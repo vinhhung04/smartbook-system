@@ -1,0 +1,68 @@
+services:
+  # 1. Cơ sở dữ liệu
+  db:
+    image: postgres:15-alpine
+    container_name: smartbook_postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: inventory
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Quản lý DB (Giao diện web)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: smartbook_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+
+  # 3. Backend (Inventory Service)
+  inventory-service:
+    build: ./inventory-service
+    container_name: inventory-service
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/inventory
+    depends_on:
+      - db
+
+  # 4. Frontend (Smartbook UI)
+  smartbook-ui:
+    build: ./smartbook-ui
+    container_name: smartbook-ui
+    ports:
+      - "5173:5173"
+    depends_on:
+      - inventory-service
+
+  # 5. Trí tuệ nhân tạo (Ollama)
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+
+  # 6. AI Service (Python/OCR)
+  ai-service:
+    build: ./ai-service
+    container_name: ai-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+
+volumes:
+  postgres_data:

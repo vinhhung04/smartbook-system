@@ -1,0 +1,12 @@
+node_modules/
+ollama_data/
+.env
+dist/
+build/
+coverage/
+*.log
+*.zip
+*.tar
+*.gz
+*.db
+*.sqlite
