@@ -72,7 +72,6 @@ export default function CreateOrderPage() {
   // --- Scanner ---
   const [scannerOpen, setScannerOpen] = useState(false);
 
-<<<<<<< HEAD
   // Xử lý khi quét thành công — nhận object từ ScannerModal (đã tra API)
   const handleScanSuccess = (data) => {
     // data = { isbn, title, author, coverImage, price } do ScannerModal trả về
@@ -84,24 +83,12 @@ export default function CreateOrderPage() {
     setBooks((prev) => {
       // Nếu ISBN đã có → tăng số lượng
       const existing = prev.findIndex((b) => b.isbn === isbn);
-=======
-  // Xử lý khi quét thành công
-  const handleScanSuccess = (barcode) => {
-    const info = lookupISBN(barcode);
-    setBooks((prev) => {
-      // Nếu ISBN đã có → tăng số lượng
-      const existing = prev.findIndex((b) => b.isbn === barcode);
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
       if (existing !== -1) {
         const next = [...prev];
         next[existing] = { ...next[existing], qty: next[existing].qty + 1 };
         return next;
       }
-<<<<<<< HEAD
       return [...prev, { isbn, title, author, price, qty: 1 }];
-=======
-      return [...prev, { isbn: barcode, ...info, qty: 1 }];
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
     });
   };
 

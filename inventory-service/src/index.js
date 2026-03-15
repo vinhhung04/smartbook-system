@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
+const authMiddleware = require('./middlewares/auth.middleware');
+const bookRoutes = require('./routes/book.routes');
+const warehouseRoutes = require('./routes/warehouse.routes');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -9,6 +12,12 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Only API routes require JWT.
+app.use('/api', authMiddleware);
+
+app.use('/api/books', bookRoutes);
+app.use('/api/warehouses', warehouseRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

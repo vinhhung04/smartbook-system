@@ -1,6 +1,5 @@
-// src/pages/AIImportPage.jsx
-<<<<<<< HEAD
-// Trang nhập kho thông minh bằng AI — Upload ảnh → Phân tích → Điền form
+﻿// src/pages/AIImportPage.jsx
+// Trang nháº­p kho thÃ´ng minh báº±ng AI â€” Upload áº£nh â†’ PhÃ¢n tÃ­ch â†’ Äiá»n form
 
 import { useState, useRef, useCallback } from 'react';
 import {
@@ -11,9 +10,9 @@ import {
 const AI_API_BASE    = 'http://localhost:8000';
 const INVENTORY_API  = 'http://localhost:3001';
 
-// ─────────────────────────────────────────────────────────────
-//  Toast component (nội bộ, không cần thư viện ngoài)
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//  Toast component (ná»™i bá»™, khÃ´ng cáº§n thÆ° viá»‡n ngoÃ i)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Toast({ toasts, onDismiss }) {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
@@ -53,54 +52,54 @@ function useToast() {
   return { toasts, add, dismiss };
 }
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //  Field definitions
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BOOK_FIELDS = [
-  { label: 'Tên sách',     key: 'title',     span: true,  placeholder: 'AI sẽ tự điền...' },
-  { label: 'Tác giả',      key: 'author',    span: false, placeholder: 'AI sẽ tự điền...' },
-  { label: 'ISBN',         key: 'isbn',      span: false, placeholder: 'AI sẽ tự điền...' },
-  { label: 'Nhà xuất bản', key: 'publisher', span: false, placeholder: 'AI sẽ tự điền...' },
-  { label: 'Giá bán',      key: 'price',     span: false, placeholder: 'VD: 85.000đ' },
+  { label: 'TÃªn sÃ¡ch',     key: 'title',     span: true,  placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
+  { label: 'TÃ¡c giáº£',      key: 'author',    span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
+  { label: 'ISBN',         key: 'isbn',      span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
+  { label: 'NhÃ  xuáº¥t báº£n', key: 'publisher', span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
+  { label: 'GiÃ¡ bÃ¡n',      key: 'price',     span: false, placeholder: 'VD: 85.000Ä‘' },
 ];
 
 const EMPTY_FORM = { title: '', author: '', isbn: '', publisher: '', price: '', quantity: '', location: '' };
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //  Main Page
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function AIImportPage() {
   const { toasts, add: addToast, dismiss } = useToast();
 
-  // ── State bìa trước ──
+  // â”€â”€ State bÃ¬a trÆ°á»›c â”€â”€
   const [fileObj,        setFileObj]        = useState(null);
   const [preview,        setPreview]        = useState(null);
   const [isAnalyzing,    setIsAnalyzing]    = useState(false);
   const [isDragging,     setIsDragging]     = useState(false);
   const fileInputRef = useRef(null);
 
-  // ── State mặt sau ──
+  // â”€â”€ State máº·t sau â”€â”€
   const [backFileObj,    setBackFileObj]    = useState(null);
   const [backPreview,    setBackPreview]    = useState(null);
   const [isScanningBack, setIsScanningBack] = useState(false);
   const [isDraggingBack, setIsDraggingBack] = useState(false);
   const backFileInputRef = useRef(null);
 
-  // ── State chung ──
+  // â”€â”€ State chung â”€â”€
   const [isSaving,     setIsSaving]     = useState(false);
   const [formData,     setFormData]     = useState(EMPTY_FORM);
   const [formVisible,  setFormVisible]  = useState(false);
   const [confirmed,    setConfirmed]    = useState(false);
 
-  // ── Helper validate file ─────────────────────────────────
+  // â”€â”€ Helper validate file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const validateImageFile = useCallback((file) => {
     if (!file) return false;
     if (!file.type.startsWith('image/')) {
-      addToast('Vui lòng chọn file ảnh (PNG, JPG, WEBP…)', 'error');
+      addToast('Vui lÃ²ng chá»n file áº£nh (PNG, JPG, WEBPâ€¦)', 'error');
       return false;
     }
     if (file.size > 10 * 1024 * 1024) {
-      addToast('File quá lớn! Tối đa 10 MB.', 'error');
+      addToast('File quÃ¡ lá»›n! Tá»‘i Ä‘a 10 MB.', 'error');
       return false;
     }
     return true;
@@ -112,7 +111,7 @@ export default function AIImportPage() {
     reader.readAsDataURL(file);
   };
 
-  // ── Xử lý bìa trước ─────────────────────────────────────
+  // â”€â”€ Xá»­ lÃ½ bÃ¬a trÆ°á»›c â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFile = useCallback((file) => {
     if (!validateImageFile(file)) return;
     setFileObj(file);
@@ -130,7 +129,7 @@ export default function AIImportPage() {
     handleFile(e.dataTransfer.files[0]);
   }, [handleFile]);
 
-  // ── Xử lý mặt sau ───────────────────────────────────────
+  // â”€â”€ Xá»­ lÃ½ máº·t sau â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBackFile = useCallback((file) => {
     if (!validateImageFile(file)) return;
     setBackFileObj(file);
@@ -143,7 +142,7 @@ export default function AIImportPage() {
     handleBackFile(e.dataTransfer.files[0]);
   }, [handleBackFile]);
 
-  // ── Gọi AI phân tích bìa trước ───────────────────────────
+  // â”€â”€ Gá»i AI phÃ¢n tÃ­ch bÃ¬a trÆ°á»›c â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleAnalyze = async () => {
     if (!fileObj || isAnalyzing) return;
     setIsAnalyzing(true);
@@ -164,16 +163,16 @@ export default function AIImportPage() {
         publisher: data.publisher ?? '',
       }));
       setFormVisible(true);
-      addToast('AI nhận diện bìa trước xong! Kiểm tra thông tin bên dưới.', 'success');
+      addToast('AI nháº­n diá»‡n bÃ¬a trÆ°á»›c xong! Kiá»ƒm tra thÃ´ng tin bÃªn dÆ°á»›i.', 'success');
     } catch (err) {
       console.error(err);
-      addToast(`Phân tích bìa trước thất bại: ${err.message}`, 'error');
+      addToast(`PhÃ¢n tÃ­ch bÃ¬a trÆ°á»›c tháº¥t báº¡i: ${err.message}`, 'error');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // ── Gọi AI quét mặt sau (barcode + giá) ──────────────────
+  // â”€â”€ Gá»i AI quÃ©t máº·t sau (barcode + giÃ¡) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleScanBack = async () => {
     if (!backFileObj || isScanningBack) return;
     setIsScanningBack(true);
@@ -185,32 +184,32 @@ export default function AIImportPage() {
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
       const data = await res.json();
       console.log('Back cover AI:', data);
-      // Merge vào form — chỉ ghi đè nếu field đang trống hoặc AI tìm thấy
+      // Merge vÃ o form â€” chá»‰ ghi Ä‘Ã¨ náº¿u field Ä‘ang trá»‘ng hoáº·c AI tÃ¬m tháº¥y
       setFormData((prev) => ({
         ...prev,
         isbn:  data.isbn  || prev.isbn,
         price: data.price || prev.price,
       }));
       setFormVisible(true);
-      addToast(`Quét mặt sau xong! ISBN: ${data.isbn ?? '?'} — Giá: ${data.price ?? '?'}`, 'success');
+      addToast(`QuÃ©t máº·t sau xong! ISBN: ${data.isbn ?? '?'} â€” GiÃ¡: ${data.price ?? '?'}`, 'success');
     } catch (err) {
       console.error(err);
-      addToast(`Quét mặt sau thất bại: ${err.message}`, 'error');
+      addToast(`QuÃ©t máº·t sau tháº¥t báº¡i: ${err.message}`, 'error');
     } finally {
       setIsScanningBack(false);
     }
   };
 
-  // ── Xử lý thay đổi field ─────────────────────────────────
+  // â”€â”€ Xá»­ lÃ½ thay Ä‘á»•i field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleFieldChange = (key, value) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
-  // ── Xác nhận nhập kho ────────────────────────────────────
+  // â”€â”€ XÃ¡c nháº­n nháº­p kho â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleConfirm = async (e) => {
     e.preventDefault();
     if (!formData.quantity || Number(formData.quantity) < 1) {
-      addToast('Vui lòng nhập số lượng hợp lệ.', 'error');
+      addToast('Vui lÃ²ng nháº­p sá»‘ lÆ°á»£ng há»£p lá»‡.', 'error');
       return;
     }
     setIsSaving(true);
@@ -229,15 +228,15 @@ export default function AIImportPage() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setConfirmed(true);
-      addToast(`Đã nhập kho thành công: "${formData.title}"`, 'success', 6000);
+      addToast(`ÄÃ£ nháº­p kho thÃ nh cÃ´ng: "${formData.title}"`, 'success', 6000);
     } catch (err) {
-      addToast(`Lưu thất bại: ${err.message}`, 'error');
+      addToast(`LÆ°u tháº¥t báº¡i: ${err.message}`, 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ── Reset ─────────────────────────────────────────────────
+  // â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleReset = () => {
     setFileObj(null);     setPreview(null);
     setBackFileObj(null); setBackPreview(null);
@@ -248,7 +247,7 @@ export default function AIImportPage() {
     if (backFileInputRef.current) backFileInputRef.current.value = '';
   };
 
-  // ─────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Toast */}
@@ -256,24 +255,24 @@ export default function AIImportPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">Nhập kho nhanh AI</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Nháº­p kho nhanh AI</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Tải lên ảnh bìa trước và mặt sau — AI tự động điền thông tin vào form
+          Táº£i lÃªn áº£nh bÃ¬a trÆ°á»›c vÃ  máº·t sau â€” AI tá»± Ä‘á»™ng Ä‘iá»n thÃ´ng tin vÃ o form
         </p>
       </div>
 
-      {/* ── UPLOAD ZONE: 2 CỘT ── */}
+      {/* â”€â”€ UPLOAD ZONE: 2 Cá»˜T â”€â”€ */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-          Bước 1 — Tải ảnh lên
+          BÆ°á»›c 1 â€” Táº£i áº£nh lÃªn
         </h2>
 
         <div className="grid grid-cols-2 gap-4">
-          {/* ── BÌA TRƯỚC ── */}
+          {/* â”€â”€ BÃŒA TRÆ¯á»šC â”€â”€ */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-indigo-600 flex items-center gap-1.5">
-              <Sparkles size={13} /> Bìa trước
-              <span className="text-gray-400 font-normal">(tên sách, tác giả…)</span>
+              <Sparkles size={13} /> BÃ¬a trÆ°á»›c
+              <span className="text-gray-400 font-normal">(tÃªn sÃ¡ch, tÃ¡c giáº£â€¦)</span>
             </p>
             <div
               onClick={() => !isAnalyzing && fileInputRef.current?.click()}
@@ -290,7 +289,7 @@ export default function AIImportPage() {
               {preview ? (
                 <>
                   <img src={preview} alt="front" className="max-h-32 object-contain rounded-lg shadow" />
-                  <p className="text-[11px] text-gray-400">Nhấn để thay ảnh</p>
+                  <p className="text-[11px] text-gray-400">Nháº¥n Ä‘á»ƒ thay áº£nh</p>
                   <span className="absolute top-1.5 right-1.5 bg-indigo-100 text-indigo-600 text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[100px]">
                     {fileObj?.name}
                   </span>
@@ -299,7 +298,7 @@ export default function AIImportPage() {
                 <>
                   <CloudUpload size={24} className="text-indigo-300" />
                   <p className="text-xs text-center text-gray-500">
-                    Kéo thả hoặc <span className="text-indigo-600 underline">chọn file</span>
+                    KÃ©o tháº£ hoáº·c <span className="text-indigo-600 underline">chá»n file</span>
                   </p>
                 </>
               )}
@@ -317,16 +316,16 @@ export default function AIImportPage() {
                 shadow-md shadow-violet-200 transition-all active:scale-[0.98]"
             >
               {isAnalyzing
-                ? <><Loader2 size={13} className="animate-spin" /> Đang phân tích...</>
-                : <><Sparkles size={13} /> Phân tích bìa trước</>}
+                ? <><Loader2 size={13} className="animate-spin" /> Äang phÃ¢n tÃ­ch...</>
+                : <><Sparkles size={13} /> PhÃ¢n tÃ­ch bÃ¬a trÆ°á»›c</>}
             </button>
           </div>
 
-          {/* ── MẶT SAU ── */}
+          {/* â”€â”€ Máº¶T SAU â”€â”€ */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1.5">
-              <ScanBarcode size={13} /> Mặt sau
-              <span className="text-gray-400 font-normal">(barcode, giá tiền)</span>
+              <ScanBarcode size={13} /> Máº·t sau
+              <span className="text-gray-400 font-normal">(barcode, giÃ¡ tiá»n)</span>
             </p>
             <div
               onClick={() => !isScanningBack && backFileInputRef.current?.click()}
@@ -343,7 +342,7 @@ export default function AIImportPage() {
               {backPreview ? (
                 <>
                   <img src={backPreview} alt="back" className="max-h-32 object-contain rounded-lg shadow" />
-                  <p className="text-[11px] text-gray-400">Nhấn để thay ảnh</p>
+                  <p className="text-[11px] text-gray-400">Nháº¥n Ä‘á»ƒ thay áº£nh</p>
                   <span className="absolute top-1.5 right-1.5 bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[100px]">
                     {backFileObj?.name}
                   </span>
@@ -352,7 +351,7 @@ export default function AIImportPage() {
                 <>
                   <ScanBarcode size={24} className="text-emerald-300" />
                   <p className="text-xs text-center text-gray-500">
-                    Kéo thả hoặc <span className="text-emerald-600 underline">chọn file</span>
+                    KÃ©o tháº£ hoáº·c <span className="text-emerald-600 underline">chá»n file</span>
                   </p>
                 </>
               )}
@@ -370,8 +369,8 @@ export default function AIImportPage() {
                 shadow-md shadow-emerald-200 transition-all active:scale-[0.98]"
             >
               {isScanningBack
-                ? <><Loader2 size={13} className="animate-spin" /> Đang quét...</>
-                : <><ScanBarcode size={13} /> Quét mặt sau</>}
+                ? <><Loader2 size={13} className="animate-spin" /> Äang quÃ©t...</>
+                : <><ScanBarcode size={13} /> QuÃ©t máº·t sau</>}
             </button>
           </div>
         </div>
@@ -392,31 +391,31 @@ export default function AIImportPage() {
             <p className={`text-xs font-medium
               ${isAnalyzing ? 'text-violet-700' : 'text-emerald-700'}`}>
               {isAnalyzing
-                ? 'AI đang đọc bìa trước — có thể mất 10–20 giây...'
-                : 'AI đang quét mặt sau (barcode, giá) — chờ xíu...'}
+                ? 'AI Ä‘ang Ä‘á»c bÃ¬a trÆ°á»›c â€” cÃ³ thá»ƒ máº¥t 10â€“20 giÃ¢y...'
+                : 'AI Ä‘ang quÃ©t máº·t sau (barcode, giÃ¡) â€” chá» xÃ­u...'}
             </p>
           </div>
         )}
       </div>
 
-      {/* ── FORM KẾT QUẢ ── */}
+      {/* â”€â”€ FORM Káº¾T QUáº¢ â”€â”€ */}
       {formVisible && !confirmed && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle size={18} className="text-green-500" />
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-                Bước 2 — Kiểm tra & xác nhận thông tin
+                BÆ°á»›c 2 â€” Kiá»ƒm tra & xÃ¡c nháº­n thÃ´ng tin
               </h2>
             </div>
             <button
               onClick={handleAnalyze}
               disabled={isAnalyzing}
-              title="Phân tích lại"
+              title="PhÃ¢n tÃ­ch láº¡i"
               className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-40"
             >
               <RefreshCw size={13} />
-              Phân tích lại
+              PhÃ¢n tÃ­ch láº¡i
             </button>
           </div>
 
@@ -427,7 +426,7 @@ export default function AIImportPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">
                     {label}
                     {!formData[key] && (
-                      <span className="ml-1.5 text-orange-400 font-normal">(AI không đọc được)</span>
+                      <span className="ml-1.5 text-orange-400 font-normal">(AI khÃ´ng Ä‘á»c Ä‘Æ°á»£c)</span>
                     )}
                   </label>
                   <input
@@ -439,206 +438,34 @@ export default function AIImportPage() {
                       focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50
                       ${formData[key] ? 'border-green-200' : 'border-orange-200'}
                     `}
-=======
-// Trang nhập kho thông minh bằng AI - Upload ảnh → Phân tích → Điền form
-
-import { useState, useRef } from 'react';
-import { CloudUpload, Loader2, CheckCircle, ImageIcon } from 'lucide-react';
-
-// =====================  MOCK AI RESULT  =====================
-const AI_MOCK_RESULT = {
-  title:     'Đắc Nhân Tâm',
-  author:    'Dale Carnegie',
-  isbn:      '9786049228438',
-  publisher: 'NXB Tổng hợp TP.HCM',
-  year:      '2023',
-};
-
-// =====================  MAIN PAGE  =====================
-export default function AIImportPage() {
-  const [preview, setPreview]       = useState(null);   // base64 ảnh preview
-  const [isLoading, setIsLoading]   = useState(false);  // đang phân tích AI
-  const [aiResult, setAiResult]     = useState(null);   // kết quả nhận diện
-  const [quantity, setQuantity]     = useState('');     // số lượng nhập tay
-  const [confirmed, setConfirmed]   = useState(false);  // đã xác nhận
-  const [isDragging, setIsDragging] = useState(false);  // drag-over state
-  const fileInputRef = useRef(null);
-
-  // --- Xử lý chọn / drop file ---
-  const handleFile = (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target.result);
-    reader.readAsDataURL(file);
-    setAiResult(null);
-    setConfirmed(false);
-    setQuantity('');
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  };
-
-  // --- Giả lập gọi AI (setTimeout 2s) ---
-  const handleAnalyze = () => {
-    if (!preview) return;
-    setIsLoading(true);
-    setAiResult(null);
-    setTimeout(() => {
-      setAiResult(AI_MOCK_RESULT);
-      setIsLoading(false);
-    }, 2000);
-  };
-
-  // --- Xác nhận nhập kho ---
-  const handleConfirm = (e) => {
-    e.preventDefault();
-    setConfirmed(true);
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Nhập kho nhanh AI</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Tải lên ảnh bìa sách hoặc mã vạch — AI sẽ tự động nhận diện thông tin
-        </p>
-      </div>
-
-      {/* ===== UPLOAD ZONE ===== */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-          1. Tải ảnh lên
-        </h2>
-
-        {/* Drag & Drop area */}
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors gap-3
-            ${isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400 hover:bg-slate-50'}`}
-        >
-          {preview ? (
-            <>
-              <img
-                src={preview}
-                alt="preview"
-                className="h-40 object-contain rounded-lg shadow"
-              />
-              <p className="text-xs text-gray-400">Nhấn để thay ảnh khác</p>
-            </>
-          ) : (
-            <>
-              <CloudUpload size={40} className="text-indigo-400" />
-              <p className="text-sm font-medium text-gray-600">
-                Kéo & thả ảnh vào đây, hoặc <span className="text-indigo-600 underline">chọn file</span>
-              </p>
-              <p className="text-xs text-gray-400">PNG, JPG, WEBP — tối đa 10MB</p>
-            </>
-          )}
-        </div>
-
-        {/* Input file ẩn */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => handleFile(e.target.files[0])}
-        />
-
-        {/* Nút phân tích */}
-        <button
-          onClick={handleAnalyze}
-          disabled={!preview || isLoading}
-          className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              AI đang phân tích...
-            </>
-          ) : (
-            <>
-              <ImageIcon size={16} />
-              Phân tích ảnh
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* ===== AI RESULT FORM ===== */}
-      {aiResult && !confirmed && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-500" />
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              2. Kết quả nhận diện — Vui lòng kiểm tra lại
-            </h2>
-          </div>
-
-          <form onSubmit={handleConfirm} className="space-y-4">
-            {/* Grid 2 cột */}
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: 'Tên sách',     key: 'title',     span: true },
-                { label: 'Tác giả',      key: 'author' },
-                { label: 'ISBN',         key: 'isbn' },
-                { label: 'Nhà xuất bản', key: 'publisher' },
-                { label: 'Năm xuất bản', key: 'year' },
-              ].map(({ label, key, span }) => (
-                <div key={key} className={span ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-                  <input
-                    type="text"
-                    defaultValue={aiResult[key]}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
                   />
                 </div>
               ))}
 
-<<<<<<< HEAD
-              {/* Số lượng */}
-=======
-              {/* Số lượng — nhập tay */}
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
+              {/* Sá»‘ lÆ°á»£ng */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Số lượng nhập <span className="text-red-500">*</span>
+                  Sá»‘ lÆ°á»£ng nháº­p <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   min="1"
                   required
-<<<<<<< HEAD
                   value={formData.quantity}
                   onChange={(e) => handleFieldChange('quantity', e.target.value)}
-=======
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
-                  placeholder="Nhập số lượng..."
+                  placeholder="Nháº­p sá»‘ lÆ°á»£ng..."
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              {/* Vị trí kho */}
+              {/* Vá»‹ trÃ­ kho */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Vị trí kho</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Vá»‹ trÃ­ kho</label>
                 <input
                   type="text"
-<<<<<<< HEAD
                   value={formData.location}
                   onChange={(e) => handleFieldChange('location', e.target.value)}
-=======
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
-                  placeholder="VD: Kệ A-1"
+                  placeholder="VD: Ká»‡ A-1"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -646,62 +473,39 @@ export default function AIImportPage() {
 
             <button
               type="submit"
-<<<<<<< HEAD
               disabled={isSaving}
               className="w-full flex items-center justify-center gap-2
                 bg-green-600 hover:bg-green-700 disabled:bg-green-400
                 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
             >
               {isSaving ? (
-                <><Loader2 size={15} className="animate-spin" /> Đang lưu...</>
+                <><Loader2 size={15} className="animate-spin" /> Äang lÆ°u...</>
               ) : (
-                <><CheckCircle size={15} /> Xác nhận nhập kho</>
+                <><CheckCircle size={15} /> XÃ¡c nháº­n nháº­p kho</>
               )}
-=======
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm"
-            >
-              ✓ Xác nhận nhập kho
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
             </button>
           </form>
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* ── THÀNH CÔNG ── */}
+      {/* â”€â”€ THÃ€NH CÃ”NG â”€â”€ */}
       {confirmed && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
             <CheckCircle size={28} className="text-green-600" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold text-green-800">Nhập kho thành công!</p>
+            <p className="font-semibold text-green-800">Nháº­p kho thÃ nh cÃ´ng!</p>
             <p className="text-sm text-green-600 mt-0.5">
-              <strong>{formData.title || 'Sách'}</strong> × <strong>{formData.quantity}</strong> bản
-              {formData.location && <> — vị trí <strong>{formData.location}</strong></>}
+              <strong>{formData.title || 'SÃ¡ch'}</strong> Ã— <strong>{formData.quantity}</strong> báº£n
+              {formData.location && <> â€” vá»‹ trÃ­ <strong>{formData.location}</strong></>}
             </p>
           </div>
           <button
             onClick={handleReset}
             className="flex-shrink-0 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors"
-=======
-      {/* ===== SUCCESS STATE ===== */}
-      {confirmed && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 flex items-center gap-4">
-          <CheckCircle size={36} className="text-green-500 flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-green-800">Nhập kho thành công!</p>
-            <p className="text-sm text-green-600 mt-0.5">
-              Sách <strong>{aiResult?.title}</strong> đã được thêm vào kho với số lượng{' '}
-              <strong>{quantity}</strong> bản.
-            </p>
-          </div>
-          <button
-            onClick={() => { setPreview(null); setAiResult(null); setConfirmed(false); setQuantity(''); }}
-            className="ml-auto text-xs text-green-700 underline hover:text-green-900"
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
           >
-            Nhập tiếp
+            Nháº­p tiáº¿p
           </button>
         </div>
       )}

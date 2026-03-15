@@ -1,5 +1,5 @@
-// src/components/AdminLayout.jsx
-// Khung giao diện chính: Sidebar + Header + Main Content
+﻿// src/components/AdminLayout.jsx
+// Khung giao diá»‡n chÃ­nh: Sidebar + Header + Main Content
 
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
@@ -7,21 +7,21 @@ import { LayoutDashboard, Library, ScanLine, History, Sparkles, Users, ShieldChe
 import AIChatbot from './AIChatbot';
 import ScannerModal from './ScannerModal';
 
-// --- Menu chính ---
+// --- Menu chÃ­nh ---
 const menuItems = [
-  { label: 'Tổng quan',       icon: LayoutDashboard, to: '/' },
-  { label: 'Kho sách',        icon: Library,         to: '/inventory' },
-  { label: 'Sơ đồ kho',       icon: Map,             to: '/warehouse-map' },
-  { label: 'Nhập kho AI',     icon: ScanLine,        to: '/ai-import' },
-  { label: 'Phiếu nhập kho',  icon: FileText,        to: '/orders' },
-  { label: 'Lịch sử kho',     icon: History,         to: '/movements' },
-  { label: 'Gợi ý AI',        icon: Sparkles,        to: '/recommendations' },
+  { label: 'Tá»•ng quan',       icon: LayoutDashboard, to: '/' },
+  { label: 'Kho sÃ¡ch',        icon: Library,         to: '/inventory' },
+  { label: 'SÆ¡ Ä‘á»“ kho',       icon: Map,             to: '/warehouse-map' },
+  { label: 'Nháº­p kho AI',     icon: ScanLine,        to: '/ai-import' },
+  { label: 'Phiáº¿u nháº­p kho',  icon: FileText,        to: '/orders' },
+  { label: 'Lá»‹ch sá»­ kho',     icon: History,         to: '/movements' },
+  { label: 'Gá»£i Ã½ AI',        icon: Sparkles,        to: '/recommendations' },
 ];
 
-// --- Nhóm menu HỆ THỐNG ---
+// --- NhÃ³m menu Há»† THá»NG ---
 const systemMenuItems = [
-  { label: 'Nhân viên',        icon: Users,           to: '/users' },
-  { label: 'Phân quyền',      icon: ShieldCheck,     to: '/roles' },
+  { label: 'NhÃ¢n viÃªn',        icon: Users,           to: '/users' },
+  { label: 'PhÃ¢n quyá»n',      icon: ShieldCheck,     to: '/roles' },
 ];
 
 // =====================  SIDEBAR  =====================
@@ -35,7 +35,7 @@ function Sidebar() {
         </span>
       </div>
 
-      {/* Navigation chính */}
+      {/* Navigation chÃ­nh */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {menuItems.map(({ label, icon: Icon, to }) => (
           <NavLink
@@ -55,10 +55,10 @@ function Sidebar() {
           </NavLink>
         ))}
 
-        {/* Nhóm HỆ THỐNG */}
+        {/* NhÃ³m Há»† THá»NG */}
         <div className="pt-4 mt-2 border-t border-gray-700/60">
           <p className="px-3 pb-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-            HỆ THỐNG
+            Há»† THá»NG
           </p>
           {systemMenuItems.map(({ label, icon: Icon, to }) => (
             <NavLink
@@ -79,7 +79,7 @@ function Sidebar() {
         </div>
       </nav>
 
-      {/* Footer người dùng */}
+      {/* Footer ngÆ°á»i dÃ¹ng */}
       <div className="px-4 py-4 border-t border-gray-700 flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
           A
@@ -102,13 +102,13 @@ function Header({ onScanClick }) {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
           type="text"
-          placeholder="Tìm kiếm sách, ISBN..."
+          placeholder="TÃ¬m kiáº¿m sÃ¡ch, ISBN..."
           className="w-full pl-9 pr-10 py-2 text-sm bg-slate-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
-        {/* Nút quét mã vạch ngay trong ô search */}
+        {/* NÃºt quÃ©t mÃ£ váº¡ch ngay trong Ã´ search */}
         <button
           onClick={onScanClick}
-          title="Quét mã vạch để tra cứu"
+          title="QuÃ©t mÃ£ váº¡ch Ä‘á»ƒ tra cá»©u"
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
         >
           <ScanBarcode size={16} />
@@ -116,10 +116,10 @@ function Header({ onScanClick }) {
       </div>
 
       <div className="flex items-center gap-4 ml-auto">
-        {/* Chuông thông báo */}
+        {/* ChuÃ´ng thÃ´ng bÃ¡o */}
         <button className="relative text-gray-500 hover:text-indigo-600 transition-colors">
           <Bell size={20} />
-          {/* Badge thông báo */}
+          {/* Badge thÃ´ng bÃ¡o */}
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold">
             3
           </span>
@@ -139,18 +139,11 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const [isSearchScannerOpen, setIsSearchScannerOpen] = useState(false);
 
-<<<<<<< HEAD
   const handleSearchScanSuccess = (data) => {
-    // data = { isbn, title, ... } từ ScannerModal
+    // data = { isbn, title, ... } tá»« ScannerModal
     const isbn = data.isbn ?? '';
     setIsSearchScannerOpen(false);
     navigate(`/inventory/${isbn}`, { state: { scannedBook: data } });
-=======
-  const handleSearchScanSuccess = (scannedBarcode) => {
-    setIsSearchScannerOpen(false);
-    alert(`Đang tìm sách mã: ${scannedBarcode}`);
-    navigate(`/inventory/mock-id-${scannedBarcode}`);
->>>>>>> c26363920672b40bf67cb401916b2de240ca15c4
   };
 
   return (
@@ -162,9 +155,9 @@ export default function AdminLayout({ children }) {
           {children}
         </main>
       </div>
-      {/* Chatbot nổi — hiển thị trên mọi trang */}
+      {/* Chatbot ná»•i â€” hiá»ƒn thá»‹ trÃªn má»i trang */}
       <AIChatbot />
-      {/* Scanner tra cứu nhanh từ Header */}
+      {/* Scanner tra cá»©u nhanh tá»« Header */}
       <ScannerModal
         isOpen={isSearchScannerOpen}
         onClose={() => setIsSearchScannerOpen(false)}

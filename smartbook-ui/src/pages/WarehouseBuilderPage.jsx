@@ -1,200 +1,280 @@
-// src/pages/WarehouseBuilderPage.jsx
-// Sơ đồ không gian kho — click kệ để xem chi tiết
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Warehouse, MapPin, Building2, X, Loader2 } from 'lucide-react';
+import { createWarehouse, getWarehouses } from '../services/api';
 
-import { useState } from 'react';
-import { X, Package } from 'lucide-react';
+const EMPTY_FORM = {
+  name: '',
+  code: '',
+  address: '',
+  type: '',
+};
 
-// =====================  MOCK DATA  =====================
-// capacity: sức chứa tối đa, used: đã dùng, books: danh sách sách đang ở đây
-const ZONES = [
-  {
-    id: 'A1', label: 'Kệ A-1', capacity: 100, used: 95,
-    books: [
-      { title: 'Đắc Nhân Tâm',        qty: 35 },
-      { title: 'Nhà Giả Kim',          qty: 28 },
-      { title: 'Atomic Habits',         qty: 32 },
-    ],
-  },
-  {
-    id: 'A2', label: 'Kệ A-2', capacity: 100, used: 60,
-    books: [
-      { title: 'Sapiens',              qty: 22 },
-      { title: 'Tư Duy Nhanh Và Chậm', qty: 38 },
-    ],
-  },
-  {
-    id: 'A3', label: 'Kệ A-3', capacity: 80, used: 20,
-    books: [{ title: 'The Hobbit', qty: 20 }],
-  },
-  {
-    id: 'A4', label: 'Kệ A-4', capacity: 80, used: 0,
-    books: [],
-  },
-  {
-    id: 'B1', label: 'Kệ B-1', capacity: 120, used: 118,
-    books: [
-      { title: 'Dune',                qty: 34 },
-      { title: 'Foundation',          qty: 50 },
-      { title: '1984',                qty: 34 },
-    ],
-  },
-  {
-    id: 'B2', label: 'Kệ B-2', capacity: 120, used: 110,
-    books: [
-      { title: 'Brave New World',     qty: 55 },
-      { title: 'Fahrenheit 451',      qty: 55 },
-    ],
-  },
-  {
-    id: 'B3', label: 'Kệ B-3', capacity: 100, used: 45,
-    books: [{ title: 'Nghệ Thuật Tư Duy', qty: 45 }],
-  },
-  {
-    id: 'B4', label: 'Kệ B-4', capacity: 100, used: 70,
-    books: [
-      { title: 'Người Giàu Nhất Babylon', qty: 40 },
-      { title: 'Nghĩ Và Làm Giàu',        qty: 30 },
-    ],
-  },
-  {
-    id: 'C1', label: 'Kệ C-1', capacity: 60, used: 5,
-    books: [{ title: 'Manga One Piece T.1', qty: 5 }],
-  },
-  {
-    id: 'C2', label: 'Kệ C-2', capacity: 60, used: 30,
-    books: [{ title: 'Conan T.1', qty: 30 }],
-  },
-  {
-    id: 'C3', label: 'Kệ C-3', capacity: 60, used: 58,
-    books: [
-      { title: 'Doraemon T.1', qty: 30 },
-      { title: 'Dragon Ball T.1', qty: 28 },
-    ],
-  },
-  {
-    id: 'C4', label: 'Kệ C-4', capacity: 60, used: 0,
-    books: [],
-  },
-];
+function WarehouseModal({ open, onClose, onSubmit, submitting }) {
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [error, setError] = useState('');
 
-// =====================  HELPER: màu sức chứa  =====================
-function getZoneColor(used, capacity) {
-  const ratio = capacity > 0 ? used / capacity : 0;
-  if (ratio >= 0.9) return { bg: 'bg-red-500',    text: 'text-white', bar: 'bg-red-200',    fill: 'bg-red-600',   label: 'Gần đầy' };
-  if (ratio >= 0.6) return { bg: 'bg-orange-400', text: 'text-white', bar: 'bg-orange-200', fill: 'bg-orange-500',label: 'Đang dùng' };
-  if (ratio >= 0.1) return { bg: 'bg-green-400',  text: 'text-white', bar: 'bg-green-200',  fill: 'bg-green-500', label: 'Còn trống' };
-  return                   { bg: 'bg-slate-200',  text: 'text-slate-600', bar: 'bg-slate-100', fill: 'bg-slate-400', label: 'Trống hoàn toàn' };
-}
+  useEffect(() => {
+    if (!open) {
+      setFormData(EMPTY_FORM);
+      setError('');
+    }
+  }, [open]);
 
-// =====================  MAIN PAGE  =====================
-export default function WarehouseBuilderPage() {
-  const [selectedZone, setSelectedZone] = useState(null);
+  const handleChange = (key, value) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!formData.name.trim() || !formData.code.trim()) {
+      setError('Name va Code la bat buoc.');
+      return;
+    }
+
+    setError('');
+    await onSubmit({
+      name: formData.name.trim(),
+      code: formData.code.trim(),
+      address: formData.address.trim(),
+      type: formData.type.trim(),
+    }).catch((err) => {
+      setError(err.message || 'Khong the tao kho moi.');
+    });
+  };
+
+  if (!open) return null;
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Sơ đồ Không gian Kho</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Nhấn vào một kệ để xem danh sách sách đang lưu trữ.
-        </p>
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs">
-        {[
-          { color: 'bg-red-500',    label: 'Gần đầy (≥ 90%)' },
-          { color: 'bg-orange-400', label: 'Đang dùng (60–89%)' },
-          { color: 'bg-green-400',  label: 'Còn trống (10–59%)' },
-          { color: 'bg-slate-200',  label: 'Trống hoàn toàn' },
-        ].map(({ color, label }) => (
-          <div key={label} className="flex items-center gap-1.5">
-            <span className={`w-3 h-3 rounded-sm ${color}`} />
-            <span className="text-gray-500">{label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Map + Detail panel */}
-      <div className="flex gap-4 items-start">
-        {/* ---- BẢN ĐỒ (70%) ---- */}
-        <div className={`bg-white rounded-lg shadow-sm border border-gray-100 p-6 transition-all ${selectedZone ? 'w-[65%]' : 'w-full'}`}>
-          {/* Grid sơ đồ */}
-          <div className="grid grid-cols-4 gap-3">
-            {ZONES.map((zone) => {
-              const color  = getZoneColor(zone.used, zone.capacity);
-              const ratio  = zone.capacity > 0 ? zone.used / zone.capacity : 0;
-              const isSelected = selectedZone?.id === zone.id;
-              return (
-                <button
-                  key={zone.id}
-                  onClick={() => setSelectedZone(isSelected ? null : zone)}
-                  className={`${color.bg} ${color.text} rounded-xl p-3 text-left transition-all hover:opacity-90 active:scale-95 shadow-sm
-                    ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}
-                >
-                  <p className="font-bold text-sm">{zone.label}</p>
-                  <p className="text-[11px] opacity-80 mt-0.5">{color.label}</p>
-                  {/* Mini progress bar */}
-                  <div className={`mt-2 h-1.5 rounded-full ${color.bar} overflow-hidden`}>
-                    <div
-                      className={`h-full rounded-full ${color.fill}`}
-                      style={{ width: `${Math.min(ratio * 100, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] opacity-70 mt-1">{zone.used}/{zone.capacity}</p>
-                </button>
-              );
-            })}
-          </div>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Them kho moi</h3>
+          <button
+            onClick={onClose}
+            className="text-slate-500 hover:text-slate-800"
+            disabled={submitting}
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        {/* ---- BẢNG CHI TIẾT (30%) ---- */}
-        {selectedZone && (
-          <div className="w-[35%] bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex-shrink-0">
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-indigo-600">
-              <div>
-                <p className="text-white font-bold text-sm">{selectedZone.label}</p>
-                <p className="text-indigo-200 text-xs mt-0.5">
-                  {selectedZone.used}/{selectedZone.capacity} — {Math.round((selectedZone.used / selectedZone.capacity) * 100)}% đầy
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedZone(null)}
-                className="text-white/70 hover:text-white"
-              >
-                <X size={18} />
-              </button>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+              <input
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Kho Trung Tam"
+              />
             </div>
-
-            {/* Danh sách sách */}
-            <div className="divide-y divide-gray-100">
-              {selectedZone.books.length === 0 ? (
-                <div className="py-10 flex flex-col items-center text-gray-300">
-                  <Package size={32} />
-                  <p className="text-sm mt-2">Kệ đang trống</p>
-                </div>
-              ) : (
-                selectedZone.books.map((book, i) => (
-                  <div key={i} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
-                    <p className="text-sm text-gray-700 font-medium truncate max-w-[75%]">{book.title}</p>
-                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                      {book.qty}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-4 py-3 bg-slate-50 border-t border-gray-100">
-              <button className="w-full text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                Xem chi tiết kệ →
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Code *</label>
+              <input
+                value={formData.code}
+                onChange={(e) => handleChange('code', e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="WH-HCM-01"
+              />
             </div>
           </div>
-        )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+            <input
+              value={formData.address}
+              onChange={(e) => handleChange('address', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Dia chi kho"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+            <input
+              value={formData.type}
+              onChange={(e) => handleChange('type', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Tong kho / Chi nhanh / Offline"
+            />
+          </div>
+
+          {error ? (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg"
+            >
+              Huy
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:bg-indigo-300 flex items-center gap-2"
+            >
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+              Tao kho
+            </button>
+          </div>
+        </form>
       </div>
+    </div>
+  );
+}
+
+export default function WarehouseBuilderPage() {
+  const [warehouses, setWarehouses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const loadWarehouses = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await getWarehouses();
+      setWarehouses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message || 'Khong the tai danh sach kho.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWarehouses();
+  }, []);
+
+  const totalZones = useMemo(
+    () => warehouses.reduce((sum, item) => sum + (item?._count?.zones || 0), 0),
+    [warehouses]
+  );
+
+  const handleCreateWarehouse = async (payload) => {
+    setCreating(true);
+    try {
+      await createWarehouse(payload);
+      setIsModalOpen(false);
+      await loadWarehouses();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-3 items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Warehouse Management</h1>
+          <p className="text-sm text-slate-500 mt-1">Quan ly thong tin kho va theo doi tong so zone cua tung kho.</p>
+        </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm"
+        >
+          <Plus size={16} />
+          Them kho moi
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Tong kho</p>
+          <p className="text-3xl font-bold text-indigo-600 mt-1">{warehouses.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Tong zone</p>
+          <p className="text-3xl font-bold text-emerald-600 mt-1">{totalZones}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Trang thai</p>
+          <p className="text-sm font-semibold text-slate-700 mt-3">{loading ? 'Dang dong bo du lieu...' : 'San sang'}</p>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-red-700">{error}</p>
+          <button onClick={loadWarehouses} className="text-sm font-medium text-red-700 hover:text-red-800">
+            Thu lai
+          </button>
+        </div>
+      ) : null}
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs tracking-wider">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Warehouse</th>
+                <th className="px-4 py-3 text-left font-semibold">Code</th>
+                <th className="px-4 py-3 text-left font-semibold">Address</th>
+                <th className="px-4 py-3 text-left font-semibold">Type</th>
+                <th className="px-4 py-3 text-right font-semibold">Zones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Dang tai danh sach kho...
+                    </div>
+                  </td>
+                </tr>
+              ) : warehouses.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                    Chua co kho nao. Bam "Them kho moi" de tao ban ghi dau tien.
+                  </td>
+                </tr>
+              ) : (
+                warehouses.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                        <Warehouse size={16} className="text-indigo-500" />
+                        {item.name || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600">
+                      <div className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium">
+                        <Building2 size={12} />
+                        {item.code || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600 max-w-[320px] truncate">
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin size={12} className="text-slate-400" />
+                        {item.address || '-'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-600">{item.type || '-'}</td>
+                    <td className="px-4 py-3.5 text-right font-bold text-indigo-600">{item?._count?.zones || 0}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <WarehouseModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateWarehouse}
+        submitting={creating}
+      />
     </div>
   );
 }

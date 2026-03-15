@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,40 +7,617 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Book {
-  id         Int       @id @default(autoincrement())
-  title      String
-  author     String
-  isbn       String    @unique
-  coverImage String?
-  variants   Variant[]
+model authors {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  full_name    String         @unique @db.VarChar(150)
+  sort_name    String?        @db.VarChar(150)
+  biography    String?
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @db.Timestamptz(6)
+  book_authors book_authors[]
+
+  @@index([full_name(ops: raw("gin_trgm_ops"))], map: "idx_authors_full_name_trgm", type: Gin)
 }
 
-model Variant {
-  id             Int             @id @default(autoincrement())
-  bookId         Int
-  format         String          // e.g. "Bìa cứng" | "Bìa mềm"
-  price          Float
-  book           Book            @relation(fields: [bookId], references: [id])
-  inventories    Inventory[]
-  stockMovements StockMovement[]
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model book_authors {
+  book_id      String  @db.Uuid
+  author_id    String  @db.Uuid
+  author_order Int     @default(1)
+  authors      authors @relation(fields: [author_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  books        books   @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([book_id, author_id])
 }
 
-model Inventory {
-  id        Int     @id @default(autoincrement())
-  variantId Int
-  location  String  // Vị trí kệ, e.g. "A1", "B3"
-  quantity  Int     @default(0)
-  variant   Variant @relation(fields: [variantId], references: [id])
+model book_categories {
+  book_id     String     @db.Uuid
+  category_id String     @db.Uuid
+  books       books      @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([variantId, location])
+  @@id([book_id, category_id])
 }
 
-model StockMovement {
-  id        Int      @id @default(autoincrement())
-  variantId Int
-  type      String   // "IN" | "OUT"
-  quantity  Int
-  createdAt DateTime @default(now())
-  variant   Variant  @relation(fields: [variantId], references: [id])
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model book_images {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  book_id       String?        @db.Uuid
+  variant_id    String?        @db.Uuid
+  image_url     String
+  image_type    String         @default("COVER") @db.VarChar(20)
+  is_primary    Boolean        @default(false)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  books         books?         @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants book_variants? @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model book_variants {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  book_id              String                 @db.Uuid
+  sku                  String                 @unique @db.VarChar(50)
+  isbn13               String?                @unique @db.VarChar(20)
+  isbn10               String?                @unique @db.VarChar(20)
+  internal_barcode     String?                @unique @db.VarChar(50)
+  cover_type           String                 @default("PAPERBACK") @db.VarChar(20)
+  language_code        String                 @default("vi") @db.VarChar(10)
+  publish_year         Int?
+  condition_grade      String                 @default("NEW") @db.VarChar(20)
+  unit_cost            Decimal                @default(0) @db.Decimal(12, 2)
+  list_price           Decimal                @default(0) @db.Decimal(12, 2)
+  replacement_cost     Decimal                @default(0) @db.Decimal(12, 2)
+  is_borrowable        Boolean                @default(true)
+  is_sellable          Boolean                @default(false)
+  is_track_by_unit     Boolean                @default(false)
+  cover_image_url      String?
+  metadata             Json                   @default("{}")
+  is_active            Boolean                @default(true)
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  book_images          book_images[]
+  books                books                  @relation(fields: [book_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goods_receipt_items  goods_receipt_items[]
+  inventory_units      inventory_units[]
+  outbound_order_items outbound_order_items[]
+  purchase_order_items purchase_order_items[]
+  stock_alerts         stock_alerts[]
+  stock_audit_lines    stock_audit_lines[]
+  stock_balances       stock_balances[]
+  stock_movements      stock_movements[]
+  stock_reservations   stock_reservations[]
+  supplier_variants    supplier_variants[]
+  transfer_order_items transfer_order_items[]
+
+  @@index([book_id], map: "idx_book_variants_book_id")
+  @@index([isbn13], map: "idx_book_variants_isbn13")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model books {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  book_code         String?           @unique @db.VarChar(30)
+  title             String            @db.VarChar(255)
+  subtitle          String?           @db.VarChar(255)
+  description       String?
+  publisher_id      String?           @db.Uuid
+  edition           String?           @db.VarChar(50)
+  published_date    DateTime?         @db.Date
+  page_count        Int?
+  country_of_origin String?           @db.VarChar(100)
+  default_language  String?           @db.VarChar(10)
+  is_active         Boolean           @default(true)
+  metadata          Json              @default("{}")
+  created_at        DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  book_authors      book_authors[]
+  book_categories   book_categories[]
+  book_images       book_images[]
+  book_variants     book_variants[]
+  publishers        publishers?       @relation(fields: [publisher_id], references: [id], onUpdate: NoAction)
+
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
+}
+
+model categories {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String            @db.VarChar(120)
+  slug             String            @unique @db.VarChar(150)
+  parent_id        String?           @db.Uuid
+  description      String?
+  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime          @default(now()) @db.Timestamptz(6)
+  book_categories  book_categories[]
+  categories       categories?       @relation("categoriesTocategories", fields: [parent_id], references: [id], onUpdate: NoAction)
+  other_categories categories[]      @relation("categoriesTocategories")
+
+  @@unique([parent_id, name])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model goods_receipt_items {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goods_receipt_id String         @db.Uuid
+  variant_id       String         @db.Uuid
+  location_id      String?        @db.Uuid
+  quantity         Int
+  unit_cost        Decimal        @default(0) @db.Decimal(12, 2)
+  condition_grade  String         @default("NEW") @db.VarChar(20)
+  note             String?
+  goods_receipts   goods_receipts @relation(fields: [goods_receipt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  locations        locations?     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
+  book_variants    book_variants  @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model goods_receipts {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receipt_number      String                @unique @db.VarChar(40)
+  purchase_order_id   String?               @db.Uuid
+  warehouse_id        String                @db.Uuid
+  source_type         String                @default("PURCHASE_ORDER") @db.VarChar(20)
+  source_reference_id String?               @db.Uuid
+  status              String                @default("DRAFT") @db.VarChar(20)
+  received_by_user_id String                @db.Uuid
+  received_at         DateTime?             @db.Timestamptz(6)
+  note                String?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  goods_receipt_items goods_receipt_items[]
+  purchase_orders     purchase_orders?      @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
+  warehouses          warehouses            @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, received_at], map: "idx_goods_receipts_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model integration_inbox {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_service String    @db.VarChar(50)
+  event_id       String    @db.Uuid
+  event_type     String    @db.VarChar(100)
+  payload        Json
+  status         String    @default("RECEIVED") @db.VarChar(20)
+  error_message  String?
+  received_at    DateTime  @default(now()) @db.Timestamptz(6)
+  processed_at   DateTime? @db.Timestamptz(6)
+
+  @@unique([source_service, event_id])
+  @@index([status, received_at], map: "idx_inventory_inbox_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model integration_outbox {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  aggregate_type String    @db.VarChar(100)
+  aggregate_id   String?   @db.Uuid
+  event_type     String    @db.VarChar(100)
+  payload        Json
+  headers        Json      @default("{}")
+  status         String    @default("PENDING") @db.VarChar(20)
+  retry_count    Int       @default(0)
+  occurred_at    DateTime  @default(now()) @db.Timestamptz(6)
+  published_at   DateTime? @db.Timestamptz(6)
+
+  @@index([status, occurred_at], map: "idx_inventory_outbox_status")
+}
+
+model inventory_audit_logs {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_user_id String?  @db.Uuid
+  action_name   String   @db.VarChar(100)
+  entity_type   String   @db.VarChar(50)
+  entity_id     String?  @db.Uuid
+  before_data   Json?
+  after_data    Json?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inventory_units {
+  id                                                       String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  variant_id                                               String            @db.Uuid
+  warehouse_id                                             String            @db.Uuid
+  home_location_id                                         String?           @db.Uuid
+  current_location_id                                      String?           @db.Uuid
+  unit_barcode                                             String            @unique @db.VarChar(100)
+  acquisition_reference                                    String?
+  acquisition_cost                                         Decimal           @default(0) @db.Decimal(12, 2)
+  condition_grade                                          String            @default("NEW") @db.VarChar(20)
+  status                                                   String            @default("AVAILABLE") @db.VarChar(20)
+  last_seen_at                                             DateTime?         @db.Timestamptz(6)
+  metadata                                                 Json              @default("{}")
+  created_at                                               DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                                               DateTime          @default(now()) @db.Timestamptz(6)
+  locations_inventory_units_current_location_idTolocations locations?        @relation("inventory_units_current_location_idTolocations", fields: [current_location_id], references: [id], onUpdate: NoAction)
+  locations_inventory_units_home_location_idTolocations    locations?        @relation("inventory_units_home_location_idTolocations", fields: [home_location_id], references: [id], onUpdate: NoAction)
+  book_variants                                            book_variants     @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouses                                               warehouses        @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  stock_movements                                          stock_movements[]
+
+  @@index([current_location_id], map: "idx_inventory_units_current_location_id")
+  @@index([variant_id, status], map: "idx_inventory_units_variant_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model locations {
+  id                                                                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouse_id                                                          String                 @db.Uuid
+  parent_location_id                                                    String?                @db.Uuid
+  location_code                                                         String                 @db.VarChar(60)
+  location_type                                                         String                 @default("BIN") @db.VarChar(20)
+  zone                                                                  String?                @db.VarChar(50)
+  aisle                                                                 String?                @db.VarChar(50)
+  shelf                                                                 String?                @db.VarChar(50)
+  bin                                                                   String?                @db.VarChar(50)
+  barcode                                                               String?                @unique @db.VarChar(100)
+  capacity_qty                                                          Int?
+  is_pickable                                                           Boolean                @default(true)
+  is_active                                                             Boolean                @default(true)
+  created_at                                                            DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                                            DateTime               @default(now()) @db.Timestamptz(6)
+  goods_receipt_items                                                   goods_receipt_items[]
+  inventory_units_inventory_units_current_location_idTolocations        inventory_units[]      @relation("inventory_units_current_location_idTolocations")
+  inventory_units_inventory_units_home_location_idTolocations           inventory_units[]      @relation("inventory_units_home_location_idTolocations")
+  locations                                                             locations?             @relation("locationsTolocations", fields: [parent_location_id], references: [id], onUpdate: NoAction)
+  other_locations                                                       locations[]            @relation("locationsTolocations")
+  warehouses                                                            warehouses             @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  outbound_order_items                                                  outbound_order_items[]
+  stock_audit_lines                                                     stock_audit_lines[]
+  stock_balances                                                        stock_balances[]
+  stock_movements_stock_movements_from_location_idTolocations           stock_movements[]      @relation("stock_movements_from_location_idTolocations")
+  stock_movements_stock_movements_to_location_idTolocations             stock_movements[]      @relation("stock_movements_to_location_idTolocations")
+  stock_reservations                                                    stock_reservations[]
+  transfer_order_items_transfer_order_items_from_location_idTolocations transfer_order_items[] @relation("transfer_order_items_from_location_idTolocations")
+  transfer_order_items_transfer_order_items_to_location_idTolocations   transfer_order_items[] @relation("transfer_order_items_to_location_idTolocations")
+
+  @@unique([warehouse_id, location_code])
+  @@unique([warehouse_id, zone, aisle, shelf, bin])
+  @@index([warehouse_id], map: "idx_locations_warehouse_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbound_order_items {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outbound_order_id  String          @db.Uuid
+  variant_id         String          @db.Uuid
+  source_location_id String?         @db.Uuid
+  quantity           Int
+  processed_qty      Int             @default(0)
+  note               String?
+  outbound_orders    outbound_orders @relation(fields: [outbound_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  locations          locations?      @relation(fields: [source_location_id], references: [id], onUpdate: NoAction)
+  book_variants      book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbound_orders {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outbound_number      String                 @unique @db.VarChar(40)
+  warehouse_id         String                 @db.Uuid
+  outbound_type        String                 @db.VarChar(30)
+  status               String                 @default("DRAFT") @db.VarChar(20)
+  requested_by_user_id String                 @db.Uuid
+  approved_by_user_id  String?                @db.Uuid
+  processed_by_user_id String?                @db.Uuid
+  external_reference   String?
+  requested_at         DateTime               @default(now()) @db.Timestamptz(6)
+  completed_at         DateTime?              @db.Timestamptz(6)
+  note                 String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  outbound_order_items outbound_order_items[]
+  warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, requested_at], map: "idx_outbound_orders_status")
+}
+
+model publishers {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String?  @unique @db.VarChar(30)
+  name       String   @unique @db.VarChar(150)
+  phone      String?  @db.VarChar(30)
+  email      String?  @db.VarChar(150)
+  website    String?
+  address    String?
+  country    String?  @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  books      books[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_order_items {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id String          @db.Uuid
+  variant_id        String          @db.Uuid
+  ordered_qty       Int
+  received_qty      Int             @default(0)
+  unit_cost         Decimal         @default(0) @db.Decimal(12, 2)
+  note              String?
+  purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants     book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+
+  @@unique([purchase_order_id, variant_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model purchase_orders {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  po_number            String                 @unique @db.VarChar(40)
+  supplier_id          String                 @db.Uuid
+  warehouse_id         String                 @db.Uuid
+  status               String                 @default("DRAFT") @db.VarChar(30)
+  ordered_by_user_id   String                 @db.Uuid
+  approved_by_user_id  String?                @db.Uuid
+  order_date           DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
+  expected_date        DateTime?              @db.Date
+  note                 String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  goods_receipts       goods_receipts[]
+  purchase_order_items purchase_order_items[]
+  suppliers            suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, order_date], map: "idx_purchase_orders_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_alerts {
+  id                      String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouse_id            String        @db.Uuid
+  variant_id              String        @db.Uuid
+  alert_type              String        @db.VarChar(20)
+  alert_level             String        @db.VarChar(20)
+  threshold_value         Decimal?      @db.Decimal(12, 2)
+  current_value           Decimal?      @db.Decimal(12, 2)
+  status                  String        @default("OPEN") @db.VarChar(20)
+  first_triggered_at      DateTime      @default(now()) @db.Timestamptz(6)
+  acknowledged_by_user_id String?       @db.Uuid
+  acknowledged_at         DateTime?     @db.Timestamptz(6)
+  resolved_at             DateTime?     @db.Timestamptz(6)
+  payload                 Json          @default("{}")
+  book_variants           book_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouses              warehouses    @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status, alert_type], map: "idx_stock_alerts_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_audit_lines {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stock_audit_id    String        @db.Uuid
+  variant_id        String        @db.Uuid
+  location_id       String        @db.Uuid
+  expected_qty      Int           @default(0)
+  counted_qty       Int?
+  variance_qty      Int?
+  adjustment_posted Boolean       @default(false)
+  note              String?
+  locations         locations     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
+  stock_audits      stock_audits  @relation(fields: [stock_audit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants     book_variants @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+
+  @@unique([stock_audit_id, variant_id, location_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_audits {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  audit_number        String              @unique @db.VarChar(40)
+  warehouse_id        String              @db.Uuid
+  status              String              @default("DRAFT") @db.VarChar(20)
+  created_by_user_id  String              @db.Uuid
+  reviewed_by_user_id String?             @db.Uuid
+  started_at          DateTime?           @db.Timestamptz(6)
+  completed_at        DateTime?           @db.Timestamptz(6)
+  note                String?
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  stock_audit_lines   stock_audit_lines[]
+  warehouses          warehouses          @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, created_at], map: "idx_stock_audits_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_balances {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouse_id     String        @db.Uuid
+  variant_id       String        @db.Uuid
+  location_id      String        @db.Uuid
+  on_hand_qty      Int           @default(0)
+  available_qty    Int           @default(0)
+  reserved_qty     Int           @default(0)
+  borrowed_qty     Int           @default(0)
+  damaged_qty      Int           @default(0)
+  in_transit_qty   Int           @default(0)
+  safety_stock_qty Int           @default(0)
+  reorder_point    Int           @default(0)
+  status           String        @default("AVAILABLE") @db.VarChar(20)
+  version          Int           @default(1)
+  last_movement_at DateTime?     @db.Timestamptz(6)
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime      @default(now()) @db.Timestamptz(6)
+  locations        locations     @relation(fields: [location_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants    book_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouses       warehouses    @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([variant_id, location_id])
+  @@index([variant_id, location_id], map: "idx_stock_balances_variant_location")
+  @@index([warehouse_id, status], map: "idx_stock_balances_warehouse_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_movements {
+  id                                                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  movement_number                                       String           @unique @db.VarChar(40)
+  movement_type                                         String           @db.VarChar(20)
+  movement_status                                       String           @default("POSTED") @db.VarChar(20)
+  warehouse_id                                          String           @db.Uuid
+  variant_id                                            String           @db.Uuid
+  inventory_unit_id                                     String?          @db.Uuid
+  from_location_id                                      String?          @db.Uuid
+  to_location_id                                        String?          @db.Uuid
+  quantity                                              Int
+  unit_cost                                             Decimal          @default(0) @db.Decimal(12, 2)
+  reason_code                                           String?
+  source_service                                        String           @db.VarChar(30)
+  reference_type                                        String?          @db.VarChar(50)
+  reference_id                                          String?          @db.Uuid
+  correlation_id                                        String?          @db.Uuid
+  idempotency_key                                       String?          @unique @db.VarChar(100)
+  created_by_user_id                                    String?          @db.Uuid
+  metadata                                              Json             @default("{}")
+  created_at                                            DateTime         @default(now()) @db.Timestamptz(6)
+  locations_stock_movements_from_location_idTolocations locations?       @relation("stock_movements_from_location_idTolocations", fields: [from_location_id], references: [id], onUpdate: NoAction)
+  inventory_units                                       inventory_units? @relation(fields: [inventory_unit_id], references: [id], onUpdate: NoAction)
+  locations_stock_movements_to_location_idTolocations   locations?       @relation("stock_movements_to_location_idTolocations", fields: [to_location_id], references: [id], onUpdate: NoAction)
+  book_variants                                         book_variants    @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  warehouses                                            warehouses       @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([reference_type, reference_id], map: "idx_stock_movements_reference")
+  @@index([variant_id, created_at(sort: Desc)], map: "idx_stock_movements_variant_created_at")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model stock_reservations {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reservation_code    String        @unique @db.VarChar(40)
+  variant_id          String        @db.Uuid
+  warehouse_id        String        @db.Uuid
+  location_id         String?       @db.Uuid
+  customer_id         String?       @db.Uuid
+  source_service      String        @db.VarChar(20)
+  source_reference_id String?       @db.Uuid
+  quantity            Int
+  status              String        @default("ACTIVE") @db.VarChar(20)
+  expires_at          DateTime      @db.Timestamptz(6)
+  created_by_user_id  String?       @db.Uuid
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime      @default(now()) @db.Timestamptz(6)
+  locations           locations?    @relation(fields: [location_id], references: [id], onUpdate: NoAction)
+  book_variants       book_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  warehouses          warehouses    @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status, expires_at], map: "idx_stock_reservations_status_expires")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model supplier_variants {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_id    String        @db.Uuid
+  variant_id     String        @db.Uuid
+  supplier_sku   String?       @db.VarChar(50)
+  lead_time_days Int?
+  default_cost   Decimal       @default(0) @db.Decimal(12, 2)
+  min_order_qty  Int           @default(1)
+  is_preferred   Boolean       @default(false)
+  created_at     DateTime      @default(now()) @db.Timestamptz(6)
+  suppliers      suppliers     @relation(fields: [supplier_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants  book_variants @relation(fields: [variant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([supplier_id, variant_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model suppliers {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String?             @unique @db.VarChar(30)
+  name              String              @unique @db.VarChar(150)
+  contact_name      String?             @db.VarChar(150)
+  phone             String?             @db.VarChar(30)
+  email             String?             @db.VarChar(150)
+  address           String?
+  tax_code          String?             @db.VarChar(50)
+  status            String              @default("ACTIVE") @db.VarChar(20)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  purchase_orders   purchase_orders[]
+  supplier_variants supplier_variants[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model transfer_order_items {
+  id                                                         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transfer_order_id                                          String          @db.Uuid
+  variant_id                                                 String          @db.Uuid
+  from_location_id                                           String?         @db.Uuid
+  to_location_id                                             String?         @db.Uuid
+  quantity                                                   Int
+  shipped_qty                                                Int             @default(0)
+  received_qty                                               Int             @default(0)
+  note                                                       String?
+  locations_transfer_order_items_from_location_idTolocations locations?      @relation("transfer_order_items_from_location_idTolocations", fields: [from_location_id], references: [id], onUpdate: NoAction)
+  locations_transfer_order_items_to_location_idTolocations   locations?      @relation("transfer_order_items_to_location_idTolocations", fields: [to_location_id], references: [id], onUpdate: NoAction)
+  transfer_orders                                            transfer_orders @relation(fields: [transfer_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  book_variants                                              book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model transfer_orders {
+  id                                                       String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transfer_number                                          String                 @unique @db.VarChar(40)
+  from_warehouse_id                                        String                 @db.Uuid
+  to_warehouse_id                                          String                 @db.Uuid
+  status                                                   String                 @default("DRAFT") @db.VarChar(30)
+  requested_by_user_id                                     String                 @db.Uuid
+  approved_by_user_id                                      String?                @db.Uuid
+  shipped_by_user_id                                       String?                @db.Uuid
+  received_by_user_id                                      String?                @db.Uuid
+  requested_at                                             DateTime               @default(now()) @db.Timestamptz(6)
+  shipped_at                                               DateTime?              @db.Timestamptz(6)
+  received_at                                              DateTime?              @db.Timestamptz(6)
+  note                                                     String?
+  created_at                                               DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                               DateTime               @default(now()) @db.Timestamptz(6)
+  transfer_order_items                                     transfer_order_items[]
+  warehouses_transfer_orders_from_warehouse_idTowarehouses warehouses             @relation("transfer_orders_from_warehouse_idTowarehouses", fields: [from_warehouse_id], references: [id], onUpdate: NoAction)
+  warehouses_transfer_orders_to_warehouse_idTowarehouses   warehouses             @relation("transfer_orders_to_warehouse_idTowarehouses", fields: [to_warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([status, requested_at], map: "idx_transfer_orders_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model warehouse_settings {
+  warehouse_id                String     @id @db.Uuid
+  reservation_hold_hours      Int        @default(24)
+  allow_negative_stock        Boolean    @default(false)
+  default_low_stock_threshold Int        @default(5)
+  enable_cycle_count          Boolean    @default(true)
+  created_at                  DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime   @default(now()) @db.Timestamptz(6)
+  warehouses                  warehouses @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model warehouses {
+  id                                                            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                                          String               @unique @db.VarChar(30)
+  name                                                          String               @db.VarChar(150)
+  warehouse_type                                                String               @default("WAREHOUSE") @db.VarChar(20)
+  address_line1                                                 String?
+  address_line2                                                 String?
+  ward                                                          String?              @db.VarChar(120)
+  district                                                      String?              @db.VarChar(120)
+  province                                                      String?              @db.VarChar(120)
+  country                                                       String               @default("Vietnam") @db.VarChar(120)
+  manager_user_id                                               String?              @db.Uuid
+  is_active                                                     Boolean              @default(true)
+  created_at                                                    DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                                                    DateTime             @default(now()) @db.Timestamptz(6)
+  goods_receipts                                                goods_receipts[]
+  inventory_units                                               inventory_units[]
+  locations                                                     locations[]
+  outbound_orders                                               outbound_orders[]
+  purchase_orders                                               purchase_orders[]
+  stock_alerts                                                  stock_alerts[]
+  stock_audits                                                  stock_audits[]
+  stock_balances                                                stock_balances[]
+  stock_movements                                               stock_movements[]
+  stock_reservations                                            stock_reservations[]
+  transfer_orders_transfer_orders_from_warehouse_idTowarehouses transfer_orders[]    @relation("transfer_orders_from_warehouse_idTowarehouses")
+  transfer_orders_transfer_orders_to_warehouse_idTowarehouses   transfer_orders[]    @relation("transfer_orders_to_warehouse_idTowarehouses")
+  warehouse_settings                                            warehouse_settings?
 }
