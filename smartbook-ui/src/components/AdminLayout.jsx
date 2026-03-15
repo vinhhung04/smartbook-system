@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { LayoutDashboard, Library, ScanLine, History, Sparkles, Users, ShieldCheck, Map, FileText, Bell, Search, ScanBarcode } from 'lucide-react';
 import AIChatbot from './AIChatbot';
 import ScannerModal from './ScannerModal';
+import { clearToken } from '../services/api';
 
 // --- Menu chính ---
 const menuItems = [
@@ -95,6 +96,13 @@ function Sidebar() {
 
 // =====================  HEADER  =====================
 function Header({ onScanClick }) {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    clearToken();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center px-6 gap-4 flex-shrink-0">
       {/* Search + Scan button */}
@@ -129,6 +137,15 @@ function Header({ onScanClick }) {
         <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm cursor-pointer hover:bg-indigo-700 transition-colors">
           A
         </div>
+
+        {/* Logout button */}
+        <button
+          onClick={handleLogout}
+          className="text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 px-3 py-1 rounded-md transition-colors"
+          title="Đăng xuất"
+        >
+          Đăng xuất
+        </button>
       </div>
     </header>
   );
