@@ -1,13 +1,10 @@
-# Services Overview
+# Services Doc (Archived)
 
-Short summary of services in this repository:
+Noi dung mo ta services da duoc gop vao README chinh de tranh trung lap.
 
-- `inventory-service/` — Canonical inventory service (backend implementation, exposes inventory endpoints).
-- `smartbook-backend/inventory-service/` — (CONSOLIDATED) now removed; code merged into root `inventory-service/`.
-- `smartbook-ui/` — Frontend React app.
-- `ai-service/` — Python AI helper service (OCR, Ollama).
-
-Recommendations:
-- Duplicate `inventory-service` consolidated: root `inventory-service` now holds the backend implementation.
-- Fix `smartbook-ui/package.json` git conflict (already resolved).
-- Standardize Prisma versions or separate DB ownership per service.
+- Xem tong hop: `README.md`
+- Chi tiet tung service:
+	- `auth-service/README.md`
+	- `inventory-service/README.md`
+	- `ai-service/README.md`
+	- `smartbook-ui/README.md`
