@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { LayoutDashboard, Library, BookOpen, ClipboardList, ScanLine, History, Sparkles, Users, ShieldCheck, Map, FileText, Bell, Search, ScanBarcode } from 'lucide-react';
 import AIChatbot from './AIChatbot';
 import ScannerModal from './ScannerModal';
-import { clearToken } from '../services/api';
+import { clearToken, hasAnyPermission } from '../services/api';
 
 // --- Nhóm menu chính ---
 const overviewMenuItems = [
@@ -29,13 +29,25 @@ const warehouseOperationMenuItems = [
 
 // --- Nhóm menu HỆ THỐNG ---
 const systemMenuItems = [
-  { label: 'Nhân viên', icon: Users, to: '/users' },
-  { label: 'Phân quyền', icon: ShieldCheck, to: '/roles' },
+  {
+    label: 'Nhân viên',
+    icon: Users,
+    to: '/users',
+    visible: () => hasAnyPermission(['auth.users.read', 'auth.users.write']),
+  },
+  {
+    label: 'Phân quyền',
+    icon: ShieldCheck,
+    to: '/roles',
+    visible: () => hasAnyPermission(['auth.roles.read', 'auth.roles.write']),
+  },
 ];
 
 // =====================  SIDEBAR  =====================
 function Sidebar() {
-  const renderMenuItems = (items) => items.map(({ label, icon: Icon, to }) => (
+    const renderMenuItems = (items) => items
+      .filter((item) => (typeof item.visible === 'function' ? item.visible() : true))
+      .map(({ label, icon: Icon, to }) => (
     <NavLink
       key={to}
       to={to}

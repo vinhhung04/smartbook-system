@@ -15,6 +15,43 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+export function getTokenPayload() {
+  try {
+    const token = getToken();
+    if (!token) return null;
+
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    const payload = parts[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const decoded = atob(payload);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+export function hasPermission(permissionCode) {
+  const payload = getTokenPayload();
+  if (!payload) return false;
+  if (payload.is_superuser) return true;
+
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  return permissions.includes(permissionCode);
+}
+
+export function hasAnyPermission(permissionCodes = []) {
+  const payload = getTokenPayload();
+  if (!payload) return false;
+  if (payload.is_superuser) return true;
+
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  return permissionCodes.some((code) => permissions.includes(code));
+}
+
 async function parseResponse(response) {
   const text = await response.text();
   if (!text) {
@@ -110,6 +147,81 @@ export async function register(payload) {
   }
 
   return data;
+}
+
+async function authApiRequest(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${AUTH_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const payload = await parseResponse(response);
+
+  if (!response.ok) {
+    const message = createErrorMessage(payload, `Request failed with status ${response.status}`);
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+export async function getUsers(params = {}) {
+  const query = new URLSearchParams();
+
+  if (params.search) query.set('search', params.search);
+  if (params.status) query.set('status', params.status);
+
+  const suffix = query.toString() ? `?${query}` : '';
+  return authApiRequest(`/iam/users${suffix}`, { method: 'GET' });
+}
+
+export async function createUser(payload) {
+  return authApiRequest('/iam/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateUser(id, payload) {
+  return authApiRequest(`/iam/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getRoles() {
+  return authApiRequest('/iam/roles', { method: 'GET' });
+}
+
+export async function createRole(payload) {
+  return authApiRequest('/iam/roles', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPermissions() {
+  return authApiRequest('/iam/permissions', { method: 'GET' });
+}
+
+export async function updateRolePermissions(roleId, permissionIds) {
+  return authApiRequest(`/iam/roles/${roleId}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ permission_ids: permissionIds }),
+  });
 }
 
 export async function getAllBooks() {
