@@ -3,30 +3,68 @@
 
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { LayoutDashboard, Library, ScanLine, History, Sparkles, Users, ShieldCheck, Map, FileText, Bell, Search, ScanBarcode } from 'lucide-react';
+import { LayoutDashboard, Library, BookOpen, ClipboardList, ScanLine, History, Sparkles, Users, ShieldCheck, Map, FileText, Bell, Search, ScanBarcode } from 'lucide-react';
 import AIChatbot from './AIChatbot';
 import ScannerModal from './ScannerModal';
-import { clearToken } from '../services/api';
+import { clearToken, hasAnyPermission } from '../services/api';
 
-// --- Menu chính ---
-const menuItems = [
+// --- Nhóm menu chính ---
+const overviewMenuItems = [
   { label: 'Tổng quan', icon: LayoutDashboard, to: '/' },
-  { label: 'Kho sách', icon: Library, to: '/inventory' },
-  { label: 'Sơ đồ kho', icon: Map, to: '/warehouse-map' },
-  { label: 'Nhập kho AI', icon: ScanLine, to: '/ai-import' },
-  { label: 'Phiếu nhập kho', icon: FileText, to: '/orders' },
-  { label: 'Lịch sử kho', icon: History, to: '/movements' },
+];
+
+const libraryOperationMenuItems = [
+  { label: 'Danh mục sách', icon: BookOpen, to: '/book-catalog' },
+  { label: 'Mượn / Trả sách', icon: ClipboardList, to: '/borrow-management' },
   { label: 'Gợi ý AI', icon: Sparkles, to: '/recommendations' },
+];
+
+const warehouseOperationMenuItems = [
+  { label: 'Kho sách', icon: Library, to: '/inventory' },
+  { label: 'Phiếu nhập kho', icon: FileText, to: '/orders' },
+  { label: 'Sơ đồ kho', icon: Map, to: '/warehouse-map' },
+  { label: 'Nhập kho', icon: ScanLine, to: '/inbound' },
+  { label: 'Lịch sử kho', icon: History, to: '/movements' },
 ];
 
 // --- Nhóm menu HỆ THỐNG ---
 const systemMenuItems = [
-  { label: 'Nhân viên', icon: Users, to: '/users' },
-  { label: 'Phân quyền', icon: ShieldCheck, to: '/roles' },
+  {
+    label: 'Nhân viên',
+    icon: Users,
+    to: '/users',
+    visible: () => hasAnyPermission(['auth.users.read', 'auth.users.write']),
+  },
+  {
+    label: 'Phân quyền',
+    icon: ShieldCheck,
+    to: '/roles',
+    visible: () => hasAnyPermission(['auth.roles.read', 'auth.roles.write']),
+  },
 ];
 
 // =====================  SIDEBAR  =====================
 function Sidebar() {
+    const renderMenuItems = (items) => items
+      .filter((item) => (typeof item.visible === 'function' ? item.visible() : true))
+      .map(({ label, icon: Icon, to }) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors border-l-4 ${
+          isActive
+            ? 'bg-gray-800 text-white border-indigo-500'
+            : 'text-gray-300 border-transparent hover:bg-gray-800 hover:text-white'
+        }`
+      }
+    >
+      <Icon size={18} />
+      <span>{label}</span>
+    </NavLink>
+  ));
+
   return (
     <aside className="w-64 min-h-screen bg-gray-900 flex flex-col flex-shrink-0">
       {/* Logo */}
@@ -38,45 +76,30 @@ function Sidebar() {
 
       {/* Navigation chính */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {menuItems.map(({ label, icon: Icon, to }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors border-l-4 ${
-                isActive
-                  ? 'bg-gray-800 text-white border-indigo-500'
-                  : 'text-gray-300 border-transparent hover:bg-gray-800 hover:text-white'
-              }`
-            }
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </NavLink>
-        ))}
+        <div>
+          {renderMenuItems(overviewMenuItems)}
+        </div>
+
+        <div className="pt-4 mt-2 border-t border-gray-700/60">
+          <p className="px-3 pb-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            VẬN HÀNH THƯ VIỆN
+          </p>
+          {renderMenuItems(libraryOperationMenuItems)}
+        </div>
+
+        <div className="pt-4 mt-2 border-t border-gray-700/60">
+          <p className="px-3 pb-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+            NGHIỆP VỤ KHO
+          </p>
+          {renderMenuItems(warehouseOperationMenuItems)}
+        </div>
 
         {/* Nhóm HỆ THỐNG */}
         <div className="pt-4 mt-2 border-t border-gray-700/60">
           <p className="px-3 pb-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
             HỆ THỐNG
           </p>
-          {systemMenuItems.map(({ label, icon: Icon, to }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors border-l-4 ${
-                  isActive
-                    ? 'bg-gray-800 text-white border-indigo-500'
-                    : 'text-gray-300 border-transparent hover:bg-gray-800 hover:text-white'
-                }`
-              }
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+          {renderMenuItems(systemMenuItems)}
         </div>
       </nav>
 

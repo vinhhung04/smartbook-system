@@ -11,6 +11,38 @@ function normalizeIdentifier(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+async function getUserRolesAndPermissions(userId) {
+  const roleRows = await prisma.$queryRawUnsafe(
+    `
+      SELECT DISTINCT r.code
+      FROM user_roles ur
+      JOIN roles r ON r.id = ur.role_id
+      WHERE ur.user_id = $1::uuid
+        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+      ORDER BY r.code ASC
+    `,
+    userId
+  );
+
+  const permissionRows = await prisma.$queryRawUnsafe(
+    `
+      SELECT DISTINCT p.code
+      FROM user_roles ur
+      JOIN role_permissions rp ON rp.role_id = ur.role_id
+      JOIN permissions p ON p.id = rp.permission_id
+      WHERE ur.user_id = $1::uuid
+        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+      ORDER BY p.code ASC
+    `,
+    userId
+  );
+
+  return {
+    roles: roleRows.map((r) => r.code),
+    permissions: permissionRows.map((p) => p.code),
+  };
+}
+
 async function register(req, res) {
   try {
     const username = String(req.body?.username || '').trim();
@@ -26,13 +58,19 @@ async function register(req, res) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ email }, { username }],
-      },
-    });
+    const existingUser = await prisma.$queryRawUnsafe(
+      `
+      SELECT id
+      FROM users
+      WHERE lower(username::text) = lower($1)
+         OR lower(email::text) = lower($2)
+      LIMIT 1
+      `,
+      username,
+      email
+    );
 
-    if (existingUser) {
+    if (existingUser.length) {
       return res.status(409).json({ message: 'Email or username already exists' });
     }
 
@@ -67,11 +105,22 @@ async function login(req, res) {
       return res.status(400).json({ message: 'Identifier and password are required' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [{ email: identifier }, { username: identifier }],
-      },
-    });
+    const users = await prisma.$queryRawUnsafe(
+      `
+      SELECT *
+      FROM users
+      WHERE deleted_at IS NULL
+        AND (
+          lower(username::text) = lower($1)
+          OR lower(email::text) = lower($1)
+        )
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      identifier
+    );
+
+    const user = users[0];
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -91,12 +140,17 @@ async function login(req, res) {
       return res.status(500).json({ message: 'JWT_SECRET is not configured' });
     }
 
+    const { roles, permissions } = await getUserRolesAndPermissions(user.id);
+
     const token = jwt.sign(
       {
         sub: user.id,
         username: user.username,
         email: user.email,
         status: user.status,
+        is_superuser: user.is_superuser,
+        roles,
+        permissions,
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
@@ -105,7 +159,11 @@ async function login(req, res) {
     return res.json({
       message: 'Login successful',
       token,
-      user: sanitizeUser(user),
+      user: {
+        ...sanitizeUser(user),
+        roles,
+        permissions,
+      },
     });
   } catch (error) {
     console.error('login error:', error);

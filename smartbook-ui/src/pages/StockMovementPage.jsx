@@ -1,86 +1,9 @@
 // src/pages/StockMovementPage.jsx
 // Trang Lịch sử biến động kho — bảng log giao dịch + bộ lọc
 
-import { useState } from 'react';
-import { Filter } from 'lucide-react';
-
-// =====================  MOCK DATA  =====================
-const MOCK_TRANSACTIONS = [
-  {
-    id: 'TRX-001',
-    time: '28/02/2026 09:15',
-    type: 'inbound',
-    book: 'Đắc Nhân Tâm',
-    sku: 'BK001-HRD-NEW',
-    delta: +50,
-    user: 'admin@smartbook.ai',
-  },
-  {
-    id: 'TRX-002',
-    time: '28/02/2026 10:02',
-    type: 'outbound',
-    book: 'Nhà Giả Kim',
-    sku: 'BK002-SFT-NEW',
-    delta: -12,
-    user: 'nhanvien01',
-  },
-  {
-    id: 'TRX-003',
-    time: '27/02/2026 14:30',
-    type: 'transfer',
-    book: 'Atomic Habits',
-    sku: 'BK005-SFT-NEW',
-    delta: 0,
-    note: 'Kệ C-1 → Kệ A-3',
-    user: 'nhanvien02',
-  },
-  {
-    id: 'TRX-004',
-    time: '27/02/2026 11:55',
-    type: 'outbound',
-    book: 'Sapiens',
-    sku: 'BK003-HRD-NEW',
-    delta: -5,
-    user: 'nhanvien01',
-  },
-  {
-    id: 'TRX-005',
-    time: '26/02/2026 16:00',
-    type: 'inbound',
-    book: 'Tư Duy Nhanh Và Chậm',
-    sku: 'BK004-SFT-NEW',
-    delta: +30,
-    user: 'admin@smartbook.ai',
-  },
-  {
-    id: 'TRX-006',
-    time: '26/02/2026 08:45',
-    type: 'transfer',
-    book: 'Đắc Nhân Tâm',
-    sku: 'BK001-SFT-OLD',
-    delta: 0,
-    note: 'Kệ D-3 → Kệ B-4',
-    user: 'nhanvien02',
-  },
-  {
-    id: 'TRX-007',
-    time: '25/02/2026 13:20',
-    type: 'inbound',
-    book: 'Dune',
-    sku: 'BK042-HRD-NEW',
-    delta: +20,
-    user: 'admin@smartbook.ai',
-  },
-  {
-    id: 'TRX-008',
-    time: '25/02/2026 10:10',
-    type: 'outbound',
-    book: 'Atomic Habits',
-    sku: 'BK005-SFT-NEW',
-    delta: -8,
-    user: 'nhanvien01',
-  },
-];
+import { useEffect, useMemo, useState } from 'react';
+import { Filter, Loader2, RefreshCw } from 'lucide-react';
+import { getStockMovements } from '../services/api';
 
 // =====================  TYPE CONFIG  =====================
 const TYPE_CONFIG = {
@@ -110,19 +33,69 @@ function DeltaCell({ type, delta, note }) {
   );
 }
 
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function isSameDate(value, filterDate) {
+  if (!filterDate) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const dateString = `${year}-${month}-${day}`;
+  return dateString === filterDate;
+}
+
 // =====================  MAIN PAGE  =====================
 export default function StockMovementPage() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [movements, setMovements] = useState([]);
   const [filterType, setFilterType] = useState('all');   // all | inbound | outbound | transfer
   const [filterDate, setFilterDate] = useState('');
 
-  const filtered = MOCK_TRANSACTIONS.filter((t) => {
+  async function loadMovements(showRefreshing = false) {
+    if (showRefreshing) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    setErrorMessage('');
+    try {
+      const response = await getStockMovements();
+      setMovements(Array.isArray(response) ? response : []);
+    } catch (error) {
+      setErrorMessage(error.message || 'Không tải được lịch sử kho từ DB.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    loadMovements(false);
+  }, []);
+
+  const filtered = useMemo(() => movements.filter((t) => {
     const matchType = filterType === 'all' || t.type === filterType;
-    const matchDate = !filterDate || t.time.startsWith(
-      // filterDate is yyyy-mm-dd, convert to dd/mm/yyyy prefix
-      `${filterDate.slice(8, 10)}/${filterDate.slice(5, 7)}/${filterDate.slice(0, 4)}`
-    );
+    const matchDate = isSameDate(t.created_at, filterDate);
     return matchType && matchDate;
-  });
+  }), [movements, filterType, filterDate]);
 
   return (
     <div className="space-y-6">
@@ -137,6 +110,15 @@ export default function StockMovementPage() {
 
         {/* Bộ lọc */}
         <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => loadMovements(true)}
+            className="inline-flex items-center gap-2 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg"
+          >
+            {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Làm mới
+          </button>
+
           <div className="flex items-center gap-1.5 text-gray-500">
             <Filter size={15} />
             <span className="text-sm font-medium">Lọc:</span>
@@ -174,6 +156,10 @@ export default function StockMovementPage() {
         </div>
       </div>
 
+      {errorMessage ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
+      ) : null}
+
       {/* Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         {/* Summary row */}
@@ -194,21 +180,32 @@ export default function StockMovementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      Đang tải dữ liệu từ DB...
+                    </span>
+                  </td>
+                </tr>
+              ) : null}
+
+              {!loading && filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-gray-400 text-sm">
                     Không tìm thấy giao dịch nào phù hợp.
                   </td>
                 </tr>
               ) : (
-                filtered.map((t) => (
+                !loading && filtered.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                     {/* Thời gian */}
-                    <td className="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">{t.time}</td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(t.created_at)}</td>
 
                     {/* Mã GD */}
                     <td className="px-5 py-3.5 font-mono text-xs text-gray-600 font-semibold">
-                      #{t.id}
+                      #{t.movement_number || t.id}
                     </td>
 
                     {/* Loại */}
@@ -218,17 +215,17 @@ export default function StockMovementPage() {
 
                     {/* Tên sách & SKU */}
                     <td className="px-5 py-3.5">
-                      <p className="font-medium text-gray-800 truncate max-w-[180px]">{t.book}</p>
-                      <p className="text-xs text-gray-400 font-mono mt-0.5">{t.sku}</p>
+                      <p className="font-medium text-gray-800 truncate max-w-[220px]">{t.book_title}</p>
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{t.sku || t.barcode || '-'}</p>
                     </td>
 
                     {/* Số lượng */}
                     <td className="px-5 py-3.5 text-center">
-                      <DeltaCell type={t.type} delta={t.delta} note={t.note} />
+                      <DeltaCell type={t.type} delta={t.delta} note={t.transfer_note} />
                     </td>
 
                     {/* Người thực hiện */}
-                    <td className="px-5 py-3.5 text-gray-500 text-xs">{t.user}</td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs">{t.created_by_user_id || '-'}</td>
                   </tr>
                 ))
               )}

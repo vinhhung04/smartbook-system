@@ -5,19 +5,25 @@ const { PrismaClient } = require('@prisma/client');
 const authMiddleware = require('./middlewares/auth.middleware');
 const bookRoutes = require('./routes/book.routes');
 const warehouseRoutes = require('./routes/warehouse.routes');
+const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
+const stockMovementRoutes = require('./routes/stock-movement.routes');
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '8mb';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 // Only API routes require JWT.
 app.use('/api', authMiddleware);
 
 app.use('/api/books', bookRoutes);
 app.use('/api/warehouses', warehouseRoutes);
+app.use('/api/goods-receipts', goodsReceiptRoutes);
+app.use('/api/stock-movements', stockMovementRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
@@ -123,6 +129,17 @@ app.post('/api/inventory/outbound', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Return JSON for oversized request payloads (e.g. base64 cover image uploads).
+app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({
+      message: `Payload quá lớn. Vui lòng dùng ảnh nhỏ hơn hoặc nén ảnh trước khi upload (giới hạn hiện tại: ${JSON_BODY_LIMIT}).`,
+    });
+  }
+
+  return next(err);
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────

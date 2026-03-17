@@ -3,7 +3,9 @@
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AdminLayout          from './components/AdminLayout';
+import BorrowManagementPage from './pages/BorrowManagementPage';
 import DashboardPage        from './pages/DashboardPage';
+import BookCatalogPage      from './pages/BookCatalogPage';
 import InventoryPage        from './pages/InventoryPage';
 import AIImportPage         from './pages/AIImportPage';
 import BookDetailPage       from './pages/BookDetailPage';
@@ -14,9 +16,20 @@ import RoleManagementPage   from './pages/RoleManagementPage';
 import WarehouseBuilderPage from './pages/WarehouseBuilderPage';
 import OrdersPage           from './pages/OrdersPage';
 import CreateOrderPage      from './pages/CreateOrderPage';
+import OrderDetailPage      from './pages/OrderDetailPage';
 import LoginPage            from './pages/LoginPage';
 import RegisterPage         from './pages/RegisterPage';
-import { TOKEN_KEY }        from './services/api';
+import { TOKEN_KEY, hasAnyPermission } from './services/api';
+
+function RequirePermission({ permissions, children }) {
+  const allowed = hasAnyPermission(permissions);
+
+  if (!allowed) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
 
 function ProtectedLayout() {
   const location = useLocation();
@@ -31,16 +44,33 @@ function ProtectedLayout() {
       <Routes>
         <Route path="/"                element={<DashboardPage />} />
         <Route path="/dashboard"       element={<DashboardPage />} />
+        <Route path="/book-catalog"    element={<BookCatalogPage />} />
+        <Route path="/borrow-management" element={<BorrowManagementPage />} />
         <Route path="/inventory"       element={<InventoryPage />} />
         <Route path="/inventory/:id"   element={<BookDetailPage />} />
-        <Route path="/ai-import"       element={<AIImportPage />} />
+        <Route path="/inbound"         element={<AIImportPage />} />
         <Route path="/movements"       element={<StockMovementPage />} />
         <Route path="/recommendations" element={<RecommendationPage />} />
-        <Route path="/users"           element={<UserManagementPage />} />
-        <Route path="/roles"           element={<RoleManagementPage />} />
+        <Route
+          path="/users"
+          element={(
+            <RequirePermission permissions={['auth.users.read', 'auth.users.write']}>
+              <UserManagementPage />
+            </RequirePermission>
+          )}
+        />
+        <Route
+          path="/roles"
+          element={(
+            <RequirePermission permissions={['auth.roles.read', 'auth.roles.write']}>
+              <RoleManagementPage />
+            </RequirePermission>
+          )}
+        />
         <Route path="/warehouse-map"   element={<WarehouseBuilderPage />} />
         <Route path="/orders"          element={<OrdersPage />} />
         <Route path="/orders/create"   element={<CreateOrderPage />} />
+        <Route path="/orders/:id"      element={<OrderDetailPage />} />
         <Route path="*"                element={<Navigate to="/" replace />} />
       </Routes>
     </AdminLayout>

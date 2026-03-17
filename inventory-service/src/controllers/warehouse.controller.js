@@ -3,8 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 function parseId(value) {
-  const id = Number(value);
-  return Number.isNaN(id) ? null : id;
+  return String(value || '').trim() || null;
 }
 
 async function getAllWarehouses(req, res) {
@@ -14,7 +13,7 @@ async function getAllWarehouses(req, res) {
       include: {
         _count: {
           select: {
-            zones: true,
+            locations: true,
           },
         },
       },
@@ -40,7 +39,7 @@ async function getWarehouseById(req, res) {
       include: {
         _count: {
           select: {
-            zones: true,
+            locations: true,
           },
         },
       },
@@ -58,7 +57,7 @@ async function getWarehouseById(req, res) {
 }
 
 async function createWarehouse(req, res) {
-  const { name, code, address, type } = req.body;
+  const { name, code, warehouse_type, address_line1 } = req.body;
 
   if (!name || !code) {
     return res.status(400).json({ message: 'name and code are required' });
@@ -69,8 +68,8 @@ async function createWarehouse(req, res) {
       data: {
         name,
         code,
-        address: address || null,
-        type: type || null,
+        warehouse_type: warehouse_type || 'WAREHOUSE',
+        address_line1: address_line1 || null,
       },
     });
 
@@ -88,7 +87,7 @@ async function updateWarehouse(req, res) {
     return res.status(400).json({ message: 'Invalid warehouse id' });
   }
 
-  const { name, code, address, type } = req.body;
+  const { name, code, warehouse_type, address_line1 } = req.body;
 
   try {
     const exists = await prisma.warehouses.findUnique({ where: { id } });
@@ -101,8 +100,8 @@ async function updateWarehouse(req, res) {
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(code !== undefined ? { code } : {}),
-        ...(address !== undefined ? { address } : {}),
-        ...(type !== undefined ? { type } : {}),
+        ...(warehouse_type !== undefined ? { warehouse_type } : {}),
+        ...(address_line1 !== undefined ? { address_line1 } : {}),
       },
     });
 

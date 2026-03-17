@@ -1,514 +1,550 @@
-﻿// src/pages/AIImportPage.jsx
-// Trang nháº­p kho thÃ´ng minh báº±ng AI â€” Upload áº£nh â†’ PhÃ¢n tÃ­ch â†’ Äiá»n form
-
-import { useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Barcode, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 import {
-  CloudUpload, Loader2, CheckCircle,
-  Sparkles, AlertTriangle, X, RefreshCw, ScanBarcode,
-} from 'lucide-react';
+  createGoodsReceipt,
+  createIncompleteBook,
+  findBookByBarcode,
+  getWarehouseLocations,
+  getWarehouses,
+} from '../services/api';
 
-const AI_API_BASE    = 'http://localhost:8000';
-const INVENTORY_API  = 'http://localhost:3001';
+function formatMoney(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return '0';
+  return new Intl.NumberFormat('vi-VN').format(numberValue);
+}
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-//  Toast component (ná»™i bá»™, khÃ´ng cáº§n thÆ° viá»‡n ngoÃ i)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function Toast({ toasts, onDismiss }) {
+function makeRow(data, defaultLocationId) {
+  return {
+    row_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    variant_id: data.variant_id,
+    barcode: data.barcode,
+    title: data.title,
+    unit_cost: Number(data.unit_cost || 0),
+    quantity: 1,
+    location_id: defaultLocationId || '',
+    is_new_book: Boolean(data.is_incomplete || data.created_new),
+  };
+}
+
+function NewBookModal({ open, barcode, submitting, onClose, onSave }) {
+  const [title, setTitle] = useState('');
+  const [price, setPrice] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle('');
+    setPrice('');
+    setError('');
+  }, [open]);
+
+  if (!open) return null;
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const value = Number(price);
+
+    if (!title.trim()) {
+      setError('Vui lòng nhập tên sách.');
+      return;
+    }
+
+    if (!Number.isFinite(value) || value < 0) {
+      setError('Giá sách phải lớn hơn hoặc bằng 0.');
+      return;
+    }
+
+    setError('');
+    onSave({ title: title.trim(), price: value });
+  }
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm pointer-events-auto
-            transition-all duration-300 animate-fade-in
-            ${t.type === 'success' ? 'bg-green-600 text-white' : ''}
-            ${t.type === 'error'   ? 'bg-red-600   text-white' : ''}
-            ${t.type === 'info'    ? 'bg-indigo-600 text-white' : ''}
-          `}
-        >
-          {t.type === 'success' && <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />}
-          {t.type === 'error'   && <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />}
-          {t.type === 'info'    && <Sparkles size={16} className="flex-shrink-0 mt-0.5" />}
-          <span className="flex-1">{t.message}</span>
-          <button onClick={() => onDismiss(t.id)} className="ml-1 opacity-70 hover:opacity-100">
-            <X size={14} />
-          </button>
-        </div>
-      ))}
+    <div className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm flex items-center justify-center px-4">
+      <div className="glass-card w-full max-w-lg rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-slate-800">Sách mới chưa có trong hệ thống</h3>
+        <p className="text-sm text-slate-600 mt-1">
+          Barcode: <span className="font-semibold text-slate-800">{barcode}</span>
+        </p>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tên sách</label>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Nhập tên sách mới"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Giá</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(event) => setPrice(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Nhập giá sách"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:bg-indigo-400"
+            >
+              {submitting ? <Loader2 size={15} className="animate-spin" /> : null}
+              {submitting ? 'Đang tạo sách...' : 'Lưu sách mới'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
 
-function useToast() {
-  const [toasts, setToasts] = useState([]);
-  const add = useCallback((message, type = 'info', duration = 4000) => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    if (duration > 0) setTimeout(() => dismiss(id), duration);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const dismiss = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-  return { toasts, add, dismiss };
-}
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-//  Field definitions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const BOOK_FIELDS = [
-  { label: 'TÃªn sÃ¡ch',     key: 'title',     span: true,  placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
-  { label: 'TÃ¡c giáº£',      key: 'author',    span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
-  { label: 'ISBN',         key: 'isbn',      span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
-  { label: 'NhÃ  xuáº¥t báº£n', key: 'publisher', span: false, placeholder: 'AI sáº½ tá»± Ä‘iá»n...' },
-  { label: 'GiÃ¡ bÃ¡n',      key: 'price',     span: false, placeholder: 'VD: 85.000Ä‘' },
-];
-
-const EMPTY_FORM = { title: '', author: '', isbn: '', publisher: '', price: '', quantity: '', location: '' };
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-//  Main Page
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function AIImportPage() {
-  const { toasts, add: addToast, dismiss } = useToast();
+  const [warehouses, setWarehouses] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(true);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [processingBarcode, setProcessingBarcode] = useState(false);
+  const [submittingReceipt, setSubmittingReceipt] = useState(false);
+  const [creatingBook, setCreatingBook] = useState(false);
 
-  // â”€â”€ State bÃ¬a trÆ°á»›c â”€â”€
-  const [fileObj,        setFileObj]        = useState(null);
-  const [preview,        setPreview]        = useState(null);
-  const [isAnalyzing,    setIsAnalyzing]    = useState(false);
-  const [isDragging,     setIsDragging]     = useState(false);
-  const fileInputRef = useRef(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [receiptNote, setReceiptNote] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [pendingRows, setPendingRows] = useState([]);
 
-  // â”€â”€ State máº·t sau â”€â”€
-  const [backFileObj,    setBackFileObj]    = useState(null);
-  const [backPreview,    setBackPreview]    = useState(null);
-  const [isScanningBack, setIsScanningBack] = useState(false);
-  const [isDraggingBack, setIsDraggingBack] = useState(false);
-  const backFileInputRef = useRef(null);
+  const [newBookModal, setNewBookModal] = useState({
+    open: false,
+    barcode: '',
+  });
 
-  // â”€â”€ State chung â”€â”€
-  const [isSaving,     setIsSaving]     = useState(false);
-  const [formData,     setFormData]     = useState(EMPTY_FORM);
-  const [formVisible,  setFormVisible]  = useState(false);
-  const [confirmed,    setConfirmed]    = useState(false);
+  useEffect(() => {
+    let cancelled = false;
 
-  // â”€â”€ Helper validate file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const validateImageFile = useCallback((file) => {
-    if (!file) return false;
-    if (!file.type.startsWith('image/')) {
-      addToast('Vui lÃ²ng chá»n file áº£nh (PNG, JPG, WEBPâ€¦)', 'error');
-      return false;
+    async function loadWarehouses() {
+      try {
+        const data = await getWarehouses();
+        if (cancelled) return;
+
+        const rows = Array.isArray(data) ? data : [];
+        setWarehouses(rows);
+
+        if (rows.length > 0) {
+          setWarehouseId(rows[0].id);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error.message || 'Không tải được danh sách kho.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingWarehouses(false);
+        }
+      }
     }
-    if (file.size > 10 * 1024 * 1024) {
-      addToast('File quÃ¡ lá»›n! Tá»‘i Ä‘a 10 MB.', 'error');
-      return false;
-    }
-    return true;
-  }, [addToast]);
 
-  const readPreview = (file, setter) => {
-    const reader = new FileReader();
-    reader.onload = (e) => setter(e.target.result);
-    reader.readAsDataURL(file);
-  };
+    loadWarehouses();
 
-  // â”€â”€ Xá»­ lÃ½ bÃ¬a trÆ°á»›c â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleFile = useCallback((file) => {
-    if (!validateImageFile(file)) return;
-    setFileObj(file);
-    setFormVisible(false);
-    setConfirmed(false);
-    setFormData(EMPTY_FORM);
-    setBackFileObj(null);
-    setBackPreview(null);
-    readPreview(file, setPreview);
-  }, [validateImageFile]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  }, [handleFile]);
-
-  // â”€â”€ Xá»­ lÃ½ máº·t sau â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleBackFile = useCallback((file) => {
-    if (!validateImageFile(file)) return;
-    setBackFileObj(file);
-    readPreview(file, setBackPreview);
-  }, [validateImageFile]);
-
-  const handleBackDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDraggingBack(false);
-    handleBackFile(e.dataTransfer.files[0]);
-  }, [handleBackFile]);
-
-  // â”€â”€ Gá»i AI phÃ¢n tÃ­ch bÃ¬a trÆ°á»›c â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleAnalyze = async () => {
-    if (!fileObj || isAnalyzing) return;
-    setIsAnalyzing(true);
-    setFormVisible(false);
-
-    try {
-      const fd = new FormData();
-      fd.append('file', fileObj, fileObj.name);
-      const res = await fetch(`${AI_API_BASE}/recognize-book`, { method: 'POST', body: fd });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
-      const data = await res.json();
-      console.log('Front cover AI:', data);
-      setFormData((prev) => ({
-        ...prev,
-        title:     data.title     ?? '',
-        author:    data.author    ?? '',
-        isbn:      data.isbn      ?? '',
-        publisher: data.publisher ?? '',
-      }));
-      setFormVisible(true);
-      addToast('AI nháº­n diá»‡n bÃ¬a trÆ°á»›c xong! Kiá»ƒm tra thÃ´ng tin bÃªn dÆ°á»›i.', 'success');
-    } catch (err) {
-      console.error(err);
-      addToast(`PhÃ¢n tÃ­ch bÃ¬a trÆ°á»›c tháº¥t báº¡i: ${err.message}`, 'error');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  // â”€â”€ Gá»i AI quÃ©t máº·t sau (barcode + giÃ¡) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleScanBack = async () => {
-    if (!backFileObj || isScanningBack) return;
-    setIsScanningBack(true);
-
-    try {
-      const fd = new FormData();
-      fd.append('file', backFileObj, backFileObj.name);
-      const res = await fetch(`${AI_API_BASE}/scan-back-cover`, { method: 'POST', body: fd });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
-      const data = await res.json();
-      console.log('Back cover AI:', data);
-      // Merge vÃ o form â€” chá»‰ ghi Ä‘Ã¨ náº¿u field Ä‘ang trá»‘ng hoáº·c AI tÃ¬m tháº¥y
-      setFormData((prev) => ({
-        ...prev,
-        isbn:  data.isbn  || prev.isbn,
-        price: data.price || prev.price,
-      }));
-      setFormVisible(true);
-      addToast(`QuÃ©t máº·t sau xong! ISBN: ${data.isbn ?? '?'} â€” GiÃ¡: ${data.price ?? '?'}`, 'success');
-    } catch (err) {
-      console.error(err);
-      addToast(`QuÃ©t máº·t sau tháº¥t báº¡i: ${err.message}`, 'error');
-    } finally {
-      setIsScanningBack(false);
-    }
-  };
-
-  // â”€â”€ Xá»­ lÃ½ thay Ä‘á»•i field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleFieldChange = (key, value) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  // â”€â”€ XÃ¡c nháº­n nháº­p kho â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleConfirm = async (e) => {
-    e.preventDefault();
-    if (!formData.quantity || Number(formData.quantity) < 1) {
-      addToast('Vui lÃ²ng nháº­p sá»‘ lÆ°á»£ng há»£p lá»‡.', 'error');
+  useEffect(() => {
+    if (!warehouseId) {
+      setLocations([]);
       return;
     }
-    setIsSaving(true);
-    try {
-      const res = await fetch(`${INVENTORY_API}/api/books`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isbn:      formData.isbn      || null,
-          title:     formData.title,
-          author:    formData.author    || null,
-          publisher: formData.publisher || null,
-          quantity:  Number(formData.quantity),
-          location:  formData.location  || null,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setConfirmed(true);
-      addToast(`ÄÃ£ nháº­p kho thÃ nh cÃ´ng: "${formData.title}"`, 'success', 6000);
-    } catch (err) {
-      addToast(`LÆ°u tháº¥t báº¡i: ${err.message}`, 'error');
-    } finally {
-      setIsSaving(false);
+
+    let cancelled = false;
+
+    async function loadLocations() {
+      setLoadingLocations(true);
+      try {
+        const response = await getWarehouseLocations(warehouseId);
+        if (cancelled) return;
+        const rows = Array.isArray(response?.locations) ? response.locations : [];
+        setLocations(rows);
+
+        setPendingRows((prev) => {
+          const fallbackLocation = rows[0]?.id || '';
+          return prev.map((row) => ({
+            ...row,
+            location_id: row.location_id || fallbackLocation,
+          }));
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error.message || 'Không tải được vị trí kho.');
+          setLocations([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingLocations(false);
+        }
+      }
     }
-  };
 
-  // â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleReset = () => {
-    setFileObj(null);     setPreview(null);
-    setBackFileObj(null); setBackPreview(null);
-    setFormData(EMPTY_FORM);
-    setFormVisible(false);
-    setConfirmed(false);
-    if (fileInputRef.current)     fileInputRef.current.value = '';
-    if (backFileInputRef.current) backFileInputRef.current.value = '';
-  };
+    loadLocations();
 
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    return () => {
+      cancelled = true;
+    };
+  }, [warehouseId]);
+
+  const totalQuantity = useMemo(
+    () => pendingRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
+    [pendingRows]
+  );
+
+  function upsertPendingRow(bookData) {
+    const defaultLocationId = locations[0]?.id || '';
+
+    setPendingRows((prev) => {
+      const existingIndex = prev.findIndex((row) => row.variant_id === bookData.variant_id);
+
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        const current = next[existingIndex];
+        next[existingIndex] = {
+          ...current,
+          quantity: Number(current.quantity || 0) + 1,
+        };
+        return next;
+      }
+
+      return [...prev, makeRow(bookData, defaultLocationId)];
+    });
+  }
+
+  async function handleBarcodeSubmit(event) {
+    event.preventDefault();
+
+    const barcode = barcodeInput.trim();
+    if (!barcode || processingBarcode) {
+      return;
+    }
+
+    if (!warehouseId) {
+      setErrorMessage('Vui lòng chọn kho trước khi quét barcode.');
+      return;
+    }
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setProcessingBarcode(true);
+
+    try {
+      const result = await findBookByBarcode(barcode);
+      upsertPendingRow(result);
+      setBarcodeInput('');
+    } catch (error) {
+      const msg = error.message || '';
+      if (msg.toLowerCase().includes('not found')) {
+        setNewBookModal({ open: true, barcode });
+      } else {
+        setErrorMessage(msg || 'Không thể tìm sách theo barcode.');
+      }
+    } finally {
+      setProcessingBarcode(false);
+    }
+  }
+
+  async function handleCreateNewBook(payload) {
+    setCreatingBook(true);
+    setErrorMessage('');
+
+    try {
+      const response = await createIncompleteBook({
+        barcode: newBookModal.barcode,
+        title: payload.title,
+        price: payload.price,
+      });
+
+      const bookData = response?.data;
+      upsertPendingRow(bookData);
+      setNewBookModal({ open: false, barcode: '' });
+      setBarcodeInput('');
+      setSuccessMessage('Đã tạo sách INCOMPLETE và thêm vào danh sách chờ nhập.');
+    } catch (error) {
+      setErrorMessage(error.message || 'Không thể tạo sách mới.');
+    } finally {
+      setCreatingBook(false);
+    }
+  }
+
+  function updateRow(rowId, key, value) {
+    setPendingRows((prev) =>
+      prev.map((row) => (row.row_id === rowId ? { ...row, [key]: value } : row))
+    );
+  }
+
+  function removeRow(rowId) {
+    setPendingRows((prev) => prev.filter((row) => row.row_id !== rowId));
+  }
+
+  async function handleConfirmReceipt() {
+    if (!warehouseId) {
+      setErrorMessage('Vui lòng chọn kho.');
+      return;
+    }
+
+    if (pendingRows.length === 0) {
+      setErrorMessage('Danh sách nhập đang trống. Hãy quét hoặc nhập barcode trước.');
+      return;
+    }
+
+    const invalidRow = pendingRows.find((row) => {
+      const quantity = Number(row.quantity);
+      const unitCost = Number(row.unit_cost);
+      return !row.variant_id || !row.location_id || !Number.isInteger(quantity) || quantity <= 0 || !Number.isFinite(unitCost) || unitCost < 0;
+    });
+
+    if (invalidRow) {
+      setErrorMessage('Mỗi dòng phải có location, số lượng > 0 và đơn giá hợp lệ.');
+      return;
+    }
+
+    setSubmittingReceipt(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const payload = {
+        warehouse_id: warehouseId,
+        note: receiptNote || null,
+        items: pendingRows.map((row) => ({
+          variant_id: row.variant_id,
+          location_id: row.location_id,
+          quantity: Number(row.quantity),
+          unit_cost: Number(row.unit_cost),
+          is_new_book: row.is_new_book,
+        })),
+      };
+
+      const response = await createGoodsReceipt(payload);
+      setSuccessMessage(
+        `Đã tạo phiếu nhập ${response?.data?.receipt_number || ''} ở trạng thái ${response?.data?.status || 'DRAFT'}.`
+      );
+      setPendingRows([]);
+      setReceiptNote('');
+    } catch (error) {
+      setErrorMessage(error.message || 'Tạo phiếu nhập thất bại.');
+    } finally {
+      setSubmittingReceipt(false);
+    }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Toast */}
-      <Toast toasts={toasts} onDismiss={dismiss} />
+    <div className="max-w-6xl mx-auto space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bento-card rounded-2xl p-5">
+          <p className="text-xs uppercase tracking-[0.16em] text-indigo-600 font-semibold">Inbound Workflow</p>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Nhập kho theo Barcode</h1>
+          <p className="text-sm text-slate-600 mt-2">
+            Quét hoặc nhập barcode, hệ thống tự tìm sách. Nếu chưa tồn tại, tạo nhanh sách INCOMPLETE để đưa vào phiếu nhập chờ duyệt.
+          </p>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Nháº­p kho nhanh AI</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Táº£i lÃªn áº£nh bÃ¬a trÆ°á»›c vÃ  máº·t sau â€” AI tá»± Ä‘á»™ng Ä‘iá»n thÃ´ng tin vÃ o form
-        </p>
-      </div>
-
-      {/* â”€â”€ UPLOAD ZONE: 2 Cá»˜T â”€â”€ */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-          BÆ°á»›c 1 â€” Táº£i áº£nh lÃªn
-        </h2>
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* â”€â”€ BÃŒA TRÆ¯á»šC â”€â”€ */}
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-indigo-600 flex items-center gap-1.5">
-              <Sparkles size={13} /> BÃ¬a trÆ°á»›c
-              <span className="text-gray-400 font-normal">(tÃªn sÃ¡ch, tÃ¡c giáº£â€¦)</span>
-            </p>
-            <div
-              onClick={() => !isAnalyzing && fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              className={`relative border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center
-                cursor-pointer transition-all duration-200 gap-2 min-h-[160px]
-                ${isDragging ? 'border-indigo-500 bg-indigo-50 scale-[1.01]'
-                  : preview ? 'border-indigo-300 bg-slate-50'
-                  : 'border-gray-300 hover:border-indigo-400 hover:bg-slate-50'}
-                ${isAnalyzing ? 'pointer-events-none opacity-60' : ''}`}
-            >
-              {preview ? (
-                <>
-                  <img src={preview} alt="front" className="max-h-32 object-contain rounded-lg shadow" />
-                  <p className="text-[11px] text-gray-400">Nháº¥n Ä‘á»ƒ thay áº£nh</p>
-                  <span className="absolute top-1.5 right-1.5 bg-indigo-100 text-indigo-600 text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[100px]">
-                    {fileObj?.name}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <CloudUpload size={24} className="text-indigo-300" />
-                  <p className="text-xs text-center text-gray-500">
-                    KÃ©o tháº£ hoáº·c <span className="text-indigo-600 underline">chá»n file</span>
-                  </p>
-                </>
-              )}
+          <form onSubmit={handleBarcodeSubmit} className="mt-4">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Quét/Nhập Barcode</label>
+            <div className="flex items-center gap-2 rounded-xl border border-indigo-300 bg-white px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500">
+              <Barcode size={18} className="text-indigo-500" />
+              <input
+                value={barcodeInput}
+                onChange={(event) => setBarcodeInput(event.target.value)}
+                placeholder="Quét mã vạch hoặc nhập rồi nhấn Enter"
+                className="w-full bg-transparent outline-none text-sm"
+              />
+              <button
+                type="submit"
+                disabled={processingBarcode || loadingWarehouses || loadingLocations}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-300"
+              >
+                {processingBarcode ? <Loader2 size={13} className="animate-spin" /> : null}
+                {processingBarcode ? 'Đang tìm...' : 'Thêm'}
+              </button>
             </div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-              onChange={(e) => handleFile(e.target.files[0])} />
-            <button
-              onClick={handleAnalyze}
-              disabled={!fileObj || isAnalyzing}
-              className="w-full flex items-center justify-center gap-1.5
-                bg-gradient-to-r from-violet-500 to-indigo-600
-                hover:from-violet-600 hover:to-indigo-700
-                disabled:from-violet-300 disabled:to-indigo-300
-                text-white font-semibold py-2 rounded-xl text-xs
-                shadow-md shadow-violet-200 transition-all active:scale-[0.98]"
-            >
-              {isAnalyzing
-                ? <><Loader2 size={13} className="animate-spin" /> Äang phÃ¢n tÃ­ch...</>
-                : <><Sparkles size={13} /> PhÃ¢n tÃ­ch bÃ¬a trÆ°á»›c</>}
-            </button>
-          </div>
-
-          {/* â”€â”€ Máº¶T SAU â”€â”€ */}
-          <div className="space-y-3">
-            <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1.5">
-              <ScanBarcode size={13} /> Máº·t sau
-              <span className="text-gray-400 font-normal">(barcode, giÃ¡ tiá»n)</span>
-            </p>
-            <div
-              onClick={() => !isScanningBack && backFileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingBack(true); }}
-              onDragLeave={() => setIsDraggingBack(false)}
-              onDrop={handleBackDrop}
-              className={`relative border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center
-                cursor-pointer transition-all duration-200 gap-2 min-h-[160px]
-                ${isDraggingBack ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
-                  : backPreview ? 'border-emerald-300 bg-slate-50'
-                  : 'border-gray-300 hover:border-emerald-400 hover:bg-slate-50'}
-                ${isScanningBack ? 'pointer-events-none opacity-60' : ''}`}
-            >
-              {backPreview ? (
-                <>
-                  <img src={backPreview} alt="back" className="max-h-32 object-contain rounded-lg shadow" />
-                  <p className="text-[11px] text-gray-400">Nháº¥n Ä‘á»ƒ thay áº£nh</p>
-                  <span className="absolute top-1.5 right-1.5 bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-full truncate max-w-[100px]">
-                    {backFileObj?.name}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ScanBarcode size={24} className="text-emerald-300" />
-                  <p className="text-xs text-center text-gray-500">
-                    KÃ©o tháº£ hoáº·c <span className="text-emerald-600 underline">chá»n file</span>
-                  </p>
-                </>
-              )}
-            </div>
-            <input ref={backFileInputRef} type="file" accept="image/*" className="hidden"
-              onChange={(e) => handleBackFile(e.target.files[0])} />
-            <button
-              onClick={handleScanBack}
-              disabled={!backFileObj || isScanningBack}
-              className="w-full flex items-center justify-center gap-1.5
-                bg-gradient-to-r from-emerald-500 to-teal-600
-                hover:from-emerald-600 hover:to-teal-700
-                disabled:from-emerald-300 disabled:to-teal-300
-                text-white font-semibold py-2 rounded-xl text-xs
-                shadow-md shadow-emerald-200 transition-all active:scale-[0.98]"
-            >
-              {isScanningBack
-                ? <><Loader2 size={13} className="animate-spin" /> Äang quÃ©t...</>
-                : <><ScanBarcode size={13} /> QuÃ©t máº·t sau</>}
-            </button>
-          </div>
-        </div>
-
-        {/* Loading indicators */}
-        {(isAnalyzing || isScanningBack) && (
-          <div className={`flex items-center gap-3 rounded-lg px-4 py-3 border
-            ${isAnalyzing ? 'bg-violet-50 border-violet-100' : 'bg-emerald-50 border-emerald-100'}`}>
-            <div className="flex gap-1">
-              {[0,1,2].map((i) => (
-                <span key={i}
-                  className={`w-2 h-2 rounded-full animate-bounce
-                    ${isAnalyzing ? 'bg-violet-400' : 'bg-emerald-400'}`}
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </div>
-            <p className={`text-xs font-medium
-              ${isAnalyzing ? 'text-violet-700' : 'text-emerald-700'}`}>
-              {isAnalyzing
-                ? 'AI Ä‘ang Ä‘á»c bÃ¬a trÆ°á»›c â€” cÃ³ thá»ƒ máº¥t 10â€“20 giÃ¢y...'
-                : 'AI Ä‘ang quÃ©t máº·t sau (barcode, giÃ¡) â€” chá» xÃ­u...'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* â”€â”€ FORM Káº¾T QUáº¢ â”€â”€ */}
-      {formVisible && !confirmed && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={18} className="text-green-500" />
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
-                BÆ°á»›c 2 â€” Kiá»ƒm tra & xÃ¡c nháº­n thÃ´ng tin
-              </h2>
-            </div>
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              title="PhÃ¢n tÃ­ch láº¡i"
-              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-40"
-            >
-              <RefreshCw size={13} />
-              PhÃ¢n tÃ­ch láº¡i
-            </button>
-          </div>
-
-          <form onSubmit={handleConfirm} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {BOOK_FIELDS.map(({ label, key, span, placeholder }) => (
-                <div key={key} className={span ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">
-                    {label}
-                    {!formData[key] && (
-                      <span className="ml-1.5 text-orange-400 font-normal">(AI khÃ´ng Ä‘á»c Ä‘Æ°á»£c)</span>
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData[key]}
-                    onChange={(e) => handleFieldChange(key, e.target.value)}
-                    placeholder={placeholder}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm text-gray-800
-                      focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50
-                      ${formData[key] ? 'border-green-200' : 'border-orange-200'}
-                    `}
-                  />
-                </div>
-              ))}
-
-              {/* Sá»‘ lÆ°á»£ng */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Sá»‘ lÆ°á»£ng nháº­p <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={formData.quantity}
-                  onChange={(e) => handleFieldChange('quantity', e.target.value)}
-                  placeholder="Nháº­p sá»‘ lÆ°á»£ng..."
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              {/* Vá»‹ trÃ­ kho */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Vá»‹ trÃ­ kho</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => handleFieldChange('location', e.target.value)}
-                  placeholder="VD: Ká»‡ A-1"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="w-full flex items-center justify-center gap-2
-                bg-green-600 hover:bg-green-700 disabled:bg-green-400
-                text-white font-semibold py-2.5 rounded-xl transition-colors text-sm"
-            >
-              {isSaving ? (
-                <><Loader2 size={15} className="animate-spin" /> Äang lÆ°u...</>
-              ) : (
-                <><CheckCircle size={15} /> XÃ¡c nháº­n nháº­p kho</>
-              )}
-            </button>
           </form>
         </div>
-      )}
 
-      {/* â”€â”€ THÃ€NH CÃ”NG â”€â”€ */}
-      {confirmed && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-            <CheckCircle size={28} className="text-green-600" />
+        <div className="glass-card rounded-2xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-800">Thông tin phiếu nhập</h2>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Kho</label>
+            <select
+              value={warehouseId}
+              onChange={(event) => setWarehouseId(event.target.value)}
+              disabled={loadingWarehouses}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Chọn kho</option>
+              {warehouses.map((warehouse) => (
+                <option key={warehouse.id} value={warehouse.id}>
+                  {warehouse.name} ({warehouse.code})
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex-1">
-            <p className="font-semibold text-green-800">Nháº­p kho thÃ nh cÃ´ng!</p>
-            <p className="text-sm text-green-600 mt-0.5">
-              <strong>{formData.title || 'SÃ¡ch'}</strong> Ã— <strong>{formData.quantity}</strong> báº£n
-              {formData.location && <> â€” vá»‹ trÃ­ <strong>{formData.location}</strong></>}
-            </p>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Ghi chú</label>
+            <textarea
+              value={receiptNote}
+              onChange={(event) => setReceiptNote(event.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Ghi chú thêm cho phiếu nhập"
+            />
           </div>
-          <button
-            onClick={handleReset}
-            className="flex-shrink-0 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors"
-          >
-            Nháº­p tiáº¿p
-          </button>
+
+          <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
+            Tổng số dòng: <span className="font-semibold">{pendingRows.length}</span>
+            <br />
+            Tổng số lượng: <span className="font-semibold">{totalQuantity}</span>
+          </div>
+        </div>
+      </div>
+
+      {errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5" />
+          <span>{errorMessage}</span>
         </div>
       )}
+
+      {successMessage && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-start gap-2">
+          <CheckCircle2 size={16} className="mt-0.5" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      <div className="bento-card rounded-2xl p-5">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
+                <th className="px-2 py-2">Barcode</th>
+                <th className="px-2 py-2">Tên sách</th>
+                <th className="px-2 py-2 w-44">Vị trí</th>
+                <th className="px-2 py-2 w-32">Đơn giá</th>
+                <th className="px-2 py-2 w-24">Số lượng</th>
+                <th className="px-2 py-2 w-20">Xóa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingRows.map((row) => (
+                <tr key={row.row_id} className="border-b border-slate-100">
+                  <td className="px-2 py-2 text-slate-700 font-medium">{row.barcode}</td>
+                  <td className="px-2 py-2">
+                    <div className="font-medium text-slate-800">{row.title}</div>
+                    {row.is_new_book ? (
+                      <div className="text-[11px] text-amber-600 mt-0.5">Sách mới INCOMPLETE - cần Thủ thư bổ sung thông tin</div>
+                    ) : null}
+                  </td>
+                  <td className="px-2 py-2">
+                    <select
+                      value={row.location_id}
+                      onChange={(event) => updateRow(row.row_id, 'location_id', event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">Chọn vị trí</option>
+                      {locations.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.location_code} ({location.location_type})
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.unit_cost}
+                      onChange={(event) => updateRow(row.row_id, 'unit_cost', event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <div className="text-[11px] text-slate-400 mt-1">{formatMoney(row.unit_cost)} VND</div>
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={row.quantity}
+                      onChange={(event) => updateRow(row.row_id, 'quantity', event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.row_id)}
+                      className="inline-flex items-center justify-center rounded-md p-1.5 text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+              {pendingRows.length === 0 ? (
+                <tr>
+                  <td className="px-2 py-6 text-center text-slate-500" colSpan={6}>
+                    Chưa có dòng nào. Hãy quét barcode để bắt đầu.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-end mt-4">
+          <button
+            type="button"
+            onClick={handleConfirmReceipt}
+            disabled={submittingReceipt || loadingWarehouses || loadingLocations}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-emerald-300"
+          >
+            {submittingReceipt ? <Loader2 size={16} className="animate-spin" /> : null}
+            {submittingReceipt ? 'Đang xử lý phiếu nhập...' : 'Xác nhận phiếu nhập'}
+          </button>
+        </div>
+      </div>
+
+      <NewBookModal
+        open={newBookModal.open}
+        barcode={newBookModal.barcode}
+        submitting={creatingBook}
+        onClose={() => setNewBookModal({ open: false, barcode: '' })}
+        onSave={handleCreateNewBook}
+      />
     </div>
   );
 }

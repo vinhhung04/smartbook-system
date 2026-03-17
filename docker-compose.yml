@@ -4,9 +4,9 @@ services:
     image: postgres:15-alpine
     container_name: smartbook_postgres
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: inventory
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -18,8 +18,8 @@ services:
     image: dpage/pgadmin4
     container_name: smartbook_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "8080:80"
     depends_on:
@@ -29,12 +29,13 @@ services:
   inventory-service:
     build: ./inventory-service
     container_name: inventory-service
-    command: sh -c "npx prisma db push --skip-generate --accept-data-loss && npm run start"
+    command: sh -c "npm run start"
     ports:
       - "3003:3001"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/inventory
-      - JWT_SECRET=your_super_secret_key_change_me
+      - PORT=3001
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${INVENTORY_DB_NAME}?schema=public
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - db
 
@@ -42,13 +43,33 @@ services:
   auth-service:
     build: ./auth-service
     container_name: auth-service
-    command: sh -c "npx prisma db push --skip-generate && npm run start"
+    command: sh -c "npm run start"
     ports:
       - "3004:3002"
     environment:
       - PORT=3002
-      - DATABASE_URL=postgresql://user:password@db:5432/inventory?schema=auth
-      - JWT_SECRET=your_super_secret_key_change_me
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${AUTH_DB_NAME}?schema=public
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - db
+
+  # Dev profile jobs: only run when --profile dev is enabled.
+  # These jobs apply Prisma schema changes for local development.
+  inventory-db-push:
+    profiles: ["dev"]
+    build: ./inventory-service
+    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${INVENTORY_DB_NAME}?schema=public
+    depends_on:
+      - db
+
+  auth-db-push:
+    profiles: ["dev"]
+    build: ./auth-service
+    command: sh -c "npx prisma db push --skip-generate"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${AUTH_DB_NAME}?schema=public
     depends_on:
       - db
 
@@ -59,8 +80,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_BASE_URL=http://localhost:3003
-      - VITE_AUTH_BASE_URL=http://localhost:3004
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+      - VITE_AUTH_BASE_URL=${VITE_AUTH_BASE_URL}
+      - VITE_AI_BASE_URL=${VITE_AI_BASE_URL:-http://localhost:8000}
     depends_on:
       - inventory-service
       - auth-service
@@ -84,6 +106,8 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      # Đặt SUMMARY_MODEL=llama3 hoặc SUMMARY_MODEL=mistral nếu đã pull model đó
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
 
 volumes:
   postgres_data:
