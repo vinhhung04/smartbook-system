@@ -5,10 +5,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { X, Camera, KeyboardIcon, Loader2, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
+import { findBookByBarcode } from '../services/api';
 
 const SCANNER_ID = 'reader';
-const API_BASE     = 'http://localhost:3001';
-const AI_API_BASE  = 'http://localhost:8000';
+const AI_API_BASE = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
 
 // â”€â”€â”€ Tráº¡ng thÃ¡i loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const LOADING_STATE = {
@@ -17,7 +17,7 @@ const LOADING_STATE = {
   AI:      'ai',        // Ä‘ang gá»i AI nháº­n diá»‡n bÃ¬a
 };
 
-export default function ScannerModal({ isOpen, onClose, onScanSuccess }) {
+export default function ScannerModal({ isOpen, onClose, onScanSuccess, allowUnknownBarcode = false }) {
   const scannerRef   = useRef(null);
   const [manualBarcode,    setManualBarcode]    = useState('');
   const [loadingState,     setLoadingState]     = useState(LOADING_STATE.NONE);
@@ -27,6 +27,25 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }) {
   const [aiError,          setAiError]          = useState(null);
 
   const isLoading = loadingState !== LOADING_STATE.NONE;
+
+  function buildScannedBookPayload(data, fallbackBarcode) {
+    const safeBarcode = data?.barcode || data?.isbn || fallbackBarcode || '';
+    return {
+      barcode: safeBarcode,
+      isbn: safeBarcode,
+      title: data?.title ?? '(Khong co tieu de)',
+      author: data?.author ?? 'Chua cap nhat',
+      publisher: data?.publisher ?? '',
+      description: data?.description ?? '',
+      coverImage: data?.coverImage ?? data?.cover_image ?? data?.cover_image_url ?? '',
+      price: data?.price ?? data?.list_price ?? data?.unit_cost ?? 0,
+      variant_id: data?.variant_id ?? null,
+      unit_cost: data?.unit_cost ?? 0,
+      list_price: data?.list_price ?? 0,
+      is_incomplete: Boolean(data?.is_incomplete),
+      book_id: data?.book_id ?? null,
+    };
+  }
 
   // â”€â”€â”€ Dá»«ng camera sáº¡ch sáº½ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const stopCamera = useCallback(async () => {
@@ -39,34 +58,40 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }) {
   // â”€â”€â”€ Tra cá»©u sÃ¡ch qua barcode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleScanSuccess = useCallback(async (code) => {
     if (!code || loadingState !== LOADING_STATE.NONE) return;
+    const normalizedCode = String(code).trim();
+    if (!normalizedCode) return;
     setLoadingState(LOADING_STATE.BARCODE);
     setAiError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/lookup/${encodeURIComponent(code)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      console.log('Barcode API Response:', data);
-
-      const bookData = {
-        isbn:       data.isbn        ?? code,
-        title:      data.title       ?? '(KhÃ´ng cÃ³ tiÃªu Ä‘á»)',
-        author:     data.author      ?? '(KhÃ´ng rÃµ tÃ¡c giáº£)',
-        coverImage: data.coverImage  ?? data.cover_image ?? '',
-        price:      data.price       ?? 0,
-      };
-
-      if (data.title) alert(`ÄÃ£ tÃ¬m tháº¥y: ${data.title}`);
+      const data = await findBookByBarcode(normalizedCode);
+      const bookData = buildScannedBookPayload(data, normalizedCode);
 
       await stopCamera();
       onScanSuccess(bookData);
       onClose();
     } catch (err) {
+      const message = String(err?.message || '');
+
+      if ((/not found/i.test(message) || /404/.test(message)) && allowUnknownBarcode) {
+        await stopCamera();
+        onScanSuccess({
+          barcode: normalizedCode,
+          isbn: normalizedCode,
+          title: '',
+          author: '',
+          price: 0,
+          notFound: true,
+        });
+        onClose();
+        return;
+      }
+
       console.error('Lookup error:', err);
-      alert('KhÃ´ng tÃ¬m tháº¥y sÃ¡ch!');
+      setAiError(message || 'Khong the tra cuu sach theo barcode.');
     } finally {
       setLoadingState(LOADING_STATE.NONE);
     }
-  }, [loadingState, stopCamera, onScanSuccess, onClose]);
+  }, [allowUnknownBarcode, loadingState, stopCamera, onScanSuccess, onClose]);
 
   // â”€â”€â”€ Chá»¥p frame tá»« <video> cá»§a html5-qrcode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const captureFrameAsBlob = useCallback(() => {
@@ -121,13 +146,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }) {
       const data = await res.json();
       console.log('AI Recognition Response:', data);
 
-      const bookData = {
-        isbn:       data.isbn        ?? '',
-        title:      data.title       ?? '(KhÃ´ng cÃ³ tiÃªu Ä‘á»)',
-        author:     data.author      ?? '(KhÃ´ng rÃµ tÃ¡c giáº£)',
-        coverImage: data.coverImage  ?? data.cover_image ?? '',
-        price:      data.price       ?? 0,
-      };
+      const bookData = buildScannedBookPayload(data, data?.isbn || '');
 
       await stopCamera();
       onScanSuccess(bookData);
@@ -423,9 +442,6 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }) {
             </button>
           </div>
           <p className="mt-2 text-[11px] text-gray-400 text-right">
-            Backend:{' '}
-            <span className="font-mono text-indigo-400">{API_BASE}</span>
-            {' Â· '}
             AI:{' '}
             <span className="font-mono text-violet-400">{AI_API_BASE}</span>
           </p>

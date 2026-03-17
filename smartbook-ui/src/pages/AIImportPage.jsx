@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Barcode, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, Barcode, Camera, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 import {
   createGoodsReceipt,
   createIncompleteBook,
@@ -7,6 +7,7 @@ import {
   getWarehouseLocations,
   getWarehouses,
 } from '../services/api';
+import ScannerModal from '../components/ScannerModal';
 
 function formatMoney(value) {
   const numberValue = Number(value);
@@ -136,6 +137,7 @@ export default function AIImportPage() {
   const [receiptNote, setReceiptNote] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [pendingRows, setPendingRows] = useState([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const [newBookModal, setNewBookModal] = useState({
     open: false,
@@ -241,11 +243,9 @@ export default function AIImportPage() {
     });
   }
 
-  async function handleBarcodeSubmit(event) {
-    event.preventDefault();
-
-    const barcode = barcodeInput.trim();
-    if (!barcode || processingBarcode) {
+  async function processBarcode(barcode) {
+    const normalizedBarcode = String(barcode || '').trim();
+    if (!normalizedBarcode || processingBarcode) {
       return;
     }
 
@@ -259,19 +259,50 @@ export default function AIImportPage() {
     setProcessingBarcode(true);
 
     try {
-      const result = await findBookByBarcode(barcode);
+      const result = await findBookByBarcode(normalizedBarcode);
       upsertPendingRow(result);
       setBarcodeInput('');
     } catch (error) {
       const msg = error.message || '';
       if (msg.toLowerCase().includes('not found')) {
-        setNewBookModal({ open: true, barcode });
+        setNewBookModal({ open: true, barcode: normalizedBarcode });
       } else {
         setErrorMessage(msg || 'Không thể tìm sách theo barcode.');
       }
     } finally {
       setProcessingBarcode(false);
     }
+  }
+
+  async function handleBarcodeSubmit(event) {
+    event.preventDefault();
+    await processBarcode(barcodeInput);
+  }
+
+  async function handleScannerSuccess(data) {
+    const scannedBarcode = String(data?.barcode || data?.isbn || '').trim();
+    if (!scannedBarcode) {
+      setErrorMessage('Không đọc được mã barcode từ camera.');
+      return;
+    }
+
+    setScannerOpen(false);
+    setBarcodeInput(scannedBarcode);
+
+    if (data?.variant_id) {
+      setErrorMessage('');
+      setSuccessMessage('');
+      upsertPendingRow(data);
+      setBarcodeInput('');
+      return;
+    }
+
+    if (data?.notFound) {
+      setNewBookModal({ open: true, barcode: scannedBarcode });
+      return;
+    }
+
+    await processBarcode(scannedBarcode);
   }
 
   async function handleCreateNewBook(payload) {
@@ -386,6 +417,15 @@ export default function AIImportPage() {
               >
                 {processingBarcode ? <Loader2 size={13} className="animate-spin" /> : null}
                 {processingBarcode ? 'Đang tìm...' : 'Thêm'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                disabled={processingBarcode || loadingWarehouses || loadingLocations}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+              >
+                <Camera size={13} />
+                Quét mã
               </button>
             </div>
           </form>
@@ -544,6 +584,13 @@ export default function AIImportPage() {
         submitting={creatingBook}
         onClose={() => setNewBookModal({ open: false, barcode: '' })}
         onSave={handleCreateNewBook}
+      />
+
+      <ScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScanSuccess={handleScannerSuccess}
+        allowUnknownBarcode={true}
       />
     </div>
   );

@@ -181,9 +181,9 @@ export default function AdminLayout({ children }) {
 
   const handleSearchScanSuccess = (data) => {
     // data = { isbn, title, ... } từ ScannerModal
-    const isbn = data.isbn ?? '';
+    const targetId = data.book_id ?? data.isbn ?? '';
     setIsSearchScannerOpen(false);
-    navigate(`/inventory/${isbn}`, { state: { scannedBook: data } });
+    navigate(`/inventory/${targetId}`, { state: { scannedBook: data } });
   };
 
   return (
