@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Pencil, Plus, RefreshCw } from 'lucide-react';
-import { createIncompleteBook, getAllBooks, updateBookDetails } from '../services/api';
+import { Loader2, Pencil, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { createIncompleteBook, generateBookSummary, getAllBooks, updateBookDetails } from '../services/api';
 
 const STATUS_CONFIG = {
   in_stock: { label: 'Còn hàng', className: 'bg-green-100 text-green-700' },
@@ -96,9 +96,13 @@ function EditBookModal({ open, book, submitting, onClose, onSave }) {
   });
   const [uploadError, setUploadError] = useState('');
   const [formError, setFormError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     if (!open || !book) return;
+    setAiError('');
+    setAiLoading(false);
     setForm({
       title: book.title || '',
       subtitle: book.subtitle || '',
@@ -125,6 +129,25 @@ function EditBookModal({ open, book, submitting, onClose, onSave }) {
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleAiGenerate() {
+    const title = form.title.trim() || book.title || '';
+    const author = form.author_name.trim();
+    if (!title) {
+      setAiError('Vui lòng nhập Tên sách trước khi tạo mô tả AI.');
+      return;
+    }
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await generateBookSummary(title, author);
+      setField('description', result.description || '');
+    } catch (err) {
+      setAiError(err.message || 'AI service không phản hồi.');
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   function handleSubmit(event) {
@@ -296,13 +319,27 @@ function EditBookModal({ open, book, submitting, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Mô tả</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-600">Mô tả</label>
+              <button
+                type="button"
+                onClick={handleAiGenerate}
+                disabled={aiLoading || submitting}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-xs font-semibold hover:bg-violet-100 disabled:opacity-50 transition-colors"
+              >
+                {aiLoading
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Sparkles size={12} />}
+                {aiLoading ? 'Đang tạo...' : '✨ AI Tạo mô tả'}
+              </button>
+            </div>
             <textarea
               rows={4}
               value={form.description}
               onChange={(e) => setField('description', e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            {aiError ? <p className="text-[11px] text-red-600 mt-1">{aiError}</p> : null}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[auto,1fr] gap-4 items-start">
@@ -368,6 +405,8 @@ function NewBookModal({ open, submitting, onClose, onSave }) {
   });
   const [error, setError] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -385,6 +424,8 @@ function NewBookModal({ open, submitting, onClose, onSave }) {
     });
     setError('');
     setUploadError('');
+    setAiError('');
+    setAiLoading(false);
   }, [open]);
 
   if (!open) {
@@ -393,6 +434,25 @@ function NewBookModal({ open, submitting, onClose, onSave }) {
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleAiGenerate() {
+    const title = form.title.trim();
+    const author = form.author_name.trim();
+    if (!title) {
+      setAiError('Vui lòng nhập Tên sách trước khi tạo mô tả AI.');
+      return;
+    }
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await generateBookSummary(title, author);
+      setField('description', result.description || '');
+    } catch (err) {
+      setAiError(err.message || 'AI service không phản hồi.');
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   function handleSubmit(event) {
@@ -552,13 +612,27 @@ function NewBookModal({ open, submitting, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Mô tả</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-600">Mô tả</label>
+              <button
+                type="button"
+                onClick={handleAiGenerate}
+                disabled={aiLoading || submitting}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-xs font-semibold hover:bg-violet-100 disabled:opacity-50 transition-colors"
+              >
+                {aiLoading
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Sparkles size={12} />}
+                {aiLoading ? 'Đang tạo...' : '✨ AI Tạo mô tả'}
+              </button>
+            </div>
             <textarea
               rows={3}
               value={form.description}
               onChange={(e) => setField('description', e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
+            {aiError ? <p className="text-[11px] text-red-600 mt-1">{aiError}</p> : null}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[auto,1fr] gap-4 items-start">

@@ -82,6 +82,7 @@ services:
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL}
       - VITE_AUTH_BASE_URL=${VITE_AUTH_BASE_URL}
+      - VITE_AI_BASE_URL=${VITE_AI_BASE_URL:-http://localhost:8000}
     depends_on:
       - inventory-service
       - auth-service
@@ -105,6 +106,8 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      # Đặt SUMMARY_MODEL=llama3 hoặc SUMMARY_MODEL=mistral nếu đã pull model đó
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
 
 volumes:
   postgres_data:

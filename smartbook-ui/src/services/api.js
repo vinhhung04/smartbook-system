@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 const AUTH_BASE_URL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:3002';
+const AI_BASE_URL = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
 
 export const TOKEN_KEY = 'token';
 
@@ -286,4 +287,27 @@ export async function createIncompleteBook(payload) {
 
 export async function getStockMovements() {
   return apiRequest('/api/stock-movements', { method: 'GET' });
+}
+
+/**
+ * Gọi AI service để tự động sinh mô tả sách bằng Tiếng Việt.
+ * @param {string} title  - Tên sách
+ * @param {string} author - Tên tác giả
+ * @returns {Promise<{description: string, web_context_used: boolean}>}
+ */
+export async function generateBookSummary(title, author) {
+  const response = await fetch(`${AI_BASE_URL}/api/ai/generate-book-summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, author }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = payload?.detail || payload?.message || `AI service lỗi (${response.status})`;
+    throw new Error(message);
+  }
+
+  return payload;
 }
