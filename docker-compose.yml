@@ -1,5 +1,4 @@
-services:
-  # 1. Cơ sở dữ liệu
+﻿services:
   db:
     image: postgres:15-alpine
     container_name: smartbook_postgres
@@ -13,7 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db-init:/docker-entrypoint-initdb.d:ro
 
-  # 2. Quản lý DB (Giao diện web)
   pgadmin:
     image: dpage/pgadmin4
     container_name: smartbook_pgadmin
@@ -25,9 +23,8 @@ services:
     depends_on:
       - db
 
-  # 3. Backend (Inventory Service)
   inventory-service:
-    build: ./inventory-service
+    build: ./services/inventory-service
     container_name: inventory-service
     command: sh -c "npm run start"
     ports:
@@ -39,9 +36,8 @@ services:
     depends_on:
       - db
 
-  # 4. Authentication Service
   auth-service:
-    build: ./auth-service
+    build: ./services/auth-service
     container_name: auth-service
     command: sh -c "npm run start"
     ports:
@@ -53,11 +49,9 @@ services:
     depends_on:
       - db
 
-  # Dev profile jobs: only run when --profile dev is enabled.
-  # These jobs apply Prisma schema changes for local development.
   inventory-db-push:
     profiles: ["dev"]
-    build: ./inventory-service
+    build: ./services/inventory-service
     command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${INVENTORY_DB_NAME}?schema=public
@@ -66,39 +60,15 @@ services:
 
   auth-db-push:
     profiles: ["dev"]
-    build: ./auth-service
+    build: ./services/auth-service
     command: sh -c "npx prisma db push --skip-generate"
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${AUTH_DB_NAME}?schema=public
     depends_on:
       - db
 
-  # 5. Frontend (Smartbook UI)
-  smartbook-ui:
-    build: ./smartbook-ui
-    container_name: smartbook-ui
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
-      - VITE_AUTH_BASE_URL=${VITE_AUTH_BASE_URL}
-      - VITE_AI_BASE_URL=${VITE_AI_BASE_URL:-http://localhost:8000}
-    depends_on:
-      - inventory-service
-      - auth-service
-
-  # 6. Trí tuệ nhân tạo (Ollama)
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./ollama_data:/root/.ollama
-
-  # 7. AI Service (Python/OCR)
   ai-service:
-    build: ./ai-service
+    build: ./services/ai-service
     container_name: ai-service
     ports:
       - "8000:8000"
@@ -106,8 +76,44 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      # Đặt SUMMARY_MODEL=llama3 hoặc SUMMARY_MODEL=mistral nếu đã pull model đó
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
+
+  api-gateway:
+    build: ./apps/api-gateway
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3002
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - AI_SERVICE_URL=http://ai-service:8000
+    depends_on:
+      - auth-service
+      - inventory-service
+      - ai-service
+
+  smartbook-ui:
+    build: ./apps/web
+    container_name: smartbook-ui
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000
+      - VITE_AUTH_BASE_URL=http://localhost:3000
+      - VITE_AI_BASE_URL=http://localhost:8000
+    depends_on:
+      - api-gateway
+      - inventory-service
+      - auth-service
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
 
 volumes:
   postgres_data:

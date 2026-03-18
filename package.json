@@ -1,5 +1,16 @@
 {
-  "dependencies": {
-    "lucide-react": "^0.575.0"
+  "name": "smartbook-system",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.6.2",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* --filter ./services/* dev",
+    "build": "pnpm -r --filter ./apps/* build",
+    "lint": "pnpm -r --filter ./apps/* lint",
+    "start": "pnpm -r --parallel --filter ./apps/* --filter ./services/* start",
+    "dev:web": "pnpm --filter web dev",
+    "dev:auth": "pnpm --filter auth-service dev",
+    "dev:inventory": "pnpm --filter inventory-service dev",
+    "dev:gateway": "pnpm --filter api-gateway dev"
   }
 }
