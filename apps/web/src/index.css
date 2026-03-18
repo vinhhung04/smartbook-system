@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	font-family: 'Inter', sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+* {
+	margin: 0;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+body {
+	font-family: 'Inter', sans-serif;
+	background-color: #f1f5f9;
+	color: #0f172a;
+}
+
+@layer components {
+	.glass-card {
+		background: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.72));
+		backdrop-filter: blur(10px);
+		border: 1px solid rgba(148, 163, 184, 0.25);
+		box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+	}
+
+	.bento-card {
+		background: radial-gradient(circle at top left, rgba(224, 231, 255, 0.72), rgba(255, 255, 255, 0.96));
+		border: 1px solid rgba(148, 163, 184, 0.2);
+		box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+	}
+}
+
+input,
+button,
+textarea,
+select {
+	font: inherit;
+}

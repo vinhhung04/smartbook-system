@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth Test - SmartBook</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --ink: #1c1e21;
+      --sub: #5f6368;
+      --ok: #0f9d58;
+      --err: #d93025;
+      --brand: #0b57d0;
+      --line: #e4e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top right, #e8f0fe, transparent 45%), var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+    }
+    h1 { font-size: 24px; margin: 0 0 16px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    .head {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .head .meta { color: var(--sub); font-size: 14px; }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--sub);
+      margin: 8px 0 6px;
+    }
+    input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.15); }
+    button {
+      margin-top: 12px;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--brand);
+      color: #fff;
+    }
+    button.secondary {
+      background: #1f2937;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      min-height: 18px;
+    }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    pre {
+      margin: 12px 0 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 10px;
+      max-height: 250px;
+      overflow: auto;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    @media (max-width: 860px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card head">
+      <h1>SmartBook Auth Test</h1>
+      <div class="meta">Auth URL: <span id="authUrl"></span></div>
+    </div>
+
+    <section class="card">
+      <h2>Dang ky</h2>
+      <label>Username</label>
+      <input id="reg-username" placeholder="vd: tester_20260317" />
+      <label>Email</label>
+      <input id="reg-email" placeholder="vd: tester@example.com" />
+      <label>Full name</label>
+      <input id="reg-fullname" placeholder="vd: Docker Tester" />
+      <label>Password</label>
+      <input id="reg-password" type="password" placeholder="toi thieu 6 ky tu" />
+      <button id="btn-register">Dang ky</button>
+      <div id="reg-status" class="status"></div>
+      <pre id="reg-output">Chua co ket qua</pre>
+    </section>
+
+    <section class="card">
+      <h2>Dang nhap</h2>
+      <label>Identifier (username hoac email)</label>
+      <input id="login-identifier" placeholder="vd: tester_20260317" />
+      <label>Password</label>
+      <input id="login-password" type="password" placeholder="nhap mat khau" />
+      <div class="row">
+        <button id="btn-login">Dang nhap</button>
+        <button id="btn-profile" class="secondary">Goi API books (test token)</button>
+      </div>
+      <div id="login-status" class="status"></div>
+      <pre id="login-output">Chua co ket qua</pre>
+    </section>
+  </div>
+
+  <script>
+    const AUTH_URL = "http://localhost:3004";
+    const INVENTORY_URL = "http://localhost:3003";
+    let accessToken = "";
+
+    document.getElementById("authUrl").textContent = AUTH_URL;
+
+    function print(el, data) {
+      el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    }
+
+    function setStatus(el, ok, text) {
+      el.className = "status " + (ok ? "ok" : "err");
+      el.textContent = text;
+    }
+
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data: json };
+    }
+
+    document.getElementById("btn-register").addEventListener("click", async () => {
+      const username = document.getElementById("reg-username").value.trim();
+      const email = document.getElementById("reg-email").value.trim();
+      const full_name = document.getElementById("reg-fullname").value.trim();
+      const password = document.getElementById("reg-password").value;
+
+      const out = document.getElementById("reg-output");
+      const st = document.getElementById("reg-status");
+
+      try {
+        const result = await postJson(AUTH_URL + "/auth/register", {
+          username,
+          email,
+          full_name,
+          password,
+        });
+
+        print(out, result);
+        setStatus(st, result.ok, result.ok ? "Dang ky thanh cong" : "Dang ky that bai");
+
+        if (result.ok) {
+          document.getElementById("login-identifier").value = username;
+          document.getElementById("login-password").value = password;
+        }
+      } catch (err) {
+        setStatus(st, false, "Loi ket noi auth-service");
+        print(out, String(err));
+      }
+    });
+
+    document.getElementById("btn-login").addEventListener("click", async () => {
+      const identifier = document.getElementById("login-identifier").value.trim();
+      const password = document.getElementById("login-password").value;
+
+      const out = document.getElementById("login-output");
+      const st = document.getElementById("login-status");
+
+      try {
+        const result = await postJson(AUTH_URL + "/auth/login", { identifier, password });
+        print(out, result);
+        setStatus(st, result.ok, result.ok ? "Dang nhap thanh cong" : "Dang nhap that bai");
+        accessToken = result.data && result.data.token ? result.data.token : "";
+      } catch (err) {
+        setStatus(st, false, "Loi ket noi auth-service");
+        print(out, String(err));
+      }
+    });
+
+    document.getElementById("btn-profile").addEventListener("click", async () => {
+      const out = document.getElementById("login-output");
+      const st = document.getElementById("login-status");
+
+      if (!accessToken) {
+        setStatus(st, false, "Chua co token. Hay dang nhap truoc.");
+        return;
+      }
+
+      try {
+        const res = await fetch(INVENTORY_URL + "/api/books", {
+          headers: { Authorization: "Bearer " + accessToken },
+        });
+        const data = await res.json().catch(() => ({}));
+        print(out, { status: res.status, ok: res.ok, data });
+        setStatus(st, res.ok, res.ok ? "Goi API books thanh cong" : "Goi API books that bai");
+      } catch (err) {
+        setStatus(st, false, "Loi ket noi inventory-service");
+        print(out, String(err));
+      }
+    });
+  </script>
+</body>
+</html>
