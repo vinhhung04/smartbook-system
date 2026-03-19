@@ -176,12 +176,44 @@ def _search_book_context(title: str, author: str) -> str:
         return ""
 
 
+def _format_summary_description(text: str) -> str:
+    """Đảm bảo mô tả có bố cục nhiều dòng và ký tự trang trí nhẹ."""
+    cleaned = re.sub(r"\s+", " ", (text or "")).strip()
+    if not cleaned:
+        return ""
+
+    # Nếu đã có bố cục nhiều dòng kèm ký tự trang trí thì giữ nguyên.
+    if "\n" in text and any(ch in text for ch in ["📘", "✨", "🎯", "•"]):
+        return text.strip()
+
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
+    if not sentences:
+        sentences = [cleaned]
+
+    overview = sentences[0]
+    highlights = sentences[1:3]
+    audience = " ".join(sentences[3:]).strip()
+
+    if not highlights:
+        highlights = ["Nội dung được diễn đạt súc tích, dễ tiếp cận với nhiều nhóm bạn đọc."]
+
+    if not audience:
+        audience = "Phù hợp với bạn đọc muốn khám phá chủ đề chính của cuốn sách một cách rõ ràng và thực tế."
+
+    highlight_lines = "\n".join(f"• {item}" for item in highlights)
+    return (
+        f"📘 Tổng quan\n{overview}\n\n"
+        f"✨ Điểm nổi bật\n{highlight_lines}\n\n"
+        f"🎯 Gợi ý bạn đọc\n{audience}"
+    )
+
+
 @app.post("/api/ai/generate-book-summary")
 async def generate_book_summary(req: BookSummaryRequest):
     """
     Tạo mô tả sách bằng Tiếng Việt sử dụng Ollama.
     Nhập: title (tên sách), author (tác giả)
-    Xuất: description (mô tả 150-200 từ), web_context_used (có sử dụng web search hay không)
+    Xuất: description (mô tả 150-200 từ, có bố cục nhiều dòng), web_context_used (có sử dụng web search hay không)
     """
     if not req.title.strip():
         raise HTTPException(status_code=400, detail="Thiếu tên sách (title).")
@@ -202,7 +234,10 @@ async def generate_book_summary(req: BookSummaryRequest):
         f"Dựa trên tên sách '{req.title.strip()}' của tác giả '{req.author.strip()}', "
         f"hãy viết một đoạn tóm tắt nội dung ngắn gọn, hấp dẫn và chuyên nghiệp bằng Tiếng Việt "
         f"(khoảng 150-200 từ) để đưa vào hệ thống thư viện. "
-        f"Trả về văn bản thuần túy, không dùng markdown, không bullet points."
+        f"Không viết thành 1 đoạn liền. Bắt buộc trình bày theo nhiều dòng với bố cục sau: "
+        f"'📘 Tổng quan' (1 đoạn ngắn), '✨ Điểm nổi bật' (2 gạch đầu dòng), '🎯 Gợi ý bạn đọc' (1-2 câu). "
+        f"Có thể dùng thêm một vài ký tự trang trí như 📘 ✨ 🎯 • để nội dung sinh động, nhưng không lạm dụng. "
+        f"Trả về văn bản thuần túy, không markdown code block."
         f"{context_block}"
     )
 
@@ -215,7 +250,7 @@ async def generate_book_summary(req: BookSummaryRequest):
             prompt=prompt,
             options={"temperature": 0.7, "num_predict": 400},
         )
-        description: str = response.get("response", "").strip()
+        description = _format_summary_description(response.get("response", ""))
         return {"description": description, "web_context_used": bool(web_context)}
 
     except ollama.ResponseError as e:

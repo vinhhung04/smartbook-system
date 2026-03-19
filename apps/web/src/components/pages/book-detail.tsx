@@ -30,6 +30,7 @@ interface BookDetailData {
   unit_cost?: number;
   quantity?: number;
   is_incomplete?: boolean;
+  cover_image_url?: string | null;
   locations?: BookLocation[];
 }
 
@@ -45,10 +46,22 @@ interface EditForm {
   list_price: string;
   unit_cost: string;
   description: string;
+  cover_image_url?: string;
 }
 
 function formatCurrency(value: number): string {
   return `${value.toLocaleString("vi-VN")} VND`;
+}
+
+function formatDescriptionText(value?: string | null): string {
+  if (!value || !value.trim()) return "-";
+
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\s*(📘|✨|🎯)\s*/g, "\n$1 ")
+    .replace(/\s*•\s*/g, "\n• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function toEditForm(book: BookDetailData): EditForm {
@@ -64,6 +77,7 @@ function toEditForm(book: BookDetailData): EditForm {
     list_price: Number(book.list_price || 0).toString(),
     unit_cost: Number(book.unit_cost || 0).toString(),
     description: String(book.description || ""),
+    cover_image_url: String(book.cover_image_url || ""),
   };
 }
 
@@ -86,6 +100,7 @@ export function BookDetailPage() {
     list_price: "0",
     unit_cost: "0",
     description: "",
+    cover_image_url: "",
   });
 
   const loadBook = async () => {
@@ -157,6 +172,10 @@ export function BookDetailPage() {
       unit_cost: Number(editForm.unit_cost || 0),
     };
 
+    if (editForm.cover_image_url?.trim()) {
+      payload.cover_image_url = editForm.cover_image_url.trim();
+    }
+
     if (editForm.publish_year.trim()) {
       payload.publish_year = Number(editForm.publish_year);
     }
@@ -213,9 +232,20 @@ export function BookDetailPage() {
       <FadeItem>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="w-16 h-20 rounded-[12px] bg-gradient-to-br from-blue-100 to-teal-50 flex items-center justify-center border border-blue-200/40 shrink-0 shadow-sm shadow-blue-100/30">
-              <BookOpen className="w-6 h-6 text-blue-500" />
-            </div>
+            {book.cover_image_url ? (
+              <img
+                src={book.cover_image_url}
+                alt={book.title}
+                className="w-16 h-20 rounded-[12px] border border-blue-200/40 shrink-0 shadow-sm shadow-blue-100/30 object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <div className="w-16 h-20 rounded-[12px] bg-gradient-to-br from-blue-100 to-teal-50 flex items-center justify-center border border-blue-200/40 shrink-0 shadow-sm shadow-blue-100/30">
+                <BookOpen className="w-6 h-6 text-blue-500" />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="tracking-[-0.02em]">{book.title}</h1>
@@ -267,18 +297,10 @@ export function BookDetailPage() {
                 ))}
               </div>
               <div className="mt-4 pt-4 border-t border-slate-100">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="text-[11px] text-slate-400 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>Description</div>
-                  <button
-                    onClick={() => void handleGenerateQuickDescription()}
-                    disabled={isGeneratingDescription}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[12px] font-semibold text-cyan-700 disabled:opacity-60"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {isGeneratingDescription ? "Dang tao..." : "Mo ta nhanh bang AI"}
-                  </button>
-                </div>
-                <p className="text-[13px] text-slate-500" style={{ lineHeight: 1.6 }}>{book.description || "-"}</p>
+                <div className="text-[11px] text-slate-400 uppercase tracking-[0.05em] mb-2" style={{ fontWeight: 550 }}>Description</div>
+                <p className="text-[13px] text-slate-500 whitespace-pre-line break-words" style={{ lineHeight: 1.6 }}>
+                  {formatDescriptionText(book.description)}
+                </p>
               </div>
             </div>
           </FadeItem>
@@ -354,42 +376,198 @@ export function BookDetailPage() {
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
-            className="w-full max-w-3xl rounded-[16px] bg-white p-6 shadow-2xl"
+            className="w-full max-w-3xl rounded-[16px] bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
           >
-            <h3 className="mb-4 text-[16px] font-semibold">Chinh sua thong tin sach</h3>
+            <h3 className="mb-5 text-[16px] font-semibold">Chinh sua thong tin sach</h3>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input value={editForm.title} onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Ten sach" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.subtitle} onChange={(event) => setEditForm((prev) => ({ ...prev, subtitle: event.target.value }))} placeholder="Subtitle" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.author_name} onChange={(event) => setEditForm((prev) => ({ ...prev, author_name: event.target.value }))} placeholder="Tac gia" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.publisher_name} onChange={(event) => setEditForm((prev) => ({ ...prev, publisher_name: event.target.value }))} placeholder="Nha xuat ban" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.category_name} onChange={(event) => setEditForm((prev) => ({ ...prev, category_name: event.target.value }))} placeholder="The loai" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.isbn_or_barcode} onChange={(event) => setEditForm((prev) => ({ ...prev, isbn_or_barcode: event.target.value }))} placeholder="ISBN hoac barcode" className="rounded-[10px] border border-slate-200 px-3 py-2 font-mono text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.language} onChange={(event) => setEditForm((prev) => ({ ...prev, language: event.target.value }))} placeholder="Ngon ngu" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.publish_year} onChange={(event) => setEditForm((prev) => ({ ...prev, publish_year: event.target.value }))} placeholder="Nam xuat ban" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.list_price} onChange={(event) => setEditForm((prev) => ({ ...prev, list_price: event.target.value }))} placeholder="Gia ban" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
-              <input value={editForm.unit_cost} onChange={(event) => setEditForm((prev) => ({ ...prev, unit_cost: event.target.value }))} placeholder="Gia nhap" className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10" />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Ten sach <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    value={editForm.title}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                    placeholder="Nhap ten sach"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Subtitle
+                  </label>
+                  <input
+                    value={editForm.subtitle}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, subtitle: event.target.value }))}
+                    placeholder="Nhap subtitle"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Tac gia
+                  </label>
+                  <input
+                    value={editForm.author_name}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, author_name: event.target.value }))}
+                    placeholder="Nhap ten tac gia"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Nha xuat ban
+                  </label>
+                  <input
+                    value={editForm.publisher_name}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, publisher_name: event.target.value }))}
+                    placeholder="Nhap ten nha xuat ban"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    The loai
+                  </label>
+                  <input
+                    value={editForm.category_name}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, category_name: event.target.value }))}
+                    placeholder="Nhap the loai"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    ISBN / Barcode
+                  </label>
+                  <input
+                    value={editForm.isbn_or_barcode}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, isbn_or_barcode: event.target.value }))}
+                    placeholder="Nhap ISBN hoac barcode"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 font-mono text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Ngon ngu
+                  </label>
+                  <input
+                    value={editForm.language}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, language: event.target.value }))}
+                    placeholder="vd: vi, en"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Nam xuat ban
+                  </label>
+                  <input
+                    value={editForm.publish_year}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, publish_year: event.target.value }))}
+                    placeholder="vd: 2024"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                    type="number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Gia ban (VND)
+                  </label>
+                  <input
+                    value={editForm.list_price}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, list_price: event.target.value }))}
+                    placeholder="Nhap gia ban"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                    type="number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                    Gia nhap (VND)
+                  </label>
+                  <input
+                    value={editForm.unit_cost}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, unit_cost: event.target.value }))}
+                    placeholder="Nhap gia nhap"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                    type="number"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
+                  Link anh bia sach
+                </label>
+                <input
+                  value={editForm.cover_image_url}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, cover_image_url: event.target.value }))}
+                  placeholder="https://example.com/cover.jpg"
+                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                />
+                {editForm.cover_image_url && (
+                  <div className="mt-2 px-3 py-2 rounded-[10px] bg-blue-50 border border-blue-100">
+                    <img
+                      src={editForm.cover_image_url}
+                      alt="Cover preview"
+                      className="max-w-full max-h-32 rounded"
+                      onError={() => {
+                        /* Handle image load error */
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-[0.02em]">
+                    Mo ta
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateQuickDescription()}
+                    disabled={isGeneratingDescription}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-60"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {isGeneratingDescription ? "Dang tao..." : "Tao bang AI"}
+                  </button>
+                </div>
+                <textarea
+                  value={editForm.description}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, description: event.target.value }))}
+                  rows={4}
+                  placeholder="Nhap mo ta chi tiet ve sach"
+                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10 resize-none"
+                />
+              </div>
             </div>
 
-            <textarea
-              value={editForm.description}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, description: event.target.value }))}
-              rows={4}
-              placeholder="Mo ta"
-              className="mt-3 w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
-            />
-
-            <div className="mt-5 flex items-center gap-3">
+            <div className="mt-6 flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => setShowEditModal(false)}
-                className="flex-1 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700"
+                className="flex-1 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 Huy
               </button>
               <button
+                type="button"
                 onClick={() => void handleSaveBook()}
                 disabled={isSaving}
-                className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60 hover:shadow-md transition-shadow"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isSaving ? "Dang luu" : "Luu thay doi"}
