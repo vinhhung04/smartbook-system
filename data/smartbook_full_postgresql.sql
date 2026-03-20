@@ -438,14 +438,15 @@ CREATE TABLE IF NOT EXISTS locations (
     warehouse_id UUID NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
     parent_location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
     location_code VARCHAR(60) NOT NULL,
-    location_type VARCHAR(20) NOT NULL DEFAULT 'BIN'
-        CHECK (location_type IN ('ZONE', 'AISLE', 'SHELF', 'BIN', 'RECEIVING', 'SHIPPING', 'RETURN', 'STAGING')),
+    location_type VARCHAR(20) NOT NULL DEFAULT 'ZONE'
+        CHECK (location_type IN ('ZONE', 'SHELF', 'SHELF_COMPARTMENT', 'AISLE', 'BIN', 'RECEIVING', 'SHIPPING', 'RETURN', 'STAGING')),
     zone VARCHAR(50),
     aisle VARCHAR(50),
     shelf VARCHAR(50),
     bin VARCHAR(50),
     barcode VARCHAR(100) UNIQUE,
     capacity_qty INT CHECK (capacity_qty IS NULL OR capacity_qty >= 0),
+    available INT NOT NULL DEFAULT 0,
     is_pickable BOOLEAN NOT NULL DEFAULT TRUE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -454,8 +455,7 @@ CREATE TABLE IF NOT EXISTS locations (
     UNIQUE (warehouse_id, zone, aisle, shelf, bin)
 );
 
-CREATE TABLE IF NOT EXISTS inventory_units (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE IF NOT EXISTS inventory_units (    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     variant_id UUID NOT NULL REFERENCES book_variants(id) ON DELETE CASCADE,
     warehouse_id UUID NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
     home_location_id UUID REFERENCES locations(id) ON DELETE SET NULL,

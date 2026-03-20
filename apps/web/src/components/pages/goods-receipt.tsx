@@ -16,11 +16,6 @@ interface WarehouseOption {
   name: string;
 }
 
-interface LocationOption {
-  id: string;
-  location_code: string;
-}
-
 interface ReceiptItemForm {
   id: string;
   barcode: string;
@@ -28,7 +23,6 @@ interface ReceiptItemForm {
   title: string;
   qty: number;
   unit_cost: number;
-  location_id: string;
   is_new_book?: boolean;
 }
 
@@ -43,7 +37,6 @@ function makeRowId() {
 export function GoodsReceiptPage() {
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
-  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
   const [items, setItems] = useState<ReceiptItemForm[]>([]);
@@ -82,34 +75,13 @@ export function GoodsReceiptPage() {
     void loadWarehouses();
   }, []);
 
-  const loadLocations = async (warehouseId: string) => {
-    try {
-      const data = await warehouseService.getLocations(warehouseId);
-      const rows = Array.isArray(data) ? data : [];
-      setLocations(rows);
-
-      const fallback = rows[0]?.id || "";
-      setItems((prev) =>
-        prev.map((item) => ({
-          ...item,
-          location_id: item.location_id || fallback,
-        })),
-      );
-    } catch (error) {
-      setLocations([]);
-      toast.error(getApiErrorMessage(error, "Khong tai duoc vi tri kho"));
-    }
-  };
-
   const handleSelectWarehouse = async (warehouseId: string) => {
     setSelectedWarehouse(warehouseId);
-    await loadLocations(warehouseId);
     setStep("scan");
   };
 
   const upsertReceiptItem = (nextItem: Omit<ReceiptItemForm, "id" | "qty"> & { qty?: number }) => {
     const defaultQty = Number(nextItem.qty || 1);
-    const defaultLocation = nextItem.location_id || locations[0]?.id || "";
 
     setItems((prev) => {
       const index = prev.findIndex((item) => item.variant_id === nextItem.variant_id);
@@ -119,7 +91,6 @@ export function GoodsReceiptPage() {
           ...clone[index],
           qty: clone[index].qty + defaultQty,
           unit_cost: Number(nextItem.unit_cost || clone[index].unit_cost),
-          location_id: clone[index].location_id || defaultLocation,
         };
         return clone;
       }
@@ -133,7 +104,6 @@ export function GoodsReceiptPage() {
           title: nextItem.title,
           qty: defaultQty,
           unit_cost: Number(nextItem.unit_cost || 0),
-          location_id: defaultLocation,
           is_new_book: Boolean(nextItem.is_new_book),
         },
       ];
@@ -174,7 +144,6 @@ export function GoodsReceiptPage() {
         variant_id: payload.variant_id,
         title: payload.title || title,
         unit_cost: Number(payload.unit_cost || 0),
-        location_id: locations[0]?.id || "",
         is_new_book: true,
       });
 
@@ -210,7 +179,6 @@ export function GoodsReceiptPage() {
         variant_id: found.variant_id,
         title: found.title,
         unit_cost: Number(found.unit_cost || 0),
-        location_id: locations[0]?.id || "",
       });
       toast.success(`Da them: ${found.title}`);
       setBarcodeInput("");
@@ -243,8 +211,6 @@ export function GoodsReceiptPage() {
     () => items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_cost || 0), 0),
     [items],
   );
-  const allLocationsSet = useMemo(() => items.every((item) => item.location_id), [items]);
-
   const handleCreateDraftReceipt = async () => {
     if (!selectedWarehouse) {
       toast.error("Vui long chon kho");
@@ -254,11 +220,6 @@ export function GoodsReceiptPage() {
       toast.error("Phieu nhap chua co sach");
       return;
     }
-    if (!allLocationsSet) {
-      toast.error("Vui long chon vi tri cho tat ca dong sach");
-      return;
-    }
-
     if (items.some((item) => !Number.isFinite(item.qty) || item.qty <= 0)) {
       toast.error("So luong phai lon hon 0");
       return;
@@ -271,7 +232,7 @@ export function GoodsReceiptPage() {
         note: note || undefined,
         items: items.map((item) => ({
           variant_id: item.variant_id,
-          location_id: item.location_id,
+          location_id: null,
           quantity: Number(item.qty),
           unit_cost: Number(item.unit_cost),
           is_new_book: item.is_new_book,
@@ -430,23 +391,7 @@ export function GoodsReceiptPage() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-slate-500">Vi tri</label>
-                        <select
-                          value={item.location_id}
-                          onChange={(event) => updateItem(item.id, "location_id", event.target.value)}
-                          className="w-full rounded-[6px] border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"
-                        >
-                          <option value="">Chon vi tri</option>
-                          {locations.map((location) => (
-                            <option key={location.id} value={location.id}>
-                              {location.location_code}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="mb-1 block text-[10px] font-semibold text-slate-500">So luong</label>
                         <input
@@ -515,17 +460,15 @@ export function GoodsReceiptPage() {
 
       {step === "review" ? (
         <div className="space-y-4">
-          {!allLocationsSet ? (
-            <FadeItem>
-              <div className="flex items-start gap-3 rounded-[12px] border border-amber-200/60 bg-amber-50 p-4">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <div>
-                  <p className="text-[12px] font-semibold text-amber-800">Thong tin chua day du</p>
-                  <p className="mt-0.5 text-[11px] text-amber-700">Tat ca dong sach can duoc chon vi tri truoc khi tao phieu.</p>
-                </div>
+          <FadeItem>
+            <div className="flex items-start gap-3 rounded-[12px] border border-amber-200/60 bg-amber-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-[12px] font-semibold text-amber-800">Thong bao</p>
+                <p className="mt-0.5 text-[11px] text-amber-700">Vi tri kho se duoc phan bo tai buoc Putaway sau khi phieu duoc duyet.</p>
               </div>
-            </FadeItem>
-          ) : null}
+            </div>
+          </FadeItem>
 
           <FadeItem>
             <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
@@ -540,13 +483,12 @@ export function GoodsReceiptPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => {
-                    const location = locations.find((entry) => entry.id === item.location_id);
+                    {items.map((item) => {
                     const subtotal = Number(item.qty) * Number(item.unit_cost);
                     return (
                       <tr key={item.id} className="border-b border-slate-50 last:border-0">
                         <td className="px-4 py-3 text-[12px] font-semibold">{item.title}</td>
-                        <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{location?.location_code || "-"}</td>
+                        <td className="px-4 py-3 font-mono text-[12px] text-slate-500">Phan bo sau</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{item.qty}</td>
                         <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{formatCurrency(item.unit_cost)}</td>
                         <td className="px-4 py-3 font-mono text-[12px] font-semibold">{formatCurrency(subtotal)}</td>
@@ -568,9 +510,9 @@ export function GoodsReceiptPage() {
               </button>
               <button
                 onClick={() => setShowConfirmModal(true)}
-                disabled={!allLocationsSet || items.length === 0 || isSaving}
+                disabled={items.length === 0 || isSaving}
                 className={`rounded-[10px] px-5 py-2.5 text-[13px] font-semibold text-white transition-all ${
-                  allLocationsSet && items.length > 0
+                  items.length > 0
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600"
                     : "cursor-not-allowed bg-slate-300"
                 }`}

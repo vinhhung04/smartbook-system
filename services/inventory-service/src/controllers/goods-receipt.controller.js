@@ -16,10 +16,6 @@ function createReceiptNumber(baseTimestamp) {
   return `GR-${baseTimestamp}-${suffix}`;
 }
 
-function createMovementNumber(baseTimestamp, index) {
-  return `MV-${baseTimestamp}-${index + 1}`;
-}
-
 function parseId(value) {
   return String(value || '').trim() || null;
 }
@@ -177,9 +173,9 @@ async function createGoodsReceipt(req, res) {
   }
 
   for (const item of items) {
-    if (!item?.variant_id || !item?.location_id || !isPositiveInteger(item?.quantity)) {
+    if (!item?.variant_id || !isPositiveInteger(item?.quantity)) {
       return res.status(400).json({
-        message: 'Each item must include variant_id, location_id and quantity > 0',
+        message: 'Each item must include variant_id and quantity > 0',
       });
     }
 
@@ -207,7 +203,7 @@ async function createGoodsReceipt(req, res) {
       const receiptItemsData = items.map((item) => ({
         goods_receipt_id: goodsReceipt.id,
         variant_id: item.variant_id,
-        location_id: item.location_id,
+        location_id: item.location_id || null,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
       }));
@@ -247,63 +243,6 @@ async function createGoodsReceipt(req, res) {
   }
 }
 
-async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
-  const items = await tx.goods_receipt_items.findMany({
-    where: { goods_receipt_id: goodsReceipt.id },
-    select: {
-      variant_id: true,
-      location_id: true,
-      quantity: true,
-      unit_cost: true,
-    },
-  });
-
-  const baseTimestamp = Date.now();
-
-  await Promise.all(
-    items
-      .filter((item) => item.location_id)
-      .map((item) =>
-        tx.stock_balances.upsert({
-          where: {
-            variant_id_location_id: {
-              variant_id: item.variant_id,
-              location_id: item.location_id,
-            },
-          },
-          update: {
-            on_hand_qty: { increment: item.quantity },
-            available_qty: { increment: item.quantity },
-          },
-          create: {
-            warehouse_id: goodsReceipt.warehouse_id,
-            variant_id: item.variant_id,
-            location_id: item.location_id,
-            on_hand_qty: item.quantity,
-            available_qty: item.quantity,
-          },
-        })
-      )
-  );
-
-  await tx.stock_movements.createMany({
-    data: items.map((item, index) => ({
-      movement_number: createMovementNumber(baseTimestamp, index),
-      movement_type: 'INBOUND',
-      movement_status: 'POSTED',
-      warehouse_id: goodsReceipt.warehouse_id,
-      variant_id: item.variant_id,
-      to_location_id: item.location_id,
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-      source_service: 'INVENTORY_SERVICE',
-      reference_type: 'GOODS_RECEIPT',
-      reference_id: goodsReceipt.id,
-      created_by_user_id: userId,
-    })),
-  });
-}
-
 async function updateGoodsReceipt(req, res) {
   const id = parseId(req.params.id);
   const { status, note } = req.body;
@@ -337,10 +276,6 @@ async function updateGoodsReceipt(req, res) {
 
       if (existing.status === 'POSTED' && targetStatus === 'DRAFT') {
         return { invalidTransition: true, message: 'Cannot rollback POSTED receipt to DRAFT' };
-      }
-
-      if (existing.status === 'DRAFT' && targetStatus === 'POSTED') {
-        await postDraftGoodsReceipt(tx, existing, userId);
       }
 
       const updated = await tx.goods_receipts.update({

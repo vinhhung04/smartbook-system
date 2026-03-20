@@ -4,6 +4,7 @@ export * from './book';
 export * from './stock-movement';
 export * from './warehouse';
 export * from './goods-receipt';
+export * from './putaway';
 export * from './ai';
 export * from './user';
 export * from './role';

@@ -5,8 +5,11 @@ const { PrismaClient } = require('@prisma/client');
 const authMiddleware = require('./middlewares/auth.middleware');
 const bookRoutes = require('./routes/book.routes');
 const warehouseRoutes = require('./routes/warehouse.routes');
+const locationRoutes = require('./routes/location.routes');
 const goodsReceiptRoutes = require('./routes/goods-receipt.routes');
 const stockMovementRoutes = require('./routes/stock-movement.routes');
+const putawayRoutes = require('./routes/putaway.routes');
+const shelfRoutes = require('./routes/shelf.routes');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -22,8 +25,11 @@ app.use('/api', authMiddleware);
 
 app.use('/api/books', bookRoutes);
 app.use('/api/warehouses', warehouseRoutes);
+app.use('/api/locations', locationRoutes);
 app.use('/api/goods-receipts', goodsReceiptRoutes);
 app.use('/api/stock-movements', stockMovementRoutes);
+app.use('/api/putaway', putawayRoutes);
+app.use('/api/shelves', shelfRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
