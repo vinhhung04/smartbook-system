@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db-init:/docker-entrypoint-initdb.d
-      - ./data:/docker-entrypoint-initdb.d/data
+      - ./data:/seed-data
 
   pgadmin:
     image: dpage/pgadmin4
