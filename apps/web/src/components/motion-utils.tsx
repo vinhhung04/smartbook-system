@@ -37,7 +37,7 @@ export function PageWrapper({ children, className = "" }: { children: ReactNode;
 
 export function FadeItem({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <motion.div variants={stagger.item} className={className}>
+    <motion.div variants={stagger.item as any} className={className}>
       {children}
     </motion.div>
   );

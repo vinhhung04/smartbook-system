@@ -23,7 +23,7 @@ export function KpiCard({ title, value, numericValue, change, icon: Icon, trend,
 }) {
   return (
     <motion.div
-      variants={stagger.item}
+      variants={stagger.item as any}
       whileHover={{ y: -3, boxShadow: "0 12px 32px -4px rgba(0,0,0,0.08)" }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       className={`relative overflow-hidden bg-white rounded-[14px] border border-white/80 p-5 flex flex-col gap-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] cursor-default`}

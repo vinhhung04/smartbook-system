@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion, AnimatePresence } from "motion/react";
-import { Upload, Camera, Loader2, Check, X, Edit, AlertCircle, Sparkles } from "lucide-react";
+import { Upload, Camera, Loader2, Check, X, Edit, AlertCircle, Sparkles, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const mockResults = [
@@ -14,10 +14,10 @@ export function AIImportPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<any[]>([]);
   const [fileCount, setFileCount] = useState(0);
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
   };
@@ -26,14 +26,14 @@ export function AIImportPage() {
     setIsDragging(false);
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
     processFiles(files);
   };
 
-  const processFiles = (files) => {
+  const processFiles = (files: File[]) => {
     const imageFiles = files.filter(f => f.type.startsWith("image/"));
     if (imageFiles.length === 0) {
       toast.error("Please upload image files");
@@ -79,7 +79,7 @@ export function AIImportPage() {
             <motion.div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
               className={`relative border-2 border-dashed rounded-[16px] p-8 transition-all cursor-pointer ${isDragging ? "border-cyan-500 bg-cyan-50/30" : "border-slate-300 bg-slate-50/30 hover:border-slate-400"}`}
               whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-              <input type="file" multiple accept="image/*" onChange={e => processFiles(Array.from(e.target.files))} className="absolute inset-0 opacity-0 cursor-pointer" />
+              <input type="file" multiple accept="image/*" onChange={e => processFiles(e.target.files ? Array.from(e.target.files) : [])} className="absolute inset-0 opacity-0 cursor-pointer" />
               <div className="flex flex-col items-center justify-center py-8">
                 <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity }} className="mb-4">
                   <Upload className="w-12 h-12 text-cyan-500" />

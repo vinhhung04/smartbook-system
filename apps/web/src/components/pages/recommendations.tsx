@@ -34,9 +34,9 @@ const trendData = [
 ];
 
 export function RecommendationsPage() {
-  const [dismissed, setDismissed] = useState([]);
+  const [dismissed, setDismissed] = useState<number[]>([]);
 
-  const handleDismiss = (id) => {
+  const handleDismiss = (id: number) => {
     setDismissed([...dismissed, id]);
     toast.info("Recommendation dismissed");
   };

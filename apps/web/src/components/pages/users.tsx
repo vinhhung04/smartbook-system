@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { userService } from "@/services/user";
 import { roleService } from "@/services/role";
-import { getApiErrorMessage } from "@/services/api.ts";
+import { getApiErrorMessage } from "@/services/api";
 
 interface RoleItem {
   id: string;
@@ -119,8 +119,8 @@ export function UsersPage() {
       await userService.create({
         username: form.username.trim(),
         full_name: form.full_name.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
+        email: form.email.trim() || "",
+        phone: form.phone.trim() || "",
         password: form.password,
         status: form.status,
         role_ids: form.role_ids,
