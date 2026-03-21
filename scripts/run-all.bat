@@ -8,6 +8,11 @@ echo [INFO] SmartBook One-Command Entrypoint
 echo [INFO] ========================================
 echo.
 
+set SCRIPT_DIR=%~dp0
+if exist "%SCRIPT_DIR%scripts\bootstrap.bat" (
+  set SCRIPT_DIR=%SCRIPT_DIR%scripts\
+)
+
 set SKIP_ENV=0
 set SKIP_WORKSPACE=0
 set SKIP_DOCKER=0
@@ -46,7 +51,7 @@ goto :help
 :start
 if "%SKIP_ENV%"=="0" (
   echo [STEP 1/3] Checking environment...
-  call "%~dp0check-env.bat"
+  call "%SCRIPT_DIR%check-env.bat"
   if errorlevel 1 (
     echo [ERROR] Environment check failed.
     exit /b 1
@@ -58,7 +63,7 @@ if "%SKIP_ENV%"=="0" (
 echo.
 if "%SKIP_WORKSPACE%"=="0" (
   echo [STEP 2/3] Installing workspace dependencies...
-  call "%~dp0bootstrap-workspace.bat"
+  call "%SCRIPT_DIR%bootstrap-workspace.bat"
   if errorlevel 1 (
     echo [ERROR] Workspace bootstrap failed.
     exit /b 1
@@ -70,7 +75,7 @@ if "%SKIP_WORKSPACE%"=="0" (
 echo.
 if "%SKIP_DOCKER%"=="0" (
   echo [STEP 3/3] Starting Docker stack + DB setup...
-  call "%~dp0bootstrap.bat"
+  call "%SCRIPT_DIR%bootstrap.bat"
   if errorlevel 1 (
     echo [ERROR] Docker bootstrap failed.
     exit /b 1

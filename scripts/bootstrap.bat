@@ -78,12 +78,6 @@ timeout /t 20 /nobreak >nul
 
 echo.
 echo [INFO] Running database setup jobs...
-docker compose --profile dev run --rm auth-db-push
-if errorlevel 1 (
-    echo [ERROR] auth-db-push failed
-    exit /b 1
-)
-
 docker compose --profile dev run --rm inventory-db-push
 if errorlevel 1 (
     echo [ERROR] inventory-db-push failed
@@ -93,6 +87,26 @@ if errorlevel 1 (
 docker compose --profile dev run --rm borrow-db-push
 if errorlevel 1 (
     echo [ERROR] borrow-db-push failed
+    exit /b 1
+)
+
+echo.
+echo [INFO] Importing SQL schema + seed data...
+docker compose exec -T db psql -U user -d postgres -f /docker-entrypoint-initdb.d/00-full-schema.sql
+if errorlevel 1 (
+    echo [ERROR] Failed to import 00-full-schema.sql
+    exit /b 1
+)
+
+docker compose exec -T db psql -U user -d postgres -f /docker-entrypoint-initdb.d/03-sample-seed.sql
+if errorlevel 1 (
+    echo [ERROR] Failed to import 03-sample-seed.sql
+    exit /b 1
+)
+
+docker compose exec -T db psql -U user -d postgres -f /docker-entrypoint-initdb.d/04-extended-seed.sql
+if errorlevel 1 (
+    echo [ERROR] Failed to import 04-extended-seed.sql
     exit /b 1
 )
 
