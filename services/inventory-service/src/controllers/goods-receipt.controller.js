@@ -196,7 +196,9 @@ async function createGoodsReceipt(req, res) {
       }
 
       const variantIds = [...new Set(items.map((item) => item.variant_id))];
-      const locationIds = [...new Set(items.map((item) => item.location_id))];
+
+      // Normalize location ids: remove null/undefined values before querying
+      const locationIds = [...new Set(items.map((item) => item.location_id).filter((id) => id !== null && id !== undefined))];
 
       const variants = await tx.book_variants.findMany({
         where: { id: { in: variantIds } },
@@ -207,16 +209,18 @@ async function createGoodsReceipt(req, res) {
         throw new Error('INVALID_VARIANTS');
       }
 
-      const locations = await tx.locations.findMany({
-        where: {
-          id: { in: locationIds },
-          warehouse_id,
-        },
-        select: { id: true },
-      });
+      if (locationIds.length > 0) {
+        const locations = await tx.locations.findMany({
+          where: {
+            id: { in: locationIds },
+            warehouse_id,
+          },
+          select: { id: true },
+        });
 
-      if (locations.length !== locationIds.length) {
-        throw new Error('INVALID_LOCATIONS');
+        if (locations.length !== locationIds.length) {
+          throw new Error('INVALID_LOCATIONS');
+        }
       }
 
       const goodsReceipt = await tx.goods_receipts.create({
