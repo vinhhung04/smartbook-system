@@ -101,11 +101,10 @@ if %FAILED% equ 1 (
     echo [ERROR] ========================================
     echo [ERROR] Some required tools are missing!
     echo [ERROR] ========================================
-    pause
     exit /b 1
 ) else (
     echo [SUCCESS] ========================================
     echo [SUCCESS] All required tools are installed!
     echo [SUCCESS] ========================================
-    pause
+    exit /b 0
 )

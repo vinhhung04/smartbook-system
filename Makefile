@@ -47,7 +47,12 @@ help:
 # Bootstrap - Full setup from scratch
 setup:
 	@echo "[INFO] Running automated bootstrap..."
-	@bash scripts/bootstrap.sh
+	@if [ ! -f .env ]; then \
+		echo "[INFO] .env not found, creating from .env.example"; \
+		cp .env.example .env; \
+	fi
+	@docker compose up -d --build
+	@$(MAKE) migrate
 
 # Basic Docker commands
 up:
@@ -125,7 +130,9 @@ shell-api:
 # Cleanup
 check-env:
 	@echo "[INFO] Validating environment..."
-	bash scripts/check-env.sh
+	@docker --version >/dev/null 2>&1 || (echo "[ERROR] Docker is required" && exit 1)
+	@docker compose version >/dev/null 2>&1 || (echo "[ERROR] Docker Compose is required" && exit 1)
+	@echo "[SUCCESS] Docker and Docker Compose are available"
 
 check-ports:
 	@echo "[INFO] Checking port availability..."

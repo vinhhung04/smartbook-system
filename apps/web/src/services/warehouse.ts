@@ -1,4 +1,4 @@
-import { inventoryAPI } from './api.ts';
+import { inventoryAPI } from './http-clients';
 
 export interface Warehouse {
   id: string;

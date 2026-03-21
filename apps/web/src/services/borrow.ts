@@ -1,4 +1,4 @@
-import { inventoryAPI } from './api.ts';
+import { inventoryAPI } from './http-clients';
 
 export type CustomerStatus = 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'INACTIVE';
 export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'READY_FOR_PICKUP' | 'CANCELLED' | 'EXPIRED' | 'CONVERTED_TO_LOAN';

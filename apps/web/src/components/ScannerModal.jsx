@@ -6,9 +6,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { X, Camera, KeyboardIcon, Loader2, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
 import { findBookByBarcode } from '../services/api';
+import { aiService } from '../services/ai';
 
 const SCANNER_ID = 'reader';
-const AI_API_BASE = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
 
 // â”€â”€â”€ Tráº¡ng thÃ¡i loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const LOADING_STATE = {
@@ -130,20 +130,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess, allowUnkn
     try {
       const blob = await captureFrameAsBlob();
 
-      const formData = new FormData();
-      formData.append('file', blob, 'cover.jpg');
-
-      const res = await fetch(`${AI_API_BASE}/recognize-book`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(`AI service lá»—i (${res.status})${errText ? ': ' + errText : ''}`);
-      }
-
-      const data = await res.json();
+      const data = await aiService.recognizeBook(blob);
       console.log('AI Recognition Response:', data);
 
       const bookData = buildScannedBookPayload(data, data?.isbn || '');

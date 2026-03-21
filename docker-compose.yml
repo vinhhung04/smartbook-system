@@ -126,7 +126,7 @@
     environment:
       - VITE_API_BASE_URL=http://localhost:3000
       - VITE_AUTH_BASE_URL=http://localhost:3000
-      - VITE_AI_BASE_URL=http://localhost:8000
+      - VITE_AI_BASE_URL=http://localhost:3000/ai
     depends_on:
       - api-gateway
       - inventory-service

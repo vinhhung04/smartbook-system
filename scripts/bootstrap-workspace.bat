@@ -1,9 +1,4 @@
 @echo off
-REM ============================================================================
-REM SmartBook Monorepo - Workspace Bootstrap (Windows Batch)
-REM ============================================================================
-REM This script installs workspace dependencies using pnpm
-
 setlocal enabledelayedexpansion
 chcp 65001 > nul
 
@@ -22,8 +17,7 @@ if errorlevel 1 (
     npm install -g pnpm
     if errorlevel 1 (
         echo [ERROR] Failed to install pnpm
-        echo [INFO] Manual install: npm install -g pnpm
-        pause
+        echo [INFO] Please run manually: npm install -g pnpm
         exit /b 1
     )
 )
@@ -42,7 +36,6 @@ pnpm install
 
 if errorlevel 1 (
     echo [ERROR] pnpm install failed
-    pause
     exit /b 1
 )
 
@@ -52,7 +45,11 @@ echo [SUCCESS] Workspace bootstrap completed!
 echo [SUCCESS] ========================================
 echo.
 echo [INFO] Next steps:
-echo   1. Run: .\scripts\bootstrap.bat
-echo   2. Access web UI at http://localhost:5173
+echo   scripts\bootstrap.bat
 echo.
-pause
+
+if /I "%~1"=="--with-docker" (
+    call "%~dp0bootstrap.bat"
+)
+
+exit /b 0
