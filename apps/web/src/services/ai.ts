@@ -1,4 +1,4 @@
-import { aiAPI } from './api.ts';
+import { aiAPI } from './http-clients';
 
 export interface AIAnalysisRequest {
   imageUrl?: string;
@@ -24,6 +24,14 @@ export interface RecommendationResponse {
 export interface BookSummaryResponse {
   description: string;
   web_context_used: boolean;
+}
+
+export interface RecognizeBookResponse {
+  title: string | null;
+  author: string | null;
+  isbn: string | null;
+  publisher: string | null;
+  raw?: string;
 }
 
 export const aiService = {
@@ -62,8 +70,20 @@ export const aiService = {
     return response.data;
   },
 
+  recognizeBook: async (imageFile: File | Blob): Promise<RecognizeBookResponse> => {
+    const formData = new FormData();
+    formData.append('file', imageFile, 'cover.jpg');
+
+    const response = await aiAPI.post('/recognize-book', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   generateBookSummary: async (title: string, author: string): Promise<BookSummaryResponse> => {
-    const response = await aiAPI.post('/api/ai/generate-book-summary', {
+    const response = await aiAPI.post('/generate-book-summary', {
       title,
       author,
     });

@@ -125,6 +125,53 @@ async function deleteWarehouse(req, res) {
       return res.status(404).json({ message: 'Warehouse not found' });
     }
 
+    const [
+      locationsCount,
+      stockBalanceCount,
+      stockMovementCount,
+      inventoryUnitCount,
+      stockAuditCount,
+      goodsReceiptCount,
+      purchaseOrderCount,
+      outboundOrderCount,
+      stockReservationCount,
+      transferFromCount,
+      transferToCount,
+    ] = await Promise.all([
+      prisma.locations.count({ where: { warehouse_id: id } }),
+      prisma.stock_balances.count({ where: { warehouse_id: id } }),
+      prisma.stock_movements.count({ where: { warehouse_id: id } }),
+      prisma.inventory_units.count({ where: { warehouse_id: id } }),
+      prisma.stock_audits.count({ where: { warehouse_id: id } }),
+      prisma.goods_receipts.count({ where: { warehouse_id: id } }),
+      prisma.purchase_orders.count({ where: { warehouse_id: id } }),
+      prisma.outbound_orders.count({ where: { warehouse_id: id } }),
+      prisma.stock_reservations.count({ where: { warehouse_id: id } }),
+      prisma.transfer_orders.count({ where: { from_warehouse_id: id } }),
+      prisma.transfer_orders.count({ where: { to_warehouse_id: id } }),
+    ]);
+
+    const conflicts = [];
+    if (locationsCount > 0) conflicts.push(`Warehouse has ${locationsCount} location(s)`);
+    if (stockBalanceCount > 0) conflicts.push(`Warehouse has ${stockBalanceCount} stock balance record(s)`);
+    if (stockMovementCount > 0) conflicts.push(`Warehouse has ${stockMovementCount} stock movement record(s)`);
+    if (inventoryUnitCount > 0) conflicts.push(`Warehouse has ${inventoryUnitCount} inventory unit(s)`);
+    if (stockAuditCount > 0) conflicts.push(`Warehouse has ${stockAuditCount} stock audit(s)`);
+    if (goodsReceiptCount > 0) conflicts.push(`Warehouse has ${goodsReceiptCount} goods receipt(s)`);
+    if (purchaseOrderCount > 0) conflicts.push(`Warehouse has ${purchaseOrderCount} purchase order(s)`);
+    if (outboundOrderCount > 0) conflicts.push(`Warehouse has ${outboundOrderCount} outbound order(s)`);
+    if (stockReservationCount > 0) conflicts.push(`Warehouse has ${stockReservationCount} stock reservation(s)`);
+    if (transferFromCount > 0 || transferToCount > 0) {
+      conflicts.push(`Warehouse has ${transferFromCount + transferToCount} transfer order relation(s)`);
+    }
+
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Cannot delete warehouse because it is referenced by existing records',
+        conflicts,
+      });
+    }
+
     await prisma.warehouses.delete({ where: { id } });
     return res.status(204).send();
   } catch (error) {

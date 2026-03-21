@@ -1,64 +1,153 @@
-import axios, { AxiosInstance } from 'axios';
+import type { RegisterRequest } from './auth';
+import { aiService } from './ai';
+import { authService } from './auth';
+import { bookService, type BookUpdateRequest, type IncompleteBookRequest } from './book';
+import { goodsReceiptService, type GoodsReceiptCreateRequest } from './goods-receipt';
+import {
+  aiAPI,
+  authAPI,
+  clearToken,
+  domainAPIs,
+  gatewayAPI,
+  getApiErrorMessage,
+  getToken,
+  hasAllPermissions,
+  hasAnyPermission,
+  hasPermission,
+  inventoryAPI,
+  setToken,
+  TOKEN_KEY,
+  USER_KEY,
+} from './http-clients';
+import { roleService, type RoleCreateRequest } from './role';
+import { stockMovementService } from './stock-movement';
+import { userService, type UserCreateRequest, type UserUpdateRequest } from './user';
+import { warehouseService, type WarehouseCreateRequest } from './warehouse';
 
-// Create API client instances
-const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:3002';
-const inventoryBaseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-const aiBaseURL = import.meta.env.VITE_AI_BASE_URL || 'http://localhost:8000';
-const gatewayBaseURL = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://localhost:3000';
-
-const authAPI: AxiosInstance = axios.create({
-  baseURL: authBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const inventoryAPI: AxiosInstance = axios.create({
-  baseURL: inventoryBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const aiAPI: AxiosInstance = axios.create({
-  baseURL: aiBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const gatewayAPI: AxiosInstance = axios.create({
-  baseURL: gatewayBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add request interceptor to attach JWT token
-const addTokenInterceptor = (api: AxiosInstance) => {
-  api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  });
-};
-
-addTokenInterceptor(authAPI);
-addTokenInterceptor(inventoryAPI);
-addTokenInterceptor(aiAPI);
-addTokenInterceptor(gatewayAPI);
-
-export function getApiErrorMessage(error: unknown, fallback = 'Request failed'): string {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { message?: string; error?: string } | undefined;
-    if (data?.message) return data.message;
-    if (data?.error) return data.error;
-    if (error.message) return error.message;
+// Legacy-compatible named exports used by JSX pages.
+export async function login(identifier: string, password: string) {
+  try {
+    return await authService.login({ identifier, password });
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Dang nhap that bai.'));
   }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
 }
+
+export async function register(payload: RegisterRequest) {
+  try {
+    return await authService.register(payload);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, 'Dang ky that bai.'));
+  }
+}
+
+export async function getAllBooks(params?: Record<string, unknown>) {
+  return bookService.getAll(params);
+}
+
+export async function findBookByBarcode(barcode: string) {
+  return bookService.findByBarcode(barcode);
+}
+
+export async function createIncompleteBook(payload: IncompleteBookRequest) {
+  return bookService.createIncomplete(payload);
+}
+
+export async function updateBookDetails(id: string, payload: BookUpdateRequest) {
+  return bookService.update(id, payload);
+}
+
+export async function generateBookSummary(title: string, author: string) {
+  return aiService.generateBookSummary(title, author);
+}
+
+export async function getGoodsReceipts(params?: Record<string, unknown>) {
+  return goodsReceiptService.getAll(params);
+}
+
+export async function getGoodsReceiptDetail(id: string) {
+  return goodsReceiptService.getById(id);
+}
+
+export async function createGoodsReceipt(payload: GoodsReceiptCreateRequest) {
+  return goodsReceiptService.create(payload);
+}
+
+export async function updateGoodsReceipt(id: string, next: string | { status?: string }) {
+  const status = typeof next === 'string' ? next : next?.status;
+  if (!status) {
+    throw new Error('Missing goods receipt status.');
+  }
+  return goodsReceiptService.updateStatus(id, status);
+}
+
+export async function getStockMovements(params?: Record<string, unknown>) {
+  return stockMovementService.getAll(params);
+}
+
+export async function getWarehouses(params?: Record<string, unknown>) {
+  return warehouseService.getAll(params);
+}
+
+export async function createWarehouse(payload: {
+  code: string;
+  name: string;
+  address?: string;
+  type?: string;
+}) {
+  const data: WarehouseCreateRequest = {
+    code: payload.code,
+    name: payload.name,
+    address_line1: payload.address,
+    warehouse_type: payload.type,
+  };
+  return warehouseService.create(data);
+}
+
+export async function getWarehouseLocations(warehouseId: string) {
+  const locations = await warehouseService.getLocations(warehouseId);
+  return { locations };
+}
+
+export async function getUsers(params?: Record<string, unknown>) {
+  return userService.getAll(params);
+}
+
+export async function createUser(payload: UserCreateRequest) {
+  return userService.create(payload);
+}
+
+export async function updateUser(id: string, payload: UserUpdateRequest) {
+  return userService.update(id, payload);
+}
+
+export async function getRoles(params?: Record<string, unknown>) {
+  return roleService.getAll(params);
+}
+
+export async function createRole(payload: RoleCreateRequest) {
+  return roleService.create(payload);
+}
+
+export async function getPermissions() {
+  return roleService.getPermissions();
+}
+
+export async function updateRolePermissions(roleId: string, permissionIds: string[]) {
+  return roleService.update(roleId, { permission_ids: permissionIds });
+}
+
+export {
+  TOKEN_KEY,
+  USER_KEY,
+  getToken,
+  setToken,
+  clearToken,
+  hasPermission,
+  hasAnyPermission,
+  hasAllPermissions,
+  getApiErrorMessage,
+  domainAPIs,
+};
 
 export { authAPI, inventoryAPI, aiAPI, gatewayAPI };

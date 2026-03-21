@@ -1,4 +1,4 @@
-import { inventoryAPI } from './api.ts';
+import { inventoryAPI } from './http-clients';
 
 export interface GoodsReceipt {
   id: string;
@@ -17,7 +17,7 @@ export interface GoodsReceipt {
 
 export interface GoodsReceiptItem {
   variant_id: string;
-  location_id: string;
+  location_id?: string | null;
   quantity: number;
   unit_cost: number;
   is_new_book?: boolean;

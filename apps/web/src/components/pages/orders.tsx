@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Package, Plus, Download, MoreVertical } from "lucide-react";
+import { Search, Package, Plus, Download, MoreVertical, ClipboardCheck } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
@@ -84,6 +84,9 @@ export function OrdersPage() {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
+            <NavLink to="/putaway" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-emerald-100 bg-white text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm" style={{ fontWeight: 550 }}>
+              <ClipboardCheck className="w-3.5 h-3.5" /> Putaway
+            </NavLink>
             <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm" style={{ fontWeight: 550 }}>
               <Download className="w-3.5 h-3.5" /> Export
             </button>

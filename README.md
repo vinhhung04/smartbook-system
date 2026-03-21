@@ -1,6 +1,6 @@
 # SmartBook System
 
-Tài liệu onboarding nhanh cho toàn bộ hệ thống SmartBook 🚀
+Tài liệu onboarding nhanh cho toàn bộ hệ thống SmartBook.
 
 ---
 
@@ -11,7 +11,7 @@ Tài liệu onboarding nhanh cho toàn bộ hệ thống SmartBook 🚀
 
 ---
 
-## 🚀 Khởi động nhanh (1-2 phút)
+## 🚀 Khởi động nhanh (máy mới pull về)
 
 ### 1️⃣ Chuẩn bị ban đầu
 
@@ -20,31 +20,77 @@ Tài liệu onboarding nhanh cho toàn bộ hệ thống SmartBook 🚀
 git clone https://github.com/your-org/smartbook-system.git
 cd smartbook-system
 
-# Tạo .env từ template
-cp .env.example .env  # (Linux/macOS)
-# hoặc copy .env.example .env  (Windows)
+# Tạo .env từ template (nếu chưa có)
+cp .env.example .env  # Linux/macOS
+# hoặc: copy .env.example .env  # Windows CMD
 ```
 
-### 2️⃣ Chạy Scripts (Windows Batch)
+### 2️⃣ Windows: chạy tự động 1 lệnh
 
 ```cmd
-REM Kiểm tra môi trường (tùy chọn)
-scripts\check-env.bat
-
-REM Cài đặt workspace dependencies
-scripts\bootstrap-workspace.bat
-
-REM Khởi động hệ thống (Docker + services)
-scripts\bootstrap.bat
+scripts\run-all.bat
 ```
 
-### 3️⃣ Truy cập ứng dụng
+Script sẽ tự làm:
+- Kiểm tra môi trường (`check-env.bat`)
+- Cài workspace dependencies (`pnpm install`)
+- Kiểm tra Docker + Docker Compose
+- Tạo `.env` nếu chưa có
+- `docker compose up -d --build`
+- Chạy db setup jobs (`auth-db-push`, `inventory-db-push`, `borrow-db-push`)
+- In trạng thái service + health check nhanh
 
-Script sẽ hiển thị các URL sau khi khởi động:
-- 🌐 **Web UI**: http://localhost:5173
-- 🔌 **API Gateway**: http://localhost:3000
-- 🗄️ **pgAdmin**: http://localhost:8080
-- 🤖 **Ollama**: http://localhost:11434
+### 3️⃣ Linux/macOS: chạy bằng Docker Compose
+
+```bash
+docker compose up -d --build
+docker compose --profile dev run --rm auth-db-push
+docker compose --profile dev run --rm inventory-db-push
+docker compose --profile dev run --rm borrow-db-push
+```
+
+### 4️⃣ Truy cập ứng dụng
+
+Sau khi script/chạy compose xong:
+- Web UI: http://localhost:5173
+- API Gateway: http://localhost:3000
+- AI Service: http://localhost:8000
+- pgAdmin: http://localhost:8080
+- Ollama: http://localhost:11434
+
+---
+
+## ⚡ Script tự động (Windows)
+
+### `scripts\check-env.bat`
+- Kiểm tra: Node.js, npm, pnpm, Docker, Docker Compose
+- Non-interactive: trả mã lỗi nếu thiếu tool
+
+### `scripts\bootstrap-workspace.bat`
+- Cài pnpm (nếu thiếu) + `pnpm install` cho monorepo
+- Có thể chain Docker bootstrap:
+
+```cmd
+scripts\bootstrap-workspace.bat --with-docker
+```
+
+### `scripts\bootstrap.bat`
+- Script chính để máy mới pull về chạy được ngay
+- Không cần pause/manual step
+
+### `scripts\run-all.bat`
+- Entrypoint duy nhất cho máy mới pull về
+- Chạy tuần tự: check-env -> bootstrap-workspace -> bootstrap
+
+```cmd
+scripts\run-all.bat
+```
+
+Tùy chọn (nâng cao):
+```cmd
+scripts\run-all.bat --skip-workspace
+scripts\run-all.bat --skip-docker
+```
 
 ---
 
@@ -60,14 +106,10 @@ Script sẽ hiển thị các URL sau khi khởi động:
 | **PostgreSQL** | DB | Lưu trữ dữ liệu |
 | **Ollama** | AI Models | Local LLM runtime |
 
----
-
 ## 🔧 Các lệnh thường dùng
 
-### 🐳 Docker Commands
-
 ```bash
-# Khởi động toàn bộ
+# Khởi động toàn bộ stack
 docker compose up -d --build
 
 # Dừng toàn bộ
@@ -82,16 +124,18 @@ docker compose ps
 # Reset (xóa dữ liệu)
 docker compose down -v
 
-# Chạy migration
-docker compose --profile dev run --rm auth-service pnpm db:push
-docker compose --profile dev run --rm inventory-service pnpm db:push
+# DB setup jobs
+docker compose --profile dev run --rm auth-db-push
+docker compose --profile dev run --rm inventory-db-push
+docker compose --profile dev run --rm borrow-db-push
 ```
 
-### 🛠️ Windows Batch Scripts
+### 🛠️ Windows Scripts
 
 | Script | Mục đích |
 |--------|---------|
-| `bootstrap.bat` | Khởi động Docker stack + services |
+| `run-all.bat` | Entrypoint 1 lệnh setup + run toàn bộ |
+| `bootstrap.bat` | 1 lệnh tự động khởi động toàn hệ thống |
 | `bootstrap-workspace.bat` | Cài đặt workspace dependencies |
 | `check-env.bat` | Kiểm tra công cụ yêu cầu |
 
@@ -103,71 +147,6 @@ make down         # Dừng
 make logs         # Xem logs
 make status       # Trạng thái
 ```
-
----
-
-## 📜 Hướng dẫn sử dụng Windows Batch Scripts
-
-### ✅ Bước 1: Kiểm tra môi trường
-
-Trước khi khởi động, hãy chắc chắn bạn đã cài đặt:
-- ✔️ Node.js v18+
-- ✔️ Docker Desktop
-- ✔️ Docker Compose (thường đi kèm Docker Desktop)
-
-```cmd
-scripts\check-env.bat
-```
-
-### ✅ Bước 2: Cài đặt Workspace Dependencies
-
-Cài đặt các dependencies của toàn bộ monorepo:
-
-```cmd
-scripts\bootstrap-workspace.bat
-```
-
-> **Lưu ý**: Script sẽ cài đặt `pnpm` nếu chưa có
-
-### ✅ Bước 3: Khởi động Hệ thống
-
-Script này sẽ:
-1. Kiểm tra Docker daemon
-2. Tạo `.env` file nếu chưa có
-3. Khởi động Docker Compose stack
-4. Chạy database migrations
-5. Hiển thị URLs truy cập
-
-```cmd
-scripts\bootstrap.bat
-```
-
-### 🔄 Các tác vụ thường xuyên
-
-**Xem logs (tất cả services):**
-```bash
-docker compose logs -f
-```
-
-**Xem logs của service cụ thể:**
-```bash
-docker compose logs -f auth-service
-docker compose logs -f inventory-service
-docker compose logs -f api-gateway
-```
-
-**Dừng tất cả services:**
-```bash
-docker compose down
-```
-
-**Reset (xóa dữ liệu database):**
-```bash
-docker compose down -v
-scripts\bootstrap.bat
-```
-
----
 
 ## 🎯 Các port quan trọng
 
@@ -198,7 +177,7 @@ Các lỗi phổ biến:
 - ❌ Docker daemon not running → Mở Docker Desktop
 - ❌ Port already in use → `docker compose down` rồi chạy lại
 - ❌ Missing `.env` → `cp .env.example .env`
-- ❌ DB not ready → Chờ 10-15 giây, sau đó kiểm tra `docker compose ps`
+- ❌ DB not ready → chạy lại 3 lệnh `*-db-push` và kiểm tra `docker compose ps`
 
 ---
 

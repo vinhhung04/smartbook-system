@@ -3,7 +3,7 @@ import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import { StatusBadge } from "../status-badge";
 import { NavLink, useParams } from "react-router";
-import { ArrowLeft, Download, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, Download, FileText, CheckCircle, XCircle, AlertCircle, ClipboardCheck } from "lucide-react";
 import { goodsReceiptService } from "@/services/goods-receipt";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { toast } from "sonner";
@@ -246,6 +246,17 @@ export function OrderDetailPage() {
                 <button className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15" style={{ fontWeight: 550 }}>
                   <FileText className="w-3.5 h-3.5" /> Print
                 </button>
+                <NavLink
+                  to={`/putaway/${receipt.id}`}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-[10px] text-[13px] transition-all ${
+                    receipt.status === "POSTED"
+                      ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
+                      : "cursor-not-allowed border border-slate-200 bg-white text-slate-400 pointer-events-none"
+                  }`}
+                  style={{ fontWeight: 550 }}
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5" /> Nhap hang
+                </NavLink>
                 <button
                   disabled={receipt.status !== "DRAFT" || isUpdatingStatus}
                   onClick={() => void handleUpdateStatus("POSTED")}

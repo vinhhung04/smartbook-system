@@ -13,7 +13,9 @@ INSERT INTO users (
 ) VALUES
     ('00000000-0000-0000-0000-000000000101', 'admin.smartbook', 'admin@smartbook.local', '$2b$12$demo_admin_hash', 'System Admin', '0901000001', 'ACTIVE', '00000000-0000-0000-0000-000000000461', TRUE, 0, '2026-03-14 08:30:00+07'),
     ('00000000-0000-0000-0000-000000000102', 'manager.hcm', 'manager.hcm@smartbook.local', '$2b$12$demo_manager_hash', 'HCM Library Manager', '0901000002', 'ACTIVE', '00000000-0000-0000-0000-000000000461', FALSE, 0, '2026-03-14 08:15:00+07'),
-    ('00000000-0000-0000-0000-000000000103', 'staff.counter', 'staff.counter@smartbook.local', '$2b$12$demo_staff_hash', 'Counter Staff', '0901000003', 'ACTIVE', '00000000-0000-0000-0000-000000000461', FALSE, 1, '2026-03-13 17:40:00+07')
+    ('00000000-0000-0000-0000-000000000103', 'staff.counter', 'staff.counter@smartbook.local', '$2b$12$demo_staff_hash', 'Counter Staff', '0901000003', 'ACTIVE', '00000000-0000-0000-0000-000000000461', FALSE, 1, '2026-03-13 17:40:00+07'),
+    ('00000000-0000-0000-0000-000000000104', 'hung', 'hung@smartbook.local', '$2b$10$7Du0qLbFMsVmDremJzRrX.QMMydqBYI7aR83PnG2Ifbte/7ZrSzAG', 'Hung Admin', '0912345678', 'ACTIVE', '00000000-0000-0000-0000-000000000461', TRUE, 0, '2026-03-14 08:30:00+07'),
+    ('00000000-0000-0000-0000-000000000105', 'khoa', 'khoa@smartbook.local', '$2b$10$7Du0qLbFMsVmDremJzRrX.QMMydqBYI7aR83PnG2Ifbte/7ZrSzAG', 'Khoa Admin', '0912345679', 'ACTIVE', '00000000-0000-0000-0000-000000000461', TRUE, 0, '2026-03-14 08:30:00+07')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO user_roles (user_id, role_id, assigned_by_user_id, assigned_at, expires_at)
@@ -24,6 +26,10 @@ FROM (
     SELECT '00000000-0000-0000-0000-000000000102'::uuid, r.id, '00000000-0000-0000-0000-000000000101'::uuid, '2026-03-01 09:10:00+07'::timestamptz, NULL::timestamptz FROM roles r WHERE r.code = 'MANAGER'
     UNION ALL
     SELECT '00000000-0000-0000-0000-000000000103'::uuid, r.id, '00000000-0000-0000-0000-000000000102'::uuid, '2026-03-01 09:15:00+07'::timestamptz, NULL::timestamptz FROM roles r WHERE r.code = 'STAFF'
+    UNION ALL
+    SELECT '00000000-0000-0000-0000-000000000104'::uuid, r.id, '00000000-0000-0000-0000-000000000101'::uuid, '2026-03-01 09:00:00+07'::timestamptz, NULL::timestamptz FROM roles r WHERE r.code = 'ADMIN'
+    UNION ALL
+    SELECT '00000000-0000-0000-0000-000000000105'::uuid, r.id, '00000000-0000-0000-0000-000000000101'::uuid, '2026-03-01 09:00:00+07'::timestamptz, NULL::timestamptz FROM roles r WHERE r.code = 'ADMIN'
 ) AS x(user_id, role_id, assigned_by_user_id, assigned_at, expires_at)
 ON CONFLICT DO NOTHING;
 
@@ -66,96 +72,6 @@ INSERT INTO integration_inbox (
     id, source_service, event_id, event_type, payload, status, error_message, received_at, processed_at
 ) VALUES
     ('00000000-0000-0000-0000-000000000161', 'inventory', '00000000-0000-0000-0000-000000000601', 'inventory.stock.low', '{"warehouse_id":"00000000-0000-0000-0000-000000000461","variant_id":"00000000-0000-0000-0000-000000000442"}'::jsonb, 'PROCESSED', NULL, '2026-03-14 08:35:00+07', '2026-03-14 08:35:01+07')
-ON CONFLICT (id) DO NOTHING;
-
-COMMIT;
-
--- ------------------------------------------------------------
--- Borrow harden demo seeds (Phase 1/2 validation)
--- ------------------------------------------------------------
-
-\connect auth_db
-BEGIN;
-
-INSERT INTO permissions (code, module_name, action_name, description)
-VALUES
-    ('borrow.read', 'borrow', 'read', 'View customers, reservations and loans'),
-    ('borrow.write', 'borrow', 'write', 'Create reservations, loans and returns')
-ON CONFLICT (code) DO NOTHING;
-
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-JOIN permissions p ON p.code IN ('borrow.read', 'borrow.write')
-WHERE r.code IN ('MANAGER', 'STAFF')
-ON CONFLICT DO NOTHING;
-
-COMMIT;
-
-\connect borrow_db
-BEGIN;
-
-INSERT INTO membership_plans (
-    id, code, name, description, max_active_loans, max_loan_days,
-    max_renewal_count, reservation_hold_hours, fine_per_day,
-    lost_item_fee_multiplier, is_active
-) VALUES
-    ('00000000-0000-0000-0000-000000000713', 'PLAN-LIMIT-ONE', 'Limit One Plan', 'Used for membership limit test case.', 1, 7, 0, 12, 4000, 1.00, TRUE)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO customers (
-    id, customer_code, full_name, email, phone, status, total_fine_balance
-) VALUES
-    ('00000000-0000-0000-0000-000000000703', 'CUS-HARDEN-01', 'Le Borrow Active', 'borrow.active@smartbook.local', '0912000003', 'ACTIVE', 0),
-    ('00000000-0000-0000-0000-000000000704', 'CUS-HARDEN-02', 'Le Borrow Fine', 'borrow.fine@smartbook.local', '0912000004', 'ACTIVE', 25000),
-    ('00000000-0000-0000-0000-000000000705', 'CUS-HARDEN-03', 'Le Borrow Limited', 'borrow.limit@smartbook.local', '0912000005', 'ACTIVE', 0)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO customer_preferences (customer_id)
-VALUES
-    ('00000000-0000-0000-0000-000000000703'),
-    ('00000000-0000-0000-0000-000000000704'),
-    ('00000000-0000-0000-0000-000000000705')
-ON CONFLICT (customer_id) DO NOTHING;
-
-INSERT INTO customer_memberships (
-    id, customer_id, plan_id, card_number, start_date, end_date, status
-) VALUES
-    ('00000000-0000-0000-0000-000000000723', '00000000-0000-0000-0000-000000000703', '00000000-0000-0000-0000-000000000712', 'CARD-HARDEN-01', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE'),
-    ('00000000-0000-0000-0000-000000000724', '00000000-0000-0000-0000-000000000704', '00000000-0000-0000-0000-000000000712', 'CARD-HARDEN-02', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE'),
-    ('00000000-0000-0000-0000-000000000725', '00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000713', 'CARD-HARDEN-03', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO loan_transactions (
-    id, loan_number, customer_id, warehouse_id, handled_by_user_id, borrow_date, due_date, status, total_items, notes
-) VALUES
-    ('00000000-0000-0000-0000-000000000742', 'LOAN-HARDEN-01', '00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000000103', NOW() - INTERVAL '1 day', NOW() + INTERVAL '6 day', 'BORROWED', 1, 'Seeded active loan for membership limit test')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO loan_items (
-    id, loan_id, variant_id, due_date, status, item_condition_on_checkout
-) VALUES
-    ('00000000-0000-0000-0000-000000000753', '00000000-0000-0000-0000-000000000742', '00000000-0000-0000-0000-000000000441', NOW() + INTERVAL '6 day', 'BORROWED', 'GOOD')
-ON CONFLICT (id) DO NOTHING;
-
-COMMIT;
-
-\connect inventory_db
-BEGIN;
-
-INSERT INTO book_variants (
-    id, book_id, sku, isbn13, internal_barcode, cover_type, language_code,
-    publish_year, condition_grade, unit_cost, list_price, replacement_cost,
-    is_borrowable, is_sellable, is_track_by_unit, is_active
-) VALUES
-    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-000000000431', 'SKU-DB-OUT-001', '9786040000099', 'BC-DB-OUT-001', 'PAPERBACK', 'en', 2024, 'GOOD', 70000, 99000, 120000, TRUE, FALSE, FALSE, TRUE)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO stock_balances (
-    id, warehouse_id, variant_id, location_id, on_hand_qty, available_qty, reserved_qty, borrowed_qty,
-    damaged_qty, in_transit_qty, safety_stock_qty, reorder_point, status, version, last_movement_at
-) VALUES
-    ('00000000-0000-0000-0000-000000000487', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-000000000472', 0, 0, 0, 0, 0, 0, 0, 1, 'OUT_OF_STOCK', 1, NOW())
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
@@ -252,10 +168,16 @@ INSERT INTO locations (
     shelf, bin, barcode, capacity_qty, is_pickable, is_active
 ) VALUES
     ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-000000000461', NULL, 'RCV-HCM',  'RECEIVING', NULL, NULL, NULL, NULL, 'LOC-RCV-HCM', 500, FALSE, TRUE),
-    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-000000000461', NULL, 'A-01-01-01','SHELF',     'A',  '01', '01', '01', 'LOC-HCM-A010101', 100, TRUE, TRUE),
-    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-000000000461', NULL, 'B-01-02-01','SHELF',     'B',  '01', '02', '01', 'LOC-HCM-B010201', 100, TRUE, TRUE),
+    ('00000000-0000-0000-0000-000000004720', '00000000-0000-0000-0000-000000000461', NULL, 'A', 'ZONE', 'A', NULL, NULL, NULL, 'LOC-HCM-ZA', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000004721', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000004720', 'A-01', 'SHELF', 'A', NULL, '01', NULL, 'LOC-HCM-S-A01', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000004721', 'A-01-01', 'SHELF_COMPARTMENT', 'A', NULL, '01', '01', 'LOC-HCM-A0101', 100, TRUE, TRUE),
+    ('00000000-0000-0000-0000-000000004730', '00000000-0000-0000-0000-000000000461', NULL, 'B', 'ZONE', 'B', NULL, NULL, NULL, 'LOC-HCM-ZB', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000004731', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000004730', 'B-01', 'SHELF', 'B', NULL, '01', NULL, 'LOC-HCM-S-B01', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000004731', 'B-01-02', 'SHELF_COMPARTMENT', 'B', NULL, '01', '02', 'LOC-HCM-B0102', 100, TRUE, TRUE),
     ('00000000-0000-0000-0000-000000000474', '00000000-0000-0000-0000-000000000462', NULL, 'RCV-HN',   'RECEIVING', NULL, NULL, NULL, NULL, 'LOC-RCV-HN',  300, FALSE, TRUE),
-    ('00000000-0000-0000-0000-000000000475', '00000000-0000-0000-0000-000000000462', NULL, 'A-02-01-01','SHELF',     'A',  '02', '01', '01', 'LOC-HN-A020101', 80,  TRUE, TRUE)
+    ('00000000-0000-0000-0000-000000004750', '00000000-0000-0000-0000-000000000462', NULL, 'A', 'ZONE', 'A', NULL, NULL, NULL, 'LOC-HN-ZA', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000004751', '00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-000000004750', 'A-02', 'SHELF', 'A', NULL, '02', NULL, 'LOC-HN-S-A02', NULL, FALSE, TRUE),
+    ('00000000-0000-0000-0000-000000000475', '00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-000000004751', 'A-02-01', 'SHELF_COMPARTMENT', 'A', NULL, '02', '01', 'LOC-HN-A0201', 80,  TRUE, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO inventory_units (
@@ -697,3 +619,93 @@ INSERT INTO integration_inbox (
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
+-- ------------------------------------------------------------
+-- Borrow harden demo seeds (Phase 1/2 validation)
+-- ------------------------------------------------------------
+
+\connect auth_db
+BEGIN;
+
+INSERT INTO permissions (code, module_name, action_name, description)
+VALUES
+    ('borrow.read', 'borrow', 'read', 'View customers, reservations and loans'),
+    ('borrow.write', 'borrow', 'write', 'Create reservations, loans and returns')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN ('borrow.read', 'borrow.write')
+WHERE r.code IN ('MANAGER', 'STAFF')
+ON CONFLICT DO NOTHING;
+
+COMMIT;
+
+\connect borrow_db
+BEGIN;
+
+INSERT INTO membership_plans (
+    id, code, name, description, max_active_loans, max_loan_days,
+    max_renewal_count, reservation_hold_hours, fine_per_day,
+    lost_item_fee_multiplier, is_active
+) VALUES
+    ('00000000-0000-0000-0000-000000000713', 'PLAN-LIMIT-ONE', 'Limit One Plan', 'Used for membership limit test case.', 1, 7, 0, 12, 4000, 1.00, TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO customers (
+    id, customer_code, full_name, email, phone, status, total_fine_balance
+) VALUES
+    ('00000000-0000-0000-0000-000000000703', 'CUS-HARDEN-01', 'Le Borrow Active', 'borrow.active@smartbook.local', '0912000003', 'ACTIVE', 0),
+    ('00000000-0000-0000-0000-000000000704', 'CUS-HARDEN-02', 'Le Borrow Fine', 'borrow.fine@smartbook.local', '0912000004', 'ACTIVE', 25000),
+    ('00000000-0000-0000-0000-000000000705', 'CUS-HARDEN-03', 'Le Borrow Limited', 'borrow.limit@smartbook.local', '0912000005', 'ACTIVE', 0)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO customer_preferences (customer_id)
+VALUES
+    ('00000000-0000-0000-0000-000000000703'),
+    ('00000000-0000-0000-0000-000000000704'),
+    ('00000000-0000-0000-0000-000000000705')
+ON CONFLICT (customer_id) DO NOTHING;
+
+INSERT INTO customer_memberships (
+    id, customer_id, plan_id, card_number, start_date, end_date, status
+) VALUES
+    ('00000000-0000-0000-0000-000000000723', '00000000-0000-0000-0000-000000000703', '00000000-0000-0000-0000-000000000712', 'CARD-HARDEN-01', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE'),
+    ('00000000-0000-0000-0000-000000000724', '00000000-0000-0000-0000-000000000704', '00000000-0000-0000-0000-000000000712', 'CARD-HARDEN-02', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE'),
+    ('00000000-0000-0000-0000-000000000725', '00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000713', 'CARD-HARDEN-03', CURRENT_DATE - INTERVAL '3 day', CURRENT_DATE + INTERVAL '180 day', 'ACTIVE')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO loan_transactions (
+    id, loan_number, customer_id, warehouse_id, handled_by_user_id, borrow_date, due_date, status, total_items, notes
+) VALUES
+    ('00000000-0000-0000-0000-000000000742', 'LOAN-HARDEN-01', '00000000-0000-0000-0000-000000000705', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000000103', NOW() - INTERVAL '1 day', NOW() + INTERVAL '6 day', 'BORROWED', 1, 'Seeded active loan for membership limit test')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO loan_items (
+    id, loan_id, variant_id, due_date, status, item_condition_on_checkout
+) VALUES
+    ('00000000-0000-0000-0000-000000000753', '00000000-0000-0000-0000-000000000742', '00000000-0000-0000-0000-000000000441', NOW() + INTERVAL '6 day', 'BORROWED', 'GOOD')
+ON CONFLICT (id) DO NOTHING;
+
+COMMIT;
+
+\connect inventory_db
+BEGIN;
+
+INSERT INTO book_variants (
+    id, book_id, sku, isbn13, internal_barcode, cover_type, language_code,
+    publish_year, condition_grade, unit_cost, list_price, replacement_cost,
+    is_borrowable, is_sellable, is_track_by_unit, is_active
+) VALUES
+    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-000000000431', 'SKU-DB-OUT-001', '9786040000099', 'BC-DB-OUT-001', 'PAPERBACK', 'en', 2024, 'GOOD', 70000, 99000, 120000, TRUE, FALSE, FALSE, TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO stock_balances (
+    id, warehouse_id, variant_id, location_id, on_hand_qty, available_qty, reserved_qty, borrowed_qty,
+    damaged_qty, in_transit_qty, safety_stock_qty, reorder_point, status, version, last_movement_at
+) VALUES
+    ('00000000-0000-0000-0000-000000000487', '00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-000000000472', 0, 0, 0, 0, 0, 0, 0, 1, 'OUT_OF_STOCK', 1, NOW())
+ON CONFLICT (id) DO NOTHING;
+
+COMMIT;
+

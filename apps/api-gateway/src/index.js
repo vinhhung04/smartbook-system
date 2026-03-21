@@ -46,6 +46,15 @@ app.use(
 
 app.use(
   createProxyMiddleware({
+    pathFilter: "/api/ai",
+    target: aiTarget,
+    changeOrigin: true,
+    xfwd: true,
+  }),
+);
+
+app.use(
+  createProxyMiddleware({
     pathFilter: "/api",
     target: inventoryTarget,
     changeOrigin: true,

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, BookOpen, Package, FileText, Warehouse, ArrowRightLeft,
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
-  UserRound, CalendarClock, HandCoins
+  UserRound, CalendarClock, HandCoins, ClipboardCheck, Layers3
 } from "lucide-react";
 import { authService } from "@/services/auth";
 
@@ -16,7 +16,9 @@ const navGroups = [
       { to: "/catalog", icon: BookOpen, label: "Catalog", activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/inventory", icon: Package, label: "Inventory", activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/putaway", icon: ClipboardCheck, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
       { to: "/warehouses", icon: Warehouse, label: "Warehouses", activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/shelves", icon: Layers3, label: "Shelves", activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
       { to: "/movements", icon: ArrowRightLeft, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
     ],
   },

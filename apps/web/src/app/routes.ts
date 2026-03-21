@@ -10,6 +10,7 @@ import { OrderDetailPage } from "@/components/pages/order-detail";
 import { GoodsReceiptPage } from "@/components/pages/goods-receipt";
 import { MovementsPage } from "@/components/pages/movements";
 import { WarehousesPage } from "@/components/pages/warehouses";
+import { ShelvesPage } from "@/components/pages/shelves";
 import { AIImportPage } from "@/components/pages/ai-import";
 import { RecommendationsPage } from "@/components/pages/recommendations";
 import { BorrowPage } from "@/components/pages/borrow";
@@ -20,6 +21,9 @@ import { BorrowLoanDetailPage } from "@/components/pages/borrow-loan-detail";
 import { BorrowFinesPage } from "@/components/pages/borrow-fines";
 import { UsersPage } from "@/components/pages/users";
 import { RolesPage } from "@/components/pages/roles";
+import { PutawayPage } from "@/components/pages/putaway";
+import { PutawayDetailPage } from "@/components/pages/putaway-detail";
+import { PutawayExecutePage } from "@/components/pages/putaway-execute";
 import { LoginPage } from "@/components/pages/login";
 import { RegisterPage } from "@/components/pages/register";
 import { CustomerLayout } from "@/components/pages/customer/layout";
@@ -126,8 +130,12 @@ export const router = createBrowserRouter([
       { path: "orders", Component: OrdersPage },
       { path: "orders/new", Component: GoodsReceiptPage },
       { path: "orders/:id", Component: OrderDetailPage },
+      { path: "putaway", Component: PutawayPage },
+      { path: "putaway/:id", Component: PutawayDetailPage },
+      { path: "putaway/:id/execute", Component: PutawayExecutePage },
       { path: "movements", Component: MovementsPage },
       { path: "warehouses", Component: WarehousesPage },
+      { path: "shelves", Component: ShelvesPage },
       { path: "ai-import", Component: AIImportPage },
       { path: "recommendations", Component: RecommendationsPage },
       { path: "borrow", Component: BorrowPage },

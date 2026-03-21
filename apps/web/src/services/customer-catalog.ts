@@ -1,4 +1,4 @@
-import { gatewayAPI } from './api';
+import { gatewayAPI } from './http-clients';
 
 export interface CustomerCatalogBook {
   id: string;

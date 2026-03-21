@@ -17,7 +17,8 @@ function createReceiptNumber(baseTimestamp) {
 }
 
 function createMovementNumber(baseTimestamp, index) {
-  return `MV-${baseTimestamp}-${index + 1}`;
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `MV-${baseTimestamp}-${index + 1}-${suffix}`;
 }
 
 function parseId(value) {
@@ -177,9 +178,9 @@ async function createGoodsReceipt(req, res) {
   }
 
   for (const item of items) {
-    if (!item?.variant_id || !item?.location_id || !isPositiveInteger(item?.quantity)) {
+    if (!item?.variant_id || !isPositiveInteger(item?.quantity)) {
       return res.status(400).json({
-        message: 'Each item must include variant_id, location_id and quantity > 0',
+        message: 'Each item must include variant_id and quantity > 0',
       });
     }
 
@@ -200,7 +201,9 @@ async function createGoodsReceipt(req, res) {
       }
 
       const variantIds = [...new Set(items.map((item) => item.variant_id))];
-      const locationIds = [...new Set(items.map((item) => item.location_id))];
+
+      // Normalize location ids: remove null/undefined values before querying
+      const locationIds = [...new Set(items.map((item) => item.location_id).filter((id) => id !== null && id !== undefined))];
 
       const variants = await tx.book_variants.findMany({
         where: { id: { in: variantIds } },
@@ -211,16 +214,18 @@ async function createGoodsReceipt(req, res) {
         throw new Error('INVALID_VARIANTS');
       }
 
-      const locations = await tx.locations.findMany({
-        where: {
-          id: { in: locationIds },
-          warehouse_id,
-        },
-        select: { id: true },
-      });
+      if (locationIds.length > 0) {
+        const locations = await tx.locations.findMany({
+          where: {
+            id: { in: locationIds },
+            warehouse_id,
+          },
+          select: { id: true },
+        });
 
-      if (locations.length !== locationIds.length) {
-        throw new Error('INVALID_LOCATIONS');
+        if (locations.length !== locationIds.length) {
+          throw new Error('INVALID_LOCATIONS');
+        }
       }
 
       const goodsReceipt = await tx.goods_receipts.create({
@@ -236,7 +241,7 @@ async function createGoodsReceipt(req, res) {
       const receiptItemsData = items.map((item) => ({
         goods_receipt_id: goodsReceipt.id,
         variant_id: item.variant_id,
-        location_id: item.location_id,
+        location_id: item.location_id || null,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
       }));
@@ -356,7 +361,6 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
     })),
   });
 }
-
 async function updateGoodsReceipt(req, res) {
   const id = parseId(req.params.id);
   const { status, note } = req.body;
@@ -390,10 +394,6 @@ async function updateGoodsReceipt(req, res) {
 
       if (existing.status === 'POSTED' && targetStatus === 'DRAFT') {
         return { invalidTransition: true, message: 'Cannot rollback POSTED receipt to DRAFT' };
-      }
-
-      if (existing.status === 'DRAFT' && targetStatus === 'POSTED') {
-        await postDraftGoodsReceipt(tx, existing, userId);
       }
 
       const updated = await tx.goods_receipts.update({

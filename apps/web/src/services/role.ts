@@ -1,4 +1,4 @@
-import { authAPI } from './api.ts';
+import { authAPI } from './http-clients';
 
 export interface Role {
   id: string;
