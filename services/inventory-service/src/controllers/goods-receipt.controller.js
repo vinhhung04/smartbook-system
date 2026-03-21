@@ -16,6 +16,11 @@ function createReceiptNumber(baseTimestamp) {
   return `GR-${baseTimestamp}-${suffix}`;
 }
 
+function createMovementNumber(baseTimestamp, index) {
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `MV-${baseTimestamp}-${index + 1}-${suffix}`;
+}
+
 function parseId(value) {
   return String(value || '').trim() || null;
 }

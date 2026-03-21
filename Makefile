@@ -119,6 +119,19 @@ migrate:
 	docker compose --profile dev run --rm borrow-db-push
 	@echo "[INFO] Migrations complete!"
 
+db-import:
+	@echo "[INFO] Importing full schema and seed data..."
+	docker compose exec -T db psql -U $${POSTGRES_USER:-user} -f /docker-entrypoint-initdb.d/data/smartbook_full_postgresql.sql
+	docker compose exec -T db psql -U $${POSTGRES_USER:-user} -f /docker-entrypoint-initdb.d/data/smartbook_sample_seed.sql
+	@echo "[INFO] Import complete!"
+
+db-refresh:
+	@echo "[INFO] Refreshing database from source files..."
+	@$(MAKE) down
+	@$(MAKE) clean-volumes
+	@$(MAKE) up
+	@echo "[INFO] Database refreshed!"
+
 shell-db:
 	@echo "[INFO] Connecting to PostgreSQL..."
 	docker compose exec db psql -U $${POSTGRES_USER:-user} -d $${AUTH_DB_NAME:-auth_db}

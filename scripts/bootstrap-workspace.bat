@@ -10,11 +10,11 @@ echo.
 
 REM Check if pnpm is installed
 echo [INFO] Checking pnpm installation...
-pnpm --version >nul 2>&1
+call pnpm --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] pnpm is not installed
     echo [WARN] Installing pnpm globally...
-    npm install -g pnpm
+    call npm install -g pnpm
     if errorlevel 1 (
         echo [ERROR] Failed to install pnpm
         echo [INFO] Please run manually: npm install -g pnpm
@@ -23,7 +23,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] pnpm version:
-pnpm --version
+call pnpm --version
 
 REM Install workspace dependencies
 echo.
@@ -32,7 +32,7 @@ echo [INFO] This may take a few minutes...
 echo.
 
 cd /d "%~dp0.."
-pnpm install
+call pnpm install
 
 if errorlevel 1 (
     echo [ERROR] pnpm install failed

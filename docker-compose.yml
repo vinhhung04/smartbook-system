@@ -1,4 +1,4 @@
-﻿services:
+services:
   db:
     image: postgres:15-alpine
     container_name: smartbook_postgres
@@ -10,7 +10,8 @@
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - ./db-init:/docker-entrypoint-initdb.d
+      - ./data:/docker-entrypoint-initdb.d/data
 
   pgadmin:
     image: dpage/pgadmin4
@@ -95,10 +96,8 @@
     container_name: ai-service
     ports:
       - "8000:8000"
-    depends_on:
-      - ollama
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://localhost:11434}
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
 
   api-gateway:
@@ -134,12 +133,16 @@
       - borrow-service
 
   ollama:
-    image: ollama/ollama
+    image: ollama/ollama:latest
     container_name: ollama
+    profiles:
+      - full
     ports:
       - "11434:11434"
     volumes:
       - ./ollama_data:/root/.ollama
+    stdin_open: true
+    tty: true
 
 volumes:
   postgres_data:

@@ -302,6 +302,24 @@ def _format_summary_description(text: str) -> str:
     )
 
 
+def _generate_fallback_description(title: str, author: str, web_context: str = "") -> str:
+    """Generate a simple description when Ollama is unavailable."""
+    web_info = ""
+    if web_context:
+        web_info = f"\n\nThông tin tham khảo:\n{web_context}"
+    
+    return (
+        f"📘 Tổng quan\n"
+        f"'{title}' của tác giả {author} là một tác phẩm đáng chú ý trong lĩnh vực văn học."
+        f"{web_info}\n\n"
+        f"✨ Điểm nổi bật\n"
+        f"• Tác phẩm được viết bởi tác giả nổi tiếng {author}\n"
+        f"• Nằm trong bộ sưu tập sách của thư viện\n\n"
+        f"🎯 Gợi ý bạn đọc\n"
+        f"Phù hợp với bạn đọc quan tâm đến thể loại này và muốn tìm hiểu thêm về tác phẩm của {author}."
+    )
+
+
 @app.post("/api/ai/generate-book-summary")
 async def generate_book_summary_legacy(req: BookSummaryRequest):
     """
@@ -357,6 +375,10 @@ async def _generate_book_summary(req: BookSummaryRequest):
         return {"description": description, "web_context_used": bool(web_context)}
 
     except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+        logger.error(f"Ollama ResponseError: {e.error}")
+        raise HTTPException(status_code=502, detail=f"Ollama không disponible: {e.error}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error calling Ollama: {str(e)}")
+        # Fallback: Return a simple description when Ollama is unavailable
+        fallback_description = _generate_fallback_description(req.title, req.author, web_context)
+        return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}

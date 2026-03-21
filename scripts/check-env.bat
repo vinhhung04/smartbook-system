@@ -28,25 +28,25 @@ echo.
 
 REM Check npm
 echo [INFO] Checking npm...
-npm --version >nul 2>&1
+call npm --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] npm is not installed
     set FAILED=1
 ) else (
     echo [SUCCESS] npm version:
-    npm --version
+    call npm --version
 )
 echo.
 
 REM Check pnpm
 echo [INFO] Checking pnpm...
-pnpm --version >nul 2>&1
+call pnpm --version >nul 2>&1
 if errorlevel 1 (
     echo [WARN] pnpm is not installed (optional)
     echo [WARN] Install with: npm install -g pnpm
 ) else (
     echo [SUCCESS] pnpm version:
-    pnpm --version
+    call pnpm --version
 )
 echo.
 
