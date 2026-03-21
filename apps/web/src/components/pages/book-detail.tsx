@@ -3,7 +3,7 @@ import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import { StatusBadge } from "../status-badge";
 import { NavLink, useParams } from "react-router";
-import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { aiService } from "@/services/ai";
 import { bookService } from "@/services/book";
@@ -508,24 +508,55 @@ export function BookDetailPage() {
 
               <div>
                 <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
-                  Link anh bia sach
+                  Anh bia sach
                 </label>
-                <input
-                  value={editForm.cover_image_url}
-                  onChange={(event) => setEditForm((prev) => ({ ...prev, cover_image_url: event.target.value }))}
-                  placeholder="https://example.com/cover.jpg"
-                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    value={editForm.cover_image_url}
+                    onChange={(event) => setEditForm((prev) => ({ ...prev, cover_image_url: event.target.value }))}
+                    placeholder="https://example.com/cover.jpg hoac tai anh len"
+                    className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  />
+                  <label className="shrink-0 flex items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer">
+                    <Upload className="w-4 h-4" /> Tai len
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            toast.error("Anh qua lon (toi da 5MB)");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setEditForm((prev) => ({ ...prev, cover_image_url: reader.result as string }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
                 {editForm.cover_image_url && (
-                  <div className="mt-2 px-3 py-2 rounded-[10px] bg-blue-50 border border-blue-100">
+                  <div className="mt-2 px-3 py-2 rounded-[10px] bg-blue-50 border border-blue-100 flex items-center justify-between">
                     <img
                       src={editForm.cover_image_url}
                       alt="Cover preview"
-                      className="max-w-full max-h-32 rounded"
+                      className="max-w-full max-h-32 rounded object-contain"
                       onError={() => {
                         /* Handle image load error */
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setEditForm((prev) => ({ ...prev, cover_image_url: "" }))}
+                      className="text-[12px] text-red-500 hover:underline font-semibold"
+                    >
+                      Xoa
+                    </button>
                   </div>
                 )}
               </div>

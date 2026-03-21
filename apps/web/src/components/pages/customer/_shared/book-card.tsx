@@ -17,7 +17,7 @@ export function BookCard({ book, onView, onReserve, reserving = false }: BookCar
 
   return (
     <article className="rounded-[14px] border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-      <BookCoverPlaceholder category={book.category} title={book.title} />
+      <BookCoverPlaceholder category={book.category} title={book.title} imageUrl={book.cover_image_url} />
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="max-w-[70%] truncate rounded-[8px] border border-slate-200 bg-slate-50/90 px-2 py-1 text-[10px] uppercase tracking-[0.05em] text-slate-500">
