@@ -894,7 +894,7 @@ docker compose --profile dev run --rm inventory-db-push
 
 # Seed thu cong (neu can)
 # Vi du import SQL mau vao inventory_db:
-docker exec -i smartbook_postgres psql -U user -d inventory_db < "Tai Lieu/smartbook_sample_seed.sql"
+docker exec -i smartbook_postgres psql -U user -d inventory_db < "data/smartbook_merged_seed.sql"
 
 # Kiem tra env/compose
 bash scripts/check-env.sh

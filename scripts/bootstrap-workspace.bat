@@ -1,55 +1,9 @@
 @echo off
-setlocal enabledelayedexpansion
-chcp 65001 > nul
-
-echo.
-echo [INFO] ========================================
-echo [INFO] SmartBook Workspace Bootstrap
-echo [INFO] ========================================
-echo.
-
-REM Check if pnpm is installed
-echo [INFO] Checking pnpm installation...
-call pnpm --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] pnpm is not installed
-    echo [WARN] Installing pnpm globally...
-    call npm install -g pnpm
-    if errorlevel 1 (
-        echo [ERROR] Failed to install pnpm
-        echo [INFO] Please run manually: npm install -g pnpm
-        exit /b 1
-    )
-)
-
-echo [INFO] pnpm version:
-call pnpm --version
-
-REM Install workspace dependencies
-echo.
-echo [INFO] Installing workspace dependencies with pnpm...
-echo [INFO] This may take a few minutes...
-echo.
-
-cd /d "%~dp0.."
-call pnpm install
-
-if errorlevel 1 (
-    echo [ERROR] pnpm install failed
-    exit /b 1
-)
-
-echo.
-echo [SUCCESS] ========================================
-echo [SUCCESS] Workspace bootstrap completed!
-echo [SUCCESS] ========================================
-echo.
-echo [INFO] Next steps:
-echo   scripts\bootstrap.bat
-echo.
-
+set SCRIPT_DIR=%~dp0
 if /I "%~1"=="--with-docker" (
-    call "%~dp0bootstrap.bat"
+    call "%SCRIPT_DIR%run-all.bat" --skip-env
+    exit /b %errorlevel%
 )
 
-exit /b 0
+call "%SCRIPT_DIR%run-all.bat" --skip-env --skip-docker
+exit /b %errorlevel%

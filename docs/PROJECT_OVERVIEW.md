@@ -125,8 +125,8 @@ Luồng request điển hình:
 - Migration/seed:
   - Không thấy thư mục migration Prisma (`prisma/migrations`) trong 2 service.
   - Có profile `inventory-db-push` và `auth-db-push` để `prisma db push`.
-  - Có script init DB `db-init/01-extensions.sql` (enable `pg_trgm`).
-  - Có file SQL tham khảo dữ liệu mẫu tại `Tài Liệu/smartbook_full_postgresql.sql` và `Tài Liệu/smartbook_sample_seed.sql`.
+  - Có script init DB `db-init/00-full-schema.sql` (đã bao gồm extension).
+  - Có file SQL tham khảo dữ liệu tại `data/smartbook_full_postgresql.sql` và `data/smartbook_merged_seed.sql`.
 - Volume dữ liệu:
   - Docker volume `postgres_data:/var/lib/postgresql/data`.
 

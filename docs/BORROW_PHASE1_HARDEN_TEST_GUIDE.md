@@ -5,7 +5,7 @@ This guide validates the hardened Customer + Reservation flow and the new Phase 
 ## Prerequisites
 
 - Run stack: `docker compose up --build`
-- Ensure sample seed loaded: `data/smartbook_sample_seed.sql`
+- Ensure merged seed loaded: `data/smartbook_merged_seed.sql`
 - Login with a user that has `borrow.read`, `borrow.write`, `inventory.stock.write`.
 - Export JWT token to environment variable:
   - PowerShell: `$env:SMARTBOOK_TOKEN = "<jwt>"`
