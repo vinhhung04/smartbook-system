@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CheckCircle2, Search, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ScanLine, Search, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
+import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
@@ -25,6 +26,7 @@ export function OutboundPage() {
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [detail, setDetail] = useState<OutboundOrderDetail | null>(null);
   const [scanCode, setScanCode] = useState('');
+  const [showScanModal, setShowScanModal] = useState(false);
 
   const filteredQueue = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -50,7 +52,7 @@ export function OutboundPage() {
       setDetail(data);
       setSelectedTaskType(taskType);
       setSelectedTaskId(taskId);
-      setScanCode(data.order_number || '');
+      setScanCode('');
     } finally {
       setLoadingDetail(false);
     }
@@ -102,9 +104,15 @@ export function OutboundPage() {
       return;
     }
 
+    const normalizedCode = scanCode.trim();
+    if (!normalizedCode) {
+      toast.error('Vui long nhap hoac scan ma don truoc khi confirm outbound');
+      return;
+    }
+
     try {
       setConfirming(true);
-      const response = await outboundService.confirmOutbound(selectedTaskType, selectedTaskId, scanCode.trim() || null);
+      const response = await outboundService.confirmOutbound(selectedTaskType, selectedTaskId, normalizedCode);
       const destinationReceiptNumber = response.data.destination_receipt_number;
 
       if (destinationReceiptNumber) {
@@ -251,14 +259,28 @@ export function OutboundPage() {
           <FadeItem>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
               <h3 className="text-[13px]" style={{ fontWeight: 650 }}>Scan code va confirm outbound</h3>
-              <p className="text-[12px] text-slate-500">Nhap/scan ma don de xac nhan (co the de mac dinh theo ma don).</p>
+              <p className="text-[12px] text-slate-500">Nhap tay hoac scan ma don de xac nhan outbound.</p>
               <div className="flex gap-2">
                 <input
                   value={scanCode}
                   onChange={(event) => setScanCode(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void handleConfirm();
+                    }
+                  }}
                   placeholder="Ma don scan code"
                   className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
                 />
+                <button
+                  onClick={() => setShowScanModal(true)}
+                  disabled={confirming}
+                  className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                  title="Scan ma don"
+                >
+                  <ScanLine className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => void handleConfirm()}
                   disabled={confirming}
@@ -309,6 +331,16 @@ export function OutboundPage() {
               <p className="text-[12px] text-emerald-800">Transfer sau khi confirm outbound se tu dong tao Goods Receipt DRAFT o kho dich.</p>
             </div>
           </FadeItem>
+
+          <BarcodeScanModal
+            isOpen={showScanModal}
+            onClose={() => setShowScanModal(false)}
+            onDetected={(code) => {
+              setScanCode(code);
+              toast.success(`Da quet ma don: ${code}`);
+            }}
+            title="Quet ma don outbound"
+          />
         </>
       )}
     </PageWrapper>

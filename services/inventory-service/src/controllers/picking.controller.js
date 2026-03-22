@@ -6,6 +6,9 @@ const OUTBOUND_READY_STATUS = ['APPROVED', 'PICKING'];
 const TRANSFER_READY_STATUS = ['APPROVED', 'PICKING'];
 const SHIPPING_LOCATION_TYPE = 'SHIPPING';
 const RECEIVING_LOCATION_TYPES = ['RECEIVING', 'STAGING'];
+const REPICK_META_MARKER = 'REPICK_META';
+const REPICK_LINE_MARKER = 'REPICK_LINE';
+const SHORT_PICK_MARKER = 'SHORT_PICK';
 
 function parseId(value) {
   return String(value || '').trim() || null;
@@ -73,7 +76,7 @@ function countRemainingOutbound(items) {
   return items.reduce((sum, item) => {
     const qty = Number(item.quantity || 0);
     const picked = Number(item.processed_qty || 0);
-    return sum + Math.max(qty - picked, 0);
+    return sum + calculateLineRemaining(qty, picked, item.note);
   }, 0);
 }
 
@@ -81,7 +84,7 @@ function countRemainingTransfer(items) {
   return items.reduce((sum, item) => {
     const qty = Number(item.quantity || 0);
     const picked = Number(item.shipped_qty || 0);
-    return sum + Math.max(qty - picked, 0);
+    return sum + calculateLineRemaining(qty, picked, item.note);
   }, 0);
 }
 
@@ -116,6 +119,154 @@ function normalizeCode(value) {
 function appendOrderNote(existingNote, marker, text) {
   const line = text ? `[${marker}] ${text}` : `[${marker}]`;
   return [existingNote, line].filter(Boolean).join('\n');
+}
+
+function encodeMetaValue(value) {
+  return encodeURIComponent(String(value ?? ''));
+}
+
+function decodeMetaValue(value) {
+  try {
+    return decodeURIComponent(String(value || ''));
+  } catch {
+    return String(value || '');
+  }
+}
+
+function buildMarkerLine(marker, payload) {
+  const entries = Object.entries(payload || {})
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([key, value]) => `${key}=${encodeMetaValue(value)}`);
+
+  if (entries.length === 0) {
+    return `[${marker}]`;
+  }
+
+  return `[${marker}] ${entries.join(';')}`;
+}
+
+function parseMarkerPayload(note, marker) {
+  const lines = String(note || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const prefix = `[${marker}]`;
+  const line = lines.find((item) => item.startsWith(prefix));
+  if (!line) return null;
+
+  const rawPayload = line.slice(prefix.length).trim();
+  if (!rawPayload) return {};
+
+  const parsed = {};
+  rawPayload.split(';').map((item) => item.trim()).filter(Boolean).forEach((entry) => {
+    const idx = entry.indexOf('=');
+    if (idx <= 0) return;
+    const key = entry.slice(0, idx).trim();
+    const value = decodeMetaValue(entry.slice(idx + 1).trim());
+    if (key) parsed[key] = value;
+  });
+
+  return parsed;
+}
+
+function upsertMarkerLine(note, marker, payload) {
+  const lines = String(note || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const prefix = `[${marker}]`;
+  const markerLine = buildMarkerLine(marker, payload);
+  const next = [];
+  let replaced = false;
+
+  lines.forEach((line) => {
+    if (line.startsWith(prefix)) {
+      if (!replaced) {
+        next.push(markerLine);
+        replaced = true;
+      }
+      return;
+    }
+    next.push(line);
+  });
+
+  if (!replaced) {
+    next.push(markerLine);
+  }
+
+  return next.join('\n');
+}
+
+function parsePositiveInt(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.trunc(num));
+}
+
+function parseRepickMeta(note) {
+  const payload = parseMarkerPayload(note, REPICK_META_MARKER);
+  if (!payload) return null;
+
+  const rootTaskType = String(payload.root_task_type || '').trim();
+  const rootTaskId = String(payload.root_task_id || '').trim();
+  const parentTaskType = String(payload.parent_task_type || '').trim();
+  const parentTaskId = String(payload.parent_task_id || '').trim();
+
+  if (!rootTaskType || !rootTaskId || !parentTaskType || !parentTaskId) {
+    return null;
+  }
+
+  return {
+    root_task_type: rootTaskType,
+    root_task_id: rootTaskId,
+    parent_task_type: parentTaskType,
+    parent_task_id: parentTaskId,
+    repick_sequence: parsePositiveInt(payload.repick_sequence),
+    repick_reason: String(payload.repick_reason || 'SHORT_PICK').trim() || 'SHORT_PICK',
+  };
+}
+
+function parseRepickLineMeta(note) {
+  const payload = parseMarkerPayload(note, REPICK_LINE_MARKER);
+  if (!payload) return null;
+
+  return {
+    original_line_id: String(payload.original_line_id || '').trim() || null,
+    source_task_type: String(payload.source_task_type || '').trim() || null,
+    source_task_id: String(payload.source_task_id || '').trim() || null,
+    missing_qty: parsePositiveInt(payload.missing_qty),
+  };
+}
+
+function getLineShortPickedQty(note) {
+  const payload = parseMarkerPayload(note, SHORT_PICK_MARKER);
+  if (!payload) return 0;
+  return parsePositiveInt(payload.qty);
+}
+
+function withLineShortPickedQty(note, qty) {
+  return upsertMarkerLine(note, SHORT_PICK_MARKER, { qty: parsePositiveInt(qty) });
+}
+
+function calculateLineRemaining(quantity, pickedQty, note) {
+  const requested = Math.max(0, Number(quantity || 0));
+  const picked = Math.max(0, Number(pickedQty || 0));
+  const shortPicked = getLineShortPickedQty(note);
+  return Math.max(requested - picked - shortPicked, 0);
+}
+
+function getTaskClassFromNote(note) {
+  return parseRepickMeta(note) ? 'REPICK' : 'PICK';
+}
+
+function createRepickOutboundNumber() {
+  const ts = Date.now();
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `OBR-${ts}-${suffix}`;
+}
+
+function createRepickTransferNumber() {
+  const ts = Date.now();
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `TOR-${ts}-${suffix}`;
+}
+
+function buildTaskRef(taskType, taskId) {
+  return `${String(taskType || '').trim()}:${String(taskId || '').trim()}`;
 }
 
 async function resolveOrCreateWarehouseLocation(tx, warehouseId, locationTypes, defaultCodePrefix, isPickable) {
@@ -357,10 +508,360 @@ async function resolveVariantMatchesByBarcode(tx, barcode) {
   return Array.from(map.values()).sort((a, b) => a.match_priority - b.match_priority || a.variant_id.localeCompare(b.variant_id));
 }
 
+async function resolveTaskOrderNumber(dbClient, taskType, taskId) {
+  if (!taskType || !taskId) return null;
+
+  if (taskType === 'outbound') {
+    const order = await dbClient.outbound_orders.findUnique({
+      where: { id: taskId },
+      select: { outbound_number: true },
+    });
+    return order?.outbound_number || null;
+  }
+
+  if (taskType === 'transfer') {
+    const order = await dbClient.transfer_orders.findUnique({
+      where: { id: taskId },
+      select: { transfer_number: true },
+    });
+    return order?.transfer_number || null;
+  }
+
+  return null;
+}
+
+function buildRepickOrderNote(meta) {
+  const withMeta = upsertMarkerLine('', REPICK_META_MARKER, meta);
+  return appendOrderNote(withMeta, 'REPICK_REASON', meta.repick_reason || 'SHORT_PICK');
+}
+
+function buildRepickLineNote(meta) {
+  return upsertMarkerLine('', REPICK_LINE_MARKER, meta);
+}
+
+function mapOutboundShortages(lines, taskType, taskId) {
+  return (lines || []).map((line) => {
+    const missingQty = getLineShortPickedQty(line.note);
+    const repickLineMeta = parseRepickLineMeta(line.note);
+    return {
+      variant_id: line.variant_id,
+      source_location_id: line.source_location_id || null,
+      quantity: missingQty,
+      original_line_id: repickLineMeta?.original_line_id || line.id,
+      source_task_type: repickLineMeta?.source_task_type || taskType,
+      source_task_id: repickLineMeta?.source_task_id || taskId,
+    };
+  }).filter((line) => line.quantity > 0);
+}
+
+function mapTransferShortages(lines, taskType, taskId) {
+  return (lines || []).map((line) => {
+    const missingQty = getLineShortPickedQty(line.note);
+    const repickLineMeta = parseRepickLineMeta(line.note);
+    return {
+      variant_id: line.variant_id,
+      from_location_id: line.from_location_id || null,
+      to_location_id: line.to_location_id || null,
+      quantity: missingQty,
+      original_line_id: repickLineMeta?.original_line_id || line.id,
+      source_task_type: repickLineMeta?.source_task_type || taskType,
+      source_task_id: repickLineMeta?.source_task_id || taskId,
+    };
+  }).filter((line) => line.quantity > 0);
+}
+
+async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
+  const shortages = mapOutboundShortages(lines, 'outbound', order.id);
+  if (shortages.length === 0) return null;
+
+  const parentMeta = parseRepickMeta(order.note);
+  const rootTaskType = parentMeta?.root_task_type || 'outbound';
+  const rootTaskId = parentMeta?.root_task_id || order.id;
+  const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
+
+  const existingChild = await tx.outbound_orders.findFirst({
+    where: {
+      note: { contains: `[${REPICK_META_MARKER}]` },
+      AND: [
+        { note: { contains: `parent_task_type=${encodeMetaValue('outbound')}` } },
+        { note: { contains: `parent_task_id=${encodeMetaValue(order.id)}` } },
+      ],
+      status: { not: 'CANCELLED' },
+    },
+    select: {
+      id: true,
+      outbound_number: true,
+    },
+  });
+
+  if (existingChild) {
+    return {
+      task_type: 'outbound',
+      task_id: existingChild.id,
+      order_number: existingChild.outbound_number,
+      repick_sequence: repickSequence,
+      reused_existing: true,
+    };
+  }
+
+  const repickMeta = {
+    root_task_type: rootTaskType,
+    root_task_id: rootTaskId,
+    parent_task_type: 'outbound',
+    parent_task_id: order.id,
+    repick_sequence: repickSequence,
+    repick_reason: 'SHORT_PICK',
+  };
+
+  const createdOrder = await tx.outbound_orders.create({
+    data: {
+      outbound_number: createRepickOutboundNumber(),
+      warehouse_id: order.warehouse_id,
+      outbound_type: 'MANUAL',
+      status: 'APPROVED',
+      requested_by_user_id: order.requested_by_user_id || actorUserId,
+      approved_by_user_id: actorUserId,
+      external_reference: `REPICK:${order.outbound_number}`,
+      note: buildRepickOrderNote(repickMeta),
+    },
+    select: {
+      id: true,
+      outbound_number: true,
+    },
+  });
+
+  await tx.outbound_order_items.createMany({
+    data: shortages.map((line) => ({
+      outbound_order_id: createdOrder.id,
+      variant_id: line.variant_id,
+      source_location_id: line.source_location_id,
+      quantity: line.quantity,
+      processed_qty: 0,
+      note: buildRepickLineNote({
+        original_line_id: line.original_line_id,
+        source_task_type: line.source_task_type,
+        source_task_id: line.source_task_id,
+        missing_qty: line.quantity,
+      }),
+    })),
+  });
+
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: actorUserId,
+      action_name: 'REPICK_ORDER_CREATED',
+      entity_type: 'OUTBOUND_ORDER',
+      entity_id: createdOrder.id,
+      after_data: {
+        parent_task_type: 'outbound',
+        parent_task_id: order.id,
+        root_task_type: rootTaskType,
+        root_task_id: rootTaskId,
+        repick_sequence: repickSequence,
+        line_count: shortages.length,
+      },
+    },
+  });
+
+  return {
+    task_type: 'outbound',
+    task_id: createdOrder.id,
+    order_number: createdOrder.outbound_number,
+    repick_sequence: repickSequence,
+    reused_existing: false,
+  };
+}
+
+async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
+  const shortages = mapTransferShortages(lines, 'transfer', order.id);
+  if (shortages.length === 0) return null;
+
+  const parentMeta = parseRepickMeta(order.note);
+  const rootTaskType = parentMeta?.root_task_type || 'transfer';
+  const rootTaskId = parentMeta?.root_task_id || order.id;
+  const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
+
+  const existingChild = await tx.transfer_orders.findFirst({
+    where: {
+      note: { contains: `[${REPICK_META_MARKER}]` },
+      AND: [
+        { note: { contains: `parent_task_type=${encodeMetaValue('transfer')}` } },
+        { note: { contains: `parent_task_id=${encodeMetaValue(order.id)}` } },
+      ],
+      status: { not: 'CANCELLED' },
+    },
+    select: {
+      id: true,
+      transfer_number: true,
+    },
+  });
+
+  if (existingChild) {
+    return {
+      task_type: 'transfer',
+      task_id: existingChild.id,
+      order_number: existingChild.transfer_number,
+      repick_sequence: repickSequence,
+      reused_existing: true,
+    };
+  }
+
+  const repickMeta = {
+    root_task_type: rootTaskType,
+    root_task_id: rootTaskId,
+    parent_task_type: 'transfer',
+    parent_task_id: order.id,
+    repick_sequence: repickSequence,
+    repick_reason: 'SHORT_PICK',
+  };
+
+  const createdOrder = await tx.transfer_orders.create({
+    data: {
+      transfer_number: createRepickTransferNumber(),
+      from_warehouse_id: order.from_warehouse_id,
+      to_warehouse_id: order.to_warehouse_id,
+      status: 'APPROVED',
+      requested_by_user_id: order.requested_by_user_id || actorUserId,
+      approved_by_user_id: actorUserId,
+      note: buildRepickOrderNote(repickMeta),
+    },
+    select: {
+      id: true,
+      transfer_number: true,
+    },
+  });
+
+  await tx.transfer_order_items.createMany({
+    data: shortages.map((line) => ({
+      transfer_order_id: createdOrder.id,
+      variant_id: line.variant_id,
+      from_location_id: line.from_location_id,
+      to_location_id: line.to_location_id,
+      quantity: line.quantity,
+      shipped_qty: 0,
+      received_qty: 0,
+      note: buildRepickLineNote({
+        original_line_id: line.original_line_id,
+        source_task_type: line.source_task_type,
+        source_task_id: line.source_task_id,
+        missing_qty: line.quantity,
+      }),
+    })),
+  });
+
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: actorUserId,
+      action_name: 'REPICK_ORDER_CREATED',
+      entity_type: 'TRANSFER_ORDER',
+      entity_id: createdOrder.id,
+      after_data: {
+        parent_task_type: 'transfer',
+        parent_task_id: order.id,
+        root_task_type: rootTaskType,
+        root_task_id: rootTaskId,
+        repick_sequence: repickSequence,
+        line_count: shortages.length,
+      },
+    },
+  });
+
+  return {
+    task_type: 'transfer',
+    task_id: createdOrder.id,
+    order_number: createdOrder.transfer_number,
+    repick_sequence: repickSequence,
+    reused_existing: false,
+  };
+}
+
+async function ensureRepicksFromCompletedShortages() {
+  await prisma.$transaction(async (tx) => {
+    const [outboundParents, transferParents] = await Promise.all([
+      tx.outbound_orders.findMany({
+        where: {
+          status: 'READY_FOR_OUTBOUND',
+          outbound_order_items: {
+            some: {
+              note: {
+                contains: `[${SHORT_PICK_MARKER}]`,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          outbound_number: true,
+          warehouse_id: true,
+          requested_by_user_id: true,
+          processed_by_user_id: true,
+          note: true,
+          outbound_order_items: {
+            select: {
+              id: true,
+              variant_id: true,
+              source_location_id: true,
+              quantity: true,
+              processed_qty: true,
+              note: true,
+            },
+          },
+        },
+        take: 20,
+      }),
+      tx.transfer_orders.findMany({
+        where: {
+          status: 'READY_FOR_OUTBOUND',
+          transfer_order_items: {
+            some: {
+              note: {
+                contains: `[${SHORT_PICK_MARKER}]`,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          transfer_number: true,
+          from_warehouse_id: true,
+          to_warehouse_id: true,
+          requested_by_user_id: true,
+          shipped_by_user_id: true,
+          note: true,
+          transfer_order_items: {
+            select: {
+              id: true,
+              variant_id: true,
+              from_location_id: true,
+              to_location_id: true,
+              quantity: true,
+              shipped_qty: true,
+              note: true,
+            },
+          },
+        },
+        take: 20,
+      }),
+    ]);
+
+    for (const order of outboundParents) {
+      const actorUserId = parseId(order.processed_by_user_id) || parseId(order.requested_by_user_id);
+      await maybeCreateRepickFromOutbound(tx, order, order.outbound_order_items || [], actorUserId);
+    }
+
+    for (const order of transferParents) {
+      const actorUserId = parseId(order.shipped_by_user_id) || parseId(order.requested_by_user_id);
+      await maybeCreateRepickFromTransfer(tx, order, order.transfer_order_items || [], actorUserId);
+    }
+  }, { isolationLevel: 'Serializable' });
+}
+
 async function listPickingTasks(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
 
   try {
+    await ensureRepicksFromCompletedShortages();
+
     const [outboundOrders, transferOrders] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
@@ -376,6 +877,7 @@ async function listPickingTasks(req, res) {
               id: true,
               quantity: true,
               processed_qty: true,
+              note: true,
             },
           },
         },
@@ -398,6 +900,7 @@ async function listPickingTasks(req, res) {
               id: true,
               quantity: true,
               shipped_qty: true,
+              note: true,
             },
           },
         },
@@ -411,12 +914,21 @@ async function listPickingTasks(req, res) {
       const remaining = countRemainingOutbound(order.outbound_order_items || []);
       const totalQty = (order.outbound_order_items || []).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
       const assignedPicker = parseId(order.processed_by_user_id);
+      const repickMeta = parseRepickMeta(order.note);
+      const taskClass = getTaskClassFromNote(order.note);
 
       tasks.push({
         task_type: 'outbound',
         task_id: order.id,
         order_number: order.outbound_number,
-        order_type: `OUTBOUND_${order.outbound_type}`,
+        order_type: repickMeta ? 'OUTBOUND_REPICK' : `OUTBOUND_${order.outbound_type}`,
+        task_class: taskClass,
+        repick_sequence: repickMeta?.repick_sequence || null,
+        repick_reason: repickMeta?.repick_reason || null,
+        root_task_type: repickMeta?.root_task_type || null,
+        root_task_id: repickMeta?.root_task_id || null,
+        parent_task_type: repickMeta?.parent_task_type || null,
+        parent_task_id: repickMeta?.parent_task_id || null,
         source_warehouse_id: order.warehouse_id,
         source_warehouse_code: order.warehouses?.code || null,
         source_warehouse_name: order.warehouses?.name || null,
@@ -437,12 +949,21 @@ async function listPickingTasks(req, res) {
       const remaining = countRemainingTransfer(order.transfer_order_items || []);
       const totalQty = (order.transfer_order_items || []).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
       const assignedPicker = parseId(order.shipped_by_user_id);
+      const repickMeta = parseRepickMeta(order.note);
+      const taskClass = getTaskClassFromNote(order.note);
 
       tasks.push({
         task_type: 'transfer',
         task_id: order.id,
         order_number: order.transfer_number,
-        order_type: 'WAREHOUSE_TRANSFER',
+        order_type: repickMeta ? 'WAREHOUSE_TRANSFER_REPICK' : 'WAREHOUSE_TRANSFER',
+        task_class: taskClass,
+        repick_sequence: repickMeta?.repick_sequence || null,
+        repick_reason: repickMeta?.repick_reason || null,
+        root_task_type: repickMeta?.root_task_type || null,
+        root_task_id: repickMeta?.root_task_id || null,
+        parent_task_type: repickMeta?.parent_task_type || null,
+        parent_task_id: repickMeta?.parent_task_id || null,
         source_warehouse_id: order.from_warehouse_id,
         source_warehouse_code: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code || null,
         source_warehouse_name: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.name || null,
@@ -668,7 +1189,9 @@ async function getPickingTaskDetail(req, res) {
       for (const line of order.outbound_order_items) {
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.processed_qty || 0);
-        const remainingQty = Math.max(requestedQty - pickedQty, 0);
+        const shortPickedQty = getLineShortPickedQty(line.note);
+        const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
+        const repickLineMeta = parseRepickLineMeta(line.note);
 
         let sourceLocationId = line.source_location_id || null;
         let sourceLocationCode = line.locations?.location_code || null;
@@ -694,10 +1217,12 @@ async function getPickingTaskDetail(req, res) {
         }
 
         let candidateLocationId = null;
-        if (!sourceLocationId && remainingQty > 0) {
+        if (remainingQty > 0 && (!sourceLocationId || sourceAvailableHint <= 0)) {
           const candidateBalance = await findBestSourceBalance(order.warehouse_id, line.variant_id, currentLocation);
           if (candidateBalance?.locations) {
-            candidateLocationId = candidateBalance.location_id;
+            if (!sourceLocationId || candidateBalance.location_id !== sourceLocationId) {
+              candidateLocationId = candidateBalance.location_id;
+            }
             sourceLocationId = candidateBalance.location_id;
             sourceLocationCode = candidateBalance.locations.location_code || null;
             sourceLocationBarcode = candidateBalance.locations.barcode || null;
@@ -726,7 +1251,9 @@ async function getPickingTaskDetail(req, res) {
           book_title: line.book_variants?.books?.title || 'Chua co ten sach',
           requested_qty: requestedQty,
           picked_qty: pickedQty,
+          short_picked_qty: shortPickedQty,
           remaining_qty: remainingQty,
+          repick_line: repickLineMeta,
           note: line.note || null,
         });
       }
@@ -757,6 +1284,13 @@ async function getPickingTaskDetail(req, res) {
       });
 
       const remainingLines = lines.filter((line) => line.remaining_qty > 0);
+      const repickMeta = parseRepickMeta(order.note);
+      const rootOrderNumber = repickMeta
+        ? await resolveTaskOrderNumber(prisma, repickMeta.root_task_type, repickMeta.root_task_id)
+        : null;
+      const parentOrderNumber = repickMeta
+        ? await resolveTaskOrderNumber(prisma, repickMeta.parent_task_type, repickMeta.parent_task_id)
+        : null;
 
       const preparedCurrentLine = remainingLines[0] || null;
       if (preparedCurrentLine?.candidate_source_location_id) {
@@ -772,7 +1306,16 @@ async function getPickingTaskDetail(req, res) {
         task_type: 'outbound',
         task_id: order.id,
         order_number: order.outbound_number,
-        order_type: `OUTBOUND_${order.outbound_type}`,
+        order_type: repickMeta ? 'OUTBOUND_REPICK' : `OUTBOUND_${order.outbound_type}`,
+        task_class: getTaskClassFromNote(order.note),
+        repick_sequence: repickMeta?.repick_sequence || null,
+        repick_reason: repickMeta?.repick_reason || null,
+        root_task_type: repickMeta?.root_task_type || null,
+        root_task_id: repickMeta?.root_task_id || null,
+        root_order_number: rootOrderNumber,
+        parent_task_type: repickMeta?.parent_task_type || null,
+        parent_task_id: repickMeta?.parent_task_id || null,
+        parent_order_number: parentOrderNumber,
         status: order.status,
         source_warehouse_id: order.warehouse_id,
         source_warehouse_code: order.warehouses?.code || null,
@@ -848,7 +1391,9 @@ async function getPickingTaskDetail(req, res) {
     for (const line of order.transfer_order_items) {
       const requestedQty = Number(line.quantity || 0);
       const pickedQty = Number(line.shipped_qty || 0);
-      const remainingQty = Math.max(requestedQty - pickedQty, 0);
+      const shortPickedQty = getLineShortPickedQty(line.note);
+      const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
+      const repickLineMeta = parseRepickLineMeta(line.note);
 
       let sourceLocationId = line.from_location_id || null;
       let sourceLocationCode = line.locations_transfer_order_items_from_location_idTolocations?.location_code || null;
@@ -874,10 +1419,12 @@ async function getPickingTaskDetail(req, res) {
       }
 
       let candidateLocationId = null;
-      if (!sourceLocationId && remainingQty > 0) {
+      if (remainingQty > 0 && (!sourceLocationId || sourceAvailableHint <= 0)) {
         const candidateBalance = await findBestSourceBalance(order.from_warehouse_id, line.variant_id, currentLocation);
         if (candidateBalance?.locations) {
-          candidateLocationId = candidateBalance.location_id;
+          if (!sourceLocationId || candidateBalance.location_id !== sourceLocationId) {
+            candidateLocationId = candidateBalance.location_id;
+          }
           sourceLocationId = candidateBalance.location_id;
           sourceLocationCode = candidateBalance.locations.location_code || null;
           sourceLocationBarcode = candidateBalance.locations.barcode || null;
@@ -908,7 +1455,9 @@ async function getPickingTaskDetail(req, res) {
         book_title: line.book_variants?.books?.title || 'Chua co ten sach',
         requested_qty: requestedQty,
         picked_qty: pickedQty,
+        short_picked_qty: shortPickedQty,
         remaining_qty: remainingQty,
+        repick_line: repickLineMeta,
         note: line.note || null,
       });
     }
@@ -939,6 +1488,13 @@ async function getPickingTaskDetail(req, res) {
     });
 
     const remainingLines = lines.filter((line) => line.remaining_qty > 0);
+    const repickMeta = parseRepickMeta(order.note);
+    const rootOrderNumber = repickMeta
+      ? await resolveTaskOrderNumber(prisma, repickMeta.root_task_type, repickMeta.root_task_id)
+      : null;
+    const parentOrderNumber = repickMeta
+      ? await resolveTaskOrderNumber(prisma, repickMeta.parent_task_type, repickMeta.parent_task_id)
+      : null;
 
     const preparedCurrentLine = remainingLines[0] || null;
     if (preparedCurrentLine?.candidate_source_location_id) {
@@ -954,7 +1510,16 @@ async function getPickingTaskDetail(req, res) {
       task_type: 'transfer',
       task_id: order.id,
       order_number: order.transfer_number,
-      order_type: 'WAREHOUSE_TRANSFER',
+      order_type: repickMeta ? 'WAREHOUSE_TRANSFER_REPICK' : 'WAREHOUSE_TRANSFER',
+      task_class: getTaskClassFromNote(order.note),
+      repick_sequence: repickMeta?.repick_sequence || null,
+      repick_reason: repickMeta?.repick_reason || null,
+      root_task_type: repickMeta?.root_task_type || null,
+      root_task_id: repickMeta?.root_task_id || null,
+      root_order_number: rootOrderNumber,
+      parent_task_type: repickMeta?.parent_task_type || null,
+      parent_task_id: repickMeta?.parent_task_id || null,
+      parent_order_number: parentOrderNumber,
       status: order.status,
       source_warehouse_id: order.from_warehouse_id,
       source_warehouse_code: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code || null,
@@ -1148,7 +1713,81 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
       return { invalid: true, message: 'Source location is invalid for this warehouse' };
     }
 
-    return { location };
+    const fixedBalance = await tx.stock_balances.findUnique({
+      where: {
+        variant_id_location_id: {
+          variant_id: line.variant_id,
+          location_id: currentLocationId,
+        },
+      },
+      select: {
+        available_qty: true,
+      },
+    });
+
+    if (Number(fixedBalance?.available_qty || 0) > 0) {
+      return { location };
+    }
+
+    // Current source location is depleted. Re-resolve to any pickable location with stock.
+    const fallbackBalance = await tx.stock_balances.findFirst({
+      where: {
+        warehouse_id: warehouseId,
+        variant_id: line.variant_id,
+        available_qty: { gt: 0 },
+        locations: {
+          is_active: true,
+          is_pickable: true,
+        },
+      },
+      include: {
+        locations: {
+          select: {
+            id: true,
+            warehouse_id: true,
+            location_code: true,
+            barcode: true,
+            location_type: true,
+            is_active: true,
+          },
+        },
+      },
+      orderBy: [
+        { available_qty: 'desc' },
+        { locations: { location_code: 'asc' } },
+      ],
+    });
+
+    if (!fallbackBalance || !fallbackBalance.locations) {
+      return { invalid: true, message: 'No pickable source location has available stock for this line' };
+    }
+
+    if (taskType === 'outbound') {
+      await tx.outbound_order_items.update({
+        where: { id: line.id },
+        data: {
+          source_location_id: fallbackBalance.location_id,
+        },
+      });
+    } else {
+      await tx.transfer_order_items.update({
+        where: { id: line.id },
+        data: {
+          from_location_id: fallbackBalance.location_id,
+        },
+      });
+    }
+
+    return {
+      location: {
+        id: fallbackBalance.locations.id,
+        warehouse_id: fallbackBalance.locations.warehouse_id,
+        location_code: fallbackBalance.locations.location_code,
+        barcode: fallbackBalance.locations.barcode,
+        location_type: fallbackBalance.locations.location_type,
+        is_active: fallbackBalance.locations.is_active,
+      },
+    };
   }
 
   const balance = await tx.stock_balances.findFirst({
@@ -1252,9 +1891,12 @@ async function confirmPickingLine(req, res) {
           where: { id: taskId },
           select: {
             id: true,
+            outbound_number: true,
             status: true,
             warehouse_id: true,
+            requested_by_user_id: true,
             processed_by_user_id: true,
+            note: true,
           },
         });
 
@@ -1289,6 +1931,7 @@ async function confirmPickingLine(req, res) {
             source_location_id: true,
             quantity: true,
             processed_qty: true,
+            note: true,
           },
         });
 
@@ -1298,7 +1941,8 @@ async function confirmPickingLine(req, res) {
 
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.processed_qty || 0);
-        const remainingQty = Math.max(requestedQty - pickedQty, 0);
+        const currentShortPickedQty = getLineShortPickedQty(line.note);
+        const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
 
         if (remainingQty <= 0) {
           return { invalid: true, statusCode: 409, message: 'Line is already fully picked' };
@@ -1471,10 +2115,17 @@ async function confirmPickingLine(req, res) {
           },
         });
 
+        const shortageDelta = Math.max(remainingQty - quantity, 0);
+        const nextShortPickedQty = currentShortPickedQty + shortageDelta;
+        const nextLineNote = shortageDelta > 0
+          ? withLineShortPickedQty(line.note, nextShortPickedQty)
+          : (line.note || null);
+
         await tx.outbound_order_items.update({
           where: { id: line.id },
           data: {
             processed_qty: { increment: quantity },
+            note: nextLineNote,
           },
         });
 
@@ -1508,12 +2159,17 @@ async function confirmPickingLine(req, res) {
         const allLines = await tx.outbound_order_items.findMany({
           where: { outbound_order_id: order.id },
           select: {
+            id: true,
+            variant_id: true,
+            source_location_id: true,
             quantity: true,
             processed_qty: true,
+            note: true,
           },
         });
 
-        const allDone = allLines.every((item) => Number(item.processed_qty || 0) >= Number(item.quantity || 0));
+        const allDone = allLines.every((item) => calculateLineRemaining(item.quantity, item.processed_qty, item.note) <= 0);
+        let repickInfo = null;
 
         if (allDone) {
           await tx.outbound_orders.update({
@@ -1523,6 +2179,8 @@ async function confirmPickingLine(req, res) {
               processed_by_user_id: scope.currentUserId,
             },
           });
+
+          repickInfo = await maybeCreateRepickFromOutbound(tx, order, allLines, scope.currentUserId);
         } else if (order.status !== 'PICKING') {
           await tx.outbound_orders.update({
             where: { id: order.id },
@@ -1542,9 +2200,11 @@ async function confirmPickingLine(req, res) {
             after_data: {
               line_id: lineId,
               quantity,
+              short_pick_qty_added: shortageDelta,
               expected_location_id: expectedLocation.id,
               expected_location_code: expectedLocation.location_code,
               all_done: allDone,
+              repick_task_id: repickInfo?.task_id || null,
             },
           },
         });
@@ -1555,8 +2215,10 @@ async function confirmPickingLine(req, res) {
             task_id: order.id,
             line_id: line.id,
             confirmed_quantity: quantity,
-            line_remaining_quantity: remainingQty - quantity,
+            line_remaining_quantity: Math.max(remainingQty - quantity - shortageDelta, 0),
+            short_pick_recorded: shortageDelta,
             task_completed: allDone,
+            repick_created: repickInfo,
           },
         };
       }
@@ -1568,9 +2230,13 @@ async function confirmPickingLine(req, res) {
         where: { id: taskId },
         select: {
           id: true,
+          transfer_number: true,
           status: true,
           from_warehouse_id: true,
+          to_warehouse_id: true,
+          requested_by_user_id: true,
           shipped_by_user_id: true,
+          note: true,
         },
       });
 
@@ -1604,6 +2270,8 @@ async function confirmPickingLine(req, res) {
           from_location_id: true,
           quantity: true,
           shipped_qty: true,
+          to_location_id: true,
+          note: true,
         },
       });
 
@@ -1613,7 +2281,8 @@ async function confirmPickingLine(req, res) {
 
       const requestedQty = Number(line.quantity || 0);
       const pickedQty = Number(line.shipped_qty || 0);
-      const remainingQty = Math.max(requestedQty - pickedQty, 0);
+      const currentShortPickedQty = getLineShortPickedQty(line.note);
+      const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
 
       if (remainingQty <= 0) {
         return { invalid: true, statusCode: 409, message: 'Line is already fully picked' };
@@ -1786,10 +2455,17 @@ async function confirmPickingLine(req, res) {
         },
       });
 
+      const shortageDelta = Math.max(remainingQty - quantity, 0);
+      const nextShortPickedQty = currentShortPickedQty + shortageDelta;
+      const nextLineNote = shortageDelta > 0
+        ? withLineShortPickedQty(line.note, nextShortPickedQty)
+        : (line.note || null);
+
       await tx.transfer_order_items.update({
         where: { id: line.id },
         data: {
           shipped_qty: { increment: quantity },
+          note: nextLineNote,
         },
       });
 
@@ -1823,12 +2499,18 @@ async function confirmPickingLine(req, res) {
       const allLines = await tx.transfer_order_items.findMany({
         where: { transfer_order_id: order.id },
         select: {
+          id: true,
+          variant_id: true,
+          from_location_id: true,
+          to_location_id: true,
           quantity: true,
           shipped_qty: true,
+          note: true,
         },
       });
 
-      const allDone = allLines.every((item) => Number(item.shipped_qty || 0) >= Number(item.quantity || 0));
+      const allDone = allLines.every((item) => calculateLineRemaining(item.quantity, item.shipped_qty, item.note) <= 0);
+      let repickInfo = null;
 
       if (allDone) {
         await tx.transfer_orders.update({
@@ -1838,6 +2520,8 @@ async function confirmPickingLine(req, res) {
             shipped_by_user_id: scope.currentUserId,
           },
         });
+
+        repickInfo = await maybeCreateRepickFromTransfer(tx, order, allLines, scope.currentUserId);
       } else if (order.status !== 'PICKING') {
         await tx.transfer_orders.update({
           where: { id: order.id },
@@ -1857,9 +2541,11 @@ async function confirmPickingLine(req, res) {
           after_data: {
             line_id: lineId,
             quantity,
+            short_pick_qty_added: shortageDelta,
             expected_location_id: expectedLocation.id,
             expected_location_code: expectedLocation.location_code,
             all_done: allDone,
+            repick_task_id: repickInfo?.task_id || null,
           },
         },
       });
@@ -1870,8 +2556,10 @@ async function confirmPickingLine(req, res) {
           task_id: order.id,
           line_id: line.id,
           confirmed_quantity: quantity,
-          line_remaining_quantity: remainingQty - quantity,
+          line_remaining_quantity: Math.max(remainingQty - quantity - shortageDelta, 0),
+          short_pick_recorded: shortageDelta,
           task_completed: allDone,
+          repick_created: repickInfo,
         },
       };
     }, { isolationLevel: 'Serializable' });

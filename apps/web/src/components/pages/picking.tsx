@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, ScanLine, Search, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
+import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { authService } from "@/services/auth";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
@@ -27,10 +28,18 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function taskTypeLabel(orderType: string): string {
+  if (orderType === "OUTBOUND_REPICK") return "Outbound / Repick";
+  if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Warehouse Transfer / Repick";
   if (orderType === "WAREHOUSE_TRANSFER") return "Warehouse Transfer";
   if (orderType.startsWith("OUTBOUND_")) return "Outbound / Store";
   return orderType;
 }
+
+function taskClassLabel(taskClass?: string): string {
+  return taskClass === "REPICK" ? "REPICK" : "PICK";
+}
+
+type PickingScanTarget = "presence" | "location" | "product";
 
 export function PickingPage() {
   const [loading, setLoading] = useState(true);
@@ -45,6 +54,7 @@ export function PickingPage() {
 
   const [tasks, setTasks] = useState<PickingTaskSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [taskClassFilter, setTaskClassFilter] = useState<"ALL" | "PICK" | "REPICK">("ALL");
 
   const [selectedTaskType, setSelectedTaskType] = useState<PickingTaskType | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState("");
@@ -61,6 +71,7 @@ export function PickingPage() {
   const [quantityInput, setQuantityInput] = useState(1);
   const [selectedScannedVariantId, setSelectedScannedVariantId] = useState("");
   const [ambiguousMatches, setAmbiguousMatches] = useState<PickingVariantLookupMatch[]>([]);
+  const [activeScanTarget, setActiveScanTarget] = useState<PickingScanTarget | null>(null);
 
   const currentUser = authService.getCurrentUser();
   const currentUserId = String((currentUser as { id?: string } | null)?.id || "");
@@ -71,15 +82,19 @@ export function PickingPage() {
 
   const filteredTasks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return tasks;
+    const classFiltered = taskClassFilter === "ALL"
+      ? tasks
+      : tasks.filter((task) => taskClassLabel(task.task_class) === taskClassFilter);
 
-    return tasks.filter((task) => (
+    if (!keyword) return classFiltered;
+
+    return classFiltered.filter((task) => (
       task.order_number.toLowerCase().includes(keyword)
       || (task.source_warehouse_code || "").toLowerCase().includes(keyword)
       || (task.source_warehouse_name || "").toLowerCase().includes(keyword)
       || taskTypeLabel(task.order_type).toLowerCase().includes(keyword)
     ));
-  }, [tasks, query]);
+  }, [tasks, query, taskClassFilter]);
 
   const currentLine = detail?.current_line || null;
   const completedLineCount = useMemo(
@@ -99,6 +114,13 @@ export function PickingPage() {
     && productVerified
     && Number(quantityInput) > 0,
   );
+
+  const scannerTitle = useMemo(() => {
+    if (activeScanTarget === "presence") return "Quet vi tri hien tai";
+    if (activeScanTarget === "location") return "Quet location can den";
+    if (activeScanTarget === "product") return "Quet barcode san pham";
+    return "Quet Barcode";
+  }, [activeScanTarget]);
 
   const loadTasks = async (warehouseId?: string) => {
     const res = await pickingService.getTasks(warehouseId);
@@ -199,10 +221,16 @@ export function PickingPage() {
     }
   };
 
-  const handleConfirmPresence = async () => {
+  const handleConfirmPresence = async (inputOverride?: string) => {
     if (!selectedTaskType || !selectedTaskId) return;
 
-    const input = presenceInput.trim();
+    const sourceInput = inputOverride ?? presenceInput;
+    const input = sourceInput.trim();
+
+    if (inputOverride !== undefined) {
+      setPresenceInput(sourceInput);
+    }
+
     if (!input) {
       toast.error("Nhap hoac scan vi tri hien tai");
       return;
@@ -230,7 +258,7 @@ export function PickingPage() {
     }
   };
 
-  const handleLookupProduct = async () => {
+  const handleLookupProduct = async (barcodeOverride?: string) => {
     if (!locationVerified) {
       toast.error("Can scan dung location dich truoc");
       return;
@@ -241,7 +269,13 @@ export function PickingPage() {
       return;
     }
 
-    const barcode = productBarcodeInput.trim();
+    const sourceBarcode = barcodeOverride ?? productBarcodeInput;
+    const barcode = sourceBarcode.trim();
+
+    if (barcodeOverride !== undefined) {
+      setProductBarcodeInput(sourceBarcode);
+    }
+
     if (!barcode) {
       toast.error("Nhap barcode san pham");
       return;
@@ -352,15 +386,22 @@ export function PickingPage() {
     setQuantityInput(1);
     setSelectedScannedVariantId("");
     setAmbiguousMatches([]);
+    setActiveScanTarget(null);
   };
 
-  const handleVerifyLocation = () => {
+  const handleVerifyLocation = (inputOverride?: string) => {
     if (!currentLine) {
       toast.error("Khong co line can pick");
       return;
     }
 
-    const input = locationInput.trim().toLowerCase();
+    const sourceInput = inputOverride ?? locationInput;
+    const input = sourceInput.trim().toLowerCase();
+
+    if (inputOverride !== undefined) {
+      setLocationInput(sourceInput);
+    }
+
     if (!input) {
       toast.error("Nhap hoac scan location dich");
       return;
@@ -378,6 +419,7 @@ export function PickingPage() {
       setLocationVerified(true);
       setProductVerified(false);
       setProductBarcodeInput("");
+      setQuantityInput(Math.max(1, Math.trunc(Number(currentLine.remaining_qty || 1))));
       setSelectedScannedVariantId("");
       setAmbiguousMatches([]);
       toast.success("Da xac nhan dung location pick");
@@ -387,6 +429,25 @@ export function PickingPage() {
     setLocationVerified(false);
     setProductVerified(false);
     toast.error(`Sai location. Can den ${currentLine.source_location_code || "vi tri duoc chi dinh"}`);
+  };
+
+  const handleDetectedScan = (code: string) => {
+    const normalized = String(code || "").trim();
+    if (!normalized || !activeScanTarget) return;
+
+    if (activeScanTarget === "presence") {
+      void handleConfirmPresence(normalized);
+    }
+
+    if (activeScanTarget === "location") {
+      handleVerifyLocation(normalized);
+    }
+
+    if (activeScanTarget === "product") {
+      void handleLookupProduct(normalized);
+    }
+
+    setActiveScanTarget(null);
   };
 
   if (loading) {
@@ -445,6 +506,21 @@ export function PickingPage() {
                     className="w-full pl-9 pr-3 py-2 rounded-[10px] border border-slate-200 text-[12px]"
                   />
                 </div>
+                <div className="mt-2 inline-flex items-center gap-1 rounded-[10px] border border-slate-200 p-1">
+                  {[
+                    { key: "ALL", label: "Tat ca" },
+                    { key: "PICK", label: "PICK" },
+                    { key: "REPICK", label: "REPICK" },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => setTaskClassFilter(item.key as "ALL" | "PICK" | "REPICK")}
+                      className={`rounded-[8px] px-2.5 py-1 text-[11px] ${taskClassFilter === item.key ? "bg-emerald-100 text-emerald-700" : "text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </FadeItem>
@@ -457,6 +533,7 @@ export function PickingPage() {
                     {[
                       "Ma don",
                       "Loai",
+                      "Nhom",
                       "Kho nguon",
                       "Dich",
                       "Trang thai",
@@ -475,7 +552,7 @@ export function PickingPage() {
                 <tbody>
                   {filteredTasks.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-10 text-center text-[12px] text-slate-400">
+                      <td colSpan={11} className="py-10 text-center text-[12px] text-slate-400">
                         Khong co don nao san sang pick.
                       </td>
                     </tr>
@@ -488,6 +565,12 @@ export function PickingPage() {
                       <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/40">
                         <td className="px-4 py-3 text-[12px]" style={{ fontWeight: 600 }}>{task.order_number}</td>
                         <td className="px-4 py-3 text-[12px]">{taskTypeLabel(task.order_type)}</td>
+                        <td className="px-4 py-3 text-[12px]">
+                          <span className={`inline-flex items-center rounded-[999px] px-2 py-0.5 text-[11px] ${taskClassLabel(task.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                            {taskClassLabel(task.task_class)}
+                            {taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-[12px]">{task.source_warehouse_code || task.source_warehouse_name || "-"}</td>
                         <td className="px-4 py-3 text-[12px]">{task.target_warehouse_code || task.target_warehouse_name || "-"}</td>
                         <td className="px-4 py-3 text-[12px] text-emerald-700" style={{ fontWeight: 600 }}>{task.status}</td>
@@ -533,7 +616,13 @@ export function PickingPage() {
             <div className="rounded-[12px] border border-slate-200 bg-white p-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[12px] text-slate-500">Don dang thao tac</p>
-                <h2 className="text-[15px]" style={{ fontWeight: 650 }}>{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[15px]" style={{ fontWeight: 650 }}>{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
+                  <span className={`inline-flex items-center rounded-[999px] px-2 py-0.5 text-[11px] ${taskClassLabel(detail.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                    {taskClassLabel(detail.task_class)}
+                    {taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}
+                  </span>
+                </div>
                 <p className="text-[12px] text-slate-500 mt-1">
                   Nguon: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
                   {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Dich: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
@@ -573,6 +662,22 @@ export function PickingPage() {
 
           {!loadingDetail && detail.remaining_line_count > 0 ? (
             <>
+              {taskClassLabel(detail.task_class) === "REPICK" ? (
+                <FadeItem>
+                  <div className="rounded-[12px] border border-amber-200 bg-amber-50 p-4 space-y-1.5">
+                    <p className="text-[12px] text-amber-900" style={{ fontWeight: 650 }}>
+                      Don REPICK bo sung phan thieu
+                    </p>
+                    <p className="text-[12px] text-amber-800">
+                      Don goc: {detail.root_order_number || detail.root_task_id || "-"}
+                      {detail.parent_order_number || detail.parent_task_id ? ` | Sinh tu: ${detail.parent_order_number || detail.parent_task_id}` : ""}
+                      {detail.repick_sequence ? ` | Lan REPICK: #${detail.repick_sequence}` : ""}
+                    </p>
+                    <p className="text-[12px] text-amber-800">Don nay chi chua phan con thieu can pick lai.</p>
+                  </div>
+                </FadeItem>
+              ) : null}
+
               <FadeItem>
                 <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
                   <h3 className="text-[13px]" style={{ fontWeight: 650 }}>1) Xac nhan hien dien picker</h3>
@@ -581,12 +686,26 @@ export function PickingPage() {
                     <input
                       value={presenceInput}
                       onChange={(event) => setPresenceInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleConfirmPresence();
+                        }
+                      }}
                       placeholder="Barcode hoac ma vi tri hien tai"
                       className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
                       disabled={presenceConfirmed}
                     />
                     <button
-                      onClick={handleConfirmPresence}
+                      onClick={() => setActiveScanTarget("presence")}
+                      disabled={confirmingPresence || presenceConfirmed}
+                      className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                      title="Scan vi tri hien tai"
+                    >
+                      <ScanLine className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => void handleConfirmPresence()}
                       disabled={confirmingPresence || presenceConfirmed}
                       className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
                     >
@@ -620,11 +739,25 @@ export function PickingPage() {
                             setLocationVerified(false);
                             setProductVerified(false);
                           }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              handleVerifyLocation();
+                            }
+                          }}
                           placeholder="Barcode hoac ma location dich"
                           className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
                         />
                         <button
-                          onClick={handleVerifyLocation}
+                          onClick={() => setActiveScanTarget("location")}
+                          disabled={!presenceConfirmed || !currentLine}
+                          className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
+                          title="Scan location"
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleVerifyLocation()}
                           className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
                         >
                           {locationVerified ? "Da dung location" : "Xac nhan location"}
@@ -643,6 +776,11 @@ export function PickingPage() {
                             <p className="text-[12px] text-slate-500 mt-1">
                               Can pick: {currentLine.remaining_qty} (da pick {currentLine.picked_qty}/{currentLine.requested_qty})
                             </p>
+                            {taskClassLabel(detail.task_class) === "REPICK" && currentLine.repick_line?.original_line_id ? (
+                              <p className="text-[12px] text-slate-500 mt-1">
+                                Truy vet line goc: {currentLine.repick_line.original_line_id} | Thieu ban dau: {currentLine.repick_line.missing_qty}
+                              </p>
+                            ) : null}
                           </div>
 
                           <div className="flex gap-2">
@@ -653,15 +791,29 @@ export function PickingPage() {
                                 setProductVerified(false);
                                 setSelectedScannedVariantId("");
                               }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void handleLookupProduct();
+                                }
+                              }}
                               placeholder="unit barcode / internal / isbn / sku"
                               className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
                             />
                             <button
-                              onClick={handleLookupProduct}
+                              onClick={() => setActiveScanTarget("product")}
+                              disabled={loadingLookup || !locationVerified}
+                              className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                              title="Quet barcode san pham"
+                            >
+                              <ScanLine className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => void handleLookupProduct()}
                               disabled={loadingLookup}
                               className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
                             >
-                              <ScanLine className="w-3.5 h-3.5" />
+                              {loadingLookup ? "Dang quet..." : "Xac nhan ma"}
                             </button>
                           </div>
 
@@ -739,6 +891,13 @@ export function PickingPage() {
           ) : null}
         </>
       )}
+
+      <BarcodeScanModal
+        isOpen={Boolean(activeScanTarget)}
+        onClose={() => setActiveScanTarget(null)}
+        onDetected={handleDetectedScan}
+        title={scannerTitle}
+      />
     </PageWrapper>
   );
 }
