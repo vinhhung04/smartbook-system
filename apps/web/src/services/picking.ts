@@ -7,6 +7,13 @@ export interface PickingTaskSummary {
   task_id: string;
   order_number: string;
   order_type: string;
+  task_class?: 'PICK' | 'REPICK';
+  repick_sequence?: number | null;
+  repick_reason?: string | null;
+  root_task_type?: PickingTaskType | null;
+  root_task_id?: string | null;
+  parent_task_type?: PickingTaskType | null;
+  parent_task_id?: string | null;
   source_warehouse_id: string;
   source_warehouse_code: string | null;
   source_warehouse_name: string | null;
@@ -38,7 +45,14 @@ export interface PickingTaskLine {
   book_title: string;
   requested_qty: number;
   picked_qty: number;
+  short_picked_qty?: number;
   remaining_qty: number;
+  repick_line?: {
+    original_line_id: string | null;
+    source_task_type: PickingTaskType | null;
+    source_task_id: string | null;
+    missing_qty: number;
+  } | null;
   note: string | null;
 }
 
@@ -47,6 +61,15 @@ export interface PickingTaskDetail {
   task_id: string;
   order_number: string;
   order_type: string;
+  task_class?: 'PICK' | 'REPICK';
+  repick_sequence?: number | null;
+  repick_reason?: string | null;
+  root_task_type?: PickingTaskType | null;
+  root_task_id?: string | null;
+  root_order_number?: string | null;
+  parent_task_type?: PickingTaskType | null;
+  parent_task_id?: string | null;
+  parent_order_number?: string | null;
   status: string;
   source_warehouse_id: string;
   source_warehouse_code: string | null;
