@@ -351,15 +351,38 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     prompt = (
-        f"Bạn là một chuyên gia phê bình sách. "
-        f"Dựa trên tên sách '{req.title.strip()}' của tác giả '{req.author.strip()}', "
-        f"hãy viết một đoạn tóm tắt nội dung ngắn gọn, hấp dẫn và chuyên nghiệp bằng Tiếng Việt "
-        f"(khoảng 150-200 từ) để đưa vào hệ thống thư viện. "
-        f"Không viết thành 1 đoạn liền. Bắt buộc trình bày theo nhiều dòng với bố cục sau: "
-        f"'📘 Tổng quan' (1 đoạn ngắn), '✨ Điểm nổi bật' (2 gạch đầu dòng), '🎯 Gợi ý bạn đọc' (1-2 câu). "
-        f"Có thể dùng thêm một vài ký tự trang trí như 📘 ✨ 🎯 • để nội dung sinh động, nhưng không lạm dụng. "
-        f"Trả về văn bản thuần túy, không markdown code block."
-        f"{context_block}"
+    f"Bạn là một biên tập viên nội dung sách cao cấp và chuyên gia giới thiệu sách cho hệ thống thư viện số. "
+    f"Nhiệm vụ của bạn là viết phần mô tả sách bằng tiếng Việt thật cuốn hút, giàu hình ảnh, chuyên nghiệp, dễ đọc, "
+    f"nhưng vẫn tự nhiên và đáng tin cậy. "
+    f"Dựa trên tên sách '{req.title.strip()}' của tác giả '{req.author.strip()}', "
+    f"hãy tạo một bài mô tả sách chất lượng cao để hiển thị trong hệ thống thư viện. "
+    f"Độ dài mong muốn: khoảng 250-350 từ. "
+    f"Nội dung cần vừa có tính giới thiệu, vừa làm nổi bật giá trị của cuốn sách, giúp người đọc nhanh chóng cảm nhận được "
+    f"tinh thần, chủ đề và sức hấp dẫn của tác phẩm. "
+
+    f"Yêu cầu bắt buộc: "
+    f"Không viết thành một đoạn liền. "
+    f"Trình bày thành nhiều phần rõ ràng, xuống dòng hợp lý, văn phong mượt mà. "
+    f"Chỉ trả về văn bản thuần túy, không dùng markdown code block. "
+    f"Có thể dùng emoji nhẹ nhàng như 📘 ✨ 🎯 • để tạo điểm nhấn, nhưng không lạm dụng. "
+
+    f"Bố cục đầu ra bắt buộc gồm các phần sau: "
+    f"📘 Tổng quan: 1 đoạn ngắn giới thiệu khái quát về cuốn sách, bối cảnh hoặc giá trị cốt lõi. "
+    f"🧠 Nội dung và chủ đề: 1 đoạn 3-5 câu làm rõ nội dung chính, thông điệp nổi bật, chiều sâu tư tưởng hoặc cảm xúc mà sách mang lại. "
+    f"✨ Điểm nổi bật: 3 gạch đầu dòng, mỗi gạch đầu dòng nêu một điểm đáng chú ý như phong cách viết, giá trị kiến thức, cảm hứng, chiều sâu nhân vật hoặc tính ứng dụng. "
+    f"🎯 Gợi ý bạn đọc: 2-3 câu nêu nhóm độc giả phù hợp và lý do vì sao họ nên đọc cuốn sách này. "
+
+    f"Phong cách viết cần: "
+    f"ấm áp, tinh tế, hấp dẫn, có chiều sâu, tránh sáo rỗng, tránh lặp ý, tránh liệt kê khô khan. "
+    f"Ưu tiên cách diễn đạt giàu hình ảnh và có tính gợi mở, giống phần giới thiệu sách chuyên nghiệp trên các nền tảng thư viện hoặc nhà sách lớn. "
+
+    f"Quy tắc quan trọng về độ chính xác: "
+    f"Nếu có đủ dữ liệu trong ngữ cảnh cung cấp, hãy bám sát dữ liệu đó. "
+    f"Nếu thông tin về nội dung sách chưa đầy đủ, không được bịa chi tiết cụ thể như tên nhân vật, tình tiết hoặc kết thúc. "
+    f"Trong trường hợp thiếu dữ liệu, hãy viết theo hướng giới thiệu khái quát, an toàn nhưng vẫn hấp dẫn, dựa trên tinh thần từ nhan đề, tác giả và ngữ cảnh hiện có. "
+
+    f"Mục tiêu cuối cùng là tạo ra một mô tả khiến người đọc cảm thấy đây là một cuốn sách đáng chú ý, đáng mượn hoặc đáng khám phá. "
+    f"{context_block}"
     )
 
     summary_model = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
