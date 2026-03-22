@@ -96,8 +96,10 @@ services:
     container_name: ai-service
     ports:
       - "8000:8000"
+    depends_on:
+      - ollama
     environment:
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://localhost:11434}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
 
   api-gateway:
@@ -135,8 +137,6 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
-    profiles:
-      - full
     ports:
       - "11434:11434"
     volumes:
