@@ -66,6 +66,7 @@ function mapBookSummary(book) {
     title: book.title,
     subtitle: book.subtitle,
     description: book.description,
+    summary_vi: book.metadata?.summary_vi || null,
     author: authorName,
     category: categoryName,
     publisher: book.publishers?.name || 'Chưa cập nhật',
@@ -591,6 +592,7 @@ async function updateBookDetails(req, res) {
     title,
     subtitle,
     description,
+    summary_vi,
     author_name,
     publisher_name,
     category_name,
@@ -634,6 +636,7 @@ async function updateBookDetails(req, res) {
           ...(publisher ? { publisher_id: publisher.id } : {}),
           metadata: {
             ...(existingBook.metadata || {}),
+            ...(summary_vi !== undefined ? { summary_vi: String(summary_vi).trim() || null } : {}),
             ...(author || publisher || category ? { is_incomplete: false, requires_librarian_review: false } : {}),
           },
         },
