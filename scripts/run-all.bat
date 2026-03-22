@@ -202,11 +202,17 @@ exit /b 0
 echo [INFO] Checking pnpm installation...
 call pnpm --version >nul 2>&1
 if errorlevel 1 (
-  echo [WARN] pnpm not found. Installing globally...
-  call npm install -g pnpm
+  echo [WARN] pnpm not found. Trying Corepack first...
+  call corepack enable >nul 2>&1
+  call corepack prepare pnpm@latest --activate >nul 2>&1
+  call pnpm --version >nul 2>&1
   if errorlevel 1 (
-    echo [ERROR] Failed to install pnpm
-    exit /b 1
+    echo [WARN] Corepack pnpm activation failed. Falling back to global npm install...
+    call npm install -g pnpm
+    if errorlevel 1 (
+      echo [ERROR] Failed to install pnpm via Corepack and npm global install
+      exit /b 1
+    )
   )
 )
 
@@ -274,14 +280,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [INFO] Database bootstrap is managed by PostgreSQL entrypoint scripts in db-init/ on fresh volumes.
 if "%RESET_DB%"=="1" (
-  echo [INFO] Fresh volume detected. PostgreSQL entrypoint auto-init will run db-init scripts.
+  echo [INFO] Reset mode: new PostgreSQL volume will auto-run schema + seed initialization.
 ) else (
-  echo [INFO] Importing SQL schema + seed data...
-  call :run_db_sql /docker-entrypoint-initdb.d/00-full-schema.sql
-  if errorlevel 1 exit /b 1
-  call :run_db_sql /seed-data/smartbook_merged_seed.sql
-  if errorlevel 1 exit /b 1
+  echo [INFO] Keeping existing DB volume/data (no manual SQL import).
 )
 
 echo.
@@ -301,13 +304,4 @@ echo [INFO] Quick health checks:
 powershell -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing http://localhost:3000/health -TimeoutSec 8).StatusCode } catch { 'gateway: fail' }"
 powershell -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing http://localhost:8000/health -TimeoutSec 8).StatusCode } catch { 'ai-service: fail' }"
 
-exit /b 0
-
-:run_db_sql
-set "SQL_FILE=%~1"
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U user -d postgres -f "%SQL_FILE%"
-if errorlevel 1 (
-  echo [ERROR] Failed to execute SQL script: %SQL_FILE%
-  exit /b 1
-)
 exit /b 0

@@ -34,6 +34,45 @@ export interface RecognizeBookResponse {
   raw?: string;
 }
 
+export interface LookupBookByIsbnRequest {
+  isbn: string;
+  generateVietnameseSummary?: boolean;
+}
+
+export interface LookupBookByIsbnResponse {
+  success: boolean;
+  found: boolean;
+  isbn: string;
+  isbn13?: string | null;
+  isbn10?: string | null;
+  title: string | null;
+  subtitle: string | null;
+  authors: string[];
+  publisher: string | null;
+  publishedDate: string | null;
+  description: string | null;
+  categories: string[];
+  language: string | null;
+  pageCount: number | null;
+  thumbnail: string | null;
+  source: {
+    googleBooks: boolean;
+    openLibrary: boolean;
+    worldCat?: boolean;
+    ollamaSummary: boolean;
+  };
+  confidence: {
+    overall: number;
+    googleBooks: number;
+    openLibrary: number;
+    worldCat?: number;
+  };
+  summaryVi: string | null;
+  keywords: string[];
+  manualEntryRequired: boolean;
+  reason?: string;
+}
+
 export const aiService = {
   analyzeImage: async (data: AIAnalysisRequest): Promise<AIAnalysisResponse> => {
     const formData = new FormData();
@@ -86,6 +125,16 @@ export const aiService = {
     const response = await aiAPI.post('/generate-book-summary', {
       title,
       author,
+    });
+    return response.data;
+  },
+
+  lookupBookByIsbn: async (
+    payload: LookupBookByIsbnRequest,
+  ): Promise<LookupBookByIsbnResponse> => {
+    const response = await aiAPI.post('/lookup-book-by-isbn', {
+      isbn: payload.isbn,
+      generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
     });
     return response.data;
   },

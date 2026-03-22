@@ -20,6 +20,7 @@ interface BookDetailData {
   title: string;
   subtitle?: string | null;
   description?: string | null;
+  summary_vi?: string | null;
   author?: string;
   category?: string;
   publisher?: string;
@@ -46,6 +47,7 @@ interface EditForm {
   list_price: string;
   unit_cost: string;
   description: string;
+  summary_vi: string;
   cover_image_url?: string;
 }
 
@@ -58,7 +60,7 @@ function formatDescriptionText(value?: string | null): string {
 
   return value
     .replace(/\\n/g, "\n")
-    .replace(/\s*(📘|✨|🎯)\s*/g, "\n$1 ")
+    .replace(/\s*(📘|🧠|✨|🎯)\s*/g, "\n$1 ")
     .replace(/\s*•\s*/g, "\n• ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -77,6 +79,7 @@ function toEditForm(book: BookDetailData): EditForm {
     list_price: Number(book.list_price || 0).toString(),
     unit_cost: Number(book.unit_cost || 0).toString(),
     description: String(book.description || ""),
+    summary_vi: String(book.summary_vi || ""),
     cover_image_url: String(book.cover_image_url || ""),
   };
 }
@@ -85,7 +88,7 @@ export function BookDetailPage() {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [book, setBook] = useState<BookDetailData | null>(null);
-  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [isApplyingAiMetadata, setIsApplyingAiMetadata] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState<EditForm>({
@@ -100,6 +103,7 @@ export function BookDetailPage() {
     list_price: "0",
     unit_cost: "0",
     description: "",
+    summary_vi: "",
     cover_image_url: "",
   });
 
@@ -127,26 +131,64 @@ export function BookDetailPage() {
     return (book?.locations || []).reduce((sum, location) => sum + Number(location.quantity || 0), 0);
   }, [book]);
 
-  const handleGenerateQuickDescription = async () => {
-    if (!book || !id) return;
-    try {
-      setIsGeneratingDescription(true);
-      const summary = await aiService.generateBookSummary(book.title, book.author || "");
-      const generatedDescription = summary?.description?.trim();
+  const normalizeIsbnOrBarcode = (value: string): string => {
+    return String(value || "").trim().replace(/[^0-9Xx]/g, "").toUpperCase();
+  };
 
-      if (!generatedDescription) {
-        toast.error("AI khong tra ve mo ta");
+  const extractPublishYear = (publishedDate?: string | null): string => {
+    const matched = String(publishedDate || "").match(/\b(\d{4})\b/);
+    if (!matched) return "";
+    const year = Number(matched[1]);
+    if (!Number.isInteger(year) || year < 1000 || year > 2100) return "";
+    return String(year);
+  };
+
+  const handleApplyAiMetadata = async () => {
+    const isbnOrBarcode = normalizeIsbnOrBarcode(editForm.isbn_or_barcode);
+    if (!isbnOrBarcode) {
+      toast.error("Vui long nhap ISBN truoc khi dung AI");
+      return;
+    }
+
+    try {
+      setIsApplyingAiMetadata(true);
+      const lookup = await aiService.lookupBookByIsbn({
+        isbn: isbnOrBarcode,
+        generateVietnameseSummary: true,
+      });
+
+      if (!lookup?.found) {
+        toast.info("Khong tim thay metadata tu ISBN. Ban co the tiep tuc nhap tay.");
         return;
       }
 
-      await bookService.update(String(id), { description: generatedDescription });
-      setBook((prev) => (prev ? { ...prev, description: generatedDescription } : prev));
-      setEditForm((prev) => ({ ...prev, description: generatedDescription }));
-      toast.success("Da tao mo ta nhanh bang AI");
+      setEditForm((prev) => {
+        const firstAuthor = lookup.authors?.[0] || prev.author_name;
+        const firstCategory = lookup.categories?.[0] || prev.category_name;
+        const suggestedDescription = lookup.description?.trim() || prev.description;
+        const suggestedSummaryVi = lookup.summaryVi?.trim() || prev.summary_vi;
+
+        return {
+          ...prev,
+          title: lookup.title || prev.title,
+          subtitle: lookup.subtitle || prev.subtitle,
+          author_name: firstAuthor,
+          publisher_name: lookup.publisher || prev.publisher_name,
+          category_name: firstCategory,
+          isbn_or_barcode: lookup.isbn || prev.isbn_or_barcode,
+          language: lookup.language || prev.language,
+          publish_year: extractPublishYear(lookup.publishedDate) || prev.publish_year,
+          description: suggestedDescription,
+          summary_vi: suggestedSummaryVi,
+          cover_image_url: lookup.thumbnail || prev.cover_image_url,
+        };
+      });
+
+      toast.success("Da dien metadata, description va summary TIeng Viet bang AI");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong the tao mo ta nhanh"));
+      toast.error(getApiErrorMessage(error, "Khong the lay metadata bang AI"));
     } finally {
-      setIsGeneratingDescription(false);
+      setIsApplyingAiMetadata(false);
     }
   };
 
@@ -164,6 +206,7 @@ export function BookDetailPage() {
       title,
       subtitle: editForm.subtitle.trim() || null,
       description: editForm.description.trim() || null,
+      summary_vi: editForm.summary_vi.trim() || null,
       author_name: editForm.author_name.trim() || null,
       publisher_name: editForm.publisher_name.trim() || null,
       category_name: editForm.category_name.trim() || null,
@@ -300,6 +343,12 @@ export function BookDetailPage() {
                 <div className="text-[11px] text-slate-400 uppercase tracking-[0.05em] mb-2" style={{ fontWeight: 550 }}>Description</div>
                 <p className="text-[13px] text-slate-500 whitespace-pre-line break-words" style={{ lineHeight: 1.6 }}>
                   {formatDescriptionText(book.description)}
+                </p>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="text-[11px] text-slate-400 uppercase tracking-[0.05em] mb-2" style={{ fontWeight: 550 }}>Summary TIeng Viet (AI)</div>
+                <p className="text-[13px] text-slate-500 whitespace-pre-line break-words" style={{ lineHeight: 1.6 }}>
+                  {formatDescriptionText(book.summary_vi)}
                 </p>
               </div>
             </div>
@@ -443,9 +492,20 @@ export function BookDetailPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[12px] font-semibold text-slate-700 mb-2 uppercase tracking-[0.02em]">
-                    ISBN / Barcode
-                  </label>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-[0.02em]">
+                      ISBN / Barcode
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleApplyAiMetadata()}
+                      disabled={isApplyingAiMetadata}
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-60"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {isApplyingAiMetadata ? "Dang lay AI..." : "Dien metadata + mo ta AI"}
+                    </button>
+                  </div>
                   <input
                     value={editForm.isbn_or_barcode}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, isbn_or_barcode: event.target.value }))}
@@ -562,25 +622,31 @@ export function BookDetailPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
                   <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-[0.02em]">
                     Mo ta
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerateQuickDescription()}
-                    disabled={isGeneratingDescription}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-60"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {isGeneratingDescription ? "Dang tao..." : "Tao bang AI"}
-                  </button>
                 </div>
                 <textarea
                   value={editForm.description}
                   onChange={(event) => setEditForm((prev) => ({ ...prev, description: event.target.value }))}
                   rows={4}
                   placeholder="Nhap mo ta chi tiet ve sach"
+                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10 resize-none"
+                />
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <label className="block text-[12px] font-semibold text-slate-700 uppercase tracking-[0.02em]">
+                    Summary TIeng Viet (AI)
+                  </label>
+                </div>
+                <textarea
+                  value={editForm.summary_vi}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, summary_vi: event.target.value }))}
+                  rows={5}
+                  placeholder="Nhap hoac chinh sua summary TIeng Viet"
                   className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10 resize-none"
                 />
               </div>
@@ -597,7 +663,7 @@ export function BookDetailPage() {
               <button
                 type="button"
                 onClick={() => void handleSaveBook()}
-                disabled={isSaving}
+                disabled={isSaving || isApplyingAiMetadata}
                 className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60 hover:shadow-md transition-shadow"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

@@ -6,6 +6,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-inventory}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-inventory}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     ports:
       - "5432:5432"
     volumes:
@@ -17,12 +23,13 @@ services:
     image: dpage/pgadmin4
     container_name: smartbook_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
     ports:
       - "8080:80"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   inventory-service:
     build: ./services/inventory-service
@@ -35,7 +42,8 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   auth-service:
     build: ./services/auth-service
@@ -48,7 +56,8 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   borrow-service:
     build: ./services/borrow-service
@@ -62,7 +71,8 @@ services:
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   inventory-db-push:
     profiles: ["dev"]
@@ -71,7 +81,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   auth-db-push:
     profiles: ["dev"]
@@ -80,7 +91,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   borrow-db-push:
     profiles: ["dev"]
@@ -89,7 +101,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   ai-service:
     build: ./services/ai-service
@@ -101,6 +114,10 @@ services:
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
+      - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
+      - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
+      - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-8}
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
 
   api-gateway:
     build: ./apps/api-gateway
