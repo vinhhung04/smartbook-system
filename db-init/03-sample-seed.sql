@@ -1,3 +1,3 @@
--- Load sample seed data for all databases
--- This runs after the main schema and extensions are applied
-\i /seed-data/smartbook_sample_seed.sql
+-- Load merged seed data (sample + extended) for all databases.
+-- Kept at step 03 so older scripts that run 00->03 still get full seed data.
+\i /seed-data/smartbook_merged_seed.sql

@@ -1,5 +1,36 @@
 import uuid
 import random
+from pathlib import Path
+
+MERGED_SEED_PATH = Path("data/smartbook_merged_seed.sql")
+AUTO_BEGIN_MARKER = "-- BEGIN: AUTO-GENERATED EXTENDED SEED"
+AUTO_END_MARKER = "-- END: AUTO-GENERATED EXTENDED SEED"
+LEGACY_EXTENDED_HEADER = "-- Extended Seed Data V2 (Includes Warehouses & Locations)"
+
+
+def write_to_merged_seed(sql_lines):
+    generated_block = "\n".join([
+        AUTO_BEGIN_MARKER,
+        *sql_lines,
+        AUTO_END_MARKER,
+    ]) + "\n"
+
+    if MERGED_SEED_PATH.exists():
+        content = MERGED_SEED_PATH.read_text(encoding="utf-8")
+
+        if AUTO_BEGIN_MARKER in content and AUTO_END_MARKER in content:
+            start_idx = content.index(AUTO_BEGIN_MARKER)
+            end_idx = content.index(AUTO_END_MARKER) + len(AUTO_END_MARKER)
+            updated = content[:start_idx] + generated_block + content[end_idx:]
+        elif LEGACY_EXTENDED_HEADER in content:
+            start_idx = content.index(LEGACY_EXTENDED_HEADER)
+            updated = content[:start_idx].rstrip() + "\n\n" + generated_block
+        else:
+            updated = content.rstrip() + "\n\n" + generated_block
+    else:
+        updated = generated_block
+
+    MERGED_SEED_PATH.write_text(updated, encoding="utf-8")
 
 def generate_sql():
     sql = []
@@ -114,8 +145,7 @@ def generate_sql():
 
     sql.append("COMMIT;")
     
-    with open("data/smartbook_extended_seed.sql", "w") as f:
-        f.write("\n".join(sql))
+    write_to_merged_seed(sql)
 
 if __name__ == '__main__':
     generate_sql()
