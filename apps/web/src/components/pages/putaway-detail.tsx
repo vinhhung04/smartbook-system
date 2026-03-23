@@ -106,7 +106,7 @@ export function PutawayDetailPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100 bg-gradient-to-r from-blue-50/40 to-transparent">
-                {["SKU/Barcode", "Ten san pham", "So luong", "Da nhap ke", "Ton kho cho xep ke", "Nhap hang"].map((header) => (
+                {["ISBN13", "Ten san pham", "So luong", "Da nhap ke", "Ton kho cho xep ke", "Nhap hang"].map((header) => (
                   <th key={header} className="text-left text-[11px] text-slate-400 px-5 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>{header}</th>
                 ))}
               </tr>
@@ -114,7 +114,7 @@ export function PutawayDetailPage() {
             <tbody>
               {detail.items.map((item) => (
                 <tr key={item.id} className="border-b border-slate-50 last:border-0 hover:bg-blue-50/20 transition-colors">
-                  <td className="px-5 py-3.5 text-[12px] font-mono text-slate-500">{item.sku || item.barcode || "-"}</td>
+                  <td className="px-5 py-3.5 text-[12px] font-mono text-slate-500">{item.isbn13 || item.sku || item.barcode || "-"}</td>
                   <td className="px-5 py-3.5 text-[13px]" style={{ fontWeight: 550 }}>{item.book_title}</td>
                   <td className="px-5 py-3.5 text-[13px]">{item.quantity}</td>
                   <td className="px-5 py-3.5 text-[13px] text-emerald-700">{item.putaway_quantity}</td>

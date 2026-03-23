@@ -391,6 +391,34 @@ def _safe_list(values) -> list[str]:
     return out
 
 
+def _ollama_generate_with_summary_fallback(client: ollama.Client, prompt: str, options: dict | None = None):
+    """Generate with SUMMARY_MODEL, then fallback to OLLAMA_MODEL if summary model is missing."""
+    summary_model = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
+    fallback_model = os.getenv("OLLAMA_MODEL", "llava")
+    opts = options or {}
+
+    try:
+        return client.generate(
+            model=summary_model,
+            prompt=prompt,
+            options=opts,
+        )
+    except ollama.ResponseError as exc:
+        err_text = str(getattr(exc, "error", exc) or "").lower()
+        if "not found" in err_text and fallback_model and fallback_model != summary_model:
+            logger.warning(
+                "SUMMARY_MODEL '%s' not found. Falling back to OLLAMA_MODEL '%s'.",
+                summary_model,
+                fallback_model,
+            )
+            return client.generate(
+                model=fallback_model,
+                prompt=prompt,
+                options=opts,
+            )
+        raise
+
+
 def _metadata_completeness_score(data: dict) -> float:
     weighted = {
         "title": 2.0,
@@ -742,10 +770,10 @@ def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None, list[
 
     try:
         client = ollama.Client(host=OLLAMA_HOST)
-        response = client.generate(
-            model=SUMMARY_MODEL,
-            prompt=_build_summary_prompt(metadata),
-            options={"temperature": 0.4, "num_predict": 420},
+        response = _ollama_generate_with_summary_fallback(
+            client,
+            _build_summary_prompt(metadata),
+            {"temperature": 0.4, "num_predict": 420},
         )
         raw_text = response.get("response", "")
         parsed = _extract_json(raw_text)
@@ -1003,14 +1031,12 @@ async def _generate_book_summary(req: BookSummaryRequest):
         context_block,
     )
 
-    summary_model = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
-
     try:
         client = ollama.Client(host=OLLAMA_HOST)
-        response = client.generate(
-            model=summary_model,
-            prompt=prompt,
-            options={"temperature": 0.7, "num_predict": 400},
+        response = _ollama_generate_with_summary_fallback(
+            client,
+            prompt,
+            {"temperature": 0.7, "num_predict": 400},
         )
         description = _format_summary_description(
             response.get("response", ""),

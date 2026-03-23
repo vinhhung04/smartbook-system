@@ -15,7 +15,7 @@ import {
 type RequestType = "outbound" | "transfer";
 
 type DraftLine = {
-  variant_id: string;
+  isbn13: string;
   title: string;
   sku: string | null;
   barcode: string | null;
@@ -48,6 +48,35 @@ function canApproveRequests(): boolean {
 
   const roles = Array.isArray(user?.roles) ? user.roles.map((role) => String(role || "").toUpperCase()) : [];
   return roles.includes("ADMIN") || roles.includes("MANAGER");
+}
+
+function getTransferInsufficientStockDescription(error: unknown): string | null {
+  const maybe = error as {
+    response?: {
+      data?: {
+        details?: {
+          shortages?: Array<{
+            isbn13?: string | null;
+            sku?: string | null;
+            variant_id?: string;
+            shortage_qty?: number;
+            required_qty?: number;
+            available_qty?: number;
+          }>;
+        };
+      };
+    };
+  };
+
+  const shortages = maybe?.response?.data?.details?.shortages;
+  if (!Array.isArray(shortages) || shortages.length === 0) {
+    return null;
+  }
+
+  return shortages
+    .slice(0, 3)
+    .map((item) => `${item.isbn13 || item.sku || item.variant_id || "N/A"}: can ${item.available_qty || 0}, yeu cau ${item.required_qty || 0}, thieu ${item.shortage_qty || 0}`)
+    .join(" | ");
 }
 
 export function OrderRequestsPage() {
@@ -139,11 +168,17 @@ export function OrderRequestsPage() {
   };
 
   const handleAddLine = (variant: OrderRequestVariant) => {
+    const isbn13 = String(variant.isbn13 || "").trim();
+    if (!isbn13 || !/^\d{13}$/.test(isbn13)) {
+      toast.error("Chi duoc them sach co ISBN13 hop le");
+      return;
+    }
+
     setDraftLines((prev) => {
-      const found = prev.find((line) => line.variant_id === variant.variant_id);
+      const found = prev.find((line) => line.isbn13 === isbn13);
       if (found) {
         return prev.map((line) => (
-          line.variant_id === variant.variant_id
+          line.isbn13 === isbn13
             ? { ...line, quantity: line.quantity + 1 }
             : line
         ));
@@ -152,26 +187,26 @@ export function OrderRequestsPage() {
       return [
         ...prev,
         {
-          variant_id: variant.variant_id,
+          isbn13,
           title: variant.title,
           sku: variant.sku,
-          barcode: variant.barcode,
+          barcode: variant.isbn13 || variant.barcode,
           quantity: 1,
         },
       ];
     });
   };
 
-  const handleQuantityChange = (variantId: string, value: number) => {
+  const handleQuantityChange = (isbn13: string, value: number) => {
     setDraftLines((prev) => prev.map((line) => (
-      line.variant_id === variantId
+      line.isbn13 === isbn13
         ? { ...line, quantity: Number.isFinite(value) ? Math.max(1, Math.trunc(value)) : 1 }
         : line
     )));
   };
 
-  const handleRemoveLine = (variantId: string) => {
-    setDraftLines((prev) => prev.filter((line) => line.variant_id !== variantId));
+  const handleRemoveLine = (isbn13: string) => {
+    setDraftLines((prev) => prev.filter((line) => line.isbn13 !== isbn13));
   };
 
   const resetForm = () => {
@@ -203,7 +238,7 @@ export function OrderRequestsPage() {
           external_reference: externalReference.trim() || null,
           note: requestNote.trim() || null,
           lines: draftLines.map((line) => ({
-            variant_id: line.variant_id,
+            isbn13: line.isbn13,
             quantity: Math.max(1, Math.trunc(line.quantity || 0)),
           })),
         });
@@ -218,7 +253,7 @@ export function OrderRequestsPage() {
           to_warehouse_id: targetWarehouseId,
           note: requestNote.trim() || null,
           lines: draftLines.map((line) => ({
-            variant_id: line.variant_id,
+            isbn13: line.isbn13,
             quantity: Math.max(1, Math.trunc(line.quantity || 0)),
           })),
         });
@@ -229,7 +264,14 @@ export function OrderRequestsPage() {
       setListView("my");
       await loadRequests("my", selectedWarehouseId || undefined);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Tao request that bai"));
+      const message = getApiErrorMessage(error, "Tao request that bai");
+      const shortageDescription = getTransferInsufficientStockDescription(error);
+
+      if (shortageDescription) {
+        toast.error(message, { description: shortageDescription });
+      } else {
+        toast.error(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -360,7 +402,7 @@ export function OrderRequestsPage() {
               <input
                 value={variantQuery}
                 onChange={(event) => setVariantQuery(event.target.value)}
-                placeholder="Nhap SKU, barcode, ISBN, ten sach"
+                placeholder="Nhap ISBN13, SKU hoac ten sach"
                 className="w-full pl-9 pr-3 py-2 rounded-[10px] border border-slate-200 text-[12px]"
               />
             </div>
@@ -380,7 +422,7 @@ export function OrderRequestsPage() {
                 <div key={variant.variant_id} className="px-3 py-2 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[12px] text-slate-700 truncate" style={{ fontWeight: 550 }}>{variant.title}</p>
-                    <p className="text-[11px] text-slate-500">SKU: {variant.sku || "-"} | Barcode: {variant.barcode || "-"}</p>
+                    <p className="text-[11px] text-slate-500">ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}</p>
                   </div>
                   <button
                     type="button"
@@ -410,24 +452,24 @@ export function OrderRequestsPage() {
                     <td colSpan={3} className="px-3 py-4 text-[12px] text-slate-400">Chua co line nao</td>
                   </tr>
                 ) : draftLines.map((line) => (
-                  <tr key={line.variant_id} className="border-b border-slate-100 last:border-0 text-[12px]">
+                  <tr key={line.isbn13} className="border-b border-slate-100 last:border-0 text-[12px]">
                     <td className="px-3 py-2">
                       <p className="text-slate-700" style={{ fontWeight: 550 }}>{line.title}</p>
-                      <p className="text-[11px] text-slate-500">SKU: {line.sku || "-"} | Barcode: {line.barcode || "-"}</p>
+                      <p className="text-[11px] text-slate-500">ISBN13: {line.isbn13} | SKU: {line.sku || "-"}</p>
                     </td>
                     <td className="px-3 py-2">
                       <input
                         type="number"
                         min={1}
                         value={line.quantity}
-                        onChange={(event) => handleQuantityChange(line.variant_id, Number(event.target.value))}
+                        onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
                         className="w-full rounded-[8px] border border-slate-200 px-2 py-1.5"
                       />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <button
                         type="button"
-                        onClick={() => handleRemoveLine(line.variant_id)}
+                        onClick={() => handleRemoveLine(line.isbn13)}
                         className="text-rose-600 hover:text-rose-700"
                       >
                         <X className="w-4 h-4 inline" />

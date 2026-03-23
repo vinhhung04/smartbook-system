@@ -241,7 +241,7 @@ export function PutawayExecutePage() {
                   <tr key={item.id} className="border-b border-slate-50 last:border-0">
                     <td className="px-4 py-3 text-[12px]">
                       <p style={{ fontWeight: 600 }}>{item.book_title}</p>
-                      <p className="text-slate-400">{item.sku || item.barcode || item.variant_id.slice(0, 8)}</p>
+                      <p className="text-slate-400">{item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8)}</p>
                     </td>
                     <td className="px-4 py-3 text-[12px]" style={{ fontWeight: 600 }}>{item.quantity}</td>
                     <td className="px-4 py-3">

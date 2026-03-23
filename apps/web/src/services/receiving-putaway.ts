@@ -87,15 +87,19 @@ export const receivingPutawayService = {
     return response.data as { id: string; location_code: string; location_type: string };
   },
 
-  lookupVariantByBarcode: async (barcode: string) => {
+  lookupVariantByIsbn13: async (isbn13: string) => {
     const response = await inventoryAPI.get('/api/receiving-putaway/lookup/variant-by-barcode', {
-      params: { barcode },
+      params: { isbn13 },
     });
     return response.data as {
       ambiguous: boolean;
       selected: VariantLookupMatch | null;
       matches: VariantLookupMatch[];
     };
+  },
+
+  lookupVariantByBarcode: async (barcode: string) => {
+    return receivingPutawayService.lookupVariantByIsbn13(barcode);
   },
 
   transfer: async (payload: {

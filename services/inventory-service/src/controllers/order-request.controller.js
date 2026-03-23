@@ -6,6 +6,11 @@ function parseId(value) {
   return String(value || '').trim() || null;
 }
 
+function normalizeIsbn13(value) {
+  const normalized = String(value || '').trim().replace(/[^0-9]/g, '');
+  return normalized || null;
+}
+
 function normalizeText(value) {
   const text = String(value || '').trim();
   return text || null;
@@ -47,6 +52,28 @@ function createTransferNumber() {
   const ts = Date.now();
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `TO-${ts}-${suffix}`;
+}
+
+async function resolveVariantIdByIdentifier(tx, payloadLine) {
+  const directVariantId = parseId(payloadLine?.variant_id);
+  if (directVariantId) {
+    return { variant_id: directVariantId, isbn13: normalizeIsbn13(payloadLine?.isbn13) };
+  }
+
+  const isbn13 = normalizeIsbn13(payloadLine?.isbn13);
+  if (!isbn13 || !/^\d{13}$/.test(isbn13)) {
+    return { variant_id: null, isbn13: null };
+  }
+
+  const variant = await tx.book_variants.findFirst({
+    where: { isbn13, is_active: true },
+    select: { id: true },
+  });
+
+  return {
+    variant_id: variant?.id || null,
+    isbn13,
+  };
 }
 
 function mapOutboundSummary(order) {
@@ -117,11 +144,10 @@ async function searchVariants(req, res) {
     const rows = await prisma.book_variants.findMany({
       where: {
         is_active: true,
+        isbn13: { not: null },
         OR: [
-          { sku: { contains: keyword, mode: 'insensitive' } },
-          { internal_barcode: { contains: keyword, mode: 'insensitive' } },
           { isbn13: { contains: keyword, mode: 'insensitive' } },
-          { isbn10: { contains: keyword, mode: 'insensitive' } },
+          { sku: { contains: keyword, mode: 'insensitive' } },
           {
             books: {
               title: { contains: keyword, mode: 'insensitive' },
@@ -149,7 +175,7 @@ async function searchVariants(req, res) {
       data: rows.map((row) => ({
         variant_id: row.id,
         sku: row.sku || null,
-        barcode: row.internal_barcode || row.isbn13 || row.isbn10 || row.sku || null,
+        barcode: row.isbn13 || row.internal_barcode || row.isbn10 || row.sku || null,
         isbn13: row.isbn13 || null,
         isbn10: row.isbn10 || null,
         title: row.books?.title || 'Chua co ten sach',
@@ -266,17 +292,23 @@ async function createOutboundRequest(req, res) {
 
   const normalizedLines = [];
   for (const line of lines) {
-    const variantId = parseId(line?.variant_id);
     const sourceLocationId = parseId(line?.source_location_id);
     const quantity = toInt(line?.quantity);
     const lineNote = normalizeText(line?.note);
+    const lineIsbn13 = normalizeIsbn13(line?.isbn13);
+    const hasIdentifier = parseId(line?.variant_id) || lineIsbn13;
 
-    if (!variantId || quantity === null || quantity <= 0) {
-      return res.status(400).json({ message: 'Each line must include variant_id and quantity > 0' });
+    if (!hasIdentifier || quantity === null || quantity <= 0) {
+      return res.status(400).json({ message: 'Each line must include isbn13 (or variant_id) and quantity > 0' });
+    }
+
+    if (lineIsbn13 && !/^\d{13}$/.test(lineIsbn13)) {
+      return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
     }
 
     normalizedLines.push({
-      variant_id: variantId,
+      variant_id: parseId(line?.variant_id),
+      isbn13: lineIsbn13,
       source_location_id: sourceLocationId,
       quantity,
       note: lineNote,
@@ -294,20 +326,38 @@ async function createOutboundRequest(req, res) {
         return { invalid: true, statusCode: 400, message: 'Warehouse not found or inactive' };
       }
 
-      const variantIds = normalizedLines.map((line) => line.variant_id);
+      const resolvedLines = [];
+      for (const line of normalizedLines) {
+        const resolved = await resolveVariantIdByIdentifier(tx, line);
+        if (!resolved.variant_id) {
+          return { invalid: true, statusCode: 400, message: 'One or more isbn13 values are invalid or inactive' };
+        }
+
+        resolvedLines.push({
+          ...line,
+          variant_id: resolved.variant_id,
+          isbn13: resolved.isbn13,
+        });
+      }
+
+      const variantIds = [...new Set(resolvedLines.map((line) => line.variant_id))];
       const variants = await tx.book_variants.findMany({
         where: {
           id: { in: variantIds },
           is_active: true,
         },
-        select: { id: true },
+        select: {
+          id: true,
+          sku: true,
+          isbn13: true,
+        },
       });
 
       if (variants.length !== variantIds.length) {
         return { invalid: true, statusCode: 400, message: 'One or more variant_id is invalid or inactive' };
       }
 
-      const locationIds = normalizedLines.map((line) => line.source_location_id).filter(Boolean);
+      const locationIds = resolvedLines.map((line) => line.source_location_id).filter(Boolean);
       if (locationIds.length > 0) {
         const locations = await tx.locations.findMany({
           where: {
@@ -336,7 +386,7 @@ async function createOutboundRequest(req, res) {
       });
 
       await tx.outbound_order_items.createMany({
-        data: normalizedLines.map((line) => ({
+        data: resolvedLines.map((line) => ({
           outbound_order_id: order.id,
           variant_id: line.variant_id,
           source_location_id: line.source_location_id,
@@ -354,8 +404,8 @@ async function createOutboundRequest(req, res) {
           entity_id: order.id,
           after_data: {
             status: 'PENDING_APPROVAL',
-            line_count: normalizedLines.length,
-            total_quantity: normalizedLines.reduce((sum, line) => sum + line.quantity, 0),
+            line_count: resolvedLines.length,
+            total_quantity: resolvedLines.reduce((sum, line) => sum + line.quantity, 0),
           },
         },
       });
@@ -364,7 +414,10 @@ async function createOutboundRequest(req, res) {
     });
 
     if (result.invalid) {
-      return res.status(result.statusCode || 400).json({ message: result.message });
+      return res.status(result.statusCode || 400).json({
+        message: result.message,
+        ...(result.details ? { details: result.details } : {}),
+      });
     }
 
     return res.status(201).json({
@@ -407,18 +460,24 @@ async function createTransferRequest(req, res) {
 
   const normalizedLines = [];
   for (const line of lines) {
-    const variantId = parseId(line?.variant_id);
     const fromLocationId = parseId(line?.from_location_id);
     const toLocationId = parseId(line?.to_location_id);
     const quantity = toInt(line?.quantity);
     const lineNote = normalizeText(line?.note);
+    const lineIsbn13 = normalizeIsbn13(line?.isbn13);
+    const hasIdentifier = parseId(line?.variant_id) || lineIsbn13;
 
-    if (!variantId || quantity === null || quantity <= 0) {
-      return res.status(400).json({ message: 'Each line must include variant_id and quantity > 0' });
+    if (!hasIdentifier || quantity === null || quantity <= 0) {
+      return res.status(400).json({ message: 'Each line must include isbn13 (or variant_id) and quantity > 0' });
+    }
+
+    if (lineIsbn13 && !/^\d{13}$/.test(lineIsbn13)) {
+      return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
     }
 
     normalizedLines.push({
-      variant_id: variantId,
+      variant_id: parseId(line?.variant_id),
+      isbn13: lineIsbn13,
       from_location_id: fromLocationId,
       to_location_id: toLocationId,
       quantity,
@@ -440,20 +499,107 @@ async function createTransferRequest(req, res) {
         return { invalid: true, statusCode: 400, message: 'Source or target warehouse is invalid/inactive' };
       }
 
-      const variantIds = normalizedLines.map((line) => line.variant_id);
+      const resolvedLines = [];
+      for (const line of normalizedLines) {
+        const resolved = await resolveVariantIdByIdentifier(tx, line);
+        if (!resolved.variant_id) {
+          return { invalid: true, statusCode: 400, message: 'One or more isbn13 values are invalid or inactive' };
+        }
+
+        resolvedLines.push({
+          ...line,
+          variant_id: resolved.variant_id,
+          isbn13: resolved.isbn13,
+        });
+      }
+
+      const variantIds = [...new Set(resolvedLines.map((line) => line.variant_id))];
       const variants = await tx.book_variants.findMany({
         where: {
           id: { in: variantIds },
           is_active: true,
         },
-        select: { id: true },
+        select: {
+          id: true,
+          sku: true,
+          isbn13: true,
+        },
       });
 
       if (variants.length !== variantIds.length) {
         return { invalid: true, statusCode: 400, message: 'One or more variant_id is invalid or inactive' };
       }
 
-      const fromLocationIds = normalizedLines.map((line) => line.from_location_id).filter(Boolean);
+      // Enforce stock sufficiency at transfer-request creation using warehouse-level available_qty.
+      const requiredQtyByVariant = new Map();
+      resolvedLines.forEach((line) => {
+        const key = String(line.variant_id);
+        const current = Number(requiredQtyByVariant.get(key) || 0);
+        requiredQtyByVariant.set(key, current + Number(line.quantity || 0));
+      });
+
+      const availableQtyRows = await tx.stock_balances.groupBy({
+        by: ['variant_id'],
+        where: {
+          warehouse_id: fromWarehouseId,
+          variant_id: { in: variantIds },
+          available_qty: { gt: 0 },
+        },
+        _sum: {
+          available_qty: true,
+        },
+      });
+
+      const availableQtyByVariant = new Map();
+      availableQtyRows.forEach((row) => {
+        availableQtyByVariant.set(String(row.variant_id), Number(row._sum.available_qty || 0));
+      });
+
+      const variantMetaById = new Map();
+      variants.forEach((variant) => {
+        variantMetaById.set(String(variant.id), {
+          isbn13: variant.isbn13 || null,
+          sku: variant.sku || null,
+        });
+      });
+
+      const shortages = [];
+      requiredQtyByVariant.forEach((requiredQty, variantId) => {
+        const availableQty = Number(availableQtyByVariant.get(variantId) || 0);
+        if (availableQty >= requiredQty) {
+          return;
+        }
+
+        const meta = variantMetaById.get(variantId) || { isbn13: null, sku: null };
+        shortages.push({
+          variant_id: variantId,
+          isbn13: meta.isbn13,
+          sku: meta.sku,
+          required_qty: requiredQty,
+          available_qty: availableQty,
+          shortage_qty: requiredQty - availableQty,
+        });
+      });
+
+      if (shortages.length > 0) {
+        const shortagePreview = shortages
+          .slice(0, 3)
+          .map((item) => `${item.isbn13 || item.sku || item.variant_id}: thieu ${item.shortage_qty}`)
+          .join('; ');
+
+        return {
+          invalid: true,
+          statusCode: 409,
+          message: `Khong du ton kho tai kho nguon. ${shortagePreview}`,
+          details: {
+            error_code: 'INSUFFICIENT_STOCK',
+            source_warehouse_id: fromWarehouseId,
+            shortages,
+          },
+        };
+      }
+
+      const fromLocationIds = resolvedLines.map((line) => line.from_location_id).filter(Boolean);
       if (fromLocationIds.length > 0) {
         const locations = await tx.locations.findMany({
           where: {
@@ -469,7 +615,7 @@ async function createTransferRequest(req, res) {
         }
       }
 
-      const toLocationIds = normalizedLines.map((line) => line.to_location_id).filter(Boolean);
+      const toLocationIds = resolvedLines.map((line) => line.to_location_id).filter(Boolean);
       if (toLocationIds.length > 0) {
         const locations = await tx.locations.findMany({
           where: {
@@ -497,7 +643,7 @@ async function createTransferRequest(req, res) {
       });
 
       await tx.transfer_order_items.createMany({
-        data: normalizedLines.map((line) => ({
+        data: resolvedLines.map((line) => ({
           transfer_order_id: order.id,
           variant_id: line.variant_id,
           from_location_id: line.from_location_id,
@@ -517,8 +663,8 @@ async function createTransferRequest(req, res) {
           entity_id: order.id,
           after_data: {
             status: 'REQUESTED',
-            line_count: normalizedLines.length,
-            total_quantity: normalizedLines.reduce((sum, line) => sum + line.quantity, 0),
+            line_count: resolvedLines.length,
+            total_quantity: resolvedLines.reduce((sum, line) => sum + line.quantity, 0),
           },
         },
       });
@@ -527,7 +673,10 @@ async function createTransferRequest(req, res) {
     });
 
     if (result.invalid) {
-      return res.status(result.statusCode || 400).json({ message: result.message });
+      return res.status(result.statusCode || 400).json({
+        message: result.message,
+        ...(result.details ? { details: result.details } : {}),
+      });
     }
 
     return res.status(201).json({

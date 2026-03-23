@@ -23,7 +23,7 @@ export interface BookCreateRequest {
 export type BookUpdateRequest = Record<string, unknown>;
 
 export interface IncompleteBookRequest {
-  barcode: string;
+  isbn13: string;
   title: string;
   price: number;
   cover_image_url?: string;
@@ -33,6 +33,7 @@ export interface IncompleteBookRequest {
 
 export interface BarcodeLookupResponse {
   variant_id: string;
+  isbn13?: string;
   barcode: string;
   title: string;
   unit_cost: number;
@@ -66,10 +67,14 @@ export const bookService = {
     await inventoryAPI.delete(`/api/books/${id}`);
   },
 
-  findByBarcode: async (barcode: string): Promise<BarcodeLookupResponse> => {
-    const safeBarcode = encodeURIComponent(String(barcode || '').trim());
-    const response = await inventoryAPI.get(`/api/books/barcode/${safeBarcode}`);
+  findByIsbn13: async (isbn13: string): Promise<BarcodeLookupResponse> => {
+    const safeIsbn13 = encodeURIComponent(String(isbn13 || '').trim());
+    const response = await inventoryAPI.get(`/api/books/isbn13/${safeIsbn13}`);
     return response.data;
+  },
+
+  findByBarcode: async (barcode: string): Promise<BarcodeLookupResponse> => {
+    return bookService.findByIsbn13(barcode);
   },
 
   createIncomplete: async (data: IncompleteBookRequest) => {

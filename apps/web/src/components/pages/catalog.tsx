@@ -106,18 +106,23 @@ export function CatalogPage() {
     });
 
   const handleAddBook = async () => {
-    const barcode = newBook.barcode.trim();
+    const isbn13 = newBook.barcode.trim().replace(/[^0-9]/g, "");
     const title = newBook.title.trim();
 
-    if (!barcode || !title) {
-      toast.error("Barcode va title la bat buoc");
+    if (!isbn13 || !title) {
+      toast.error("ISBN13 va title la bat buoc");
+      return;
+    }
+
+    if (!/^\d{13}$/.test(isbn13)) {
+      toast.error("ISBN13 phai gom dung 13 chu so");
       return;
     }
 
     try {
       setSaving(true);
       await bookService.createIncomplete({
-        barcode,
+        isbn13,
         title,
         price: 0,
         language: "vi",

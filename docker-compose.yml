@@ -113,7 +113,7 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
-      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-llava}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-8}
