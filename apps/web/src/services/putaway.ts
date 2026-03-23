@@ -74,6 +74,12 @@ export interface PutawayCompartment {
   shelf_id: string;
   shelf_code: string;
   zone_id: string;
+  /** Max books for this compartment (from location.capacity_qty), if set */
+  capacity_qty?: number | null;
+  /** Current on_hand sum at this compartment */
+  occupied_qty?: number;
+  /** Slots left before this putaway request (max - occupied) */
+  remaining_capacity?: number;
 }
 
 export interface PutawayLocationResponse {

@@ -2,31 +2,10 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-function parseId(value) {
-  return String(value || '').trim() || null;
-}
-
-function normalizeIsbn13(value) {
-  const normalized = String(value || '').trim().replace(/[^0-9]/g, '');
-  return normalized || null;
-}
-
-function normalizeText(value) {
-  const text = String(value || '').trim();
-  return text || null;
-}
-
-function toInt(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  return Math.trunc(num);
-}
-
-function normalizeTaskType(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'outbound' || normalized === 'transfer') return normalized;
-  return null;
-}
+const { parseId, normalizeText } = require('../utils/validation');
+const { toInt } = require('../utils/validation');
+const { normalizeIsbn13 } = require('../utils/validation');
+const { normalizeTaskType } = require('../utils/validation');
 
 function canApproveRequests(user) {
   if (user?.is_superuser) return true;
@@ -642,17 +621,24 @@ async function createTransferRequest(req, res) {
         },
       });
 
+      const variantMap = new Map();
+      variants.forEach((v) => variantMap.set(v.id, v));
+
       await tx.transfer_order_items.createMany({
-        data: resolvedLines.map((line) => ({
-          transfer_order_id: order.id,
-          variant_id: line.variant_id,
-          from_location_id: line.from_location_id,
-          to_location_id: line.to_location_id,
-          quantity: line.quantity,
-          shipped_qty: 0,
-          received_qty: 0,
-          note: line.note,
-        })),
+        data: resolvedLines.map((line) => {
+          const variant = variantMap.get(line.variant_id);
+          return {
+            transfer_order_id: order.id,
+            variant_id: line.variant_id,
+            from_location_id: line.from_location_id,
+            to_location_id: line.to_location_id,
+            quantity: line.quantity,
+            shipped_qty: 0,
+            received_qty: 0,
+            unit_cost: variant ? Number(variant.unit_cost || 0) : 0,
+            note: line.note,
+          };
+        }),
       });
 
       await tx.inventory_audit_logs.create({

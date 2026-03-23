@@ -1,191 +1,313 @@
 # SmartBook System
 
-Tài liệu onboarding nhanh cho toàn bộ hệ thống SmartBook.
+Onboarding guide cho toàn bộ hệ thống SmartBook.
 
 ---
 
-## 📖 Tài liệu chính
+## Tong quan
 
-- **[Chạy Docker (Chi tiết)](docs/RUN_WITH_DOCKER.md)** ← Hướng dẫn đầy đủ với troubleshooting
-- **[Architecture Overview](docs/PROJECT_OVERVIEW.md)** ← Thiết kế tổng quan
+SmartBook la he thong quan ly thu vien tu dong, gom cac microservice chay trong Docker cung PostgreSQL lam co so du lieu.
+
+**Cac thanh phan chinh:**
+| Thanh phan | Cong nghe | Chuc nang |
+|---|---|---|
+| **Web UI** (`apps/web`) | React + Vite + Tailwind | Giao dien nguoi dung |
+| **API Gateway** (`apps/api-gateway`) | Express | Reverse proxy, dinh tuyen yeu cau |
+| **Auth Service** | Node.js + Prisma | Xac thuc, JWT |
+| **Inventory Service** | Node.js + Prisma | Quan ly sach, kho |
+| **Borrow Service** | Node.js + Prisma | Quan ly muon/tra sach |
+| **AI Service** | FastAPI + Ollama | OCR, tom tat AI |
+| **PostgreSQL** | Database | Luu tru du lieu |
+| **Ollama** | AI Models | Local LLM runtime |
+
+**Co so du lieu rieng biet** (3 database):
+- `auth_db` — Auth Service
+- `inventory_db` — Inventory Service
+- `borrow_db` — Borrow Service
 
 ---
 
-## 🚀 Khởi động nhanh (máy mới pull về)
+## Khoi dong nhanh
 
-### 1️⃣ Chuẩn bị ban đầu
+### Buoc 1 — Clone va tao file .env
 
 ```bash
-# Clone repo
 git clone https://github.com/your-org/smartbook-system.git
 cd smartbook-system
 
-# Tạo .env từ template (nếu chưa có)
-cp .env.example .env  # Linux/macOS
-# hoặc: copy .env.example .env  # Windows CMD
+# Tao .env tu template (bat buoc, cac service can .env de chay)
+copy .env.example .env     # Windows CMD
+# hoac: cp .env.example .env   # Linux/macOS
 ```
 
-### 2️⃣ Windows: chạy tự động 1 lệnh
+**Quan trong:** File `.env` chua thong tin ket noi database va JWT secret. Neu khong co, cac service se khong khoi dong duoc.
+
+### Buoc 2 — Chay script khoi dong (Windows)
 
 ```cmd
 scripts\run-all.bat
 ```
 
-Script sẽ tự làm:
-- Kiểm tra môi trường (`check-env.bat`)
-- Cài workspace dependencies (`pnpm install`)
-- Kiểm tra Docker + Docker Compose
-- Tạo `.env` nếu chưa có
-- `docker compose up -d --build`
-- Chạy db setup jobs (`auth-db-push`, `inventory-db-push`, `borrow-db-push`)
-- In trạng thái service + health check nhanh
+Script tu dong lam:
+1. Kiem tra Node.js, Docker, Docker Compose (can cai dat neu thieu)
+2. Kiem tra Docker daemon dang chay (neu chua, yeu cau mo Docker Desktop)
+3. Tao file `.env` neu chua co
+4. Cai dat pnpm (neu chua cai)
+5. Chay `pnpm install` tai workspace root (cai thu vien cho tat ca packages)
+6. Chay `docker compose up -d --build` (khoi dong PostgreSQL + tat ca service)
+7. Cho PostgreSQL san sang
+8. Chay Prisma schema push cho 3 database (`auth_db`, `inventory_db`, `borrow_db`)
 
-### 3️⃣ Linux/macOS: chạy bằng Docker Compose
+**Luu y:** Buoc 6 (`docker compose up --build`) lai dau tien se mat nhieu phut vi can tai hinh anh Docker va build code.
+
+### Buoc 3 — Truy cap ung dung
+
+Sau khi script hoan tat:
+
+| Service | Dia chi |
+|---|---|
+| Web UI | http://localhost:5173 |
+| API Gateway | http://localhost:3000 |
+| AI Service | http://localhost:8000 |
+| pgAdmin | http://localhost:8080 |
+| Ollama | http://localhost:11434 |
+
+### Cac tuy chon cua run-all.bat
+
+```cmd
+scripts\run-all.bat --skip-workspace   # Bo qua pnpm install (da cai roi)
+scripts\run-all.bat --skip-docker      # Chi chay pnpm install, khong khoi docker
+scripts\run-all.bat --reset-db         # Xoa toan bo du lieu DB cu roi khoi dong lai
+scripts\run-all.bat --skip-env         # Bo qua kiem tra moi truong
+scripts\run-all.bat --help             # Xem huong dan
+```
+
+---
+
+## Khoi dong thu cong (Linux/macOS hoac tuy chinh)
+
+### 1. Tao .env
 
 ```bash
+cp .env.example .env
+```
+
+### 2. Cai dat pnpm
+
+```bash
+npm install -g pnpm
+pnpm install
+```
+
+### 3. Khoi dong Docker
+
+```bash
+# Khoi dong toan bo stack
 docker compose up -d --build
+
+# Hoac khoi dong tung buoc de dam bao DB san sang
+docker compose up -d db
+# Choi PostgreSQL san sang
+docker compose exec db pg_isready -U user -d inventory
+
+# Khoi dong cac service con lai
+docker compose up -d --build
+
+# Chay schema push cho 3 database
 docker compose --profile dev run --rm auth-db-push
 docker compose --profile dev run --rm inventory-db-push
 docker compose --profile dev run --rm borrow-db-push
 ```
 
-### 4️⃣ Truy cập ứng dụng
-
-Sau khi script/chạy compose xong:
-- Web UI: http://localhost:5173
-- API Gateway: http://localhost:3000
-- AI Service: http://localhost:8000
-- pgAdmin: http://localhost:8080
-- Ollama: http://localhost:11434
-
 ---
 
-## ⚡ Script tự động (Windows)
-
-### `scripts\check-env.bat`
-- Kiểm tra: Node.js, npm, pnpm, Docker, Docker Compose
-- Non-interactive: trả mã lỗi nếu thiếu tool
-
-### `scripts\bootstrap-workspace.bat`
-- Cài pnpm (nếu thiếu) + `pnpm install` cho monorepo
-- Có thể chain Docker bootstrap:
-
-```cmd
-scripts\bootstrap-workspace.bat --with-docker
-```
-
-### `scripts\bootstrap.bat`
-- Script chính để máy mới pull về chạy được ngay
-- Không cần pause/manual step
-
-### `scripts\run-all.bat`
-- Entrypoint duy nhất cho máy mới pull về
-- Chạy tuần tự: check-env -> bootstrap-workspace -> bootstrap
-
-```cmd
-scripts\run-all.bat
-```
-
-Tùy chọn (nâng cao):
-```cmd
-scripts\run-all.bat --skip-workspace
-scripts\run-all.bat --skip-docker
-```
-
----
-
-## 📦 Thành phần chính
-
-| Component | Công nghệ | Chức năng |
-|-----------|-----------|---------|
-| **Web UI** (`apps/web`) | React + Vite | Frontend chính |
-| **API Gateway** (`apps/api-gateway`) | Express | Reverse proxy, định tuyến |
-| **Auth Service** | Node.js + Prisma | Xác thực, JWT, IAM |
-| **Inventory Service** | Node.js + Prisma | Quản lý sách, kho |
-| **AI Service** | FastAPI + Ollama | OCR, tóm tắt AI |
-| **PostgreSQL** | DB | Lưu trữ dữ liệu |
-| **Ollama** | AI Models | Local LLM runtime |
-
-## 🔧 Các lệnh thường dùng
+## Cac lenh thuong dung
 
 ```bash
-# Khởi động toàn bộ stack
-docker compose up -d --build
+# Khoi dong lai (sau khi da build lan dau)
+docker compose up -d
 
-# Dừng toàn bộ
-docker compose down
+# Xem trang thai cac container
+docker compose ps
 
 # Xem logs
 docker compose logs -f
+docker compose logs -f inventory-service    # Logs chi 1 service
+docker compose logs --tail=50 api-gateway   # 50 dong cuoi
 
-# Kiểm tra trạng thái
-docker compose ps
+# Dung toan bo
+docker compose down
 
-# Reset (xóa dữ liệu)
+# Dung + xoa du lieu (reset hoan toan)
 docker compose down -v
 
-# DB setup jobs
-docker compose --profile dev run --rm auth-db-push
+# Reset + khoi dong lai tu dau
+scripts\run-all.bat --reset-db
+
+# Chay lai schema push (neu thay schema Prisma)
 docker compose --profile dev run --rm inventory-db-push
+docker compose --profile dev run --rm auth-db-push
 docker compose --profile dev run --rm borrow-db-push
+
+# Rebuild 1 service cu the
+docker compose up -d --build inventory-service
 ```
 
-### 🛠️ Windows Scripts
+---
 
-| Script | Mục đích |
-|--------|---------|
-| `run-all.bat` | Entrypoint 1 lệnh setup + run toàn bộ |
-| `bootstrap.bat` | 1 lệnh tự động khởi động toàn hệ thống |
-| `bootstrap-workspace.bat` | Cài đặt workspace dependencies |
-| `check-env.bat` | Kiểm tra công cụ yêu cầu |
+## Xem logs va xu ly loi
 
-**Makefile (Linux/macOS)**:
+### Docker daemon khong chay
+
+```
+Error response from daemon: ...
+```
+
+**Cach fix:** Mo Docker Desktop, cho den khi hien thi "Docker Desktop is running", sau do chay lai script.
+
+### Port da duoc su dung
+
+```
+Bind for 0.0.0.0:5432 failed: port is already allocated
+```
+
+**Cach fix:** Dung tat ca container hien tai roi khoi dong lai:
+
 ```bash
-make setup        # Bootstrap tự động
-make up           # Khởi động
-make down         # Dừng
-make logs         # Xem logs
-make status       # Trạng thái
+docker compose down
+docker compose up -d --build
 ```
 
-## 🎯 Các port quan trọng
+Hoac kiem tra port nao dang su dung:
 
-| Port | Service | URL |
-|------|---------|-----|
-| 3000 | API Gateway | http://localhost:3000 |
-| 5173 | Web UI | http://localhost:5173 |
-| 8000 | AI Service | http://localhost:8000 |
-| 5432 | PostgreSQL | localhost:5432 |
-| 8080 | pgAdmin | http://localhost:8080 |
-| 11434 | Ollama | http://localhost:11434 |
+```bash
+netstat -ano | findstr :5432   # Windows
+lsof -i :5432                  # macOS/Linux
+```
 
----
+### Schema loi sau khi thay doi code
 
-## 📚 Tài liệu module
+Neu sua schema Prisma (`schema.prisma`) trong `services/*/prisma/schema.prisma`, can chay lai schema push:
 
-- [apps/web/README.md](apps/web/README.md) - Frontend
-- [services/inventory-service/README.md](services/inventory-service/README.md) - Inventory
-- [services/ai-service/README.md](services/ai-service/README.md) - AI/Ollama
+```bash
+docker compose --profile dev run --rm inventory-db-push
+```
 
----
+### Khoong the truy cap Web UI
 
-## 🆘 Gặp vấn đề?
+Kiem tra container co dang chay khong:
 
-→ Xem **[docs/RUN_WITH_DOCKER.md](docs/RUN_WITH_DOCKER.md)** phần "Lỗi thường gặp" để biết cách fix
+```bash
+docker compose ps smartbook-ui
+```
 
-Các lỗi phổ biến:
-- ❌ Docker daemon not running → Mở Docker Desktop
-- ❌ Port already in use → `docker compose down` rồi chạy lại
-- ❌ Missing `.env` → `cp .env.example .env`
-- ❌ DB not ready → chạy lại 3 lệnh `*-db-push` và kiểm tra `docker compose ps`
+Kiem tra logs:
 
----
+```bash
+docker compose logs smartbook-ui
+```
 
-## 📝 Ghi chú
+Neu build that bai, xoa image cu va build lai:
 
-- **`.env` file**: Không track trên git (credential/secret). Template: `.env.example`
-- **Architecture**: Xem [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)
+```bash
+docker compose down
+docker compose up -d --build
+```
 
 ---
 
-**Happy coding! 🎉**
+## Cau truc database
+
+### Database cua Auth Service (`auth_db`)
+Luu user accounts, roles, permissions, JWT tokens.
+
+### Database cua Inventory Service (`inventory_db`)
+Luu sach, tac gia, nha xuat ban, kho, vi tri, theo doi ton kho, yeu cau nhap/xuat sach, yeu cau dat hang.
+
+### Database cua Borrow Service (`borrow_db`)
+Luu thong tin muon/tra sach, theo doi trang thai cac ban sao sach.
+
+---
+
+## Cong cu phat trien
+
+### pgAdmin (quan ly PostgreSQL)
+
+Truy cap: http://localhost:8080
+
+Dang nhap: `admin@admin.com` / `admin`
+
+**Ket noi PostgreSQL tu pgAdmin:**
+- Host: `db`
+- Port: `5432`
+- Database: `inventory` (default, tao boi db-init)
+- Username: `user` (hoac gia tri cua `POSTGRES_USER` trong .env)
+- Password: `password` (hoac gia tri cua `POSTGRES_PASSWORD` trong .env)
+
+### Ollama (AI model)
+
+Truy cap: http://localhost:11434
+
+De tai model AI:
+
+```bash
+docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull llava
+```
+
+### Khi phat trien khong qua Docker
+
+Co the chay tung service truc tiep tren may (thay vi Docker):
+
+```bash
+# Khoi dong PostgreSQL
+docker compose up -d db
+
+# Cai dat phu thuoc
+pnpm install
+
+# Chay 1 service
+cd services/auth-service
+node src/index.js
+
+# Chay Web UI
+cd apps/web
+pnpm dev
+```
+
+---
+
+## Tien ich (Windows Scripts)
+
+| Script | Muc dich |
+|---|---|
+| `scripts\run-all.bat` | Entry point duy nhat — setup + run toan bo he thong |
+| `scripts\run-all.bat --reset-db` | Reset hoan toan (xoa DB, build lai) |
+
+---
+
+## De loi thuong gap
+
+| Loi | Nguyen nhan | Cach xu ly |
+|---|---|---|
+| `docker: command not found` | Docker chua cai dat | Tai Docker Desktop |
+| `Error response from daemon` | Docker daemon chua chay | Mo Docker Desktop, doi "running" roi thu lai |
+| `port is already allocated` | Port bi chiem | `docker compose down` roi `up -d --build` |
+| Services khoi dong nhung khong truy cap duoc | Healthcheck that bai | Xem logs: `docker compose logs <service>` |
+| Schema chua dong bo | Thay doi `schema.prisma` nhung chua push | Chay `docker compose --profile dev run --rm <service>-db-push` |
+| `npm install` that bai tren Windows | PowerShell policy | Mo PowerShell voi quyen Admin, chay `Set-ExecutionPolicy RemoteSigned` |
+
+---
+
+## Ghi chu
+
+- **`.env`**: Khong track tren git. Tao tu `.env.example` truoc khi chay.
+- **Package manager**: Dung `pnpm` (quy dinh trong `package.json` `packageManager` field).
+- **Node.js**: Can Node.js 20+. Kiem tra: `node --version`.
+- **Docker**: Docker Desktop (Windows/macOS) hoac Docker Engine (Linux).
+- **Database**: PostgreSQL 15 chay trong container `db`.
+- **Architecture**: Xem [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md).
+
+---
+
+**Happy coding!**

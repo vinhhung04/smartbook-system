@@ -1,50 +1,29 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
-const OUTBOUND_READY_STATUS = ['APPROVED', 'PICKING'];
-const TRANSFER_READY_STATUS = ['APPROVED', 'PICKING'];
-const SHIPPING_LOCATION_TYPE = 'SHIPPING';
-const RECEIVING_LOCATION_TYPES = ['RECEIVING', 'STAGING'];
-const REPICK_META_MARKER = 'REPICK_META';
-const REPICK_LINE_MARKER = 'REPICK_LINE';
-const SHORT_PICK_MARKER = 'SHORT_PICK';
+const OUTBOUND_READY_STATUS = ["APPROVED", "PICKING"];
+const TRANSFER_READY_STATUS = ["APPROVED", "PICKING"];
+const REPICK_META_MARKER = "REPICK_META";
+const REPICK_LINE_MARKER = "REPICK_LINE";
+const SHORT_PICK_MARKER = "SHORT_PICK";
 
-function parseId(value) {
-  return String(value || '').trim() || null;
-}
+const {
+  SHIPPING_LOCATION_TYPE,
+  RECEIVING_LOCATION_TYPES,
+} = require("../utils/constants");
+const { parseId, normalizeText } = require("../utils/validation");
+const { toInt } = require("../utils/validation");
+const { normalizeLocationType } = require("../utils/validation");
+const { normalizeTaskType } = require("../utils/validation");
+const { createMovementNumber } = require("../utils/inventory");
+const { toSerializableError } = require("../utils/inventory");
 
 function isUuid(value) {
-  const text = String(value || '').trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text);
-}
-
-function normalizeText(value) {
-  const text = String(value || '').trim();
-  return text || null;
-}
-
-function toInt(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  return Math.trunc(num);
-}
-
-function normalizeTaskType(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'outbound' || normalized === 'transfer') {
-    return normalized;
-  }
-  return null;
-}
-
-function normalizeLocationType(value) {
-  return String(value || '').trim().toUpperCase();
-}
-
-function createMovementNumber(baseTimestamp, index) {
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `MV-PICK-${baseTimestamp}-${index + 1}-${suffix}`;
+  const text = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    text,
+  );
 }
 
 function createLocationCode(prefix) {
@@ -53,16 +32,12 @@ function createLocationCode(prefix) {
   return `${prefix}-${ts}-${suffix}`;
 }
 
-function toSerializableError(error) {
-  const code = String(error?.code || '').toUpperCase();
-  const msg = String(error?.message || '').toLowerCase();
-  return code === 'P2034' || code === '40001' || msg.includes('could not serialize');
-}
-
 function isManagerOrAdmin(user) {
   if (user?.is_superuser) return true;
-  const roles = Array.isArray(user?.roles) ? user.roles.map((r) => String(r || '').toUpperCase()) : [];
-  return roles.includes('ADMIN') || roles.includes('MANAGER');
+  const roles = Array.isArray(user?.roles)
+    ? user.roles.map((r) => String(r || "").toUpperCase())
+    : [];
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
 }
 
 function getTaskPermissionScope(user) {
@@ -89,14 +64,18 @@ function countRemainingTransfer(items) {
 }
 
 function findExpectedLocationMatch(input, expectedLocation) {
-  const normalized = String(input || '').trim().toLowerCase();
+  const normalized = String(input || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return false;
 
   const options = [
     expectedLocation?.id,
     expectedLocation?.location_code,
     expectedLocation?.barcode,
-  ].filter(Boolean).map((value) => String(value).trim().toLowerCase());
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toLowerCase());
 
   return options.includes(normalized);
 }
@@ -113,40 +92,48 @@ function canAccessTask(user, assignedPickerUserId) {
 }
 
 function normalizeCode(value) {
-  return String(value || '').trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 function appendOrderNote(existingNote, marker, text) {
   const line = text ? `[${marker}] ${text}` : `[${marker}]`;
-  return [existingNote, line].filter(Boolean).join('\n');
+  return [existingNote, line].filter(Boolean).join("\n");
 }
 
 function encodeMetaValue(value) {
-  return encodeURIComponent(String(value ?? ''));
+  return encodeURIComponent(String(value ?? ""));
 }
 
 function decodeMetaValue(value) {
   try {
-    return decodeURIComponent(String(value || ''));
+    return decodeURIComponent(String(value || ""));
   } catch {
-    return String(value || '');
+    return String(value || "");
   }
 }
 
 function buildMarkerLine(marker, payload) {
   const entries = Object.entries(payload || {})
-    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .filter(
+      ([, value]) =>
+        value !== null && value !== undefined && String(value).trim() !== "",
+    )
     .map(([key, value]) => `${key}=${encodeMetaValue(value)}`);
 
   if (entries.length === 0) {
     return `[${marker}]`;
   }
 
-  return `[${marker}] ${entries.join(';')}`;
+  return `[${marker}] ${entries.join(";")}`;
 }
 
 function parseMarkerPayload(note, marker) {
-  const lines = String(note || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const lines = String(note || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
   const prefix = `[${marker}]`;
   const line = lines.find((item) => item.startsWith(prefix));
   if (!line) return null;
@@ -155,19 +142,26 @@ function parseMarkerPayload(note, marker) {
   if (!rawPayload) return {};
 
   const parsed = {};
-  rawPayload.split(';').map((item) => item.trim()).filter(Boolean).forEach((entry) => {
-    const idx = entry.indexOf('=');
-    if (idx <= 0) return;
-    const key = entry.slice(0, idx).trim();
-    const value = decodeMetaValue(entry.slice(idx + 1).trim());
-    if (key) parsed[key] = value;
-  });
+  rawPayload
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((entry) => {
+      const idx = entry.indexOf("=");
+      if (idx <= 0) return;
+      const key = entry.slice(0, idx).trim();
+      const value = decodeMetaValue(entry.slice(idx + 1).trim());
+      if (key) parsed[key] = value;
+    });
 
   return parsed;
 }
 
 function upsertMarkerLine(note, marker, payload) {
-  const lines = String(note || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const lines = String(note || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
   const prefix = `[${marker}]`;
   const markerLine = buildMarkerLine(marker, payload);
   const next = [];
@@ -188,7 +182,7 @@ function upsertMarkerLine(note, marker, payload) {
     next.push(markerLine);
   }
 
-  return next.join('\n');
+  return next.join("\n");
 }
 
 function parsePositiveInt(value) {
@@ -201,10 +195,10 @@ function parseRepickMeta(note) {
   const payload = parseMarkerPayload(note, REPICK_META_MARKER);
   if (!payload) return null;
 
-  const rootTaskType = String(payload.root_task_type || '').trim();
-  const rootTaskId = String(payload.root_task_id || '').trim();
-  const parentTaskType = String(payload.parent_task_type || '').trim();
-  const parentTaskId = String(payload.parent_task_id || '').trim();
+  const rootTaskType = String(payload.root_task_type || "").trim();
+  const rootTaskId = String(payload.root_task_id || "").trim();
+  const parentTaskType = String(payload.parent_task_type || "").trim();
+  const parentTaskId = String(payload.parent_task_id || "").trim();
 
   if (!rootTaskType || !rootTaskId || !parentTaskType || !parentTaskId) {
     return null;
@@ -216,7 +210,8 @@ function parseRepickMeta(note) {
     parent_task_type: parentTaskType,
     parent_task_id: parentTaskId,
     repick_sequence: parsePositiveInt(payload.repick_sequence),
-    repick_reason: String(payload.repick_reason || 'SHORT_PICK').trim() || 'SHORT_PICK',
+    repick_reason:
+      String(payload.repick_reason || "SHORT_PICK").trim() || "SHORT_PICK",
   };
 }
 
@@ -225,9 +220,9 @@ function parseRepickLineMeta(note) {
   if (!payload) return null;
 
   return {
-    original_line_id: String(payload.original_line_id || '').trim() || null,
-    source_task_type: String(payload.source_task_type || '').trim() || null,
-    source_task_id: String(payload.source_task_id || '').trim() || null,
+    original_line_id: String(payload.original_line_id || "").trim() || null,
+    source_task_type: String(payload.source_task_type || "").trim() || null,
+    source_task_id: String(payload.source_task_id || "").trim() || null,
     missing_qty: parsePositiveInt(payload.missing_qty),
   };
 }
@@ -239,7 +234,9 @@ function getLineShortPickedQty(note) {
 }
 
 function withLineShortPickedQty(note, qty) {
-  return upsertMarkerLine(note, SHORT_PICK_MARKER, { qty: parsePositiveInt(qty) });
+  return upsertMarkerLine(note, SHORT_PICK_MARKER, {
+    qty: parsePositiveInt(qty),
+  });
 }
 
 function calculateLineRemaining(quantity, pickedQty, note) {
@@ -250,7 +247,7 @@ function calculateLineRemaining(quantity, pickedQty, note) {
 }
 
 function getTaskClassFromNote(note) {
-  return parseRepickMeta(note) ? 'REPICK' : 'PICK';
+  return parseRepickMeta(note) ? "REPICK" : "PICK";
 }
 
 function createRepickOutboundNumber() {
@@ -266,13 +263,29 @@ function createRepickTransferNumber() {
 }
 
 function buildTaskRef(taskType, taskId) {
-  return `${String(taskType || '').trim()}:${String(taskId || '').trim()}`;
+  return `${String(taskType || "").trim()}:${String(taskId || "").trim()}`;
 }
 
-async function resolveOrCreateWarehouseLocation(tx, warehouseId, locationTypes, defaultCodePrefix, isPickable) {
+async function resolveOrCreateWarehouseLocation(
+  tx,
+  warehouseId,
+  locationTypes,
+  defaultCodePrefix,
+  isPickable,
+) {
   const normalizedTypes = Array.isArray(locationTypes)
-    ? locationTypes.map((item) => String(item || '').trim().toUpperCase()).filter(Boolean)
-    : [String(locationTypes || '').trim().toUpperCase()].filter(Boolean);
+    ? locationTypes
+        .map((item) =>
+          String(item || "")
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean)
+    : [
+        String(locationTypes || "")
+          .trim()
+          .toUpperCase(),
+      ].filter(Boolean);
 
   const found = await tx.locations.findFirst({
     where: {
@@ -280,7 +293,7 @@ async function resolveOrCreateWarehouseLocation(tx, warehouseId, locationTypes, 
       is_active: true,
       location_type: { in: normalizedTypes },
     },
-    orderBy: { location_code: 'asc' },
+    orderBy: { location_code: "asc" },
     select: {
       id: true,
       warehouse_id: true,
@@ -336,10 +349,7 @@ async function resolveWarehouseLocationByInput(warehouseId, rawInput) {
   const input = normalizeText(rawInput);
   if (!warehouseId || !input) return null;
 
-  const filters = [
-    { location_code: input },
-    { barcode: input },
-  ];
+  const filters = [{ location_code: input }, { barcode: input }];
 
   if (isUuid(input)) {
     filters.unshift({ id: input });
@@ -374,8 +384,8 @@ function chooseBestCandidate(candidates, currentLocation) {
     const availableB = Number(b.available_qty || 0);
     if (availableA !== availableB) return availableB - availableA;
 
-    const codeA = String(a.locations?.location_code || 'ZZZ');
-    const codeB = String(b.locations?.location_code || 'ZZZ');
+    const codeA = String(a.locations?.location_code || "ZZZ");
+    const codeB = String(b.locations?.location_code || "ZZZ");
     return codeA.localeCompare(codeB);
   });
 
@@ -415,7 +425,7 @@ async function resolveVariantMatchesByBarcode(tx, barcode) {
   if (!normalized) return [];
 
   const unitMatches = await tx.inventory_units.findMany({
-    where: { unit_barcode: normalized },
+    where: { unit_barcode: normalized, status: "AVAILABLE" },
     select: {
       variant_id: true,
       unit_barcode: true,
@@ -425,6 +435,7 @@ async function resolveVariantMatchesByBarcode(tx, barcode) {
 
   const variantMatches = await tx.book_variants.findMany({
     where: {
+      is_active: true,
       OR: [
         { internal_barcode: normalized },
         { isbn13: normalized },
@@ -458,27 +469,27 @@ async function resolveVariantMatchesByBarcode(tx, barcode) {
         isbn13: null,
         isbn10: null,
         internal_barcode: null,
-        matched_by: 'unit_barcode',
+        matched_by: "unit_barcode",
         match_priority: 0,
         book_id: null,
-        book_title: 'Chua co ten sach',
+        book_title: "Chua co ten sach",
       });
     }
   });
 
   variantMatches.forEach((row) => {
     const key = String(row.id);
-    let matchedBy = 'sku';
+    let matchedBy = "sku";
     let priority = 4;
 
     if (row.internal_barcode === normalized) {
-      matchedBy = 'internal_barcode';
+      matchedBy = "internal_barcode";
       priority = 1;
     } else if (row.isbn13 === normalized) {
-      matchedBy = 'isbn13';
+      matchedBy = "isbn13";
       priority = 2;
     } else if (row.isbn10 === normalized) {
-      matchedBy = 'isbn10';
+      matchedBy = "isbn10";
       priority = 3;
     }
 
@@ -493,25 +504,31 @@ async function resolveVariantMatchesByBarcode(tx, barcode) {
         matched_by: matchedBy,
         match_priority: priority,
         book_id: row.books?.id || null,
-        book_title: row.books?.title || 'Chua co ten sach',
+        book_title: row.books?.title || "Chua co ten sach",
       });
     } else if (current) {
       current.sku = current.sku || row.sku;
       current.isbn13 = current.isbn13 || row.isbn13;
       current.isbn10 = current.isbn10 || row.isbn10;
-      current.internal_barcode = current.internal_barcode || row.internal_barcode;
+      current.internal_barcode =
+        current.internal_barcode || row.internal_barcode;
       current.book_id = current.book_id || row.books?.id || null;
-      current.book_title = current.book_title || row.books?.title || 'Chua co ten sach';
+      current.book_title =
+        current.book_title || row.books?.title || "Chua co ten sach";
     }
   });
 
-  return Array.from(map.values()).sort((a, b) => a.match_priority - b.match_priority || a.variant_id.localeCompare(b.variant_id));
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      a.match_priority - b.match_priority ||
+      a.variant_id.localeCompare(b.variant_id),
+  );
 }
 
 async function resolveTaskOrderNumber(dbClient, taskType, taskId) {
   if (!taskType || !taskId) return null;
 
-  if (taskType === 'outbound') {
+  if (taskType === "outbound") {
     const order = await dbClient.outbound_orders.findUnique({
       where: { id: taskId },
       select: { outbound_number: true },
@@ -519,7 +536,7 @@ async function resolveTaskOrderNumber(dbClient, taskType, taskId) {
     return order?.outbound_number || null;
   }
 
-  if (taskType === 'transfer') {
+  if (taskType === "transfer") {
     const order = await dbClient.transfer_orders.findUnique({
       where: { id: taskId },
       select: { transfer_number: true },
@@ -531,51 +548,59 @@ async function resolveTaskOrderNumber(dbClient, taskType, taskId) {
 }
 
 function buildRepickOrderNote(meta) {
-  const withMeta = upsertMarkerLine('', REPICK_META_MARKER, meta);
-  return appendOrderNote(withMeta, 'REPICK_REASON', meta.repick_reason || 'SHORT_PICK');
+  const withMeta = upsertMarkerLine("", REPICK_META_MARKER, meta);
+  return appendOrderNote(
+    withMeta,
+    "REPICK_REASON",
+    meta.repick_reason || "SHORT_PICK",
+  );
 }
 
 function buildRepickLineNote(meta) {
-  return upsertMarkerLine('', REPICK_LINE_MARKER, meta);
+  return upsertMarkerLine("", REPICK_LINE_MARKER, meta);
 }
 
 function mapOutboundShortages(lines, taskType, taskId) {
-  return (lines || []).map((line) => {
-    const missingQty = getLineShortPickedQty(line.note);
-    const repickLineMeta = parseRepickLineMeta(line.note);
-    return {
-      variant_id: line.variant_id,
-      source_location_id: line.source_location_id || null,
-      quantity: missingQty,
-      original_line_id: repickLineMeta?.original_line_id || line.id,
-      source_task_type: repickLineMeta?.source_task_type || taskType,
-      source_task_id: repickLineMeta?.source_task_id || taskId,
-    };
-  }).filter((line) => line.quantity > 0);
+  return (lines || [])
+    .map((line) => {
+      const missingQty = getLineShortPickedQty(line.note);
+      const repickLineMeta = parseRepickLineMeta(line.note);
+      return {
+        variant_id: line.variant_id,
+        source_location_id: line.source_location_id || null,
+        quantity: missingQty,
+        original_line_id: repickLineMeta?.original_line_id || line.id,
+        source_task_type: repickLineMeta?.source_task_type || taskType,
+        source_task_id: repickLineMeta?.source_task_id || taskId,
+      };
+    })
+    .filter((line) => line.quantity > 0);
 }
 
 function mapTransferShortages(lines, taskType, taskId) {
-  return (lines || []).map((line) => {
-    const missingQty = getLineShortPickedQty(line.note);
-    const repickLineMeta = parseRepickLineMeta(line.note);
-    return {
-      variant_id: line.variant_id,
-      from_location_id: line.from_location_id || null,
-      to_location_id: line.to_location_id || null,
-      quantity: missingQty,
-      original_line_id: repickLineMeta?.original_line_id || line.id,
-      source_task_type: repickLineMeta?.source_task_type || taskType,
-      source_task_id: repickLineMeta?.source_task_id || taskId,
-    };
-  }).filter((line) => line.quantity > 0);
+  return (lines || [])
+    .map((line) => {
+      const missingQty = getLineShortPickedQty(line.note);
+      const repickLineMeta = parseRepickLineMeta(line.note);
+      return {
+        variant_id: line.variant_id,
+        from_location_id: line.from_location_id || null,
+        to_location_id: line.to_location_id || null,
+        quantity: missingQty,
+        original_line_id: repickLineMeta?.original_line_id || line.id,
+        source_task_type: repickLineMeta?.source_task_type || taskType,
+        source_task_id: repickLineMeta?.source_task_id || taskId,
+      };
+    })
+    .filter((line) => line.quantity > 0);
 }
 
 async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
-  const shortages = mapOutboundShortages(lines, 'outbound', order.id);
+  const shortages = mapOutboundShortages(lines, "outbound", order.id);
   if (shortages.length === 0) return null;
 
   const parentMeta = parseRepickMeta(order.note);
-  const rootTaskType = parentMeta?.root_task_type || 'outbound';
+  const rootTaskType = parentMeta?.root_task_type || "outbound";
   const rootTaskId = parentMeta?.root_task_id || order.id;
   const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
 
@@ -583,10 +608,12 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
     where: {
       note: { contains: `[${REPICK_META_MARKER}]` },
       AND: [
-        { note: { contains: `parent_task_type=${encodeMetaValue('outbound')}` } },
+        {
+          note: { contains: `parent_task_type=${encodeMetaValue("outbound")}` },
+        },
         { note: { contains: `parent_task_id=${encodeMetaValue(order.id)}` } },
       ],
-      status: { not: 'CANCELLED' },
+      status: { not: "CANCELLED" },
     },
     select: {
       id: true,
@@ -596,7 +623,7 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
 
   if (existingChild) {
     return {
-      task_type: 'outbound',
+      task_type: "outbound",
       task_id: existingChild.id,
       order_number: existingChild.outbound_number,
       repick_sequence: repickSequence,
@@ -607,18 +634,18 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
   const repickMeta = {
     root_task_type: rootTaskType,
     root_task_id: rootTaskId,
-    parent_task_type: 'outbound',
+    parent_task_type: "outbound",
     parent_task_id: order.id,
     repick_sequence: repickSequence,
-    repick_reason: 'SHORT_PICK',
+    repick_reason: "SHORT_PICK",
   };
 
   const createdOrder = await tx.outbound_orders.create({
     data: {
       outbound_number: createRepickOutboundNumber(),
       warehouse_id: order.warehouse_id,
-      outbound_type: 'MANUAL',
-      status: 'APPROVED',
+      outbound_type: "MANUAL",
+      status: "APPROVED",
       requested_by_user_id: order.requested_by_user_id || actorUserId,
       approved_by_user_id: actorUserId,
       external_reference: `REPICK:${order.outbound_number}`,
@@ -649,11 +676,11 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
   await tx.inventory_audit_logs.create({
     data: {
       actor_user_id: actorUserId,
-      action_name: 'REPICK_ORDER_CREATED',
-      entity_type: 'OUTBOUND_ORDER',
+      action_name: "REPICK_ORDER_CREATED",
+      entity_type: "OUTBOUND_ORDER",
       entity_id: createdOrder.id,
       after_data: {
-        parent_task_type: 'outbound',
+        parent_task_type: "outbound",
         parent_task_id: order.id,
         root_task_type: rootTaskType,
         root_task_id: rootTaskId,
@@ -664,7 +691,7 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
   });
 
   return {
-    task_type: 'outbound',
+    task_type: "outbound",
     task_id: createdOrder.id,
     order_number: createdOrder.outbound_number,
     repick_sequence: repickSequence,
@@ -673,11 +700,11 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
 }
 
 async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
-  const shortages = mapTransferShortages(lines, 'transfer', order.id);
+  const shortages = mapTransferShortages(lines, "transfer", order.id);
   if (shortages.length === 0) return null;
 
   const parentMeta = parseRepickMeta(order.note);
-  const rootTaskType = parentMeta?.root_task_type || 'transfer';
+  const rootTaskType = parentMeta?.root_task_type || "transfer";
   const rootTaskId = parentMeta?.root_task_id || order.id;
   const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
 
@@ -685,10 +712,12 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
     where: {
       note: { contains: `[${REPICK_META_MARKER}]` },
       AND: [
-        { note: { contains: `parent_task_type=${encodeMetaValue('transfer')}` } },
+        {
+          note: { contains: `parent_task_type=${encodeMetaValue("transfer")}` },
+        },
         { note: { contains: `parent_task_id=${encodeMetaValue(order.id)}` } },
       ],
-      status: { not: 'CANCELLED' },
+      status: { not: "CANCELLED" },
     },
     select: {
       id: true,
@@ -698,7 +727,7 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
 
   if (existingChild) {
     return {
-      task_type: 'transfer',
+      task_type: "transfer",
       task_id: existingChild.id,
       order_number: existingChild.transfer_number,
       repick_sequence: repickSequence,
@@ -709,10 +738,10 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
   const repickMeta = {
     root_task_type: rootTaskType,
     root_task_id: rootTaskId,
-    parent_task_type: 'transfer',
+    parent_task_type: "transfer",
     parent_task_id: order.id,
     repick_sequence: repickSequence,
-    repick_reason: 'SHORT_PICK',
+    repick_reason: "SHORT_PICK",
   };
 
   const createdOrder = await tx.transfer_orders.create({
@@ -720,7 +749,7 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
       transfer_number: createRepickTransferNumber(),
       from_warehouse_id: order.from_warehouse_id,
       to_warehouse_id: order.to_warehouse_id,
-      status: 'APPROVED',
+      status: "APPROVED",
       requested_by_user_id: order.requested_by_user_id || actorUserId,
       approved_by_user_id: actorUserId,
       note: buildRepickOrderNote(repickMeta),
@@ -752,11 +781,11 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
   await tx.inventory_audit_logs.create({
     data: {
       actor_user_id: actorUserId,
-      action_name: 'REPICK_ORDER_CREATED',
-      entity_type: 'TRANSFER_ORDER',
+      action_name: "REPICK_ORDER_CREATED",
+      entity_type: "TRANSFER_ORDER",
       entity_id: createdOrder.id,
       after_data: {
-        parent_task_type: 'transfer',
+        parent_task_type: "transfer",
         parent_task_id: order.id,
         root_task_type: rootTaskType,
         root_task_id: rootTaskId,
@@ -767,7 +796,7 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
   });
 
   return {
-    task_type: 'transfer',
+    task_type: "transfer",
     task_id: createdOrder.id,
     order_number: createdOrder.transfer_number,
     repick_sequence: repickSequence,
@@ -775,93 +804,108 @@ async function maybeCreateRepickFromTransfer(tx, order, lines, actorUserId) {
   };
 }
 
-async function ensureRepicksFromCompletedShortages() {
-  await prisma.$transaction(async (tx) => {
-    const [outboundParents, transferParents] = await Promise.all([
-      tx.outbound_orders.findMany({
-        where: {
-          status: 'READY_FOR_OUTBOUND',
-          outbound_order_items: {
-            some: {
-              note: {
-                contains: `[${SHORT_PICK_MARKER}]`,
+async function ensureRepicksFromShortages() {
+  await prisma.$transaction(
+    async (tx) => {
+      const [outboundParents, transferParents] = await Promise.all([
+        tx.outbound_orders.findMany({
+          where: {
+            status: "READY_FOR_OUTBOUND",
+            outbound_order_items: {
+              some: {
+                note: {
+                  contains: `[${SHORT_PICK_MARKER}]`,
+                },
               },
             },
           },
-        },
-        select: {
-          id: true,
-          outbound_number: true,
-          warehouse_id: true,
-          requested_by_user_id: true,
-          processed_by_user_id: true,
-          note: true,
-          outbound_order_items: {
-            select: {
-              id: true,
-              variant_id: true,
-              source_location_id: true,
-              quantity: true,
-              processed_qty: true,
-              note: true,
-            },
-          },
-        },
-        take: 20,
-      }),
-      tx.transfer_orders.findMany({
-        where: {
-          status: 'READY_FOR_OUTBOUND',
-          transfer_order_items: {
-            some: {
-              note: {
-                contains: `[${SHORT_PICK_MARKER}]`,
+          select: {
+            id: true,
+            outbound_number: true,
+            warehouse_id: true,
+            requested_by_user_id: true,
+            processed_by_user_id: true,
+            note: true,
+            outbound_order_items: {
+              select: {
+                id: true,
+                variant_id: true,
+                source_location_id: true,
+                quantity: true,
+                processed_qty: true,
+                note: true,
               },
             },
           },
-        },
-        select: {
-          id: true,
-          transfer_number: true,
-          from_warehouse_id: true,
-          to_warehouse_id: true,
-          requested_by_user_id: true,
-          shipped_by_user_id: true,
-          note: true,
-          transfer_order_items: {
-            select: {
-              id: true,
-              variant_id: true,
-              from_location_id: true,
-              to_location_id: true,
-              quantity: true,
-              shipped_qty: true,
-              note: true,
+          take: 20,
+        }),
+        tx.transfer_orders.findMany({
+          where: {
+            status: "READY_FOR_OUTBOUND",
+            transfer_order_items: {
+              some: {
+                note: {
+                  contains: `[${SHORT_PICK_MARKER}]`,
+                },
+              },
             },
           },
-        },
-        take: 20,
-      }),
-    ]);
+          select: {
+            id: true,
+            transfer_number: true,
+            from_warehouse_id: true,
+            to_warehouse_id: true,
+            requested_by_user_id: true,
+            shipped_by_user_id: true,
+            note: true,
+            transfer_order_items: {
+              select: {
+                id: true,
+                variant_id: true,
+                from_location_id: true,
+                to_location_id: true,
+                quantity: true,
+                shipped_qty: true,
+                note: true,
+              },
+            },
+          },
+          take: 20,
+        }),
+      ]);
 
-    for (const order of outboundParents) {
-      const actorUserId = parseId(order.processed_by_user_id) || parseId(order.requested_by_user_id);
-      await maybeCreateRepickFromOutbound(tx, order, order.outbound_order_items || [], actorUserId);
-    }
+      for (const order of outboundParents) {
+        const actorUserId =
+          parseId(order.processed_by_user_id) ||
+          parseId(order.requested_by_user_id);
+        await maybeCreateRepickFromOutbound(
+          tx,
+          order,
+          order.outbound_order_items || [],
+          actorUserId,
+        );
+      }
 
-    for (const order of transferParents) {
-      const actorUserId = parseId(order.shipped_by_user_id) || parseId(order.requested_by_user_id);
-      await maybeCreateRepickFromTransfer(tx, order, order.transfer_order_items || [], actorUserId);
-    }
-  }, { isolationLevel: 'Serializable' });
+      for (const order of transferParents) {
+        const actorUserId =
+          parseId(order.shipped_by_user_id) ||
+          parseId(order.requested_by_user_id);
+        await maybeCreateRepickFromTransfer(
+          tx,
+          order,
+          order.transfer_order_items || [],
+          actorUserId,
+        );
+      }
+    },
+    { isolationLevel: "Serializable" },
+  );
 }
 
 async function listPickingTasks(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
 
   try {
-    await ensureRepicksFromCompletedShortages();
-
     const [outboundOrders, transferOrders] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
@@ -881,7 +925,7 @@ async function listPickingTasks(req, res) {
             },
           },
         },
-        orderBy: { requested_at: 'asc' },
+        orderBy: { requested_at: "asc" },
       }),
       prisma.transfer_orders.findMany({
         where: {
@@ -904,24 +948,31 @@ async function listPickingTasks(req, res) {
             },
           },
         },
-        orderBy: { requested_at: 'asc' },
+        orderBy: { requested_at: "asc" },
       }),
     ]);
 
     const tasks = [];
 
     outboundOrders.forEach((order) => {
-      const remaining = countRemainingOutbound(order.outbound_order_items || []);
-      const totalQty = (order.outbound_order_items || []).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+      const remaining = countRemainingOutbound(
+        order.outbound_order_items || [],
+      );
+      const totalQty = (order.outbound_order_items || []).reduce(
+        (sum, line) => sum + Number(line.quantity || 0),
+        0,
+      );
       const assignedPicker = parseId(order.processed_by_user_id);
       const repickMeta = parseRepickMeta(order.note);
       const taskClass = getTaskClassFromNote(order.note);
 
       tasks.push({
-        task_type: 'outbound',
+        task_type: "outbound",
         task_id: order.id,
         order_number: order.outbound_number,
-        order_type: repickMeta ? 'OUTBOUND_REPICK' : `OUTBOUND_${order.outbound_type}`,
+        order_type: repickMeta
+          ? "OUTBOUND_REPICK"
+          : `OUTBOUND_${order.outbound_type}`,
         task_class: taskClass,
         repick_sequence: repickMeta?.repick_sequence || null,
         repick_reason: repickMeta?.repick_reason || null,
@@ -946,17 +997,24 @@ async function listPickingTasks(req, res) {
     });
 
     transferOrders.forEach((order) => {
-      const remaining = countRemainingTransfer(order.transfer_order_items || []);
-      const totalQty = (order.transfer_order_items || []).reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+      const remaining = countRemainingTransfer(
+        order.transfer_order_items || [],
+      );
+      const totalQty = (order.transfer_order_items || []).reduce(
+        (sum, line) => sum + Number(line.quantity || 0),
+        0,
+      );
       const assignedPicker = parseId(order.shipped_by_user_id);
       const repickMeta = parseRepickMeta(order.note);
       const taskClass = getTaskClassFromNote(order.note);
 
       tasks.push({
-        task_type: 'transfer',
+        task_type: "transfer",
         task_id: order.id,
         order_number: order.transfer_number,
-        order_type: repickMeta ? 'WAREHOUSE_TRANSFER_REPICK' : 'WAREHOUSE_TRANSFER',
+        order_type: repickMeta
+          ? "WAREHOUSE_TRANSFER_REPICK"
+          : "WAREHOUSE_TRANSFER",
         task_class: taskClass,
         repick_sequence: repickMeta?.repick_sequence || null,
         repick_reason: repickMeta?.repick_reason || null,
@@ -965,11 +1023,19 @@ async function listPickingTasks(req, res) {
         parent_task_type: repickMeta?.parent_task_type || null,
         parent_task_id: repickMeta?.parent_task_id || null,
         source_warehouse_id: order.from_warehouse_id,
-        source_warehouse_code: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code || null,
-        source_warehouse_name: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.name || null,
+        source_warehouse_code:
+          order.warehouses_transfer_orders_from_warehouse_idTowarehouses
+            ?.code || null,
+        source_warehouse_name:
+          order.warehouses_transfer_orders_from_warehouse_idTowarehouses
+            ?.name || null,
         target_warehouse_id: order.to_warehouse_id,
-        target_warehouse_code: order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code || null,
-        target_warehouse_name: order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name || null,
+        target_warehouse_code:
+          order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code ||
+          null,
+        target_warehouse_name:
+          order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name ||
+          null,
         status: order.status,
         line_count: order.transfer_order_items.length,
         total_quantity: totalQty,
@@ -987,14 +1053,21 @@ async function listPickingTasks(req, res) {
       .filter((task) => {
         if (scope.canManageAssignment) return true;
         if (!scope.currentUserId) return false;
-        return !task.assigned_picker_user_id || task.assigned_picker_user_id === scope.currentUserId;
+        return (
+          !task.assigned_picker_user_id ||
+          task.assigned_picker_user_id === scope.currentUserId
+        );
       })
-      .sort((a, b) => new Date(a.requested_at).getTime() - new Date(b.requested_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(a.requested_at).getTime() -
+          new Date(b.requested_at).getTime(),
+      );
 
     return res.json({ data: filtered });
   } catch (error) {
-    console.error('Error while listing picking tasks:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while listing picking tasks:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -1004,25 +1077,27 @@ async function claimPickingTask(req, res) {
   const requestedPickerUserId = parseId(req.body?.picker_user_id);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: 'Invalid task type or task id' });
+    return res.status(400).json({ message: "Invalid task type or task id" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
   const currentUserId = scope.currentUserId;
 
   if (!currentUserId) {
-    return res.status(401).json({ message: 'Invalid current user context' });
+    return res.status(401).json({ message: "Invalid current user context" });
   }
 
   const pickerUserId = requestedPickerUserId || currentUserId;
 
   if (!scope.canManageAssignment && pickerUserId !== currentUserId) {
-    return res.status(403).json({ message: 'You can only claim task for yourself' });
+    return res
+      .status(403)
+      .json({ message: "You can only claim task for yourself" });
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      if (taskType === 'outbound') {
+      if (taskType === "outbound") {
         const order = await tx.outbound_orders.findUnique({
           where: { id: taskId },
           select: {
@@ -1032,28 +1107,45 @@ async function claimPickingTask(req, res) {
           },
         });
 
-        if (!order) return { invalid: true, statusCode: 404, message: 'Outbound order not found' };
+        if (!order)
+          return {
+            invalid: true,
+            statusCode: 404,
+            message: "Outbound order not found",
+          };
         if (!OUTBOUND_READY_STATUS.includes(order.status)) {
-          return { invalid: true, statusCode: 400, message: 'Outbound order is not ready for picking' };
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: "Outbound order is not ready for picking",
+          };
         }
 
-        if (order.processed_by_user_id && order.processed_by_user_id !== pickerUserId && !scope.canManageAssignment) {
-          return { invalid: true, statusCode: 409, message: 'Task is already assigned to another picker' };
+        if (
+          order.processed_by_user_id &&
+          order.processed_by_user_id !== pickerUserId &&
+          !scope.canManageAssignment
+        ) {
+          return {
+            invalid: true,
+            statusCode: 409,
+            message: "Task is already assigned to another picker",
+          };
         }
 
         const updated = await tx.outbound_orders.update({
           where: { id: taskId },
           data: {
             processed_by_user_id: pickerUserId,
-            status: 'PICKING',
+            status: "PICKING",
           },
         });
 
         await tx.inventory_audit_logs.create({
           data: {
             actor_user_id: currentUserId,
-            action_name: 'PICK_TASK_CLAIM',
-            entity_type: 'OUTBOUND_ORDER',
+            action_name: "PICK_TASK_CLAIM",
+            entity_type: "OUTBOUND_ORDER",
             entity_id: taskId,
             after_data: {
               picker_user_id: pickerUserId,
@@ -1063,7 +1155,7 @@ async function claimPickingTask(req, res) {
 
         return {
           data: {
-            task_type: 'outbound',
+            task_type: "outbound",
             task_id: updated.id,
             assigned_picker_user_id: updated.processed_by_user_id,
             status: updated.status,
@@ -1080,28 +1172,45 @@ async function claimPickingTask(req, res) {
         },
       });
 
-      if (!order) return { invalid: true, statusCode: 404, message: 'Transfer order not found' };
+      if (!order)
+        return {
+          invalid: true,
+          statusCode: 404,
+          message: "Transfer order not found",
+        };
       if (!TRANSFER_READY_STATUS.includes(order.status)) {
-        return { invalid: true, statusCode: 400, message: 'Transfer order is not ready for picking' };
+        return {
+          invalid: true,
+          statusCode: 400,
+          message: "Transfer order is not ready for picking",
+        };
       }
 
-      if (order.shipped_by_user_id && order.shipped_by_user_id !== pickerUserId && !scope.canManageAssignment) {
-        return { invalid: true, statusCode: 409, message: 'Task is already assigned to another picker' };
+      if (
+        order.shipped_by_user_id &&
+        order.shipped_by_user_id !== pickerUserId &&
+        !scope.canManageAssignment
+      ) {
+        return {
+          invalid: true,
+          statusCode: 409,
+          message: "Task is already assigned to another picker",
+        };
       }
 
       const updated = await tx.transfer_orders.update({
         where: { id: taskId },
         data: {
           shipped_by_user_id: pickerUserId,
-          status: 'PICKING',
+          status: "PICKING",
         },
       });
 
       await tx.inventory_audit_logs.create({
         data: {
           actor_user_id: currentUserId,
-          action_name: 'PICK_TASK_CLAIM',
-          entity_type: 'TRANSFER_ORDER',
+          action_name: "PICK_TASK_CLAIM",
+          entity_type: "TRANSFER_ORDER",
           entity_id: taskId,
           after_data: {
             picker_user_id: pickerUserId,
@@ -1111,7 +1220,7 @@ async function claimPickingTask(req, res) {
 
       return {
         data: {
-          task_type: 'transfer',
+          task_type: "transfer",
           task_id: updated.id,
           assigned_picker_user_id: updated.shipped_by_user_id,
           status: updated.status,
@@ -1120,13 +1229,15 @@ async function claimPickingTask(req, res) {
     });
 
     if (result.invalid) {
-      return res.status(result.statusCode || 400).json({ message: result.message });
+      return res
+        .status(result.statusCode || 400)
+        .json({ message: result.message });
     }
 
     return res.json(result.data);
   } catch (error) {
-    console.error('Error while claiming picking task:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while claiming picking task:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -1136,11 +1247,11 @@ async function getPickingTaskDetail(req, res) {
   const currentLocationInput = normalizeText(req.query.current_location_input);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: 'Invalid task type or task id' });
+    return res.status(400).json({ message: "Invalid task type or task id" });
   }
 
   try {
-    if (taskType === 'outbound') {
+    if (taskType === "outbound") {
       const order = await prisma.outbound_orders.findUnique({
         where: { id: taskId },
         include: {
@@ -1170,27 +1281,34 @@ async function getPickingTaskDetail(req, res) {
                 },
               },
             },
-            orderBy: { id: 'asc' },
+            orderBy: { id: "asc" },
           },
         },
       });
 
       if (!order) {
-        return res.status(404).json({ message: 'Outbound order not found' });
+        return res.status(404).json({ message: "Outbound order not found" });
       }
 
       if (!canAccessTask(req.user || {}, order.processed_by_user_id)) {
-        return res.status(403).json({ message: 'Forbidden' });
+        return res.status(403).json({ message: "Forbidden" });
       }
 
-      const currentLocation = await resolveWarehouseLocationByInput(order.warehouse_id, currentLocationInput);
+      const currentLocation = await resolveWarehouseLocationByInput(
+        order.warehouse_id,
+        currentLocationInput,
+      );
 
       const lines = [];
       for (const line of order.outbound_order_items) {
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.processed_qty || 0);
         const shortPickedQty = getLineShortPickedQty(line.note);
-        const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
+        const remainingQty = calculateLineRemaining(
+          requestedQty,
+          pickedQty,
+          line.note,
+        );
         const repickLineMeta = parseRepickLineMeta(line.note);
 
         let sourceLocationId = line.source_location_id || null;
@@ -1217,16 +1335,28 @@ async function getPickingTaskDetail(req, res) {
         }
 
         let candidateLocationId = null;
-        if (remainingQty > 0 && (!sourceLocationId || sourceAvailableHint <= 0)) {
-          const candidateBalance = await findBestSourceBalance(order.warehouse_id, line.variant_id, currentLocation);
+        if (
+          remainingQty > 0 &&
+          (!sourceLocationId || sourceAvailableHint <= 0)
+        ) {
+          const candidateBalance = await findBestSourceBalance(
+            order.warehouse_id,
+            line.variant_id,
+            currentLocation,
+          );
           if (candidateBalance?.locations) {
-            if (!sourceLocationId || candidateBalance.location_id !== sourceLocationId) {
+            if (
+              !sourceLocationId ||
+              candidateBalance.location_id !== sourceLocationId
+            ) {
               candidateLocationId = candidateBalance.location_id;
             }
             sourceLocationId = candidateBalance.location_id;
-            sourceLocationCode = candidateBalance.locations.location_code || null;
+            sourceLocationCode =
+              candidateBalance.locations.location_code || null;
             sourceLocationBarcode = candidateBalance.locations.barcode || null;
-            sourceLocationType = candidateBalance.locations.location_type || null;
+            sourceLocationType =
+              candidateBalance.locations.location_type || null;
             sourceLocationZone = candidateBalance.locations.zone || null;
             sourceLocationShelf = candidateBalance.locations.shelf || null;
             sourceAvailableHint = Number(candidateBalance.available_qty || 0);
@@ -1247,8 +1377,13 @@ async function getPickingTaskDetail(req, res) {
           sku: line.book_variants?.sku || null,
           isbn13: line.book_variants?.isbn13 || null,
           isbn10: line.book_variants?.isbn10 || null,
-          barcode: line.book_variants?.internal_barcode || line.book_variants?.isbn13 || line.book_variants?.isbn10 || line.book_variants?.sku || null,
-          book_title: line.book_variants?.books?.title || 'Chua co ten sach',
+          barcode:
+            line.book_variants?.internal_barcode ||
+            line.book_variants?.isbn13 ||
+            line.book_variants?.isbn10 ||
+            line.book_variants?.sku ||
+            null,
+          book_title: line.book_variants?.books?.title || "Chua co ten sach",
           requested_qty: requestedQty,
           picked_qty: pickedQty,
           short_picked_qty: shortPickedQty,
@@ -1259,16 +1394,26 @@ async function getPickingTaskDetail(req, res) {
       }
 
       lines.sort((a, b) => {
-        const proximityA = buildLocationProximityRank({
-          zone: a.source_location_zone,
-          shelf: a.source_location_shelf,
-        }, currentLocation);
-        const proximityB = buildLocationProximityRank({
-          zone: b.source_location_zone,
-          shelf: b.source_location_shelf,
-        }, currentLocation);
+        const proximityA = buildLocationProximityRank(
+          {
+            zone: a.source_location_zone,
+            shelf: a.source_location_shelf,
+          },
+          currentLocation,
+        );
+        const proximityB = buildLocationProximityRank(
+          {
+            zone: b.source_location_zone,
+            shelf: b.source_location_shelf,
+          },
+          currentLocation,
+        );
 
-        if (a.remaining_qty > 0 && b.remaining_qty > 0 && proximityA !== proximityB) {
+        if (
+          a.remaining_qty > 0 &&
+          b.remaining_qty > 0 &&
+          proximityA !== proximityB
+        ) {
           return proximityA - proximityB;
         }
 
@@ -1278,18 +1423,28 @@ async function getPickingTaskDetail(req, res) {
           return availB - availA;
         }
 
-        const aCode = String(a.source_location_code || 'ZZZ');
-        const bCode = String(b.source_location_code || 'ZZZ');
-        return aCode.localeCompare(bCode) || a.book_title.localeCompare(b.book_title);
+        const aCode = String(a.source_location_code || "ZZZ");
+        const bCode = String(b.source_location_code || "ZZZ");
+        return (
+          aCode.localeCompare(bCode) || a.book_title.localeCompare(b.book_title)
+        );
       });
 
       const remainingLines = lines.filter((line) => line.remaining_qty > 0);
       const repickMeta = parseRepickMeta(order.note);
       const rootOrderNumber = repickMeta
-        ? await resolveTaskOrderNumber(prisma, repickMeta.root_task_type, repickMeta.root_task_id)
+        ? await resolveTaskOrderNumber(
+            prisma,
+            repickMeta.root_task_type,
+            repickMeta.root_task_id,
+          )
         : null;
       const parentOrderNumber = repickMeta
-        ? await resolveTaskOrderNumber(prisma, repickMeta.parent_task_type, repickMeta.parent_task_id)
+        ? await resolveTaskOrderNumber(
+            prisma,
+            repickMeta.parent_task_type,
+            repickMeta.parent_task_id,
+          )
         : null;
 
       const preparedCurrentLine = remainingLines[0] || null;
@@ -1297,16 +1452,19 @@ async function getPickingTaskDetail(req, res) {
         await prisma.outbound_order_items.update({
           where: { id: preparedCurrentLine.line_id },
           data: {
-            source_location_id: preparedCurrentLine.candidate_source_location_id,
+            source_location_id:
+              preparedCurrentLine.candidate_source_location_id,
           },
         });
       }
 
       return res.json({
-        task_type: 'outbound',
+        task_type: "outbound",
         task_id: order.id,
         order_number: order.outbound_number,
-        order_type: repickMeta ? 'OUTBOUND_REPICK' : `OUTBOUND_${order.outbound_type}`,
+        order_type: repickMeta
+          ? "OUTBOUND_REPICK"
+          : `OUTBOUND_${order.outbound_type}`,
         task_class: getTaskClassFromNote(order.note),
         repick_sequence: repickMeta?.repick_sequence || null,
         repick_reason: repickMeta?.repick_reason || null,
@@ -1329,7 +1487,10 @@ async function getPickingTaskDetail(req, res) {
         lines,
         current_line: preparedCurrentLine,
         remaining_line_count: remainingLines.length,
-        remaining_quantity: remainingLines.reduce((sum, line) => sum + line.remaining_qty, 0),
+        remaining_quantity: remainingLines.reduce(
+          (sum, line) => sum + line.remaining_qty,
+          0,
+        ),
       });
     }
 
@@ -1372,35 +1533,52 @@ async function getPickingTaskDetail(req, res) {
               },
             },
           },
-          orderBy: { id: 'asc' },
+          orderBy: { id: "asc" },
         },
       },
     });
 
     if (!order) {
-      return res.status(404).json({ message: 'Transfer order not found' });
+      return res.status(404).json({ message: "Transfer order not found" });
     }
 
     if (!canAccessTask(req.user || {}, order.shipped_by_user_id)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: "Forbidden" });
     }
 
-    const currentLocation = await resolveWarehouseLocationByInput(order.from_warehouse_id, currentLocationInput);
+    const currentLocation = await resolveWarehouseLocationByInput(
+      order.from_warehouse_id,
+      currentLocationInput,
+    );
 
     const lines = [];
     for (const line of order.transfer_order_items) {
       const requestedQty = Number(line.quantity || 0);
       const pickedQty = Number(line.shipped_qty || 0);
       const shortPickedQty = getLineShortPickedQty(line.note);
-      const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
+      const remainingQty = calculateLineRemaining(
+        requestedQty,
+        pickedQty,
+        line.note,
+      );
       const repickLineMeta = parseRepickLineMeta(line.note);
 
       let sourceLocationId = line.from_location_id || null;
-      let sourceLocationCode = line.locations_transfer_order_items_from_location_idTolocations?.location_code || null;
-      let sourceLocationBarcode = line.locations_transfer_order_items_from_location_idTolocations?.barcode || null;
-      let sourceLocationType = line.locations_transfer_order_items_from_location_idTolocations?.location_type || null;
-      let sourceLocationZone = line.locations_transfer_order_items_from_location_idTolocations?.zone || null;
-      let sourceLocationShelf = line.locations_transfer_order_items_from_location_idTolocations?.shelf || null;
+      let sourceLocationCode =
+        line.locations_transfer_order_items_from_location_idTolocations
+          ?.location_code || null;
+      let sourceLocationBarcode =
+        line.locations_transfer_order_items_from_location_idTolocations
+          ?.barcode || null;
+      let sourceLocationType =
+        line.locations_transfer_order_items_from_location_idTolocations
+          ?.location_type || null;
+      let sourceLocationZone =
+        line.locations_transfer_order_items_from_location_idTolocations?.zone ||
+        null;
+      let sourceLocationShelf =
+        line.locations_transfer_order_items_from_location_idTolocations
+          ?.shelf || null;
       let sourceAvailableHint = 0;
 
       if (sourceLocationId) {
@@ -1420,9 +1598,16 @@ async function getPickingTaskDetail(req, res) {
 
       let candidateLocationId = null;
       if (remainingQty > 0 && (!sourceLocationId || sourceAvailableHint <= 0)) {
-        const candidateBalance = await findBestSourceBalance(order.from_warehouse_id, line.variant_id, currentLocation);
+        const candidateBalance = await findBestSourceBalance(
+          order.from_warehouse_id,
+          line.variant_id,
+          currentLocation,
+        );
         if (candidateBalance?.locations) {
-          if (!sourceLocationId || candidateBalance.location_id !== sourceLocationId) {
+          if (
+            !sourceLocationId ||
+            candidateBalance.location_id !== sourceLocationId
+          ) {
             candidateLocationId = candidateBalance.location_id;
           }
           sourceLocationId = candidateBalance.location_id;
@@ -1447,12 +1632,19 @@ async function getPickingTaskDetail(req, res) {
         source_available_hint: sourceAvailableHint,
         candidate_source_location_id: candidateLocationId,
         target_location_id: line.to_location_id,
-        target_location_code: line.locations_transfer_order_items_to_location_idTolocations?.location_code || null,
+        target_location_code:
+          line.locations_transfer_order_items_to_location_idTolocations
+            ?.location_code || null,
         sku: line.book_variants?.sku || null,
         isbn13: line.book_variants?.isbn13 || null,
         isbn10: line.book_variants?.isbn10 || null,
-        barcode: line.book_variants?.internal_barcode || line.book_variants?.isbn13 || line.book_variants?.isbn10 || line.book_variants?.sku || null,
-        book_title: line.book_variants?.books?.title || 'Chua co ten sach',
+        barcode:
+          line.book_variants?.internal_barcode ||
+          line.book_variants?.isbn13 ||
+          line.book_variants?.isbn10 ||
+          line.book_variants?.sku ||
+          null,
+        book_title: line.book_variants?.books?.title || "Chua co ten sach",
         requested_qty: requestedQty,
         picked_qty: pickedQty,
         short_picked_qty: shortPickedQty,
@@ -1463,16 +1655,26 @@ async function getPickingTaskDetail(req, res) {
     }
 
     lines.sort((a, b) => {
-      const proximityA = buildLocationProximityRank({
-        zone: a.source_location_zone,
-        shelf: a.source_location_shelf,
-      }, currentLocation);
-      const proximityB = buildLocationProximityRank({
-        zone: b.source_location_zone,
-        shelf: b.source_location_shelf,
-      }, currentLocation);
+      const proximityA = buildLocationProximityRank(
+        {
+          zone: a.source_location_zone,
+          shelf: a.source_location_shelf,
+        },
+        currentLocation,
+      );
+      const proximityB = buildLocationProximityRank(
+        {
+          zone: b.source_location_zone,
+          shelf: b.source_location_shelf,
+        },
+        currentLocation,
+      );
 
-      if (a.remaining_qty > 0 && b.remaining_qty > 0 && proximityA !== proximityB) {
+      if (
+        a.remaining_qty > 0 &&
+        b.remaining_qty > 0 &&
+        proximityA !== proximityB
+      ) {
         return proximityA - proximityB;
       }
 
@@ -1482,18 +1684,28 @@ async function getPickingTaskDetail(req, res) {
         return availB - availA;
       }
 
-      const aCode = String(a.source_location_code || 'ZZZ');
-      const bCode = String(b.source_location_code || 'ZZZ');
-      return aCode.localeCompare(bCode) || a.book_title.localeCompare(b.book_title);
+      const aCode = String(a.source_location_code || "ZZZ");
+      const bCode = String(b.source_location_code || "ZZZ");
+      return (
+        aCode.localeCompare(bCode) || a.book_title.localeCompare(b.book_title)
+      );
     });
 
     const remainingLines = lines.filter((line) => line.remaining_qty > 0);
     const repickMeta = parseRepickMeta(order.note);
     const rootOrderNumber = repickMeta
-      ? await resolveTaskOrderNumber(prisma, repickMeta.root_task_type, repickMeta.root_task_id)
+      ? await resolveTaskOrderNumber(
+          prisma,
+          repickMeta.root_task_type,
+          repickMeta.root_task_id,
+        )
       : null;
     const parentOrderNumber = repickMeta
-      ? await resolveTaskOrderNumber(prisma, repickMeta.parent_task_type, repickMeta.parent_task_id)
+      ? await resolveTaskOrderNumber(
+          prisma,
+          repickMeta.parent_task_type,
+          repickMeta.parent_task_id,
+        )
       : null;
 
     const preparedCurrentLine = remainingLines[0] || null;
@@ -1507,10 +1719,12 @@ async function getPickingTaskDetail(req, res) {
     }
 
     return res.json({
-      task_type: 'transfer',
+      task_type: "transfer",
       task_id: order.id,
       order_number: order.transfer_number,
-      order_type: repickMeta ? 'WAREHOUSE_TRANSFER_REPICK' : 'WAREHOUSE_TRANSFER',
+      order_type: repickMeta
+        ? "WAREHOUSE_TRANSFER_REPICK"
+        : "WAREHOUSE_TRANSFER",
       task_class: getTaskClassFromNote(order.note),
       repick_sequence: repickMeta?.repick_sequence || null,
       repick_reason: repickMeta?.repick_reason || null,
@@ -1522,22 +1736,33 @@ async function getPickingTaskDetail(req, res) {
       parent_order_number: parentOrderNumber,
       status: order.status,
       source_warehouse_id: order.from_warehouse_id,
-      source_warehouse_code: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code || null,
-      source_warehouse_name: order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.name || null,
+      source_warehouse_code:
+        order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code ||
+        null,
+      source_warehouse_name:
+        order.warehouses_transfer_orders_from_warehouse_idTowarehouses?.name ||
+        null,
       target_warehouse_id: order.to_warehouse_id,
-      target_warehouse_code: order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code || null,
-      target_warehouse_name: order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name || null,
+      target_warehouse_code:
+        order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code ||
+        null,
+      target_warehouse_name:
+        order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name ||
+        null,
       assigned_picker_user_id: parseId(order.shipped_by_user_id),
       requested_at: order.requested_at,
       completed_at: order.shipped_at || null,
       lines,
       current_line: preparedCurrentLine,
       remaining_line_count: remainingLines.length,
-      remaining_quantity: remainingLines.reduce((sum, line) => sum + line.remaining_qty, 0),
+      remaining_quantity: remainingLines.reduce(
+        (sum, line) => sum + line.remaining_qty,
+        0,
+      ),
     });
   } catch (error) {
-    console.error('Error while loading picking task detail:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while loading picking task detail:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -1547,17 +1772,21 @@ async function confirmPickerPresence(req, res) {
   const scannedLocation = normalizeText(req.body?.current_location_input);
 
   if (!taskType || !taskId || !scannedLocation) {
-    return res.status(400).json({ message: 'taskType, taskId and current_location_input are required' });
+    return res
+      .status(400)
+      .json({
+        message: "taskType, taskId and current_location_input are required",
+      });
   }
 
   try {
     const task = await getTaskWarehouse(taskType, taskId);
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return res.status(404).json({ message: "Task not found" });
     }
 
     if (!canAccessTask(req.user || {}, task.assigned_picker_user_id)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     const locationOrFilters = [
@@ -1585,14 +1814,15 @@ async function confirmPickerPresence(req, res) {
 
     if (!location) {
       return res.status(400).json({
-        message: 'Current location does not belong to task warehouse or is inactive',
+        message:
+          "Current location does not belong to task warehouse or is inactive",
       });
     }
 
     await prisma.inventory_audit_logs.create({
       data: {
         actor_user_id: parseId(req.user?.id),
-        action_name: 'PICK_PRESENCE_CONFIRMED',
+        action_name: "PICK_PRESENCE_CONFIRMED",
         entity_type: task.entity_type,
         entity_id: taskId,
         after_data: {
@@ -1606,7 +1836,7 @@ async function confirmPickerPresence(req, res) {
     });
 
     return res.json({
-      message: 'Presence confirmed',
+      message: "Presence confirmed",
       data: {
         location_id: location.id,
         location_code: location.location_code,
@@ -1614,8 +1844,8 @@ async function confirmPickerPresence(req, res) {
       },
     });
   } catch (error) {
-    console.error('Error while confirming picker presence:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while confirming picker presence:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -1623,14 +1853,14 @@ async function lookupVariantByBarcode(req, res) {
   const barcode = normalizeText(req.query.barcode);
 
   if (!barcode) {
-    return res.status(400).json({ message: 'barcode is required' });
+    return res.status(400).json({ message: "barcode is required" });
   }
 
   try {
     const matches = await resolveVariantMatchesByBarcode(prisma, barcode);
 
     if (matches.length === 0) {
-      return res.status(404).json({ message: 'No variant matched barcode' });
+      return res.status(404).json({ message: "No variant matched barcode" });
     }
 
     const topPriority = matches[0].match_priority;
@@ -1650,13 +1880,13 @@ async function lookupVariantByBarcode(req, res) {
       matches,
     });
   } catch (error) {
-    console.error('Error while lookup variant barcode in picking:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while lookup variant barcode in picking:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
 async function getTaskWarehouse(taskType, taskId) {
-  if (taskType === 'outbound') {
+  if (taskType === "outbound") {
     const order = await prisma.outbound_orders.findUnique({
       where: { id: taskId },
       select: {
@@ -1671,7 +1901,7 @@ async function getTaskWarehouse(taskType, taskId) {
     return {
       warehouse_id: order.warehouse_id,
       assigned_picker_user_id: order.processed_by_user_id,
-      entity_type: 'OUTBOUND_ORDER',
+      entity_type: "OUTBOUND_ORDER",
     };
   }
 
@@ -1689,12 +1919,13 @@ async function getTaskWarehouse(taskType, taskId) {
   return {
     warehouse_id: order.from_warehouse_id,
     assigned_picker_user_id: order.shipped_by_user_id,
-    entity_type: 'TRANSFER_ORDER',
+    entity_type: "TRANSFER_ORDER",
   };
 }
 
 async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
-  const currentLocationId = taskType === 'outbound' ? line.source_location_id : line.from_location_id;
+  const currentLocationId =
+    taskType === "outbound" ? line.source_location_id : line.from_location_id;
 
   if (currentLocationId) {
     const location = await tx.locations.findUnique({
@@ -1709,8 +1940,15 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
       },
     });
 
-    if (!location || !location.is_active || location.warehouse_id !== warehouseId) {
-      return { invalid: true, message: 'Source location is invalid for this warehouse' };
+    if (
+      !location ||
+      !location.is_active ||
+      location.warehouse_id !== warehouseId
+    ) {
+      return {
+        invalid: true,
+        message: "Source location is invalid for this warehouse",
+      };
     }
 
     const fixedBalance = await tx.stock_balances.findUnique({
@@ -1753,16 +1991,20 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
         },
       },
       orderBy: [
-        { available_qty: 'desc' },
-        { locations: { location_code: 'asc' } },
+        { available_qty: "desc" },
+        { locations: { location_code: "asc" } },
       ],
     });
 
     if (!fallbackBalance || !fallbackBalance.locations) {
-      return { invalid: true, message: 'No pickable source location has available stock for this line' };
+      return {
+        invalid: true,
+        message:
+          "No pickable source location has available stock for this line",
+      };
     }
 
-    if (taskType === 'outbound') {
+    if (taskType === "outbound") {
       await tx.outbound_order_items.update({
         where: { id: line.id },
         data: {
@@ -1813,16 +2055,19 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
       },
     },
     orderBy: [
-      { available_qty: 'desc' },
-      { locations: { location_code: 'asc' } },
+      { available_qty: "desc" },
+      { locations: { location_code: "asc" } },
     ],
   });
 
   if (!balance || !balance.locations) {
-    return { invalid: true, message: 'No pickable source location has available stock for this line' };
+    return {
+      invalid: true,
+      message: "No pickable source location has available stock for this line",
+    };
   }
 
-  if (taskType === 'outbound') {
+  if (taskType === "outbound") {
     await tx.outbound_order_items.update({
       where: { id: line.id },
       data: {
@@ -1857,114 +2102,653 @@ async function confirmPickingLine(req, res) {
 
   const quantity = toInt(req.body?.quantity);
   const scannedLocationInput = normalizeText(req.body?.scanned_location_input);
-  const scannedProductBarcode = normalizeText(req.body?.scanned_product_barcode);
+  const scannedProductBarcode = normalizeText(
+    req.body?.scanned_product_barcode,
+  );
   const scannedVariantId = parseId(req.body?.scanned_variant_id);
 
   if (!taskType || !taskId || !lineId) {
-    return res.status(400).json({ message: 'Invalid task type, task id or line id' });
+    return res
+      .status(400)
+      .json({ message: "Invalid task type, task id or line id" });
   }
 
   if (quantity === null || quantity <= 0) {
-    return res.status(400).json({ message: 'quantity must be > 0' });
+    return res.status(400).json({ message: "quantity must be > 0" });
   }
 
   if (!scannedLocationInput) {
-    return res.status(400).json({ message: 'scanned_location_input is required' });
+    return res
+      .status(400)
+      .json({ message: "scanned_location_input is required" });
   }
 
   if (!scannedProductBarcode && !scannedVariantId) {
-    return res.status(400).json({ message: 'scanned_product_barcode or scanned_variant_id is required' });
+    return res
+      .status(400)
+      .json({
+        message: "scanned_product_barcode or scanned_variant_id is required",
+      });
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const scope = getTaskPermissionScope(req.user || {});
-      if (!scope.currentUserId) {
-        return { invalid: true, statusCode: 401, message: 'Invalid current user context' };
-      }
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const scope = getTaskPermissionScope(req.user || {});
+        if (!scope.currentUserId) {
+          return {
+            invalid: true,
+            statusCode: 401,
+            message: "Invalid current user context",
+          };
+        }
 
-      if (taskType === 'outbound') {
-        await tx.$queryRawUnsafe('SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE', taskId);
-        await tx.$queryRawUnsafe('SELECT id FROM outbound_order_items WHERE id = $1::uuid FOR UPDATE', lineId);
+        if (taskType === "outbound") {
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE",
+            taskId,
+          );
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM outbound_order_items WHERE id = $1::uuid FOR UPDATE",
+            lineId,
+          );
 
-        const order = await tx.outbound_orders.findUnique({
+          const order = await tx.outbound_orders.findUnique({
+            where: { id: taskId },
+            select: {
+              id: true,
+              outbound_number: true,
+              status: true,
+              warehouse_id: true,
+              requested_by_user_id: true,
+              processed_by_user_id: true,
+              note: true,
+            },
+          });
+
+          if (!order)
+            return {
+              invalid: true,
+              statusCode: 404,
+              message: "Outbound order not found",
+            };
+          if (!OUTBOUND_READY_STATUS.includes(order.status)) {
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: "Outbound order is not ready for picking",
+            };
+          }
+
+          if (
+            order.processed_by_user_id &&
+            order.processed_by_user_id !== scope.currentUserId &&
+            !scope.canManageAssignment
+          ) {
+            return {
+              invalid: true,
+              statusCode: 403,
+              message: "Task is assigned to another picker",
+            };
+          }
+
+          if (!order.processed_by_user_id) {
+            await tx.outbound_orders.update({
+              where: { id: order.id },
+              data: {
+                processed_by_user_id: scope.currentUserId,
+                status: "PICKING",
+              },
+            });
+          }
+
+          const line = await tx.outbound_order_items.findFirst({
+            where: {
+              id: lineId,
+              outbound_order_id: taskId,
+            },
+            select: {
+              id: true,
+              outbound_order_id: true,
+              variant_id: true,
+              source_location_id: true,
+              quantity: true,
+              processed_qty: true,
+              note: true,
+            },
+          });
+
+          if (!line) {
+            return {
+              invalid: true,
+              statusCode: 404,
+              message: "Line not found in outbound task",
+            };
+          }
+
+          const requestedQty = Number(line.quantity || 0);
+          const pickedQty = Number(line.processed_qty || 0);
+          const currentShortPickedQty = getLineShortPickedQty(line.note);
+          const remainingQty = calculateLineRemaining(
+            requestedQty,
+            pickedQty,
+            line.note,
+          );
+
+          if (remainingQty <= 0) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              message: "Line is already fully picked",
+            };
+          }
+
+          if (quantity > remainingQty) {
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: "quantity exceeds line remaining quantity",
+            };
+          }
+
+          const resolvedLocation = await resolveExpectedSourceLocation(
+            tx,
+            taskType,
+            line,
+            order.warehouse_id,
+          );
+          if (resolvedLocation.invalid) {
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: resolvedLocation.message,
+            };
+          }
+
+          const expectedLocation = resolvedLocation.location;
+
+          if (
+            !findExpectedLocationMatch(scannedLocationInput, expectedLocation)
+          ) {
+            await tx.inventory_audit_logs.create({
+              data: {
+                actor_user_id: scope.currentUserId,
+                action_name: "PICK_SCAN_LOCATION_INVALID",
+                entity_type: "OUTBOUND_ORDER",
+                entity_id: taskId,
+                after_data: {
+                  line_id: lineId,
+                  expected_location_id: expectedLocation.id,
+                  expected_location_code: expectedLocation.location_code,
+                  scanned_input: scannedLocationInput,
+                },
+              },
+            });
+
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+            };
+          }
+
+          if (scannedVariantId && scannedVariantId !== line.variant_id) {
+            await tx.inventory_audit_logs.create({
+              data: {
+                actor_user_id: scope.currentUserId,
+                action_name: "PICK_SCAN_PRODUCT_INVALID",
+                entity_type: "OUTBOUND_ORDER",
+                entity_id: taskId,
+                after_data: {
+                  line_id: lineId,
+                  expected_variant_id: line.variant_id,
+                  scanned_variant_id: scannedVariantId,
+                },
+              },
+            });
+
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: "Sai san pham cho line hien tai",
+            };
+          }
+
+          if (scannedProductBarcode) {
+            const matches = await resolveVariantMatchesByBarcode(
+              tx,
+              scannedProductBarcode,
+            );
+
+            if (matches.length === 0) {
+              return {
+                invalid: true,
+                statusCode: 400,
+                message: "Barcode san pham khong hop le",
+              };
+            }
+
+            if (matches.length > 1) {
+              return {
+                invalid: true,
+                statusCode: 400,
+                code: "AMBIGUOUS_PRODUCT",
+                message: "Barcode trung nhieu SKU, vui long chon dung san pham",
+              };
+            }
+
+            const matchedVariant = matches[0];
+            if (matchedVariant.variant_id !== line.variant_id) {
+              await tx.inventory_audit_logs.create({
+                data: {
+                  actor_user_id: scope.currentUserId,
+                  action_name: "PICK_SCAN_PRODUCT_INVALID",
+                  entity_type: "OUTBOUND_ORDER",
+                  entity_id: taskId,
+                  after_data: {
+                    line_id: lineId,
+                    expected_variant_id: line.variant_id,
+                    scanned_variant_id: matchedVariant.variant_id,
+                    scanned_barcode: scannedProductBarcode,
+                  },
+                },
+              });
+
+              return {
+                invalid: true,
+                statusCode: 400,
+                message: "Sai san pham cho line hien tai",
+              };
+            }
+          }
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            expectedLocation.id,
+          );
+
+          const stockBalance = await tx.stock_balances.findUnique({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: expectedLocation.id,
+              },
+            },
+            select: {
+              id: true,
+              available_qty: true,
+              on_hand_qty: true,
+              version: true,
+            },
+          });
+
+          if (
+            !stockBalance ||
+            Number(stockBalance.available_qty || 0) < quantity ||
+            Number(stockBalance.on_hand_qty || 0) < quantity
+          ) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              code: "CONCURRENCY_CONFLICT",
+              message:
+                "So luong available da thay doi. Vui long reload va thao tac lai.",
+            };
+          }
+
+          const shippingLocation = await resolveOrCreateWarehouseLocation(
+            tx,
+            order.warehouse_id,
+            SHIPPING_LOCATION_TYPE,
+            "SHIPPING",
+            false,
+          );
+
+          // Lock source compartment first, then SHIPPING to prevent concurrent over-draw.
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            expectedLocation.id,
+          );
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            shippingLocation.id,
+          );
+
+          const sourceBalance = await tx.stock_balances.findUnique({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: expectedLocation.id,
+              },
+            },
+            select: {
+              on_hand_qty: true,
+              available_qty: true,
+            },
+          });
+
+          if (
+            !sourceBalance ||
+            Number(sourceBalance.on_hand_qty || 0) < quantity
+          ) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              code: "CONCURRENCY_CONFLICT",
+              message:
+                "So luong on_hand da thay doi. Vui long reload va thao tac lai.",
+            };
+          }
+
+          if (Number(sourceBalance.available_qty || 0) < quantity) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              code: "CONCURRENCY_CONFLICT",
+              message:
+                "So luong available da thay doi. Vui long reload va thao tac lai.",
+            };
+          }
+
+          // Pick from SHELF: available_qty -= qty (SHELF source, qty guaranteed >= 0 by DB constraint).
+          await tx.stock_balances.update({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: expectedLocation.id,
+              },
+            },
+            data: {
+              on_hand_qty: { decrement: quantity },
+              available_qty: { decrement: quantity },
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+          });
+
+          await tx.stock_balances.upsert({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+              },
+            },
+            update: {
+              on_hand_qty: { increment: quantity },
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+            create: {
+              warehouse_id: order.warehouse_id,
+              variant_id: line.variant_id,
+              location_id: shippingLocation.id,
+              on_hand_qty: quantity,
+              available_qty: 0,
+              version: 1,
+              last_movement_at: new Date(),
+            },
+          });
+
+          const shortageDelta = Math.max(remainingQty - quantity, 0);
+          const nextShortPickedQty = currentShortPickedQty + shortageDelta;
+          const nextLineNote =
+            shortageDelta > 0
+              ? withLineShortPickedQty(line.note, nextShortPickedQty)
+              : line.note || null;
+
+          await tx.outbound_order_items.update({
+            where: { id: line.id },
+            data: {
+              processed_qty: { increment: quantity },
+              note: nextLineNote,
+            },
+          });
+
+          await tx.stock_movements.create({
+            data: {
+              movement_number: createMovementNumber(Date.now(), 0),
+              movement_type: "TRANSFER",
+              movement_status: "POSTED",
+              warehouse_id: order.warehouse_id,
+              variant_id: line.variant_id,
+              from_location_id: expectedLocation.id,
+              to_location_id: shippingLocation.id,
+              quantity,
+              unit_cost: 0,
+              source_service: "INVENTORY_SERVICE",
+              reference_type: "OUTBOUND_PICKING",
+              reference_id: order.id,
+              created_by_user_id: scope.currentUserId,
+              metadata: {
+                task_type: "outbound",
+                task_id: taskId,
+                line_id: line.id,
+                stage: "PICK_TO_SHIPPING",
+                scanned_location_input: scannedLocationInput,
+                scanned_product_barcode: scannedProductBarcode,
+                scanned_variant_id: scannedVariantId,
+              },
+            },
+          });
+
+          const allLines = await tx.outbound_order_items.findMany({
+            where: { outbound_order_id: order.id },
+            select: {
+              id: true,
+              variant_id: true,
+              source_location_id: true,
+              quantity: true,
+              processed_qty: true,
+              note: true,
+            },
+          });
+
+          const allDone = allLines.every(
+            (item) =>
+              calculateLineRemaining(
+                item.quantity,
+                item.processed_qty,
+                item.note,
+              ) <= 0,
+          );
+          let repickInfo = null;
+
+          if (allDone) {
+            await tx.outbound_orders.update({
+              where: { id: order.id },
+              data: {
+                status: "READY_FOR_OUTBOUND",
+                processed_by_user_id: scope.currentUserId,
+              },
+            });
+
+            repickInfo = await maybeCreateRepickFromOutbound(
+              tx,
+              order,
+              allLines,
+              scope.currentUserId,
+            );
+          } else if (order.status !== "PICKING") {
+            await tx.outbound_orders.update({
+              where: { id: order.id },
+              data: {
+                status: "PICKING",
+                processed_by_user_id: scope.currentUserId,
+              },
+            });
+          }
+
+          await tx.inventory_audit_logs.create({
+            data: {
+              actor_user_id: scope.currentUserId,
+              action_name: "PICK_LINE_CONFIRMED",
+              entity_type: "OUTBOUND_ORDER",
+              entity_id: taskId,
+              after_data: {
+                line_id: lineId,
+                quantity,
+                short_pick_qty_added: shortageDelta,
+                expected_location_id: expectedLocation.id,
+                expected_location_code: expectedLocation.location_code,
+                all_done: allDone,
+                repick_task_id: repickInfo?.task_id || null,
+              },
+            },
+          });
+
+          return {
+            data: {
+              task_type: "outbound",
+              task_id: order.id,
+              line_id: line.id,
+              confirmed_quantity: quantity,
+              line_remaining_quantity: Math.max(
+                remainingQty - quantity - shortageDelta,
+                0,
+              ),
+              short_pick_recorded: shortageDelta,
+              task_completed: allDone,
+              repick_created: repickInfo,
+            },
+          };
+        }
+
+        await tx.$queryRawUnsafe(
+          "SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE",
+          taskId,
+        );
+        await tx.$queryRawUnsafe(
+          "SELECT id FROM transfer_order_items WHERE id = $1::uuid FOR UPDATE",
+          lineId,
+        );
+
+        const order = await tx.transfer_orders.findUnique({
           where: { id: taskId },
           select: {
             id: true,
-            outbound_number: true,
+            transfer_number: true,
             status: true,
-            warehouse_id: true,
+            from_warehouse_id: true,
+            to_warehouse_id: true,
             requested_by_user_id: true,
-            processed_by_user_id: true,
+            shipped_by_user_id: true,
             note: true,
           },
         });
 
-        if (!order) return { invalid: true, statusCode: 404, message: 'Outbound order not found' };
-        if (!OUTBOUND_READY_STATUS.includes(order.status)) {
-          return { invalid: true, statusCode: 400, message: 'Outbound order is not ready for picking' };
+        if (!order)
+          return {
+            invalid: true,
+            statusCode: 404,
+            message: "Transfer order not found",
+          };
+        if (!TRANSFER_READY_STATUS.includes(order.status)) {
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: "Transfer order is not ready for picking",
+          };
         }
 
-        if (order.processed_by_user_id && order.processed_by_user_id !== scope.currentUserId && !scope.canManageAssignment) {
-          return { invalid: true, statusCode: 403, message: 'Task is assigned to another picker' };
+        if (
+          order.shipped_by_user_id &&
+          order.shipped_by_user_id !== scope.currentUserId &&
+          !scope.canManageAssignment
+        ) {
+          return {
+            invalid: true,
+            statusCode: 403,
+            message: "Task is assigned to another picker",
+          };
         }
 
-        if (!order.processed_by_user_id) {
-          await tx.outbound_orders.update({
+        if (!order.shipped_by_user_id) {
+          await tx.transfer_orders.update({
             where: { id: order.id },
             data: {
-              processed_by_user_id: scope.currentUserId,
-              status: 'PICKING',
+              shipped_by_user_id: scope.currentUserId,
             },
           });
         }
 
-        const line = await tx.outbound_order_items.findFirst({
+        const line = await tx.transfer_order_items.findFirst({
           where: {
             id: lineId,
-            outbound_order_id: taskId,
+            transfer_order_id: taskId,
           },
           select: {
             id: true,
-            outbound_order_id: true,
+            transfer_order_id: true,
             variant_id: true,
-            source_location_id: true,
+            from_location_id: true,
             quantity: true,
-            processed_qty: true,
+            shipped_qty: true,
+            to_location_id: true,
             note: true,
           },
         });
 
         if (!line) {
-          return { invalid: true, statusCode: 404, message: 'Line not found in outbound task' };
+          return {
+            invalid: true,
+            statusCode: 404,
+            message: "Line not found in transfer task",
+          };
         }
 
         const requestedQty = Number(line.quantity || 0);
-        const pickedQty = Number(line.processed_qty || 0);
+        const pickedQty = Number(line.shipped_qty || 0);
         const currentShortPickedQty = getLineShortPickedQty(line.note);
-        const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
+        const remainingQty = calculateLineRemaining(
+          requestedQty,
+          pickedQty,
+          line.note,
+        );
 
         if (remainingQty <= 0) {
-          return { invalid: true, statusCode: 409, message: 'Line is already fully picked' };
+          return {
+            invalid: true,
+            statusCode: 409,
+            message: "Line is already fully picked",
+          };
         }
 
         if (quantity > remainingQty) {
-          return { invalid: true, statusCode: 400, message: 'quantity exceeds line remaining quantity' };
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: "quantity exceeds line remaining quantity",
+          };
         }
 
-        const resolvedLocation = await resolveExpectedSourceLocation(tx, taskType, line, order.warehouse_id);
+        const resolvedLocation = await resolveExpectedSourceLocation(
+          tx,
+          taskType,
+          line,
+          order.from_warehouse_id,
+        );
         if (resolvedLocation.invalid) {
-          return { invalid: true, statusCode: 400, message: resolvedLocation.message };
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: resolvedLocation.message,
+          };
         }
 
         const expectedLocation = resolvedLocation.location;
 
-        if (!findExpectedLocationMatch(scannedLocationInput, expectedLocation)) {
+        if (
+          !findExpectedLocationMatch(scannedLocationInput, expectedLocation)
+        ) {
           await tx.inventory_audit_logs.create({
             data: {
               actor_user_id: scope.currentUserId,
-              action_name: 'PICK_SCAN_LOCATION_INVALID',
-              entity_type: 'OUTBOUND_ORDER',
+              action_name: "PICK_SCAN_LOCATION_INVALID",
+              entity_type: "TRANSFER_ORDER",
               entity_id: taskId,
               after_data: {
                 line_id: lineId,
@@ -1975,15 +2759,19 @@ async function confirmPickingLine(req, res) {
             },
           });
 
-          return { invalid: true, statusCode: 400, message: `Sai vi tri. Can scan ${expectedLocation.location_code}` };
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+          };
         }
 
         if (scannedVariantId && scannedVariantId !== line.variant_id) {
           await tx.inventory_audit_logs.create({
             data: {
               actor_user_id: scope.currentUserId,
-              action_name: 'PICK_SCAN_PRODUCT_INVALID',
-              entity_type: 'OUTBOUND_ORDER',
+              action_name: "PICK_SCAN_PRODUCT_INVALID",
+              entity_type: "TRANSFER_ORDER",
               entity_id: taskId,
               after_data: {
                 line_id: lineId,
@@ -1993,22 +2781,33 @@ async function confirmPickingLine(req, res) {
             },
           });
 
-          return { invalid: true, statusCode: 400, message: 'Sai san pham cho line hien tai' };
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: "Sai san pham cho line hien tai",
+          };
         }
 
         if (scannedProductBarcode) {
-          const matches = await resolveVariantMatchesByBarcode(tx, scannedProductBarcode);
+          const matches = await resolveVariantMatchesByBarcode(
+            tx,
+            scannedProductBarcode,
+          );
 
           if (matches.length === 0) {
-            return { invalid: true, statusCode: 400, message: 'Barcode san pham khong hop le' };
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: "Barcode san pham khong hop le",
+            };
           }
 
           if (matches.length > 1) {
             return {
               invalid: true,
               statusCode: 400,
-              code: 'AMBIGUOUS_PRODUCT',
-              message: 'Barcode trung nhieu SKU, vui long chon dung san pham',
+              code: "AMBIGUOUS_PRODUCT",
+              message: "Barcode trung nhieu SKU, vui long chon dung san pham",
             };
           }
 
@@ -2017,8 +2816,8 @@ async function confirmPickingLine(req, res) {
             await tx.inventory_audit_logs.create({
               data: {
                 actor_user_id: scope.currentUserId,
-                action_name: 'PICK_SCAN_PRODUCT_INVALID',
-                entity_type: 'OUTBOUND_ORDER',
+                action_name: "PICK_SCAN_PRODUCT_INVALID",
+                entity_type: "TRANSFER_ORDER",
                 entity_id: taskId,
                 after_data: {
                   line_id: lineId,
@@ -2029,12 +2828,16 @@ async function confirmPickingLine(req, res) {
               },
             });
 
-            return { invalid: true, statusCode: 400, message: 'Sai san pham cho line hien tai' };
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: "Sai san pham cho line hien tai",
+            };
           }
         }
 
         await tx.$queryRawUnsafe(
-          'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
+          "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
           line.variant_id,
           expectedLocation.id,
         );
@@ -2054,25 +2857,30 @@ async function confirmPickingLine(req, res) {
           },
         });
 
-        if (!stockBalance || Number(stockBalance.available_qty || 0) < quantity || Number(stockBalance.on_hand_qty || 0) < quantity) {
+        if (
+          !stockBalance ||
+          Number(stockBalance.available_qty || 0) < quantity ||
+          Number(stockBalance.on_hand_qty || 0) < quantity
+        ) {
           return {
             invalid: true,
             statusCode: 409,
-            code: 'CONCURRENCY_CONFLICT',
-            message: 'So luong available da thay doi. Vui long reload va thao tac lai.',
+            code: "CONCURRENCY_CONFLICT",
+            message:
+              "So luong available da thay doi. Vui long reload va thao tac lai.",
           };
         }
 
         const shippingLocation = await resolveOrCreateWarehouseLocation(
           tx,
-          order.warehouse_id,
+          order.from_warehouse_id,
           SHIPPING_LOCATION_TYPE,
-          'SHIPPING',
+          "SHIPPING",
           false,
         );
 
         await tx.$queryRawUnsafe(
-          'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
+          "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
           line.variant_id,
           shippingLocation.id,
         );
@@ -2105,7 +2913,7 @@ async function confirmPickingLine(req, res) {
             last_movement_at: new Date(),
           },
           create: {
-            warehouse_id: order.warehouse_id,
+            warehouse_id: order.from_warehouse_id,
             variant_id: line.variant_id,
             location_id: shippingLocation.id,
             on_hand_qty: quantity,
@@ -2117,14 +2925,15 @@ async function confirmPickingLine(req, res) {
 
         const shortageDelta = Math.max(remainingQty - quantity, 0);
         const nextShortPickedQty = currentShortPickedQty + shortageDelta;
-        const nextLineNote = shortageDelta > 0
-          ? withLineShortPickedQty(line.note, nextShortPickedQty)
-          : (line.note || null);
+        const nextLineNote =
+          shortageDelta > 0
+            ? withLineShortPickedQty(line.note, nextShortPickedQty)
+            : line.note || null;
 
-        await tx.outbound_order_items.update({
+        await tx.transfer_order_items.update({
           where: { id: line.id },
           data: {
-            processed_qty: { increment: quantity },
+            shipped_qty: { increment: quantity },
             note: nextLineNote,
           },
         });
@@ -2132,23 +2941,23 @@ async function confirmPickingLine(req, res) {
         await tx.stock_movements.create({
           data: {
             movement_number: createMovementNumber(Date.now(), 0),
-            movement_type: 'TRANSFER',
-            movement_status: 'POSTED',
-            warehouse_id: order.warehouse_id,
+            movement_type: "TRANSFER",
+            movement_status: "POSTED",
+            warehouse_id: order.from_warehouse_id,
             variant_id: line.variant_id,
             from_location_id: expectedLocation.id,
             to_location_id: shippingLocation.id,
             quantity,
             unit_cost: 0,
-            source_service: 'INVENTORY_SERVICE',
-            reference_type: 'OUTBOUND_PICKING',
+            source_service: "INVENTORY_SERVICE",
+            reference_type: "TRANSFER_PICKING",
             reference_id: order.id,
             created_by_user_id: scope.currentUserId,
             metadata: {
-              task_type: 'outbound',
+              task_type: "transfer",
               task_id: taskId,
               line_id: line.id,
-              stage: 'PICK_TO_SHIPPING',
+              stage: "PICK_TO_SHIPPING",
               scanned_location_input: scannedLocationInput,
               scanned_product_barcode: scannedProductBarcode,
               scanned_variant_id: scannedVariantId,
@@ -2156,37 +2965,50 @@ async function confirmPickingLine(req, res) {
           },
         });
 
-        const allLines = await tx.outbound_order_items.findMany({
-          where: { outbound_order_id: order.id },
+        const allLines = await tx.transfer_order_items.findMany({
+          where: { transfer_order_id: order.id },
           select: {
             id: true,
             variant_id: true,
-            source_location_id: true,
+            from_location_id: true,
+            to_location_id: true,
             quantity: true,
-            processed_qty: true,
+            shipped_qty: true,
             note: true,
           },
         });
 
-        const allDone = allLines.every((item) => calculateLineRemaining(item.quantity, item.processed_qty, item.note) <= 0);
+        const allDone = allLines.every(
+          (item) =>
+            calculateLineRemaining(
+              item.quantity,
+              item.shipped_qty,
+              item.note,
+            ) <= 0,
+        );
         let repickInfo = null;
 
         if (allDone) {
-          await tx.outbound_orders.update({
+          await tx.transfer_orders.update({
             where: { id: order.id },
             data: {
-              status: 'READY_FOR_OUTBOUND',
-              processed_by_user_id: scope.currentUserId,
+              status: "READY_FOR_OUTBOUND",
+              shipped_by_user_id: scope.currentUserId,
             },
           });
 
-          repickInfo = await maybeCreateRepickFromOutbound(tx, order, allLines, scope.currentUserId);
-        } else if (order.status !== 'PICKING') {
-          await tx.outbound_orders.update({
+          repickInfo = await maybeCreateRepickFromTransfer(
+            tx,
+            order,
+            allLines,
+            scope.currentUserId,
+          );
+        } else if (order.status !== "PICKING") {
+          await tx.transfer_orders.update({
             where: { id: order.id },
             data: {
-              status: 'PICKING',
-              processed_by_user_id: scope.currentUserId,
+              status: "PICKING",
+              shipped_by_user_id: scope.currentUserId,
             },
           });
         }
@@ -2194,8 +3016,8 @@ async function confirmPickingLine(req, res) {
         await tx.inventory_audit_logs.create({
           data: {
             actor_user_id: scope.currentUserId,
-            action_name: 'PICK_LINE_CONFIRMED',
-            entity_type: 'OUTBOUND_ORDER',
+            action_name: "PICK_LINE_CONFIRMED",
+            entity_type: "TRANSFER_ORDER",
             entity_id: taskId,
             after_data: {
               line_id: lineId,
@@ -2211,358 +3033,22 @@ async function confirmPickingLine(req, res) {
 
         return {
           data: {
-            task_type: 'outbound',
+            task_type: "transfer",
             task_id: order.id,
             line_id: line.id,
             confirmed_quantity: quantity,
-            line_remaining_quantity: Math.max(remainingQty - quantity - shortageDelta, 0),
+            line_remaining_quantity: Math.max(
+              remainingQty - quantity - shortageDelta,
+              0,
+            ),
             short_pick_recorded: shortageDelta,
             task_completed: allDone,
             repick_created: repickInfo,
           },
         };
-      }
-
-      await tx.$queryRawUnsafe('SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE', taskId);
-      await tx.$queryRawUnsafe('SELECT id FROM transfer_order_items WHERE id = $1::uuid FOR UPDATE', lineId);
-
-      const order = await tx.transfer_orders.findUnique({
-        where: { id: taskId },
-        select: {
-          id: true,
-          transfer_number: true,
-          status: true,
-          from_warehouse_id: true,
-          to_warehouse_id: true,
-          requested_by_user_id: true,
-          shipped_by_user_id: true,
-          note: true,
-        },
-      });
-
-      if (!order) return { invalid: true, statusCode: 404, message: 'Transfer order not found' };
-      if (!TRANSFER_READY_STATUS.includes(order.status)) {
-        return { invalid: true, statusCode: 400, message: 'Transfer order is not ready for picking' };
-      }
-
-      if (order.shipped_by_user_id && order.shipped_by_user_id !== scope.currentUserId && !scope.canManageAssignment) {
-        return { invalid: true, statusCode: 403, message: 'Task is assigned to another picker' };
-      }
-
-      if (!order.shipped_by_user_id) {
-        await tx.transfer_orders.update({
-          where: { id: order.id },
-          data: {
-            shipped_by_user_id: scope.currentUserId,
-          },
-        });
-      }
-
-      const line = await tx.transfer_order_items.findFirst({
-        where: {
-          id: lineId,
-          transfer_order_id: taskId,
-        },
-        select: {
-          id: true,
-          transfer_order_id: true,
-          variant_id: true,
-          from_location_id: true,
-          quantity: true,
-          shipped_qty: true,
-          to_location_id: true,
-          note: true,
-        },
-      });
-
-      if (!line) {
-        return { invalid: true, statusCode: 404, message: 'Line not found in transfer task' };
-      }
-
-      const requestedQty = Number(line.quantity || 0);
-      const pickedQty = Number(line.shipped_qty || 0);
-      const currentShortPickedQty = getLineShortPickedQty(line.note);
-      const remainingQty = calculateLineRemaining(requestedQty, pickedQty, line.note);
-
-      if (remainingQty <= 0) {
-        return { invalid: true, statusCode: 409, message: 'Line is already fully picked' };
-      }
-
-      if (quantity > remainingQty) {
-        return { invalid: true, statusCode: 400, message: 'quantity exceeds line remaining quantity' };
-      }
-
-      const resolvedLocation = await resolveExpectedSourceLocation(tx, taskType, line, order.from_warehouse_id);
-      if (resolvedLocation.invalid) {
-        return { invalid: true, statusCode: 400, message: resolvedLocation.message };
-      }
-
-      const expectedLocation = resolvedLocation.location;
-
-      if (!findExpectedLocationMatch(scannedLocationInput, expectedLocation)) {
-        await tx.inventory_audit_logs.create({
-          data: {
-            actor_user_id: scope.currentUserId,
-            action_name: 'PICK_SCAN_LOCATION_INVALID',
-            entity_type: 'TRANSFER_ORDER',
-            entity_id: taskId,
-            after_data: {
-              line_id: lineId,
-              expected_location_id: expectedLocation.id,
-              expected_location_code: expectedLocation.location_code,
-              scanned_input: scannedLocationInput,
-            },
-          },
-        });
-
-        return { invalid: true, statusCode: 400, message: `Sai vi tri. Can scan ${expectedLocation.location_code}` };
-      }
-
-      if (scannedVariantId && scannedVariantId !== line.variant_id) {
-        await tx.inventory_audit_logs.create({
-          data: {
-            actor_user_id: scope.currentUserId,
-            action_name: 'PICK_SCAN_PRODUCT_INVALID',
-            entity_type: 'TRANSFER_ORDER',
-            entity_id: taskId,
-            after_data: {
-              line_id: lineId,
-              expected_variant_id: line.variant_id,
-              scanned_variant_id: scannedVariantId,
-            },
-          },
-        });
-
-        return { invalid: true, statusCode: 400, message: 'Sai san pham cho line hien tai' };
-      }
-
-      if (scannedProductBarcode) {
-        const matches = await resolveVariantMatchesByBarcode(tx, scannedProductBarcode);
-
-        if (matches.length === 0) {
-          return { invalid: true, statusCode: 400, message: 'Barcode san pham khong hop le' };
-        }
-
-        if (matches.length > 1) {
-          return {
-            invalid: true,
-            statusCode: 400,
-            code: 'AMBIGUOUS_PRODUCT',
-            message: 'Barcode trung nhieu SKU, vui long chon dung san pham',
-          };
-        }
-
-        const matchedVariant = matches[0];
-        if (matchedVariant.variant_id !== line.variant_id) {
-          await tx.inventory_audit_logs.create({
-            data: {
-              actor_user_id: scope.currentUserId,
-              action_name: 'PICK_SCAN_PRODUCT_INVALID',
-              entity_type: 'TRANSFER_ORDER',
-              entity_id: taskId,
-              after_data: {
-                line_id: lineId,
-                expected_variant_id: line.variant_id,
-                scanned_variant_id: matchedVariant.variant_id,
-                scanned_barcode: scannedProductBarcode,
-              },
-            },
-          });
-
-          return { invalid: true, statusCode: 400, message: 'Sai san pham cho line hien tai' };
-        }
-      }
-
-      await tx.$queryRawUnsafe(
-        'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
-        line.variant_id,
-        expectedLocation.id,
-      );
-
-      const stockBalance = await tx.stock_balances.findUnique({
-        where: {
-          variant_id_location_id: {
-            variant_id: line.variant_id,
-            location_id: expectedLocation.id,
-          },
-        },
-        select: {
-          id: true,
-          available_qty: true,
-          on_hand_qty: true,
-          version: true,
-        },
-      });
-
-      if (!stockBalance || Number(stockBalance.available_qty || 0) < quantity || Number(stockBalance.on_hand_qty || 0) < quantity) {
-        return {
-          invalid: true,
-          statusCode: 409,
-          code: 'CONCURRENCY_CONFLICT',
-          message: 'So luong available da thay doi. Vui long reload va thao tac lai.',
-        };
-      }
-
-      const shippingLocation = await resolveOrCreateWarehouseLocation(
-        tx,
-        order.from_warehouse_id,
-        SHIPPING_LOCATION_TYPE,
-        'SHIPPING',
-        false,
-      );
-
-      await tx.$queryRawUnsafe(
-        'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
-        line.variant_id,
-        shippingLocation.id,
-      );
-
-      await tx.stock_balances.update({
-        where: {
-          variant_id_location_id: {
-            variant_id: line.variant_id,
-            location_id: expectedLocation.id,
-          },
-        },
-        data: {
-          on_hand_qty: { decrement: quantity },
-          available_qty: { decrement: quantity },
-          version: { increment: 1 },
-          last_movement_at: new Date(),
-        },
-      });
-
-      await tx.stock_balances.upsert({
-        where: {
-          variant_id_location_id: {
-            variant_id: line.variant_id,
-            location_id: shippingLocation.id,
-          },
-        },
-        update: {
-          on_hand_qty: { increment: quantity },
-          version: { increment: 1 },
-          last_movement_at: new Date(),
-        },
-        create: {
-          warehouse_id: order.from_warehouse_id,
-          variant_id: line.variant_id,
-          location_id: shippingLocation.id,
-          on_hand_qty: quantity,
-          available_qty: 0,
-          version: 1,
-          last_movement_at: new Date(),
-        },
-      });
-
-      const shortageDelta = Math.max(remainingQty - quantity, 0);
-      const nextShortPickedQty = currentShortPickedQty + shortageDelta;
-      const nextLineNote = shortageDelta > 0
-        ? withLineShortPickedQty(line.note, nextShortPickedQty)
-        : (line.note || null);
-
-      await tx.transfer_order_items.update({
-        where: { id: line.id },
-        data: {
-          shipped_qty: { increment: quantity },
-          note: nextLineNote,
-        },
-      });
-
-      await tx.stock_movements.create({
-        data: {
-          movement_number: createMovementNumber(Date.now(), 0),
-          movement_type: 'TRANSFER',
-          movement_status: 'POSTED',
-          warehouse_id: order.from_warehouse_id,
-          variant_id: line.variant_id,
-          from_location_id: expectedLocation.id,
-          to_location_id: shippingLocation.id,
-          quantity,
-          unit_cost: 0,
-          source_service: 'INVENTORY_SERVICE',
-          reference_type: 'TRANSFER_PICKING',
-          reference_id: order.id,
-          created_by_user_id: scope.currentUserId,
-          metadata: {
-            task_type: 'transfer',
-            task_id: taskId,
-            line_id: line.id,
-            stage: 'PICK_TO_SHIPPING',
-            scanned_location_input: scannedLocationInput,
-            scanned_product_barcode: scannedProductBarcode,
-            scanned_variant_id: scannedVariantId,
-          },
-        },
-      });
-
-      const allLines = await tx.transfer_order_items.findMany({
-        where: { transfer_order_id: order.id },
-        select: {
-          id: true,
-          variant_id: true,
-          from_location_id: true,
-          to_location_id: true,
-          quantity: true,
-          shipped_qty: true,
-          note: true,
-        },
-      });
-
-      const allDone = allLines.every((item) => calculateLineRemaining(item.quantity, item.shipped_qty, item.note) <= 0);
-      let repickInfo = null;
-
-      if (allDone) {
-        await tx.transfer_orders.update({
-          where: { id: order.id },
-          data: {
-            status: 'READY_FOR_OUTBOUND',
-            shipped_by_user_id: scope.currentUserId,
-          },
-        });
-
-        repickInfo = await maybeCreateRepickFromTransfer(tx, order, allLines, scope.currentUserId);
-      } else if (order.status !== 'PICKING') {
-        await tx.transfer_orders.update({
-          where: { id: order.id },
-          data: {
-            status: 'PICKING',
-            shipped_by_user_id: scope.currentUserId,
-          },
-        });
-      }
-
-      await tx.inventory_audit_logs.create({
-        data: {
-          actor_user_id: scope.currentUserId,
-          action_name: 'PICK_LINE_CONFIRMED',
-          entity_type: 'TRANSFER_ORDER',
-          entity_id: taskId,
-          after_data: {
-            line_id: lineId,
-            quantity,
-            short_pick_qty_added: shortageDelta,
-            expected_location_id: expectedLocation.id,
-            expected_location_code: expectedLocation.location_code,
-            all_done: allDone,
-            repick_task_id: repickInfo?.task_id || null,
-          },
-        },
-      });
-
-      return {
-        data: {
-          task_type: 'transfer',
-          task_id: order.id,
-          line_id: line.id,
-          confirmed_quantity: quantity,
-          line_remaining_quantity: Math.max(remainingQty - quantity - shortageDelta, 0),
-          short_pick_recorded: shortageDelta,
-          task_completed: allDone,
-          repick_created: repickInfo,
-        },
-      };
-    }, { isolationLevel: 'Serializable' });
+      },
+      { isolationLevel: "Serializable" },
+    );
 
     if (result.invalid) {
       return res.status(result.statusCode || 400).json({
@@ -2572,19 +3058,20 @@ async function confirmPickingLine(req, res) {
     }
 
     return res.status(201).json({
-      message: 'Picking line confirmed',
+      message: "Picking line confirmed",
       data: result.data,
     });
   } catch (error) {
     if (toSerializableError(error)) {
       return res.status(409).json({
-        message: 'Data changed during confirmation. Please reload and try again.',
-        code: 'CONCURRENCY_CONFLICT',
+        message:
+          "Data changed during confirmation. Please reload and try again.",
+        code: "CONCURRENCY_CONFLICT",
       });
     }
 
-    console.error('Error while confirming picking line:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while confirming picking line:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -2594,210 +3081,239 @@ async function cancelTransferReturn(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: 'Invalid transfer task id' });
+    return res.status(400).json({ message: "Invalid transfer task id" });
   }
 
   if (!actorUserId) {
-    return res.status(401).json({ message: 'Invalid current user context' });
+    return res.status(401).json({ message: "Invalid current user context" });
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE', taskId);
-
-      const order = await tx.transfer_orders.findUnique({
-        where: { id: taskId },
-        select: {
-          id: true,
-          status: true,
-          from_warehouse_id: true,
-          note: true,
-        },
-      });
-
-      if (!order) {
-        return { invalid: true, statusCode: 404, message: 'Transfer order not found' };
-      }
-
-      if (order.status !== 'READY_FOR_OUTBOUND') {
-        return { invalid: true, statusCode: 400, message: 'Only READY_FOR_OUTBOUND transfer can be cancelled for return' };
-      }
-
-      const lines = await tx.transfer_order_items.findMany({
-        where: { transfer_order_id: order.id },
-        select: {
-          id: true,
-          variant_id: true,
-          shipped_qty: true,
-        },
-      });
-
-      const activeLines = lines.filter((line) => Number(line.shipped_qty || 0) > 0);
-      if (activeLines.length === 0) {
-        return { invalid: true, statusCode: 409, message: 'No picked quantity found in transfer order' };
-      }
-
-      const shippingLocation = await resolveOrCreateWarehouseLocation(
-        tx,
-        order.from_warehouse_id,
-        SHIPPING_LOCATION_TYPE,
-        'SHIPPING',
-        false,
-      );
-
-      const receivingLocation = await resolveOrCreateWarehouseLocation(
-        tx,
-        order.from_warehouse_id,
-        RECEIVING_LOCATION_TYPES,
-        'RECEIVING',
-        false,
-      );
-
-      const moveEntries = [];
-
-      for (const line of activeLines) {
-        const qty = Number(line.shipped_qty || 0);
-
+    const result = await prisma.$transaction(
+      async (tx) => {
         await tx.$queryRawUnsafe(
-          'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
-          line.variant_id,
-          shippingLocation.id,
+          "SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE",
+          taskId,
         );
 
-        await tx.$queryRawUnsafe(
-          'SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE',
-          line.variant_id,
-          receivingLocation.id,
-        );
-
-        const shippingBalance = await tx.stock_balances.findUnique({
-          where: {
-            variant_id_location_id: {
-              variant_id: line.variant_id,
-              location_id: shippingLocation.id,
-            },
-          },
+        const order = await tx.transfer_orders.findUnique({
+          where: { id: taskId },
           select: {
-            on_hand_qty: true,
+            id: true,
+            status: true,
+            from_warehouse_id: true,
+            note: true,
           },
         });
 
-        if (!shippingBalance || Number(shippingBalance.on_hand_qty || 0) < qty) {
+        if (!order) {
           return {
             invalid: true,
-            statusCode: 409,
-            code: 'CONCURRENCY_CONFLICT',
-            message: 'Shipping stock changed. Please reload and retry cancel return.',
+            statusCode: 404,
+            message: "Transfer order not found",
           };
         }
 
-        await tx.stock_balances.update({
-          where: {
-            variant_id_location_id: {
-              variant_id: line.variant_id,
-              location_id: shippingLocation.id,
-            },
-          },
-          data: {
-            on_hand_qty: { decrement: qty },
-            version: { increment: 1 },
-            last_movement_at: new Date(),
+        if (order.status !== "READY_FOR_OUTBOUND") {
+          return {
+            invalid: true,
+            statusCode: 400,
+            message:
+              "Only READY_FOR_OUTBOUND transfer can be cancelled for return",
+          };
+        }
+
+        const lines = await tx.transfer_order_items.findMany({
+          where: { transfer_order_id: order.id },
+          select: {
+            id: true,
+            variant_id: true,
+            shipped_qty: true,
           },
         });
 
-        await tx.stock_balances.upsert({
-          where: {
-            variant_id_location_id: {
+        const activeLines = lines.filter(
+          (line) => Number(line.shipped_qty || 0) > 0,
+        );
+        if (activeLines.length === 0) {
+          return {
+            invalid: true,
+            statusCode: 409,
+            message: "No picked quantity found in transfer order",
+          };
+        }
+
+        const shippingLocation = await resolveOrCreateWarehouseLocation(
+          tx,
+          order.from_warehouse_id,
+          SHIPPING_LOCATION_TYPE,
+          "SHIPPING",
+          false,
+        );
+
+        const receivingLocation = await resolveOrCreateWarehouseLocation(
+          tx,
+          order.from_warehouse_id,
+          RECEIVING_LOCATION_TYPES,
+          "RECEIVING",
+          false,
+        );
+
+        const moveEntries = [];
+
+        for (const line of activeLines) {
+          const qty = Number(line.shipped_qty || 0);
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            shippingLocation.id,
+          );
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            receivingLocation.id,
+          );
+
+          const shippingBalance = await tx.stock_balances.findUnique({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+              },
+            },
+            select: {
+              on_hand_qty: true,
+            },
+          });
+
+          if (
+            !shippingBalance ||
+            Number(shippingBalance.on_hand_qty || 0) < qty
+          ) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              code: "CONCURRENCY_CONFLICT",
+              message:
+                "Shipping stock changed. Please reload and retry cancel return.",
+            };
+          }
+
+          await tx.stock_balances.update({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+              },
+            },
+            data: {
+              on_hand_qty: { decrement: qty },
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+          });
+
+          await tx.stock_balances.upsert({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: receivingLocation.id,
+              },
+            },
+            update: {
+              on_hand_qty: { increment: qty },
+              available_qty: 0,
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+            create: {
+              warehouse_id: order.from_warehouse_id,
               variant_id: line.variant_id,
               location_id: receivingLocation.id,
+              on_hand_qty: qty,
+              available_qty: 0,
+              version: 1,
+              last_movement_at: new Date(),
+            },
+          });
+
+          await tx.transfer_order_items.update({
+            where: { id: line.id },
+            data: {
+              shipped_qty: 0,
+            },
+          });
+
+          moveEntries.push({
+            variant_id: line.variant_id,
+            quantity: qty,
+          });
+        }
+
+        const baseTimestamp = Date.now();
+        await tx.stock_movements.createMany({
+          data: moveEntries.map((entry, index) => ({
+            movement_number: createMovementNumber(baseTimestamp, index),
+            movement_type: "TRANSFER",
+            movement_status: "POSTED",
+            warehouse_id: order.from_warehouse_id,
+            variant_id: entry.variant_id,
+            from_location_id: shippingLocation.id,
+            to_location_id: receivingLocation.id,
+            quantity: entry.quantity,
+            unit_cost: 0,
+            source_service: "INVENTORY_SERVICE",
+            reference_type: "TRANSFER_CANCEL_RETURN",
+            reference_id: order.id,
+            created_by_user_id: actorUserId,
+            metadata: {
+              stage: "CANCEL_RETURN",
+              reason,
+            },
+          })),
+        });
+
+        await tx.transfer_orders.update({
+          where: { id: order.id },
+          data: {
+            status: "CANCELLED",
+            note: appendOrderNote(
+              order.note,
+              "CANCEL_RETURN",
+              reason || "Cancelled before outbound",
+            ),
+          },
+        });
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: actorUserId,
+            action_name: "TRANSFER_CANCEL_RETURN",
+            entity_type: "TRANSFER_ORDER",
+            entity_id: order.id,
+            after_data: {
+              status: "CANCELLED",
+              reason,
+              shipping_location_id: shippingLocation.id,
+              receiving_location_id: receivingLocation.id,
+              returned_line_count: moveEntries.length,
             },
           },
-          update: {
-            on_hand_qty: { increment: qty },
-            available_qty: 0,
-            version: { increment: 1 },
-            last_movement_at: new Date(),
-          },
-          create: {
-            warehouse_id: order.from_warehouse_id,
-            variant_id: line.variant_id,
-            location_id: receivingLocation.id,
-            on_hand_qty: qty,
-            available_qty: 0,
-            version: 1,
-            last_movement_at: new Date(),
-          },
         });
 
-        await tx.transfer_order_items.update({
-          where: { id: line.id },
+        return {
           data: {
-            shipped_qty: 0,
-          },
-        });
-
-        moveEntries.push({
-          variant_id: line.variant_id,
-          quantity: qty,
-        });
-      }
-
-      const baseTimestamp = Date.now();
-      await tx.stock_movements.createMany({
-        data: moveEntries.map((entry, index) => ({
-          movement_number: createMovementNumber(baseTimestamp, index),
-          movement_type: 'TRANSFER',
-          movement_status: 'POSTED',
-          warehouse_id: order.from_warehouse_id,
-          variant_id: entry.variant_id,
-          from_location_id: shippingLocation.id,
-          to_location_id: receivingLocation.id,
-          quantity: entry.quantity,
-          unit_cost: 0,
-          source_service: 'INVENTORY_SERVICE',
-          reference_type: 'TRANSFER_CANCEL_RETURN',
-          reference_id: order.id,
-          created_by_user_id: actorUserId,
-          metadata: {
-            stage: 'CANCEL_RETURN',
-            reason,
-          },
-        })),
-      });
-
-      await tx.transfer_orders.update({
-        where: { id: order.id },
-        data: {
-          status: 'CANCELLED',
-          note: appendOrderNote(order.note, 'CANCEL_RETURN', reason || 'Cancelled before outbound'),
-        },
-      });
-
-      await tx.inventory_audit_logs.create({
-        data: {
-          actor_user_id: actorUserId,
-          action_name: 'TRANSFER_CANCEL_RETURN',
-          entity_type: 'TRANSFER_ORDER',
-          entity_id: order.id,
-          after_data: {
-            status: 'CANCELLED',
-            reason,
-            shipping_location_id: shippingLocation.id,
-            receiving_location_id: receivingLocation.id,
+            task_type: "transfer",
+            task_id: order.id,
+            status: "CANCELLED",
             returned_line_count: moveEntries.length,
           },
-        },
-      });
-
-      return {
-        data: {
-          task_type: 'transfer',
-          task_id: order.id,
-          status: 'CANCELLED',
-          returned_line_count: moveEntries.length,
-        },
-      };
-    }, { isolationLevel: 'Serializable' });
+        };
+      },
+      { isolationLevel: "Serializable" },
+    );
 
     if (result.invalid) {
       return res.status(result.statusCode || 400).json({
@@ -2807,19 +3323,287 @@ async function cancelTransferReturn(req, res) {
     }
 
     return res.json({
-      message: 'Cancel return completed: stock moved from SHIPPING to RECEIVING',
+      message:
+        "Cancel return completed: stock moved from SHIPPING to RECEIVING",
       data: result.data,
     });
   } catch (error) {
     if (toSerializableError(error)) {
       return res.status(409).json({
-        message: 'Data changed during cancel return. Please reload and try again.',
-        code: 'CONCURRENCY_CONFLICT',
+        message:
+          "Data changed during cancel return. Please reload and try again.",
+        code: "CONCURRENCY_CONFLICT",
       });
     }
 
-    console.error('Error while cancelling transfer for return:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error("Error while cancelling transfer for return:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function cancelOutboundReturn(req, res) {
+  const taskId = parseId(req.params.taskId);
+  const reason = normalizeText(req.body?.reason);
+  const actorUserId = parseId(req.user?.id);
+
+  if (!taskId) {
+    return res.status(400).json({ message: "Invalid outbound task id" });
+  }
+
+  if (!actorUserId) {
+    return res.status(401).json({ message: "Invalid current user context" });
+  }
+
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRawUnsafe(
+          "SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE",
+          taskId,
+        );
+
+        const order = await tx.outbound_orders.findUnique({
+          where: { id: taskId },
+          select: {
+            id: true,
+            status: true,
+            warehouse_id: true,
+            note: true,
+          },
+        });
+
+        if (!order) {
+          return {
+            invalid: true,
+            statusCode: 404,
+            message: "Outbound order not found",
+          };
+        }
+
+        if (order.status !== "READY_FOR_OUTBOUND") {
+          return {
+            invalid: true,
+            statusCode: 400,
+            message:
+              "Only READY_FOR_OUTBOUND outbound can be cancelled for return",
+          };
+        }
+
+        const lines = await tx.outbound_order_items.findMany({
+          where: { outbound_order_id: order.id },
+          select: {
+            id: true,
+            variant_id: true,
+            processed_qty: true,
+          },
+        });
+
+        const activeLines = lines.filter(
+          (line) => Number(line.processed_qty || 0) > 0,
+        );
+        if (activeLines.length === 0) {
+          return {
+            invalid: true,
+            statusCode: 409,
+            message: "No picked quantity found in outbound order",
+          };
+        }
+
+        const shippingLocation = await resolveOrCreateWarehouseLocation(
+          tx,
+          order.warehouse_id,
+          SHIPPING_LOCATION_TYPE,
+          "SHIPPING",
+          false,
+        );
+
+        const receivingLocation = await resolveOrCreateWarehouseLocation(
+          tx,
+          order.warehouse_id,
+          RECEIVING_LOCATION_TYPES,
+          "RECEIVING",
+          false,
+        );
+
+        const moveEntries = [];
+
+        for (const line of activeLines) {
+          const qty = Number(line.processed_qty || 0);
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            shippingLocation.id,
+          );
+
+          await tx.$queryRawUnsafe(
+            "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+            line.variant_id,
+            receivingLocation.id,
+          );
+
+          const shippingBalance = await tx.stock_balances.findUnique({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+              },
+            },
+            select: { on_hand_qty: true },
+          });
+
+          if (
+            !shippingBalance ||
+            Number(shippingBalance.on_hand_qty || 0) < qty
+          ) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              code: "CONCURRENCY_CONFLICT",
+              message:
+                "Shipping stock changed. Please reload and retry cancel return.",
+            };
+          }
+
+          await tx.stock_balances.update({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+              },
+            },
+            data: {
+              on_hand_qty: { decrement: qty },
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+          });
+
+          await tx.stock_balances.upsert({
+            where: {
+              variant_id_location_id: {
+                variant_id: line.variant_id,
+                location_id: receivingLocation.id,
+              },
+            },
+            update: {
+              on_hand_qty: { increment: qty },
+              available_qty: 0,
+              version: { increment: 1 },
+              last_movement_at: new Date(),
+            },
+            create: {
+              warehouse_id: order.warehouse_id,
+              variant_id: line.variant_id,
+              location_id: receivingLocation.id,
+              on_hand_qty: qty,
+              available_qty: 0,
+              version: 1,
+              last_movement_at: new Date(),
+            },
+          });
+
+          await tx.outbound_order_items.update({
+            where: { id: line.id },
+            data: { processed_qty: 0 },
+          });
+
+          moveEntries.push({ variant_id: line.variant_id, quantity: qty });
+        }
+
+        const baseTimestamp = Date.now();
+        await tx.stock_movements.createMany({
+          data: moveEntries.map((entry, index) => ({
+            movement_number: createMovementNumber(baseTimestamp, index),
+            movement_type: "TRANSFER",
+            movement_status: "POSTED",
+            warehouse_id: order.warehouse_id,
+            variant_id: entry.variant_id,
+            from_location_id: shippingLocation.id,
+            to_location_id: receivingLocation.id,
+            quantity: entry.quantity,
+            unit_cost: 0,
+            source_service: "INVENTORY_SERVICE",
+            reference_type: "OUTBOUND_CANCEL_RETURN",
+            reference_id: order.id,
+            created_by_user_id: actorUserId,
+            metadata: { stage: "CANCEL_RETURN", reason },
+          })),
+        });
+
+        await tx.outbound_orders.update({
+          where: { id: order.id },
+          data: {
+            status: "CANCELLED",
+            note: appendOrderNote(
+              order.note,
+              "CANCEL_RETURN",
+              reason || "Cancelled before outbound",
+            ),
+          },
+        });
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: actorUserId,
+            action_name: "OUTBOUND_CANCEL_RETURN",
+            entity_type: "OUTBOUND_ORDER",
+            entity_id: order.id,
+            after_data: {
+              status: "CANCELLED",
+              reason,
+              shipping_location_id: shippingLocation.id,
+              receiving_location_id: receivingLocation.id,
+              returned_line_count: moveEntries.length,
+            },
+          },
+        });
+
+        return {
+          data: {
+            task_type: "outbound",
+            task_id: order.id,
+            status: "CANCELLED",
+            returned_line_count: moveEntries.length,
+          },
+        };
+      },
+      { isolationLevel: "Serializable" },
+    );
+
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({
+        message: result.message,
+        ...(result.code ? { code: result.code } : {}),
+      });
+    }
+
+    return res.json({
+      message:
+        "Cancel return completed: stock moved from SHIPPING to RECEIVING",
+      data: result.data,
+    });
+  } catch (error) {
+    if (toSerializableError(error)) {
+      return res.status(409).json({
+        message:
+          "Data changed during cancel return. Please reload and try again.",
+        code: "CONCURRENCY_CONFLICT",
+      });
+    }
+
+    console.error("Error while cancelling outbound for return:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function ensureRepicksEndpoint(req, res) {
+  try {
+    await ensureRepicksFromShortages();
+    return res.json({ message: "Repicks checked and created if needed" });
+  } catch (error) {
+    console.error("Error while ensuring repicks:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }
 
@@ -2831,4 +3615,6 @@ module.exports = {
   lookupVariantByBarcode,
   confirmPickingLine,
   cancelTransferReturn,
+  cancelOutboundReturn,
+  ensureRepicksEndpoint,
 };

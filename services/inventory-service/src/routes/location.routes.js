@@ -7,13 +7,14 @@ const {
   updateLocation,
   deleteLocation,
 } = require('../controllers/location.controller');
+const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/tree/:warehouseId', getLocationTreeByWarehouse);
-router.get('/:id', getLocationById);
-router.post('/', createLocation);
-router.put('/:id', updateLocation);
-router.delete('/:id', deleteLocation);
+router.get('/tree/:warehouseId', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationTreeByWarehouse);
+router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationById);
+router.post('/', authorizeAnyPermission(['inventory.stock.write']), createLocation);
+router.put('/:id', authorizeAnyPermission(['inventory.stock.write']), updateLocation);
+router.delete('/:id', authorizeAnyPermission(['inventory.stock.write']), deleteLocation);
 
 module.exports = router;

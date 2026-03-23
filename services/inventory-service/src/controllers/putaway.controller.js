@@ -6,18 +6,11 @@ const READY_PUTAWAY_STATUS = 'POSTED';
 const POSTING_REFERENCE_TYPE = 'GOODS_RECEIPT';
 const PUTAWAY_MOVEMENT_TYPE = 'INBOUND';
 
-function parseId(value) {
-  return String(value || '').trim() || null;
-}
-
-function createMovementNumber(baseTimestamp, index) {
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `MV-${baseTimestamp}-${index + 1}-${suffix}`;
-}
-
-function normalizeLocationType(value) {
-  return String(value || '').trim().toUpperCase();
-}
+const { parseId } = require('../utils/validation');
+const { toInt } = require('../utils/validation');
+const { normalizeLocationType } = require('../utils/validation');
+const { createMovementNumber } = require('../utils/inventory');
+const { MAX_COMPARTMENT_CAPACITY } = require('../utils/constants');
 
 function getAncestorByType(location, locationMap, targetType) {
   const normalizedTarget = normalizeLocationType(targetType);
@@ -52,12 +45,6 @@ function getShelfAncestor(location, locationMap) {
   return getAncestorByType(location, locationMap, 'SHELF');
 }
 
-function toInt(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  return Math.trunc(num);
-}
-
 function aggregateBalanceEntries(entries) {
   const map = new Map();
 
@@ -77,6 +64,34 @@ function aggregateBalanceEntries(entries) {
   });
 
   return Array.from(map.values());
+}
+
+async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
+  const found = await tx.locations.findFirst({
+    where: {
+      warehouse_id: warehouseId,
+      is_active: true,
+      location_type: { in: ['RECEIVING', 'STAGING'] },
+    },
+    select: { id: true, location_code: true },
+    orderBy: { location_code: 'asc' },
+  });
+
+  if (found) return found;
+
+  const ts = Date.now();
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return tx.locations.create({
+    data: {
+      warehouse_id: warehouseId,
+      location_code: 'RECEIVING',
+      location_type: 'RECEIVING',
+      zone: 'RECEIVING',
+      is_pickable: false,
+      is_active: true,
+    },
+    select: { id: true, location_code: true },
+  });
 }
 
 async function getReadyReceipts(req, res) {
@@ -112,19 +127,43 @@ async function getReadyReceipts(req, res) {
         },
         select: {
           reference_id: true,
+          quantity: true,
+          metadata: true,
         },
       })
       : [];
 
-    const postedReceiptIds = new Set(postedMovements.map((item) => String(item.reference_id)));
+    // Sum PUTAWAY bucket per receipt line (same rules as getReadyReceiptDetail).
+    const putawayQtyByReceiptItem = new Map();
+    postedMovements.forEach((movement) => {
+      const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
+      const itemId = metadata && metadata.goods_receipt_item_id ? String(metadata.goods_receipt_item_id) : null;
+      const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
+      if (!itemId || bucket !== 'PUTAWAY' || !movement.reference_id) return;
+      const rid = String(movement.reference_id);
+      const key = `${rid}::${itemId}`;
+      putawayQtyByReceiptItem.set(
+        key,
+        (putawayQtyByReceiptItem.get(key) || 0) + Number(movement.quantity || 0),
+      );
+    });
 
     const data = receipts.map((receipt) => {
       const totalLines = receipt.goods_receipt_items.length;
       const totalQuantity = receipt.goods_receipt_items.reduce((sum, item) => sum + item.quantity, 0);
-      const allocatedLines = receipt.goods_receipt_items.filter((item) => item.location_id).length;
-      const putawayQuantity = receipt.goods_receipt_items
-        .filter((item) => item.location_id)
-        .reduce((sum, item) => sum + item.quantity, 0);
+
+      let putawayQuantity = 0;
+      let allocatedLines = 0;
+      receipt.goods_receipt_items.forEach((item) => {
+        const key = `${receipt.id}::${String(item.id)}`;
+        const fromMovements = putawayQtyByReceiptItem.get(key) || 0;
+        const linePutaway = fromMovements > 0
+          ? Math.min(Number(item.quantity || 0), fromMovements)
+          : (item.location_id ? Number(item.quantity || 0) : 0);
+        putawayQuantity += linePutaway;
+        if (linePutaway > 0) allocatedLines += 1;
+      });
+
       const remainingQuantity = Math.max(totalQuantity - putawayQuantity, 0);
 
       return {
@@ -143,7 +182,7 @@ async function getReadyReceipts(req, res) {
         putaway_quantity: putawayQuantity,
         remaining_quantity: remainingQuantity,
       };
-    }).filter((receipt) => !postedReceiptIds.has(receipt.id));
+    }).filter((receipt) => receipt.remaining_quantity > 0);
 
     return res.json(data);
   } catch (error) {
@@ -315,6 +354,7 @@ async function getPutawayLocations(req, res) {
         location_type: true,
         location_code: true,
         is_active: true,
+        capacity_qty: true,
       },
       orderBy: { location_code: 'asc' },
     });
@@ -345,7 +385,7 @@ async function getPutawayLocations(req, res) {
 
     const shelvesById = new Map(shelves.map((item) => [item.id, item]));
 
-    const compartments = locations
+    const compartmentRows = locations
       .filter((item) => {
         const type = normalizeLocationType(item.location_type);
         return type === 'SHELF_COMPARTMENT' || type === 'BIN';
@@ -368,9 +408,44 @@ async function getPutawayLocations(req, res) {
           shelf_id: shelf.id,
           shelf_code: shelf.location_code,
           zone_id: shelfInfo.zone_id,
+          capacity_qty: item.capacity_qty,
         };
       })
       .filter(Boolean);
+
+    const compartmentIds = compartmentRows.map((row) => row.id);
+    const occupancyByLocation = new Map();
+    if (compartmentIds.length > 0) {
+      const occupancy = await prisma.stock_balances.groupBy({
+        by: ['location_id'],
+        where: { location_id: { in: compartmentIds } },
+        _sum: { on_hand_qty: true },
+      });
+      occupancy.forEach((row) => {
+        occupancyByLocation.set(row.location_id, Number(row._sum.on_hand_qty || 0));
+      });
+    }
+
+    const compartments = compartmentRows.map((row) => {
+      const locationCapacity = Number(row.capacity_qty || 0);
+      const maxCapacity =
+        locationCapacity > 0
+          ? Math.min(locationCapacity, MAX_COMPARTMENT_CAPACITY)
+          : MAX_COMPARTMENT_CAPACITY;
+      const occupiedQty = occupancyByLocation.get(row.id) || 0;
+      const remainingCapacity = Math.max(maxCapacity - occupiedQty, 0);
+      return {
+        id: row.id,
+        location_code: row.location_code,
+        location_name: row.location_name,
+        shelf_id: row.shelf_id,
+        shelf_code: row.shelf_code,
+        zone_id: row.zone_id,
+        capacity_qty: row.capacity_qty == null ? null : locationCapacity,
+        occupied_qty: occupiedQty,
+        remaining_capacity: remainingCapacity,
+      };
+    });
 
     return res.json({
       warehouse_id: receipt.warehouse_id,
@@ -414,18 +489,6 @@ async function confirmPutaway(req, res) {
         return { invalid: true, message: 'Only POSTED goods receipts can be put away' };
       }
 
-      const postedMovementCount = await tx.stock_movements.count({
-        where: {
-          reference_type: POSTING_REFERENCE_TYPE,
-          reference_id: receiptId,
-          movement_status: 'POSTED',
-        },
-      });
-
-      if (postedMovementCount > 0) {
-        return { invalid: true, message: 'Goods receipt has already been posted to stock' };
-      }
-
       const receiptItems = await tx.goods_receipt_items.findMany({
         where: { goods_receipt_id: receiptId },
         select: {
@@ -440,6 +503,45 @@ async function confirmPutaway(req, res) {
 
       if (receiptItems.length === 0) {
         return { invalid: true, message: 'Goods receipt has no item lines' };
+      }
+
+      // Track which items are already fully putaway (location already assigned).
+      const alreadyPutawayItemIds = new Set(
+        receiptItems.filter((item) => item.location_id !== null).map((item) => String(item.id))
+      );
+
+      // Build a map of already-posted putaway quantities per item.
+      const existingPostedMovements = await tx.stock_movements.findMany({
+        where: {
+          reference_type: POSTING_REFERENCE_TYPE,
+          reference_id: receiptId,
+          movement_status: 'POSTED',
+        },
+        select: { quantity: true, metadata: true },
+      });
+
+      const alreadyPutawayQtyByItem = new Map();
+      existingPostedMovements.forEach((m) => {
+        const meta = m.metadata && typeof m.metadata === 'object' ? m.metadata : null;
+        const itemId = meta?.goods_receipt_item_id ? String(meta.goods_receipt_item_id) : null;
+        const bucket = meta?.movement_bucket ? String(meta.movement_bucket) : null;
+        if (!itemId || bucket !== 'PUTAWAY') return;
+        const current = alreadyPutawayQtyByItem.get(itemId) || 0;
+        alreadyPutawayQtyByItem.set(itemId, current + Number(m.quantity || 0));
+      });
+
+      // Items that still need to be putaway (fully or partially).
+      const itemsToProcess = receiptItems.filter((item) => {
+        if (!alreadyPutawayItemIds.has(String(item.id))) return true;
+        const alreadyDone = alreadyPutawayQtyByItem.get(String(item.id)) || 0;
+        return alreadyDone < Number(item.quantity || 0);
+      });
+
+      if (itemsToProcess.length === 0) {
+        return {
+          invalid: true,
+          message: 'All item lines have already been fully putaway',
+        };
       }
 
       const allocationMap = new Map();
@@ -467,7 +569,7 @@ async function confirmPutaway(req, res) {
         });
       }
 
-      for (const item of receiptItems) {
+      for (const item of itemsToProcess) {
         if (!allocationMap.has(String(item.id))) {
           return { invalid: true, message: 'Cannot complete putaway while some item lines are not allocated' };
         }
@@ -507,6 +609,7 @@ async function confirmPutaway(req, res) {
         const itemId = String(item.id);
         const allocation = allocationMap.get(itemId);
         const totalQuantity = Number(item.quantity || 0);
+        const alreadyPutawayQty = alreadyPutawayQtyByItem.get(itemId) || 0;
         const putawayQuantity = allocation.putaway_quantity;
 
         if (putawayQuantity > totalQuantity) {
@@ -552,15 +655,9 @@ async function confirmPutaway(req, res) {
           }
         }
 
-        const remainingQuantity = totalQuantity - putawayQuantity;
+        // remaining after this putaway session, accounting for any previous partial putaway
+        const remainingQuantity = Math.max(totalQuantity - alreadyPutawayQty - putawayQuantity, 0);
         const remainingLocationId = remainingQuantity > 0 ? (fallbackLocation?.id || null) : null;
-        if (remainingQuantity > 0 && !remainingLocationId) {
-          return {
-            invalid: true,
-            message: 'Remaining quantity must be moved to an active RECEIVING/STAGING location in this warehouse',
-          };
-        }
-
         if (putawayQuantity > 0) {
           postingEntries.push({
             goods_receipt_item_id: itemId,
@@ -589,6 +686,77 @@ async function confirmPutaway(req, res) {
             ? remainingLocationId
             : (putawayQuantity > 0 ? compartment.id : null),
         });
+      }
+
+      const putawayIncrementByLocation = new Map();
+      postingEntries.forEach((entry) => {
+        if (entry.movement_bucket === 'PUTAWAY' && entry.location_id) {
+          const lid = entry.location_id;
+          const add = Number(entry.quantity || 0);
+          putawayIncrementByLocation.set(lid, (putawayIncrementByLocation.get(lid) || 0) + add);
+        }
+      });
+
+      const putawayLocationIds = Array.from(putawayIncrementByLocation.keys());
+      if (putawayLocationIds.length > 0) {
+        await tx.$queryRawUnsafe(
+          'SELECT id FROM locations WHERE id = ANY($1::uuid[]) FOR UPDATE',
+          putawayLocationIds,
+        );
+
+        const targetLocs = await tx.locations.findMany({
+          where: {
+            id: { in: putawayLocationIds },
+            warehouse_id: receipt.warehouse_id,
+            is_active: true,
+          },
+          select: {
+            id: true,
+            location_code: true,
+            location_type: true,
+            capacity_qty: true,
+          },
+        });
+
+        if (targetLocs.length !== putawayLocationIds.length) {
+          return { invalid: true, message: 'One or more putaway target locations are invalid or inactive' };
+        }
+
+        const occRows = await tx.stock_balances.groupBy({
+          by: ['location_id'],
+          where: { location_id: { in: putawayLocationIds } },
+          _sum: { on_hand_qty: true },
+        });
+        const occMap = new Map();
+        occRows.forEach((row) => {
+          occMap.set(row.location_id, Number(row._sum.on_hand_qty || 0));
+        });
+        const locById = new Map(targetLocs.map((loc) => [loc.id, loc]));
+
+        for (const [locationId, increment] of putawayIncrementByLocation) {
+          const target = locById.get(locationId);
+          const compartmentType = normalizeLocationType(target.location_type);
+          if (compartmentType !== 'SHELF_COMPARTMENT' && compartmentType !== 'BIN') {
+            return {
+              invalid: true,
+              message: `Location ${target.location_code} is not a valid shelf compartment for putaway`,
+            };
+          }
+          const currentOnHand = occMap.get(locationId) || 0;
+          const locationCapacity = Number(target.capacity_qty || 0);
+          const maxCapacity =
+            locationCapacity > 0
+              ? Math.min(locationCapacity, MAX_COMPARTMENT_CAPACITY)
+              : MAX_COMPARTMENT_CAPACITY;
+          const remaining = Math.max(maxCapacity - currentOnHand, 0);
+          if (increment > remaining) {
+            return {
+              invalid: true,
+              message:
+                `Shelf compartment ${target.location_code} only has ${remaining} remaining capacity (max ${maxCapacity}, currently ${currentOnHand}). Cannot put away ${increment} unit(s).`,
+            };
+          }
+        }
       }
 
       await Promise.all(updates.map((update) => tx.goods_receipt_items.update({
