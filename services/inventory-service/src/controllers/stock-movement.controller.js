@@ -75,7 +75,7 @@ async function getStockMovements(req, res) {
         movement_type: movement.movement_type,
         type,
         quantity: movement.quantity,
-        delta: type === 'outbound' ? -movement.quantity : (type === 'transfer' ? 0 : movement.quantity),
+        delta: type === 'outbound' ? -movement.quantity : movement.quantity,
         unit_cost: Number(movement.unit_cost || 0),
         warehouse_id: movement.warehouse_id,
         warehouse_name: movement.warehouses?.name || null,

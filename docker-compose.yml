@@ -87,7 +87,7 @@ services:
   auth-db-push:
     profiles: ["dev"]
     build: ./services/auth-service
-    command: sh -c "npx prisma db push --skip-generate"
+    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
     depends_on:
@@ -97,7 +97,7 @@ services:
   borrow-db-push:
     profiles: ["dev"]
     build: ./services/borrow-service
-    command: sh -c "npx prisma db push --skip-generate"
+    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
     depends_on:

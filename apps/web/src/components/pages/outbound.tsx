@@ -104,14 +104,9 @@ export function OutboundPage() {
       return;
     }
 
-    const normalizedCode = scanCode.trim();
-    if (!normalizedCode) {
-      toast.error('Vui long nhap hoac scan ma don truoc khi confirm outbound');
-      return;
-    }
-
     try {
       setConfirming(true);
+      const normalizedCode = scanCode.trim() || null;
       const response = await outboundService.confirmOutbound(selectedTaskType, selectedTaskId, normalizedCode);
       const destinationReceiptNumber = response.data.destination_receipt_number;
 

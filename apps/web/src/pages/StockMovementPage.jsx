@@ -23,7 +23,12 @@ function TypeBadge({ type }) {
 
 function DeltaCell({ type, delta, note }) {
   if (type === 'transfer') {
-    return <span className="text-blue-600 text-xs font-medium">{note ?? '—'}</span>;
+    return (
+      <div className="text-center">
+        <span className="text-blue-600 font-semibold text-sm">+{delta}</span>
+        <p className="text-blue-500 text-xs font-medium mt-0.5">{note ?? '—'}</p>
+      </div>
+    );
   }
   const positive = delta > 0;
   return (

@@ -129,7 +129,7 @@ export function MovementsPage() {
                       <div className="flex items-center gap-2 text-[12px] text-slate-600">
                         <span style={{ fontWeight: 550 }}>{m.book_title}</span>
                         <span className="text-slate-400">·</span>
-                        <span className={m.delta >= 0 ? "text-emerald-600" : "text-rose-600"} style={{ fontWeight: 550 }}>
+                        <span className={m.type === "transfer" ? "text-blue-600" : (m.delta >= 0 ? "text-emerald-600" : "text-rose-600")} style={{ fontWeight: 550 }}>
                           {m.delta >= 0 ? "+" : ""}{m.delta} units
                         </span>
                       </div>

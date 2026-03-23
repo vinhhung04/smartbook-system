@@ -1,7 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('./middlewares/auth.middleware');
+
+const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
 const warehouseRoutes = require('./routes/warehouse.routes');
 const locationRoutes = require('./routes/location.routes');
@@ -43,14 +46,19 @@ app.use('/api/outbound', outboundRoutes);
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
 app.get('/api/inventory', async (req, res) => {
   try {
-    const books = await prisma.book.findMany({
+    const books = await prisma.books.findMany({
       include: {
-        variants: {
+        book_variants: {
           include: {
-            inventories: {
-              select: {
-                location: true,
-                quantity: true,
+            stock_balances: {
+              include: {
+                locations: {
+                  select: {
+                    id: true,
+                    location_code: true,
+                    location_type: true,
+                  },
+                },
               },
             },
           },
@@ -67,23 +75,43 @@ app.get('/api/inventory', async (req, res) => {
 // ─── POST /api/inventory/inbound ─────────────────────────────────────────────
 // Nhập kho: cộng số lượng vào Inventory và ghi log StockMovement (type: IN)
 app.post('/api/inventory/inbound', async (req, res) => {
-  const { variantId, location, quantity } = req.body;
+  const { variantId, locationId, warehouseId, quantity, unitCost } = req.body;
 
-  if (!variantId || !location || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'variantId, location và quantity (> 0) là bắt buộc' });
+  if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {
+    return res.status(400).json({ error: 'variantId, locationId, warehouseId và quantity (> 0) là bắt buộc' });
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Upsert: nếu đã có bản ghi với cùng variantId + location thì cộng thêm; nếu chưa thì tạo mới
-      const inventory = await tx.inventory.upsert({
-        where: { variantId_location: { variantId, location } },
-        update: { quantity: { increment: quantity } },
-        create: { variantId, location, quantity },
+      // Upsert: nếu đã có bản ghi với cùng variant_id + location_id thì cộng thêm; nếu chưa thì tạo mới
+      const inventory = await tx.stock_balances.upsert({
+        where: {
+          variant_id_location_id: { variant_id: variantId, location_id: locationId },
+        },
+        update: {
+          on_hand_qty: { increment: quantity },
+          available_qty: { increment: quantity },
+        },
+        create: {
+          variant_id: variantId,
+          location_id: locationId,
+          warehouse_id: warehouseId,
+          on_hand_qty: quantity,
+          available_qty: quantity,
+        },
       });
 
-      const movement = await tx.stockMovement.create({
-        data: { variantId, type: 'IN', quantity },
+      const movement = await tx.stock_movements.create({
+        data: {
+          movement_number: `IN-${Date.now()}`,
+          movement_type: 'IN',
+          warehouse_id: warehouseId,
+          variant_id: variantId,
+          to_location_id: locationId,
+          quantity,
+          unit_cost: unitCost || 0,
+          source_service: 'inventory-service',
+        },
       });
 
       return { inventory, movement };
@@ -99,15 +127,19 @@ app.post('/api/inventory/inbound', async (req, res) => {
 // ─── POST /api/inventory/outbound ────────────────────────────────────────────
 // Xuất kho: trừ số lượng tồn và ghi log StockMovement (type: OUT)
 app.post('/api/inventory/outbound', async (req, res) => {
-  const { variantId, location, quantity } = req.body;
+  const { variantId, locationId, warehouseId, quantity } = req.body;
 
-  if (!variantId || !location || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'variantId, location và quantity (> 0) là bắt buộc' });
+  if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {
+    return res.status(400).json({ error: 'variantId, locationId, warehouseId và quantity (> 0) là bắt buộc' });
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const inventory = await tx.inventory.findFirst({ where: { variantId, location } });
+      const inventory = await tx.stock_balances.findUnique({
+        where: {
+          variant_id_location_id: { variant_id: variantId, location_id: locationId },
+        },
+      });
 
       if (!inventory) {
         const err = new Error('Không tìm thấy bản ghi tồn kho cho variant và vị trí này');
@@ -115,21 +147,32 @@ app.post('/api/inventory/outbound', async (req, res) => {
         throw err;
       }
 
-      if (inventory.quantity < quantity) {
+      if (inventory.on_hand_qty < quantity) {
         const err = new Error(
-          `Số lượng tồn kho không đủ. Hiện có: ${inventory.quantity}, yêu cầu xuất: ${quantity}`
+          `Số lượng tồn kho không đủ. Hiện có: ${inventory.on_hand_qty}, yêu cầu xuất: ${quantity}`
         );
         err.statusCode = 400;
         throw err;
       }
 
-      const updated = await tx.inventory.update({
+      const updated = await tx.stock_balances.update({
         where: { id: inventory.id },
-        data: { quantity: { decrement: quantity } },
+        data: {
+          on_hand_qty: { decrement: quantity },
+          available_qty: { decrement: quantity },
+        },
       });
 
-      const movement = await tx.stockMovement.create({
-        data: { variantId, type: 'OUT', quantity },
+      const movement = await tx.stock_movements.create({
+        data: {
+          movement_number: `OUT-${Date.now()}`,
+          movement_type: 'OUT',
+          warehouse_id: warehouseId,
+          variant_id: variantId,
+          from_location_id: locationId,
+          quantity,
+          source_service: 'inventory-service',
+        },
       });
 
       return { inventory: updated, movement };

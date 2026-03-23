@@ -20,6 +20,56 @@ interface LineAllocation {
   putaway_quantity: number;
 }
 
+function getCompartment(
+  compartments: PutawayCompartment[],
+  compartmentId: string,
+): PutawayCompartment | undefined {
+  return compartments.find((c) => c.id === compartmentId);
+}
+
+/** Max putaway for this line: min(line remaining, compartment slots left vs other lines in form). */
+function computeEffectivePutawayMax(
+  itemId: string,
+  compartmentId: string,
+  allocations: Record<string, LineAllocation>,
+  compartments: PutawayCompartment[],
+  lineRemaining: number,
+): number {
+  const lineMax = Math.max(0, lineRemaining);
+  if (!compartmentId) return lineMax;
+  const compartment = getCompartment(compartments, compartmentId);
+  if (!compartment || compartment.remaining_capacity == null) return lineMax;
+  const othersOnSameCompartment = Object.entries(allocations).reduce((sum, [id, a]) => {
+    if (id === itemId) return sum;
+    if (a.compartment_id === compartmentId) return sum + (Number(a.putaway_quantity) || 0);
+    return sum;
+  }, 0);
+  return Math.min(lineMax, Math.max(0, compartment.remaining_capacity - othersOnSameCompartment));
+}
+
+function validateCompartmentCapacities(
+  payload: { compartment_id: string; putaway_quantity: number }[],
+  compartments: PutawayCompartment[],
+): string | null {
+  const byCompartment = new Map<string, number>();
+  for (const line of payload) {
+    if (line.putaway_quantity > 0 && line.compartment_id) {
+      byCompartment.set(
+        line.compartment_id,
+        (byCompartment.get(line.compartment_id) || 0) + line.putaway_quantity,
+      );
+    }
+  }
+  for (const [compId, total] of byCompartment) {
+    const comp = getCompartment(compartments, compId);
+    if (!comp || comp.remaining_capacity == null) continue;
+    if (total > comp.remaining_capacity) {
+      return `Ngăn ${comp.location_code}: tổng ${total} vượt sức chứa còn lại (${comp.remaining_capacity}).`;
+    }
+  }
+  return null;
+}
+
 export function PutawayExecutePage() {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
@@ -45,7 +95,7 @@ export function PutawayExecutePage() {
           zone_id: "",
           shelf_id: "",
           compartment_id: "",
-          putaway_quantity: item.remaining_quantity > 0 ? item.remaining_quantity : item.quantity,
+          putaway_quantity: item.remaining_quantity > 0 ? item.remaining_quantity : 0,
         };
       });
       return next;
@@ -73,15 +123,27 @@ export function PutawayExecutePage() {
     return lineItems.filter((item) => {
       const current = allocations[item.id];
       if (!current) return true;
-      if (!Number.isFinite(current.putaway_quantity) || current.putaway_quantity < 0 || current.putaway_quantity > item.quantity) {
+      const lineMax = Math.max(0, item.remaining_quantity);
+      if (item.remaining_quantity <= 0) {
+        return current.putaway_quantity !== 0;
+      }
+      if (!Number.isFinite(current.putaway_quantity) || current.putaway_quantity < 0 || current.putaway_quantity > lineMax) {
         return true;
       }
+      const effMax = computeEffectivePutawayMax(
+        item.id,
+        current.compartment_id,
+        allocations,
+        locationData.compartments || [],
+        lineMax,
+      );
+      if (current.putaway_quantity > effMax) return true;
       if (current.putaway_quantity === 0) {
         return false;
       }
       return !current.zone_id || !current.shelf_id || !current.compartment_id;
     }).length;
-  }, [allocations, lineItems]);
+  }, [allocations, lineItems, locationData.compartments]);
 
   const shelfOptionsByZone = useMemo(() => {
     const grouped: Record<string, { id: string; location_code: string }[]> = {};
@@ -93,10 +155,10 @@ export function PutawayExecutePage() {
   }, [locationData.shelves]);
 
   const compartmentOptionsByShelf = useMemo(() => {
-    const grouped: Record<string, { id: string; location_code: string }[]> = {};
+    const grouped: Record<string, PutawayCompartment[]> = {};
     (locationData.compartments || []).forEach((compartment: PutawayCompartment) => {
       if (!grouped[compartment.shelf_id]) grouped[compartment.shelf_id] = [];
-      grouped[compartment.shelf_id].push({ id: compartment.id, location_code: compartment.location_code });
+      grouped[compartment.shelf_id].push(compartment);
     });
     return grouped;
   }, [locationData.compartments]);
@@ -125,25 +187,49 @@ export function PutawayExecutePage() {
   };
 
   const updateCompartment = (itemId: string, compartmentId: string) => {
-    setAllocations((prev) => ({
-      ...prev,
-      [itemId]: {
-        ...(prev[itemId] || { zone_id: "", shelf_id: "", compartment_id: "", putaway_quantity: 0 }),
-        compartment_id: compartmentId,
-      },
-    }));
+    setAllocations((prev) => {
+      const base = prev[itemId] || { zone_id: "", shelf_id: "", compartment_id: "", putaway_quantity: 0 };
+      const item = lineItems.find((i) => i.id === itemId);
+      const lineMax = Math.max(0, item?.remaining_quantity ?? 0);
+      const next = { ...base, compartment_id: compartmentId };
+      const eff = computeEffectivePutawayMax(
+        itemId,
+        compartmentId,
+        { ...prev, [itemId]: next },
+        locationData.compartments || [],
+        lineMax,
+      );
+      return {
+        ...prev,
+        [itemId]: {
+          ...next,
+          putaway_quantity: Math.min(next.putaway_quantity, eff),
+        },
+      };
+    });
   };
 
-  const updatePutawayQuantity = (itemId: string, maxQuantity: number, rawValue: string) => {
-    const parsed = Number(rawValue);
-    const nextQuantity = Number.isFinite(parsed) ? Math.max(0, Math.min(maxQuantity, Math.trunc(parsed))) : 0;
-    setAllocations((prev) => ({
-      ...prev,
-      [itemId]: {
-        ...(prev[itemId] || { zone_id: "", shelf_id: "", compartment_id: "", putaway_quantity: 0 }),
-        putaway_quantity: nextQuantity,
-      },
-    }));
+  const updatePutawayQuantity = (itemId: string, lineRemaining: number, rawValue: string) => {
+    setAllocations((prev) => {
+      const alloc = prev[itemId] || { zone_id: "", shelf_id: "", compartment_id: "", putaway_quantity: 0 };
+      const lineMax = Math.max(0, lineRemaining);
+      const effMax = computeEffectivePutawayMax(
+        itemId,
+        alloc.compartment_id,
+        prev,
+        locationData.compartments || [],
+        lineMax,
+      );
+      const parsed = Number(rawValue);
+      const nextQuantity = Number.isFinite(parsed) ? Math.max(0, Math.min(effMax, Math.trunc(parsed))) : 0;
+      return {
+        ...prev,
+        [itemId]: {
+          ...alloc,
+          putaway_quantity: nextQuantity,
+        },
+      };
+    });
   };
 
   const handleConfirm = async () => {
@@ -160,9 +246,21 @@ export function PutawayExecutePage() {
     const hasInvalidLine = payload.some((line) => {
       const sourceItem = detail.items.find((item) => item.id === line.item_id);
       if (!sourceItem) return true;
-      if (!Number.isFinite(line.putaway_quantity) || line.putaway_quantity < 0 || line.putaway_quantity > sourceItem.quantity) {
+      const lineMax = Math.max(0, sourceItem.remaining_quantity);
+      if (sourceItem.remaining_quantity <= 0) {
+        return line.putaway_quantity !== 0;
+      }
+      if (!Number.isFinite(line.putaway_quantity) || line.putaway_quantity < 0 || line.putaway_quantity > lineMax) {
         return true;
       }
+      const effMax = computeEffectivePutawayMax(
+        line.item_id,
+        line.compartment_id,
+        allocations,
+        locationData.compartments || [],
+        lineMax,
+      );
+      if (line.putaway_quantity > effMax) return true;
       if (line.putaway_quantity === 0) {
         return false;
       }
@@ -170,6 +268,18 @@ export function PutawayExecutePage() {
     });
     if (hasInvalidLine) {
       toast.error("Vui long nhap dung so luong va chon du Vi tri/Kệ/Tang-Ngan cho cac dong co nhap ke");
+      return;
+    }
+
+    const capErr = validateCompartmentCapacities(payload, locationData.compartments || []);
+    if (capErr) {
+      toast.error(capErr);
+      return;
+    }
+
+    const allZeroQty = payload.every((line) => line.putaway_quantity === 0);
+    if (allZeroQty) {
+      toast.error("So luong putaway khong duoc la 0. Vui long nhap so luong lon hon 0.");
       return;
     }
 
@@ -234,9 +344,11 @@ export function PutawayExecutePage() {
                 const lineAllocation = allocations[item.id] || { zone_id: "", shelf_id: "", compartment_id: "", putaway_quantity: 0 };
                 const shelfOptions = lineAllocation.zone_id ? (shelfOptionsByZone[lineAllocation.zone_id] || []) : [];
                 const compartmentOptions = lineAllocation.shelf_id ? (compartmentOptionsByShelf[lineAllocation.shelf_id] || []) : [];
-                const remainToStock = Math.max(item.quantity - Number(lineAllocation.putaway_quantity || 0), 0);
+                const lineMax = Math.max(0, item.remaining_quantity);
+                const remainToStock = Math.max(item.remaining_quantity - Number(lineAllocation.putaway_quantity || 0), 0);
                 const putawayQty = Number(lineAllocation.putaway_quantity || 0);
                 const isDone = putawayQty > 0 && Boolean(lineAllocation.zone_id && lineAllocation.shelf_id && lineAllocation.compartment_id);
+                const rowDisabled = item.remaining_quantity <= 0;
                 return (
                   <tr key={item.id} className="border-b border-slate-50 last:border-0">
                     <td className="px-4 py-3 text-[12px]">
@@ -248,7 +360,8 @@ export function PutawayExecutePage() {
                       <select
                         value={lineAllocation.zone_id}
                         onChange={(event: ChangeEvent<HTMLSelectElement>) => updateZone(item.id, event.target.value)}
-                        className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15"
+                        disabled={rowDisabled}
+                        className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15 disabled:opacity-60"
                       >
                         <option value="">Chon Zone</option>
                         {locationData.zones.map((zone: PutawayZone) => (
@@ -260,7 +373,7 @@ export function PutawayExecutePage() {
                       <select
                         value={lineAllocation.shelf_id}
                         onChange={(event: ChangeEvent<HTMLSelectElement>) => updateShelf(item.id, event.target.value)}
-                        disabled={!lineAllocation.zone_id}
+                        disabled={rowDisabled || !lineAllocation.zone_id}
                         className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15 disabled:opacity-60"
                       >
                         <option value="">Chon Shelf</option>
@@ -273,12 +386,17 @@ export function PutawayExecutePage() {
                       <select
                         value={lineAllocation.compartment_id}
                         onChange={(event: ChangeEvent<HTMLSelectElement>) => updateCompartment(item.id, event.target.value)}
-                        disabled={!lineAllocation.shelf_id}
+                        disabled={rowDisabled || !lineAllocation.shelf_id}
                         className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15 disabled:opacity-60"
                       >
                         <option value="">Chon Tang/Ngan Ke</option>
-                        {compartmentOptions.map((compartment: { id: string; location_code: string }) => (
-                          <option key={compartment.id} value={compartment.id}>{compartment.location_code}</option>
+                        {compartmentOptions.map((compartment: PutawayCompartment) => (
+                          <option key={compartment.id} value={compartment.id}>
+                            {compartment.location_code}
+                            {compartment.remaining_capacity != null
+                              ? ` (con ${compartment.remaining_capacity})`
+                              : ""}
+                          </option>
                         ))}
                       </select>
                     </td>
@@ -286,15 +404,18 @@ export function PutawayExecutePage() {
                       <input
                         type="number"
                         min={0}
-                        max={item.quantity}
+                        max={lineMax}
                         value={lineAllocation.putaway_quantity}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => updatePutawayQuantity(item.id, item.quantity, event.target.value)}
-                        className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15"
+                        disabled={rowDisabled}
+                        onChange={(event: ChangeEvent<HTMLInputElement>) => updatePutawayQuantity(item.id, item.remaining_quantity, event.target.value)}
+                        className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15 disabled:opacity-60"
                       />
                     </td>
                     <td className="px-4 py-3 text-[12px] text-blue-700" style={{ fontWeight: 600 }}>{remainToStock}</td>
                     <td className="px-4 py-3 text-[12px]" style={{ fontWeight: 600 }}>
-                      {isDone ? (
+                      {rowDisabled ? (
+                        <span className="text-slate-400">Da xong</span>
+                      ) : isDone ? (
                         <span className="text-emerald-700">Da phan bo</span>
                       ) : putawayQty === 0 ? (
                         <span className="text-slate-500">Khong nhap ke</span>

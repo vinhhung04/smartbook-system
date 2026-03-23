@@ -554,6 +554,8 @@ CREATE TABLE IF NOT EXISTS goods_receipts (
         CHECK (status IN ('DRAFT', 'POSTED', 'CANCELLED')),
     received_by_user_id UUID NOT NULL,
     received_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    cancelled_by_user_id UUID,
     note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

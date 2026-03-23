@@ -14,5 +14,11 @@
     "dev:auth": "pnpm --filter auth-service dev",
     "dev:inventory": "pnpm --filter inventory-service dev",
     "dev:gateway": "pnpm --filter api-gateway dev"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5"
   }
 }
