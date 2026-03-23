@@ -16,7 +16,8 @@ export interface GoodsReceipt {
 }
 
 export interface GoodsReceiptItem {
-  variant_id: string;
+  variant_id?: string;
+  isbn13?: string;
   location_id?: string | null;
   quantity: number;
   unit_cost: number;

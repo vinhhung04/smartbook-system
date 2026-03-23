@@ -18,12 +18,16 @@ interface WarehouseOption {
 
 interface ReceiptItemForm {
   id: string;
-  barcode: string;
-  variant_id: string;
+  isbn13: string;
+  variant_id?: string;
   title: string;
   qty: number;
   unit_cost: number;
   is_new_book?: boolean;
+}
+
+function normalizeIsbn13(value: string): string {
+  return String(value || "").trim().replace(/[^0-9]/g, "");
 }
 
 function formatCurrency(value: number): string {
@@ -38,7 +42,7 @@ export function GoodsReceiptPage() {
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
-  const [barcodeInput, setBarcodeInput] = useState("");
+  const [isbn13Input, setIsbn13Input] = useState("");
   const [items, setItems] = useState<ReceiptItemForm[]>([]);
   const [note, setNote] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +50,7 @@ export function GoodsReceiptPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showNewBookModal, setShowNewBookModal] = useState(false);
-  const [pendingBarcode, setPendingBarcode] = useState("");
+  const [pendingIsbn13, setPendingIsbn13] = useState("");
   const [pendingTitle, setPendingTitle] = useState("");
   const [isCreatingNewBook, setIsCreatingNewBook] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -84,7 +88,7 @@ export function GoodsReceiptPage() {
     const defaultQty = Number(nextItem.qty || 1);
 
     setItems((prev) => {
-      const index = prev.findIndex((item) => item.variant_id === nextItem.variant_id);
+      const index = prev.findIndex((item) => item.isbn13 === nextItem.isbn13);
       if (index >= 0) {
         const clone = [...prev];
         clone[index] = {
@@ -99,7 +103,7 @@ export function GoodsReceiptPage() {
         ...prev,
         {
           id: makeRowId(),
-          barcode: nextItem.barcode,
+          isbn13: nextItem.isbn13,
           variant_id: nextItem.variant_id,
           title: nextItem.title,
           qty: defaultQty,
@@ -111,11 +115,11 @@ export function GoodsReceiptPage() {
   };
 
   const handleCreateIncompleteBook = async () => {
-    const barcode = pendingBarcode.trim();
+    const isbn13 = normalizeIsbn13(pendingIsbn13);
     const title = pendingTitle.trim();
 
-    if (!barcode) {
-      toast.error("Barcode khong hop le");
+    if (!/^\d{13}$/.test(isbn13)) {
+      toast.error("ISBN13 khong hop le");
       return;
     }
 
@@ -127,7 +131,7 @@ export function GoodsReceiptPage() {
     try {
       setIsCreatingNewBook(true);
       const created = await bookService.createIncomplete({
-        barcode,
+        isbn13,
         title,
         price: 0,
         language: "vi",
@@ -140,17 +144,17 @@ export function GoodsReceiptPage() {
       }
 
       upsertReceiptItem({
-        barcode,
+        isbn13,
         variant_id: payload.variant_id,
         title: payload.title || title,
         unit_cost: Number(payload.unit_cost || 0),
         is_new_book: true,
       });
 
-      setPendingBarcode("");
+      setPendingIsbn13("");
       setPendingTitle("");
       setShowNewBookModal(false);
-      setBarcodeInput("");
+      setIsbn13Input("");
       scanInputRef.current?.focus();
       toast.success("Da tao sach tam va them vao phieu nhap");
     } catch (createError) {
@@ -161,9 +165,14 @@ export function GoodsReceiptPage() {
   };
 
   const handleAddBarcode = async (input?: string) => {
-    const barcode = String(input ?? barcodeInput).trim();
-    if (!barcode) {
-      toast.error("Vui long quet hoac nhap barcode");
+    const isbn13 = normalizeIsbn13(input ?? isbn13Input);
+    if (!isbn13) {
+      toast.error("Vui long quet hoac nhap ISBN13");
+      return;
+    }
+
+    if (!/^\d{13}$/.test(isbn13)) {
+      toast.error("ISBN13 phai gom dung 13 chu so");
       return;
     }
 
@@ -173,15 +182,15 @@ export function GoodsReceiptPage() {
     }
 
     try {
-      const found = await bookService.findByBarcode(barcode);
+      const found = await bookService.findByIsbn13(isbn13);
       upsertReceiptItem({
-        barcode,
+        isbn13,
         variant_id: found.variant_id,
         title: found.title,
         unit_cost: Number(found.unit_cost || 0),
       });
       toast.success(`Da them: ${found.title}`);
-      setBarcodeInput("");
+      setIsbn13Input("");
       scanInputRef.current?.focus();
       return;
     } catch (error) {
@@ -192,8 +201,8 @@ export function GoodsReceiptPage() {
         return;
       }
 
-      setPendingBarcode(barcode);
-      setPendingTitle(`Sach ${barcode}`);
+      setPendingIsbn13(isbn13);
+      setPendingTitle(`Sach ${isbn13}`);
       setShowNewBookModal(true);
     }
   };
@@ -232,6 +241,7 @@ export function GoodsReceiptPage() {
         note: note || undefined,
         items: items.map((item) => ({
           variant_id: item.variant_id,
+          isbn13: item.isbn13,
           location_id: null,
           quantity: Number(item.qty),
           unit_cost: Number(item.unit_cost),
@@ -298,7 +308,7 @@ export function GoodsReceiptPage() {
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Nhap kho theo barcode</h1>
+        <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
       </FadeItem>
 
       {step === "warehouse" ? (
@@ -328,21 +338,21 @@ export function GoodsReceiptPage() {
         <div className="space-y-5">
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <h3 className="mb-4 text-[14px] font-semibold">Quet barcode hoac nhap thu cong</h3>
+              <h3 className="mb-4 text-[14px] font-semibold">Quet ISBN13 hoac nhap thu cong</h3>
               <div className="mb-4 flex items-center gap-2">
                 <div className="relative flex-1">
                   <ScanBarcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
                   <input
                     ref={scanInputRef}
-                    value={barcodeInput}
-                    onChange={(event) => setBarcodeInput(event.target.value)}
+                    value={isbn13Input}
+                    onChange={(event) => setIsbn13Input(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
                         void handleAddBarcode();
                       }
                     }}
-                    placeholder="Nhap barcode/ISBN..."
+                    placeholder="Nhap ISBN13..."
                     className="w-full rounded-[12px] border-2 border-blue-300/30 bg-gradient-to-r from-blue-50/40 to-indigo-50/30 py-3 pl-10 pr-4 text-[13px] outline-none transition-all focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
                   />
                 </div>
@@ -359,7 +369,7 @@ export function GoodsReceiptPage() {
                   Quet camera
                 </button>
               </div>
-              <p className="text-[11px] text-slate-500">Neu barcode chua co, he thong se tao sach tam de bo sung sau.</p>
+              <p className="text-[11px] text-slate-500">Neu ISBN13 chua co, he thong se tao sach tam de bo sung sau.</p>
             </div>
           </FadeItem>
 
@@ -377,7 +387,7 @@ export function GoodsReceiptPage() {
                   <div key={item.id} className="border-b border-slate-50 p-4 last:border-0">
                     <div className="mb-3 flex items-start gap-4">
                       <div className="flex-1">
-                        <p className="mb-0.5 font-mono text-[12px] text-slate-400">{item.barcode}</p>
+                        <p className="mb-0.5 font-mono text-[12px] text-slate-400">ISBN13: {item.isbn13}</p>
                         <p className="text-[13px] font-semibold">{item.title}</p>
                         {item.is_new_book ? (
                           <p className="mt-1 text-[11px] text-amber-600">Sach tam (INCOMPLETE) - can bo sung metadata sau.</p>
@@ -569,17 +579,17 @@ export function GoodsReceiptPage() {
             exit={{ scale: 0.95, opacity: 0 }}
             className="w-full max-w-md rounded-[16px] bg-white p-6 shadow-2xl"
           >
-            <h3 className="mb-2 text-[16px] font-semibold">Tao sach tam cho barcode moi</h3>
+            <h3 className="mb-2 text-[16px] font-semibold">Tao sach tam cho ISBN13 moi</h3>
             <p className="mb-4 text-[13px] text-slate-600">
-              Barcode chua ton tai trong he thong. Vui long nhap ten sach de tao ban ghi INCOMPLETE.
+              ISBN13 chua ton tai trong he thong. Vui long nhap ten sach de tao ban ghi INCOMPLETE.
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[12px] font-semibold text-slate-500">Barcode</label>
+                <label className="mb-1 block text-[12px] font-semibold text-slate-500">ISBN13</label>
                 <input
-                  value={pendingBarcode}
-                  onChange={(event) => setPendingBarcode(event.target.value)}
+                  value={pendingIsbn13}
+                  onChange={(event) => setPendingIsbn13(event.target.value)}
                   className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
                 />
               </div>
@@ -604,7 +614,7 @@ export function GoodsReceiptPage() {
               <button
                 onClick={() => {
                   setShowNewBookModal(false);
-                  setPendingBarcode("");
+                  setPendingIsbn13("");
                   setPendingTitle("");
                 }}
                 className="flex-1 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700"
@@ -630,7 +640,7 @@ export function GoodsReceiptPage() {
         onDetected={(code) => {
           void handleAddBarcode(code);
         }}
-        title="Quet barcode de nhap kho"
+        title="Quet ISBN13 de nhap kho"
       />
     </PageWrapper>
   );

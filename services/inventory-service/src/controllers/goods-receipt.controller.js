@@ -25,6 +25,27 @@ function parseId(value) {
   return String(value || '').trim() || null;
 }
 
+function normalizeIsbn13(value) {
+  const normalized = String(value || '').trim().replace(/[^0-9]/g, '');
+  return normalized || null;
+}
+
+async function resolveVariantIdByIsbn13(tx, isbn13) {
+  if (!isbn13) return null;
+
+  const normalized = normalizeIsbn13(isbn13);
+  if (!normalized || !/^\d{13}$/.test(normalized)) {
+    return null;
+  }
+
+  const variant = await tx.book_variants.findFirst({
+    where: { isbn13: normalized },
+    select: { id: true },
+  });
+
+  return variant?.id || null;
+}
+
 async function resolveOrCreateReceivingLocation(tx, warehouseId) {
   const found = await tx.locations.findFirst({
     where: {
@@ -212,9 +233,18 @@ async function createGoodsReceipt(req, res) {
   }
 
   for (const item of items) {
-    if (!item?.variant_id || !isPositiveInteger(item?.quantity)) {
+    const variantId = parseId(item?.variant_id);
+    const isbn13 = normalizeIsbn13(item?.isbn13);
+
+    if ((!variantId && !isbn13) || !isPositiveInteger(item?.quantity)) {
       return res.status(400).json({
-        message: 'Each item must include variant_id and quantity > 0',
+        message: 'Each item must include isbn13 (or variant_id) and quantity > 0',
+      });
+    }
+
+    if (isbn13 && !/^\d{13}$/.test(isbn13)) {
+      return res.status(400).json({
+        message: 'isbn13 must contain exactly 13 digits',
       });
     }
 
@@ -234,10 +264,27 @@ async function createGoodsReceipt(req, res) {
         throw new Error('WAREHOUSE_NOT_FOUND');
       }
 
-      const variantIds = [...new Set(items.map((item) => item.variant_id))];
+      const normalizedItems = [];
+      for (const item of items) {
+        const rawVariantId = parseId(item?.variant_id);
+        const isbn13 = normalizeIsbn13(item?.isbn13);
+        const resolvedVariantId = rawVariantId || await resolveVariantIdByIsbn13(tx, isbn13);
+
+        if (!resolvedVariantId) {
+          throw new Error('INVALID_VARIANTS');
+        }
+
+        normalizedItems.push({
+          ...item,
+          variant_id: resolvedVariantId,
+          isbn13: isbn13 || null,
+        });
+      }
+
+      const variantIds = [...new Set(normalizedItems.map((item) => item.variant_id))];
 
       // Normalize location ids: remove null/undefined values before querying
-      const locationIds = [...new Set(items.map((item) => item.location_id).filter((id) => id !== null && id !== undefined))];
+      const locationIds = [...new Set(normalizedItems.map((item) => item.location_id).filter((id) => id !== null && id !== undefined))];
 
       const variants = await tx.book_variants.findMany({
         where: { id: { in: variantIds } },
@@ -272,7 +319,7 @@ async function createGoodsReceipt(req, res) {
         },
       });
 
-      const receiptItemsData = items.map((item) => ({
+      const receiptItemsData = normalizedItems.map((item) => ({
         goods_receipt_id: goodsReceipt.id,
         variant_id: item.variant_id,
         location_id: item.location_id || null,
@@ -284,7 +331,7 @@ async function createGoodsReceipt(req, res) {
         data: receiptItemsData,
       });
 
-      const hasNewBook = items.some((item) => Boolean(item.is_new_book));
+      const hasNewBook = normalizedItems.some((item) => Boolean(item.is_new_book));
 
       if (hasNewBook) {
         await tx.inventory_audit_logs.create({

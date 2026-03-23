@@ -251,17 +251,22 @@ export function ReceivingPutawayPage() {
   };
 
   const handleScanSku = async () => {
-    const input = scanSkuInput.trim();
+    const input = scanSkuInput.trim().replace(/[^0-9]/g, "");
     if (!input) {
-      toast.error("Nhap barcode SKU truoc khi scan");
+      toast.error("Nhap ISBN13 truoc khi scan");
+      return;
+    }
+
+    if (!/^\d{13}$/.test(input)) {
+      toast.error("ISBN13 phai gom dung 13 chu so");
       return;
     }
 
     try {
-      const res = await receivingPutawayService.lookupVariantByBarcode(input);
+      const res = await receivingPutawayService.lookupVariantByIsbn13(input);
       if (res.ambiguous) {
         setAmbiguousVariantMatches(res.matches || []);
-        toast.error("Barcode trung nhieu SKU, vui long chon thu cong");
+        toast.error("ISBN13 trung nhieu SKU, vui long chon thu cong");
         return;
       }
 
@@ -522,19 +527,19 @@ export function ReceivingPutawayPage() {
                 <option value="">Chon SKU</option>
                 {receivingItems.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
-                    {(item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
+                    {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Scan SKU barcode</p>
+              <p className="text-[11px] text-slate-500 mb-1">Scan ISBN13 cua sach</p>
               <div className="flex gap-2">
                 <input
                   value={scanSkuInput}
                   onChange={(event) => setScanSkuInput(event.target.value)}
-                  placeholder="internal_barcode / isbn13 / isbn10 / sku"
+                  placeholder="Nhap ISBN13"
                   className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
                 />
                 <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50">
@@ -561,7 +566,7 @@ export function ReceivingPutawayPage() {
 
           {ambiguousVariantMatches.length > 0 ? (
             <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-3">
-              <p className="text-[12px] text-amber-800" style={{ fontWeight: 600 }}>Barcode trung nhieu SKU, vui long chon thu cong:</p>
+              <p className="text-[12px] text-amber-800" style={{ fontWeight: 600 }}>ISBN13 trung nhieu SKU, vui long chon thu cong:</p>
               <select
                 className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2 text-[12px]"
                 onChange={(event) => {
@@ -575,7 +580,7 @@ export function ReceivingPutawayPage() {
                 <option value="">Chon SKU dung</option>
                 {ambiguousVariantMatches.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
-                    {item.sku || item.internal_barcode || item.isbn13 || item.isbn10} | {item.book_title} | {item.matched_by}
+                    {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} | {item.book_title} | {item.matched_by}
                   </option>
                 ))}
               </select>
@@ -725,7 +730,7 @@ export function ReceivingPutawayPage() {
                 <option value="">Chon SKU</option>
                 {reverseItems.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
-                    {(item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
+                    {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
                   </option>
                 ))}
               </select>

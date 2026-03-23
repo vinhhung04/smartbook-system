@@ -265,6 +265,12 @@ function normalizeBarcode(value) {
   return String(value || '').trim();
 }
 
+function normalizeIsbn13(value) {
+  const normalized = String(value || '').trim().replace(/[^0-9]/g, '');
+  if (!normalized) return '';
+  return normalized;
+}
+
 function buildManualSku(barcode) {
   const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
   const compactBarcode = barcode.replace(/\s+/g, '').slice(0, 16);
@@ -375,8 +381,55 @@ async function findBookByBarcode(req, res) {
   }
 }
 
+async function findBookByIsbn13(req, res) {
+  const isbn13 = normalizeIsbn13(req.params.isbn13 || req.query.isbn13 || req.query.barcode);
+
+  if (!isbn13) {
+    return res.status(400).json({ message: 'isbn13 is required' });
+  }
+
+  if (!/^\d{13}$/.test(isbn13)) {
+    return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
+  }
+
+  try {
+    const variant = await prisma.book_variants.findFirst({
+      where: { isbn13 },
+      include: {
+        books: {
+          select: {
+            id: true,
+            title: true,
+            metadata: true,
+          },
+        },
+      },
+    });
+
+    if (!variant) {
+      return res.status(404).json({ message: 'Book variant not found by isbn13' });
+    }
+
+    return res.json({
+      variant_id: variant.id,
+      isbn13,
+      barcode: variant.internal_barcode || isbn13,
+      title: variant.books?.title || 'Chưa có tiêu đề',
+      unit_cost: variant.unit_cost,
+      list_price: variant.list_price,
+      is_incomplete: Boolean(variant.books?.metadata?.is_incomplete),
+      book_id: variant.books?.id,
+    });
+  } catch (error) {
+    console.error('Error while finding book by isbn13:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function createIncompleteBook(req, res) {
-  const barcode = normalizeBarcode(req.body?.barcode);
+  const rawIsbn13 = normalizeIsbn13(req.body?.isbn13);
+  const barcode = normalizeBarcode(req.body?.barcode || rawIsbn13);
+  const isbn13 = rawIsbn13 || (/^\d{13}$/.test(barcode) ? barcode : '');
   const title = String(req.body?.title || '').trim();
   const rawPrice = Number(req.body?.price);
   const coverImageUrl = normalizeCoverImageUrl(req.body?.cover_image_url);
@@ -384,10 +437,14 @@ async function createIncompleteBook(req, res) {
   const publishYear = normalizePublishYear(req.body?.publish_year);
   const userId = req.user?.id || null;
 
-  if (!barcode || !title || !Number.isFinite(rawPrice) || rawPrice < 0) {
+  if (!isbn13 || !title || !Number.isFinite(rawPrice) || rawPrice < 0) {
     return res.status(400).json({
-      message: 'barcode, title and price >= 0 are required',
+      message: 'isbn13, title and price >= 0 are required',
     });
+  }
+
+  if (!/^\d{13}$/.test(isbn13)) {
+    return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
   }
 
   if (publishYear === undefined) {
@@ -397,7 +454,7 @@ async function createIncompleteBook(req, res) {
   try {
     const existingVariant = await prisma.book_variants.findFirst({
       where: {
-        OR: [{ internal_barcode: barcode }, { isbn13: barcode }, { isbn10: barcode }, { sku: barcode }],
+        OR: [{ isbn13 }, { internal_barcode: isbn13 }, { isbn10: isbn13 }, { sku: isbn13 }],
       },
       include: {
         books: {
@@ -416,7 +473,8 @@ async function createIncompleteBook(req, res) {
         data: {
           book_id: existingVariant.books?.id,
           variant_id: existingVariant.id,
-          barcode,
+          barcode: existingVariant.internal_barcode || isbn13,
+          isbn13: existingVariant.isbn13 || isbn13,
           title: existingVariant.books?.title,
           unit_cost: existingVariant.unit_cost,
           list_price: existingVariant.list_price,
@@ -457,20 +515,15 @@ async function createIncompleteBook(req, res) {
 
       const variantData = {
         book_id: createdBook.id,
-        sku: buildManualSku(barcode),
-        internal_barcode: barcode,
+        sku: buildManualSku(isbn13),
+        internal_barcode: isbn13,
+        isbn13,
         unit_cost: rawPrice,
         list_price: rawPrice,
         language_code: languageCode,
         ...(publishYear !== null ? { publish_year: publishYear } : {}),
         ...(coverImageUrl ? { cover_image_url: coverImageUrl } : {}),
       };
-
-      if (/^\d{13}$/.test(barcode)) {
-        variantData.isbn13 = barcode;
-      } else if (/^\d{10}$/.test(barcode)) {
-        variantData.isbn10 = barcode;
-      }
 
       const createdVariant = await tx.book_variants.create({
         data: variantData,
@@ -484,7 +537,8 @@ async function createIncompleteBook(req, res) {
           entity_id: createdBook.id,
           after_data: {
             title,
-            barcode,
+            barcode: isbn13,
+            isbn13,
             category: UNCATEGORIZED_NAME,
             publisher: UNCATEGORIZED_NAME,
             note: 'Yeu cau Thu thu bo sung thong tin sach (Tac gia, NXB, The loai).',
@@ -495,7 +549,8 @@ async function createIncompleteBook(req, res) {
       return {
         book_id: createdBook.id,
         variant_id: createdVariant.id,
-        barcode,
+        barcode: isbn13,
+        isbn13,
         title,
         unit_cost: createdVariant.unit_cost,
         list_price: createdVariant.list_price,
@@ -738,6 +793,7 @@ module.exports = {
   getAllBooks,
   getBookById,
   findBookByBarcode,
+  findBookByIsbn13,
   createIncompleteBook,
   updateBookDetails,
 };

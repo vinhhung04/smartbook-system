@@ -385,21 +385,20 @@ async function lookupCompartmentByBarcode(req, res) {
 }
 
 async function lookupVariantByBarcode(req, res) {
-  const barcode = normalizeText(req.query.barcode);
+  const isbn13 = String(req.query.isbn13 || req.query.barcode || '').trim().replace(/[^0-9]/g, '');
 
-  if (!barcode) {
-    return res.status(400).json({ message: 'barcode is required' });
+  if (!isbn13) {
+    return res.status(400).json({ message: 'isbn13 is required' });
+  }
+
+  if (!/^\d{13}$/.test(isbn13)) {
+    return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
   }
 
   try {
     const rows = await prisma.book_variants.findMany({
       where: {
-        OR: [
-          { internal_barcode: barcode },
-          { isbn13: barcode },
-          { isbn10: barcode },
-          { sku: barcode },
-        ],
+        isbn13,
       },
       select: {
         id: true,
@@ -417,23 +416,10 @@ async function lookupVariantByBarcode(req, res) {
     });
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'No variant matched barcode' });
+      return res.status(404).json({ message: 'No variant matched isbn13' });
     }
 
     const matches = rows.map((row) => {
-      let matched_by = 'sku';
-      let priority = 4;
-      if (row.internal_barcode === barcode) {
-        matched_by = 'internal_barcode';
-        priority = 1;
-      } else if (row.isbn13 === barcode) {
-        matched_by = 'isbn13';
-        priority = 2;
-      } else if (row.isbn10 === barcode) {
-        matched_by = 'isbn10';
-        priority = 3;
-      }
-
       return {
         variant_id: row.id,
         sku: row.sku,
@@ -442,13 +428,12 @@ async function lookupVariantByBarcode(req, res) {
         internal_barcode: row.internal_barcode,
         book_id: row.books?.id || null,
         book_title: row.books?.title || 'Chua co ten sach',
-        matched_by,
-        match_priority: priority,
+        matched_by: 'isbn13',
+        match_priority: 1,
       };
-    }).sort((a, b) => a.match_priority - b.match_priority || a.variant_id.localeCompare(b.variant_id));
+    }).sort((a, b) => a.variant_id.localeCompare(b.variant_id));
 
-    const topPriority = matches[0].match_priority;
-    const top = matches.filter((item) => item.match_priority === topPriority);
+    const top = matches;
 
     if (top.length > 1) {
       return res.json({

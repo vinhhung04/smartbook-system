@@ -36,14 +36,14 @@ export interface OrderRequestSummary {
 }
 
 export interface OutboundRequestLineInput {
-  variant_id: string;
+  isbn13: string;
   source_location_id?: string | null;
   quantity: number;
   note?: string | null;
 }
 
 export interface TransferRequestLineInput {
-  variant_id: string;
+  isbn13: string;
   from_location_id?: string | null;
   to_location_id?: string | null;
   quantity: number;

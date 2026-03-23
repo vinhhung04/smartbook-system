@@ -156,7 +156,7 @@ export function AIImportPage() {
     setSaving(true);
     try {
       const created = await bookService.createIncomplete({
-        barcode: normalizedIsbn,
+        isbn13: normalizedIsbn,
         title,
         price: 0,
         language: (form.language || "vi").trim() || "vi",
