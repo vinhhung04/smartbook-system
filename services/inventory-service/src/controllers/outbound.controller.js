@@ -81,15 +81,16 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
   const aggregatedItems = Array.from(aggregateMap.values());
 
   for (const item of aggregatedItems) {
-    const existing = await tx.$queryRawUnsafe(
+    const existingRows = await tx.$queryRawUnsafe(
       `SELECT id, on_hand_qty FROM stock_balances
        WHERE variant_id::text = $1 AND location_id::text = $2
        FOR UPDATE`,
       item.variant_id,
       receivingLocation.id,
     );
+    const existingList = Array.isArray(existingRows) ? existingRows : [];
 
-    if (existing.rows.length > 0) {
+    if (existingList.length > 0) {
       await tx.$queryRawUnsafe(
         `UPDATE stock_balances
          SET on_hand_qty = on_hand_qty + $1,
@@ -105,7 +106,7 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
       await tx.$queryRawUnsafe(
         `INSERT INTO stock_balances
            (id, warehouse_id, variant_id, location_id, on_hand_qty, available_qty, version, last_movement_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, 0, 1, NOW())`,
+         VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3::uuid, $4, 0, 1, NOW())`,
         goodsReceipt.warehouse_id,
         item.variant_id,
         receivingLocation.id,
@@ -704,7 +705,12 @@ async function confirmOutbound(req, res) {
             source_type: "TRANSFER",
             source_reference_id: order.id,
           },
-          select: { id: true, warehouse_id: true, receipt_number: true, status: true },
+          select: {
+            id: true,
+            warehouse_id: true,
+            receipt_number: true,
+            status: true,
+          },
         });
 
         let destinationReceipt = existingReceipt;
@@ -719,7 +725,12 @@ async function confirmOutbound(req, res) {
               received_by_user_id: actorUserIdRequired,
               note: `Auto-created from transfer ${order.transfer_number}`,
             },
-            select: { id: true, warehouse_id: true, receipt_number: true, status: true },
+            select: {
+              id: true,
+              warehouse_id: true,
+              receipt_number: true,
+              status: true,
+            },
           });
 
           await tx.goods_receipt_items.createMany({

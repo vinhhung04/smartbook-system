@@ -1,9 +1,10 @@
 import { NavLink } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  LayoutDashboard, BookOpen, Package, FileText, Warehouse, ArrowRightLeft,
+  LayoutDashboard, BookOpen, Package, FileText, Warehouse,
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
-  UserRound, CalendarClock, HandCoins, ClipboardCheck, Layers3
+  UserRound, CalendarClock, HandCoins, Layers3,
+  MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 
@@ -11,24 +12,26 @@ const navGroups = [
   {
     label: "Core Operations",
     color: "text-indigo-400",
+    dotColor: "bg-indigo-400",
     items: [
       { to: "/", icon: LayoutDashboard, label: "Dashboard", activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/catalog", icon: BookOpen, label: "Catalog", activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/inventory", icon: Package, label: "Inventory", activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/putaway", icon: ClipboardCheck, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-      { to: "/receiving-putaway", icon: ArrowRightLeft, label: "Receiving Putaway", activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
-      { to: "/order-requests", icon: ClipboardCheck, label: "Order Requests", activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/picking", icon: ArrowRightLeft, label: "Picking", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
-      { to: "/outbound", icon: ArrowRightLeft, label: "Outbound", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
+      { to: "/putaway", icon: MapPinned, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+      { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
+      { to: "/order-requests", icon: ListOrdered, label: "Order Requests", activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
+      { to: "/picking", icon: Hand, label: "Picking", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
+      { to: "/outbound", icon: Truck, label: "Outbound", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/warehouses", icon: Warehouse, label: "Warehouses", activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/shelves", icon: Layers3, label: "Shelves", activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/movements", icon: ArrowRightLeft, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/movements", icon: Activity, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
     ],
   },
   {
     label: "Intelligence",
     color: "text-violet-400",
+    dotColor: "bg-violet-400",
     items: [
       { to: "/ai-import", icon: Sparkles, label: "AI Import", activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
       { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
@@ -37,17 +40,19 @@ const navGroups = [
   {
     label: "Library",
     color: "text-amber-400",
+    dotColor: "bg-amber-400",
     items: [
       { to: "/borrow", icon: BookMarked, label: "Borrow", activeColor: "from-amber-500/15 to-orange-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
       { to: "/borrow/customers", icon: UserRound, label: "Borrow Customers", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
       { to: "/borrow/reservations", icon: CalendarClock, label: "Reservations", activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10" },
       { to: "/borrow/loans", icon: HandCoins, label: "Loans", activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/borrow/fines", icon: ClipboardCheck, label: "Fines", activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
+      { to: "/borrow/fines", icon: Receipt, label: "Fines", activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
     ],
   },
   {
     label: "Administration",
     color: "text-slate-400",
+    dotColor: "bg-slate-400",
     items: [
       { to: "/users", icon: Users, label: "Users", activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
       { to: "/roles", icon: Shield, label: "Roles", activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
@@ -84,7 +89,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             )}
           </AnimatePresence>
         </div>
-        <button onClick={onToggle} className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-indigo-50 transition-colors text-muted-foreground hover:text-indigo-600">
+        <button onClick={onToggle} className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-indigo-50 transition-colors text-muted-foreground hover:text-indigo-600" aria-label="Toggle sidebar">
           <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.24 }}>
             <ChevronLeft className="w-3.5 h-3.5" />
           </motion.div>
@@ -97,6 +102,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           to="/orders/new"
           className={`group flex items-center gap-2.5 rounded-[10px] bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 text-white text-[13px] shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:shadow-indigo-500/30 active:scale-[0.98] transition-all duration-140 ${collapsed ? "justify-center px-0 py-2.5" : "px-3.5 py-2.5"}`}
           style={{ fontWeight: 500 }}
+          aria-label="Scan and receive new goods"
         >
           <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}>
             <ScanBarcode className="w-4 h-4" />
@@ -104,7 +110,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                Scan & Receive
+                Scan &amp; Receive
               </motion.span>
             )}
           </AnimatePresence>
@@ -119,7 +125,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               {!collapsed && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="flex items-center gap-1.5 px-3 pb-2">
-                  <div className={`w-1 h-1 rounded-full ${group.color.replace("text-", "bg-")}`} />
+                  <div className={`w-1 h-1 rounded-full ${group.dotColor}`} />
                   <span className={`text-[10px] uppercase tracking-[0.08em] ${group.color}`} style={{ fontWeight: 600 }}>{group.label}</span>
                 </motion.div>
               )}
@@ -167,7 +173,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {/* User */}
       <div className="border-t border-[#e2e4ed] p-3">
-        <div className={`flex items-center gap-2.5 px-2 py-2.5 rounded-[10px] bg-gradient-to-r from-indigo-50/80 to-violet-50/50 border border-indigo-100/40 cursor-pointer hover:border-indigo-200/60 transition-all duration-160 ${collapsed ? "justify-center" : ""}`}>
+          <div className={`flex items-center gap-2.5 px-2 py-2.5 rounded-[10px] bg-gradient-to-r from-indigo-50/80 to-violet-50/50 border border-indigo-100/40 cursor-pointer hover:border-indigo-200/60 transition-all duration-160 ${collapsed ? "justify-center" : ""}`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0 shadow-sm shadow-indigo-500/20">
             <span className="text-[10px] text-white" style={{ fontWeight: 700 }}>{initials}</span>
           </div>

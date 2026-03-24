@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ClipboardList, Plus, Search, Send, X } from "lucide-react";
+import { Check, ListOrdered, Plus, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -11,6 +11,12 @@ import {
   type OrderRequestVariant,
   type RequestTaskType,
 } from "@/services/order-requests";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-state";
+import { StatusBadge } from "@/components/status-badge";
 
 type RequestType = "outbound" | "transfer";
 
@@ -77,6 +83,15 @@ function getTransferInsufficientStockDescription(error: unknown): string | null 
     .slice(0, 3)
     .map((item) => `${item.isbn13 || item.sku || item.variant_id || "N/A"}: can ${item.available_qty || 0}, yeu cau ${item.required_qty || 0}, thieu ${item.shortage_qty || 0}`)
     .join(" | ");
+}
+
+function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
+  const upper = String(status || "").toUpperCase();
+  if (upper.includes("APPROVED") || upper.includes("COMPLETED") || upper.includes("READY")) return "success";
+  if (upper.includes("REJECT") || upper.includes("CANCEL")) return "danger";
+  if (upper.includes("PENDING") || upper.includes("REQUESTED")) return "warning";
+  if (upper.includes("PICK")) return "info";
+  return "neutral";
 }
 
 export function OrderRequestsPage() {
@@ -306,174 +321,213 @@ export function OrderRequestsPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-400">Dang tai du lieu order requests...</p>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <LoadingSpinner message="Dang tai du lieu order requests..." className="flex-col gap-3 text-[13px]" />
+        </div>
       </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-5 lg:space-y-6">
       <FadeItem>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-cyan-100 to-blue-50 flex items-center justify-center border border-cyan-200/50">
-            <ClipboardList className="w-5 h-5 text-cyan-700" />
-          </div>
-          <div>
-            <h1 className="tracking-[-0.02em]">Order Requests</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">Tao don yeu cau va duyet truoc khi vao Picking</p>
-          </div>
-        </div>
+        <PageHeader
+          icon={ListOrdered}
+          title="Order Requests"
+          description="Tao don yeu cau va duyet truoc khi vao Picking"
+          iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50"
+          iconColor="text-cyan-700"
+        />
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <p className="text-[11px] text-slate-500 mb-1">Loai request</p>
-            <select
-              value={requestType}
-              onChange={(event) => setRequestType(event.target.value as RequestType)}
-              className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-            >
-              <option value="outbound">Outbound Request</option>
-              <option value="transfer">Warehouse Transfer Request</option>
-            </select>
-          </div>
-
-          <div>
-            <p className="text-[11px] text-slate-500 mb-1">Warehouse nguon</p>
-            <select
-              value={selectedWarehouseId}
-              onChange={(event) => setSelectedWarehouseId(event.target.value)}
-              className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-            >
-              <option value="">Chon warehouse</option>
-              {warehouses.map((warehouse) => (
-                <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {requestType === "transfer" ? (
+        <SectionCard
+          title="Thong tin request"
+          subtitle="Chon loai, kho nguon va ghi chu truoc khi them dong hang."
+          icon={Send}
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Warehouse dich</p>
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loai request</p>
               <select
-                value={targetWarehouseId}
-                onChange={(event) => setTargetWarehouseId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                value={requestType}
+                onChange={(event) => setRequestType(event.target.value as RequestType)}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
               >
-                <option value="">Chon warehouse dich</option>
-                {filteredWarehouses.map((warehouse) => (
+                <option value="outbound">Outbound Request</option>
+                <option value="transfer">Warehouse Transfer Request</option>
+              </select>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguon</p>
+              <select
+                value={selectedWarehouseId}
+                onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <option value="">Chon warehouse</option>
+                {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
                 ))}
               </select>
             </div>
-          ) : (
-            <div>
-              <p className="text-[11px] text-slate-500 mb-1">External reference</p>
-              <input
-                value={externalReference}
-                onChange={(event) => setExternalReference(event.target.value)}
-                placeholder="SO-001 / Ticket code..."
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+
+            {requestType === "transfer" ? (
+              <div>
+                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse dich</p>
+                <select
+                  value={targetWarehouseId}
+                  onChange={(event) => setTargetWarehouseId(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <option value="">Chon warehouse dich</option>
+                  {filteredWarehouses.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">External reference</p>
+                <input
+                  value={externalReference}
+                  onChange={(event) => setExternalReference(event.target.value)}
+                  placeholder="SO-001 / Ticket code..."
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                />
+              </div>
+            )}
+
+            <div className="md:col-span-3">
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Note</p>
+              <textarea
+                value={requestNote}
+                onChange={(event) => setRequestNote(event.target.value)}
+                rows={2}
+                className="min-h-[72px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                placeholder="Ly do tao request..."
               />
             </div>
-          )}
-
-          <div className="md:col-span-3">
-            <p className="text-[11px] text-slate-500 mb-1">Note</p>
-            <textarea
-              value={requestNote}
-              onChange={(event) => setRequestNote(event.target.value)}
-              rows={2}
-              className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-              placeholder="Ly do tao request..."
-            />
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-          <p className="text-[12px] text-slate-600">Them lines</p>
-
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <SectionCard
+          title="Them lines"
+          subtitle="Tim variant theo ISBN13, SKU hoac ten sach, sau do them vao bang duoi."
+          icon={Plus}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={variantQuery}
                 onChange={(event) => setVariantQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleSearchVariant();
+                  }
+                }}
                 placeholder="Nhap ISBN13, SKU hoac ten sach"
-                className="w-full pl-9 pr-3 py-2 rounded-[10px] border border-slate-200 text-[12px]"
+                className="h-9 w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
               />
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => void handleSearchVariant()}
               disabled={searchingVariant}
-              className="px-3 py-2 rounded-[10px] text-[12px] bg-slate-900 text-white disabled:opacity-60"
+              loading={searchingVariant}
+              className="shrink-0 sm:w-auto"
             >
               Tim
-            </button>
+            </Button>
           </div>
 
           {variantResults.length > 0 && (
-            <div className="rounded-[10px] border border-slate-200 overflow-hidden">
+            <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
               {variantResults.map((variant) => (
-                <div key={variant.variant_id} className="px-3 py-2 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3">
+                <div
+                  key={variant.variant_id}
+                  className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div className="min-w-0">
-                    <p className="text-[12px] text-slate-700 truncate" style={{ fontWeight: 550 }}>{variant.title}</p>
-                    <p className="text-[11px] text-slate-500">ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}</p>
+                    <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
+                    </p>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="info-outline"
+                    size="sm"
                     onClick={() => handleAddLine(variant)}
-                    className="px-2.5 py-1.5 rounded-[8px] text-[11px] bg-cyan-50 text-cyan-700 border border-cyan-200"
+                    className="shrink-0"
                   >
-                    <Plus className="w-3 h-3 inline mr-1" />
+                    <Plus className="h-3.5 w-3.5" />
                     Them
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="rounded-[10px] border border-slate-200 overflow-hidden">
+          <div className="mt-5 overflow-hidden rounded-xl border border-border">
             <table className="w-full">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] text-slate-500">
-                  <th className="text-left px-3 py-2">San pham</th>
-                  <th className="text-left px-3 py-2 w-[130px]">So luong</th>
-                  <th className="text-right px-3 py-2 w-[100px]">Action</th>
+                <tr className="border-b border-border bg-muted/40">
+                  {["San pham", "So luong", "Action"].map((head) => (
+                    <th
+                      key={head}
+                      className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      {head}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {draftLines.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-3 py-4 text-[12px] text-slate-400">Chua co line nao</td>
+                    <td colSpan={3} className="py-10 text-center">
+                      <EmptyState
+                        variant="no-data"
+                        title="Chua co line nao"
+                        description="Tim san pham va nhan Them de bat dau."
+                        className="py-0"
+                      />
+                    </td>
                   </tr>
                 ) : draftLines.map((line) => (
-                  <tr key={line.isbn13} className="border-b border-slate-100 last:border-0 text-[12px]">
-                    <td className="px-3 py-2">
-                      <p className="text-slate-700" style={{ fontWeight: 550 }}>{line.title}</p>
-                      <p className="text-[11px] text-slate-500">ISBN13: {line.isbn13} | SKU: {line.sku || "-"}</p>
+                  <tr key={line.isbn13} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-4 py-3 text-[12px]">
+                      <p className="font-semibold text-foreground">{line.title}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
+                      </p>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-3 text-[12px]">
                       <input
                         type="number"
                         min={1}
                         value={line.quantity}
                         onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
-                        className="w-full rounded-[8px] border border-slate-200 px-2 py-1.5"
+                        className="h-9 w-full max-w-[120px] rounded-lg border border-input bg-background px-2 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                       />
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
+                    <td className="px-4 py-3 text-right">
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm-icon"
+                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                         onClick={() => handleRemoveLine(line.isbn13)}
-                        className="text-rose-600 hover:text-rose-700"
+                        aria-label="Xoa dong"
                       >
-                        <X className="w-4 h-4 inline" />
-                      </button>
+                        <X className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -481,69 +535,72 @@ export function OrderRequestsPage() {
             </table>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={resetForm}
-              className="px-3 py-2 rounded-[10px] text-[12px] border border-slate-200"
-            >
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-5">
+            <Button type="button" variant="outline" onClick={resetForm}>
               Reset
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSubmitRequest()}
-              disabled={submitting}
-              className="px-3 py-2 rounded-[10px] text-[12px] bg-cyan-600 text-white disabled:opacity-60"
-            >
-              <Send className="w-3.5 h-3.5 inline mr-1" />
+            </Button>
+            <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
+              <Send className="h-3.5 w-3.5" />
               Tao request
-            </button>
+            </Button>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[12px] text-slate-600">Danh sach requests</p>
-            <div className="flex items-center gap-2">
-              <button
+        <SectionCard
+          title="Danh sach requests"
+          subtitle={listView === "my" ? "Cac don ban da tao theo kho nguon." : "Hang cho duyet (can quyen phu hop)."}
+          actions={(
+            <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
+              <Button
                 type="button"
+                variant={listView === "my" ? "default" : "ghost"}
+                size="sm"
+                className={listView === "my" ? "" : "text-muted-foreground"}
                 onClick={() => setListView("my")}
-                className={`px-2.5 py-1.5 rounded-[8px] text-[11px] border ${listView === "my" ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600"}`}
               >
                 Don cua toi
-              </button>
+              </Button>
               {canApprove && (
-                <button
+                <Button
                   type="button"
+                  variant={listView === "approval" ? "default" : "ghost"}
+                  size="sm"
+                  className={listView === "approval" ? "bg-emerald-600 hover:bg-emerald-600/90" : "text-muted-foreground"}
                   onClick={() => setListView("approval")}
-                  className={`px-2.5 py-1.5 rounded-[8px] text-[11px] border ${listView === "approval" ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-200 text-slate-600"}`}
                 >
                   Approval queue
-                </button>
+                </Button>
               )}
             </div>
-          </div>
-
-          <div className="rounded-[10px] border border-slate-200 overflow-hidden">
-            <table className="w-full">
+          )}
+        >
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="min-w-[920px] w-full">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] text-slate-500">
-                  <th className="text-left px-3 py-2">Order</th>
-                  <th className="text-left px-3 py-2">Loai</th>
-                  <th className="text-left px-3 py-2">Nguon</th>
-                  <th className="text-left px-3 py-2">Dich</th>
-                  <th className="text-left px-3 py-2">Trang thai</th>
-                  <th className="text-left px-3 py-2">So luong</th>
-                  <th className="text-left px-3 py-2">Requested at</th>
-                  <th className="text-right px-3 py-2">Action</th>
+                <tr className="border-b border-border bg-muted/40">
+                  {["Order", "Loai", "Nguon", "Dich", "Trang thai", "So luong", "Requested at", "Action"].map((head) => (
+                    <th
+                      key={head}
+                      className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      {head}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {requests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-4 text-[12px] text-slate-400">Khong co request nao</td>
+                    <td colSpan={8} className="py-10 text-center">
+                      <EmptyState
+                        variant="no-data"
+                        title="Khong co request nao"
+                        description={listView === "approval" ? "Khong co don cho duyet." : "Hay tao request moi o phan tren."}
+                        className="py-0"
+                      />
+                    </td>
                   </tr>
                 ) : requests.map((row) => {
                   const approveKey = `approve:${row.task_type}:${row.task_id}`;
@@ -553,42 +610,44 @@ export function OrderRequestsPage() {
                       || (row.task_type === "transfer" && row.status === "REQUESTED"));
 
                   return (
-                    <tr key={`${row.task_type}-${row.task_id}`} className="border-b border-slate-100 last:border-0 text-[12px]">
-                      <td className="px-3 py-2">
-                        <p className="text-slate-700" style={{ fontWeight: 600 }}>{row.order_number}</p>
-                        <p className="text-[11px] text-slate-500">{row.line_count} lines</p>
+                    <tr key={`${row.task_type}-${row.task_id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3 text-[12px]">
+                        <p className="font-semibold text-foreground">{row.order_number}</p>
+                        <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
                       </td>
-                      <td className="px-3 py-2">{row.order_type}</td>
-                      <td className="px-3 py-2">{row.source_warehouse_code || "-"}</td>
-                      <td className="px-3 py-2">{row.target_warehouse_code || "-"}</td>
-                      <td className="px-3 py-2">
-                        <span className="px-2 py-1 rounded-full text-[11px] bg-slate-100 text-slate-700">{row.status}</span>
+                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{row.order_type}</td>
+                      <td className="px-4 py-3 text-[12px]">{row.source_warehouse_code || "-"}</td>
+                      <td className="px-4 py-3 text-[12px]">{row.target_warehouse_code || "-"}</td>
+                      <td className="px-4 py-3 text-[12px]">
+                        <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
                       </td>
-                      <td className="px-3 py-2">{row.total_quantity}</td>
-                      <td className="px-3 py-2">{formatDate(row.requested_at)}</td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-4 py-3 text-[12px] font-medium">{row.total_quantity}</td>
+                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</td>
+                      <td className="px-4 py-3 text-right">
                         {canTakeAction ? (
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
+                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                            <Button
                               type="button"
+                              variant="success-outline"
+                              size="sm"
                               onClick={() => void handleApproveOrReject(row.task_type, row.task_id, "approve")}
                               disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
-                              className="px-2 py-1 rounded-[7px] text-[11px] border border-emerald-200 bg-emerald-50 text-emerald-700 disabled:opacity-60"
                             >
-                              <Check className="w-3 h-3 inline mr-1" />
+                              <Check className="h-3 w-3" />
                               Duyet
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
+                              variant="danger-outline"
+                              size="sm"
                               onClick={() => void handleApproveOrReject(row.task_type, row.task_id, "reject")}
                               disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
-                              className="px-2 py-1 rounded-[7px] text-[11px] border border-rose-200 bg-rose-50 text-rose-700 disabled:opacity-60"
                             >
                               Tu choi
-                            </button>
+                            </Button>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-slate-400">-</span>
+                          <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -597,7 +656,7 @@ export function OrderRequestsPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
     </PageWrapper>
   );

@@ -113,11 +113,18 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
-      - SUMMARY_MODEL=${SUMMARY_MODEL:-llava}
+      # Mặc định là llama3 (LLM text) thay vì llava — llava là vision model, không phù hợp cho tóm tắt văn bản
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-8}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
+      - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
+      # Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
+      # Nếu không set, sẽ fallback về Ollama local
+      - GROQ_API_KEY=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${GROQ_API_KEY:-}
+      - GROQ_SUMMARY_MODEL=${GROQ_SUMMARY_MODEL:-llama-3.3-70b-versatile}
 
   api-gateway:
     build: ./apps/api-gateway

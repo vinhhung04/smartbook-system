@@ -52,7 +52,11 @@ setup:
 		cp .env.example .env; \
 	fi
 	@docker compose up -d --build
+	@echo "[INFO] Waiting for DB to be ready..."; \
+	sleep 5
 	@$(MAKE) migrate
+	@$(MAKE) db-import
+	@echo "[INFO] Bootstrap complete!"
 
 # Basic Docker commands
 up:
@@ -120,9 +124,9 @@ migrate:
 	@echo "[INFO] Migrations complete!"
 
 db-import:
-	@echo "[INFO] Importing full schema and seed data..."
-	docker compose exec -T db psql -U $${POSTGRES_USER:-user} -f /docker-entrypoint-initdb.d/data/smartbook_full_postgresql.sql
-	docker compose exec -T db psql -U $${POSTGRES_USER:-user} -f /docker-entrypoint-initdb.d/data/smartbook_merged_seed.sql
+	@echo "[INFO] Importing full schema and seed data (all databases)..."
+	@docker compose exec -T db psql -U $${POSTGRES_USER:-user} -d inventory_db -f /seed-data/smartbook_full_postgresql.sql
+	@docker compose exec -T db psql -U $${POSTGRES_USER:-user} -d inventory_db -f /seed-data/smartbook_merged_seed.sql
 	@echo "[INFO] Import complete!"
 
 db-refresh:

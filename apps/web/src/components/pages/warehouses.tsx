@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import { ArrowLeft, ChevronRight, MapPin, Package, Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { warehouseService, type LocationNode, type Warehouse } from "@/services/warehouse";
+import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 
 type WarehouseMode = "create" | "edit";
 type LocationMode = "create-root" | "create-child" | "edit";
@@ -96,7 +98,7 @@ function TreeNode({
             onSelect(node.id);
           }
         }}
-        className={`w-full flex items-center gap-2 py-2 px-3 rounded-[8px] transition-colors text-left ${selectedId === node.id ? "bg-violet-50 border border-violet-200" : "hover:bg-slate-100/60 border border-transparent"}`}
+        className={`w-full flex items-center gap-2 py-2 px-3 rounded-lg transition-colors text-left ${selectedId === node.id ? "bg-violet-50 border border-violet-200" : "hover:bg-muted/60 border border-transparent"}`}
       >
         <button
           type="button"
@@ -107,18 +109,18 @@ function TreeNode({
           className="inline-flex items-center justify-center w-4 h-4"
         >
           <motion.div animate={{ rotate: hasChildren && expanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </motion.div>
         </button>
-        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] truncate" style={{ fontWeight: 600 }}>{node.name || node.code}</p>
-          <p className="text-[10px] text-slate-400">{TYPE_LABEL[node.location_type] || node.location_type} · {node.code}</p>
+          <p className="text-[12px] truncate font-semibold">{node.name || node.code}</p>
+          <p className="text-[10px] text-muted-foreground">{TYPE_LABEL[node.location_type] || node.location_type} · {node.code}</p>
         </div>
       </div>
 
       {hasChildren && expanded ? (
-        <div className="ml-3 border-l border-slate-200 pl-3">
+        <div className="ml-3 border-l border-border pl-3">
           {(node.children || []).map((child) => (
             <TreeNode
               key={child.id}
@@ -492,116 +494,131 @@ export function WarehousesPage() {
   };
 
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
-            <Package className="w-5 h-5 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="tracking-[-0.02em]">Warehouses</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">{warehouses.length} kho · Quan ly cau truc vi tri phan cap</p>
-          </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center gap-3"
+      >
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
+          <Package className="w-5 h-5 text-violet-600" />
         </div>
-      </FadeItem>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Warehouses</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5">{warehouses.length} kho · Quan ly cau truc vi tri phan cap</p>
+        </div>
+      </motion.div>
 
       {pageError ? (
-        <FadeItem>
-          <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">{pageError}</div>
-        </FadeItem>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <SectionCard className="border-red-200 bg-red-50">
+            <p className="text-[13px] text-red-700">{pageError}</p>
+          </SectionCard>
+        </motion.div>
       ) : null}
 
       {!selectedWarehouseId ? (
         <div className="space-y-4">
-          <FadeItem>
-            <div className="flex items-center justify-end">
-              <button onClick={startCreateWarehouse} className="inline-flex items-center gap-2 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700">
-                <Plus className="w-3.5 h-3.5" />
-                Them kho
-              </button>
-            </div>
-          </FadeItem>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+            className="flex items-center justify-end"
+          >
+            <Button onClick={startCreateWarehouse} size="sm">
+              <Plus className="w-3.5 h-3.5" />
+              Them kho
+            </Button>
+          </motion.div>
 
           {loadingWarehouses ? (
-            <FadeItem>
-              <div className="rounded-[12px] border border-slate-200 bg-white p-4 text-[12px] text-slate-500">Dang tai danh sach kho...</div>
-            </FadeItem>
+            <SectionCard><p className="text-center py-8 text-[12px] text-muted-foreground">Dang tai danh sach kho...</p></SectionCard>
           ) : warehouses.length === 0 ? (
-            <FadeItem>
-              <div className="rounded-[12px] border border-slate-200 bg-white p-4 text-[12px] text-slate-500">Chua co kho nao. Hay tao kho moi.</div>
-            </FadeItem>
+            <SectionCard>
+              <EmptyState variant="no-data" title="Chua co kho nao" description="Hay tao kho moi de bat dau" />
+            </SectionCard>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {warehouses.map((warehouse) => (
-                <FadeItem key={warehouse.id}>
-                  <motion.button
-                    onClick={() => setSelectedWarehouseId(warehouse.id)}
-                    whileHover={{ y: -2 }}
-                    className="w-full text-left p-4 rounded-[12px] border-2 border-slate-200 bg-white hover:border-slate-300 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="text-[12px]" style={{ fontWeight: 650 }}>{warehouse.code}</h3>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{warehouse.name}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-violet-600" />
+                <motion.button
+                  key={warehouse.id}
+                  onClick={() => setSelectedWarehouseId(warehouse.id)}
+                  whileHover={{ y: -2 }}
+                  className="w-full text-left p-4 rounded-xl border-2 border-border bg-card hover:border-primary/30 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-[12px] font-semibold">{warehouse.code}</h3>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{warehouse.name}</p>
                     </div>
-                    <p className="mt-2 text-[10px] text-slate-400">{warehouse.warehouse_type || "WAREHOUSE"} · {warehouse.is_active === false ? "INACTIVE" : "ACTIVE"}</p>
-                  </motion.button>
-                </FadeItem>
+                    <ChevronRight className="w-4 h-4 text-violet-600" />
+                  </div>
+                  <p className="mt-2 text-[10px] text-muted-foreground">{warehouse.warehouse_type || "WAREHOUSE"} · {warehouse.is_active === false ? "INACTIVE" : "ACTIVE"}</p>
+                </motion.button>
               ))}
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-4">
-          <FadeItem>
-            <div className="flex items-center justify-between gap-3 rounded-[12px] border border-slate-200 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setSelectedWarehouseId("")} className="inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[12px] hover:bg-slate-50">
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  Quay lai danh sach
-                </button>
-                <div>
-                  <p className="text-[13px]" style={{ fontWeight: 650 }}>{selectedWarehouse?.name}</p>
-                  <p className="text-[11px] text-slate-500">{selectedWarehouse?.code} · {selectedWarehouse?.warehouse_type || "WAREHOUSE"}</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={startEditWarehouse} className="inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[12px] hover:bg-slate-50">
-                  <Pencil className="w-3.5 h-3.5" /> Sua kho
-                </button>
-                <button onClick={handleDeleteWarehouse} disabled={deletingWarehouse} className="inline-flex items-center gap-1.5 rounded-[8px] border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] text-rose-700 hover:bg-rose-100 disabled:opacity-50">
-                  <Trash2 className="w-3.5 h-3.5" /> {deletingWarehouse ? "Dang xoa..." : "Xoa kho"}
-                </button>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setSelectedWarehouseId("")}>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Quay lai danh sach
+              </Button>
+              <div>
+                <p className="text-[13px] font-semibold">{selectedWarehouse?.name}</p>
+                <p className="text-[11px] text-muted-foreground">{selectedWarehouse?.code} · {selectedWarehouse?.warehouse_type || "WAREHOUSE"}</p>
               </div>
             </div>
-          </FadeItem>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={startEditWarehouse}>
+                <Pencil className="w-3.5 h-3.5" /> Sua kho
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleDeleteWarehouse} disabled={deletingWarehouse}>
+                <Trash2 className="w-3.5 h-3.5" /> {deletingWarehouse ? "Dang xoa..." : "Xoa kho"}
+              </Button>
+            </div>
+          </motion.div>
 
-          <FadeItem>
-            <div className="bg-white rounded-[16px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <h3 className="text-[14px]" style={{ fontWeight: 650 }}>Cau truc vi tri trong kho</h3>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+          >
+            <SectionCard
+              title="Cau truc vi tri trong kho"
+              actions={
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={startCreateRootLocation} className="inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[12px] hover:bg-slate-50">
+                  <Button variant="outline" size="sm" onClick={startCreateRootLocation}>
                     <Plus className="w-3.5 h-3.5" /> Them vi tri
-                  </button>
-                  <button onClick={startCreateChildLocation} disabled={!selectedLocationId} className="inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[12px] hover:bg-slate-50 disabled:opacity-50">
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={startCreateChildLocation} disabled={!selectedLocationId}>
                     <Plus className="w-3.5 h-3.5" /> Them node con
-                  </button>
-                  <button onClick={startEditLocation} disabled={!selectedLocationId} className="inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[12px] hover:bg-slate-50 disabled:opacity-50">
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={startEditLocation} disabled={!selectedLocationId}>
                     <Pencil className="w-3.5 h-3.5" /> Sua
-                  </button>
-                  <button onClick={handleDeleteLocation} disabled={!selectedLocationId || deletingLocation} className="inline-flex items-center gap-1.5 rounded-[8px] border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[12px] text-rose-700 hover:bg-rose-100 disabled:opacity-50">
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleDeleteLocation} disabled={!selectedLocationId || deletingLocation}>
                     <Trash2 className="w-3.5 h-3.5" /> {deletingLocation ? "Dang xoa..." : "Xoa"}
-                  </button>
+                  </Button>
                 </div>
-              </div>
-
+              }
+            >
               {loadingLocations ? (
-                <p className="text-[12px] text-slate-400">Dang tai cau truc vi tri...</p>
+                <p className="text-center py-8 text-[12px] text-muted-foreground">Dang tai cau truc vi tri...</p>
               ) : locationTree.length === 0 ? (
-                <p className="text-[12px] text-slate-400">Chua co vi tri nao trong kho nay.</p>
+                <EmptyState variant="no-data" title="Chua co vi tri nao" description="Them vi tri dau tien de bat dau" />
               ) : (
                 <div className="space-y-0 max-h-[560px] overflow-auto pr-1">
                   {locationTree.map((node) => (
@@ -616,43 +633,43 @@ export function WarehousesPage() {
                   ))}
                 </div>
               )}
-            </div>
-          </FadeItem>
+            </SectionCard>
+          </motion.div>
         </div>
       )}
 
       {showWarehouseForm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-[16px] bg-white p-6 shadow-2xl">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{warehouseMode === "create" ? "Them kho" : "Sua kho"}</h3>
-              <button onClick={() => setShowWarehouseForm(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowWarehouseForm(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-3">
-              <input value={warehouseForm.code} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15" />
-              <input value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten kho *" className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15" />
-              <select value={warehouseForm.warehouse_type} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, warehouse_type: event.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15">
+              <input value={warehouseForm.code} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <input value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten kho *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <select value={warehouseForm.warehouse_type} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, warehouse_type: event.target.value }))} className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10">
                 <option value="WAREHOUSE">WAREHOUSE</option>
                 <option value="STORE">STORE</option>
                 <option value="BRANCH">BRANCH</option>
                 <option value="LIBRARY">LIBRARY</option>
               </select>
-              <input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Dia chi" className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15" />
+              <input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Dia chi" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
 
-              <label className="inline-flex items-center gap-2 text-[12px] text-slate-600">
+              <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
                 <input type="checkbox" checked={warehouseForm.is_active} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
                 Active
               </label>
             </div>
 
             <div className="mt-5 flex items-center gap-2">
-              <button onClick={() => setShowWarehouseForm(false)} className="flex-1 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[12px] font-semibold text-slate-700">Huy</button>
-              <button onClick={handleSaveWarehouse} disabled={savingWarehouse} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
+              <Button variant="outline" className="flex-1" onClick={() => setShowWarehouseForm(false)}>Huy</Button>
+              <Button className="flex-1" onClick={handleSaveWarehouse} disabled={savingWarehouse}>
                 <Save className="w-3.5 h-3.5" /> {savingWarehouse ? "Dang luu..." : "Luu"}
-              </button>
+              </Button>
             </div>
           </motion.div>
         </div>
@@ -660,17 +677,17 @@ export function WarehousesPage() {
 
       {showLocationForm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-[16px] bg-white p-6 shadow-2xl">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{locationMode === "edit" ? "Sua vi tri" : "Them vi tri"}</h3>
-              <button onClick={() => setShowLocationForm(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowLocationForm(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-3">
-              <input value={locationForm.code} onChange={(event) => setLocationForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15" />
-              <input value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten vi tri *" className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15" />
+              <input value={locationForm.code} onChange={(event) => setLocationForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <input value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten vi tri *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
               <select
                 value={locationForm.parent_location_id}
                 onChange={(event) => {
@@ -686,35 +703,35 @@ export function WarehousesPage() {
                     location_type: inferredType,
                   }));
                 }}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15"
+                className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10"
               >
                 <option value="">Root (thuoc kho)</option>
                 {parentLocationOptions.map((item) => (
                   <option key={item.id} value={item.id}>{TYPE_LABEL[item.location_type] || item.location_type} · {item.code}</option>
                 ))}
               </select>
-              <select value={locationForm.location_type} onChange={(event) => setLocationForm((prev) => ({ ...prev, location_type: event.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] outline-none focus:ring-[3px] focus:ring-violet-500/15">
+              <select value={locationForm.location_type} onChange={(event) => setLocationForm((prev) => ({ ...prev, location_type: event.target.value }))} className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10">
                 <option value="">Chon loai vi tri</option>
                 {(allowedLocationTypes.length > 0 ? allowedLocationTypes : LOCATION_TYPES).map((item) => (
                   <option key={item} value={item}>{TYPE_LABEL[item] || item}</option>
                 ))}
               </select>
 
-              <label className="inline-flex items-center gap-2 text-[12px] text-slate-600">
+              <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
                 <input type="checkbox" checked={locationForm.is_active} onChange={(event) => setLocationForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
                 Active
               </label>
             </div>
 
             <div className="mt-5 flex items-center gap-2">
-              <button onClick={() => setShowLocationForm(false)} className="flex-1 rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[12px] font-semibold text-slate-700">Huy</button>
-              <button onClick={handleSaveLocation} disabled={savingLocation || !selectedWarehouseId} className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
+              <Button variant="outline" className="flex-1" onClick={() => setShowLocationForm(false)}>Huy</Button>
+              <Button className="flex-1" onClick={handleSaveLocation} disabled={savingLocation || !selectedWarehouseId}>
                 <Save className="w-3.5 h-3.5" /> {savingLocation ? "Dang luu..." : "Luu"}
-              </button>
+              </Button>
             </div>
           </motion.div>
         </div>
       ) : null}
-    </PageWrapper>
+    </div>
   );
 }

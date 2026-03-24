@@ -34,6 +34,19 @@ export interface RecognizeBookResponse {
   raw?: string;
 }
 
+export interface SummaryViRequest {
+  title: string;
+  author?: string;
+  description?: string;
+  categories?: string[];
+}
+
+export interface SummaryViResponse {
+  summaryVi: string;
+  keywords: string[];
+  ai_provider: string;
+}
+
 export interface LookupBookByIsbnRequest {
   isbn: string;
   generateVietnameseSummary?: boolean;
@@ -59,7 +72,7 @@ export interface LookupBookByIsbnResponse {
     googleBooks: boolean;
     openLibrary: boolean;
     worldCat?: boolean;
-    ollamaSummary: boolean;
+    aiSummary: string;
   };
   confidence: {
     overall: number;
@@ -136,6 +149,11 @@ export const aiService = {
       isbn: payload.isbn,
       generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
     });
+    return response.data;
+  },
+
+  generateSummaryVi: async (payload: SummaryViRequest): Promise<SummaryViResponse> => {
+    const response = await aiAPI.post('/generate-summary-vi', payload);
     return response.data;
   },
 };

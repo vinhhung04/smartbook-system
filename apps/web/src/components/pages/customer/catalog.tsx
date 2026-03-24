@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { motion } from 'motion/react';
 import { customerCatalogService, CustomerCatalogBook } from '@/services/customer-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
-import { SearchFilterBar } from './_shared/search-filter-bar';
-import { LoadingState } from './_shared/loading-state';
-import { EmptyState } from './_shared/empty-state';
-import { CustomerStateBlock } from './_shared/customer-state-block';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SectionCard } from '@/components/ui/section-card';
+import { FilterBar } from '@/components/ui/filter-bar';
 import { BookCard } from './_shared/book-card';
 import { DetailDrawer } from './_shared/detail-drawer';
-import { StatusBadge } from './_shared/status-badge';
-import { EmptyBooksIllustration } from './_shared/empty-state-illustrations';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { BookOpen, RefreshCw } from 'lucide-react';
 
 export function CustomerCatalogPage() {
   const navigate = useNavigate();
@@ -69,127 +69,187 @@ export function CustomerCatalogPage() {
   };
 
   return (
-    <div className="space-y-4">
-
-      <div className="relative overflow-hidden rounded-[16px] border border-cyan-200/70 bg-gradient-to-br from-indigo-50 via-cyan-50/80 to-white px-5 py-4">
-        <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-200/35 blur-2xl" />
-        <div className="absolute -left-8 bottom-0 h-20 w-20 rounded-full bg-indigo-200/35 blur-2xl" />
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Hero Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="relative overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/15"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="relative">
-          <h2 className="text-[19px] tracking-[-0.02em] text-slate-900" style={{ fontWeight: 700 }}>Browse the Catalog</h2>
-          <p className="mt-1 text-[12px] text-slate-600">Find books fast, preview details, and reserve in one click.</p>
+          <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>Browse the Catalog</h1>
+          <p className="text-white/65 text-[13px] mt-1">Discover titles, preview details, and reserve in one click.</p>
         </div>
+      </motion.div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Total Titles', value: stats.total, variant: 'default' as const },
+          { label: 'Available', value: stats.available, variant: 'success' as const },
+          { label: 'Out of Stock', value: stats.unavailable, variant: 'danger' as const },
+        ].map((stat) => (
+          <div key={stat.label} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
+            stat.variant === 'success' ? 'bg-emerald-50 border-emerald-100' :
+            stat.variant === 'danger' ? 'bg-rose-50 border-rose-100' :
+            'bg-indigo-50 border-indigo-100'
+          }`}>
+            <span className="text-[12px] text-muted-foreground font-medium">{stat.label}</span>
+            <span className={`text-[20px] font-bold ${
+              stat.variant === 'success' ? 'text-emerald-700' :
+              stat.variant === 'danger' ? 'text-rose-700' :
+              'text-indigo-700'
+            }`}>{stat.value}</span>
+          </div>
+        ))}
       </div>
 
-      <SearchFilterBar
+      {/* Filters */}
+      <FilterBar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search title, author, ISBN..."
+        searchPlaceholder="Search by title, author, ISBN..."
         filters={
-          <select
-            value={availability}
-            onChange={(e) => setAvailability(e.target.value as 'available' | 'unavailable' | '')}
-            className="h-10 rounded-[10px] border border-slate-200 bg-white px-3 text-[13px] text-slate-700"
-          >
-            <option value="">All availability</option>
-            <option value="available">Available</option>
-            <option value="unavailable">Out of stock</option>
-          </select>
+          <>
+            <select
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value as 'available' | 'unavailable' | '')}
+              className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10"
+            >
+              <option value="">All availability</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Out of stock</option>
+            </select>
+            <select
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="hidden"
+            >
+            </select>
+          </>
         }
         actions={
           <button
             onClick={() => void loadBooks()}
-            className="h-10 rounded-[10px] border border-slate-200 bg-white px-3 text-[12px] text-slate-600 hover:bg-slate-50"
-            style={{ fontWeight: 600 }}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            style={{ fontWeight: 500 }}
           >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         }
       />
 
-      <section>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className="text-[16px] text-slate-900" style={{ fontWeight: 700 }}>Catalog</h3>
-            <p className="mt-0.5 text-[12px] text-slate-500">Total: {stats.total} | Available: {stats.available} | Out of stock: {stats.unavailable}</p>
-          </div>
-          <div className="flex items-center gap-2 text-[11px]">
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700">Available: {stats.available}</span>
-            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-rose-700">Out: {stats.unavailable}</span>
-          </div>
+      {/* Catalog Grid */}
+      <SectionCard noPadding className="!rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border bg-muted/20">
+          <p className="text-[12px] text-muted-foreground font-medium">
+            Showing {stats.total} title{stats.total !== 1 ? 's' : ''} — {stats.available} available
+          </p>
         </div>
 
         {loading ? (
-          <LoadingState message="Loading catalog..." />
+          <div className="p-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-xl border bg-card p-4 animate-pulse space-y-3">
+                  <div className="h-40 bg-muted rounded-lg" />
+                  <div className="h-4 bg-muted rounded w-3/4" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : error ? (
-          <CustomerStateBlock mode="error" message={error} />
+          <EmptyState
+            variant="error"
+            title="Failed to load catalog"
+            description={error}
+            action={
+              <button onClick={() => void loadBooks()} className="text-primary font-medium hover:underline">
+                Try again
+              </button>
+            }
+          />
         ) : books.length === 0 ? (
           <EmptyState
-            message="No books found. Try changing filters or search keyword."
-            illustration={<EmptyBooksIllustration />}
+            variant="no-results"
+            title="No books found"
+            description="Try adjusting your search or filters to find what you're looking for."
             action={
               <button
-                onClick={() => {
-                  setSearch('');
-                  setAvailability('');
-                }}
-                className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50"
-                style={{ fontWeight: 600 }}
+                onClick={() => { setSearch(''); setAvailability(''); }}
+                className="text-primary font-medium hover:underline"
               >
-                Clear filters
+                Clear all filters
               </button>
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {books.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onView={(bookId) => {
-                  const found = books.find((row) => row.id === bookId) || null;
-                  setPreviewBook(found);
-                }}
-                onReserve={handleReserve}
-                reserving={reservingBookId === book.id}
-              />
-            ))}
+          <div className="p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {books.map((book, index) => (
+                <motion.div
+                  key={book.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.25 }}
+                >
+                  <BookCard
+                    book={book}
+                    onView={(bookId) => {
+                      const found = books.find((row) => row.id === bookId) || null;
+                      setPreviewBook(found);
+                    }}
+                    onReserve={handleReserve}
+                    reserving={reservingBookId === book.id}
+                  />
+                </motion.div>
+              ))}
+            </div>
           </div>
         )}
-      </section>
+      </SectionCard>
 
+      {/* Detail Drawer */}
       <DetailDrawer
         open={Boolean(previewBook)}
         title={previewBook?.title || 'Book preview'}
         onClose={() => setPreviewBook(null)}
       >
         {previewBook ? (
-          <div className="space-y-3 text-[13px]">
+          <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-slate-600">{previewBook.author || 'Unknown author'}</p>
-              <StatusBadge status={Number(previewBook.quantity || 0) > 0 ? 'ACTIVE' : 'OUT_OF_STOCK'} />
+              <p className="text-[13px] text-muted-foreground">{previewBook.author || 'Unknown author'}</p>
+              <StatusBadge
+                label={Number(previewBook.quantity || 0) > 0 ? 'Available' : 'Out of Stock'}
+                variant={Number(previewBook.quantity || 0) > 0 ? 'success' : 'destructive'}
+              />
             </div>
-            <div className="rounded-[10px] border border-slate-200 bg-white p-3 text-slate-600">
-              <p><span className="text-slate-500">Category:</span> {previewBook.category || '-'}</p>
-              <p className="mt-1"><span className="text-slate-500">ISBN:</span> {previewBook.isbn || '-'}</p>
-              <p className="mt-1"><span className="text-slate-500">Stock:</span> {previewBook.quantity || 0}</p>
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
+              <p className="text-[12px]"><span className="text-muted-foreground">Category:</span> {previewBook.category || '-'}</p>
+              <p className="text-[12px]"><span className="text-muted-foreground">ISBN:</span> {previewBook.isbn || '-'}</p>
+              <p className="text-[12px]"><span className="text-muted-foreground">Stock:</span> {previewBook.quantity || 0} available</p>
             </div>
-            <p className="text-[12px] text-slate-500">{previewBook.description || 'No description available.'}</p>
+            <p className="text-[12px] text-muted-foreground">{previewBook.description || 'No description available.'}</p>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={() => void handleReserve(previewBook)}
                 disabled={reservingBookId === previewBook.id || Number(previewBook.quantity || 0) <= 0}
-                className="rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:opacity-60"
-                style={{ fontWeight: 600 }}
+                className="flex-1 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {reservingBookId === previewBook.id ? 'Reserving...' : 'Reserve'}
+                {reservingBookId === previewBook.id ? 'Reserving...' : Number(previewBook.quantity || 0) <= 0 ? 'Out of Stock' : 'Reserve Now'}
               </button>
               <button
                 onClick={() => navigate(`/customer/books/${previewBook.id}`)}
-                className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50"
-                style={{ fontWeight: 600 }}
+                className="rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] text-foreground hover:bg-muted transition-colors"
               >
-                Open detail page
+                Details
               </button>
             </div>
           </div>

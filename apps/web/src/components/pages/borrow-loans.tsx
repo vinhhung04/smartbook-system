@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { LoaderCircle, RefreshCcw, Search } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Loader2, RefreshCw, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageWrapper, FadeItem } from '../motion-utils';
-import { StatusBadge } from '../status-badge';
+import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
 const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
 
-function getVariant(status: LoanStatus) {
-  if (status === 'BORROWED') return 'info';
-  if (status === 'RETURNED') return 'success';
-  if (status === 'OVERDUE' || status === 'LOST' || status === 'DAMAGED') return 'warning';
-  if (status === 'CANCELLED') return 'neutral';
-  return 'primary';
+function getBadgeVariant(status: LoanStatus) {
+  if (status === 'BORROWED') return 'secondary';
+  if (status === 'RETURNED') return 'default';
+  if (status === 'OVERDUE' || status === 'LOST' || status === 'DAMAGED') return 'destructive';
+  if (status === 'CANCELLED') return 'outline';
+  return 'secondary';
 }
 
 export function BorrowLoansPage() {
@@ -123,168 +125,225 @@ export function BorrowLoansPage() {
   };
 
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center justify-between gap-3">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center border border-blue-200/40 shadow-sm">
+            <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
           <div>
-            <h1 className="tracking-[-0.02em]">Borrow Loans</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">{loans.length} loans</p>
-          </div>
-          <button
-            onClick={() => void loadLoans()}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] bg-white border border-slate-200 text-slate-700 text-[13px] hover:bg-slate-50 transition-all"
-            style={{ fontWeight: 550 }}
-          >
-            <RefreshCcw className="w-4 h-4" /> Refresh
-          </button>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search loan..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white border border-rose-100/60 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-rose-500/10 focus:border-rose-300/60 transition-all shadow-sm"
-            />
-          </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200/60 rounded-[10px] p-[3px] shadow-sm overflow-x-auto">
-            {(['ALL', ...statuses] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-3.5 py-1.5 rounded-[8px] text-[12px] whitespace-nowrap transition-all duration-160 ${statusFilter === status ? 'bg-rose-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                style={{ fontWeight: 550 }}
-              >
-                {status}
-              </button>
-            ))}
+            <h1 className="text-xl font-semibold tracking-tight">Borrow Loans</h1>
+            <p className="text-sm text-muted-foreground">{loans.length} loans</p>
           </div>
         </div>
-      </FadeItem>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void loadLoans()}
+          className="gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </Button>
+      </motion.div>
 
-      <FadeItem>
-        <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[14px] text-slate-700" style={{ fontWeight: 650 }}>Pending Renewal Requests</h2>
-            <p className="text-[12px] text-slate-400">{renewalRequests.length} request(s)</p>
-          </div>
+      {/* Filter Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
+      >
+        <FilterBar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search loan..."
+          filters={
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {(['ALL', ...statuses] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
+                    statusFilter === status
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </motion.div>
+
+      {/* Pending Renewal Requests */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.15, ease: 'easeOut' }}
+      >
+        <SectionCard
+          title="Pending Renewal Requests"
+          subtitle={`${renewalRequests.length} request(s)`}
+          className="border-l-4 border-l-amber-400"
+        >
           {renewalRequests.length === 0 ? (
-            <p className="text-[12px] text-slate-500">No pending renewal requests.</p>
+            <EmptyState
+              variant="no-data"
+              title="No pending renewal requests"
+              description="All renewal requests have been processed."
+              className="py-8"
+            />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {renewalRequests.map((request) => (
-                <div key={request.request_id} className="border border-slate-100 rounded-[10px] px-3 py-2.5 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] text-slate-800" style={{ fontWeight: 600 }}>
+                <div key={request.request_id} className="border border-border rounded-lg p-4 flex items-center justify-between gap-4 bg-muted/30">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {request.loan?.loan_number || request.loan?.id || 'Unknown loan'} - {request.customer?.full_name || request.customer?.customer_code || 'Unknown customer'}
                     </p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Requested extension: {request.requested_extension_days ?? '-'} day(s) | Requested at {new Date(request.requested_at).toLocaleString('vi-VN')}
                     </p>
                   </div>
                   {request.loan?.id ? (
-                    <div className="flex items-center gap-2">
-                      <button
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
                         onClick={() => void reviewRenewal(request.loan!.id, 'APPROVE')}
-                        className="px-2.5 py-1 rounded-[6px] border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] hover:bg-emerald-100 transition-all"
-                        style={{ fontWeight: 550 }}
                       >
                         Approve
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
                         onClick={() => void reviewRenewal(request.loan!.id, 'REJECT')}
-                        className="px-2.5 py-1 rounded-[6px] border border-rose-200 bg-rose-50 text-rose-700 text-[11px] hover:bg-rose-100 transition-all"
-                        style={{ fontWeight: 550 }}
                       >
                         Reject
-                      </button>
+                      </Button>
                     </div>
                   ) : (
-                    <span className="text-[11px] text-slate-400">Invalid loan reference</span>
+                    <span className="text-xs text-muted-foreground shrink-0">Invalid loan reference</span>
                   )}
                 </div>
               ))}
             </div>
           )}
-        </div>
-      </FadeItem>
+        </SectionCard>
+      </motion.div>
 
-      <FadeItem>
-        <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-gradient-to-r from-rose-50/40 to-transparent">
-                {['Loan', 'Customer', 'Borrow Date', 'Due Date', 'Items', 'Status', 'Action'].map((header) => (
-                  <th key={header} className="text-left text-[11px] text-slate-400 px-5 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-14 text-[13px] text-slate-400">
-                    <LoaderCircle className="w-4 h-4 inline mr-2 animate-spin" /> Loading loans...
-                  </td>
+      {/* Loans Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
+      >
+        <SectionCard noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  {['Loan', 'Customer', 'Borrow Date', 'Due Date', 'Items', 'Status', 'Action'].map((header) => (
+                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                      {header}
+                    </th>
+                  ))}
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-14 text-[13px] text-slate-400">No loans found</td>
-                </tr>
-              ) : (
-                filtered.map((loan) => (
-                  <tr key={loan.id} className="border-b border-slate-50 last:border-0 hover:bg-rose-50/20 transition-all">
-                    <td className="px-5 py-3.5 text-[13px]" style={{ fontWeight: 550 }}>
-                      <Link to={`/borrow/loans/${loan.id}`} className="text-rose-700 hover:underline">{loan.loan_number}</Link>
-                    </td>
-                    <td className="px-5 py-3.5 text-[13px]">{loan.customers?.full_name || loan.customer_id}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{new Date(loan.borrow_date).toLocaleString('vi-VN')}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{new Date(loan.due_date).toLocaleString('vi-VN')}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{loan.total_items}</td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge label={loan.status} variant={getVariant(loan.status)} dot />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => void returnLoan(loan.id)}
-                            className="px-2.5 py-1 rounded-[6px] border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] hover:bg-emerald-100 transition-all"
-                            style={{ fontWeight: 550 }}
-                          >
-                            Return
-                          </button>
-                          <button
-                            onClick={() => void reportDamage(loan.id)}
-                            className="px-2.5 py-1 rounded-[6px] border border-amber-200 bg-amber-50 text-amber-700 text-[11px] hover:bg-amber-100 transition-all"
-                            style={{ fontWeight: 550 }}
-                          >
-                            Report Damage
-                          </button>
-                          <button
-                            onClick={() => void markLost(loan.id)}
-                            className="px-2.5 py-1 rounded-[6px] border border-rose-200 bg-rose-50 text-rose-700 text-[11px] hover:bg-rose-100 transition-all"
-                            style={{ fontWeight: 550 }}
-                          >
-                            Mark Lost
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">-</span>
-                      )}
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-14">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Loading loans...</span>
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </FadeItem>
-    </PageWrapper>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState
+                        variant="no-results"
+                        title="No loans found"
+                        description="Try adjusting your search or filters."
+                        className="py-12"
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((loan, index) => (
+                    <motion.tr
+                      key={loan.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-5 py-3.5">
+                        <Link to={`/borrow/loans/${loan.id}`} className="text-sm font-medium text-primary hover:underline">
+                          {loan.loan_number}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm">{loan.customers?.full_name || loan.customer_id}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.borrow_date).toLocaleString('vi-VN')}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</td>
+                      <td className="px-5 py-3.5 text-sm">{loan.total_items}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant={getBadgeVariant(loan.status)}>{loan.status}</Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => void returnLoan(loan.id)}
+                            >
+                              Return
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                              onClick={() => void reportDamage(loan.id)}
+                            >
+                              Report Damage
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                              onClick={() => void markLost(loan.id)}
+                            >
+                              Mark Lost
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </motion.div>
+    </div>
   );
 }

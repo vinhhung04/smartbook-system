@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'react';
+import { Bell, RefreshCw } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { CustomerStateBlock } from './_shared/customer-state-block';
-import { SectionCard } from './_shared/section-card';
+import { SectionCard } from '@/components/ui/section-card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingOverlay } from '@/components/ui/loading-state';
 import { NotificationListItem } from './_shared/notification-list-item';
-import { LoadingState } from './_shared/loading-state';
-import { EmptyState } from './_shared/empty-state';
 
 export function CustomerNotificationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'UNREAD' | 'READ'>('ALL');
-
-  useEffect(() => {
-    void loadNotifications();
-  }, []);
 
   const loadNotifications = async () => {
     try {
@@ -30,6 +26,8 @@ export function CustomerNotificationsPage() {
     }
   };
 
+  useEffect(() => { void loadNotifications(); }, []);
+
   const filteredRows = rows.filter((row) => {
     if (filter === 'UNREAD') return !row.read_at;
     if (filter === 'READ') return Boolean(row.read_at);
@@ -40,93 +38,72 @@ export function CustomerNotificationsPage() {
   const readRows = filteredRows.filter((row) => Boolean(row.read_at));
 
   return (
-    <div className="space-y-4">
-      <SectionCard
-        title="Notifications"
-        subtitle={`${rows.length} notification(s)`}
-        actions={
-          <button onClick={() => void loadNotifications()} className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50" style={{ fontWeight: 600 }}>
-            Refresh
-          </button>
-        }
-      >
-        <div className="mb-3 flex items-center gap-2">
-          <button
-            onClick={() => setFilter('ALL')}
-            className={`rounded-[9px] px-2.5 py-1.5 text-[11px] ${filter === 'ALL' ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-            style={{ fontWeight: 600 }}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('UNREAD')}
-            className={`rounded-[9px] px-2.5 py-1.5 text-[11px] ${filter === 'UNREAD' ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-            style={{ fontWeight: 600 }}
-          >
-            Unread
-          </button>
-          <button
-            onClick={() => setFilter('READ')}
-            className={`rounded-[9px] px-2.5 py-1.5 text-[11px] ${filter === 'READ' ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-            style={{ fontWeight: 600 }}
-          >
-            Read
-          </button>
+    <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Hero */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-cyan-50 flex items-center justify-center border border-indigo-200/40">
+            <Bell className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">My Notifications</h1>
+            <p className="text-[13px] text-muted-foreground">Reminders, updates, and account alerts</p>
+          </div>
         </div>
+        <button onClick={() => void loadNotifications()} disabled={loading}
+          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
-        {loading ? (
-          <LoadingState message="Loading notifications..." />
-        ) : error ? (
-          <CustomerStateBlock mode="error" message={error} />
-        ) : filteredRows.length === 0 ? (
-          <EmptyState
-            message={filter === 'ALL' ? 'No notifications yet. Check back later for reminders and account updates.' : `No ${filter.toLowerCase()} notifications.`}
-            action={
-              <button
-                onClick={() => void loadNotifications()}
-                className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50"
-                style={{ fontWeight: 600 }}
-              >
-                Refresh list
-              </button>
-            }
-          />
-        ) : filter === 'ALL' ? (
-          <div className="space-y-3">
-            {unreadRows.length > 0 ? (
-              <div className="rounded-[12px] border border-cyan-200 bg-cyan-50/60 p-2.5">
-                <p className="mb-2 px-1 text-[11px] uppercase tracking-[0.05em] text-cyan-700" style={{ fontWeight: 700 }}>
-                  Unread ({unreadRows.length})
-                </p>
-                <div className="space-y-2">
-                  {unreadRows.map((row) => (
-                    <NotificationListItem key={row.id} item={row} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2">
+        {(['ALL', 'UNREAD', 'READ'] as const).map((f) => (
+          <button key={f} onClick={() => setFilter(f)} className={`inline-flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium transition-colors ${
+            filter === f
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card border border-input text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}>
+            {f === 'ALL' ? 'All' : f === 'UNREAD' ? 'Unread' : 'Read'}
+            {f === 'UNREAD' && unreadRows.length > 0 && (
+              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] text-white">{unreadRows.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
 
-            {readRows.length > 0 ? (
-              <div className="rounded-[12px] border border-slate-200 bg-white p-2.5">
-                <p className="mb-2 px-1 text-[11px] uppercase tracking-[0.05em] text-slate-500" style={{ fontWeight: 700 }}>
-                  Read ({readRows.length})
-                </p>
-                <div className="space-y-2">
-                  {readRows.map((row) => (
-                    <NotificationListItem key={row.id} item={row} />
-                  ))}
-                </div>
+      {/* Content */}
+      {loading ? (
+        <LoadingOverlay />
+      ) : error ? (
+        <EmptyState variant="error" title="Failed to load notifications" description={error} action={<button onClick={() => void loadNotifications()} className="text-primary font-medium hover:underline">Try again</button>} />
+      ) : filteredRows.length === 0 ? (
+        <EmptyState variant="inbox" title="No notifications" description={filter === 'ALL' ? 'You are all caught up! Check back later for reminders and account updates.' : `No ${filter.toLowerCase()} notifications.`} />
+      ) : (
+        <div className="space-y-3">
+          {unreadRows.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Unread ({unreadRows.length})</p>
+              <div className="space-y-2">
+                {unreadRows.map((row) => (
+                  <NotificationListItem key={row.id} item={row} />
+                ))}
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {filteredRows.map((row) => (
-              <NotificationListItem key={row.id} item={row} />
-            ))}
-          </div>
-        )}
-      </SectionCard>
+            </div>
+          )}
+          {readRows.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Read ({readRows.length})</p>
+              <div className="space-y-2">
+                {readRows.map((row) => (
+                  <NotificationListItem key={row.id} item={row} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
