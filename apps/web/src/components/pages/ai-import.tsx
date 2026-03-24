@@ -88,6 +88,8 @@ export function AIImportPage() {
   const [lookupData, setLookupData] = useState<LookupBookByIsbnResponse | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   const manualMode = Boolean(lookupData && !lookupData.found);
 
   const confidenceText = useMemo(() => {
@@ -105,9 +107,10 @@ export function AIImportPage() {
 
     setLookupLoading(true);
     try {
+      // Lookup nhanh: không chờ Ollama/Groq sinh summary
       const result = await aiService.lookupBookByIsbn({
         isbn: normalized,
-        generateVietnameseSummary: true,
+        generateVietnameseSummary: false,
       });
 
       setIsbnInput(normalized);
@@ -129,6 +132,32 @@ export function AIImportPage() {
       toast.error(getApiErrorMessage(error, "Lookup ISBN that bai"));
     } finally {
       setLookupLoading(false);
+    }
+  }
+
+  async function handleGenerateSummary() {
+    if (!form.title.trim()) {
+      toast.error("Can co title sach truoc khi tao summary AI");
+      return;
+    }
+    setSummaryLoading(true);
+    try {
+      const result = await aiService.generateSummaryVi({
+        title: form.title.trim(),
+        author: form.authorsText.split(",")[0].trim(),
+        description: form.description,
+        categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
+      });
+      setForm((prev) => ({
+        ...prev,
+        summaryVi: result.summaryVi || prev.summaryVi,
+        keywordsText: (result.keywords || []).join(", ") || prev.keywordsText,
+      }));
+      toast.success(`Da tao summary AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
+    } catch {
+      toast.error("Khong the tao summary. Vui long thu lai.");
+    } finally {
+      setSummaryLoading(false);
     }
   }
 
@@ -345,7 +374,17 @@ export function AIImportPage() {
                 <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Summary TIeng Viet (AI)</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-slate-500">Summary TIeng Viet (AI)</label>
+                  <button
+                    onClick={() => void handleGenerateSummary()}
+                    disabled={summaryLoading || !form.title.trim()}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-40"
+                  >
+                    {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {summaryLoading ? "Dang tao..." : "Tao summary AI"}
+                  </button>
+                </div>
                 <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>

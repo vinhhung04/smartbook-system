@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Package, AlertTriangle, Leaf, Download, ArrowRightLeft } from "lucide-react";
 import { StatusBadge } from "../status-badge";
-import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
+import { StatCard } from "@/components/ui/stat-card";
+import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
 
 interface InventoryLocation {
   warehouse_id?: string;
@@ -28,10 +31,8 @@ interface InventoryBook {
   updated_at: string;
 }
 
-/** One table row = one book in one warehouse (qty is only for that warehouse). */
 interface InventoryWarehouseRow extends InventoryBook {
   rowKey: string;
-  /** Filter key: real `warehouse_id` UUID, or `__name:...` if API had no id, or `__none__`. */
   warehouseId: string;
   warehouseName: string;
   warehouseQty: number;
@@ -60,12 +61,10 @@ function summarizeLocationCodes(locs: InventoryLocation[]): string {
   return sorted.length > 1 ? `${first.location_code} +${sorted.length - 1}` : first.location_code;
 }
 
-/** Split each book into one row per warehouse using `locations` from API. */
 function expandBooksByWarehouse(data: InventoryBook[]): InventoryWarehouseRow[] {
   const rows: InventoryWarehouseRow[] = [];
   for (const item of data) {
     const locs = item.locations || [];
-    /** Group by warehouse_id when present so filter matches API data reliably. */
     const byWh = new Map<string, { name: string; locs: InventoryLocation[] }>();
     for (const loc of locs) {
       const wid = loc.warehouse_id ? String(loc.warehouse_id) : "";
@@ -105,7 +104,6 @@ function expandBooksByWarehouse(data: InventoryBook[]): InventoryWarehouseRow[] 
 export function InventoryPage() {
   const [data, setData] = useState<InventoryBook[]>([]);
   const [loading, setLoading] = useState(true);
-  /** `"all"` or warehouse UUID from `stock_balances.warehouse_id` */
   const [whFilterId, setWhFilterId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -178,139 +176,137 @@ export function InventoryPage() {
   const tableHeaders = ["Barcode", "Title", "Category", "Warehouse", "Location", "Qty", "Health", "Status", "Updated"];
 
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-emerald-100 to-teal-50 flex items-center justify-center border border-emerald-200/40">
-              <Package className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <h1 className="tracking-[-0.02em]">Inventory</h1>
-              <p className="text-[12px] text-slate-400 mt-0.5">{whSubtitle}</p>
-            </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 flex items-center justify-center border border-emerald-200/40">
+            <Package className="w-5 h-5 text-emerald-600" />
           </div>
-          <div className="flex items-center gap-2.5">
-            <button onClick={() => toast.success("Export started", { description: `${filtered.length} rows` })} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-emerald-100 bg-white text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm" style={{ fontWeight: 550 }}>
-              <Download className="w-3.5 h-3.5" /> Export
-            </button>
-            <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm" style={{ fontWeight: 550 }}>
-              <ArrowRightLeft className="w-3.5 h-3.5" /> Movements
-            </NavLink>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Inventory</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{whSubtitle}</p>
           </div>
         </div>
-      </FadeItem>
+        <div className="flex items-center gap-2.5">
+          <button onClick={() => toast.success("Export started", { description: `${filtered.length} rows` })} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 bg-white text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm font-medium">
+            <Download className="w-3.5 h-3.5" /> Export
+          </button>
+          <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium">
+            <ArrowRightLeft className="w-3.5 h-3.5" /> Movements
+          </NavLink>
+        </div>
+      </motion.div>
 
-      {/* Filters first: stats below react to warehouse + status */}
-      <FadeItem>
-        <div className="rounded-[12px] border border-emerald-100/50 bg-emerald-50/20 px-4 py-3">
-          <p className="text-[11px] text-slate-500 uppercase tracking-wide mb-2" style={{ fontWeight: 600 }}>Scope</p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search inventory by title/barcode..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-emerald-100/60 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-emerald-500/10 focus:border-emerald-300/60 transition-all shadow-sm" />
-            </div>
-            <label className="flex items-center gap-2 text-[12px] text-slate-600 shrink-0">
-              <span style={{ fontWeight: 600 }}>Warehouse</span>
-              <select
-                value={whFilterId}
-                onChange={(e) => setWhFilterId(e.target.value)}
-                className="min-w-[200px] max-w-[280px] px-3 py-2.5 bg-white border border-emerald-100/60 rounded-[10px] text-[13px] outline-none shadow-sm cursor-pointer"
-              >
-                {warehouseOptions.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+      >
+        <FilterBar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search inventory by title/barcode..."
+          showSearchClear
+          filters={
+            <>
+              <label className="flex items-center gap-2 text-[12px] text-muted-foreground font-medium">
+                <span>Warehouse</span>
+                <select
+                  value={whFilterId}
+                  onChange={(e) => setWhFilterId(e.target.value)}
+                  className="min-w-[200px] max-w-[280px] px-3 py-2 bg-white border border-input rounded-lg text-[13px] outline-none shadow-sm cursor-pointer"
+                >
+                  {warehouseOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-1 bg-white border border-input rounded-lg p-[3px] shadow-sm">
+                {statusFilters.map(f => (
+                  <button key={f} onClick={() => setStatusFilter(f)} className={`relative px-3.5 py-1.5 rounded-lg text-[12px] transition-all duration-160 font-medium ${statusFilter === f ? "text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                    {statusFilter === f && <motion.div layoutId="inv-filter" className="absolute inset-0 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 shadow-sm" transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} />}
+                    <span className="relative z-10">{f}</span>
+                  </button>
                 ))}
-              </select>
-            </label>
-            <div className="flex items-center gap-1 bg-white border border-slate-200/60 rounded-[10px] p-[3px] shadow-sm">
-              {statusFilters.map(f => (
-                <button key={f} onClick={() => setStatusFilter(f)} className={`relative px-3.5 py-1.5 rounded-[8px] text-[12px] transition-all duration-160 ${statusFilter === f ? "text-white" : "text-slate-500 hover:text-slate-700"}`} style={{ fontWeight: 550 }}>
-                  {statusFilter === f && <motion.div layoutId="inv-filter" className="absolute inset-0 rounded-[8px] bg-gradient-to-r from-emerald-600 to-teal-600 shadow-sm" transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} />}
-                  <span className="relative z-10">{f}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </FadeItem>
+              </div>
+            </>
+          }
+        />
+      </motion.div>
 
-      {/* Health Summary with Chart — values follow whScopedRows */}
-      <FadeItem>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: "Total Units", val: totalUnits, color: "from-emerald-50 to-teal-50/50 border-emerald-100/60", textColor: "text-emerald-700", icon: Package, iconColor: "text-emerald-500" },
-              { label: "Healthy", val: healthyCount, color: "from-green-50 to-emerald-50/50 border-green-100/60", textColor: "text-green-700", icon: Leaf, iconColor: "text-green-500" },
-              { label: "Low Stock", val: lowCount, color: "from-amber-50 to-orange-50/50 border-amber-100/60", textColor: "text-amber-700", icon: AlertTriangle, iconColor: "text-amber-500" },
-              { label: "Out of Stock", val: outCount, color: "from-rose-50 to-red-50/50 border-rose-100/60", textColor: "text-rose-700", icon: Package, iconColor: "text-rose-500" },
-            ].map(s => (
-              <motion.div key={`${whFilterId}-${s.label}`} whileHover={{ y: -2 }} className={`bg-gradient-to-br ${s.color} rounded-[12px] border p-4 flex items-center gap-3`}>
-                <s.icon className={`w-5 h-5 ${s.iconColor}`} />
-                <div>
-                  <div className={`text-[20px] tracking-[-0.02em] ${s.textColor}`} style={{ fontWeight: 700, lineHeight: 1 }}>{s.val}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5" style={{ fontWeight: 500 }}>{s.label}</div>
-                </div>
-              </motion.div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1 }}
+        className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4"
+      >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Total Units" value={totalUnits} icon={Package} variant="default" />
+          <StatCard label="Healthy" value={healthyCount} icon={Leaf} variant="success" />
+          <StatCard label="Low Stock" value={lowCount} icon={AlertTriangle} variant="warning" />
+          <StatCard label="Out of Stock" value={outCount} icon={Package} variant="danger" />
+        </div>
+        <div className="bg-card rounded-xl border border-black/5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-3 flex flex-col items-center justify-center">
+          <div className="text-[11px] text-muted-foreground mb-1 font-medium">Health</div>
+          <ResponsiveContainer width="100%" height={100} key={`pie-${whFilterId}-${healthyCount}-${lowCount}-${outCount}`}>
+            <PieChart>
+              <Pie data={healthData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                {healthData.map((entry, index) => <Cell key={`cell-${whFilterId}-${index}`} fill={entry.color} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e4ed" }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex items-center gap-3 mt-1">
+            {healthData.map(d => (
+              <span key={d.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />{d.value}
+              </span>
             ))}
           </div>
-          <div className="bg-white rounded-[12px] border border-white/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-3 flex flex-col items-center justify-center">
-            <div className="text-[11px] text-slate-400 mb-1" style={{ fontWeight: 550 }}>Health</div>
-            <ResponsiveContainer width="100%" height={100} key={`pie-${whFilterId}-${healthyCount}-${lowCount}-${outCount}`}>
-              <PieChart>
-                <Pie data={healthData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                  {healthData.map((entry, index) => <Cell key={`cell-${whFilterId}-${index}`} fill={entry.color} />)}
-                </Pie>
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e4ed" }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex items-center gap-3 mt-1">
-              {healthData.map(d => (
-                <span key={d.name} className="flex items-center gap-1 text-[10px] text-slate-500">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />{d.value}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
-      </FadeItem>
+      </motion.div>
 
-      {/* Table */}
-      <FadeItem>
-        <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.15 }}
+      >
+        <SectionCard noPadding>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-100 bg-gradient-to-r from-emerald-50/40 to-transparent">
+              <tr className="border-b border-border bg-muted/40">
                 {tableHeaders.map(h => (
-                  <th key={h} className={`${["Qty"].includes(h) ? "text-right" : "text-left"} text-[11px] text-slate-400 px-5 py-3 uppercase tracking-[0.05em]`} style={{ fontWeight: 550 }}>{h}</th>
+                  <th key={h} className={`${["Qty"].includes(h) ? "text-right" : "text-left"} text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-14 text-[13px] text-slate-400">Dang tai du lieu ton kho...</td></tr>
+                <tr><td colSpan={9} className="text-center py-14 text-[13px] text-muted-foreground">Dang tai du lieu ton kho...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-14">
-                  <Package className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
-                  <p className="text-[13px] text-slate-400">No inventory items found</p>
-                </td></tr>
+                <tr><td colSpan={9}><EmptyState variant="no-data" title="No inventory items found" description="Try adjusting your search or filters" className="py-12" /></td></tr>
               ) : filtered.map((row, i) => {
                 const qty = Number(row.warehouseQty || 0);
                 const status = getStockStatus(qty);
                 const healthPct = Math.min(Math.max((qty / 5) * 100, 0), 100);
                 return (
                   <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="border-b border-slate-50 last:border-0 hover:bg-gradient-to-r hover:from-emerald-50/30 hover:to-transparent transition-all duration-140 cursor-pointer">
-                    <td className="px-5 py-3.5 text-[12px] font-mono text-slate-400">{row.isbn || "-"}</td>
-                    <td className="px-5 py-3.5 text-[13px]" style={{ fontWeight: 550 }}>{row.title}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{row.category || "-"}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-700" style={{ fontWeight: 600 }}>{row.warehouseName}</td>
-                    <td className="px-5 py-3.5 text-[12px] font-mono text-slate-500">{row.locationSummary}</td>
-                    <td className="px-5 py-3.5 text-right text-[14px] font-mono" style={{ fontWeight: 700 }}>
+                    className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
+                    <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{row.isbn || "-"}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-medium">{row.title}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{row.category || "-"}</td>
+                    <td className="px-5 py-3.5 text-[12px] font-medium">{row.warehouseName}</td>
+                    <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{row.locationSummary}</td>
+                    <td className="px-5 py-3.5 text-right text-[14px] font-mono font-bold">
                       <span className={qty === 0 ? "text-red-500" : qty <= 5 ? "text-amber-600" : "text-emerald-600"}>{qty}</span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                         <motion.div initial={{ width: 0 }} animate={{ width: `${healthPct}%` }} transition={{ duration: 0.6, ease: "easeOut", delay: i * 0.02 }}
                           className={`h-full rounded-full ${status === "out-of-stock" ? "bg-red-500" : status === "low-stock" ? "bg-amber-500" : "bg-emerald-500"}`} />
                       </div>
@@ -318,17 +314,17 @@ export function InventoryPage() {
                     <td className="px-5 py-3.5">
                       <StatusBadge label={status === "in-stock" ? "Healthy" : status === "low-stock" ? "Low" : "Out"} variant={status === "in-stock" ? "success" : status === "low-stock" ? "warning" : "danger"} dot />
                     </td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-400">{formatUpdatedTime(row.updated_at)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatUpdatedTime(row.updated_at)}</td>
                   </motion.tr>
                 );
               })}
             </tbody>
           </table>
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 text-[12px] text-slate-400">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
             <span>Showing {filtered.length} of {whScopedRows.length} lines ({data.length} titles)</span>
           </div>
-        </div>
-      </FadeItem>
-    </PageWrapper>
+        </SectionCard>
+      </motion.div>
+    </div>
   );
 }

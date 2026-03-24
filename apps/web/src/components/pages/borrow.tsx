@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
-import { BookMarked, Users, CalendarClock, CircleAlert, ArrowRight } from 'lucide-react';
-import { PageWrapper, FadeItem } from '../motion-utils';
+import { BookMarked, Users, CalendarClock, CircleAlert, ArrowRight, RefreshCw } from 'lucide-react';
+import { StatCard, SectionCard } from '@/components/ui';
+import { Button } from '@/components/ui/button';
 import { borrowService, type Customer, type Reservation, type Loan } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
@@ -51,91 +52,132 @@ export function BorrowPage() {
   }, [customers, reservations, loans]);
 
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center border border-rose-200/40">
-              <BookMarked className="w-5 h-5 text-rose-600" />
-            </div>
-            <div>
-              <h1 className="tracking-[-0.02em]">Borrow Management</h1>
-              <p className="text-[12px] text-slate-400 mt-0.5">Realtime customer and reservation flow</p>
-            </div>
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center border border-rose-200/40 shadow-sm">
+            <BookMarked className="w-6 h-6 text-rose-600" />
           </div>
-          <button
-            onClick={() => void loadDashboard()}
-            className="px-3.5 py-2 rounded-[10px] border border-slate-200 bg-white text-slate-600 text-[13px] hover:bg-slate-50"
-            style={{ fontWeight: 550 }}
-          >
-            Refresh
-          </button>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Borrow Management</h1>
+            <p className="text-sm text-muted-foreground">Realtime customer and reservation flow</p>
+          </div>
         </div>
-      </FadeItem>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void loadDashboard()}
+          className="gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </Button>
+      </motion.div>
 
-      <FadeItem>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[
-            { label: 'Active Customers', val: summary.activeCustomers, icon: Users, color: 'from-emerald-50 to-teal-50/50 border-emerald-100/60', textColor: 'text-emerald-700' },
-            { label: 'Pending Reservations', val: summary.pendingReservations, icon: CalendarClock, color: 'from-amber-50 to-orange-50/50 border-amber-100/60', textColor: 'text-amber-700' },
-            { label: 'Ready For Pickup', val: summary.readyReservations, icon: BookMarked, color: 'from-blue-50 to-cyan-50/50 border-blue-100/60', textColor: 'text-blue-700' },
-            { label: 'Active Loans', val: summary.activeLoans, icon: BookMarked, color: 'from-teal-50 to-cyan-50/50 border-teal-100/60', textColor: 'text-teal-700' },
-            { label: 'Fine Balance', val: `${summary.totalFineBalance.toLocaleString('vi-VN')} VND`, icon: CircleAlert, color: 'from-rose-50 to-red-50/50 border-rose-100/60', textColor: 'text-rose-700' },
-          ].map((item) => (
-            <motion.div key={item.label} whileHover={{ y: -2 }} className={`bg-gradient-to-br ${item.color} rounded-[12px] border p-3`}>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="text-[11px] text-slate-500" style={{ fontWeight: 550 }}>{item.label}</p>
-                <item.icon className="w-4 h-4 text-slate-400" />
-              </div>
-              <p className={`text-[22px] ${item.textColor}`} style={{ fontWeight: 700, lineHeight: 1 }}>{loading ? '-' : item.val}</p>
-            </motion.div>
-          ))}
-        </div>
-      </FadeItem>
+      {/* Stats Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
+      >
+        <StatCard
+          label="Active Customers"
+          value={loading ? '-' : summary.activeCustomers}
+          icon={Users}
+          variant="success"
+        />
+        <StatCard
+          label="Pending Reservations"
+          value={loading ? '-' : summary.pendingReservations}
+          icon={CalendarClock}
+          variant="warning"
+        />
+        <StatCard
+          label="Ready For Pickup"
+          value={loading ? '-' : summary.readyReservations}
+          icon={BookMarked}
+          variant="info"
+        />
+        <StatCard
+          label="Active Loans"
+          value={loading ? '-' : summary.activeLoans}
+          icon={BookMarked}
+          variant="default"
+        />
+        <StatCard
+          label="Fine Balance"
+          value={loading ? '-' : `${summary.totalFineBalance.toLocaleString('vi-VN')} VND`}
+          icon={CircleAlert}
+          variant="danger"
+        />
+      </motion.div>
 
-      <FadeItem>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Link to="/borrow/customers" className="group bg-white rounded-[14px] border border-slate-200 p-4 hover:border-rose-200 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[14px] text-slate-700" style={{ fontWeight: 650 }}>Manage Customers</p>
-                <p className="text-[12px] text-slate-400 mt-1">Create, update and review customer eligibility.</p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-rose-600 transition-colors" />
+      {/* Navigation Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
+        <Link
+          to="/borrow/customers"
+          className="group bg-card rounded-xl border border-border p-5 hover:border-rose-200 hover:shadow-md transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Manage Customers</p>
+              <p className="text-xs text-muted-foreground mt-1">Create, update and review customer eligibility.</p>
             </div>
-          </Link>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
+          </div>
+        </Link>
 
-          <Link to="/borrow/reservations" className="group bg-white rounded-[14px] border border-slate-200 p-4 hover:border-rose-200 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[14px] text-slate-700" style={{ fontWeight: 650 }}>Manage Reservations</p>
-                <p className="text-[12px] text-slate-400 mt-1">Create, list and cancel reservations with real stock reserve.</p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-rose-600 transition-colors" />
+        <Link
+          to="/borrow/reservations"
+          className="group bg-card rounded-xl border border-border p-5 hover:border-rose-200 hover:shadow-md transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Manage Reservations</p>
+              <p className="text-xs text-muted-foreground mt-1">Create, list and cancel reservations with real stock reserve.</p>
             </div>
-          </Link>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
+          </div>
+        </Link>
 
-          <Link to="/borrow/loans" className="group bg-white rounded-[14px] border border-slate-200 p-4 hover:border-rose-200 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[14px] text-slate-700" style={{ fontWeight: 650 }}>Manage Loans</p>
-                <p className="text-[12px] text-slate-400 mt-1">Convert reservation to loan and process return flow.</p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-rose-600 transition-colors" />
+        <Link
+          to="/borrow/loans"
+          className="group bg-card rounded-xl border border-border p-5 hover:border-rose-200 hover:shadow-md transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Manage Loans</p>
+              <p className="text-xs text-muted-foreground mt-1">Convert reservation to loan and process return flow.</p>
             </div>
-          </Link>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
+          </div>
+        </Link>
 
-          <Link to="/borrow/fines" className="group bg-white rounded-[14px] border border-slate-200 p-4 hover:border-rose-200 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[14px] text-slate-700" style={{ fontWeight: 650 }}>Manage Fines</p>
-                <p className="text-[12px] text-slate-400 mt-1">View details, record payment, and waive/reduce fines.</p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-rose-600 transition-colors" />
+        <Link
+          to="/borrow/fines"
+          className="group bg-card rounded-xl border border-border p-5 hover:border-rose-200 hover:shadow-md transition-all duration-200"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Manage Fines</p>
+              <p className="text-xs text-muted-foreground mt-1">View details, record payment, and waive/reduce fines.</p>
             </div>
-          </Link>
-        </div>
-      </FadeItem>
-    </PageWrapper>
+            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
+          </div>
+        </Link>
+      </motion.div>
+    </div>
   );
 }

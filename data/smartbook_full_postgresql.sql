@@ -633,6 +633,7 @@ CREATE TABLE IF NOT EXISTS transfer_order_items (
     quantity INT NOT NULL CHECK (quantity > 0),
     shipped_qty INT NOT NULL DEFAULT 0 CHECK (shipped_qty >= 0),
     received_qty INT NOT NULL DEFAULT 0 CHECK (received_qty >= 0),
+    unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (unit_cost >= 0),
     note TEXT
 );
 
@@ -687,6 +688,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     idempotency_key VARCHAR(100),
     created_by_user_id UUID,
     metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+    reverted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (idempotency_key)
 );

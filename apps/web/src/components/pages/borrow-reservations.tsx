@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LoaderCircle, Plus, Search } from 'lucide-react';
+import { Loader2, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageWrapper, FadeItem } from '../motion-utils';
-import { StatusBadge } from '../status-badge';
+import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   borrowService,
   type Reservation,
@@ -45,12 +46,12 @@ const initialFormState: ReservationFormState = {
   notes: '',
 };
 
-function getVariant(status: ReservationStatus) {
-  if (status === 'PENDING') return 'warning';
-  if (status === 'CONFIRMED' || status === 'READY_FOR_PICKUP') return 'info';
-  if (status === 'CONVERTED_TO_LOAN') return 'success';
-  if (status === 'CANCELLED' || status === 'EXPIRED') return 'neutral';
-  return 'primary';
+function getBadgeVariant(status: ReservationStatus) {
+  if (status === 'PENDING') return 'destructive';
+  if (status === 'CONFIRMED' || status === 'READY_FOR_PICKUP') return 'secondary';
+  if (status === 'CONVERTED_TO_LOAN') return 'default';
+  if (status === 'CANCELLED' || status === 'EXPIRED') return 'outline';
+  return 'secondary';
 }
 
 function isUuid(value: string) {
@@ -355,167 +356,212 @@ export function BorrowReservationsPage() {
     }
   };
 
+  const openReservationForm = () => {
+    setFormOpen(true);
+    setFormMode('RESERVATION');
+    setFormState(initialFormState);
+    setCustomerQuery('');
+    setCustomerOptions([]);
+    setVariantQuery('');
+    setVariantOptions([]);
+    setWarehouseQuery('');
+    setWarehouseOptions([]);
+    setPickupQuery('');
+    setPickupLocations([]);
+  };
+
+  const openDirectLoanForm = () => {
+    setFormOpen(true);
+    setFormMode('DIRECT_LOAN');
+    setFormState({ ...initialFormState, source_channel: 'COUNTER' });
+    setCustomerQuery('');
+    setCustomerOptions([]);
+    setVariantQuery('');
+    setVariantOptions([]);
+    setWarehouseQuery('');
+    setWarehouseOptions([]);
+    setPickupQuery('');
+    setPickupLocations([]);
+  };
+
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center justify-between gap-3">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center border border-indigo-200/40 shadow-sm">
+            <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
           <div>
-            <h1 className="tracking-[-0.02em]">Borrow Reservations</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">{reservations.length} reservations</p>
-          </div>
-          <button
-            onClick={() => {
-              setFormOpen(true);
-              setFormMode('RESERVATION');
-              setFormState(initialFormState);
-              setCustomerQuery('');
-              setCustomerOptions([]);
-              setVariantQuery('');
-              setVariantOptions([]);
-              setWarehouseQuery('');
-              setWarehouseOptions([]);
-              setPickupQuery('');
-              setPickupLocations([]);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[13px] shadow-md shadow-rose-500/15 hover:shadow-lg transition-all"
-            style={{ fontWeight: 550 }}
-          >
-            <Plus className="w-4 h-4" /> New Reservation
-          </button>
-          <button
-            onClick={() => {
-              setFormOpen(true);
-              setFormMode('DIRECT_LOAN');
-              setFormState({ ...initialFormState, source_channel: 'COUNTER' });
-              setCustomerQuery('');
-              setCustomerOptions([]);
-              setVariantQuery('');
-              setVariantOptions([]);
-              setWarehouseQuery('');
-              setWarehouseOptions([]);
-              setPickupQuery('');
-              setPickupLocations([]);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] bg-white border border-slate-200 text-slate-700 text-[13px] shadow-sm hover:bg-slate-50 transition-all"
-            style={{ fontWeight: 550 }}
-          >
-            <Plus className="w-4 h-4" /> New Direct Loan
-          </button>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search reservation..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white border border-rose-100/60 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-rose-500/10 focus:border-rose-300/60 transition-all shadow-sm"
-            />
-          </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200/60 rounded-[10px] p-[3px] shadow-sm overflow-x-auto">
-            {(['ALL', ...statuses] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`relative px-3.5 py-1.5 rounded-[8px] text-[12px] whitespace-nowrap transition-all duration-160 ${statusFilter === status ? 'text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                style={{ fontWeight: 550 }}
-              >
-                {statusFilter === status && (
-                  <motion.div
-                    layoutId="reservation-filter"
-                    className="absolute inset-0 rounded-[8px] bg-gradient-to-r from-rose-600 to-pink-600 shadow-sm"
-                    transition={{ duration: 0.22 }}
-                  />
-                )}
-                <span className="relative z-10">{status}</span>
-              </button>
-            ))}
+            <h1 className="text-xl font-semibold tracking-tight">Borrow Reservations</h1>
+            <p className="text-sm text-muted-foreground">{reservations.length} reservations</p>
           </div>
         </div>
-      </FadeItem>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={openReservationForm} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Reservation
+          </Button>
+          <Button size="sm" variant="outline" onClick={openDirectLoanForm} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Direct Loan
+          </Button>
+        </div>
+      </motion.div>
 
-      <FadeItem>
-        <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-gradient-to-r from-rose-50/40 to-transparent">
-                {['No.', 'Customer', 'Variant', 'Warehouse', 'Qty', 'Expires At', 'Status', 'Action'].map((header) => (
-                  <th key={header} className="text-left text-[11px] text-slate-400 px-5 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-14 text-[13px] text-slate-400">
-                    <LoaderCircle className="w-4 h-4 inline mr-2 animate-spin" /> Loading reservations...
-                  </td>
+      {/* Filter Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
+      >
+        <FilterBar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search reservation..."
+          filters={
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {(['ALL', ...statuses] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
+                    statusFilter === status ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {statusFilter === status && (
+                    <motion.div
+                      layoutId="reservation-filter"
+                      className="absolute inset-0 rounded-md bg-primary"
+                      transition={{ duration: 0.15 }}
+                    />
+                  )}
+                  <span className="relative z-10">{status}</span>
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </motion.div>
+
+      {/* Reservations Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
+      >
+        <SectionCard noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  {['No.', 'Customer', 'Variant', 'Warehouse', 'Qty', 'Expires At', 'Status', 'Action'].map((header) => (
+                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                      {header}
+                    </th>
+                  ))}
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-14 text-[13px] text-slate-400">No reservations found</td>
-                </tr>
-              ) : (
-                filtered.map((reservation) => (
-                  <tr key={reservation.id} className="border-b border-slate-50 last:border-0 hover:bg-rose-50/20 transition-all">
-                    <td className="px-5 py-3.5 text-[13px]" style={{ fontWeight: 550 }}>{reservation.reservation_number}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{reservation.customers?.full_name || reservation.customer_id}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{reservation.variant_id}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{reservation.warehouse_id}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{reservation.quantity}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge label={reservation.status} variant={getVariant(reservation.status)} dot />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => void convertReservation(reservation.id)}
-                            className="px-2.5 py-1 rounded-[6px] border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] hover:bg-emerald-100 transition-all"
-                            style={{ fontWeight: 550 }}
-                          >
-                            Convert
-                          </button>
-                          <button
-                            onClick={() => void cancelReservation(reservation.id)}
-                            className="px-2.5 py-1 rounded-[6px] border border-amber-200 bg-amber-50 text-amber-700 text-[11px] hover:bg-amber-100 transition-all"
-                            style={{ fontWeight: 550 }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">-</span>
-                      )}
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-14">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Loading reservations...</span>
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </FadeItem>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <EmptyState
+                        variant="no-results"
+                        title="No reservations found"
+                        description="Try adjusting your search or filters."
+                        className="py-12"
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((reservation, index) => (
+                    <motion.tr
+                      key={reservation.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</td>
+                      <td className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{reservation.variant_id}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{reservation.warehouse_id}</td>
+                      <td className="px-5 py-3.5 text-sm">{reservation.quantity}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant={getBadgeVariant(reservation.status)}>{reservation.status}</Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => void convertReservation(reservation.id)}
+                            >
+                              Convert
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                              onClick={() => void cancelReservation(reservation.id)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </motion.div>
 
+      {/* Create Form Modal */}
       <AnimatePresence>
         {formOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
             <motion.div
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
-              className="bg-white rounded-[16px] p-6 w-full max-w-lg shadow-2xl"
+              transition={{ duration: 0.2 }}
+              className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
-              <h3 className="text-[16px] mb-4" style={{ fontWeight: 650 }}>
+              <h3 className="text-base font-semibold mb-4">
                 {formMode === 'DIRECT_LOAN' ? 'New Direct Loan (Counter)' : 'New Reservation'}
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                <label className="text-[12px] text-slate-600 md:col-span-2" style={{ fontWeight: 550 }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <label className="text-xs font-medium text-muted-foreground md:col-span-2">
                   Customer (phone, name, email)*
                   <div className="relative mt-1">
                     <input
@@ -528,13 +574,13 @@ export function BorrowReservationsPage() {
                         }
                       }}
                       placeholder="Type phone/name/email to search customer"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                      className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(customerLoading || customerOptions.length > 0) && (
-                      <div className="absolute z-20 mt-1 w-full rounded-[8px] border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto">
+                      <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {customerLoading ? (
-                          <p className="px-3 py-2 text-[12px] text-slate-500">Searching customers...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Searching customers...</p>
                         ) : (
                           customerOptions.map((customer) => (
                             <button
@@ -545,21 +591,21 @@ export function BorrowReservationsPage() {
                                 setCustomerQuery(customerLabel(customer));
                                 setCustomerOptions([]);
                               }}
-                              className="w-full text-left px-3 py-2 hover:bg-rose-50 transition-colors"
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
                             >
-                              <p className="text-[12px] text-slate-800" style={{ fontWeight: 550 }}>{customer.full_name}</p>
-                              <p className="text-[11px] text-slate-500">{customer.phone || customer.email || 'No contact'} • {customer.customer_code}</p>
+                              <p className="text-xs font-medium text-foreground">{customer.full_name}</p>
+                              <p className="text-[11px] text-muted-foreground">{customer.phone || customer.email || 'No contact'} • {customer.customer_code}</p>
                             </button>
                           ))
                         )}
                       </div>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     {formState.customer_id ? `Selected customer ID: ${formState.customer_id}` : 'Please select a customer from suggestions'}
                   </p>
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Variant (title / ISBN / barcode)*
                   <div className="relative mt-1">
                     <input
@@ -579,13 +625,13 @@ export function BorrowReservationsPage() {
                         }
                       }}
                       placeholder="Type title / ISBN / barcode"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                      className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(variantLoading || variantOptions.length > 0) && (
-                      <div className="absolute z-20 mt-1 w-full rounded-[8px] border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto">
+                      <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {variantLoading ? (
-                          <p className="px-3 py-2 text-[12px] text-slate-500">Searching variants...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Searching variants...</p>
                         ) : (
                           variantOptions.map((variant) => {
                             const identifier = variant.internal_barcode || variant.isbn || variant.sku;
@@ -598,10 +644,10 @@ export function BorrowReservationsPage() {
                                   setVariantQuery(variantLabel(variant));
                                   setVariantOptions([]);
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-rose-50 transition-colors"
+                                className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
                               >
-                                <p className="text-[12px] text-slate-800" style={{ fontWeight: 550 }}>{variant.title}</p>
-                                <p className="text-[11px] text-slate-500">{identifier} • {variant.sku}</p>
+                                <p className="text-xs font-medium text-foreground">{variant.title}</p>
+                                <p className="text-[11px] text-muted-foreground">{identifier} • {variant.sku}</p>
                               </button>
                             );
                           })
@@ -609,11 +655,11 @@ export function BorrowReservationsPage() {
                       </div>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     {formState.variant_id ? `Selected variant ID: ${formState.variant_id}` : 'Please select a variant from suggestions'}
                   </p>
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Warehouse (name / code)*
                   <div className="relative mt-1">
                     <input
@@ -637,13 +683,13 @@ export function BorrowReservationsPage() {
                         }
                       }}
                       placeholder="Type warehouse name/code"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                      className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(warehouseLoading || warehouseOptions.length > 0) && (
-                      <div className="absolute z-20 mt-1 w-full rounded-[8px] border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto">
+                      <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {warehouseLoading ? (
-                          <p className="px-3 py-2 text-[12px] text-slate-500">Loading warehouses...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Loading warehouses...</p>
                         ) : (
                           warehouseOptions.map((warehouse) => (
                             <button
@@ -655,21 +701,21 @@ export function BorrowReservationsPage() {
                                 setWarehouseOptions([]);
                                 setPickupQuery('');
                               }}
-                              className="w-full text-left px-3 py-2 hover:bg-rose-50 transition-colors"
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
                             >
-                              <p className="text-[12px] text-slate-800" style={{ fontWeight: 550 }}>{warehouse.name}</p>
-                              <p className="text-[11px] text-slate-500">{warehouse.code} • {warehouse.warehouse_type}</p>
+                              <p className="text-xs font-medium text-foreground">{warehouse.name}</p>
+                              <p className="text-[11px] text-muted-foreground">{warehouse.code} • {warehouse.warehouse_type}</p>
                             </button>
                           ))
                         )}
                       </div>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     {formState.warehouse_id ? `Selected warehouse ID: ${formState.warehouse_id}` : 'Please select a warehouse from suggestions'}
                   </p>
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Pickup location (code / zone)
                   <div className="relative mt-1">
                     <input
@@ -689,13 +735,13 @@ export function BorrowReservationsPage() {
                       }}
                       disabled={!formState.warehouse_id}
                       placeholder={formState.warehouse_id ? 'Type location code/zone' : 'Select warehouse first'}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 disabled:bg-muted disabled:text-muted-foreground"
                     />
 
                     {(pickupLoading || (formState.warehouse_id && filteredPickupLocations.length > 0)) && (
-                      <div className="absolute z-20 mt-1 w-full rounded-[8px] border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto">
+                      <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {pickupLoading ? (
-                          <p className="px-3 py-2 text-[12px] text-slate-500">Loading pickup locations...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Loading pickup locations...</p>
                         ) : (
                           filteredPickupLocations.map((location) => (
                             <button
@@ -705,61 +751,64 @@ export function BorrowReservationsPage() {
                                 setFormState((prev) => ({ ...prev, pickup_location_id: location.id }));
                                 setPickupQuery(pickupLabel(location));
                               }}
-                              className="w-full text-left px-3 py-2 hover:bg-rose-50 transition-colors"
+                              className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
                             >
-                              <p className="text-[12px] text-slate-800" style={{ fontWeight: 550 }}>{location.location_code}</p>
-                              <p className="text-[11px] text-slate-500">{[location.zone, location.aisle, location.shelf, location.bin].filter(Boolean).join(' • ') || location.location_type}</p>
+                              <p className="text-xs font-medium text-foreground">{location.location_code}</p>
+                              <p className="text-[11px] text-muted-foreground">{[location.zone, location.aisle, location.shelf, location.bin].filter(Boolean).join(' • ') || location.location_type}</p>
                             </button>
                           ))
                         )}
                       </div>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     {formState.pickup_location_id ? `Selected pickup location ID: ${formState.pickup_location_id}` : 'Optional: choose pickup location from this warehouse'}
                   </p>
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Quantity
                   <input type="number" min={1} value={formState.quantity} onChange={(event) => setFormState((prev) => ({ ...prev, quantity: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300" />
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40" />
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Source
                   <select value={formState.source_channel} onChange={(event) => setFormState((prev) => ({ ...prev, source_channel: event.target.value as ReservationSource }))}
                     disabled={formMode === 'DIRECT_LOAN'}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300">
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 disabled:bg-muted disabled:text-muted-foreground">
                     {(['WEB', 'MOBILE', 'COUNTER', 'ADMIN'] as const).map((source) => (
                       <option key={source} value={source}>{source}</option>
                     ))}
                   </select>
                 </label>
-                <label className="text-[12px] text-slate-600 md:col-span-2" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground md:col-span-2">
                   Notes
                   <textarea rows={2} value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300" />
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40" />
                 </label>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={() => {
-                  setFormOpen(false);
-                  setFormMode('RESERVATION');
-                }} className="flex-1 px-4 py-2.5 rounded-[10px] border border-slate-200 bg-white text-slate-700 text-[13px] hover:bg-slate-50" style={{ fontWeight: 550 }}>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setFormMode('RESERVATION');
+                  }}
+                >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  className="flex-1"
                   onClick={() => void submitReservation()}
                   disabled={saving}
-                  className="flex-1 px-4 py-2.5 rounded-[10px] bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[13px] shadow-md disabled:opacity-60"
-                  style={{ fontWeight: 550 }}
                 >
                   {saving ? 'Saving...' : (formMode === 'DIRECT_LOAN' ? 'Create Direct Loan' : 'Create Reservation')}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </PageWrapper>
+    </div>
   );
 }

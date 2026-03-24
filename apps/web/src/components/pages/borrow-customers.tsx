@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserPlus, Search, LoaderCircle } from 'lucide-react';
+import { UserPlus, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageWrapper, FadeItem } from '../motion-utils';
-import { StatusBadge } from '../status-badge';
+import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -28,11 +29,11 @@ const initialFormState: CustomerFormState = {
   status: 'ACTIVE',
 };
 
-function statusVariant(status: CustomerStatus) {
-  if (status === 'ACTIVE') return 'success';
-  if (status === 'SUSPENDED') return 'warning';
-  if (status === 'BLOCKED') return 'danger';
-  return 'neutral';
+function getBadgeVariant(status: CustomerStatus) {
+  if (status === 'ACTIVE') return 'default';
+  if (status === 'SUSPENDED') return 'destructive';
+  if (status === 'BLOCKED') return 'destructive';
+  return 'outline';
 }
 
 export function BorrowCustomersPage() {
@@ -126,196 +127,229 @@ export function BorrowCustomersPage() {
   };
 
   return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <div className="flex items-center justify-between gap-3">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-emerald-50 flex items-center justify-center border border-teal-200/40 shadow-sm">
+            <svg className="w-6 h-6 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
           <div>
-            <h1 className="tracking-[-0.02em]">Borrow Customers</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">{customers.length} customers</p>
-          </div>
-          <button
-            onClick={() => {
-              setFormState(initialFormState);
-              setFormOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[13px] shadow-md shadow-rose-500/15 hover:shadow-lg transition-all"
-            style={{ fontWeight: 550 }}
-          >
-            <UserPlus className="w-4 h-4" /> New Customer
-          </button>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search customer..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white border border-rose-100/60 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-rose-500/10 focus:border-rose-300/60 transition-all shadow-sm"
-            />
-          </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200/60 rounded-[10px] p-[3px] shadow-sm">
-            {(['ALL', ...customerStatuses] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`relative px-3.5 py-1.5 rounded-[8px] text-[12px] transition-all duration-160 ${statusFilter === status ? 'text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                style={{ fontWeight: 550 }}
-              >
-                {statusFilter === status && (
-                  <motion.div
-                    layoutId="customer-filter"
-                    className="absolute inset-0 rounded-[8px] bg-gradient-to-r from-rose-600 to-pink-600 shadow-sm"
-                    transition={{ duration: 0.22 }}
-                  />
-                )}
-                <span className="relative z-10">{status}</span>
-              </button>
-            ))}
+            <h1 className="text-xl font-semibold tracking-tight">Borrow Customers</h1>
+            <p className="text-sm text-muted-foreground">{customers.length} customers</p>
           </div>
         </div>
-      </FadeItem>
+        <Button size="sm" onClick={() => { setFormState(initialFormState); setFormOpen(true); }} className="gap-2">
+          <UserPlus className="w-4 h-4" />
+          New Customer
+        </Button>
+      </motion.div>
 
-      <FadeItem>
-        <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-gradient-to-r from-rose-50/40 to-transparent">
-                {['Code', 'Name', 'Email', 'Phone', 'Status', 'Fine Balance', 'Action'].map((header) => (
-                  <th key={header} className="text-left text-[11px] text-slate-400 px-5 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-14 text-[13px] text-slate-400">
-                    <LoaderCircle className="w-4 h-4 inline mr-2 animate-spin" /> Loading customers...
-                  </td>
+      {/* Filter Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
+      >
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search customer..."
+          filters={
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {(['ALL', ...customerStatuses] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className="relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all"
+                >
+                  {statusFilter === status ? (
+                    <motion.div
+                      layoutId="customer-filter"
+                      className="absolute inset-0 rounded-md bg-primary"
+                      transition={{ duration: 0.15 }}
+                    />
+                  ) : (
+                    <span className="text-muted-foreground hover:text-foreground"> {status}</span>
+                  )}
+                  <span className="relative z-10">{status}</span>
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </motion.div>
+
+      {/* Customers Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
+      >
+        <SectionCard noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  {['Code', 'Name', 'Email', 'Phone', 'Status', 'Fine Balance', 'Action'].map((header) => (
+                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                      {header}
+                    </th>
+                  ))}
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-14 text-[13px] text-slate-400">No customers found</td>
-                </tr>
-              ) : (
-                filtered.map((customer) => (
-                  <tr key={customer.id} className="border-b border-slate-50 last:border-0 hover:bg-rose-50/20 transition-all">
-                    <td className="px-5 py-3.5 text-[13px]" style={{ fontWeight: 550 }}>{customer.customer_code}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{customer.full_name}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{customer.email || '-'}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{customer.phone || '-'}</td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge label={customer.status} variant={statusVariant(customer.status)} dot />
-                    </td>
-                    <td className="px-5 py-3.5 text-[13px] text-rose-700" style={{ fontWeight: 550 }}>
-                      {Number(customer.total_fine_balance).toLocaleString('vi-VN')} VND
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => openEdit(customer)}
-                        className="px-2.5 py-1 rounded-[6px] border border-blue-200 bg-blue-50 text-blue-700 text-[11px] hover:bg-blue-100 transition-all"
-                        style={{ fontWeight: 550 }}
-                      >
-                        Edit
-                      </button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-14">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Loading customers...</span>
+                      </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </FadeItem>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <EmptyState
+                        variant="no-results"
+                        title="No customers found"
+                        description="Try adjusting your search or filters."
+                        className="py-12"
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((customer, index) => (
+                    <motion.tr
+                      key={customer.id}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-5 py-3.5 text-sm font-medium">{customer.customer_code}</td>
+                      <td className="px-5 py-3.5 text-sm">{customer.full_name}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.email || '-'}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.phone || '-'}</td>
+                      <td className="px-5 py-3.5">
+                        <Badge variant={getBadgeVariant(customer.status)}>{customer.status}</Badge>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-rose-600">
+                        {Number(customer.total_fine_balance).toLocaleString('vi-VN')} VND
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={() => openEdit(customer)}
+                        >
+                          Edit
+                        </Button>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      </motion.div>
 
+      {/* Create/Edit Form Modal */}
       <AnimatePresence>
         {formOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
             <motion.div
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
-              className="bg-white rounded-[16px] p-6 w-full max-w-lg shadow-2xl"
+              transition={{ duration: 0.2 }}
+              className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
-              <h3 className="text-[16px] mb-4" style={{ fontWeight: 650 }}>{formState.id ? 'Edit Customer' : 'New Customer'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+              <h3 className="text-base font-semibold mb-4">{formState.id ? 'Edit Customer' : 'New Customer'}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <label className="text-xs font-medium text-muted-foreground">
                   Full name*
                   <input
                     value={formState.full_name}
                     onChange={(event) => setFormState((prev) => ({ ...prev, full_name: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   />
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Status
                   <select
                     value={formState.status}
                     onChange={(event) => setFormState((prev) => ({ ...prev, status: event.target.value as CustomerStatus }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   >
                     {customerStatuses.map((status) => (
                       <option key={status} value={status}>{status}</option>
                     ))}
                   </select>
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Email
                   <input
                     type="email"
                     value={formState.email}
                     onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   />
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Phone
                   <input
                     value={formState.phone}
                     onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   />
                 </label>
-                <label className="text-[12px] text-slate-600" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground">
                   Birth date
                   <input
                     type="date"
                     value={formState.birth_date}
                     onChange={(event) => setFormState((prev) => ({ ...prev, birth_date: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   />
                 </label>
-                <label className="text-[12px] text-slate-600 md:col-span-2" style={{ fontWeight: 550 }}>
+                <label className="text-xs font-medium text-muted-foreground md:col-span-2">
                   Address
                   <textarea
                     value={formState.address}
                     onChange={(event) => setFormState((prev) => ({ ...prev, address: event.target.value }))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-200 rounded-[8px] text-[13px] outline-none focus:ring-[2px] focus:ring-rose-500/15 focus:border-rose-300"
+                    className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     rows={2}
                   />
                 </label>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={resetForm} className="flex-1 px-4 py-2.5 rounded-[10px] border border-slate-200 bg-white text-slate-700 text-[13px] hover:bg-slate-50" style={{ fontWeight: 550 }}>
+                <Button variant="outline" className="flex-1" onClick={resetForm}>
                   Cancel
-                </button>
-                <button
-                  onClick={() => void onSave()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2.5 rounded-[10px] bg-gradient-to-r from-rose-600 to-pink-600 text-white text-[13px] shadow-md disabled:opacity-60"
-                  style={{ fontWeight: 550 }}
-                >
+                </Button>
+                <Button className="flex-1" onClick={() => void onSave()} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
-                </button>
+                </Button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-    </PageWrapper>
+    </div>
   );
 }

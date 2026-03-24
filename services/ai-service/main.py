@@ -7,6 +7,7 @@ import os
 import json
 import re
 import logging
+import asyncio
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger("uvicorn.error")
@@ -37,12 +38,20 @@ OPEN_LIBRARY_API_BASE_URL = os.getenv(
     "OPEN_LIBRARY_API_BASE_URL",
     "https://openlibrary.org/api/books",
 )
+# Trang chủ OL (dùng để lấy /books/… .json và /works/… .json — API books không có description)
+OPEN_LIBRARY_SITE_ORIGIN = os.getenv("OPEN_LIBRARY_SITE_ORIGIN", "https://openlibrary.org").rstrip("/")
 WORLDCAT_CLASSIFY_API_BASE_URL = os.getenv(
     "WORLDCAT_CLASSIFY_API_BASE_URL",
     "https://classify.oclc.org/classify2/Classify",
 )
 GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY", "").strip()
 BOOK_LOOKUP_TIMEOUT_SECONDS = float(os.getenv("BOOK_LOOKUP_TIMEOUT_SECONDS", "8"))
+ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() == "true"
+
+# Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_SUMMARY_MODEL = os.getenv("GROQ_SUMMARY_MODEL", "llama-3.3-70b-versatile")
 
 PROMPT = (
     "Bạn là chuyên gia biên mục và giới thiệu sách cho thư viện. "
@@ -419,6 +428,81 @@ def _ollama_generate_with_summary_fallback(client: ollama.Client, prompt: str, o
         raise
 
 
+async def _call_groq(metadata: dict) -> tuple[str | None, list[str], bool]:
+    """
+    Gọi Groq cloud LLM (OpenAI-compatible) để sinh summaryVi + keywords.
+    Trả về (summary_vi, keywords, success).
+    Chỉ gọi khi GROQ_API_KEY đã được set.
+    """
+    if not GROQ_API_KEY:
+        return None, [], False
+
+    description_hint = (_safe_text(metadata.get("description")) or "")[:800]
+    title = _safe_text(metadata.get("title")) or "Không rõ"
+    authors = _safe_list(metadata.get("authors"))
+    author_text = authors[0] if authors else "Không rõ"
+    categories = _safe_list(metadata.get("categories"))
+    category_text = ", ".join(categories[:3]) if categories else ""
+
+    system_prompt = (
+        "Bạn là chuyên gia biên mục sách cho thư viện. "
+        "Chỉ được paraphrase từ ngữ cảnh được cung cấp. "
+        "Không bịa đặt tên nhân vật, cốt truyện, giải thưởng cụ thể nếu không có trong ngữ cảnh. "
+        "Nếu không đủ thông tin, viết mô tả an toàn, khái quát."
+    )
+
+    user_prompt = f"""Dựa trên thông tin sau, viết một đoạn mô tả sách tiếng Việt ngắn gọn (120-180 từ) cho hệ thống thư viện.
+
+Thông tin sách:
+- Tên sách: {title}
+- Tác giả: {author_text}
+- Chủ đề: {category_text or '(không có)'}
+- Mô tả tham khảo: {description_hint or '(không có)'}
+
+Yêu cầu:
+- Viết 3-4 câu, văn phong trang trọng, ấm áp, hấp dẫn
+- Có thể dùng emoji nhẹ (📘, 🧠, ✨) làm điểm nhấn, tối đa 3 emoji
+- Xuống dòng hợp lý, không viết liền 1 đoạn
+- Trả về DUY NHẤT JSON: {{"summaryVi": "...", "keywords": ["...", "..."]}}
+- keywords: 3-5 từ khóa tiếng Việt, bám theo tên sách, tác giả, chủ đề"""
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as http_client:
+            resp = await http_client.post(
+                f"{GROQ_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": GROQ_SUMMARY_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 300,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            parsed = _extract_json(raw)
+
+            summary_vi = _safe_text(parsed.get("summaryVi")) or None
+            keywords = _safe_list(parsed.get("keywords"))
+
+            if not summary_vi:
+                text = raw.strip()
+                if text and not text.startswith("{"):
+                    summary_vi = text
+
+            return summary_vi, keywords, bool(summary_vi)
+    except Exception as exc:
+        logger.warning("Groq call failed: %s", exc)
+        return None, [], False
+
+
 def _metadata_completeness_score(data: dict) -> float:
     weighted = {
         "title": 2.0,
@@ -458,6 +542,63 @@ def _parse_google_books_item(item: dict) -> dict:
         "pageCount": volume_info.get("pageCount") if isinstance(volume_info.get("pageCount"), int) else None,
         "thumbnail": _safe_text(image_links.get("thumbnail") or image_links.get("smallThumbnail")),
     }
+
+
+def _open_library_structured_text_field(raw) -> str | None:
+    """Mô tả / first_sentence trên OL có thể là chuỗi hoặc {'type': ..., 'value': '...'}."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return _safe_text(raw)
+    if isinstance(raw, dict):
+        return _safe_text(raw.get("value"))
+    return None
+
+
+async def _fetch_open_library_description_via_json(
+    client: httpx.AsyncClient,
+    edition_key: str | None,
+) -> str | None:
+    """
+    /api/books?jscmd=data thường không trả description; cần đọc edition .json rồi work .json.
+    """
+    if not edition_key or not str(edition_key).startswith("/books/"):
+        return None
+    edition_url = f"{OPEN_LIBRARY_SITE_ORIGIN}{edition_key}.json"
+    try:
+        ed_resp = await client.get(edition_url)
+        ed_resp.raise_for_status()
+        edition = ed_resp.json() or {}
+    except Exception as exc:
+        logger.warning("Open Library edition JSON failed %s: %s", edition_key, exc)
+        return None
+
+    for field in ("description", "first_sentence"):
+        text = _open_library_structured_text_field(edition.get(field))
+        if text:
+            return text
+
+    works = edition.get("works") or []
+    work_key = None
+    if works and isinstance(works[0], dict):
+        work_key = works[0].get("key")
+    if not work_key or not str(work_key).startswith("/works/"):
+        return None
+
+    work_url = f"{OPEN_LIBRARY_SITE_ORIGIN}{work_key}.json"
+    try:
+        w_resp = await client.get(work_url)
+        w_resp.raise_for_status()
+        work = w_resp.json() or {}
+    except Exception as exc:
+        logger.warning("Open Library work JSON failed %s: %s", work_key, exc)
+        return None
+
+    for field in ("description", "first_sentence"):
+        text = _open_library_structured_text_field(work.get(field))
+        if text:
+            return text
+    return None
 
 
 def _parse_open_library_item(item: dict) -> dict:
@@ -602,6 +743,10 @@ async def _fetch_open_library_by_isbn(
             if not item:
                 continue
             metadata = _parse_open_library_item(item)
+            if not metadata.get("description"):
+                extra = await _fetch_open_library_description_via_json(client, item.get("key"))
+                if extra:
+                    metadata["description"] = extra
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("Open Library lookup failed for ISBN %s: %s", isbn, exc)
@@ -764,13 +909,14 @@ def _build_metadata_fallback_summary(metadata: dict) -> str:
     return summary
 
 
-def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None, list[str], bool]:
+async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None, list[str], bool]:
     if not _should_generate_summary(metadata):
         return None, [], False
 
     try:
         client = ollama.Client(host=OLLAMA_HOST)
-        response = _ollama_generate_with_summary_fallback(
+        response = await asyncio.to_thread(
+            _ollama_generate_with_summary_fallback,
             client,
             _build_summary_prompt(metadata),
             {"temperature": 0.4, "num_predict": 420},
@@ -811,35 +957,58 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     if validation_error:
         return _manual_entry_response(raw_isbn, None, validation_error)
 
+    # ── Bước 1: Song song hóa 3 nguồn lookup ────────────────────────────────
     timeout = httpx.Timeout(BOOK_LOOKUP_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        google_data, google_score = await _fetch_google_books_by_isbn(client, isbn13)
-        open_data, open_score = await _fetch_open_library_by_isbn(client, isbn13, isbn10)
-        worldcat_data, worldcat_score = await _fetch_worldcat_by_isbn(client, isbn13, isbn10)
+        tasks = [
+            _fetch_google_books_by_isbn(client, isbn13),
+            _fetch_open_library_by_isbn(client, isbn13, isbn10),
+        ]
+        if ENABLE_WORLDCAT_LOOKUP:
+            tasks.append(_fetch_worldcat_by_isbn(client, isbn13, isbn10))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    google_data, google_score = results[0] if not isinstance(results[0], Exception) else (None, 0.0)
+    open_data, open_score = results[1] if not isinstance(results[1], Exception) else (None, 0.0)
+
+    worldcat_data, worldcat_score = None, 0.0
+    if ENABLE_WORLDCAT_LOOKUP and len(results) > 2:
+        wc_result = results[2]
+        worldcat_data, worldcat_score = wc_result if not isinstance(wc_result, Exception) else (None, 0.0)
 
     merged = _merge_lookup_metadata_with_fallbacks(google_data, open_data, worldcat_data)
     found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
 
+    # ── Bước 2: Không tìm thấy → trả response rỗng ────────────────────────
     if not found:
         result = _manual_entry_response(raw_isbn, isbn13, "metadata not found from providers")
         result["isbn"] = isbn13
         result["source"]["googleBooks"] = bool(google_data)
         result["source"]["openLibrary"] = bool(open_data)
-        result["source"]["worldCat"] = bool(worldcat_data)
+        result["source"]["worldCat"] = bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False
         result["confidence"]["googleBooks"] = google_score
         result["confidence"]["openLibrary"] = open_score
-        result["confidence"]["worldCat"] = worldcat_score
-        result["confidence"]["overall"] = max(google_score, open_score, worldcat_score)
+        result["confidence"]["worldCat"] = worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0
+        result["confidence"]["overall"] = max(google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0)
         return result
 
+    # ── Bước 3: Sinh summary tiếng Việt ───────────────────────────────────
     summary_vi = None
     keywords = []
-    ollama_summary = False
+    ai_provider = "none"
     if req.generateVietnameseSummary and _should_generate_summary(merged):
-        summary_vi, keywords, ollama_summary = _generate_summary_vi_and_keywords(merged)
+        # Ưu tiên Groq (nhanh, free) trước; fallback Ollama
+        summary_vi, keywords, groq_ok = await _call_groq(merged)
+        if groq_ok:
+            ai_provider = "groq"
+        else:
+            # Fallback Ollama local
+            summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(merged)
+            ai_provider = "ollama" if ollama_ok else "none"
 
-    overall_confidence = round(max(google_score, open_score, worldcat_score), 3)
-    active_scores = [score for score in [google_score, open_score, worldcat_score] if score > 0]
+    overall_confidence = round(max(google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0), 3)
+    active_scores = [s for s in [google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0] if s > 0]
     if len(active_scores) >= 2:
         avg_score = sum(active_scores) / len(active_scores)
         overall_confidence = round(max(overall_confidence, min(1.0, avg_score + 0.1)), 3)
@@ -863,14 +1032,14 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         "source": {
             "googleBooks": bool(google_data),
             "openLibrary": bool(open_data),
-            "worldCat": bool(worldcat_data),
-            "ollamaSummary": ollama_summary,
+            "worldCat": bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False,
+            "aiSummary": ai_provider,
         },
         "confidence": {
             "overall": overall_confidence,
             "googleBooks": google_score,
             "openLibrary": open_score,
-            "worldCat": worldcat_score,
+            "worldCat": worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
         },
         "summaryVi": summary_vi,
         "keywords": keywords,
@@ -1010,6 +1179,45 @@ async def generate_book_summary(req: BookSummaryRequest):
     return await _generate_book_summary(req)
 
 
+class SummaryViRequest(BaseModel):
+    title: str
+    author: str = ""
+    description: str = ""
+    categories: list[str] = []
+
+
+@app.post("/generate-summary-vi")
+async def generate_summary_vi(req: SummaryViRequest):
+    """
+    Endpoint nhẹ: chỉ sinh summaryVi + keywords.
+    Ưu tiên Groq (nhanh, free), fallback Ollama local.
+    Dùng cho bước 2 trên UI — user click nút riêng sau khi đã lookup metadata.
+    """
+    if not req.title.strip():
+        raise HTTPException(status_code=400, detail="Thiếu tên sách (title).")
+
+    metadata = {
+        "title": req.title.strip(),
+        "authors": [req.author] if req.author else [],
+        "description": req.description,
+        "categories": req.categories,
+    }
+
+    # Ưu tiên Groq
+    summary_vi, keywords, groq_ok = await _call_groq(metadata)
+    if groq_ok:
+        description = _format_summary_description(summary_vi or "", metadata)
+        return {"summaryVi": description, "keywords": keywords, "ai_provider": "groq"}
+
+    # Fallback Ollama
+    summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
+    if ollama_ok:
+        description = _format_summary_description(summary_vi or "", metadata)
+        return {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
+
+    raise HTTPException(status_code=503, detail="Không thể sinh summary. Vui lòng nhập tay.")
+
+
 async def _generate_book_summary(req: BookSummaryRequest):
     if not req.title.strip():
         raise HTTPException(status_code=400, detail="Thiếu tên sách (title).")
@@ -1033,7 +1241,25 @@ async def _generate_book_summary(req: BookSummaryRequest):
 
     try:
         client = ollama.Client(host=OLLAMA_HOST)
-        response = _ollama_generate_with_summary_fallback(
+
+        # Ưu tiên Groq (nhanh, free) trước
+        summary_vi, keywords, groq_ok = await _call_groq({
+            "title": req.title.strip(),
+            "author": req.author.strip(),
+            "description": web_context or "",
+            "categories": [],
+        })
+
+        if groq_ok:
+            description = _format_summary_description(summary_vi or "", {
+                "title": req.title.strip(),
+                "author": req.author.strip(),
+            })
+            return {"description": description, "web_context_used": bool(web_context), "ai_provider": "groq"}
+
+        # Fallback Ollama local
+        response = await asyncio.to_thread(
+            _ollama_generate_with_summary_fallback,
             client,
             prompt,
             {"temperature": 0.7, "num_predict": 400},
@@ -1046,13 +1272,12 @@ async def _generate_book_summary(req: BookSummaryRequest):
                 "categories": [],
             },
         )
-        return {"description": description, "web_context_used": bool(web_context)}
+        return {"description": description, "web_context_used": bool(web_context), "ai_provider": "ollama"}
 
     except ollama.ResponseError as e:
         logger.error(f"Ollama ResponseError: {e.error}")
         raise HTTPException(status_code=502, detail=f"Ollama không disponible: {e.error}")
     except Exception as e:
-        logger.error(f"Error calling Ollama: {str(e)}")
-        # Fallback: Return a simple description when Ollama is unavailable
+        logger.error(f"Error calling LLM: {str(e)}")
         fallback_description = _generate_fallback_description(req.title, req.author, web_context)
         return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}

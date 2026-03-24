@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
+import { ReceiptText, RefreshCw, Wallet } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
-import { CustomerStateBlock } from './_shared/customer-state-block';
 import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
-import { SectionCard } from './_shared/section-card';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingOverlay } from '@/components/ui/loading-state';
 import { FineCard } from './_shared/fine-card';
-import { LoadingState } from './_shared/loading-state';
-import { EmptyState } from './_shared/empty-state';
-import { CustomerStatCard } from './_shared/customer-stat-card';
 
 export function CustomerFinesPage() {
   const [data, setData] = useState<any | null>(null);
@@ -41,14 +41,12 @@ export function CustomerFinesPage() {
     }
   };
 
-  useEffect(() => {
-    void loadFines();
-  }, []);
+  useEffect(() => { void loadFines(); }, []);
 
   const getRemainingBalance = (fine: any) => {
     const paid = (fine?.fine_payments || []).reduce(
       (sum: number, payment: any) => sum + Number(payment?.amount || 0),
-      0,
+      0
     );
     return Math.max(0, Number(fine?.amount || 0) - Number(fine?.waived_amount || 0) - paid);
   };
@@ -59,16 +57,10 @@ export function CustomerFinesPage() {
       toast.info('This fine is already settled');
       return;
     }
-
     const amount = mode === 'FULL' ? remaining : Number((remaining / 2).toFixed(2));
-
     try {
       setPayingFineId(String(fine.id));
-      await customerBorrowService.payFine({
-        fine_id: fine.id,
-        amount,
-        payment_method: 'EWALLET',
-      });
+      await customerBorrowService.payFine({ fine_id: fine.id, amount, payment_method: 'EWALLET' });
       toast.success(mode === 'FULL' ? 'Fine paid successfully' : 'Partial payment recorded');
       await loadFines();
     } catch (err) {
@@ -84,7 +76,6 @@ export function CustomerFinesPage() {
       toast.error('Topup amount must be greater than 0');
       return;
     }
-
     try {
       setIsTopupLoading(true);
       await customerBorrowService.topupMyAccount({ amount, note: 'Topup from customer portal' });
@@ -97,84 +88,106 @@ export function CustomerFinesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <LoadingState message="Loading fines..." />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <CustomerStateBlock mode="error" message={error} />
-      </div>
-    );
-  }
+  const totalFine = Number(data?.total_fine_balance || 0);
+  const walletBalance = Number(accountSnapshot?.available_balance || 0);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <CustomerStatCard label="Outstanding balance" value={formatCurrencyVnd(data?.total_fine_balance)} />
-        <CustomerStatCard label="Wallet balance" value={formatCurrencyVnd(accountSnapshot?.available_balance)} />
-        <SectionCard title="Top up wallet" className="p-4">
-          <div className="flex items-center gap-2">
-            <input
-              value={topupAmount}
-              onChange={(event) => setTopupAmount(event.target.value)}
-              className="h-10 w-full rounded-[10px] border border-slate-200 px-3 text-[13px]"
-              inputMode="numeric"
-            />
-            <button
-              onClick={() => void handleTopup()}
-              disabled={isTopupLoading}
-              className="h-10 rounded-[10px] bg-indigo-600 px-3 text-[12px] text-white hover:bg-indigo-700 disabled:opacity-60"
-              style={{ fontWeight: 600 }}
-            >
-              {isTopupLoading ? 'Processing...' : 'Top up'}
-            </button>
+    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 to-red-50 flex items-center justify-center border border-rose-200/40">
+            <ReceiptText className="w-5 h-5 text-rose-600" />
           </div>
-        </SectionCard>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">My Fines & Wallet</h1>
+            <p className="text-[13px] text-muted-foreground">Manage outstanding balances and wallet topups</p>
+          </div>
+        </div>
+        <button
+          onClick={() => void loadFines()}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
-      <SectionCard
-        title="Fine Records"
-        subtitle={`Fine records: ${(data?.fines || []).length} | Payments: ${(data?.fine_payments || []).length}`}
-      >
-        <div className="space-y-2.5">
-          {(data?.fines || []).length === 0 ? (
-            <EmptyState message="No fines found." />
-          ) : (
-            (data?.fines || []).map((fine: any) => (
-              <FineCard
-                key={fine.id}
-                fine={fine}
-                paying={payingFineId === String(fine.id)}
-                onPay={(item, mode) => void payFine(item, mode)}
-              />
-            ))
-          )}
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Recent Wallet Ledger">
-        {ledgerRows.length === 0 ? (
-          <EmptyState message="No ledger entries yet." />
-        ) : (
-          <div className="space-y-2.5">
-            {ledgerRows.map((entry) => (
-              <div key={entry.id} className="rounded-[10px] border border-slate-200 bg-white p-3 text-[12px] text-slate-600">
-                <div className="flex items-center justify-between gap-2">
-                  <div>{entry.entry_type || entry.reference_type || 'Entry'}</div>
-                  <div style={{ fontWeight: 700 }}>{formatCurrencyVnd(entry.amount)}</div>
-                </div>
-                <div className="mt-1 text-[11px] text-slate-400">{formatDateTime(entry.created_at)}</div>
-              </div>
-            ))}
+      {loading ? (
+        <LoadingOverlay />
+      ) : error ? (
+        <EmptyState variant="error" title="Failed to load fines" description={error} action={<button onClick={() => void loadFines()} className="text-primary font-medium hover:underline">Try again</button>} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard label="Outstanding Fines" value={formatCurrencyVnd(totalFine)} icon={ReceiptText} variant={totalFine > 0 ? 'danger' : 'success'} />
+            <StatCard label="Wallet Balance" value={formatCurrencyVnd(walletBalance)} icon={Wallet} variant={walletBalance < 100000 ? 'warning' : 'success'} />
+            <StatCard label="Fine Records" value={(data?.fines || []).length} icon={ReceiptText} variant="default" />
+            <StatCard label="Payments Made" value={(data?.fine_payments || []).length} icon={ReceiptText} variant="info" />
           </div>
-        )}
-      </SectionCard>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div>
+              <div className="rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                    <Wallet className="w-3.5 h-3.5 text-indigo-600" />
+                  </div>
+                  <h3 className="text-[14px] font-semibold">Top Up Wallet</h3>
+                </div>
+                <p className="text-[12px] text-muted-foreground mb-3">Balance: <strong className="text-foreground">{formatCurrencyVnd(walletBalance)}</strong></p>
+                <div className="flex items-center gap-2">
+                  <input value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} className="flex-1 h-10 rounded-xl border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40" inputMode="numeric" />
+                  <button onClick={() => void handleTopup()} disabled={isTopupLoading} className="h-10 rounded-xl bg-primary text-primary-foreground px-4 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap">
+                    {isTopupLoading ? 'Processing...' : 'Top Up'}
+                  </button>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  {['50000', '100000', '200000'].map(amt => (
+                    <button key={amt} onClick={() => setTopupAmount(amt)} className="text-[11px] rounded-lg border border-input px-2 py-1 text-muted-foreground hover:bg-muted transition-colors">
+                      {Number(amt).toLocaleString()} VND
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2">
+              <SectionCard title="Fine Records" subtitle={`${(data?.fines || []).length} record(s)`}>
+                {(data?.fines || []).length === 0 ? (
+                  <EmptyState variant="no-data" title="No fines" description="You have no outstanding fines. Keep reading!" />
+                ) : (
+                  <div className="space-y-3">
+                    {(data?.fines || []).map((fine: any) => (
+                      <FineCard key={fine.id} fine={fine} paying={payingFineId === String(fine.id)} onPay={(item, mode) => void payFine(item, mode)} />
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+            </div>
+          </div>
+
+          <SectionCard title="Recent Wallet Activity" subtitle="Latest transactions">
+            {ledgerRows.length === 0 ? (
+              <EmptyState variant="inbox" title="No transactions yet" description="Your wallet transactions will appear here." />
+            ) : (
+              <div className="space-y-2">
+                {ledgerRows.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-foreground truncate">{entry.entry_type || entry.reference_type || 'Entry'}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
+                    </div>
+                    <span className={`text-[14px] font-bold shrink-0 ml-3 ${Number(entry.amount) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {Number(entry.amount) >= 0 ? '+' : ''}{formatCurrencyVnd(Number(entry.amount))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </>
+      )}
     </div>
   );
 }

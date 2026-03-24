@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, ScanLine, Search, UserCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ScanLine, UserCheck } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "motion/react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -13,6 +14,9 @@ import {
   type PickingTaskType,
   type PickingVariantLookupMatch,
 } from "@/services/picking";
+import { SectionCard } from "@/components/ui/section-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -453,7 +457,7 @@ export function PickingPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-400">Dang tai danh sach picking tasks...</p>
+        <p className="text-[13px] text-muted-foreground">Dang tai danh sach picking tasks...</p>
       </PageWrapper>
     );
   }
@@ -462,12 +466,12 @@ export function PickingPage() {
     <PageWrapper className="space-y-5">
       <FadeItem>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-emerald-100 to-teal-50 flex items-center justify-center border border-emerald-200/40">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-50 flex items-center justify-center border border-emerald-200/40">
             <UserCheck className="w-5 h-5 text-emerald-700" />
           </div>
           <div>
-            <h1 className="tracking-[-0.02em]">Picking</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">Nhan don da duyet va pick theo dung vi tri trong kho</p>
+            <h1 className="text-xl font-semibold tracking-tight">Picking</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">Nhan don da duyet va pick theo dung vi tri trong kho</p>
           </div>
         </div>
       </FadeItem>
@@ -475,61 +479,62 @@ export function PickingPage() {
       {!detail ? (
         <>
           <FadeItem>
-            <div className="rounded-[12px] border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <p className="text-[11px] text-slate-500 mb-1">Warehouse</p>
-                <select
-                  value={selectedWarehouseId}
-                  onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-                >
-                  <option value="">Chon warehouse</option>
-                  {warehouses.map((warehouse) => (
-                    <option key={warehouse.id} value={warehouse.id}>
-                      {warehouse.code} - {warehouse.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Luu y: Don transfer se hien o kho nguon (from warehouse), khong hien o kho dich.
-                </p>
-              </div>
+            <SectionCard>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[11px] text-muted-foreground mb-1 font-medium">Warehouse</p>
+                  <select
+                    value={selectedWarehouseId}
+                    onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                    className="w-full rounded-lg border border-input px-3 py-2 text-[12px]"
+                  >
+                    <option value="">Chon warehouse</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.code} - {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Luu y: Don transfer se hien o kho nguon (from warehouse), khong hien o kho dich.
+                  </p>
+                </div>
 
-              <div className="md:col-span-2">
-                <p className="text-[11px] text-slate-500 mb-1">Tim don</p>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Ma don / kho / loai don"
-                    className="w-full pl-9 pr-3 py-2 rounded-[10px] border border-slate-200 text-[12px]"
+                <div className="md:col-span-2">
+                  <p className="text-[11px] text-muted-foreground mb-1 font-medium">Tim don</p>
+                  <FilterBar
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    searchPlaceholder="Ma don / kho / loai don"
+                    showSearchClear
+                    filters={
+                      <div className="inline-flex items-center gap-1 rounded-lg border border-input p-1">
+                        {[
+                          { key: "ALL", label: "Tat ca" },
+                          { key: "PICK", label: "PICK" },
+                          { key: "REPICK", label: "REPICK" },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            onClick={() => setTaskClassFilter(item.key as "ALL" | "PICK" | "REPICK")}
+                            className={`rounded-lg px-2.5 py-1 text-[11px] ${taskClassFilter === item.key ? "bg-emerald-100 text-emerald-700" : "text-muted-foreground hover:bg-muted"}`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    }
                   />
                 </div>
-                <div className="mt-2 inline-flex items-center gap-1 rounded-[10px] border border-slate-200 p-1">
-                  {[
-                    { key: "ALL", label: "Tat ca" },
-                    { key: "PICK", label: "PICK" },
-                    { key: "REPICK", label: "REPICK" },
-                  ].map((item) => (
-                    <button
-                      key={item.key}
-                      onClick={() => setTaskClassFilter(item.key as "ALL" | "PICK" | "REPICK")}
-                      className={`rounded-[8px] px-2.5 py-1 text-[11px] ${taskClassFilter === item.key ? "bg-emerald-100 text-emerald-700" : "text-slate-600 hover:bg-slate-100"}`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
               </div>
-            </div>
+            </SectionCard>
           </FadeItem>
 
           <FadeItem>
-            <div className="bg-white rounded-[16px] border border-white/80 overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+            <SectionCard noPadding>
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-gradient-to-r from-emerald-50/40 to-transparent">
+                  <tr className="border-b border-border bg-muted/40">
                     {[
                       "Ma don",
                       "Loai",
@@ -543,7 +548,7 @@ export function PickingPage() {
                       "Ngay",
                       "Action",
                     ].map((head) => (
-                      <th key={head} className="text-left text-[11px] text-slate-400 px-4 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
+                      <th key={head} className="text-left text-[11px] text-muted-foreground px-4 py-3 uppercase tracking-wider font-medium">
                         {head}
                       </th>
                     ))}
@@ -552,8 +557,8 @@ export function PickingPage() {
                 <tbody>
                   {filteredTasks.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-10 text-center text-[12px] text-slate-400">
-                        Khong co don nao san sang pick.
+                      <td colSpan={11} className="py-10 text-center">
+                        <EmptyState variant="no-data" title="Khong co don nao san sang pick" description="Cac don da duyet se hien o day" className="py-0" />
                       </td>
                     </tr>
                   ) : filteredTasks.map((task) => {
@@ -562,31 +567,31 @@ export function PickingPage() {
                     const isAssigned = Boolean(task.assigned_picker_user_id);
 
                     return (
-                      <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/40">
-                        <td className="px-4 py-3 text-[12px]" style={{ fontWeight: 600 }}>{task.order_number}</td>
+                      <tr key={key} className="border-b border-border last:border-0 hover:bg-muted/40">
+                        <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
                         <td className="px-4 py-3 text-[12px]">{taskTypeLabel(task.order_type)}</td>
                         <td className="px-4 py-3 text-[12px]">
-                          <span className={`inline-flex items-center rounded-[999px] px-2 py-0.5 text-[11px] ${taskClassLabel(task.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${taskClassLabel(task.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
                             {taskClassLabel(task.task_class)}
                             {taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-[12px]">{task.source_warehouse_code || task.source_warehouse_name || "-"}</td>
                         <td className="px-4 py-3 text-[12px]">{task.target_warehouse_code || task.target_warehouse_name || "-"}</td>
-                        <td className="px-4 py-3 text-[12px] text-emerald-700" style={{ fontWeight: 600 }}>{task.status}</td>
+                        <td className="px-4 py-3 text-[12px] text-emerald-700 font-semibold">{task.status}</td>
                         <td className="px-4 py-3 text-[12px]">{task.line_count}</td>
-                        <td className="px-4 py-3 text-[12px]" style={{ fontWeight: 600 }}>{task.remaining_quantity}</td>
+                        <td className="px-4 py-3 text-[12px] font-semibold">{task.remaining_quantity}</td>
                         <td className="px-4 py-3 text-[12px]">
                           {task.assigned_picker_user_id ? (assignedToMe ? currentUserLabel : `User ${task.assigned_picker_user_id.slice(0, 8)}`) : "Chua giao"}
                         </td>
-                        <td className="px-4 py-3 text-[11px] text-slate-500">{formatDate(task.requested_at)}</td>
+                        <td className="px-4 py-3 text-[11px] text-muted-foreground">{formatDate(task.requested_at)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {!isAssigned ? (
                               <button
-                                onClick={() => handleClaimTask(task)}
+                                onClick={() => void handleClaimTask(task)}
                                 disabled={claimingTaskKey === key}
-                                className="rounded-[8px] border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-700 disabled:opacity-60"
+                                className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
                               >
                                 {claimingTaskKey === key ? "Dang nhan..." : "Nhan don"}
                               </button>
@@ -594,8 +599,8 @@ export function PickingPage() {
 
                             {(assignedToMe || !isAssigned) ? (
                               <button
-                                onClick={() => handleOpenTask(task)}
-                                className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 px-2.5 py-1.5 text-[11px] hover:bg-slate-50"
+                                onClick={() => void handleOpenTask(task)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-input px-2.5 py-1.5 text-[11px] hover:bg-muted"
                               >
                                 Vao pick <ArrowRight className="w-3 h-3" />
                               </button>
@@ -607,56 +612,60 @@ export function PickingPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </SectionCard>
           </FadeItem>
         </>
       ) : (
         <>
           <FadeItem>
-            <div className="rounded-[12px] border border-slate-200 bg-white p-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[12px] text-slate-500">Don dang thao tac</p>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[15px]" style={{ fontWeight: 650 }}>{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
-                  <span className={`inline-flex items-center rounded-[999px] px-2 py-0.5 text-[11px] ${taskClassLabel(detail.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
-                    {taskClassLabel(detail.task_class)}
-                    {taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}
-                  </span>
+            <SectionCard>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-[12px] text-muted-foreground font-medium">Don dang thao tac</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${taskClassLabel(detail.task_class) === "REPICK" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                      {taskClassLabel(detail.task_class)}
+                      {taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground mt-1">
+                    Nguon: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
+                    {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Dich: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
+                    {` | Con ${detail.remaining_line_count} line / ${detail.remaining_quantity} qty`}
+                  </p>
                 </div>
-                <p className="text-[12px] text-slate-500 mt-1">
-                  Nguon: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
-                  {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Dich: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
-                  {` | Con ${detail.remaining_line_count} line / ${detail.remaining_quantity} qty`}
-                </p>
+                <button
+                  onClick={handleBackToList}
+                  className="rounded-xl border border-input px-3 py-2 text-[12px] hover:bg-muted"
+                >
+                  Quay lai danh sach
+                </button>
               </div>
-              <button
-                onClick={handleBackToList}
-                className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
-              >
-                Quay lai danh sach
-              </button>
-            </div>
+            </SectionCard>
           </FadeItem>
 
           {loadingDetail ? (
             <FadeItem>
-              <div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[12px] text-slate-400">Dang tai chi tiet don pick...</div>
+              <SectionCard><p className="text-center py-8 text-[12px] text-muted-foreground">Dang tai chi tiet don pick...</p></SectionCard>
             </FadeItem>
           ) : null}
 
           {!loadingDetail && detail.remaining_line_count === 0 ? (
             <FadeItem>
-              <div className="rounded-[12px] border border-emerald-200 bg-emerald-50 p-5 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-                <div>
-                  <p className="text-[13px] text-emerald-800" style={{ fontWeight: 600 }}>Da hoan tat picking, cho outbound</p>
-                  <p className="text-[12px] text-emerald-700 mt-0.5">Hang da duoc chuyen vao SHIPPING va dang cho xac nhan outbound.</p>
-                  <p className="text-[12px] text-emerald-700 mt-1">
-                    Don: {detail.order_number} | Line da pick: {completedLineCount}/{detail.lines.length} | Tong qty da pick: {totalPickedQty}
-                    {detail.completed_at ? ` | Hoan tat: ${formatDate(detail.completed_at)}` : ""}
-                  </p>
+              <SectionCard className="border-emerald-200 bg-emerald-50/50">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                  <div>
+                    <p className="text-[13px] text-emerald-800 font-semibold">Da hoan tat picking, cho outbound</p>
+                    <p className="text-[12px] text-emerald-700 mt-0.5">Hang da duoc chuyen vao SHIPPING va dang cho xac nhan outbound.</p>
+                    <p className="text-[12px] text-emerald-700 mt-1">
+                      Don: {detail.order_number} | Line da pick: {completedLineCount}/{detail.lines.length} | Tong qty da pick: {totalPickedQty}
+                      {detail.completed_at ? ` | Hoan tat: ${formatDate(detail.completed_at)}` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </SectionCard>
             </FadeItem>
           ) : null}
 
@@ -664,42 +673,38 @@ export function PickingPage() {
             <>
               {taskClassLabel(detail.task_class) === "REPICK" ? (
                 <FadeItem>
-                  <div className="rounded-[12px] border border-amber-200 bg-amber-50 p-4 space-y-1.5">
-                    <p className="text-[12px] text-amber-900" style={{ fontWeight: 650 }}>
-                      Don REPICK bo sung phan thieu
-                    </p>
-                    <p className="text-[12px] text-amber-800">
+                  <SectionCard className="border-amber-200 bg-amber-50/50">
+                    <p className="text-[12px] text-amber-900 font-semibold">Don REPICK bo sung phan thieu</p>
+                    <p className="text-[12px] text-amber-800 mt-1">
                       Don goc: {detail.root_order_number || detail.root_task_id || "-"}
                       {detail.parent_order_number || detail.parent_task_id ? ` | Sinh tu: ${detail.parent_order_number || detail.parent_task_id}` : ""}
                       {detail.repick_sequence ? ` | Lan REPICK: #${detail.repick_sequence}` : ""}
                     </p>
-                    <p className="text-[12px] text-amber-800">Don nay chi chua phan con thieu can pick lai.</p>
-                  </div>
+                    <p className="text-[12px] text-amber-800 mt-1">Don nay chi chua phan con thieu can pick lai.</p>
+                  </SectionCard>
                 </FadeItem>
               ) : null}
 
               <FadeItem>
-                <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-                  <h3 className="text-[13px]" style={{ fontWeight: 650 }}>1) Xac nhan hien dien picker</h3>
-                  <p className="text-[12px] text-slate-500">Scan/nhap vi tri hien tai trong kho nguon truoc khi pick.</p>
-                  <div className="flex gap-2">
+                <SectionCard title="1) Xac nhan hien dien picker" subtitle="Scan/nhap vi tri hien tai trong kho nguon truoc khi pick.">
+                  <div className="flex gap-2 flex-wrap">
                     <input
                       value={presenceInput}
                       onChange={(event) => setPresenceInput(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          handleConfirmPresence();
+                          void handleConfirmPresence();
                         }
                       }}
                       placeholder="Barcode hoac ma vi tri hien tai"
-                      className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                      className="flex-1 min-w-[200px] rounded-lg border border-input px-3 py-2 text-[12px]"
                       disabled={presenceConfirmed}
                     />
                     <button
                       onClick={() => setActiveScanTarget("presence")}
                       disabled={confirmingPresence || presenceConfirmed}
-                      className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                      className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
                       title="Scan vi tri hien tai"
                     >
                       <ScanLine className="w-3.5 h-3.5" />
@@ -707,31 +712,29 @@ export function PickingPage() {
                     <button
                       onClick={() => void handleConfirmPresence()}
                       disabled={confirmingPresence || presenceConfirmed}
-                      className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                      className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
                     >
                       {presenceConfirmed ? "Da xac nhan" : confirmingPresence ? "Dang xac nhan..." : "Xac nhan"}
                     </button>
                   </div>
-                </div>
+                </SectionCard>
               </FadeItem>
 
               <FadeItem>
-                <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-                  <h3 className="text-[13px]" style={{ fontWeight: 650 }}>2) Scan location can den</h3>
-
+                <SectionCard title="2) Scan location can den" subtitle={!presenceConfirmed ? "Can hoan thanh buoc 1 truoc khi hien vi tri can pick." : undefined}>
                   {!presenceConfirmed ? (
-                    <p className="text-[12px] text-slate-500">Can hoan thanh buoc 1 truoc khi hien vi tri can pick.</p>
+                    <p className="text-[12px] text-muted-foreground">Can hoan thanh buoc 1 truoc khi hien vi tri can pick.</p>
                   ) : currentLine ? (
-                    <>
-                      <div className="rounded-[10px] border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-[12px] text-slate-500">Vi tri can den</p>
-                        <p className="text-[14px] text-slate-800" style={{ fontWeight: 650 }}>
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-input bg-muted/50 p-3">
+                        <p className="text-[12px] text-muted-foreground">Vi tri can den</p>
+                        <p className="text-[14px] text-foreground font-semibold">
                           {currentLine.source_location_code || "(He thong dang xac dinh vi tri phu hop)"}
                         </p>
-                        <p className="text-[12px] text-slate-500 mt-1">Chi scan location nay moi duoc sang buoc tiep theo.</p>
+                        <p className="text-[12px] text-muted-foreground mt-1">Chi scan location nay moi duoc sang buoc tiep theo.</p>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <input
                           value={locationInput}
                           onChange={(event) => {
@@ -746,19 +749,19 @@ export function PickingPage() {
                             }
                           }}
                           placeholder="Barcode hoac ma location dich"
-                          className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                          className="flex-1 min-w-[200px] rounded-lg border border-input px-3 py-2 text-[12px]"
                         />
                         <button
                           onClick={() => setActiveScanTarget("location")}
                           disabled={!presenceConfirmed || !currentLine}
-                          className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
+                          className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted"
                           title="Scan location"
                         >
                           <ScanLine className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleVerifyLocation()}
-                          className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
+                          className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted"
                         >
                           {locationVerified ? "Da dung location" : "Xac nhan location"}
                         </button>
@@ -766,24 +769,24 @@ export function PickingPage() {
 
                       {locationVerified ? (
                         <>
-                          <h3 className="text-[13px] pt-1" style={{ fontWeight: 650 }}>3) Scan san pham can lay</h3>
-                          <div className="rounded-[10px] border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-[12px] text-slate-500">San pham can pick</p>
-                            <p className="text-[13px] text-slate-800" style={{ fontWeight: 600 }}>{currentLine.book_title}</p>
-                            <p className="text-[12px] text-slate-500 mt-1">
+                          <h3 className="text-[13px] pt-1 font-semibold">3) Scan san pham can lay</h3>
+                          <div className="rounded-lg border border-input bg-muted/50 p-3">
+                            <p className="text-[12px] text-muted-foreground">San pham can pick</p>
+                            <p className="text-[13px] text-foreground font-medium">{currentLine.book_title}</p>
+                            <p className="text-[12px] text-muted-foreground mt-1">
                               SKU: {currentLine.sku || "-"} | Barcode: {currentLine.barcode || "-"}
                             </p>
-                            <p className="text-[12px] text-slate-500 mt-1">
+                            <p className="text-[12px] text-muted-foreground mt-1">
                               Can pick: {currentLine.remaining_qty} (da pick {currentLine.picked_qty}/{currentLine.requested_qty})
                             </p>
                             {taskClassLabel(detail.task_class) === "REPICK" && currentLine.repick_line?.original_line_id ? (
-                              <p className="text-[12px] text-slate-500 mt-1">
+                              <p className="text-[12px] text-muted-foreground mt-1">
                                 Truy vet line goc: {currentLine.repick_line.original_line_id} | Thieu ban dau: {currentLine.repick_line.missing_qty}
                               </p>
                             ) : null}
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <input
                               value={productBarcodeInput}
                               onChange={(event) => {
@@ -798,12 +801,12 @@ export function PickingPage() {
                                 }
                               }}
                               placeholder="unit barcode / internal / isbn / sku"
-                              className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                              className="flex-1 min-w-[200px] rounded-lg border border-input px-3 py-2 text-[12px]"
                             />
                             <button
                               onClick={() => setActiveScanTarget("product")}
                               disabled={loadingLookup || !locationVerified}
-                              className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                              className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
                               title="Quet barcode san pham"
                             >
                               <ScanLine className="w-3.5 h-3.5" />
@@ -811,15 +814,15 @@ export function PickingPage() {
                             <button
                               onClick={() => void handleLookupProduct()}
                               disabled={loadingLookup}
-                              className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50 disabled:opacity-60"
+                              className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
                             >
                               {loadingLookup ? "Dang quet..." : "Xac nhan ma"}
                             </button>
                           </div>
 
                           {ambiguousMatches.length > 0 ? (
-                            <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-3">
-                              <p className="text-[12px] text-amber-800" style={{ fontWeight: 600 }}>Barcode trung nhieu item, chon dung item:</p>
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                              <p className="text-[12px] text-amber-800 font-semibold">Barcode trung nhieu item, chon dung item:</p>
                               <select
                                 value={selectedScannedVariantId}
                                 onChange={(event) => {
@@ -836,7 +839,7 @@ export function PickingPage() {
                                     }
                                   }
                                 }}
-                                className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2 text-[12px]"
+                                className="mt-2 w-full rounded-lg border border-amber-200 px-3 py-2 text-[12px]"
                               >
                                 <option value="">Chon variant dung</option>
                                 {ambiguousMatches.map((match) => (
@@ -850,24 +853,24 @@ export function PickingPage() {
 
                           {productVerified ? (
                             <>
-                              <h3 className="text-[13px] pt-1" style={{ fontWeight: 650 }}>4) Nhap so luong va confirm</h3>
+                              <h3 className="text-[13px] pt-1 font-semibold">4) Nhap so luong va confirm</h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                  <p className="text-[11px] text-slate-500 mb-1">So luong</p>
+                                  <p className="text-[11px] text-muted-foreground mb-1 font-medium">So luong</p>
                                   <input
                                     type="number"
                                     min={1}
                                     max={currentLine?.remaining_qty || 1}
                                     value={quantityInput}
                                     onChange={(event) => setQuantityInput(Math.max(1, Math.trunc(Number(event.target.value || 1))))}
-                                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                                    className="w-full rounded-lg border border-input px-3 py-2 text-[12px]"
                                   />
                                 </div>
                                 <div className="flex items-end justify-end">
                                   <button
                                     onClick={handleConfirmLine}
                                     disabled={!canConfirmLine || confirmingLine}
-                                    className="rounded-[10px] bg-emerald-600 text-white px-4 py-2.5 text-[12px] font-semibold disabled:opacity-60"
+                                    className="rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-[12px] font-semibold disabled:opacity-60"
                                   >
                                     {confirmingLine ? "Dang confirm..." : "Confirm line pick"}
                                   </button>
@@ -875,17 +878,17 @@ export function PickingPage() {
                               </div>
                             </>
                           ) : (
-                            <p className="text-[12px] text-slate-500">Can scan dung san pham truoc khi nhap so luong.</p>
+                            <p className="text-[12px] text-muted-foreground">Can scan dung san pham truoc khi nhap so luong.</p>
                           )}
                         </>
                       ) : (
-                        <p className="text-[12px] text-slate-500">Can scan dung location dich truoc khi hien san pham can lay.</p>
+                        <p className="text-[12px] text-muted-foreground">Can scan dung location dich truoc khi hien san pham can lay.</p>
                       )}
-                    </>
+                    </div>
                   ) : (
-                    <p className="text-[12px] text-slate-500">Khong tim thay line can pick tiep theo.</p>
+                    <p className="text-[12px] text-muted-foreground">Khong tim thay line can pick tiep theo.</p>
                   )}
-                </div>
+                </SectionCard>
               </FadeItem>
             </>
           ) : null}

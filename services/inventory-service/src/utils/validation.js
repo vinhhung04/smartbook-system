@@ -1,5 +1,5 @@
 function parseId(value) {
-  return String(value || '').trim() || null;
+  return String(value || "").trim() || null;
 }
 
 function toInt(value) {
@@ -9,23 +9,48 @@ function toInt(value) {
 }
 
 function normalizeText(value) {
-  const text = String(value || '').trim();
+  const text = String(value || "").trim();
   return text || null;
 }
 
 function normalizeIsbn13(value) {
-  const normalized = String(value || '').trim().replace(/[^0-9]/g, '');
+  const normalized = String(value || "")
+    .trim()
+    .replace(/[^0-9]/g, "");
   return normalized || null;
 }
 
 function normalizeLocationType(value) {
-  return String(value || '').trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 function normalizeTaskType(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'outbound' || normalized === 'transfer') return normalized;
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "outbound" || normalized === "transfer") return normalized;
   return null;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeRequiredUserId(value) {
+  const raw = String(value || "").trim();
+  if (!raw || !UUID_RE.test(raw)) {
+    const err = new Error(`Invalid required user ID: ${raw}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return raw;
+}
+
+function normalizeOptionalUserId(value) {
+  const raw = String(value || "").trim();
+  if (!raw || !UUID_RE.test(raw)) return null;
+  return raw;
 }
 
 module.exports = {
@@ -35,4 +60,6 @@ module.exports = {
   normalizeIsbn13,
   normalizeLocationType,
   normalizeTaskType,
+  normalizeRequiredUserId,
+  normalizeOptionalUserId,
 };
