@@ -8,6 +8,10 @@ const myRoutes = require('./routes/my.routes');
 const reservationRoutes = require('./routes/reservation.routes');
 const loanRoutes = require('./routes/loan.routes');
 const fineRoutes = require('./routes/fine.routes');
+const reviewRoutes = require('./routes/review.routes');
+const auditRoutes = require('./routes/audit.routes');
+const membershipPlanRoutes = require('./routes/membership-plan.routes');
+const notificationAdminRoutes = require('./routes/notification-admin.routes');
 const { startOverdueSweepJob } = require('./jobs/overdue.job');
 
 const app = express();
@@ -55,6 +59,10 @@ app.use('/borrow/my', myRoutes);
 app.use('/borrow/reservations', reservationRoutes);
 app.use('/borrow/loans', loanRoutes);
 app.use('/borrow/fines', fineRoutes);
+app.use('/borrow/reviews', reviewRoutes);
+app.use('/borrow/audit-logs', auditRoutes);
+app.use('/borrow/membership-plans', membershipPlanRoutes);
+app.use('/borrow/notifications', notificationAdminRoutes);
 
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {

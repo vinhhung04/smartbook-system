@@ -1,10 +1,13 @@
 import { Outlet } from 'react-router';
 import { CustomerAppShell } from './_shared/customer-app-shell';
+import { SocketProvider } from '@/lib/socket';
 
 export function CustomerLayout() {
   return (
-    <CustomerAppShell>
-      <Outlet />
-    </CustomerAppShell>
+    <SocketProvider>
+      <CustomerAppShell>
+        <Outlet />
+      </CustomerAppShell>
+    </SocketProvider>
   );
 }

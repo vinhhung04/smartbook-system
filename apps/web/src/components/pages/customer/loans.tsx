@@ -50,19 +50,20 @@ export function CustomerLoansPage() {
         <button
           onClick={() => void load()}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Active Loans" value={activeLoans} icon={HandCoins} variant="info" />
-        <StatCard label="Overdue" value={overdueLoans} icon={HandCoins} variant="danger" />
-        <StatCard label="Returned" value={returnedLoans} icon={HandCoins} variant="success" />
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Active Loans" value={activeLoans} icon={HandCoins} variant="info" />
+          <StatCard label="Overdue" value={overdueLoans} icon={HandCoins} variant="danger" />
+          <StatCard label="Returned" value={returnedLoans} icon={HandCoins} variant="success" />
+        </div>
+      )}
 
       {/* Content */}
       {loading ? (

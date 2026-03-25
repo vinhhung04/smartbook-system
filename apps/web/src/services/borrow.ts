@@ -353,6 +353,26 @@ export const borrowService = {
     };
   },
 
+  getMembershipPlans: async () => {
+    const response = await inventoryAPI.get('/borrow/membership-plans');
+    return response.data;
+  },
+
+  createMembershipPlan: async (payload: Record<string, unknown>) => {
+    const response = await inventoryAPI.post('/borrow/membership-plans', payload);
+    return response.data;
+  },
+
+  updateMembershipPlan: async (id: string, payload: Record<string, unknown>) => {
+    const response = await inventoryAPI.patch(`/borrow/membership-plans/${id}`, payload);
+    return response.data;
+  },
+
+  sendNotificationToCustomer: async (payload: { customer_id: string; subject: string; body: string }) => {
+    const response = await inventoryAPI.post('/borrow/notifications/send', payload);
+    return response.data;
+  },
+
   waiveFine: async (id: string, payload: { amount?: number; note?: string }) => {
     const response = await inventoryAPI.patch(`/borrow/fines/${id}/waive`, payload);
     return response.data as {

@@ -1,160 +1,219 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
-import { TrendingUp, AlertTriangle, Package, Zap, ArrowRight, Trash2, Sparkles } from "lucide-react";
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import {
+  Sparkles, BookOpen, RefreshCw, Star, TrendingUp,
+  BarChart3, Loader2, AlertCircle,
+} from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell, PieChart, Pie,
+} from "recharts";
 import { toast } from "sonner";
+import { aiService, AIRecommendation } from "@/services/ai";
+import { bookService } from "@/services/book";
+import { borrowService } from "@/services/borrow";
 
-const recommendations = [
-  { id: 1, priority: "high", category: "Restock", title: "Restock Clean Code", description: "Current stock is below optimal levels", action: "Create Receipt", estimatedSavings: "2.5M VND" },
-  { id: 2, priority: "high", category: "Restock", title: "Restock Design Patterns", description: "Demand has exceeded supply", action: "Create Receipt", estimatedSavings: "1.8M VND" },
-  { id: 3, priority: "medium", category: "Transfer", title: "Transfer Head First Design Patterns", description: "Rebalance inventory between warehouses", action: "Create Transfer", estimatedSavings: "0.8M VND" },
-  { id: 4, priority: "medium", category: "Optimize", title: "Optimize Storage Layout", description: "Reorganize Zone A to improve efficiency", action: "Review Layout", estimatedSavings: "1.2M VND" },
-  { id: 5, priority: "low", category: "Acquisition", title: "Add JavaScript: The Good Parts", description: "High demand but currently out of stock", action: "Order", estimatedSavings: "0.5M VND" },
-];
-
-const demandData = [
-  { name: "Clean Code", demand: 65 },
-  { name: "Design Patterns", demand: 52 },
-  { name: "Head First", demand: 48 },
-  { name: "Effective Java", demand: 42 },
-  { name: "Refactoring", demand: 38 },
-  { name: "TDD", demand: 35 },
-];
-
-const trendData = [
-  { week: "Week 1", value: 420 },
-  { week: "Week 2", value: 480 },
-  { week: "Week 3", value: 510 },
-  { week: "Week 4", value: 605 },
-  { week: "Week 5", value: 720 },
-  { week: "Week 6", value: 850 },
-  { week: "Week 7", value: 920 },
-  { week: "Week 8", value: 1050 },
-];
+const PIE_COLORS = ["#6366f1", "#a78bfa", "#c084fc", "#e879f9", "#f472b6", "#fb7185", "#38bdf8", "#34d399"];
 
 export function RecommendationsPage() {
-  const [dismissed, setDismissed] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
+  const [provider, setProvider] = useState("");
+  const [demandData, setDemandData] = useState<{ name: string; demand: number }[]>([]);
+  const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([]);
+  const [error, setError] = useState("");
 
-  const handleDismiss = (id: number) => {
-    setDismissed([...dismissed, id]);
-    toast.info("Recommendation dismissed");
-  };
+  const loadRecommendations = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  const visibleRecs = recommendations.filter(r => !dismissed.includes(r.id));
+      const [booksResp, loansResp] = await Promise.allSettled([
+        bookService.getAll(),
+        borrowService.getLoans({ pageSize: 100 }),
+      ]);
+
+      const books = booksResp.status === "fulfilled" && Array.isArray(booksResp.value) ? booksResp.value : [];
+      const loans = loansResp.status === "fulfilled" ? loansResp.value?.data || [] : [];
+
+      const borrowHistory = loans.flatMap((loan: any) =>
+        (loan.loan_items || []).map((item: any) => {
+          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
+          return { title: book?.title || "Unknown", author: book?.author || "", category: book?.category || "" };
+        })
+      );
+
+      const catalogBooks = books.map((b: any) => ({
+        id: b.id, title: b.title, author: b.author || "", category: b.category || "", quantity: Number(b.quantity || 0),
+      }));
+
+      const catMap: Record<string, number> = {};
+      books.forEach((b: any) => {
+        const cat = b.category || "Khác";
+        catMap[cat] = (catMap[cat] || 0) + 1;
+      });
+      setCategoryData(
+        Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name, value }))
+      );
+
+      const bookDemand = loans.reduce((acc: Record<string, number>, loan: any) => {
+        (loan.loan_items || []).forEach((item: any) => {
+          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
+          const title = book?.title || "Unknown";
+          acc[title] = (acc[title] || 0) + 1;
+        });
+        return acc;
+      }, {});
+      setDemandData(
+        Object.entries(bookDemand).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 6).map(([name, demand]) => ({ name: name.length > 20 ? name.slice(0, 20) + "…" : name, demand: demand as number }))
+      );
+
+      const result = await aiService.getRecommendationsAI(borrowHistory, catalogBooks);
+      setRecommendations(result.recommendations || []);
+      setProvider(result.ai_provider || "");
+    } catch (err) {
+      console.error("Failed to load recommendations:", err);
+      setError("Không thể tải gợi ý. Vui lòng thử lại.");
+      toast.error("Failed to load AI recommendations");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadRecommendations(); }, [loadRecommendations]);
 
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
-            <Sparkles className="w-5 h-5 text-violet-600" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+            </div>
+            <div>
+              <h1 className="tracking-[-0.02em]">AI Recommendations</h1>
+              <p className="text-[12px] text-slate-400 mt-0.5">
+                Gợi ý sách cá nhân hóa dựa trên lịch sử mượn
+                {provider && <span className="ml-1 text-violet-400">({provider})</span>}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="tracking-[-0.02em]">AI Recommendations</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">Smart insights for inventory optimization</p>
-          </div>
+          <button onClick={() => void loadRecommendations()} disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 text-[12px] hover:bg-violet-50 transition-all disabled:opacity-50" style={{ fontWeight: 550 }}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Phân tích lại
+          </button>
         </div>
       </FadeItem>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <FadeItem>
           <div className="bg-white rounded-[16px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-            <h3 className="text-[14px] mb-4" style={{ fontWeight: 650 }}>Top Demand Titles</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={demandData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="name" fontSize={11} stroke="#94a3b8" />
-                <YAxis fontSize={11} stroke="#94a3b8" />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc" }} />
-                <Bar dataKey="demand" radius={[8, 8, 0, 0]} fill="#6366f1">
-                  {demandData.map((entry, i) => (
-                    <Cell key={i} fill={["#6366f1", "#a78bfa", "#c7d2fe", "#ddd6fe", "#ede9fe", "#f5f3ff"][i % 6]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
+              <TrendingUp className="w-4 h-4 text-indigo-500" /> Sách mượn nhiều nhất
+            </h3>
+            {demandData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={demandData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" />
+                  <YAxis fontSize={11} stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e8f0" }} />
+                  <Bar dataKey="demand" radius={[8, 8, 0, 0]}>
+                    {demandData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+            )}
           </div>
         </FadeItem>
-
         <FadeItem>
           <div className="bg-white rounded-[16px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-            <h3 className="text-[14px] mb-4" style={{ fontWeight: 650 }}>Demand Trend (8 weeks)</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <defs>
-                  <linearGradient id="trend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="week" fontSize={11} stroke="#94a3b8" />
-                <YAxis fontSize={11} stroke="#94a3b8" />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e8f0", background: "#f8fafc" }} />
-                <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} fill="url(#trend)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
+              <BarChart3 className="w-4 h-4 text-violet-500" /> Phân bố thể loại
+            </h3>
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={categoryData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                    {categoryData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+            )}
           </div>
         </FadeItem>
       </div>
 
-      {/* Recommendations */}
       <FadeItem>
-        <h3 className="text-[14px]" style={{ fontWeight: 650 }}>Active Recommendations</h3>
+        <h3 className="text-[14px] flex items-center gap-2" style={{ fontWeight: 650 }}>
+          <Sparkles className="w-4 h-4 text-violet-500" /> Gợi ý cho bạn
+        </h3>
       </FadeItem>
 
-      <div className="space-y-3">
-        {visibleRecs.length === 0 ? (
-          <div className="text-center py-8 bg-white rounded-[12px] border border-white/80">
-            <TrendingUp className="w-8 h-8 text-violet-300 mx-auto mb-2" />
-            <p className="text-[13px] text-slate-400">All recommendations have been reviewed</p>
-          </div>
-        ) : visibleRecs.map((rec, i) => (
-          <motion.div key={rec.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-            className={`bg-white rounded-[12px] border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all ${rec.priority === "high" ? "border-rose-200/60 bg-gradient-to-r from-rose-50/40 to-orange-50/40" : rec.priority === "medium" ? "border-amber-200/60 bg-gradient-to-r from-amber-50/40 to-yellow-50/40" : "border-slate-200/60"}`}>
-            <div className="flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 ${rec.category === "Restock" ? "bg-gradient-to-br from-rose-500 to-red-500" : rec.category === "Transfer" ? "bg-gradient-to-br from-blue-500 to-indigo-500" : rec.category === "Optimize" ? "bg-gradient-to-br from-amber-500 to-orange-500" : "bg-gradient-to-br from-violet-500 to-purple-500"}`}>
-                {rec.category === "Restock" && <AlertTriangle className="w-5 h-5 text-white" />}
-                {rec.category === "Transfer" && <ArrowRight className="w-5 h-5 text-white" />}
-                {rec.category === "Optimize" && <Zap className="w-5 h-5 text-white" />}
-                {rec.category === "Acquisition" && <Package className="w-5 h-5 text-white" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between mb-1">
-                  <h4 className="text-[13px]" style={{ fontWeight: 650 }}>{rec.title}</h4>
-                  <span className={`px-2 py-1 rounded-full text-[10px] shrink-0 ${rec.priority === "high" ? "bg-rose-100 text-rose-700" : rec.priority === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`} style={{ fontWeight: 550 }}>
-                    {rec.priority.charAt(0).toUpperCase() + rec.priority.slice(1)}
-                  </span>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+          <p className="text-[13px] text-slate-400">AI đang phân tích lịch sử mượn sách...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 bg-white rounded-[12px] border border-rose-200/60">
+          <AlertCircle className="w-8 h-8 text-rose-400 mx-auto mb-2" />
+          <p className="text-[13px] text-rose-600">{error}</p>
+        </div>
+      ) : recommendations.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-[12px] border border-white/80">
+          <BookOpen className="w-8 h-8 text-violet-300 mx-auto mb-2" />
+          <p className="text-[13px] text-slate-400">Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {recommendations.map((rec, i) => (
+            <motion.div key={rec.book_id || i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+              className="bg-white rounded-[14px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all group">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
+                  <BookOpen className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-[12px] text-slate-600 mb-2">{rec.description}</p>
-                <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                  <span>Estimated savings: <span style={{ fontWeight: 600, color: "#059669" }}>{rec.estimatedSavings}</span></span>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[13px] truncate group-hover:text-violet-700 transition-colors" style={{ fontWeight: 650 }}>{rec.title}</h4>
+                  <p className="text-[11px] text-slate-400 truncate">{rec.author}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button className="px-3 py-1.5 rounded-[8px] bg-slate-100 text-slate-700 text-[11px] hover:bg-slate-200 transition-all" style={{ fontWeight: 550 }}>
-                  {rec.action}
-                </button>
-                <button onClick={() => handleDismiss(rec.id)} className="inline-flex items-center justify-center w-8 h-8 rounded-[8px] text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              {rec.category && (
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-violet-50 text-violet-600 border border-violet-100/60 mb-2" style={{ fontWeight: 550 }}>
+                  {rec.category}
+                </span>
+              )}
+              <p className="text-[12px] text-slate-600 leading-relaxed mb-3">{rec.reason}</p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, si) => (
+                    <Star key={si} className={`w-3 h-3 ${si < Math.round((rec.score || 0) * 5) ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
+                  ))}
+                </div>
+                <span className="text-[10px] text-slate-400" style={{ fontWeight: 550 }}>
+                  Phù hợp {Math.round((rec.score || 0) * 100)}%
+                </span>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-      {/* Summary Stats */}
       <FadeItem>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Active Recommendations", value: visibleRecs.length, color: "from-violet-50 to-purple-50/50 border-violet-100/60" },
-            { label: "Total Savings Potential", value: "6.8M VND", color: "from-emerald-50 to-teal-50/50 border-emerald-100/60" },
-            { label: "High Priority", value: recommendations.filter(r => r.priority === "high").length, color: "from-rose-50 to-red-50/50 border-rose-100/60" },
-            { label: "Categories", value: [...new Set(recommendations.map(r => r.category))].length, color: "from-blue-50 to-indigo-50/50 border-blue-100/60" },
-          ].map(s => (
+            { label: "Gợi ý", value: recommendations.length, color: "from-violet-50 to-purple-50/50 border-violet-100/60" },
+            { label: "Thể loại phân tích", value: categoryData.length, color: "from-blue-50 to-indigo-50/50 border-blue-100/60" },
+            { label: "Sách đã phân tích", value: demandData.reduce((s, d) => s + d.demand, 0), color: "from-emerald-50 to-teal-50/50 border-emerald-100/60" },
+            { label: "AI Provider", value: provider || "—", color: "from-rose-50 to-pink-50/50 border-rose-100/60" },
+          ].map((s) => (
             <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-[12px] border p-3`}>
               <p className="text-[11px] text-slate-500 mb-1" style={{ fontWeight: 550 }}>{s.label}</p>
               <p className="text-[22px] text-slate-700" style={{ fontWeight: 700, lineHeight: 1 }}>{s.value}</p>

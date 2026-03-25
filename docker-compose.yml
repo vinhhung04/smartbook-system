@@ -70,6 +70,13 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - GATEWAY_URL=http://api-gateway:3000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.vn>}
     depends_on:
       db:
         condition: service_healthy
@@ -137,6 +144,8 @@ services:
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - BORROW_SERVICE_URL=http://borrow-service:3005
       - AI_SERVICE_URL=http://ai-service:8000
+      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
     depends_on:
       - auth-service
       - inventory-service
@@ -152,6 +161,7 @@ services:
       - VITE_API_BASE_URL=http://localhost:3000
       - VITE_AUTH_BASE_URL=http://localhost:3000
       - VITE_AI_BASE_URL=http://localhost:3000/ai
+      - VITE_GATEWAY_BASE_URL=http://localhost:3000
     depends_on:
       - api-gateway
       - inventory-service

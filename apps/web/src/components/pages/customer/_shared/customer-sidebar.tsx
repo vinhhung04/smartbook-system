@@ -1,4 +1,4 @@
-import { LucideIcon, Bell, BookOpen, CalendarClock, HandCoins, House, ReceiptText, ShieldCheck, User, ChevronLeft } from 'lucide-react';
+import { LucideIcon, Bell, BookOpen, CalendarClock, HandCoins, House, ReceiptText, ShieldCheck, User, ChevronLeft, BarChart3, Heart } from 'lucide-react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -19,6 +19,8 @@ const primaryItems: CustomerSidebarItem[] = [
   { to: '/customer/books', label: 'Browse Books', icon: BookOpen },
   { to: '/customer/loans', label: 'My Loans', icon: HandCoins },
   { to: '/customer/reservations', label: 'My Reservations', icon: CalendarClock },
+  { to: '/customer/wishlist', label: 'Wishlist', icon: Heart },
+  { to: '/customer/reading-analytics', label: 'Reading Analytics', icon: BarChart3 },
 ];
 
 const accountItems: CustomerSidebarItem[] = [
@@ -52,8 +54,8 @@ function NavItem({
         [
           'group flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] transition-all duration-160 relative overflow-hidden',
           isActive
-            ? 'bg-gradient-to-r from-indigo-50 to-cyan-50 text-indigo-700 shadow-[0_2px_8px_rgba(79,70,229,0.10)] border border-indigo-100/60'
-            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-transparent hover:border-slate-100',
+            ? 'bg-gradient-to-r from-indigo-50 to-cyan-50 dark:from-indigo-500/10 dark:to-cyan-500/5 text-indigo-700 dark:text-indigo-400 shadow-[0_2px_8px_rgba(79,70,229,0.10)] border border-indigo-100/60 dark:border-indigo-500/20'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent hover:border-slate-100 dark:hover:border-slate-700',
           collapsed ? 'justify-center px-0' : '',
         ].join(' ')
       }
@@ -70,7 +72,7 @@ function NavItem({
           )}
           <div className={[
             'w-[22px] h-[22px] rounded-lg flex items-center justify-center shrink-0 relative z-10 transition-colors duration-160',
-            isActive ? 'bg-indigo-100' : 'group-hover:bg-slate-100',
+            isActive ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800',
           ].join(' ')}>
             <item.icon className="w-[14px] h-[14px]" />
           </div>
@@ -98,12 +100,12 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
   return (
     <aside
       className={[
-        'h-full border-r border-slate-200 bg-white flex flex-col',
+        'h-full border-r border-border bg-card flex flex-col',
         collapsed ? 'w-[72px]' : 'w-[268px]',
       ].join(' ')}
     >
       {/* Logo */}
-      <div className="h-[56px] flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
+      <div className="h-[56px] flex items-center justify-between px-4 border-b border-border shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/25">
             <BookOpen className="w-4 h-4 text-white" />
@@ -161,7 +163,7 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
 
       {/* Footer branding */}
       {!collapsed && (
-        <div className="px-4 py-3 border-t border-slate-100 shrink-0">
+        <div className="px-4 py-3 border-t border-border shrink-0">
           <p className="text-[10px] text-slate-300 text-center">SmartBook Library System</p>
         </div>
       )}

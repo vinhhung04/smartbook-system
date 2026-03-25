@@ -23,6 +23,7 @@ export interface CustomerProfile {
 export interface MembershipInfo {
   customer_id: string;
   membership_id: string;
+  card_number?: string;
   plan_id: string;
   plan_code: string;
   plan_name: string;

@@ -11,7 +11,9 @@ import { FilterBar } from '@/components/ui/filter-bar';
 import { BookCard } from './_shared/book-card';
 import { DetailDrawer } from './_shared/detail-drawer';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { BookOpen, RefreshCw } from 'lucide-react';
+import { BookOpen, RefreshCw, Star } from 'lucide-react';
+
+type RatingMap = Record<string, { averageRating: number; totalReviews: number }>;
 
 export function CustomerCatalogPage() {
   const navigate = useNavigate();
@@ -22,13 +24,38 @@ export function CustomerCatalogPage() {
   const [previewBook, setPreviewBook] = useState<CustomerCatalogBook | null>(null);
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState<'available' | 'unavailable' | ''>('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [authorFilter, setAuthorFilter] = useState('');
+  const [ratingsMap, setRatingsMap] = useState<RatingMap>({});
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [allAuthors, setAllAuthors] = useState<string[]>([]);
 
   const loadBooks = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await customerCatalogService.getBooks({ search, availability });
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (availability) params.availability = availability;
+      if (categoryFilter) params.category = categoryFilter;
+      if (authorFilter) params.author = authorFilter;
+      const data = await customerCatalogService.getBooks(params);
       setBooks(data);
+
+      const cats = [...new Set(data.map((b: any) => b.category).filter(Boolean))].sort();
+      const authors = [...new Set(data.map((b: any) => b.author).filter(Boolean))].sort();
+      if (!categoryFilter && !authorFilter) {
+        setAllCategories(cats as string[]);
+        setAllAuthors(authors as string[]);
+      }
+
+      if (data.length > 0) {
+        try {
+          const ids = data.map((b) => b.id);
+          const res = await customerBorrowService.getBookRatingStats(ids);
+          setRatingsMap(res.data || {});
+        } catch { /* ratings are optional */ }
+      }
     } catch (err) {
       setError(getApiErrorMessage(err, 'Failed to load catalog'));
     } finally {
@@ -38,7 +65,7 @@ export function CustomerCatalogPage() {
 
   useEffect(() => {
     void loadBooks();
-  }, [search, availability]);
+  }, [search, availability, categoryFilter, authorFilter]);
 
   const stats = useMemo(() => ({
     total: books.length,
@@ -124,10 +151,20 @@ export function CustomerCatalogPage() {
               <option value="unavailable">Out of stock</option>
             </select>
             <select
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="hidden"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10"
             >
+              <option value="">All categories</option>
+              {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select
+              value={authorFilter}
+              onChange={(e) => setAuthorFilter(e.target.value)}
+              className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10 max-w-[180px]"
+            >
+              <option value="">All authors</option>
+              {allAuthors.slice(0, 30).map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </>
         }
@@ -207,6 +244,7 @@ export function CustomerCatalogPage() {
                     }}
                     onReserve={handleReserve}
                     reserving={reservingBookId === book.id}
+                    ratingInfo={ratingsMap[book.id] || null}
                   />
                 </motion.div>
               ))}
@@ -236,6 +274,23 @@ export function CustomerCatalogPage() {
               <p className="text-[12px]"><span className="text-muted-foreground">Stock:</span> {previewBook.quantity || 0} available</p>
             </div>
             <p className="text-[12px] text-muted-foreground">{previewBook.description || 'No description available.'}</p>
+
+            {/* Rating in drawer */}
+            {ratingsMap[previewBook.id] && ratingsMap[previewBook.id].totalReviews > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2">
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      size={13}
+                      className={s <= Math.round(ratingsMap[previewBook.id].averageRating) ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-300'}
+                    />
+                  ))}
+                </div>
+                <span className="text-[12px] font-semibold text-amber-700">{ratingsMap[previewBook.id].averageRating}</span>
+                <span className="text-[11px] text-amber-600">({ratingsMap[previewBook.id].totalReviews} reviews)</span>
+              </div>
+            )}
 
             <div className="flex items-center gap-2 pt-2">
               <button

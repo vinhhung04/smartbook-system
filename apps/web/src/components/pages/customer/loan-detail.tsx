@@ -7,6 +7,7 @@ import { CustomerStateBlock } from './_shared/customer-state-block';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { formatDateTime } from './_shared/customer-format';
 import { getStatusTone } from './_shared/customer-status';
+import { printLoanReceipt } from '@/lib/print-utils';
 
 export function CustomerLoanDetailPage() {
   const { id } = useParams();
@@ -62,14 +63,20 @@ export function CustomerLoanDetailPage() {
         title={loan.loan_number}
         subtitle="Review due date, items, and submit renewal request when eligible."
         actions={
-          <button
-            onClick={() => void handleRenewRequest()}
-            disabled={isSubmittingRenew || !canRequestRenewal}
-            className="px-4 py-2.5 rounded-[10px] bg-indigo-600 text-white text-[13px] disabled:opacity-60"
-            title={canRequestRenewal ? 'Request renewal' : 'Only borrowed or overdue loans can request renewal'}
-          >
-            {isSubmittingRenew ? 'Submitting...' : 'Request Renewal'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
+              className="px-4 py-2.5 rounded-[10px] border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px]">
+              Print Receipt
+            </button>
+            <button
+              onClick={() => void handleRenewRequest()}
+              disabled={isSubmittingRenew || !canRequestRenewal}
+              className="px-4 py-2.5 rounded-[10px] bg-indigo-600 text-white text-[13px] disabled:opacity-60"
+              title={canRequestRenewal ? 'Request renewal' : 'Only borrowed or overdue loans can request renewal'}
+            >
+              {isSubmittingRenew ? 'Submitting...' : 'Request Renewal'}
+            </button>
+          </div>
         }
       />
 

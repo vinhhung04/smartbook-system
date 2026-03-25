@@ -142,6 +142,14 @@ export const authService = {
     return Array.isArray(user?.roles) && user.roles.includes('CUSTOMER');
   },
 
+  changePassword: async (currentPassword: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+
   hydrateCurrentUser: async (): Promise<AuthUser | null> => {
     if (!authService.isAuthenticated()) {
       return null;

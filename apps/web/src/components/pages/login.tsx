@@ -10,7 +10,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [credentials, setCredentials] = useState({ identifier: "", password: "" });
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('smartbook-remember') === 'true');
+  const [credentials, setCredentials] = useState(() => {
+    const saved = localStorage.getItem('smartbook-saved-identifier');
+    return { identifier: saved || "", password: "" };
+  });
 
   const handleLogin = async () => {
     if (!credentials.identifier || !credentials.password) {
@@ -21,6 +25,13 @@ export function LoginPage() {
     try {
       setIsSubmitting(true);
       const loginData = await authService.login(credentials);
+      if (rememberMe) {
+        localStorage.setItem('smartbook-remember', 'true');
+        localStorage.setItem('smartbook-saved-identifier', credentials.identifier);
+      } else {
+        localStorage.removeItem('smartbook-remember');
+        localStorage.removeItem('smartbook-saved-identifier');
+      }
       toast.success("Login successful");
       if (Array.isArray(loginData.user?.roles) && loginData.user.roles.includes('CUSTOMER')) {
         navigate('/customer');
@@ -35,7 +46,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
       {/* Left - Branding */}
       <div className="hidden lg:flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8">
         {/* Animated Shapes */}
@@ -72,7 +83,7 @@ export function LoginPage() {
       </div>
 
       {/* Right - Login Form */}
-      <div className="flex flex-col items-center justify-center p-8">
+      <div className="flex flex-col items-center justify-center p-8 bg-card">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
           <div className="lg:hidden text-center mb-8">
             <div className="w-12 h-12 rounded-[12px] bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center border border-blue-200/40 mx-auto mb-3">
@@ -81,8 +92,8 @@ export function LoginPage() {
             <h1 className="text-2xl tracking-[-0.02em]" style={{ fontWeight: 700 }}>SmartBook</h1>
           </div>
 
-          <h2 className="text-[24px] mb-2 tracking-[-0.02em]" style={{ fontWeight: 700 }}>Welcome back</h2>
-          <p className="text-slate-500 mb-8">Sign in to your account to continue</p>
+          <h2 className="text-[24px] text-foreground mb-2 tracking-[-0.02em]" style={{ fontWeight: 700 }}>Welcome back</h2>
+          <p className="text-muted-foreground mb-8">Sign in to your account to continue</p>
 
           <form
             className="space-y-4 mb-6"
@@ -92,20 +103,20 @@ export function LoginPage() {
             }}
           >
             <div>
-              <label className="text-[12px] text-slate-600 block mb-2" style={{ fontWeight: 550 }}>Email or Username</label>
+              <label className="text-[12px] text-muted-foreground block mb-2" style={{ fontWeight: 550 }}>Email or Username</label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input value={credentials.identifier} onChange={e => setCredentials({ ...credentials, identifier: e.target.value })} type="text" placeholder="Enter email or username" autoComplete="username"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
+                  className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
               </div>
             </div>
 
             <div>
-              <label className="text-[12px] text-slate-600 block mb-2" style={{ fontWeight: 550 }}>Password</label>
+              <label className="text-[12px] text-muted-foreground block mb-2" style={{ fontWeight: 550 }}>Password</label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input value={credentials.password} onChange={e => setCredentials({ ...credentials, password: e.target.value })} type={showPassword ? "text" : "password"} placeholder="Enter password" autoComplete="current-password"
-                  className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-[10px] text-[13px] outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
+                  className="w-full pl-10 pr-10 py-3 bg-muted/50 border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -113,8 +124,8 @@ export function LoginPage() {
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded border-slate-300" />
-              <span className="text-[12px] text-slate-600">Remember me</span>
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-input accent-primary" />
+              <span className="text-[12px] text-muted-foreground">Remember me</span>
             </label>
             <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="w-full py-3 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] font-semibold shadow-lg shadow-blue-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
@@ -122,14 +133,14 @@ export function LoginPage() {
             </motion.button>
           </form>
 
-          <div className="text-center text-[12px] text-slate-600">
+          <div className="text-center text-[12px] text-muted-foreground">
             Don't have an account?{" "}
             <NavLink to="/register" className="text-blue-600 hover:text-blue-800 font-semibold">
               Sign up
             </NavLink>
           </div>
 
-          <button type="button" className="w-full mt-6 py-2.5 rounded-[10px] border border-slate-200 text-slate-700 text-[12px] hover:bg-slate-50 transition-all">
+          <button type="button" onClick={() => toast.info("Password reset feature is coming soon")} className="w-full mt-6 py-2.5 rounded-[10px] border border-input text-muted-foreground text-[12px] hover:bg-muted/50 transition-all">
             Forgot password?
           </button>
         </motion.div>

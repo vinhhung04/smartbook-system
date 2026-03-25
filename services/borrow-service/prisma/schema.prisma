@@ -26,6 +26,9 @@ model customers {
   customer_notifications customer_notifications[]
   auto_payment_settings auto_payment_settings?
   customer_preferences customer_preferences?
+  book_reviews       book_reviews[]
+  book_wishlists     book_wishlists[]
+  availability_alerts availability_alerts[]
   fines              fines[]
   loan_reservations  loan_reservations[]
   loan_transactions  loan_transactions[]
@@ -214,6 +217,46 @@ model customer_notifications {
   customers     customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([status, scheduled_at], map: "idx_customer_notifications_status")
+}
+
+model book_reviews {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id String    @db.Uuid
+  book_id     String    @db.Uuid
+  rating      Int       @db.SmallInt
+  comment     String?
+  status      String    @default("VISIBLE") @db.VarChar(20)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  customers   customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([customer_id, book_id], map: "uniq_book_reviews_customer_book")
+  @@index([book_id], map: "idx_book_reviews_book_id")
+  @@index([customer_id], map: "idx_book_reviews_customer_id")
+}
+
+model book_wishlists {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id String   @db.Uuid
+  book_id     String   @db.Uuid
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  customers   customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([customer_id, book_id], map: "uniq_book_wishlists_customer_book")
+  @@index([customer_id], map: "idx_book_wishlists_customer_id")
+}
+
+model availability_alerts {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id String    @db.Uuid
+  book_id     String    @db.Uuid
+  status      String    @default("ACTIVE") @db.VarChar(20)
+  notified_at DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  customers   customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([customer_id, book_id], map: "uniq_availability_alerts_customer_book")
+  @@index([book_id, status], map: "idx_availability_alerts_book_status")
 }
 
 model borrow_audit_logs {

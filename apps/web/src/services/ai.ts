@@ -86,6 +86,66 @@ export interface LookupBookByIsbnResponse {
   reason?: string;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  ai_provider: string;
+}
+
+export interface SystemContext {
+  summary?: {
+    totalBooks: number;
+    totalUnits: number;
+    lowStock: number;
+    outOfStock: number;
+    activeLoans: number;
+    overdueLoans: number;
+    totalFines: number;
+  };
+  books?: { title: string; author?: string; quantity: number }[];
+  recentLoans?: {
+    loan_number: string;
+    customer_name: string;
+    status: string;
+    due_date: string;
+  }[];
+  recentFines?: {
+    customer_name: string;
+    fine_type: string;
+    amount: number;
+    status: string;
+  }[];
+  recentMovements?: {
+    movement_type: string;
+    book_title: string;
+    quantity: number;
+    warehouse_name: string;
+  }[];
+}
+
+export interface AIRecommendation {
+  book_id: string;
+  title: string;
+  author: string;
+  category: string;
+  reason: string;
+  score: number;
+}
+
+export interface ReadingStatsResponse {
+  total_books: number;
+  avg_borrow_days: number;
+  streak_months: number;
+  monthly_data: { month: string; count: number }[];
+  top_categories: { name: string; count: number }[];
+  top_authors: { name: string; count: number }[];
+  badges: { id: string; name: string; icon: string; description: string }[];
+}
+
 export const aiService = {
   analyzeImage: async (data: AIAnalysisRequest): Promise<AIAnalysisResponse> => {
     const formData = new FormData();
@@ -154,6 +214,38 @@ export const aiService = {
 
   generateSummaryVi: async (payload: SummaryViRequest): Promise<SummaryViResponse> => {
     const response = await aiAPI.post('/generate-summary-vi', payload);
+    return response.data;
+  },
+
+  chat: async (
+    message: string,
+    conversationHistory: ChatMessage[] = [],
+    systemContext?: SystemContext,
+  ): Promise<ChatResponse> => {
+    const response = await aiAPI.post('/chat', {
+      message,
+      conversation_history: conversationHistory,
+      system_context: systemContext || null,
+    });
+    return response.data;
+  },
+
+  getRecommendationsAI: async (
+    borrowHistory: { title: string; author?: string; category?: string }[],
+    catalogBooks: { id: string; title: string; author?: string; category?: string; quantity: number }[],
+  ): Promise<{ recommendations: AIRecommendation[]; ai_provider: string }> => {
+    const response = await aiAPI.post('/recommendations', {
+      borrow_history: borrowHistory,
+      catalog_books: catalogBooks,
+    });
+    return response.data;
+  },
+
+  getReadingStats: async (
+    loans: any[],
+    reviews: any[],
+  ): Promise<ReadingStatsResponse> => {
+    const response = await aiAPI.post('/reading-stats', { loans, reviews });
     return response.data;
   },
 };
