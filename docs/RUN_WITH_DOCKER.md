@@ -717,10 +717,10 @@ docker compose up -d --build
 1. **Architecture Overview**: `docs/PROJECT_OVERVIEW.md`
 2. **Docker Stack**: `docker-compose.yml` (8 service chính)
 3. **Service Detail**:
-   - `services/inventory-service/README.md` - Business logic
-   - `services/ai-service/README.md` - AI/Ollama integration
+   - `docs/SERVICES/INVENTORY_SERVICE.md` - Business logic
+   - `docs/SERVICES/AI_SERVICE.md` - AI/Ollama integration
    - `apps/api-gateway/` - Request routing
-   - `apps/web/` - Frontend (React/Vue)
+   - `apps/web/` - Frontend (React + Vite)
 
 ### 🎯 Các port quan trọng:
 
