@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import { customerCatalogService, CustomerCatalogBook } from '@/services/customer-catalog';
@@ -8,7 +8,282 @@ import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { BookOpen, MapPin, ShoppingCart, Star, Calendar, ChevronRight } from 'lucide-react';
+import { BookOpen, MapPin, ShoppingCart, Star, Calendar, ChevronRight, MessageSquare, Trash2 } from 'lucide-react';
+
+interface BookReview {
+  id: string;
+  customer_id: string;
+  book_id: string;
+  rating: number;
+  comment: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  customers: { id: string; customer_code: string; full_name: string };
+}
+
+interface ReviewStats {
+  averageRating: number;
+  totalReviews: number;
+}
+
+function StarRating({ value, onChange, size = 20, readonly = false }: {
+  value: number;
+  onChange?: (v: number) => void;
+  size?: number;
+  readonly?: boolean;
+}) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={readonly}
+          onClick={() => onChange?.(star)}
+          onMouseEnter={() => !readonly && setHover(star)}
+          onMouseLeave={() => !readonly && setHover(0)}
+          className={`transition-colors ${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
+        >
+          <Star
+            size={size}
+            className={`transition-colors ${
+              star <= (hover || value)
+                ? 'fill-amber-400 text-amber-400'
+                : 'fill-transparent text-slate-300'
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewSection({ bookId }: { bookId: string }) {
+  const [reviews, setReviews] = useState<BookReview[]>([]);
+  const [stats, setStats] = useState<ReviewStats>({ averageRating: 0, totalReviews: 0 });
+  const [myReview, setMyReview] = useState<BookReview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const loadReviews = useCallback(async (p = 1) => {
+    try {
+      setLoading(true);
+      const [reviewsRes, myRes] = await Promise.all([
+        customerBorrowService.getBookReviews(bookId, { page: p, pageSize: 10 }),
+        customerBorrowService.getMyReviewForBook(bookId).catch(() => ({ data: null })),
+      ]);
+      setReviews(reviewsRes.data || []);
+      setStats(reviewsRes.stats || { averageRating: 0, totalReviews: 0 });
+      setPage(reviewsRes.meta?.page || 1);
+      setTotalPages(reviewsRes.meta?.totalPages || 1);
+      if (myRes.data) {
+        setMyReview(myRes.data);
+        setRating(myRes.data.rating);
+        setComment(myRes.data.comment || '');
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setLoading(false);
+    }
+  }, [bookId]);
+
+  useEffect(() => { void loadReviews(); }, [loadReviews]);
+
+  const handleSubmit = async () => {
+    if (rating < 1) { toast.error('Please select a rating'); return; }
+    try {
+      setSubmitting(true);
+      await customerBorrowService.submitReview({ book_id: bookId, rating, comment: comment.trim() || undefined });
+      toast.success(myReview ? 'Review updated!' : 'Review submitted!');
+      await loadReviews(page);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to submit review'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      setDeleting(true);
+      await customerBorrowService.deleteMyReview(bookId);
+      toast.success('Review deleted');
+      setMyReview(null);
+      setRating(0);
+      setComment('');
+      await loadReviews(1);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete review'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const ratingDistribution = [5, 4, 3, 2, 1].map((star) => ({
+    star,
+    count: reviews.filter((r) => r.rating === star).length,
+  }));
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, duration: 0.3 }}
+      className="space-y-5"
+    >
+      {/* Summary Bar */}
+      <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-2 mb-4">
+          <MessageSquare className="w-4.5 h-4.5 text-amber-600" />
+          <h3 className="text-[15px] font-semibold text-foreground">Reviews & Ratings</h3>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-3 animate-pulse">
+            <div className="h-12 w-12 bg-muted rounded-xl" />
+            <div className="space-y-2 flex-1">
+              <div className="h-4 bg-muted rounded w-1/3" />
+              <div className="h-3 bg-muted rounded w-1/4" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row items-start gap-6">
+            {/* Score */}
+            <div className="text-center shrink-0">
+              <div className="text-[36px] font-bold text-foreground leading-none">
+                {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : '—'}
+              </div>
+              <StarRating value={Math.round(stats.averageRating)} readonly size={16} />
+              <p className="text-[12px] text-muted-foreground mt-1">
+                {stats.totalReviews} review{stats.totalReviews !== 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Distribution bars */}
+            <div className="flex-1 w-full space-y-1.5">
+              {ratingDistribution.map((row) => (
+                <div key={row.star} className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-4 text-right">{row.star}</span>
+                  <Star size={12} className="fill-amber-400 text-amber-400 shrink-0" />
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-amber-400 transition-all"
+                      style={{ width: stats.totalReviews > 0 ? `${(row.count / stats.totalReviews) * 100}%` : '0%' }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground w-5">{row.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Write Review */}
+      <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-violet-50/30 p-5">
+        <h4 className="text-[13px] font-semibold text-foreground mb-3">
+          {myReview ? 'Update your review' : 'Write a review'}
+        </h4>
+        <div className="space-y-3">
+          <div>
+            <p className="text-[12px] text-muted-foreground mb-1.5">Your rating</p>
+            <StarRating value={rating} onChange={setRating} size={24} />
+          </div>
+          <textarea
+            placeholder="Share your thoughts about this book... (optional)"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={3}
+            className="w-full rounded-xl border border-input bg-white px-4 py-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/10 resize-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void handleSubmit()}
+              disabled={submitting || rating < 1}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting ? 'Submitting...' : myReview ? 'Update Review' : 'Submit Review'}
+            </button>
+            {myReview && (
+              <button
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 disabled:opacity-50 transition-colors"
+              >
+                <Trash2 size={14} />
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reviews List */}
+      <div className="space-y-3">
+        {reviews.length === 0 && !loading ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-8 text-center">
+            <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-[13px] text-muted-foreground">No reviews yet. Be the first to share your thoughts!</p>
+          </div>
+        ) : (
+          reviews.map((review) => (
+            <div key={review.id} className="rounded-xl border border-black/5 bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                    <span className="text-[13px] font-semibold text-indigo-600">
+                      {review.customers?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-foreground">{review.customers?.full_name || 'Anonymous'}</p>
+                    <StarRating value={review.rating} readonly size={13} />
+                  </div>
+                </div>
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {new Date(review.created_at).toLocaleDateString('vi-VN')}
+                </span>
+              </div>
+              {review.comment && (
+                <p className="mt-2.5 text-[13px] text-muted-foreground leading-relaxed">{review.comment}</p>
+              )}
+            </div>
+          ))
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => void loadReviews(page - 1)}
+              className="px-3 py-1.5 rounded-lg border text-[12px] disabled:opacity-40 hover:bg-muted transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-[12px] text-muted-foreground">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => void loadReviews(page + 1)}
+              className="px-3 py-1.5 rounded-lg border text-[12px] disabled:opacity-40 hover:bg-muted transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 export function CustomerBookDetailPage() {
   const { id } = useParams();
@@ -234,6 +509,9 @@ export function CustomerBookDetailPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* Reviews Section */}
+      {id && <ReviewSection bookId={id} />}
     </div>
   );
 }

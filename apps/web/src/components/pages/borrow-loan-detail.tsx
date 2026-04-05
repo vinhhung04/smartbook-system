@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { StatusBadge } from '../status-badge';
 import { borrowService, type Loan } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { printLoanReceipt } from '@/lib/print-utils';
 
 function getVariant(status: string) {
   if (status === 'BORROWED') return 'info';
@@ -46,9 +47,17 @@ export function BorrowLoanDetailPage() {
             <h1 className="tracking-[-0.02em]">Loan Detail</h1>
             <p className="text-[12px] text-slate-400 mt-0.5">Review loan items and status</p>
           </div>
-          <Link to="/borrow/loans" className="px-3.5 py-2 rounded-[10px] border border-slate-200 bg-white text-slate-600 text-[13px] hover:bg-slate-50" style={{ fontWeight: 550 }}>
-            Back to Loans
-          </Link>
+          <div className="flex items-center gap-2">
+            {loan && (
+              <button onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px] hover:bg-indigo-100" style={{ fontWeight: 550 }}>
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+            )}
+            <Link to="/borrow/loans" className="px-3.5 py-2 rounded-[10px] border border-slate-200 bg-white text-slate-600 text-[13px] hover:bg-slate-50" style={{ fontWeight: 550 }}>
+              Back to Loans
+            </Link>
+          </div>
         </div>
       </FadeItem>
 

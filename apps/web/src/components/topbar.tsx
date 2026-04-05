@@ -1,9 +1,11 @@
-import { Search, Bell, ScanBarcode, LogOut } from "lucide-react";
+import { Search, Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { authService } from "@/services/auth";
 import { toast } from "sonner";
+import { useSocket, useSocketEvent } from "@/lib/socket";
+import { useTheme } from "@/lib/theme";
 
 const breadcrumbMap: Record<string, { crumbs: { label: string; to?: string }[]; color: string }> = {
   "/": { crumbs: [{ label: "Dashboard" }], color: "text-indigo-600" },
@@ -21,6 +23,7 @@ const breadcrumbMap: Record<string, { crumbs: { label: string; to?: string }[]; 
   "/movements": { crumbs: [{ label: "Stock Movements" }], color: "text-blue-600" },
   "/ai-import": { crumbs: [{ label: "AI Import" }], color: "text-cyan-600" },
   "/recommendations": { crumbs: [{ label: "Recommendations" }], color: "text-violet-600" },
+  "/reports": { crumbs: [{ label: "Reports" }], color: "text-emerald-600" },
   "/borrow": { crumbs: [{ label: "Borrow" }], color: "text-amber-600" },
   "/users": { crumbs: [{ label: "Users" }], color: "text-slate-600" },
   "/roles": { crumbs: [{ label: "Roles" }], color: "text-indigo-600" },
@@ -34,14 +37,61 @@ function resolveBreadcrumb(pathname: string): { crumbs: { label: string; to?: st
   return { crumbs: [{ label: "Dashboard" }], color: "text-indigo-600" };
 }
 
+interface AdminNotification {
+  title: string;
+  desc: string;
+  time: string;
+  color: string;
+  unread: boolean;
+}
+
+const EVENT_CONFIG: Record<string, { title: string; color: string }> = {
+  'loan:status_changed': { title: 'Loan update', color: 'bg-amber-500' },
+  'reservation:status_changed': { title: 'Reservation update', color: 'bg-indigo-500' },
+  'fine:created': { title: 'Fine update', color: 'bg-rose-500' },
+  'notification:new': { title: 'Notification', color: 'bg-cyan-500' },
+};
+
+function ThemeToggle() {
+  const { resolvedTheme, toggleTheme } = useTheme();
+  return (
+    <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500" title="Toggle dark mode">
+      {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+  );
+}
+
 export function Topbar() {
   const navigate = useNavigate();
+  const { connected } = useSocket();
   const [searchFocused, setSearchFocused] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [adminNotifs, setAdminNotifs] = useState<AdminNotification[]>([]);
   const location = useLocation();
   const { crumbs, color } = resolveBreadcrumb(location.pathname);
   const user = authService.getCurrentUser();
+
+  const handleAdminEvent = useCallback((eventName: string) => (data: any) => {
+    const cfg = EVENT_CONFIG[eventName] || { title: 'Event', color: 'bg-slate-500' };
+    const subject = data?.subject || cfg.title;
+    const body = data?.body || '';
+
+    toast(subject, { description: body, duration: 5000 });
+
+    setAdminNotifs((prev) => [{
+      title: subject,
+      desc: body,
+      time: 'just now',
+      color: cfg.color,
+      unread: true,
+    }, ...prev].slice(0, 10));
+  }, []);
+
+  useSocketEvent('loan:status_changed', handleAdminEvent('loan:status_changed'));
+  useSocketEvent('reservation:status_changed', handleAdminEvent('reservation:status_changed'));
+  useSocketEvent('fine:created', handleAdminEvent('fine:created'));
+  useSocketEvent('notification:new', handleAdminEvent('notification:new'));
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)
@@ -56,7 +106,7 @@ export function Topbar() {
   };
 
   return (
-    <header className="h-[52px] border-b border-[#e2e4ed] bg-white/70 backdrop-blur-xl flex items-center justify-between px-5 gap-4 shrink-0 sticky top-0 z-10">
+    <header className="h-[52px] border-b border-border bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl flex items-center justify-between px-5 gap-4 shrink-0 sticky top-0 z-10">
       <nav className="flex items-center gap-1.5 text-[13px]">
         {crumbs.map((crumb, i) => (
           <span key={`${crumb.label}-${i}`} className="flex items-center gap-1.5">
@@ -78,57 +128,74 @@ export function Topbar() {
             placeholder="Search books, orders, barcodes..."
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            className={`w-full pr-14 py-[7px] bg-slate-50 rounded-[9px] text-[13px] border outline-none placeholder:text-slate-400 transition-all duration-220 ${
-              searchFocused ? "border-indigo-300/60 ring-[3px] ring-indigo-500/8 bg-white shadow-md shadow-indigo-500/5" : "border-transparent hover:border-slate-200"
+            className={`w-full pr-14 py-[7px] bg-slate-50 dark:bg-slate-800 rounded-[9px] text-[13px] text-foreground border outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-220 ${
+              searchFocused ? "border-indigo-300/60 ring-[3px] ring-indigo-500/8 bg-white dark:bg-slate-800 shadow-md shadow-indigo-500/5" : "border-transparent hover:border-slate-200 dark:hover:border-slate-600"
             }`}
             style={{ paddingLeft: "2.125rem" }}
           />
           <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <kbd className="text-[10px] text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>⌘</kbd>
-            <kbd className="text-[10px] text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>K</kbd>
+            <kbd className="text-[10px] text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>⌘</kbd>
+            <kbd className="text-[10px] text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>K</kbd>
           </div>
         </motion.div>
 
-        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-all duration-140" title="Quick scan">
+        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title="Quick scan">
           <ScanBarcode className="w-4 h-4" />
         </NavLink>
 
+        <ThemeToggle />
+
         <div className="relative">
-          <button onClick={() => setNotifOpen(!notifOpen)} className="relative w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 transition-all duration-140 text-slate-500">
+          <button onClick={() => setNotifOpen(!notifOpen)} className="relative w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500 dark:text-slate-400">
             <Bell className="w-4 h-4" />
-            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-1 right-1 w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-rose-500 rounded-full ring-2 ring-white" />
+            {adminNotifs.some((n) => n.unread) && (
+              <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-1 right-1 w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-rose-500 rounded-full ring-2 ring-white" />
+            )}
+            <span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-white ${connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
           </button>
           <AnimatePresence>
             {notifOpen && (
               <motion.div initial={{ opacity: 0, y: 4, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 4, scale: 0.97 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-full mt-2 w-80 bg-white rounded-[14px] border border-[#e2e4ed] shadow-xl shadow-black/8 overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <span className="text-[13px]" style={{ fontWeight: 650 }}>Notifications</span>
-                  <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}>Mark all read</span>
+                className="absolute right-0 top-full mt-2 w-80 bg-card rounded-[14px] border border-border shadow-xl shadow-black/8 overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px]" style={{ fontWeight: 650 }}>Notifications</span>
+                    {connected ? (
+                      <Wifi className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <WifiOff className="w-3 h-3 text-slate-400" />
+                    )}
+                  </div>
+                  <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}
+                    onClick={() => setAdminNotifs((prev) => prev.map((n) => ({ ...n, unread: false })))}
+                  >Mark all read</span>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {[
-                    { title: "Low stock alert", desc: "12 books below minimum threshold", time: "2m ago", color: "bg-amber-500", unread: true },
-                    { title: "Receipt GR-2026-0042 posted", desc: "48 units added to WH-01", time: "15m ago", color: "bg-emerald-500", unread: true },
-                    { title: "Overdue borrow", desc: "Le Van C — Refactoring (12 days overdue)", time: "1h ago", color: "bg-rose-500", unread: true },
-                    { title: "AI Import complete", desc: "3 books extracted, 2 accepted", time: "3h ago", color: "bg-cyan-500", unread: false },
-                    { title: "New user registered", desc: "intern.d@smartbook.vn awaiting approval", time: "1d ago", color: "bg-indigo-500", unread: false },
-                  ].map((n, i) => (
-                    <div key={i} className={`px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 cursor-pointer transition-colors ${n.unread ? "bg-indigo-50/20" : ""}`}>
-                      <div className="flex items-start gap-2.5">
-                        <div className={`w-2 h-2 rounded-full ${n.color} mt-1.5 shrink-0`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12px]" style={{ fontWeight: n.unread ? 600 : 450 }}>{n.title}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">{n.desc}</div>
-                          <div className="text-[10px] text-slate-400 mt-1">{n.time}</div>
+                  {adminNotifs.length === 0 ? (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-[12px] text-slate-500">No real-time events yet.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Events will appear here as they happen.</p>
+                    </div>
+                  ) : (
+                    adminNotifs.map((n, i) => (
+                      <div key={i} className={`px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 cursor-pointer transition-colors ${n.unread ? "bg-indigo-50/20 dark:bg-indigo-500/5" : ""}`}>
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-2 h-2 rounded-full ${n.color} mt-1.5 shrink-0`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px]" style={{ fontWeight: n.unread ? 600 : 450 }}>{n.title}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{n.desc}</div>
+                            <div className="text-[10px] text-slate-400 mt-1">{n.time}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-                <div className="px-4 py-2.5 border-t border-slate-100 text-center">
-                  <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}>View all notifications</span>
+                <div className="px-4 py-2.5 border-t border-border text-center">
+                  <span className="text-[11px] text-slate-400" style={{ fontWeight: 500 }}>
+                    {connected ? 'Live — receiving real-time updates' : 'Offline — reconnecting...'}
+                  </span>
                 </div>
               </motion.div>
             )}
@@ -144,8 +211,8 @@ export function Topbar() {
             {profileOpen && (
               <motion.div initial={{ opacity: 0, y: 4, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 4, scale: 0.97 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-full mt-2 w-64 bg-white rounded-[14px] border border-[#e2e4ed] shadow-xl shadow-black/8 overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-slate-100">
+                className="absolute right-0 top-full mt-2 w-64 bg-card rounded-[14px] border border-border shadow-xl shadow-black/8 overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-border">
                   <p className="text-[13px]" style={{ fontWeight: 650 }}>{user?.full_name || user?.username || "User"}</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">{user?.email || ""}</p>
                 </div>

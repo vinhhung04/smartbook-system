@@ -1281,3 +1281,392 @@ async def _generate_book_summary(req: BookSummaryRequest):
         logger.error(f"Error calling LLM: {str(e)}")
         fallback_description = _generate_fallback_description(req.title, req.author, web_context)
         return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# AI Chat — Trợ lý ảo SmartBook
+# ────────────────────────────────────────────────────────────────────────────────
+
+CHAT_SYSTEM_PROMPT = (
+    "Bạn là **SmartBook AI** — trợ lý ảo thông minh chuyên biệt cho hệ thống quản lý thư viện SmartBook.\n\n"
+
+    "## Vai trò & năng lực\n"
+    "- Bạn có quyền truy cập DỮ LIỆU THỜI GIAN THỰC của thư viện (được cung cấp trong mục [DỮ LIỆU HỆ THỐNG] bên dưới).\n"
+    "- Bạn hỗ trợ: tra cứu sách, kiểm tra tồn kho, theo dõi mượn/trả, phạt quá hạn, gợi ý sách, phân tích xu hướng.\n"
+    "- Bạn hiểu cấu trúc hệ thống: Catalog (danh mục sách), Inventory (kho), Borrow (mượn/trả), Fines (phạt).\n\n"
+
+    "## Quy tắc trả lời\n"
+    "1. **Luôn dùng dữ liệu thực** khi có trong [DỮ LIỆU HỆ THỐNG]. Trích dẫn con số cụ thể.\n"
+    "2. Nếu người dùng hỏi về sách cụ thể, tìm trong danh sách sách được cung cấp. Nếu không tìm thấy, nói rõ.\n"
+    "3. Khi phân tích, đưa ra nhận xét có giá trị (ví dụ: cảnh báo tồn kho thấp, sách quá hạn nhiều).\n"
+    "4. Trả lời bằng **tiếng Việt**, ngắn gọn, thân thiện, chuyên nghiệp.\n"
+    "5. Dùng **bold** cho số liệu quan trọng và tên sách. Dùng emoji nhẹ (📚 📊 ⚠️ ✅) làm điểm nhấn.\n"
+    "6. Giới hạn 3-8 câu, trừ khi người dùng yêu cầu chi tiết.\n"
+    "7. Khi gợi ý hành động, chỉ rõ người dùng nên vào trang nào (Dashboard, Catalog, Inventory, Borrow, Reports).\n"
+    "8. Nếu dữ liệu không đủ để trả lời chính xác, nói rõ giới hạn và gợi ý cách kiểm tra.\n\n"
+
+    "## Khả năng đặc biệt\n"
+    "- Phân tích xu hướng mượn sách và gợi ý nhập thêm đầu sách.\n"
+    "- Cảnh báo sách tồn kho thấp hoặc hết hàng.\n"
+    "- Tổng hợp tình hình mượn quá hạn và phạt.\n"
+    "- So sánh và xếp hạng sách theo lượt mượn.\n"
+    "- Tư vấn quy trình nghiệp vụ thư viện (nhập kho, putaway, picking, xuất kho).\n"
+)
+
+
+def _build_context_block(system_context: dict | None) -> str:
+    """Chuyển dữ liệu hệ thống thành đoạn text để inject vào prompt."""
+    if not system_context:
+        return "\n[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu thời gian thực. Trả lời dựa trên kiến thức chung.\n"
+
+    parts = ["\n[DỮ LIỆU HỆ THỐNG — Cập nhật tại thời điểm người dùng gửi tin nhắn]\n"]
+
+    summary = system_context.get("summary")
+    if summary:
+        parts.append("### Tổng quan thư viện")
+        parts.append(f"- Tổng đầu sách: **{summary.get('totalBooks', '?')}**")
+        parts.append(f"- Tổng số bản (units): **{summary.get('totalUnits', '?')}**")
+        parts.append(f"- Sách tồn kho thấp (≤10): **{summary.get('lowStock', '?')}**")
+        parts.append(f"- Sách hết hàng: **{summary.get('outOfStock', '?')}**")
+        parts.append(f"- Phiếu mượn đang mở: **{summary.get('activeLoans', '?')}**")
+        parts.append(f"- Phiếu mượn quá hạn: **{summary.get('overdueLoans', '?')}**")
+        parts.append(f"- Tổng tiền phạt chưa thu: **{summary.get('totalFines', '?')}**đ")
+        parts.append("")
+
+    books = system_context.get("books")
+    if books and isinstance(books, list):
+        parts.append(f"### Danh sách sách ({len(books)} đầu sách, sắp xếp theo tồn kho)")
+        for b in books[:30]:
+            title = b.get("title", "?")
+            qty = b.get("quantity", 0)
+            author = b.get("author", "")
+            flag = " ⚠️ TỒN THẤP" if 0 < qty <= 10 else (" 🔴 HẾT HÀNG" if qty == 0 else "")
+            author_str = f" — {author}" if author else ""
+            parts.append(f"- **{title}**{author_str}: {qty} bản{flag}")
+        if len(books) > 30:
+            parts.append(f"  ... và {len(books) - 30} đầu sách khác")
+        parts.append("")
+
+    loans = system_context.get("recentLoans")
+    if loans and isinstance(loans, list):
+        parts.append(f"### Phiếu mượn gần đây ({len(loans)} phiếu)")
+        for l in loans[:15]:
+            num = l.get("loan_number", "?")
+            cust = l.get("customer_name", "?")
+            status = l.get("status", "?")
+            due = l.get("due_date", "")[:10] if l.get("due_date") else "?"
+            flag = " ⚠️ QUÁ HẠN" if status == "OVERDUE" else ""
+            parts.append(f"- {num}: {cust} — {status} — hạn trả: {due}{flag}")
+        parts.append("")
+
+    fines = system_context.get("recentFines")
+    if fines and isinstance(fines, list) and len(fines) > 0:
+        parts.append(f"### Phạt gần đây ({len(fines)} khoản)")
+        for f in fines[:10]:
+            cust = f.get("customer_name", "?")
+            amount = f.get("amount", 0)
+            status = f.get("status", "?")
+            ftype = f.get("fine_type", "?")
+            parts.append(f"- {cust}: {ftype} — {amount:,}đ — {status}")
+        parts.append("")
+
+    movements = system_context.get("recentMovements")
+    if movements and isinstance(movements, list) and len(movements) > 0:
+        parts.append(f"### Biến động kho gần đây ({len(movements)} dòng)")
+        for m in movements[:10]:
+            mtype = m.get("movement_type", "?")
+            book = m.get("book_title", "?")
+            qty = m.get("quantity", 0)
+            wh = m.get("warehouse_name", "?")
+            parts.append(f"- {mtype}: {book} x{qty} @ {wh}")
+        parts.append("")
+
+    return "\n".join(parts)
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: list[ChatMessage] = []
+    system_context: dict | None = None
+
+
+async def _chat_with_groq(messages: list[dict]) -> tuple[str | None, bool]:
+    if not GROQ_API_KEY:
+        return None, False
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
+            resp = await http_client.post(
+                f"{GROQ_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": GROQ_SUMMARY_MODEL,
+                    "messages": messages,
+                    "temperature": 0.4,
+                    "max_tokens": 800,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return reply.strip() or None, bool(reply.strip())
+    except Exception as exc:
+        logger.warning("Groq chat failed: %s", exc)
+        return None, False
+
+
+async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
+    try:
+        client = ollama.Client(host=OLLAMA_HOST)
+        prompt_parts = []
+        for msg in messages:
+            role_label = "User" if msg["role"] == "user" else "Assistant"
+            if msg["role"] == "system":
+                role_label = "System"
+            prompt_parts.append(f"{role_label}: {msg['content']}")
+        prompt_parts.append("Assistant:")
+        full_prompt = "\n".join(prompt_parts)
+
+        response = await asyncio.to_thread(
+            _ollama_generate_with_summary_fallback,
+            client,
+            full_prompt,
+            {"temperature": 0.4, "num_predict": 800},
+        )
+        reply = (response.get("response") or "").strip()
+        return reply or None, bool(reply)
+    except Exception as exc:
+        logger.warning("Ollama chat failed: %s", exc)
+        return None, False
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    context_block = _build_context_block(req.system_context)
+    system_content = CHAT_SYSTEM_PROMPT + context_block
+
+    messages = [{"role": "system", "content": system_content}]
+
+    for msg in req.conversation_history[-10:]:
+        messages.append({"role": msg.role, "content": msg.content})
+
+    messages.append({"role": "user", "content": req.message.strip()})
+
+    reply, groq_ok = await _chat_with_groq(messages)
+    if groq_ok and reply:
+        return {"reply": reply, "ai_provider": "groq"}
+
+    reply, ollama_ok = await _chat_with_ollama(messages)
+    if ollama_ok and reply:
+        return {"reply": reply, "ai_provider": "ollama"}
+
+    return {
+        "reply": "Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏",
+        "ai_provider": "fallback",
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# AI Recommendations — Gợi ý sách cá nhân hóa
+# ────────────────────────────────────────────────────────────────────────────────
+
+RECOMMENDATION_SYSTEM_PROMPT = (
+    "Bạn là hệ thống gợi ý sách thông minh của thư viện SmartBook.\n\n"
+    "## Nhiệm vụ\n"
+    "Dựa trên lịch sử mượn sách và danh mục sách hiện có, hãy:\n"
+    "1. Phân tích sở thích đọc (thể loại, tác giả ưa thích)\n"
+    "2. Gợi ý sách phù hợp TỪ DANH MỤC HIỆN CÓ\n"
+    "3. Giải thích ngắn gọn lý do gợi ý\n\n"
+    "## Quy tắc\n"
+    "- CHỈ gợi ý sách có trong [DANH MỤC SÁCH]. KHÔNG bịa ra sách không tồn tại.\n"
+    "- KHÔNG gợi ý sách mà người dùng đã mượn.\n"
+    "- Ưu tiên sách còn hàng (quantity > 0).\n"
+    "- Mỗi gợi ý phải có: book_id, title, author, category, reason (lý do gợi ý tiếng Việt).\n"
+    "- Trả về ĐÚNG JSON array, không có markdown hay text thừa.\n"
+    "- Tối đa 6 gợi ý, tối thiểu 1.\n\n"
+    "## Định dạng output (JSON array)\n"
+    '[{"book_id":"...","title":"...","author":"...","category":"...","reason":"...","score":0.95}]\n'
+    "score là độ phù hợp từ 0.0 đến 1.0.\n"
+)
+
+
+class RecommendationRequest(BaseModel):
+    borrow_history: list[dict] = []
+    catalog_books: list[dict] = []
+
+
+def _build_recommendation_prompt(req: RecommendationRequest) -> str:
+    parts = []
+
+    if req.borrow_history:
+        parts.append("[LỊCH SỬ MƯỢN SÁCH]")
+        for b in req.borrow_history[:30]:
+            title = b.get("title", "?")
+            author = b.get("author", "")
+            category = b.get("category", "")
+            parts.append(f"- {title} | {author} | {category}")
+    else:
+        parts.append("[LỊCH SỬ MƯỢN SÁCH]: Không có — hãy gợi ý sách phổ biến nhất.")
+
+    parts.append("")
+
+    if req.catalog_books:
+        parts.append(f"[DANH MỤC SÁCH] ({len(req.catalog_books)} đầu sách)")
+        for b in req.catalog_books[:60]:
+            bid = b.get("id", "?")
+            title = b.get("title", "?")
+            author = b.get("author", "")
+            category = b.get("category", "")
+            qty = b.get("quantity", 0)
+            flag = " (HẾT HÀNG)" if qty == 0 else ""
+            parts.append(f"- [{bid}] {title} | {author} | {category} | qty={qty}{flag}")
+
+    parts.append("\nHãy trả về JSON array gợi ý sách.")
+    return "\n".join(parts)
+
+
+def _parse_recommendation_json(text: str) -> list[dict]:
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1:
+        text = text[start : end + 1]
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data[:6]
+    except json.JSONDecodeError:
+        pass
+    return []
+
+
+@app.post("/recommendations")
+async def get_recommendations(req: RecommendationRequest):
+    user_prompt = _build_recommendation_prompt(req)
+
+    messages = [
+        {"role": "system", "content": RECOMMENDATION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    reply, groq_ok = await _chat_with_groq(messages)
+    if groq_ok and reply:
+        recs = _parse_recommendation_json(reply)
+        if recs:
+            return {"recommendations": recs, "ai_provider": "groq"}
+
+    reply, ollama_ok = await _chat_with_ollama(messages)
+    if ollama_ok and reply:
+        recs = _parse_recommendation_json(reply)
+        if recs:
+            return {"recommendations": recs, "ai_provider": "ollama"}
+
+    return {"recommendations": [], "ai_provider": "fallback"}
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Reading Analytics — Thống kê đọc sách
+# ────────────────────────────────────────────────────────────────────────────────
+
+class ReadingStatsRequest(BaseModel):
+    loans: list[dict] = []
+    reviews: list[dict] = []
+
+
+@app.post("/reading-stats")
+async def get_reading_stats(req: ReadingStatsRequest):
+    """Aggregate reading statistics from loan data."""
+    total_books = 0
+    categories: dict[str, int] = {}
+    authors: dict[str, int] = {}
+    monthly: dict[str, int] = {}
+    total_days = 0
+    returned_count = 0
+
+    from datetime import datetime
+
+    for loan in req.loans:
+        items = loan.get("loan_items") or []
+        if not isinstance(items, list):
+            items = []
+        total_books += len(items)
+        raw_borrow = loan.get("borrow_date") or ""
+        borrow_date = str(raw_borrow)[:10] if raw_borrow else ""
+        if borrow_date:
+            month_key = borrow_date[:7]
+            monthly[month_key] = monthly.get(month_key, 0) + len(items)
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            cat = item.get("category") or ""
+            if cat:
+                categories[cat] = categories.get(cat, 0) + 1
+            author = item.get("author") or ""
+            if author:
+                authors[author] = authors.get(author, 0) + 1
+            raw_return = item.get("return_date")
+            if raw_return and borrow_date:
+                try:
+                    rd_str = str(raw_return)[:10]
+                    bd = datetime.fromisoformat(borrow_date.replace("Z", "+00:00"))
+                    rd = datetime.fromisoformat(rd_str.replace("Z", "+00:00"))
+                    total_days += max(0, (rd - bd).days)
+                    returned_count += 1
+                except Exception:
+                    pass
+
+    sorted_months = sorted(monthly.items())[-12:]
+    streak = 0
+    for _, count in reversed(sorted_months):
+        if count > 0:
+            streak += 1
+        else:
+            break
+
+    avg_days = round(total_days / returned_count, 1) if returned_count > 0 else 0
+
+    top_categories = sorted(categories.items(), key=lambda x: -x[1])[:8]
+    top_authors = sorted(authors.items(), key=lambda x: -x[1])[:5]
+
+    badges = []
+    if total_books >= 50:
+        badges.append({"id": "bookworm", "name": "Mọt sách", "icon": "📚", "description": "Đã đọc 50+ sách"})
+    elif total_books >= 20:
+        badges.append({"id": "reader", "name": "Người đọc chăm chỉ", "icon": "📖", "description": "Đã đọc 20+ sách"})
+    elif total_books >= 10:
+        badges.append({"id": "starter", "name": "Khởi đầu tốt", "icon": "🌱", "description": "Đã đọc 10+ sách"})
+    if avg_days > 0 and avg_days <= 7:
+        badges.append({"id": "speed", "name": "Đọc nhanh", "icon": "⚡", "description": "Trung bình trả sách trong 7 ngày"})
+    if streak >= 6:
+        badges.append({"id": "streak6", "name": "Nửa năm không nghỉ", "icon": "🔥", "description": "6 tháng liên tục mượn sách"})
+    elif streak >= 3:
+        badges.append({"id": "streak3", "name": "Đều đặn", "icon": "✨", "description": "3 tháng liên tục mượn sách"})
+    if len(categories) >= 5:
+        badges.append({"id": "diverse", "name": "Đa dạng", "icon": "🌈", "description": "Đọc 5+ thể loại khác nhau"})
+
+    return {
+        "total_books": total_books,
+        "avg_borrow_days": avg_days,
+        "streak_months": streak,
+        "monthly_data": [{"month": m, "count": c} for m, c in sorted_months],
+        "top_categories": [{"name": n, "count": c} for n, c in top_categories],
+        "top_authors": [{"name": n, "count": c} for n, c in top_authors],
+        "badges": badges,
+    }

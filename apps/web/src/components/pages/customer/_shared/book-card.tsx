@@ -1,15 +1,17 @@
 import { CustomerCatalogBook } from '@/services/customer-catalog';
 import { StatusBadge } from './status-badge';
 import { BookCoverPlaceholder } from './book-cover-placeholder';
+import { Star } from 'lucide-react';
 
 interface BookCardProps {
   book: CustomerCatalogBook;
   onView: (bookId: string) => void;
   onReserve: (book: CustomerCatalogBook) => void;
   reserving?: boolean;
+  ratingInfo?: { averageRating: number; totalReviews: number } | null;
 }
 
-export function BookCard({ book, onView, onReserve, reserving = false }: BookCardProps) {
+export function BookCard({ book, onView, onReserve, reserving = false, ratingInfo }: BookCardProps) {
   const stock = Number(book.quantity || 0);
   const isAvailable = stock > 0;
   const canReserve = Boolean(book.reservable && isAvailable);
@@ -31,7 +33,28 @@ export function BookCard({ book, onView, onReserve, reserving = false }: BookCar
       </h3>
       <p className="mt-1 text-[12px] text-slate-500">{book.author || 'Unknown author'}</p>
 
-      <div className={`mt-3 text-[11px] ${isAvailable ? 'text-emerald-600' : 'text-rose-500'}`}>{stockLabel}</div>
+      {/* Rating */}
+      <div className="mt-2 flex items-center gap-1.5">
+        {ratingInfo && ratingInfo.totalReviews > 0 ? (
+          <>
+            <div className="flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  size={12}
+                  className={s <= Math.round(ratingInfo.averageRating) ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-300'}
+                />
+              ))}
+            </div>
+            <span className="text-[11px] font-medium text-slate-600">{ratingInfo.averageRating}</span>
+            <span className="text-[11px] text-slate-400">({ratingInfo.totalReviews})</span>
+          </>
+        ) : (
+          <span className="text-[11px] text-slate-400">No reviews</span>
+        )}
+      </div>
+
+      <div className={`mt-2 text-[11px] ${isAvailable ? 'text-emerald-600' : 'text-rose-500'}`}>{stockLabel}</div>
 
       <div className="mt-3 flex items-center gap-2">
         <button

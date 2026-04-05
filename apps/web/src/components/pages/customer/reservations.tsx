@@ -39,9 +39,9 @@ export function CustomerReservationsPage() {
     }
   };
 
-  const pendingCount = rows.filter(r => r.status === 'PENDING' || r.status === 'READY_FOR_PICKUP').length;
-  const pickedCount = rows.filter(r => r.status === 'PICKED_UP' || r.status === 'COMPLETED').length;
-  const cancelledCount = rows.filter(r => r.status === 'CANCELLED' || r.status === 'EXPIRED').length;
+  const pendingCount = rows.filter(r => r.status === 'PENDING').length;
+  const readyCount = rows.filter(r => r.status === 'READY_FOR_PICKUP').length;
+  const completedCount = rows.filter(r => r.status === 'PICKED_UP' || r.status === 'COMPLETED' || r.status === 'CANCELLED' || r.status === 'EXPIRED').length;
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
@@ -59,7 +59,7 @@ export function CustomerReservationsPage() {
         <button
           onClick={() => void load()}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -67,11 +67,13 @@ export function CustomerReservationsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Pending" value={pendingCount} icon={CalendarClock} variant="warning" />
-        <StatCard label="Ready for Pickup" value={pickedCount} icon={CalendarClock} variant="info" />
-        <StatCard label="Completed / Cancelled" value={cancelledCount} icon={CalendarClock} variant="default" />
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Pending" value={pendingCount} icon={CalendarClock} variant="warning" />
+          <StatCard label="Ready for Pickup" value={readyCount} icon={CalendarClock} variant="info" />
+          <StatCard label="Completed / Cancelled" value={completedCount} icon={CalendarClock} variant="default" />
+        </div>
+      )}
 
       {/* Content */}
       {loading ? (

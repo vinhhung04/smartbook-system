@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Bell, RefreshCw } from 'lucide-react';
+import { Bell, RefreshCw, CheckCheck } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { NotificationListItem } from './_shared/notification-list-item';
+import { toast } from 'sonner';
 
 export function CustomerNotificationsPage() {
   const [rows, setRows] = useState<any[]>([]);
@@ -50,11 +51,24 @@ export function CustomerNotificationsPage() {
             <p className="text-[13px] text-muted-foreground">Reminders, updates, and account alerts</p>
           </div>
         </div>
-        <button onClick={() => void loadNotifications()} disabled={loading}
-          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={async () => {
+            try {
+              await customerBorrowService.markAllNotificationsRead();
+              setRows((prev) => prev.map((r) => ({ ...r, read_at: r.read_at || new Date().toISOString() })));
+              toast.success('All notifications marked as read');
+            } catch (err) { toast.error(getApiErrorMessage(err, 'Failed')); }
+          }} disabled={loading || rows.every((r) => r.read_at)}
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            <CheckCheck className="w-3.5 h-3.5" />
+            Mark all read
+          </button>
+          <button onClick={() => void loadNotifications()} disabled={loading}
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}

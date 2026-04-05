@@ -11,7 +11,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#f4f5fa]">
+    <div className="min-h-screen bg-background">
       <div className="flex min-h-screen">
         {/* Desktop sidebar */}
         <div className={['hidden lg:block shrink-0', isDesktopCollapsed ? 'w-[72px]' : 'w-[268px]'].join(' ')}>
@@ -29,7 +29,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-y-0 left-0 h-full w-[268px] bg-white shadow-2xl"
+              className="absolute inset-y-0 left-0 h-full w-[268px] bg-card shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
               <CustomerSidebar onNavigate={() => setIsMobileOpen(false)} />

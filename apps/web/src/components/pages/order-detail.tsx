@@ -257,7 +257,7 @@ export function OrderDetailPage() {
           >
             <SectionCard title="Actions" className="overflow-hidden">
               <div className="space-y-2">
-                <button className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15 font-medium">
+                <button onClick={() => window.print()} className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15 font-medium">
                   <FileText className="w-3.5 h-3.5" /> Print
                 </button>
                 <NavLink

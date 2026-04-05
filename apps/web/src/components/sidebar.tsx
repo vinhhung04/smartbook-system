@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, Package, FileText, Warehouse,
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
   UserRound, CalendarClock, HandCoins, Layers3,
-  MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt,
+  MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 
@@ -26,6 +26,7 @@ const navGroups = [
       { to: "/warehouses", icon: Warehouse, label: "Warehouses", activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/shelves", icon: Layers3, label: "Shelves", activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
       { to: "/movements", icon: Activity, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/suppliers", icon: Truck, label: "Suppliers", activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
     ],
   },
   {
@@ -35,6 +36,7 @@ const navGroups = [
     items: [
       { to: "/ai-import", icon: Sparkles, label: "AI Import", activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
       { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+      { to: "/reports", icon: BarChart3, label: "Reports", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
     ],
   },
   {
@@ -47,6 +49,7 @@ const navGroups = [
       { to: "/borrow/reservations", icon: CalendarClock, label: "Reservations", activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10" },
       { to: "/borrow/loans", icon: HandCoins, label: "Loans", activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/borrow/fines", icon: Receipt, label: "Fines", activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
+      { to: "/membership-plans", icon: Crown, label: "Membership Plans", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
     ],
   },
   {
@@ -56,6 +59,7 @@ const navGroups = [
     items: [
       { to: "/users", icon: Users, label: "Users", activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
       { to: "/roles", icon: Shield, label: "Roles", activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/audit-trail", icon: ScrollText, label: "Audit Trail", activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
     ],
   },
 ];
@@ -73,10 +77,10 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     <motion.aside
       animate={{ width: collapsed ? 68 : 256 }}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-      className="h-screen bg-[#fafbfe] border-r border-[#e2e4ed] flex flex-col shrink-0 relative z-20"
+      className="h-screen bg-[#fafbfe] dark:bg-slate-950 border-r border-border flex flex-col shrink-0 relative z-20"
     >
       {/* Logo */}
-      <div className="h-[56px] flex items-center justify-between px-4 border-b border-[#e2e4ed]">
+      <div className="h-[56px] flex items-center justify-between px-4 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/25">
             <BookOpen className="w-4 h-4 text-white" />
@@ -89,7 +93,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             )}
           </AnimatePresence>
         </div>
-        <button onClick={onToggle} className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-indigo-50 transition-colors text-muted-foreground hover:text-indigo-600" aria-label="Toggle sidebar">
+        <button onClick={onToggle} className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400" aria-label="Toggle sidebar">
           <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.24 }}>
             <ChevronLeft className="w-3.5 h-3.5" />
           </motion.div>
@@ -137,7 +141,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 end={item.to === "/"}
                 className={({ isActive }) =>
                   `group flex items-center gap-2.5 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-160 relative overflow-hidden ${
-                    isActive ? item.textColor : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                    isActive ? item.textColor : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50"
                   } ${collapsed ? "justify-center" : ""}`
                 }
               >
@@ -146,12 +150,12 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                     {isActive && (
                       <motion.div
                         layoutId="sidebar-active-pill"
-                        className={`absolute inset-0 rounded-[9px] bg-gradient-to-r ${item.activeColor} border border-white/50`}
+                        className={`absolute inset-0 rounded-[9px] bg-gradient-to-r ${item.activeColor} border border-white/50 dark:border-white/10`}
                         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                       />
                     )}
                     <div className={`w-[22px] h-[22px] rounded-[6px] flex items-center justify-center shrink-0 relative z-10 transition-colors duration-160 ${
-                      isActive ? item.iconBg : "group-hover:bg-slate-100"
+                      isActive ? item.iconBg : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"
                     }`}>
                       <item.icon className="w-[14px] h-[14px]" />
                     </div>
@@ -172,8 +176,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </nav>
 
       {/* User */}
-      <div className="border-t border-[#e2e4ed] p-3">
-          <div className={`flex items-center gap-2.5 px-2 py-2.5 rounded-[10px] bg-gradient-to-r from-indigo-50/80 to-violet-50/50 border border-indigo-100/40 cursor-pointer hover:border-indigo-200/60 transition-all duration-160 ${collapsed ? "justify-center" : ""}`}>
+      <div className="border-t border-border p-3">
+          <div className={`flex items-center gap-2.5 px-2 py-2.5 rounded-[10px] bg-gradient-to-r from-indigo-50/80 to-violet-50/50 dark:from-indigo-500/10 dark:to-violet-500/5 border border-indigo-100/40 dark:border-indigo-500/20 cursor-pointer hover:border-indigo-200/60 dark:hover:border-indigo-400/30 transition-all duration-160 ${collapsed ? "justify-center" : ""}`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0 shadow-sm shadow-indigo-500/20">
             <span className="text-[10px] text-white" style={{ fontWeight: 700 }}>{initials}</span>
           </div>

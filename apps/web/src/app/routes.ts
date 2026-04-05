@@ -21,6 +21,7 @@ import { BorrowLoanDetailPage } from "@/components/pages/borrow-loan-detail";
 import { BorrowFinesPage } from "@/components/pages/borrow-fines";
 import { UsersPage } from "@/components/pages/users";
 import { RolesPage } from "@/components/pages/roles";
+import { ReportsPage } from "@/components/pages/reports";
 import { PutawayPage } from "@/components/pages/putaway";
 import { PutawayDetailPage } from "@/components/pages/putaway-detail";
 import { PutawayExecutePage } from "@/components/pages/putaway-execute";
@@ -43,6 +44,12 @@ import { CustomerLoansPage } from "@/components/pages/customer/loans";
 import { CustomerLoanDetailPage } from "@/components/pages/customer/loan-detail";
 import { CustomerFinesPage } from "@/components/pages/customer/fines";
 import { CustomerNotificationsPage } from "@/components/pages/customer/notifications";
+import { CustomerReadingAnalyticsPage } from "@/components/pages/customer/reading-analytics";
+import { CustomerWishlistPage } from "@/components/pages/customer/wishlist";
+import { AuditTrailPage } from "@/components/pages/audit-trail";
+import { MembershipPlansPage } from "@/components/pages/membership-plans";
+import { SuppliersPage } from "@/components/pages/suppliers";
+import { NotFoundPage } from "@/components/pages/not-found";
 import { authService } from "@/services/auth";
 
 async function requireAuthLoader() {
@@ -120,6 +127,8 @@ export const router = createBrowserRouter([
       { path: 'loans/:id', Component: CustomerLoanDetailPage },
       { path: 'fines', Component: CustomerFinesPage },
       { path: 'notifications', Component: CustomerNotificationsPage },
+      { path: 'reading-analytics', Component: CustomerReadingAnalyticsPage },
+      { path: 'wishlist', Component: CustomerWishlistPage },
     ],
   },
   {
@@ -152,9 +161,13 @@ export const router = createBrowserRouter([
       { path: "borrow/loans", Component: BorrowLoansPage },
       { path: "borrow/loans/:id", Component: BorrowLoanDetailPage },
       { path: "borrow/fines", Component: BorrowFinesPage },
+      { path: "reports", Component: ReportsPage },
+      { path: "audit-trail", Component: AuditTrailPage },
+      { path: "membership-plans", Component: MembershipPlansPage },
+      { path: "suppliers", Component: SuppliersPage },
       { path: "users", Component: UsersPage },
       { path: "roles", Component: RolesPage },
-      { path: "*", Component: DashboardPage },
+      { path: "*", Component: NotFoundPage },
     ],
   },
 ]);

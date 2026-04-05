@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Lock, Plus, Unlock, X } from "lucide-react";
+import { Lock, Plus, Unlock, X, Edit, Users } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { userService } from "@/services/user";
@@ -71,6 +71,7 @@ export function UsersPage() {
   const [creating, setCreating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateUserForm>(EMPTY_FORM);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
 
   const loadData = async () => {
     try {
@@ -141,6 +142,42 @@ export function UsersPage() {
     }
   };
 
+  const openEditUser = (user: UserRow) => {
+    setEditingUser(user);
+    setForm({
+      username: user.username,
+      full_name: user.full_name,
+      email: user.email || "",
+      phone: user.phone || "",
+      password: "",
+      status: user.status,
+      role_ids: (user.roles || []).map((r) => r.id),
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!editingUser) return;
+    if (!form.full_name.trim()) { toast.error("Ho ten la bat buoc"); return; }
+    try {
+      setCreating(true);
+      await userService.update(editingUser.id, {
+        full_name: form.full_name.trim(),
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim() || undefined,
+        status: form.status,
+        role_ids: form.role_ids,
+      });
+      toast.success("Da cap nhat user");
+      setForm(EMPTY_FORM);
+      setShowCreateModal(false);
+      setEditingUser(null);
+      await loadData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Cap nhat user that bai"));
+    } finally { setCreating(false); }
+  };
+
   const handleToggleLock = async (user: UserRow) => {
     const nextStatus = user.status === "LOCKED" ? "ACTIVE" : "LOCKED";
     try {
@@ -171,12 +208,17 @@ export function UsersPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Users</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Quan ly tai khoan nguoi dung trong he thong</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25">
+              <Users className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">Users</h1>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">Quan ly tai khoan nguoi dung trong he thong</p>
+            </div>
           </div>
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }}>
             <Plus className="h-3.5 w-3.5" /> Tao user moi
           </Button>
         </div>
@@ -193,7 +235,8 @@ export function UsersPage() {
 
       <FadeItem>
         <SectionCard noPadding>
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {[
@@ -244,6 +287,13 @@ export function UsersPage() {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={() => openEditUser(user)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-indigo-700 hover:bg-indigo-100"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          Sua
+                        </button>
+                        <button
                           onClick={() => void handleToggleLock(user)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
                         >
@@ -265,6 +315,7 @@ export function UsersPage() {
               )}
             </tbody>
           </table>
+          </div>
         </SectionCard>
       </FadeItem>
 
@@ -272,16 +323,16 @@ export function UsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[16px] font-semibold">Tao user moi</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-muted-foreground hover:text-foreground">
+              <h3 className="text-[16px] font-semibold">{editingUser ? "Sua user" : "Tao user moi"}</h3>
+              <button onClick={() => { setShowCreateModal(false); setEditingUser(null); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
-                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Ho ten *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Ho ten *" className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -290,8 +341,8 @@ export function UsersPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mat khau *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
-                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10">
+                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mat khau *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
                   <option value="LOCKED">LOCKED</option>
@@ -313,12 +364,11 @@ export function UsersPage() {
             </div>
 
             <div className="mt-5 flex items-center gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
+              <Button variant="outline" className="flex-1" onClick={() => { setShowCreateModal(false); setEditingUser(null); }}>
                 Huy
               </Button>
-              <Button className="flex-1" onClick={() => void handleCreateUser()} disabled={creating}>
-                {creating ? <Unlock className="h-3.5 w-3.5" /> : null}
-                {creating ? "Dang tao..." : "Tao user"}
+              <Button className="flex-1" onClick={() => void (editingUser ? handleEditUser() : handleCreateUser())} disabled={creating}>
+                {creating ? "Dang xu ly..." : editingUser ? "Cap nhat" : "Tao user"}
               </Button>
             </div>
           </motion.div>

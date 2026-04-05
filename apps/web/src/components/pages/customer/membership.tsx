@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Info } from 'lucide-react';
+import { ShieldCheck, Info, QrCode } from 'lucide-react';
 import { customerService, MembershipInfo } from '@/services/customer';
 import { getApiErrorMessage } from '@/services/api';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
+import { QRCode } from '@/components/ui/qr-code';
 
 export function CustomerMembershipPage() {
   const [membership, setMembership] = useState<MembershipInfo | null>(null);
@@ -82,6 +83,19 @@ export function CustomerMembershipPage() {
               </div>
             </div>
           ))}
+        </div>
+      </SectionCard>
+
+      {/* QR Code */}
+      <SectionCard title="Mã QR thẻ thành viên" subtitle="Xuất trình khi đến thư viện" icon={QrCode}>
+        <div className="flex flex-col items-center gap-3 py-4">
+          <div className="p-3 bg-white rounded-xl border-2 border-indigo-100 shadow-sm">
+            <QRCode value={`SMARTBOOK:MEMBER:${membership.card_number || membership.membership_id}`} size={180} />
+          </div>
+          <p className="text-[14px] font-mono text-slate-700" style={{ fontWeight: 600, letterSpacing: '0.05em' }}>
+            {membership.card_number || membership.membership_id || 'N/A'}
+          </p>
+          <p className="text-[11px] text-slate-400">Quét mã này tại quầy để mượn/trả sách nhanh chóng</p>
         </div>
       </SectionCard>
 

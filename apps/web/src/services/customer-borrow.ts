@@ -96,4 +96,81 @@ export const customerBorrowService = {
     const response = await gatewayAPI.get('/my/notifications');
     return response.data;
   },
+
+  async submitReview(payload: { book_id: string; rating: number; comment?: string }) {
+    const response = await gatewayAPI.post('/my/reviews', payload);
+    return response.data;
+  },
+
+  async getMyReviewForBook(bookId: string) {
+    const response = await gatewayAPI.get(`/my/reviews/book/${bookId}`);
+    return response.data;
+  },
+
+  async deleteMyReview(bookId: string) {
+    const response = await gatewayAPI.delete(`/my/reviews/book/${bookId}`);
+    return response.data;
+  },
+
+  async getBookReviews(bookId: string, params?: { page?: number; pageSize?: number }) {
+    const response = await gatewayAPI.get(`/borrow/reviews/book/${bookId}`, { params });
+    return response.data;
+  },
+
+  async getMyWishlist() {
+    const response = await gatewayAPI.get('/my/wishlists');
+    return response.data;
+  },
+
+  async addToWishlist(bookId: string) {
+    const response = await gatewayAPI.post('/my/wishlists', { book_id: bookId });
+    return response.data;
+  },
+
+  async removeFromWishlist(bookId: string) {
+    const response = await gatewayAPI.delete(`/my/wishlists/${bookId}`);
+    return response.data;
+  },
+
+  async getMyAvailabilityAlerts() {
+    const response = await gatewayAPI.get('/my/availability-alerts');
+    return response.data;
+  },
+
+  async subscribeAvailabilityAlert(bookId: string) {
+    const response = await gatewayAPI.post('/my/availability-alerts', { book_id: bookId });
+    return response.data;
+  },
+
+  async unsubscribeAvailabilityAlert(bookId: string) {
+    const response = await gatewayAPI.delete(`/my/availability-alerts/${bookId}`);
+    return response.data;
+  },
+
+  async markNotificationRead(id: string) {
+    const response = await gatewayAPI.patch(`/my/notifications/${id}/read`);
+    return response.data;
+  },
+
+  async markAllNotificationsRead() {
+    const response = await gatewayAPI.patch('/my/notifications/read-all');
+    return response.data;
+  },
+
+  async getMyPreferences() {
+    const response = await gatewayAPI.get('/my/preferences');
+    return response.data;
+  },
+
+  async updateMyPreferences(data: { notify_email?: boolean; notify_sms?: boolean; notify_in_app?: boolean; preferred_language?: string }) {
+    const response = await gatewayAPI.patch('/my/preferences', data);
+    return response.data;
+  },
+
+  async getBookRatingStats(bookIds: string[]) {
+    const response = await gatewayAPI.get('/borrow/reviews/stats', {
+      params: { bookIds: bookIds.join(',') },
+    });
+    return response.data as { data: Record<string, { averageRating: number; totalReviews: number }> };
+  },
 };

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
-import { Loader2, RefreshCw, Plus, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest } from '@/services/borrow';
+import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 
 const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
@@ -25,6 +26,12 @@ export function BorrowLoansPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | LoanStatus>('ALL');
+  const [showDirectLoan, setShowDirectLoan] = useState(false);
+  const [dlCustomers, setDlCustomers] = useState<any[]>([]);
+  const [dlBooks, setDlBooks] = useState<any[]>([]);
+  const [dlForm, setDlForm] = useState({ customer_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[], borrow_days: 14 });
+  const [dlSaving, setDlSaving] = useState(false);
+  const [dlBookSearch, setDlBookSearch] = useState('');
 
   const loadLoans = async () => {
     try {
@@ -107,6 +114,36 @@ export function BorrowLoansPage() {
     }
   };
 
+  const openDirectLoanModal = async () => {
+    setShowDirectLoan(true);
+    setDlForm({ customer_id: '', items: [{ variant_id: '', quantity: 1 }], borrow_days: 14 });
+    try {
+      const [custRes, bookRes] = await Promise.all([borrowService.getCustomers(), bookService.getAll({ page: 1, pageSize: 200 })]);
+      setDlCustomers(custRes.data ?? []);
+      setDlBooks(Array.isArray(bookRes) ? bookRes : bookRes?.data ?? []);
+    } catch { /* ignore */ }
+  };
+
+  const submitDirectLoan = async () => {
+    if (!dlForm.customer_id) { toast.error('Select a customer'); return; }
+    const validItems = dlForm.items.filter((i) => i.variant_id);
+    if (validItems.length === 0) { toast.error('Add at least one book'); return; }
+    try {
+      setDlSaving(true);
+      await borrowService.createDirectLoan({
+        customer_id: dlForm.customer_id,
+        source: 'COUNTER',
+        items: validItems,
+        borrow_days: dlForm.borrow_days,
+      });
+      toast.success('Direct loan created');
+      setShowDirectLoan(false);
+      await loadLoans();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to create loan'));
+    } finally { setDlSaving(false); }
+  };
+
   const reviewRenewal = async (loanId: string, decision: 'APPROVE' | 'REJECT') => {
     const reason = decision === 'REJECT'
       ? window.prompt('Reason for rejection (optional):', '') || undefined
@@ -144,15 +181,14 @@ export function BorrowLoansPage() {
             <p className="text-sm text-muted-foreground">{loans.length} loans</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadLoans()}
-          className="gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
+            <Plus className="w-4 h-4" /> Direct Loan
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void loadLoans()} className="gap-2">
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </Button>
+        </div>
       </motion.div>
 
       {/* Filter Bar */}
@@ -344,6 +380,62 @@ export function BorrowLoansPage() {
           </div>
         </SectionCard>
       </motion.div>
+
+      {showDirectLoan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[16px] font-semibold">Create Direct Loan</h3>
+              <button onClick={() => setShowDirectLoan(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Customer</label>
+                <select value={dlForm.customer_id} onChange={(e) => setDlForm({ ...dlForm, customer_id: e.target.value })}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400">
+                  <option value="">Select customer...</option>
+                  {dlCustomers.map((c: any) => <option key={c.id} value={c.id}>{c.full_name} ({c.customer_code})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Borrow Days</label>
+                <input type="number" value={dlForm.borrow_days} onChange={(e) => setDlForm({ ...dlForm, borrow_days: Number(e.target.value) || 14 })}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" min={1} max={90} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Books</label>
+                <input value={dlBookSearch} onChange={(e) => { setDlBookSearch(e.target.value); bookService.getAll({ search: e.target.value, page: 1, pageSize: 50 }).then((res: any) => setDlBooks(Array.isArray(res) ? res : res?.data ?? [])).catch(() => {}); }}
+                  placeholder="Search books..." className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 mb-2" />
+                {dlForm.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <select value={item.variant_id} onChange={(e) => { const items = [...dlForm.items]; items[idx].variant_id = e.target.value; setDlForm({ ...dlForm, items }); }}
+                      className="flex-1 h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                      <option value="">Select book variant...</option>
+                      {dlBooks.map((b: any) => (b.variants || []).map((v: any) => <option key={v.id} value={v.id}>{b.title} - {v.format || v.isbn13 || v.id.slice(0, 8)}</option>))}
+                    </select>
+                    <input type="number" value={item.quantity} min={1} max={5} onChange={(e) => { const items = [...dlForm.items]; items[idx].quantity = Number(e.target.value) || 1; setDlForm({ ...dlForm, items }); }}
+                      className="w-16 h-9 px-2 rounded-lg border border-slate-200 text-[13px] text-center" />
+                    {dlForm.items.length > 1 && (
+                      <button onClick={() => { const items = dlForm.items.filter((_, i) => i !== idx); setDlForm({ ...dlForm, items }); }}
+                        className="h-9 px-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"><X className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => setDlForm({ ...dlForm, items: [...dlForm.items, { variant_id: '', quantity: 1 }] })}
+                  className="text-[12px] text-indigo-600 hover:underline">+ Add another book</button>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDirectLoan(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={() => void submitDirectLoan()} disabled={dlSaving}>
+                {dlSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                {dlSaving ? 'Creating...' : 'Create Loan'}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

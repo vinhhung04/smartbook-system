@@ -501,8 +501,8 @@ export function BorrowReservationsPage() {
                     >
                       <td className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{reservation.variant_id}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{reservation.warehouse_id}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.variant_id}>{reservation.variant_id?.slice(0, 8)}...</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.quantity}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
                       <td className="px-5 py-3.5">

@@ -180,8 +180,8 @@ Luồng request điển hình:
   - `README.md`
 - Tài liệu module:
   - `apps/web/README.md`
-  - `services/inventory-service/README.md`
-  - `services/ai-service/README.md`
+  - `docs/SERVICES/INVENTORY_SERVICE.md`
+  - `docs/SERVICES/AI_SERVICE.md`
 - Compose phụ tham khảo:
   - `smartbook-backend/docker-compose.yml`
 

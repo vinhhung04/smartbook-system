@@ -1,7 +1,9 @@
-import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide-react';
 import { useLocation } from 'react-router';
 import { NotificationBellDropdown } from './notification-bell-dropdown';
 import { UserAvatarMenu } from './user-avatar-menu';
+import { LanguageToggle } from '@/lib/i18n';
+import { useTheme } from '@/lib/theme';
 
 const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; subtitle: string }> = [
   { test: (pathname) => pathname === '/customer', title: 'Dashboard', subtitle: 'Overview of your library activity' },
@@ -12,12 +14,23 @@ const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; 
   { test: (pathname) => pathname.startsWith('/customer/fines'), title: 'My Fines', subtitle: 'Outstanding balances and wallet' },
   { test: (pathname) => pathname.startsWith('/customer/notifications'), title: 'My Notifications', subtitle: 'Recent updates and reminders' },
   { test: (pathname) => pathname.startsWith('/customer/profile'), title: 'My Profile', subtitle: 'Personal account information' },
+  { test: (pathname) => pathname.startsWith('/customer/wishlist'), title: 'Wishlist', subtitle: 'Your favorite books' },
+  { test: (pathname) => pathname.startsWith('/customer/reading-analytics'), title: 'Reading Analytics', subtitle: 'Your reading journey' },
 ];
 
 interface CustomerHeaderProps {
   onToggleMobileMenu: () => void;
   onToggleDesktopCollapse: () => void;
   isDesktopCollapsed: boolean;
+}
+
+function CustomerThemeToggle() {
+  const { resolvedTheme, toggleTheme } = useTheme();
+  return (
+    <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted transition-all text-muted-foreground" title="Toggle theme">
+      {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+  );
 }
 
 export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, isDesktopCollapsed }: CustomerHeaderProps) {
@@ -28,22 +41,24 @@ export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, is
   };
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 px-4 py-3 backdrop-blur md:px-5">
+    <header className="sticky top-0 z-20 border-b border-border bg-white/90 dark:bg-slate-900/90 px-4 py-3 backdrop-blur md:px-5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <button onClick={onToggleMobileMenu} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-slate-200 text-slate-600 transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 lg:hidden">
+            <button onClick={onToggleMobileMenu} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 lg:hidden">
               <Menu className="h-4 w-4" />
             </button>
-            <button onClick={onToggleDesktopCollapse} className="hidden h-9 w-9 items-center justify-center rounded-[10px] border border-slate-200 text-slate-600 transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 lg:inline-flex">
+            <button onClick={onToggleDesktopCollapse} className="hidden h-9 w-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 lg:inline-flex">
               {isDesktopCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
-            <h1 className="truncate text-[18px] text-slate-900" style={{ fontWeight: 700 }}>{current.title}</h1>
+            <h1 className="truncate text-[18px] text-foreground" style={{ fontWeight: 700 }}>{current.title}</h1>
           </div>
           <p className="mt-0.5 truncate text-[12px] text-slate-500">{current.subtitle}</p>
         </div>
 
         <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <CustomerThemeToggle />
           <NotificationBellDropdown />
           <UserAvatarMenu />
         </div>

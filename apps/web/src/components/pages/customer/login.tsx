@@ -37,7 +37,7 @@ export function CustomerLoginPage() {
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
       {/* Left — Brand Panel */}
       <div className="hidden lg:flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-700 p-10">
         {/* Decorative shapes */}
@@ -99,7 +99,7 @@ export function CustomerLoginPage() {
       </div>
 
       {/* Right — Login Form */}
-      <div className="flex flex-col items-center justify-center p-8 bg-white">
+      <div className="flex flex-col items-center justify-center p-8 bg-card">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
