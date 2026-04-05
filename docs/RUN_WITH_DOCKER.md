@@ -879,9 +879,9 @@ Sau khi stack da chay, kiem tra nhanh customer portal Phase 1:
    - `PATCH /my/profile`
    - `GET /my/membership`
 
-Chi tiet testcase xem tai `docs/CUSTOMER_PORTAL_PHASE1_TEST_GUIDE.md`.
+Chi tiet testcase xem tai `docs/TEST_GUIDES/CUSTOMER_PORTAL_PHASE1_TEST_GUIDE.md`.
 
-Cho Phase 3-4 (reservations, loans, fines, notifications), xem them: `docs/CUSTOMER_PORTAL_PHASE34_TEST_GUIDE.md`.
+Cho Phase 3-4 (reservations, loans, fines, notifications), xem them: `docs/TEST_GUIDES/CUSTOMER_PORTAL_PHASE34_TEST_GUIDE.md`.
 docker compose logs -f --tail 200
 docker compose logs -f --tail 200 <service>
 

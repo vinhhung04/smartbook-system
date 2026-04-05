@@ -1,67 +1,69 @@
 # Inventory Service
 
-## Muc tieu
+## Mục tiêu
 
-Inventory Service quan ly danh muc sach va van hanh kho trong SmartBook.
+Inventory Service quản lý toàn bộ vận hành kho và cấu trúc catalog cho SmartBook.
 
 - Runtime: Node.js + Express + Prisma
 - Entrypoint: services/inventory-service/src/index.js
-- Database: inventory_db (PostgreSQL)
-- Vai tro: catalog, barcode, kho, vi tri, inbound/outbound, movement, supplier
+- Cơ sở dữ liệu: inventory_db
+- Vai trò chính: catalog, barcode, kho, vị trí, nhập/xuất, kiểm kê, nhà cung cấp
 
-## Nhom API chinh
+## Nhóm API chính
 
-| Nhom API | Route base | Mo ta |
+| Nhóm API | Route base | Mô tả |
 |---|---|---|
-| Catalog | /api/books | Quan ly sach, barcode, ISBN, cap nhat thong tin |
-| Warehouse | /api/warehouses | Quan ly kho, zone/bin, locations |
-| Goods Receipt | /api/goods-receipts | Quy trinh nhap kho |
-| Putaway | /api/putaway | Dieu phoi dua hang vao vi tri |
-| Outbound | /api/outbound | Xuat kho theo task |
-| Order Request | /api/order-requests | Tao/duyet yeu cau xuat/chuyen |
-| Picking | /api/picking | Quy trinh lay hang, repick |
-| Shelf | /api/shelf | Tong quan/su kien ke |
-| Stock Movement | /api/stock-movements | Lich su bien dong ton |
-| Borrow Integration | /api/borrow-integration | Endpoint phuc vu borrow-service |
-| Supplier | /api/suppliers | CRUD nha cung cap |
+| Catalog | /api/books | Quản lý sách, barcode, ISBN, metadata |
+| Warehouse | /api/warehouses | Quản lý kho, zone/bin, locations |
+| Goods Receipt | /api/goods-receipts | Nghiệp vụ nhập kho |
+| Putaway | /api/putaway | Đưa hàng vào vị trí lưu trữ |
+| Outbound | /api/outbound | Xử lý xuất kho theo task |
+| Order Request | /api/order-requests | Tạo/duyệt yêu cầu xuất/chuyển |
+| Picking | /api/picking | Lấy hàng, repick |
+| Shelf | /api/shelf | Tổng quan tồn theo kệ |
+| Stock Movement | /api/stock-movements | Lịch sử biến động tồn |
+| Borrow Integration | /api/borrow-integration | Tích hợp tồn kho với Borrow |
+| Supplier | /api/suppliers | Quản lý nhà cung cấp |
 
-## Permission map (tom tat)
+## Bản đồ quyền tóm tắt
 
-- inventory.catalog.read / inventory.catalog.write
-- inventory.stock.read / inventory.stock.write
-- borrow.read / borrow.write (cho integration endpoint)
+- inventory.catalog.read và inventory.catalog.write
+- inventory.stock.read và inventory.stock.write
+- borrow.read và borrow.write cho các endpoint tích hợp liên service
 
-Ghi chu:
-- Phan lon route duoc bao ve bang middleware authorizeAnyPermission.
-- Service nay la xuong song cho nghiep vu Staff (van hanh kho vat ly), khac voi Librarian (nghiep vu luan chuyen).
+Lưu ý:
 
-## Chay nhanh
+- Phần lớn endpoint được bảo vệ bằng authorizeAnyPermission.
+- Domain này là trọng tâm của Warehouse Staff và tách biệt với Librarian.
 
-Trong services/inventory-service:
+## Chạy nhanh
+
+### Local
 
 ```bash
+cd services/inventory-service
 npm install
 npm run dev
 ```
 
-Hoac tu root bang Docker Compose:
+### Docker
 
 ```bash
 docker compose up -d --build inventory-service
 docker compose --profile dev run --rm inventory-db-push
 ```
 
-## Bien moi truong quan trong
+## Biến môi trường đặc thù
 
-| Bien | Muc dich |
+| Biến | Ý nghĩa |
 |---|---|
-| PORT | Cong service (container mac dinh 3001) |
-| DATABASE_URL | Chuoi ket noi den inventory_db |
-| JWT_SECRET | Xac minh token |
-| JSON_BODY_LIMIT | Gioi han payload |
+| PORT | Cổng service, mặc định 3001 |
+| DATABASE_URL | Chuỗi kết nối inventory_db |
+| JWT_SECRET | Xác minh token |
+| JSON_BODY_LIMIT | Giới hạn payload JSON |
 
-## Tai lieu lien quan
+## Tài liệu liên quan
 
-- Root overview: README.md
-- Docker runbook: docs/RUN_WITH_DOCKER.md
-- Architecture: docs/PROJECT_OVERVIEW.md
+- README root: ../../README.md
+- Docker runbook: ../RUN_WITH_DOCKER.md
+- Kiến trúc tổng quan: ../PROJECT_OVERVIEW.md

@@ -1,138 +1,152 @@
 # SmartBook System
 
-> He thong quan ly kho va luan chuyen sach hien dai, duoc thiet ke theo huong microservices va san sang mo rong cho AI.
+> Nền tảng quản lý kho và luân chuyển sách hiện đại, kết nối vận hành vật lý với nghiệp vụ lưu thông trên kiến trúc Microservices.
 
-![status](https://img.shields.io/badge/status-active%20development-0a7f5a)
-![architecture](https://img.shields.io/badge/architecture-microservices-0b5fff)
-![runtime](https://img.shields.io/badge/runtime-Docker%20Compose-ff6b00)
+![Status](https://img.shields.io/badge/status-Active%20Development-0a7f5a)
+![Version](https://img.shields.io/badge/version-1.0.0-2563eb)
+![Tech](https://img.shields.io/badge/stack-Node.js%20%7C%20React%20%7C%20FastAPI%20%7C%20PostgreSQL-ff6b00)
 
-## Muc luc
+## Mục lục
 
-- [SmartBook System](#smartbook-system)
-  - [Muc luc](#muc-luc)
-  - [Tong quan](#tong-quan)
-  - [Key Features](#key-features)
-    - [📚 Inventory Domain](#-inventory-domain)
-    - [🔁 Circulation Domain](#-circulation-domain)
-    - [🤖 AI Domain](#-ai-domain)
-    - [🔐 IAM Domain](#-iam-domain)
-  - [Architecture](#architecture)
-    - [Luong request tong quat](#luong-request-tong-quat)
-    - [Dich vu chinh](#dich-vu-chinh)
-  - [User Roles](#user-roles)
-  - [Gateway Route Map](#gateway-route-map)
-  - [Tech Stack](#tech-stack)
-  - [Getting Started (Docker Compose)](#getting-started-docker-compose)
-    - [1) Chuan bi](#1-chuan-bi)
-    - [2) Khoi dong nhanh (khuyen nghi cho Windows)](#2-khoi-dong-nhanh-khuyen-nghi-cho-windows)
-    - [3) Hoac chay bang Docker Compose thu cong](#3-hoac-chay-bang-docker-compose-thu-cong)
-    - [4) Truy cap he thong](#4-truy-cap-he-thong)
-  - [Project Structure](#project-structure)
-  - [Tai lieu bo sung](#tai-lieu-bo-sung)
-  - [Gop y](#gop-y)
+- [Sứ mệnh và tầm nhìn](#sứ-mệnh-và-tầm-nhìn)
+- [Kiến trúc cốt lõi](#kiến-trúc-cốt-lõi)
+- [Sơ đồ luồng Microservices](#sơ-đồ-luồng-microservices)
+- [Thiết kế dữ liệu](#thiết-kế-dữ-liệu)
+- [Tích hợp AI](#tích-hợp-ai)
+- [Business Domain và ma trận vai trò](#business-domain-và-ma-trận-vai-trò)
+- [Service Catalog](#service-catalog)
+- [Technical Stack](#technical-stack)
+- [Deployment Flow](#deployment-flow)
+- [Cấu trúc dự án](#cấu-trúc-dự-án)
+- [Chiến lược dọn dẹp tài liệu](#chiến-lược-dọn-dẹp-tài-liệu)
+- [Tài liệu chuyên sâu](#tài-liệu-chuyên-sâu)
 
-## Tong quan
+## Sứ mệnh và tầm nhìn
 
-SmartBook System la nen tang quan ly danh muc sach, ton kho va nghiep vu muon tra theo mo hinh **Microservices (REST-first)** voi **API Gateway** lam diem vao duy nhat.
+SmartBook không chỉ là phần mềm thư viện. Đây là giải pháp điều phối toàn chuỗi nghiệp vụ từ kho vật lý đến lưu thông sách:
 
-- Trang thai hien tai: **dang phat trien tich cuc**, stack core da chay on dinh tren Docker Compose.
-- Dinh huong san pham: phan tach nghiep vu ro rang, de scale theo tung domain.
-- Diem nhan ky thuat: tich hop **AI Service (FastAPI + Ollama local LLM)** de nhan dien sach va trich xuat metadata.
+- 🏭 Tầng vận hành kho: barcode, vị trí kệ, nhập/xuất, kiểm kê.
+- 🔁 Tầng lưu thông: mượn/trả, giữ chỗ, gia hạn, phí phạt.
+- 🤖 Tầng hỗ trợ AI: nhận diện sách từ ảnh, trích xuất metadata, hỗ trợ nhập liệu tự động.
+- 🔐 Tầng quản trị: IAM, RBAC/PBAC, phân tách quyền theo vai trò và phạm vi kho.
 
-## Key Features
+## Kiến trúc cốt lõi
 
-### 📚 Inventory Domain
+### 1. Microservices orchestration qua API Gateway
 
-- Quan ly catalog sach, barcode, bien the va vi tri kho.
-- Theo doi ton kho, bien dong kho, nhap kho/xuat kho.
-- Dang mo rong nghiep vu Supplier va Stock Audit.
+- API Gateway là cổng vào duy nhất cho client tại cổng 3000.
+- Gateway định tuyến theo domain:
+  - /auth, /iam → Auth Service
+  - /api, /catalog → Inventory Service
+  - /borrow, /my → Borrow Service
+  - /ai, /api/ai → AI Service
+- Cấu trúc này giúp cô lập domain, giảm coupling và tối ưu khả năng scale từng service.
 
-### 🔁 Circulation Domain
+### 2. Domain tách biệt theo nghiệp vụ
 
-- Quan ly muon, tra, gia han, dat cho.
-- Theo doi phi phat va trang thai ban sao sach.
-- Ho tro cong tu phuc vu cho khach hang.
+- Auth: định danh, xác thực, phân quyền.
+- Inventory: danh mục, tồn kho, kho bãi, nhập/xuất.
+- Borrow: lưu thông, thành viên, phí phạt, thông báo.
+- AI: OCR, nhận diện sách, enrichment metadata.
+- Analytics: domain báo cáo và tổng hợp dữ liệu vận hành (đang hoàn thiện module thực thi).
 
-### 🤖 AI Domain
+### 3. Khả năng mở rộng theo service
 
-- Nhan dien thong tin sach tu anh (OCR + metadata extraction).
-- Tra cuu metadata tu ISBN va nguon bo tro.
-- Van hanh local model qua Ollama (uu tien rieng tu du lieu).
+- Mỗi service có vòng đời deploy độc lập.
+- Mỗi service có DATABASE_URL tách riêng theo cơ sở dữ liệu nghiệp vụ.
+- Hỗ trợ nâng cấp dần từng module mà không ảnh hưởng toàn hệ thống.
 
-### 🔐 IAM Domain
+## Sơ đồ luồng Microservices
 
-- Xac thuc va uy quyen tap trung qua Auth Service.
-- RBAC/PBAC cho 5 vai tro nghiep vu.
-- Tach ro quyen truy cap theo muc do van hanh va quan tri.
+```mermaid
+flowchart LR
+    U[Web Client :5173] --> G[API Gateway :3000]
 
-## Architecture
+    G --> A[Auth Service :3002]
+    G --> I[Inventory Service :3001]
+    G --> B[Borrow Service :3005]
+    G --> AI[AI Service :8000]
+    G --> AN[Analytics Service : Roadmap]
 
-### Luong request tong quat
+    A --> DB[(PostgreSQL :5432)]
+    I --> DB
+    B --> DB
 
-1. Web Client gui request vao API Gateway.
-2. Gateway route theo path den dung service domain.
-3. Service xu ly nghiep vu va truy cap PostgreSQL theo DB rieng.
-4. Cac tac vu AI duoc dieu phoi toi AI Service va Ollama.
-
-```text
-Client -> API Gateway -> (Auth | Inventory | Borrow | AI) -> PostgreSQL / Ollama
+    AI --> O[Ollama :11434]
+    P[pgAdmin :8080] --> DB
 ```
 
-### Dich vu chinh
+## Thiết kế dữ liệu
 
-| Service | Port (Host) | Vai tro |
-|---|---:|---|
-| API Gateway | 3000 | Diem vao tap trung, dinh tuyen route |
-| Auth Service | 3004 | IAM, JWT, RBAC/PBAC |
-| Inventory Service | 3003 | Catalog, kho, ton, barcode |
-| Borrow Service | 3005 | Muon/tra, dat cho, phi phat |
-| AI Service | 8000 | OCR, metadata extraction, AI processing |
-| Web UI | 5173 | Portal van hanh va nghiep vu |
-| PostgreSQL | 5432 | Luu tru du lieu giao dich |
-| pgAdmin | 8080 | Quan tri CSDL |
-| Ollama | 11434 | Local LLM runtime |
+SmartBook sử dụng PostgreSQL với Prisma ORM theo mô hình đa domain dữ liệu:
 
-## User Roles
+- auth_db: người dùng, vai trò, quyền, quan hệ role-permission.
+- inventory_db: catalog, biến thể, kho, vị trí, tồn kho, biến động.
+- borrow_db: thành viên, mượn/trả, đặt chỗ, phí phạt, thông báo.
 
-> Trong SmartBook, **Librarian** va **Staff** la 2 vai tro tach biet:
-> Librarian tap trung vao nghiep vu muon tra va tuong tac ban doc;
-> Staff tap trung vao van hanh vat ly kho, nhap xuat, kiem dem.
+Thiết kế hiện tại ưu tiên tách cơ sở dữ liệu theo service để giảm xung đột migration và dễ kiểm soát ownership dữ liệu. Prisma được dùng làm lớp truy cập dữ liệu chuẩn hóa cho các service Node.js.
 
-| Vai tro | Trong tam trach nhiem | Quyen tieu bieu |
-|---|---|---|
-| Customer | Su dung dich vu thu vien | Xem catalog, dat cho, xem lich su muon tra ca nhan |
-| Librarian | Nghiep vu luan chuyen sach | Duyet/quan ly muon tra, xu ly giu cho, xu ly tinh huong ban doc |
-| Staff | Van hanh kho vat ly | Nhap kho, dieu chuyen, cap nhat ton, barcode, vi tri |
-| Manager | Dieu phoi van hanh | Giam sat KPI, phe duyet nghiep vu, dieu huong tac nghiep |
-| Admin | Quan tri he thong | Quan ly user/role/policy, cau hinh nen tang, quan tri toan cuc |
+## Tích hợp AI
 
-## Gateway Route Map
+AI Service được xây dựng bằng FastAPI và tích hợp Local LLM qua Ollama:
 
-| Route chinh | Dich vu dich | Muc dich |
-|---|---|---|
-| /auth | Auth Service | Dang nhap, xac thuc, token |
-| /iam | Auth Service | User, role, permission |
-| /api | Inventory Service | Nhom API catalog, kho, ton |
-| /borrow | Borrow Service | API muon/tra, dat cho, phi phat |
-| /my | Borrow Service | Khach hang xem du lieu ca nhan |
-| /catalog | Inventory Service | Public catalog |
-| /ai | AI Service | OCR, metadata, AI endpoints |
-| /api/ai | AI Service | Nhom API AI qua gateway |
-| /health | API Gateway | Health check he thong |
+- OCR và nhận diện thông tin sách từ ảnh bìa.
+- Lookup metadata theo ISBN (kết hợp nhiều nguồn).
+- Tạo tóm tắt tiếng Việt hỗ trợ quy trình nhập liệu.
+- Chế độ chạy local giúp kiểm soát dữ liệu nội bộ và giảm phụ thuộc dịch vụ ngoài.
 
-## Tech Stack
+## Business Domain và ma trận vai trò
 
-| Lop | Cong nghe |
-|---|---|
-| Backend | Node.js, Express, Prisma, FastAPI |
-| Frontend | React, Vite, TypeScript |
-| Database | PostgreSQL |
-| DevOps | Docker Compose, pgAdmin |
-| AI | Ollama (Local LLM) |
+Trong SmartBook, phân tách Librarian và Warehouse Staff là nguyên tắc bắt buộc:
 
-## Getting Started (Docker Compose)
+- Librarian tập trung lưu thông và trải nghiệm bạn đọc.
+- Warehouse Staff tập trung vận hành vật lý kho.
 
-### 1) Chuan bi
+| Vai trò | Trọng tâm nghiệp vụ | Quyền nghiệp vụ chính | Hệ thống liên quan |
+|---|---|---|---|
+| Customer | Tự phục vụ qua cổng khách hàng | Mượn, trả, đặt chỗ, thanh toán phí phạt, theo dõi tài khoản cá nhân | Borrow Portal |
+| Librarian | Lưu thông và hỗ trợ bạn đọc | Duyệt mượn/trả, xử lý gia hạn, giữ chỗ, xử lý vi phạm lưu thông | Borrow Service |
+| Warehouse Staff | Vận hành kho vật lý | Quản lý barcode, vị trí kệ, nhập/xuất, điều chuyển, kiểm kê | Inventory Service |
+| Manager | Quản trị vận hành cấp trung | Phê duyệt chênh lệch kiểm kê, quản lý nhà cung cấp, theo dõi KPI | Inventory + Analytics |
+| Admin | Quản trị nền tảng | Quản lý user/role/policy, RBAC/PBAC, cấu hình hệ thống | Auth + IAM |
+
+## Service Catalog
+
+| Service | Cổng | Vai trò | Endpoint trọng yếu |
+|---|---:|---|---|
+| API Gateway | 3000 | Cổng vào tập trung và định tuyến domain | /health, /auth, /iam, /api, /borrow, /ai |
+| Auth Service | 3004 → 3002 | IAM, xác thực, token, phân quyền | /auth/login, /auth/me, /iam/users, /iam/roles |
+| Inventory Service | 3003 → 3001 | Catalog, kho, tồn, nhập/xuất, supplier | /api/books, /api/warehouses, /api/goods-receipts |
+| Borrow Service | 3005 | Mượn/trả, đặt chỗ, phí phạt, hồ sơ thành viên | /borrow/loans, /borrow/reservations, /borrow/fines, /borrow/my |
+| AI Service | 8000 | OCR, metadata enrichment, summary | /health, /recognize-book, /lookup-book-by-isbn |
+| Analytics Service | Roadmap | Báo cáo và phân tích vận hành đa domain | Đang chuẩn hóa module |
+| Web UI | 5173 | Giao diện quản trị và cổng nghiệp vụ | Dashboard, Catalog, Borrow, IAM |
+| PostgreSQL | 5432 | Lưu trữ dữ liệu giao dịch | auth_db, inventory_db, borrow_db |
+| pgAdmin | 8080 | Quản trị dữ liệu | UI quản trị DB |
+| Ollama | 11434 | Local LLM runtime cho AI | inference nội bộ |
+
+## Technical Stack
+
+### 🧩 Backend
+
+- Node.js + Express cho API Gateway, Auth, Inventory, Borrow.
+- FastAPI cho AI Service.
+- Prisma ORM cho các service Node.js sử dụng PostgreSQL.
+
+### 🎨 Frontend
+
+- React + Vite + TypeScript.
+- Routing và API client tách lớp để dễ mở rộng theo domain.
+
+### ⚙️ DevOps và vận hành
+
+- Docker Compose cho local orchestration.
+- pgAdmin cho quản trị dữ liệu.
+- Ollama cho local model serving.
+
+## Deployment Flow
+
+### Bước 1: Chuẩn bị môi trường
 
 ```bash
 git clone https://github.com/your-org/smartbook-system.git
@@ -140,22 +154,21 @@ cd smartbook-system
 copy .env.example .env
 ```
 
-### 2) Khoi dong nhanh (khuyen nghi cho Windows)
+Biến quan trọng cần rà soát trong .env:
+
+- DB_USER, DB_PASSWORD, DB_HOST, DB_PORT.
+- AUTH_DB_NAME, INVENTORY_DB_NAME, BORROW_DB_NAME.
+- JWT_SECRET, INTERNAL_SERVICE_KEY.
+- VITE_API_BASE_URL, VITE_AUTH_BASE_URL, VITE_AI_BASE_URL.
+- OLLAMA_HOST, SUMMARY_MODEL.
+
+### Bước 2: Khởi chạy nhanh toàn stack
 
 ```cmd
 scripts\run-all.bat
 ```
 
-Tuy chon nhanh:
-
-```cmd
-scripts\run-all.bat --skip-workspace
-scripts\run-all.bat --skip-docker
-scripts\run-all.bat --reset-db
-scripts\run-all.bat --help
-```
-
-### 3) Hoac chay bang Docker Compose thu cong
+### Bước 3: Hoặc khởi chạy thủ công bằng Docker Compose
 
 ```bash
 docker compose up -d --build
@@ -165,9 +178,9 @@ docker compose --profile dev run --rm borrow-db-push
 docker compose ps
 ```
 
-### 4) Truy cap he thong
+### Bước 4: Kiểm tra sau triển khai
 
-| Thanh phan | URL |
+| Thành phần | URL |
 |---|---|
 | Web UI | http://localhost:5173 |
 | API Gateway | http://localhost:3000 |
@@ -175,7 +188,7 @@ docker compose ps
 | pgAdmin | http://localhost:8080 |
 | Ollama | http://localhost:11434 |
 
-## Project Structure
+## Cấu trúc dự án
 
 ```text
 smartbook-system/
@@ -184,29 +197,46 @@ smartbook-system/
 |  \- web/
 |- services/
 |  |- auth-service/
-|  |- borrow-service/
 |  |- inventory-service/
+|  |- borrow-service/
 |  |- ai-service/
 |  \- analytics-service/
 |- packages/
 |  \- shared/
-|- docs/
 |- db-init/
-|- data/
+|- docs/
+|  |- SERVICES/
+|  \- TEST_GUIDES/
 |- scripts/
 |- docker-compose.yml
-|- pnpm-workspace.yaml
 \- README.md
 ```
 
-## Tai lieu bo sung
+## Chiến lược dọn dẹp tài liệu
 
-- Kien truc tong quan: docs/PROJECT_OVERVIEW.md
-- Huong dan chay voi Docker chi tiet: docs/RUN_WITH_DOCKER.md
-- AI service chi tiet: docs/SERVICES/AI_SERVICE.md
-- Inventory service chi tiet: docs/SERVICES/INVENTORY_SERVICE.md
-- Huong dan test theo phase: docs/CUSTOMER_PORTAL_PHASE1_TEST_GUIDE.md, docs/CUSTOMER_PORTAL_PHASE34_TEST_GUIDE.md, docs/BORROW_PHASE1_HARDEN_TEST_GUIDE.md
+- Xóa các README boilerplate mặc định không mang giá trị nghiệp vụ.
+- Mọi giới thiệu hệ thống tập trung tại README root.
+- README trong từng service chỉ giữ thông tin đặc thù:
+  - Biến môi trường riêng.
+  - Endpoint quan trọng.
+  - Lệnh chạy local ngắn gọn.
+- Tài liệu chuyên sâu được tách theo domain trong docs/SERVICES.
 
-## Gop y
+## Tài liệu chuyên sâu
 
-Neu ban muon dong gop, hay bat dau tu viec chay stack bang Docker, xac nhan health endpoint va tao pull request theo pham vi service cu the.
+- Kiến trúc tổng quan: docs/PROJECT_OVERVIEW.md
+- Hướng dẫn chạy Docker chi tiết: docs/RUN_WITH_DOCKER.md
+- Domain AI: docs/SERVICES/AI_SERVICE.md
+- Domain Inventory: docs/SERVICES/INVENTORY_SERVICE.md
+- Domain Auth: docs/SERVICES/AUTH_SERVICE.md
+- Domain Borrow: docs/SERVICES/BORROW_SERVICE.md
+- Domain Analytics: docs/SERVICES/ANALYTICS_SERVICE.md
+- Test guide theo phase: docs/TEST_GUIDES/
+
+## Góp ý và đóng góp
+
+Nếu bạn là contributor mới, nên đi theo luồng đọc tài liệu sau:
+
+1. README root để nắm kiến trúc tổng quan.
+2. docs/RUN_WITH_DOCKER.md để dựng môi trường.
+3. docs/SERVICES tương ứng domain bạn phụ trách.

@@ -1,78 +1,64 @@
 # Documentation Audit - SmartBook System
 
-## Muc tieu
+## Mục tiêu
 
-Dọn gọn he thong tai lieu, giu root folder sach va chi giu cac huong dan co gia tri cao cho contributor moi.
+Chuẩn hóa tài liệu theo nguyên tắc root gọn, docs chuyên sâu theo domain, giảm trùng lặp README con.
 
-## 1) Phan loai README hien co
+## Trạng thái triển khai
 
-| File | Danh gia | Ly do | Khuyen nghi |
-|---|---|---|---|
-| README.md (root) | 🟢 Quan trong | Entry point cho toan bo du an, onboarding + architecture + quickstart | **Giu** lam Single Source of Truth cho tong quan |
-| apps/web/README.md | 🟡 Co gia tri nhung can lam sach | Co thong tin frontend huu ich, nhung thuong de kem noi dung template Vite mac dinh | **Giu co chon loc**, xoa phan template/react-vite boilerplate |
-| services/ai-service/README.md | 🟡 Gia tri trung binh | Co huong dan endpoint AI nhung pham vi hep, thieu tong quan service-level | **Gop/bo sung**: dua setup chung ve root/docs, giu lai phan AI dac thu |
-| services/inventory-service/README.md | 🔴 Thieu gia tri doc lap | Noi dung qua ngan, de trung lap voi README tong va docs overview | **Gop vao README root + docs**, can nhac xoa file nay |
+| Hạng mục | Trạng thái | Ghi chú |
+|---|---|---|
+| Viết lại README root | ✅ Hoàn thành | Bổ sung kiến trúc, role matrix, service catalog, deployment flow, Mermaid |
+| Dọn README frontend | ✅ Hoàn thành | Đã loại phần boilerplate mặc định Vite |
+| Gộp tài liệu Inventory | ✅ Hoàn thành | Nội dung chuyển sang docs/SERVICES/INVENTORY_SERVICE.md |
+| Chuẩn hóa AI README | ✅ Hoàn thành | README service tối giản, domain detail tại docs/SERVICES/AI_SERVICE.md |
+| Bổ sung docs domain Auth/Borrow/Analytics | ✅ Hoàn thành | Đã tạo 3 tài liệu mới trong docs/SERVICES |
+| Gom test guide vào thư mục riêng | ✅ Hoàn thành | Đã chuyển sang docs/TEST_GUIDES |
 
-## 2) Danh sach de xoa hoac gop
+## Phân loại README hiện tại
 
-### 🧹 Nen gop vao README root (hoac docs)
+| File | Vai trò | Hành động |
+|---|---|---|
+| README.md | Cổng vào chính cho contributor | Giữ làm nguồn định hướng duy nhất |
+| apps/web/README.md | Setup frontend chuyên biệt | Giữ, chỉ chứa nội dung SmartBook |
+| services/ai-service/README.md | Quick entry cho AI service | Giữ ở mức tối giản và điều hướng |
 
-| File | Noi dung nen gop |
-|---|---|
-| services/inventory-service/README.md | Tong quan service, cach run co ban, route nhom inventory |
-| services/ai-service/README.md | Cac endpoint cốt lõi, yeu cau Ollama model, bien moi truong AI |
+## Danh sách gộp/xóa đã thực hiện
 
-### ❌ Nen xoa/noi dung can loai bo
+| File cũ | Hành động | Điểm đến |
+|---|---|---|
+| services/inventory-service/README.md | Đã xóa | docs/SERVICES/INVENTORY_SERVICE.md |
+| Nội dung AI service trùng lặp | Đã gộp | docs/SERVICES/AI_SERVICE.md |
+| Boilerplate Vite trong apps/web/README.md | Đã xóa | Không giữ |
 
-| Vi tri | Noi dung |
-|---|---|
-| apps/web/README.md | Doan template mac dinh "React + Vite" va plugin boilerplate khong con gia tri domain |
-
-### ✅ Nen giu nguyen
-
-| File | Ly do |
-|---|---|
-| README.md (root) | Huong dan vao du an cho nguoi moi |
-| docs/RUN_WITH_DOCKER.md | Runbook Docker chi tiet, troubleshooting thuc te |
-| docs/PROJECT_OVERVIEW.md | Kien truc chi tiet, phu hop doc sau |
-
-## 3) Documentation Tree de xuat (chuan monorepo)
+## Cấu trúc tài liệu mục tiêu
 
 ```text
 smartbook-system/
-|- README.md                              # Entry point: tong quan, role map, quickstart, route map
+|- README.md
 |- docs/
-|  |- PROJECT_OVERVIEW.md                 # Kien truc chi tiet
-|  |- RUN_WITH_DOCKER.md                  # Huong dan van hanh bang Docker
-|  |- CONTRIBUTING.md                     # Quy uoc dong gop, branch, commit, PR
-|  |- API_REFERENCE.md                    # Route theo domain: auth/inventory/borrow/ai
+|  |- PROJECT_OVERVIEW.md
+|  |- RUN_WITH_DOCKER.md
+|  |- DOCUMENTATION_AUDIT.md
 |  |- SERVICES/
-|  |  |- AUTH_SERVICE.md                  # Dac thu IAM, JWT, RBAC/PBAC
-|  |  |- INVENTORY_SERVICE.md             # Dac thu kho, ton, supplier, stock-audit
-|  |  |- BORROW_SERVICE.md                # Dac thu muon/tra, reservation, fines
-|  |  \- AI_SERVICE.md                   # Dac thu OCR, metadata, Ollama model
+|  |  |- AUTH_SERVICE.md
+|  |  |- INVENTORY_SERVICE.md
+|  |  |- BORROW_SERVICE.md
+|  |  |- AI_SERVICE.md
+|  |  \- ANALYTICS_SERVICE.md
 |  \- TEST_GUIDES/
 |     |- CUSTOMER_PORTAL_PHASE1_TEST_GUIDE.md
 |     |- CUSTOMER_PORTAL_PHASE34_TEST_GUIDE.md
 |     \- BORROW_PHASE1_HARDEN_TEST_GUIDE.md
 |- apps/
-|  \- web/README.md                      # CHI GIU setup frontend rieng, khong lap lai root
+|  \- web/README.md
 \- services/
-   |- ai-service/README.md                # CHI GIU setup nhanh service dac thu (neu can)
-   \- (cac service khac)                 # Co the bo README neu khong co setup rieng
+   \- ai-service/README.md
 ```
 
-## 4) Nguyen tac de root folder sach
+## Quy tắc quản trị tài liệu
 
-- 📌 Root chi giu tai lieu dinh huong va cach chay nhanh.
-- 📌 Service-level README chi ton tai neu co setup hoac rui ro van hanh dac thu.
-- 📌 Cac noi dung trung lap (cung mot lenh setup, cung mot route map) phai quy ve 1 file chuan.
-- 📌 Uu tien docs theo huong "overview -> domain detail -> test guide" de de scan.
-
-## 5) Ke hoach dọn dep de xuat
-
-1. Chot README root lam tai lieu tong.
-2. Lam sach apps/web/README.md (xoa boilerplate template).
-3. Gop noi dung inventory-service README vao docs/SERVICES/INVENTORY_SERVICE.md, sau do xoa README cu.
-4. Chuan hoa ai-service README thanh quick note va tro den docs/SERVICES/AI_SERVICE.md.
-5. Them docs/CONTRIBUTING.md va docs/API_REFERENCE.md de giam trao doi onboarding lap lai.
+- Root README chỉ chứa thông tin tổng quan, kiến trúc, hướng chạy nhanh.
+- docs/SERVICES chứa chi tiết kỹ thuật theo domain service.
+- README service chỉ giữ quickstart + endpoint cốt lõi + env đặc thù.
+- Mọi hướng dẫn test theo phase đặt trong docs/TEST_GUIDES.

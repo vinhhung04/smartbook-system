@@ -1,75 +1,73 @@
 # AI Service
 
-## Muc tieu
+## Mục tiêu
 
-AI Service cung cap cac tinh nang nhan dien sach va tao metadata cho SmartBook, su dung FastAPI + Ollama.
+AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng AI, tập trung vào OCR và chuẩn hóa metadata.
 
 - Runtime: Python + FastAPI
 - Entrypoint: services/ai-service/main.py
-- Model runtime: Ollama (mac dinh host http://ollama:11434)
-- Vai tro: OCR/nhan dien thong tin sach, lookup metadata tu ISBN, sinh tom tat tieng Viet
+- Model runtime: Ollama local
+- Vai trò: nhận diện sách, tra cứu ISBN, tạo tóm tắt tiếng Việt
 
-## Endpoint chinh
+## Endpoint chính
 
-| Method | Endpoint | Mo ta |
+| Method | Endpoint | Mô tả |
 |---|---|---|
-| GET | /health | Kiem tra tinh trang service |
-| POST | /scan-back-cover | OCR thong tin tu anh bia sau |
-| POST | /recognize-book | Nhan dien thong tin sach tu anh |
-| POST | /analyze | Phan tich noi dung anh sach |
-| POST | /extract-metadata | Trich xuat metadata tu input |
-| GET | /recommendations | Lay goi y doc sach |
-| POST | /recommendations | Tao goi y doc sach theo payload |
-| POST | /lookup-book-by-isbn | Tra cuu metadata theo ISBN (Google Books/Open Library) |
-| POST | /generate-book-summary | Sinh tom tat sach |
-| POST | /generate-summary-vi | Sinh tom tat tieng Viet |
-| POST | /chat | Tro ly hoi dap AI |
-| POST | /reading-stats | Tong hop thong ke doc |
+| GET | /health | Kiểm tra trạng thái service |
+| POST | /scan-back-cover | OCR thông tin từ ảnh bìa sau |
+| POST | /recognize-book | Nhận diện thông tin sách từ ảnh |
+| POST | /analyze | Phân tích nội dung ảnh |
+| POST | /extract-metadata | Trích xuất metadata từ input |
+| GET | /recommendations | Gợi ý đọc sách |
+| POST | /recommendations | Gợi ý đọc sách theo payload |
+| POST | /lookup-book-by-isbn | Tra cứu metadata theo ISBN |
+| POST | /generate-book-summary | Tạo tóm tắt sách |
+| POST | /generate-summary-vi | Tạo tóm tắt tiếng Việt |
+| POST | /chat | Hỏi đáp AI |
+| POST | /reading-stats | Tổng hợp thống kê đọc |
 
-Ghi chu:
-- Co endpoint alias /api/ai/generate-book-summary de tuong thich khi di qua gateway.
-- /lookup-book-by-isbn ho tro normalize ISBN-10/13, tra ve payload on dinh cho frontend.
+Ghi chú quan trọng:
 
-## Bien moi truong quan trong
+- Có endpoint alias /api/ai/generate-book-summary để tương thích khi đi qua gateway.
+- /lookup-book-by-isbn hỗ trợ normalize ISBN-10/ISBN-13 và trả payload ổn định cho frontend.
 
-| Bien | Mac dinh | Muc dich |
+## Biến môi trường đặc thù
+
+| Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| OLLAMA_HOST | http://ollama:11434 | Dia chi model runtime |
-| OLLAMA_MODEL | llava | Model xu ly anh |
-| SUMMARY_MODEL | llava | Model tom tat |
-| GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguon metadata chinh |
-| OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguon metadata bo sung |
-| GOOGLE_BOOKS_API_KEY | (rong) | API key tuy chon |
-| GROQ_API_KEY | (rong) | Fallback cloud LLM tuy chon |
-| ENABLE_WORLDCAT_LOOKUP | false | Bat/tat tra cuu WorldCat |
+| OLLAMA_HOST | http://ollama:11434 | Địa chỉ Ollama trong Docker network |
+| OLLAMA_MODEL | llava | Model xử lý ảnh |
+| SUMMARY_MODEL | llama3 | Model tóm tắt văn bản |
+| GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
+| OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
+| GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
+| GROQ_API_KEY | rỗng | Fallback cloud LLM tùy chọn |
+| ENABLE_WORLDCAT_LOOKUP | false | Bật/tắt tra cứu WorldCat |
 
-## Chay nhanh
+## Chạy nhanh
 
-### Cach 1: Docker Compose (khuyen nghi)
-
-Tu root repo:
+### Cách 1: Docker Compose
 
 ```bash
 docker compose up -d --build ai-service ollama
 ```
 
-### Cach 2: Chay local service
-
-Trong services/ai-service:
+### Cách 2: Chạy local
 
 ```bash
+cd services/ai-service
 pip install -r requirements.txt
 python main.py
 ```
 
-## Tich hop voi he thong
+## Tích hợp với hệ thống
 
-- Gateway route den AI qua /ai va /api/ai.
-- Frontend su dung VITE_AI_BASE_URL de goi service.
-- Khi chay bang Docker, nen dung OLLAMA_HOST=http://ollama:11434.
+- Gateway định tuyến vào AI qua /ai và /api/ai.
+- Frontend gọi qua VITE_AI_BASE_URL.
+- Khi chạy Docker, cần đảm bảo OLLAMA_HOST trỏ tới http://ollama:11434.
 
-## Tai lieu lien quan
+## Tài liệu liên quan
 
-- Root overview: README.md
-- Docker runbook: docs/RUN_WITH_DOCKER.md
-- Architecture: docs/PROJECT_OVERVIEW.md
+- README root: ../../README.md
+- Docker runbook: ../RUN_WITH_DOCKER.md
+- Kiến trúc tổng quan: ../PROJECT_OVERVIEW.md
