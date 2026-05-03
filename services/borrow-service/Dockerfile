@@ -5,6 +5,8 @@ COPY package.json ./
 RUN npm install -g pnpm && pnpm install
 COPY prisma ./prisma
 RUN npx prisma generate
+COPY src ./src
 COPY . .
+ENV SERVICE_NAME=borrow-service
 EXPOSE 3005
 CMD ["npm", "run", "start"]

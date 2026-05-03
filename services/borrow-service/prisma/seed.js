@@ -9,11 +9,13 @@ async function main() {
    * ═══════════════════════════════════════════════════════════════════════════════
    * 
    * This seed creates comprehensive demo data for the SmartBook library borrowing system.
-   * Data includes: membership plans, customers, loans, reservations, fines, notifications.
+   * Data includes: membership plans, customers, loans, reservations, loan items, renewals,
+   * fines, fine payments, notifications, reviews, wishlists.
    * 
    * AI Analysis Metadata:
    * - Diverse customer profiles for recommendation system
    * - Various loan statuses for workflow testing
+   * - Loan items and renewals for borrow history
    * - Fine and payment history for analytics
    * - Notification templates for engagement tracking
    */
@@ -550,6 +552,319 @@ await prisma.loan_transactions.createMany({
 console.log('✅ Created loan transactions');
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STEP 7.5: LOAN ITEMS (Books in each loan)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const warehouseId = '00000000-0000-0000-0000-000000000002';
+const userId = '00000000-0000-0000-0000-000000000001';
+
+const loanItemsData = [
+  // LOAN-001: 3 items (BORROWED)
+  {
+    loan_id: null, // Will be updated after loans are created
+    variant_id: '00000000-0000-0000-0000-000000000001',
+    item_barcode: 'LI-L001-001',
+    due_date: new Date('2024-03-15 10:00:00+07'),
+    status: 'BORROWED',
+    item_condition_on_checkout: 'GOOD',
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000002',
+    item_barcode: 'LI-L001-002',
+    due_date: new Date('2024-03-15 10:00:00+07'),
+    status: 'BORROWED',
+    item_condition_on_checkout: 'GOOD',
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000003',
+    item_barcode: 'LI-L001-003',
+    due_date: new Date('2024-03-15 10:00:00+07'),
+    status: 'BORROWED',
+    item_condition_on_checkout: 'GOOD',
+  },
+  // LOAN-002: 2 items (BORROWED, near due)
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000004',
+    item_barcode: 'LI-L002-001',
+    due_date: new Date('2024-03-26 09:00:00+07'),
+    status: 'BORROWED',
+    item_condition_on_checkout: 'GOOD',
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000005',
+    item_barcode: 'LI-L002-002',
+    due_date: new Date('2024-03-26 09:00:00+07'),
+    status: 'BORROWED',
+    item_condition_on_checkout: 'GOOD',
+  },
+  // LOAN-003: 2 items (RETURNED on time)
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000001',
+    item_barcode: 'LI-L003-001',
+    due_date: new Date('2024-03-01 14:00:00+07'),
+    return_date: new Date('2024-03-01 16:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000006',
+    item_barcode: 'LI-L003-002',
+    due_date: new Date('2024-03-01 14:00:00+07'),
+    return_date: new Date('2024-03-01 16:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+  },
+  // LOAN-004: 5 items (RETURNED_LATE)
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000002',
+    item_barcode: 'LI-L004-001',
+    due_date: new Date('2024-02-15 10:00:00+07'),
+    return_date: new Date('2024-03-10 14:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+    fine_amount: 120000,
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000003',
+    item_barcode: 'LI-L004-002',
+    due_date: new Date('2024-02-15 10:00:00+07'),
+    return_date: new Date('2024-03-10 14:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+    fine_amount: 120000,
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000004',
+    item_barcode: 'LI-L004-003',
+    due_date: new Date('2024-02-15 10:00:00+07'),
+    return_date: new Date('2024-03-10 14:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+    fine_amount: 120000,
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000005',
+    item_barcode: 'LI-L004-004',
+    due_date: new Date('2024-02-15 10:00:00+07'),
+    return_date: new Date('2024-03-10 14:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'ACCEPTABLE',
+    fine_amount: 120000,
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000006',
+    item_barcode: 'LI-L004-005',
+    due_date: new Date('2024-02-15 10:00:00+07'),
+    return_date: new Date('2024-03-10 14:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+    fine_amount: 120000,
+  },
+  // LOAN-005: 1 item (RETURNED_LATE - 7 days overdue)
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000007',
+    item_barcode: 'LI-L005-001',
+    due_date: new Date('2024-01-29 11:00:00+07'),
+    return_date: new Date('2024-02-05 09:00:00+07'),
+    returned_to_warehouse_id: warehouseId,
+    status: 'RETURNED',
+    item_condition_on_checkout: 'GOOD',
+    item_condition_on_return: 'GOOD',
+    fine_amount: 35000,
+  },
+  // LOAN-006: 2 items (OVERDUE - 10 days)
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000008',
+    item_barcode: 'LI-L006-001',
+    due_date: new Date('2024-03-03 10:00:00+07'),
+    status: 'OVERDUE',
+    item_condition_on_checkout: 'GOOD',
+  },
+  {
+    loan_id: null,
+    variant_id: '00000000-0000-0000-0000-000000000009',
+    item_barcode: 'LI-L006-002',
+    due_date: new Date('2024-03-03 10:00:00+07'),
+    status: 'OVERDUE',
+    item_condition_on_checkout: 'GOOD',
+  },
+];
+
+// Fetch created loans to get their IDs
+const createdLoans = await prisma.loan_transactions.findMany({
+  where: {
+    loan_number: {
+      in: ['LOAN-001', 'LOAN-002', 'LOAN-003', 'LOAN-004', 'LOAN-005', 'LOAN-006'],
+    },
+  },
+  select: { id: true, loan_number: true, total_items: true },
+});
+
+// Map loan items to their loan IDs
+const loanItemMap = {
+  'LOAN-001': createdLoans.find(l => l.loan_number === 'LOAN-001')?.id,
+  'LOAN-002': createdLoans.find(l => l.loan_number === 'LOAN-002')?.id,
+  'LOAN-003': createdLoans.find(l => l.loan_number === 'LOAN-003')?.id,
+  'LOAN-004': createdLoans.find(l => l.loan_number === 'LOAN-004')?.id,
+  'LOAN-005': createdLoans.find(l => l.loan_number === 'LOAN-005')?.id,
+  'LOAN-006': createdLoans.find(l => l.loan_number === 'LOAN-006')?.id,
+};
+
+const loanItemsWithLoanIds = loanItemsData.map((item, index) => {
+  let loanNumber;
+  if (index < 3) loanNumber = 'LOAN-001';
+  else if (index < 5) loanNumber = 'LOAN-002';
+  else if (index < 7) loanNumber = 'LOAN-003';
+  else if (index < 12) loanNumber = 'LOAN-004';
+  else if (index < 13) loanNumber = 'LOAN-005';
+  else loanNumber = 'LOAN-006';
+
+  return {
+    ...item,
+    loan_id: loanItemMap[loanNumber],
+  };
+}).filter(item => item.loan_id !== undefined);
+
+await prisma.loan_items.createMany({
+  data: loanItemsWithLoanIds,
+  skipDuplicates: true,
+});
+
+console.log(`✅ Created ${loanItemsWithLoanIds.length} loan items`);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 7.6: LOAN RENEWALS (Borrow history extensions)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const loanItems = await prisma.loan_items.findMany({
+  where: {
+    loan_transactions: {
+      loan_number: {
+        in: ['LOAN-001', 'LOAN-002', 'LOAN-004'],
+      },
+    },
+  },
+  include: {
+    loan_transactions: {
+      select: { loan_number: true },
+    },
+  },
+});
+
+const loanRenewalsData = [
+  // LOAN-001 Item 1: Renewed once
+  {
+    loan_item_id: loanItems.find(li => li.item_barcode === 'LI-L001-001')?.id,
+    renewed_by_user_id: userId,
+    renewed_at: new Date('2024-03-10 11:00:00+07'),
+    old_due_date: new Date('2024-03-15 10:00:00+07'),
+    new_due_date: new Date('2024-03-22 10:00:00+07'),
+    renewal_count: 1,
+    reason: 'Can read more time',
+  },
+  // LOAN-002 Item 1: Renewed twice (max)
+  {
+    loan_item_id: loanItems.find(li => li.item_barcode === 'LI-L002-001')?.id,
+    renewed_by_user_id: userId,
+    renewed_at: new Date('2024-03-18 14:00:00+07'),
+    old_due_date: new Date('2024-03-26 09:00:00+07'),
+    new_due_date: new Date('2024-04-05 09:00:00+07'),
+    renewal_count: 1,
+    reason: 'Need more time to finish',
+  },
+  {
+    loan_item_id: loanItems.find(li => li.item_barcode === 'LI-L002-001')?.id,
+    renewed_by_user_id: userId,
+    renewed_at: new Date('2024-04-02 10:00:00+07'),
+    old_due_date: new Date('2024-04-05 09:00:00+07'),
+    new_due_date: new Date('2024-04-12 09:00:00+07'),
+    renewal_count: 2,
+    reason: 'Still reading',
+  },
+  // LOAN-004 Items: Some renewed before return
+  {
+    loan_item_id: loanItems.find(li => li.item_barcode === 'LI-L004-001')?.id,
+    renewed_by_user_id: userId,
+    renewed_at: new Date('2024-02-10 09:00:00+07'),
+    old_due_date: new Date('2024-02-15 10:00:00+07'),
+    new_due_date: new Date('2024-02-22 10:00:00+07'),
+    renewal_count: 1,
+    reason: 'Traveling',
+  },
+  {
+    loan_item_id: loanItems.find(li => li.item_barcode === 'LI-L004-002')?.id,
+    renewed_by_user_id: userId,
+    renewed_at: new Date('2024-02-10 09:30:00+07'),
+    old_due_date: new Date('2024-02-15 10:00:00+07'),
+    new_due_date: new Date('2024-02-22 10:00:00+07'),
+    renewal_count: 1,
+    reason: 'Traveling',
+  },
+].filter(r => r.loan_item_id !== undefined);
+
+await prisma.loan_renewals.createMany({
+  data: loanRenewalsData,
+  skipDuplicates: true,
+});
+
+console.log(`✅ Created ${loanRenewalsData.length} loan renewals`);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 7.7: FINE PAYMENTS (Payment history)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const fines = await prisma.fines.findMany({
+  select: { id: true, customer_id: true },
+});
+
+const finePaymentsData = [
+  // Fine payment for CUST-002 (LOAN-003)
+  {
+    fine_id: fines.find(f => f.customer_id === customers[2].id)?.id,
+    payment_method: 'WALLET',
+    amount: 15000,
+    paid_by_user_id: userId,
+    paid_at: new Date('2024-03-05 14:00:00+07'),
+    note: 'Thanh toan phat tre han qua vi',
+  },
+].filter(p => p.fine_id !== undefined);
+
+if (finePaymentsData.length > 0) {
+  await prisma.fine_payments.createMany({
+    data: finePaymentsData,
+    skipDuplicates: true,
+  });
+  console.log(`✅ Created ${finePaymentsData.length} fine payments`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // STEP 8: FINES (For Analytics)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -854,6 +1169,9 @@ console.log(`   • Customer preferences for notifications`);
 console.log(`   • Customer accounts with wallet balances`);
 console.log(`   • Loan reservations (pending, ready, cancelled)`);
 console.log(`   • Loan transactions (borrowed, returned, overdue)`);
+console.log(`   • Loan items (books in each loan)`);
+console.log(`   • Loan renewals (borrow history extensions)`);
+console.log(`   • Fine payments (payment history)`);
 console.log(`   • Fines for analytics`);
 console.log(`   • Customer notifications (email, SMS, in-app)`);
 console.log(`   • Book reviews, wishlists, availability alerts`);

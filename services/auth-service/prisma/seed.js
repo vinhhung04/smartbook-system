@@ -255,7 +255,7 @@ async function main() {
   // STEP 4: USERS
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  const passwordHash = await bcrypt.hash('SmartBook@2024', 12);
+  const passwordHash = await bcrypt.hash('123456', 12);
 
   const users = await Promise.all([
     // Admin user
@@ -528,7 +528,7 @@ async function main() {
   console.log(`   • ${warehouseScopes.length} User Warehouse Scopes`);
   console.log(`   • Sample audit logs`);
   console.log('');
-  console.log('🔑 Default Password for all users: SmartBook@2024');
+  console.log('🔑 Default Password for all users: 123456');
   console.log('═══════════════════════════════════════════════════════════════════════\n');
 }
 

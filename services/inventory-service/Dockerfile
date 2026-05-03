@@ -4,11 +4,16 @@ COPY package*.json ./
 RUN npm install -g pnpm && pnpm install
 COPY prisma ./prisma
 RUN npx prisma generate
+COPY src ./src
 COPY . .
 RUN pnpm prune --prod
 
 FROM node:20
 WORKDIR /app
-COPY --from=builder /app ./
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+ENV SERVICE_NAME=inventory-service
 EXPOSE 3001
 CMD ["node", "src/index.js"]
