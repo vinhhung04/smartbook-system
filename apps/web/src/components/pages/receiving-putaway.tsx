@@ -359,6 +359,11 @@ export function ReceivingPutawayPage() {
       return;
     }
 
+    // Prevent double submit by checking savingTransfer state early
+    if (savingTransfer) {
+      return;
+    }
+
     const validationError = validateDraft();
     if (validationError) {
       toast.error(validationError);
@@ -367,6 +372,7 @@ export function ReceivingPutawayPage() {
 
     try {
       setSavingTransfer(true);
+      const idempotencyKey = `transfer-${selectedReceivingId}-${selectedVariantId}-${Date.now()}`;
       const payload = {
         warehouse_id: selectedWarehouseId,
         source_receiving_location_id: selectedReceivingId,
@@ -378,6 +384,7 @@ export function ReceivingPutawayPage() {
           scanned_location_barcode: line.scanned_location_barcode || null,
           scanned_product_barcode: line.scanned_product_barcode || null,
         })),
+        idempotency_key: idempotencyKey,
       };
 
       const res = await receivingPutawayService.transfer(payload);
@@ -407,6 +414,11 @@ export function ReceivingPutawayPage() {
       return;
     }
 
+    // Prevent double submit by checking savingReverse state early
+    if (savingReverse) {
+      return;
+    }
+
     const qty = Number(reverseQuantity || 0);
     if (!Number.isFinite(qty) || qty <= 0) {
       toast.error("So luong reverse phai > 0");
@@ -425,6 +437,7 @@ export function ReceivingPutawayPage() {
 
     try {
       setSavingReverse(true);
+      const idempotencyKey = `reverse-${selectedReverseCompartmentId}-${reverseVariantId}-${Date.now()}`;
       const res = await receivingPutawayService.reverse({
         warehouse_id: selectedWarehouseId,
         source_compartment_location_id: selectedReverseCompartmentId,
@@ -432,6 +445,7 @@ export function ReceivingPutawayPage() {
         variant_id: reverseVariantId,
         quantity: qty,
         reason: reverseReason.trim(),
+        idempotency_key: idempotencyKey,
       });
 
       setReverseReason("");

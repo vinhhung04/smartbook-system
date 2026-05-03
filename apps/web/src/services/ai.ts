@@ -248,4 +248,31 @@ export const aiService = {
     const response = await aiAPI.post('/reading-stats', { loans, reviews });
     return response.data;
   },
+
+  scanReceipt: async (
+    file: File,
+  ): Promise<{
+    success: boolean;
+    supplier_name?: string;
+    invoice_number?: string;
+    invoice_date?: string;
+    line_items: Array<{
+      title: string;
+      isbn: string | null;
+      quantity: number;
+      unit_price: number;
+    }>;
+    total_items: number;
+    error?: string;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await aiAPI.post('/scan-receipt', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };

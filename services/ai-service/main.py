@@ -172,6 +172,136 @@ async def scan_back_cover(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# Smart Receiving AI — Receipt/Invoice OCR Scanning
+# ────────────────────────────────────────────────────────────────────────────────
+
+PROMPT_RECEIPT = (
+    "Bạn là một chuyên gia nhập liệu kho sách cho hệ thống thư viện SmartBook. "
+    "Nhìn vào hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho này. "
+    "Hãy trích xuất tất cả thông tin một cách chính xác nhất.\n\n"
+    "YÊU CẦU ĐẦU RA:\n"
+    "Trả về DUY NHẤT một JSON hợp lệ, không có markdown, không có giải thích, theo định dạng:\n\n"
+    "{\n"
+    '  "supplier_name": "...",\n'
+    '  "invoice_number": "...",\n'
+    '  "invoice_date": "YYYY-MM-DD",\n'
+    '  "line_items": [\n'
+    '    {\n'
+    '      "title": "...",\n'
+    '      "isbn": "...",\n'
+    '      "quantity": số_nguyên,\n'
+    '      "unit_price": số_thập_phân\n'
+    '    }\n'
+    '  ]\n'
+    "}\n\n"
+    "QUY TẮC:\n"
+    "- supplier_name: tên nhà cung cấp (nếu không thấy ghi null)\n"
+    "- invoice_number: số hóa đơn (nếu không thấy ghi null)\n"
+    "- invoice_date: ngày tháng theo định dạng YYYY-MM-DD (nếu không thấy ghi null)\n"
+    "- line_items: MẢNG các dòng sản phẩm, mỗi dòng gồm:\n"
+    "  * title: tên sách (bắt buộc)\n"
+    "  * isbn: mã ISBN (10 hoặc 13 số, có thể ghi null nếu không thấy)\n"
+    "  * quantity: số lượng (số nguyên dương, mặc định 1 nếu không thấy)\n"
+    "  * unit_price: đơn giá (số, có thể làm tròn, mặc định 0 nếu không thấy)\n"
+    "- Nếu không trích xuất được gì, trả về {\"error\": \"Không thể đọc nội dung hóa đơn\"}\n"
+    "- Đọc tất cả các dòng sản phẩm trong hóa đơn, không bỏ sót\n"
+    "- Ưu tiên ISBN chuẩn (13 số bắt đầu bằng 978)"
+)
+
+
+def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
+    """Extract structured data from receipt/invoice image using Ollama vision."""
+    client = ollama.Client(host=OLLAMA_HOST)
+    response = client.generate(
+        model=OLLAMA_MODEL,
+        prompt=PROMPT_RECEIPT,
+        images=[image_bytes],
+        options={"temperature": 0},
+    )
+    raw_text: str = response.get("response", "")
+
+    # Try to parse JSON from response
+    try:
+        return json.loads(raw_text.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Try to extract JSON from markdown code block
+    import re
+    block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+    if block:
+        try:
+            return json.loads(block.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try to find JSON object anywhere in text
+    obj = re.search(r"\{[\s\S]*\}", raw_text)
+    if obj:
+        try:
+            return json.loads(obj.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    return {"error": "Không thể trích xuất dữ liệu từ hình ảnh", "raw": raw_text}
+
+
+@app.post("/scan-receipt")
+async def scan_receipt(file: UploadFile = File(...)):
+    """
+    Trích xuất dữ liệu cấu trúc từ hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho.
+    Trả về: supplier_name, invoice_number, invoice_date, line_items[]
+    """
+    # Validate file type
+    content_type = file.content_type or ""
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    if not any(content_type.startswith(t) for t in allowed_types):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}"
+        )
+
+    image_bytes = _validate_and_read_image(file)
+
+    try:
+        result = _scan_receipt_from_bytes(image_bytes)
+
+        # Validate response structure
+        if "error" in result:
+            return {
+                "success": False,
+                "error": result["error"],
+                "raw": result.get("raw"),
+            }
+
+        # Normalize line_items
+        line_items = result.get("line_items") or []
+        normalized_items = []
+        for item in line_items:
+            normalized_item = {
+                "title": item.get("title") or "Không rõ",
+                "isbn": item.get("isbn"),
+                "quantity": max(1, int(item.get("quantity") or 1)),
+                "unit_price": float(item.get("unit_price") or 0),
+            }
+            normalized_items.append(normalized_item)
+
+        return {
+            "success": True,
+            "supplier_name": result.get("supplier_name"),
+            "invoice_number": result.get("invoice_number"),
+            "invoice_date": result.get("invoice_date"),
+            "line_items": normalized_items,
+            "total_items": len(normalized_items),
+        }
+
+    except ollama.ResponseError as e:
+        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/recognize-book")
 async def recognize_book(file: UploadFile = File(...)):
     image_bytes = _validate_and_read_image(file)

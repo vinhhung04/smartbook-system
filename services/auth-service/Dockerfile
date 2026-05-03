@@ -1,11 +1,11 @@
 FROM node:20 AS builder
 WORKDIR /app
 COPY package*.json ./
-COPY package-lock.json ./
-RUN npm ci
-COPY . .
+RUN npm install -g pnpm && pnpm install
+COPY prisma ./prisma
 RUN npx prisma generate
-RUN npm prune --production
+COPY . .
+RUN pnpm prune --prod
 
 FROM node:20
 WORKDIR /app

@@ -34,7 +34,7 @@ services:
   inventory-service:
     build: ./services/inventory-service
     container_name: inventory-service
-    command: sh -c "npm run start"
+    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && npm run start"
     ports:
       - "3003:3001"
     environment:
@@ -44,11 +44,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: on-failure
 
   auth-service:
     build: ./services/auth-service
     container_name: auth-service
-    command: sh -c "npm run start"
+    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && npm run start"
     ports:
       - "3004:3002"
     environment:
@@ -58,11 +59,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: on-failure
 
   borrow-service:
     build: ./services/borrow-service
     container_name: borrow-service
-    command: sh -c "npm run start"
+    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && npm run start"
     ports:
       - "3005:3005"
     environment:
@@ -80,36 +82,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
-  inventory-db-push:
-    profiles: ["dev"]
-    build: ./services/inventory-service
-    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
-    depends_on:
-      db:
-        condition: service_healthy
-
-  auth-db-push:
-    profiles: ["dev"]
-    build: ./services/auth-service
-    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
-    depends_on:
-      db:
-        condition: service_healthy
-
-  borrow-db-push:
-    profiles: ["dev"]
-    build: ./services/borrow-service
-    command: sh -c "npx prisma db push --skip-generate --accept-data-loss"
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
-    depends_on:
-      db:
-        condition: service_healthy
+    restart: on-failure
 
   ai-service:
     build: ./services/ai-service

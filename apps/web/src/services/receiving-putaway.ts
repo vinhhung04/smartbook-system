@@ -52,6 +52,10 @@ export interface TransferAllocationLine {
   scanned_product_barcode?: string | null;
 }
 
+function generateIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export const receivingPutawayService = {
   getReceivings: async (warehouseId: string) => {
     const response = await inventoryAPI.get(`/api/receiving-putaway/warehouses/${warehouseId}/receivings`);
@@ -107,8 +111,12 @@ export const receivingPutawayService = {
     source_receiving_location_id: string;
     variant_id: string;
     allocations: TransferAllocationLine[];
+    idempotency_key?: string;
   }) => {
-    const response = await inventoryAPI.post('/api/receiving-putaway/transfer', payload);
+    const response = await inventoryAPI.post('/api/receiving-putaway/transfer', {
+      ...payload,
+      idempotency_key: payload.idempotency_key || generateIdempotencyKey(),
+    });
     return response.data as {
       message: string;
       data: {
@@ -146,8 +154,12 @@ export const receivingPutawayService = {
     variant_id: string;
     quantity: number;
     reason: string;
+    idempotency_key?: string;
   }) => {
-    const response = await inventoryAPI.post('/api/receiving-putaway/reverse', payload);
+    const response = await inventoryAPI.post('/api/receiving-putaway/reverse', {
+      ...payload,
+      idempotency_key: payload.idempotency_key || generateIdempotencyKey(),
+    });
     return response.data as {
       message: string;
       data: {

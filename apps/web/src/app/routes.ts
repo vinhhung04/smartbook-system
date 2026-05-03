@@ -26,6 +26,7 @@ import { PutawayPage } from "@/components/pages/putaway";
 import { PutawayDetailPage } from "@/components/pages/putaway-detail";
 import { PutawayExecutePage } from "@/components/pages/putaway-execute";
 import { ReceivingPutawayPage } from "@/components/pages/receiving-putaway";
+import { SmartReceivingPage } from "@/components/pages/receiving-smart";
 import { PickingPage } from "@/components/pages/picking";
 import { OrderRequestsPage } from "@/components/pages/order-requests";
 import { OutboundPage } from "@/components/pages/outbound";
@@ -147,6 +148,7 @@ export const router = createBrowserRouter([
       { path: "putaway/:id", Component: PutawayDetailPage },
       { path: "putaway/:id/execute", Component: PutawayExecutePage },
       { path: "receiving-putaway", Component: ReceivingPutawayPage },
+      { path: "receiving-smart", Component: SmartReceivingPage },
       { path: "picking", Component: PickingPage },
       { path: "order-requests", Component: OrderRequestsPage },
       { path: "movements", Component: MovementsPage },
