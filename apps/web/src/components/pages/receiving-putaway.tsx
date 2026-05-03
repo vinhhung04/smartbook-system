@@ -12,6 +12,7 @@ import {
   type ReceivingLocation,
   type VariantLookupMatch,
 } from "@/services/receiving-putaway";
+import { StorageSuggestionPanel } from "@/components/inventory/StorageSuggestionPanel";
 
 interface DraftAllocationLine {
   id: string;
@@ -54,6 +55,10 @@ export function ReceivingPutawayPage() {
   const [reverseReceivingId, setReverseReceivingId] = useState("");
   const [reverseQuantity, setReverseQuantity] = useState(0);
   const [reverseReason, setReverseReason] = useState("");
+
+  // Storage suggestion state
+  const [showStorageSuggestion, setShowStorageSuggestion] = useState(false);
+  const [suggestionQuantity, setSuggestionQuantity] = useState(1);
 
   const selectedVariantItem = useMemo(
     () => receivingItems.find((item) => item.variant_id === selectedVariantId) || null,
@@ -459,6 +464,38 @@ export function ReceivingPutawayPage() {
     }
   };
 
+  // Handle storage suggestion selection
+  const handleSelectSuggestedLocation = (location: {
+    locationId: string;
+    locationCode: string;
+    zone: string | null;
+    shelf: string | null;
+    bin: string | null;
+  }) => {
+    if (draftLines.length > 0) {
+      // Update first draft line with suggested location
+      const firstLine = draftLines[0];
+      updateLine(firstLine.id, {
+        target_location_id: location.locationId,
+      });
+      toast.success(`Da ap dung vi tri goi y: ${location.locationCode}`);
+    } else {
+      // Create new draft line with suggested location
+      setDraftLines([
+        {
+          id: makeLineId(),
+          target_location_id: location.locationId,
+          quantity: suggestionQuantity,
+          reason: "Goi y tu he thong",
+          scanned_location_barcode: "",
+          scanned_product_barcode: "",
+        },
+      ]);
+      toast.success(`Da tao dong allocation voi vi tri: ${location.locationCode}`);
+    }
+    setShowStorageSuggestion(false);
+  };
+
   if (loading) {
     return (
       <PageWrapper>
@@ -625,8 +662,43 @@ export function ReceivingPutawayPage() {
 
           <div className="flex items-center justify-between mt-4">
             <p className="text-[12px] text-slate-500">Tong draft: {totalDraftQty} / on_hand source: {selectedVariantItem?.on_hand_qty || 0}</p>
-            <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Them dong allocation</button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
+                className="rounded-[10px] border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                {showStorageSuggestion ? "An goi y" : "Goi y vi tri (AI)"}
+              </button>
+              <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Them dong allocation</button>
+            </div>
           </div>
+
+          {/* Storage Suggestion Panel */}
+          {showStorageSuggestion && selectedWarehouseId && selectedVariantId && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4"
+            >
+              <div className="mb-3 flex items-center gap-3">
+                <label className="text-[12px] text-slate-600">So luong can goi y:</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={suggestionQuantity}
+                  onChange={(e) => setSuggestionQuantity(Math.max(1, Number(e.target.value)))}
+                  className="w-20 rounded-[8px] border border-slate-200 px-2 py-1.5 text-[12px]"
+                />
+              </div>
+              <StorageSuggestionPanel
+                warehouseId={selectedWarehouseId}
+                variantId={selectedVariantId}
+                quantity={suggestionQuantity}
+                onSelectLocation={handleSelectSuggestedLocation}
+              />
+            </motion.div>
+          )}
 
           <div className="mt-3 space-y-2">
             {draftLines.length === 0 ? (

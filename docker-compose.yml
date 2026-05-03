@@ -31,6 +31,20 @@ services:
       db:
         condition: service_healthy
 
+  redis:
+    image: redis:7-alpine
+    container_name: smartbook_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   inventory-service:
     build: ./services/inventory-service
     container_name: inventory-service
@@ -41,8 +55,12 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - REDIS_URL=redis://redis:6379
+      - AI_SERVICE_URL=http://ai-service:8000
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: on-failure
 
@@ -57,8 +75,11 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: on-failure
 
@@ -104,7 +125,7 @@ services:
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
       # Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
       # Nếu không set, sẽ fallback về Ollama local
-      - GROQ_API_KEY=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${GROQ_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_SUMMARY_MODEL=${GROQ_SUMMARY_MODEL:-llama-3.3-70b-versatile}
 
   api-gateway:
@@ -154,3 +175,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
