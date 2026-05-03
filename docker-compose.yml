@@ -56,6 +56,7 @@ services:
       - PORT=3002
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
     depends_on:
       db:
         condition: service_healthy

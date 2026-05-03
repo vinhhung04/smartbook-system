@@ -24,6 +24,7 @@ export function PutawayDetailPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<PutawayReceiptDetail | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -40,7 +41,18 @@ export function PutawayDetailPage() {
     };
 
     void load();
-  }, [id]);
+  }, [id, refreshKey]);
+
+  // Force reload when tab/window is focused again (user returns from another page)
+  useEffect(() => {
+    const handleFocus = () => {
+      setRefreshKey((k) => k + 1);
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   const remainingItems = useMemo(() => detail?.items.filter((item) => item.remaining_quantity > 0) || [], [detail]);
 
@@ -75,7 +87,7 @@ export function PutawayDetailPage() {
             <p className="text-[12px] text-slate-500 mt-0.5">Kho: {detail.warehouse_code || detail.warehouse_name || "-"} · Ngay duyet: {formatDate(detail.received_at || detail.created_at)}</p>
           </div>
           <button
-            onClick={() => navigate(`/putaway/${detail.id}/execute`)}
+            onClick={() => navigate(`/receiving-putaway`)}
             disabled={detail.remaining_quantity <= 0}
             className="inline-flex items-center gap-2 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
           >
@@ -121,7 +133,7 @@ export function PutawayDetailPage() {
                   <td className="px-5 py-3.5 text-[13px] text-blue-700" style={{ fontWeight: 600 }}>{item.remaining_quantity}</td>
                   <td className="px-5 py-3.5 text-[12px]">
                     <button
-                      onClick={() => navigate(`/putaway/${detail.id}/execute`)}
+                      onClick={() => navigate(`/receiving-putaway`)}
                       className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-violet-50 px-3 py-1.5 text-violet-700 hover:bg-violet-100"
                       style={{ fontWeight: 600 }}
                     >

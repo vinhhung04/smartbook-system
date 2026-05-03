@@ -4,34 +4,87 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Starting auth-service seed...');
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════════
+   * SMARTBOOK AUTH SERVICE - SEED DATA
+   * ═══════════════════════════════════════════════════════════════════════════════
+   * 
+   * This seed creates comprehensive demo data for the SmartBook authentication system.
+   * Data includes: permissions, roles, users with warehouse scopes.
+   * 
+   * AI Analysis Metadata:
+   * - Role-based access control for workflow permissions
+   * - User warehouse scopes for multi-tenant support
+   * - Comprehensive audit logging for security analysis
+   */
 
-  // Create permissions
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 1: PERMISSIONS (Organized by Module)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   const permissions = [
-    // Auth permissions
-    { code: 'auth.users.read', module_name: 'auth', action_name: 'read', description: 'View user accounts' },
-    { code: 'auth.users.write', module_name: 'auth', action_name: 'write', description: 'Create or update user accounts' },
-    { code: 'auth.roles.read', module_name: 'auth', action_name: 'read', description: 'View roles and permissions' },
-    { code: 'auth.roles.write', module_name: 'auth', action_name: 'write', description: 'Manage roles and permissions' },
-    // Inventory permissions
-    { code: 'inventory.catalog.read', module_name: 'inventory', action_name: 'read', description: 'View catalog and variants' },
-    { code: 'inventory.catalog.write', module_name: 'inventory', action_name: 'write', description: 'Manage catalog and variants' },
-    { code: 'inventory.stock.read', module_name: 'inventory', action_name: 'read', description: 'View stock balances and movements' },
-    { code: 'inventory.stock.write', module_name: 'inventory', action_name: 'write', description: 'Post inventory movements' },
-    { code: 'inventory.purchase.approve', module_name: 'inventory', action_name: 'approve', description: 'Approve purchase and transfer documents' },
-    // Borrow permissions
-    { code: 'borrow.read', module_name: 'borrow', action_name: 'read', description: 'View customers, reservations and loans' },
-    { code: 'borrow.write', module_name: 'borrow', action_name: 'write', description: 'Create reservations, loans and returns' },
-    { code: 'borrow.fines.manage', module_name: 'borrow', action_name: 'write', description: 'Issue and settle fines' },
-    // AI permissions
-    { code: 'ai.read', module_name: 'ai', action_name: 'read', description: 'View recognition jobs and results' },
-    { code: 'ai.write', module_name: 'ai', action_name: 'write', description: 'Create and verify recognition jobs' },
-    // Analytics permissions
-    { code: 'analytics.read', module_name: 'analytics', action_name: 'read', description: 'View forecasts, KPI and recommendations' },
-    // Chatbot permissions
+    // Auth module
+    { code: 'auth.users.read', module_name: 'auth', action_name: 'read', description: 'View user accounts and profiles' },
+    { code: 'auth.users.write', module_name: 'auth', action_name: 'write', description: 'Create, update, or deactivate user accounts' },
+    { code: 'auth.roles.read', module_name: 'auth', action_name: 'read', description: 'View roles and their permissions' },
+    { code: 'auth.roles.write', module_name: 'auth', action_name: 'write', description: 'Create, update, or delete roles and permissions' },
+    { code: 'auth.sessions.manage', module_name: 'auth', action_name: 'write', description: 'Manage user sessions and tokens' },
+    { code: 'auth.audit.read', module_name: 'auth', action_name: 'read', description: 'View authentication audit logs' },
+
+    // Catalog module (Inventory)
+    { code: 'inventory.catalog.read', module_name: 'inventory', action_name: 'read', description: 'View catalog, books, and variants' },
+    { code: 'inventory.catalog.write', module_name: 'inventory', action_name: 'write', description: 'Create or update catalog items' },
+    { code: 'inventory.catalog.import', module_name: 'inventory', action_name: 'write', description: 'Import catalog data in bulk' },
+    { code: 'inventory.catalog.export', module_name: 'inventory', action_name: 'read', description: 'Export catalog data' },
+
+    // Stock module (Inventory)
+    { code: 'inventory.stock.read', module_name: 'inventory', action_name: 'read', description: 'View stock balances, movements, and inventory' },
+    { code: 'inventory.stock.write', module_name: 'inventory', action_name: 'write', description: 'Post inventory movements and adjustments' },
+    { code: 'inventory.stock.audit', module_name: 'inventory', action_name: 'write', description: 'Perform stock audits and cycle counts' },
+
+    // Warehouse module
+    { code: 'inventory.warehouse.read', module_name: 'inventory', action_name: 'read', description: 'View warehouses and locations' },
+    { code: 'inventory.warehouse.write', module_name: 'inventory', action_name: 'write', description: 'Create or update warehouses and locations' },
+
+    // Receiving & Putaway
+    { code: 'inventory.receiving.read', module_name: 'inventory', action_name: 'read', description: 'View goods receipts and receiving locations' },
+    { code: 'inventory.receiving.write', module_name: 'inventory', action_name: 'write', description: 'Create goods receipts and process putaway' },
+    { code: 'inventory.putaway.execute', module_name: 'inventory', action_name: 'write', description: 'Execute putaway operations' },
+
+    // Purchase module
+    { code: 'inventory.purchase.read', module_name: 'inventory', action_name: 'read', description: 'View purchase orders and suppliers' },
+    { code: 'inventory.purchase.write', module_name: 'inventory', action_name: 'write', description: 'Create and manage purchase orders' },
+    { code: 'inventory.purchase.approve', module_name: 'inventory', action_name: 'write', description: 'Approve purchase orders' },
+
+    // Transfer module
+    { code: 'inventory.transfer.read', module_name: 'inventory', action_name: 'read', description: 'View transfer orders' },
+    { code: 'inventory.transfer.write', module_name: 'inventory', action_name: 'write', description: 'Create and manage transfer orders' },
+
+    // Borrow module
+    { code: 'borrow.customers.read', module_name: 'borrow', action_name: 'read', description: 'View customer profiles and membership' },
+    { code: 'borrow.customers.write', module_name: 'borrow', action_name: 'write', description: 'Create or update customer accounts' },
+    { code: 'borrow.loans.read', module_name: 'borrow', action_name: 'read', description: 'View reservations and loan transactions' },
+    { code: 'borrow.loans.write', module_name: 'borrow', action_name: 'write', description: 'Create reservations, loans, and process returns' },
+    { code: 'borrow.fines.manage', module_name: 'borrow', action_name: 'write', description: 'Issue, adjust, or waive fines' },
+    { code: 'borrow.payments.process', module_name: 'borrow', action_name: 'write', description: 'Process customer payments' },
+
+    // AI module
+    { code: 'ai.scan.receipt', module_name: 'ai', action_name: 'write', description: 'Scan and extract data from receipts' },
+    { code: 'ai.ocr.process', module_name: 'ai', action_name: 'write', description: 'Process OCR requests' },
+    { code: 'ai.recommendation.view', module_name: 'ai', action_name: 'read', description: 'View AI recommendations' },
+
+    // Analytics module
+    { code: 'analytics.reports.view', module_name: 'analytics', action_name: 'read', description: 'View analytics reports and dashboards' },
+    { code: 'analytics.reports.export', module_name: 'analytics', action_name: 'read', description: 'Export analytics reports' },
+    { code: 'analytics.forecast.view', module_name: 'analytics', action_name: 'read', description: 'View demand forecasts' },
+
+    // Chatbot module
     { code: 'chatbot.use', module_name: 'chatbot', action_name: 'execute', description: 'Use chatbot and save reports' },
-    // Platform permissions
-    { code: 'observability.read', module_name: 'platform', action_name: 'read', description: 'View logs and audit information' },
+
+    // Platform/Observability module
+    { code: 'platform.settings.read', module_name: 'platform', action_name: 'read', description: 'View platform settings' },
+    { code: 'platform.settings.write', module_name: 'platform', action_name: 'write', description: 'Update platform settings' },
+    { code: 'observability.logs.read', module_name: 'platform', action_name: 'read', description: 'View system logs and audit trails' },
   ];
 
   for (const perm of permissions) {
@@ -41,169 +94,442 @@ async function main() {
       create: perm,
     });
   }
-  console.log(`Created ${permissions.length} permissions`);
+  console.log(`✅ Created ${permissions.length} permissions`);
 
-  // Create ADMIN role with all permissions
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 2: ROLES
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   const adminRole = await prisma.role.upsert({
     where: { code: 'ADMIN' },
     update: {},
     create: {
       code: 'ADMIN',
       name: 'Administrator',
-      description: 'Full access to platform configuration and IAM',
+      description: 'Full access to platform configuration, IAM, and all operations',
       is_system: true,
     },
   });
-  console.log('Created ADMIN role');
 
-  // Assign all permissions to ADMIN
-  const allPerms = await prisma.permission.findMany();
-  for (const perm of allPerms) {
-    await prisma.rolePermission.upsert({
-      where: {
-        role_id_permission_id: {
-          role_id: adminRole.id,
-          permission_id: perm.id,
-        },
-      },
-      update: {},
-      create: {
-        role_id: adminRole.id,
-        permission_id: perm.id,
-      },
-    });
-  }
-  console.log(`Assigned ${allPerms.length} permissions to ADMIN role`);
-
-  // Create MANAGER role
   const managerRole = await prisma.role.upsert({
     where: { code: 'MANAGER' },
     update: {},
     create: {
       code: 'MANAGER',
       name: 'Manager',
-      description: 'Can monitor operations, analytics and approvals',
+      description: 'Can monitor operations, view analytics, approve documents, and manage staff',
       is_system: true,
     },
   });
-  console.log('Created MANAGER role');
 
-  // Assign subset of permissions to MANAGER
-  const managerPerms = allPerms.filter(p => 
-    ['inventory.catalog.read', 'inventory.stock.read', 'borrow.read', 'analytics.read', 'observability.read'].includes(p.code)
-  );
-  for (const perm of managerPerms) {
-    await prisma.rolePermission.upsert({
-      where: {
-        role_id_permission_id: {
-          role_id: managerRole.id,
-          permission_id: perm.id,
-        },
-      },
-      update: {},
-      create: {
-        role_id: managerRole.id,
-        permission_id: perm.id,
-      },
-    });
-  }
-  console.log(`Assigned ${managerPerms.length} permissions to MANAGER role`);
-
-  // Create STAFF role
   const staffRole = await prisma.role.upsert({
     where: { code: 'STAFF' },
     update: {},
     create: {
       code: 'STAFF',
       name: 'Staff',
-      description: 'Can operate warehouse and borrow workflows',
+      description: 'Can operate warehouse workflows, process borrow operations',
       is_system: true,
     },
   });
-  console.log('Created STAFF role');
 
-  // Create admin user
-  const passwordHash = await bcrypt.hash('123456', 10);
-  
-  const existingUser = await prisma.user.findUnique({
-    where: { username: 'hung' },
+  const warehouseRole = await prisma.role.upsert({
+    where: { code: 'WAREHOUSE_OPERATOR' },
+    update: {},
+    create: {
+      code: 'WAREHOUSE_OPERATOR',
+      name: 'Warehouse Operator',
+      description: 'Focused on warehouse operations: receiving, putaway, picking, outbound',
+      is_system: true,
+    },
   });
 
-  if (!existingUser) {
-    const adminUser = await prisma.user.create({
-      data: {
+  const customerServiceRole = await prisma.role.upsert({
+    where: { code: 'CUSTOMER_SERVICE' },
+    update: {},
+    create: {
+      code: 'CUSTOMER_SERVICE',
+      name: 'Customer Service',
+      description: 'Handle customer inquiries, reservations, and loan processing',
+      is_system: true,
+    },
+  });
+
+  console.log('✅ Created 5 roles');
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 3: ASSIGN PERMISSIONS TO ROLES
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const allPerms = await prisma.permission.findMany();
+  const permMap = {};
+  for (const p of allPerms) {
+    permMap[p.code] = p;
+  }
+
+  // ADMIN: All permissions
+  for (const perm of allPerms) {
+    await prisma.rolePermission.upsert({
+      where: { role_id_permission_id: { role_id: adminRole.id, permission_id: perm.id } },
+      update: {},
+      create: { role_id: adminRole.id, permission_id: perm.id },
+    });
+  }
+  console.log('✅ Assigned all permissions to ADMIN');
+
+  // MANAGER: Read all + approve + analytics + some write
+  const managerPermCodes = [
+    'inventory.catalog.read', 'inventory.stock.read', 'inventory.warehouse.read',
+    'inventory.receiving.read', 'inventory.purchase.read', 'inventory.purchase.approve',
+    'inventory.transfer.read',
+    'borrow.customers.read', 'borrow.loans.read', 'borrow.fines.manage',
+    'analytics.reports.view', 'analytics.reports.export', 'analytics.forecast.view',
+    'observability.logs.read',
+    'ai.recommendation.view',
+    'platform.settings.read',
+  ];
+  for (const code of managerPermCodes) {
+    if (permMap[code]) {
+      await prisma.rolePermission.upsert({
+        where: { role_id_permission_id: { role_id: managerRole.id, permission_id: permMap[code].id } },
+        update: {},
+        create: { role_id: managerRole.id, permission_id: permMap[code].id },
+      });
+    }
+  }
+  console.log(`✅ Assigned ${managerPermCodes.length} permissions to MANAGER`);
+
+  // STAFF: Basic operations
+  const staffPermCodes = [
+    'inventory.catalog.read', 'inventory.stock.read', 'inventory.stock.write',
+    'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute',
+    'borrow.customers.read', 'borrow.loans.read', 'borrow.loans.write',
+  ];
+  for (const code of staffPermCodes) {
+    if (permMap[code]) {
+      await prisma.rolePermission.upsert({
+        where: { role_id_permission_id: { role_id: staffRole.id, permission_id: permMap[code].id } },
+        update: {},
+        create: { role_id: staffRole.id, permission_id: permMap[code].id },
+      });
+    }
+  }
+  console.log(`✅ Assigned ${staffPermCodes.length} permissions to STAFF`);
+
+  // WAREHOUSE_OPERATOR: Warehouse operations only
+  const warehousePermCodes = [
+    'inventory.stock.read', 'inventory.stock.write',
+    'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute',
+    'inventory.warehouse.read',
+  ];
+  for (const code of warehousePermCodes) {
+    if (permMap[code]) {
+      await prisma.rolePermission.upsert({
+        where: { role_id_permission_id: { role_id: warehouseRole.id, permission_id: permMap[code].id } },
+        update: {},
+        create: { role_id: warehouseRole.id, permission_id: permMap[code].id },
+      });
+    }
+  }
+  console.log(`✅ Assigned ${warehousePermCodes.length} permissions to WAREHOUSE_OPERATOR`);
+
+  // CUSTOMER_SERVICE: Customer-facing operations
+  const customerServicePermCodes = [
+    'borrow.customers.read', 'borrow.customers.write',
+    'borrow.loans.read', 'borrow.loans.write',
+    'borrow.fines.manage', 'borrow.payments.process',
+    'inventory.catalog.read',
+  ];
+  for (const code of customerServicePermCodes) {
+    if (permMap[code]) {
+      await prisma.rolePermission.upsert({
+        where: { role_id_permission_id: { role_id: customerServiceRole.id, permission_id: permMap[code].id } },
+        update: {},
+        create: { role_id: customerServiceRole.id, permission_id: permMap[code].id },
+      });
+    }
+  }
+  console.log(`✅ Assigned ${customerServicePermCodes.length} permissions to CUSTOMER_SERVICE`);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 4: USERS
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const passwordHash = await bcrypt.hash('SmartBook@2024', 12);
+
+  const users = await Promise.all([
+    // Admin user
+    prisma.user.upsert({
+      where: { username: 'hung' },
+      update: {},
+      create: {
         username: 'hung',
         email: 'hung@smartbook.vn',
         password_hash: passwordHash,
         full_name: 'Nguyen Van Hung',
-        phone: '+84123456789',
+        phone: '+84901234567',
         status: 'ACTIVE',
         is_superuser: true,
       },
-    });
-    console.log('Created admin user: hung');
-
-    await prisma.userRole.create({
-      data: {
-        user_id: adminUser.id,
-        role_id: adminRole.id,
-      },
-    });
-    console.log('Assigned ADMIN role to hung');
-  } else {
-    console.log('Admin user already exists: hung');
-    // Update is_superuser if needed
-    if (!existingUser.is_superuser) {
-      await prisma.user.update({
-        where: { id: existingUser.id },
-        data: { is_superuser: true },
-      });
-      console.log('Updated hung is_superuser to true');
-    }
-    // Ensure ADMIN role is assigned
-    const existingRole = await prisma.userRole.findFirst({
-      where: { user_id: existingUser.id, role_id: adminRole.id },
-    });
-    if (!existingRole) {
-      await prisma.userRole.create({
-        data: {
-          user_id: existingUser.id,
-          role_id: adminRole.id,
-        },
-      });
-      console.log('Assigned ADMIN role to hung');
-    }
-  }
-
-  // Create staff user
-  const existingStaff = await prisma.user.findUnique({
-    where: { username: 'staff01' },
-  });
-
-  if (!existingStaff) {
-    const staffUser = await prisma.user.create({
-      data: {
-        username: 'staff01',
-        email: 'staff01@smartbook.vn',
+    }),
+    // Manager user
+    prisma.user.upsert({
+      where: { username: 'manager01' },
+      update: {},
+      create: {
+        username: 'manager01',
+        email: 'manager01@smartbook.vn',
         password_hash: passwordHash,
-        full_name: 'Tran Thi Nhuan',
-        phone: '+84987654321',
+        full_name: 'Tran Thi Lan',
+        phone: '+84901234568',
         status: 'ACTIVE',
         is_superuser: false,
       },
-    });
-    console.log('Created staff user: staff01');
-
-    await prisma.userRole.create({
-      data: {
-        user_id: staffUser.id,
-        role_id: staffRole.id,
+    }),
+    // Staff users
+    prisma.user.upsert({
+      where: { username: 'staff01' },
+      update: {},
+      create: {
+        username: 'staff01',
+        email: 'staff01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Le Van Minh',
+        phone: '+84901234569',
+        status: 'ACTIVE',
+        is_superuser: false,
       },
+    }),
+    prisma.user.upsert({
+      where: { username: 'staff02' },
+      update: {},
+      create: {
+        username: 'staff02',
+        email: 'staff02@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Pham Thi Mai',
+        phone: '+84901234570',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    prisma.user.upsert({
+      where: { username: 'staff03' },
+      update: {},
+      create: {
+        username: 'staff03',
+        email: 'staff03@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Hoang Van Duc',
+        phone: '+84901234571',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    // Warehouse operator
+    prisma.user.upsert({
+      where: { username: 'warehouse01' },
+      update: {},
+      create: {
+        username: 'warehouse01',
+        email: 'warehouse01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Nguyen Van Khoa',
+        phone: '+84901234572',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    // Customer service
+    prisma.user.upsert({
+      where: { username: 'cs01' },
+      update: {},
+      create: {
+        username: 'cs01',
+        email: 'cs01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Tran Thi Thu',
+        phone: '+84901234573',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    // Inactive user
+    prisma.user.upsert({
+      where: { username: 'inactive01' },
+      update: {},
+      create: {
+        username: 'inactive01',
+        email: 'inactive01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Vo Van Teo',
+        phone: '+84901234574',
+        status: 'INACTIVE',
+        is_superuser: false,
+      },
+    }),
+  ]);
+
+  console.log(`✅ Created ${users.length} users`);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 5: ASSIGN ROLES TO USERS
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[0].id, role_id: adminRole.id } },
+    update: {},
+    create: { user_id: users[0].id, role_id: adminRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[1].id, role_id: managerRole.id } },
+    update: {},
+    create: { user_id: users[1].id, role_id: managerRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[2].id, role_id: staffRole.id } },
+    update: {},
+    create: { user_id: users[2].id, role_id: staffRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[3].id, role_id: staffRole.id } },
+    update: {},
+    create: { user_id: users[3].id, role_id: staffRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[4].id, role_id: warehouseRole.id } },
+    update: {},
+    create: { user_id: users[4].id, role_id: warehouseRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[5].id, role_id: warehouseRole.id } },
+    update: {},
+    create: { user_id: users[5].id, role_id: warehouseRole.id },
+  });
+
+  await prisma.userRole.upsert({
+    where: { user_id_role_id: { user_id: users[6].id, role_id: customerServiceRole.id } },
+    update: {},
+    create: { user_id: users[6].id, role_id: customerServiceRole.id },
+  });
+
+  console.log('✅ Assigned roles to all users');
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 6: USER WAREHOUSE SCOPES
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  // Placeholder warehouse IDs - these should match actual warehouse IDs from inventory service
+  const warehouseIds = {
+    'WH-HCM-01': '00000000-0000-0000-0000-000000000002',
+    'WH-HN-01': '00000000-0000-0000-0000-000000000003',
+    'BR-HCM-01': '00000000-0000-0000-0000-000000000004',
+  };
+
+  const warehouseScopes = [
+    { user_id: users[0].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'FULL' },
+    { user_id: users[0].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'FULL' },
+    { user_id: users[0].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'FULL' },
+    { user_id: users[1].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
+    { user_id: users[1].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'READ' },
+    { user_id: users[1].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'READ' },
+    { user_id: users[2].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: users[3].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: users[4].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: users[5].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
+    { user_id: users[6].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
+  ];
+
+  for (const scope of warehouseScopes) {
+    await prisma.userWarehouseScope.upsert({
+      where: { user_id_warehouse_id: { user_id: scope.user_id, warehouse_id: scope.warehouse_id } },
+      update: {},
+      create: scope,
     });
-    console.log('Assigned STAFF role to staff01');
   }
 
-  console.log('Auth-service seed completed successfully!');
+  console.log(`✅ Created ${warehouseScopes.length} user warehouse scopes`);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 7: AUDIT LOGS (Sample)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  await prisma.authAuditLog.createMany({
+    data: [
+      {
+        actor_user_id: users[0].id,
+        action_name: 'USER_LOGIN',
+        entity_type: 'USER',
+        entity_id: users[0].id,
+        ip_address: '192.168.1.100',
+        user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+        created_at: new Date('2024-03-01 08:00:00+07'),
+      },
+      {
+        actor_user_id: users[0].id,
+        action_name: 'CREATE_USER',
+        entity_type: 'USER',
+        entity_id: users[2].id,
+        detail: { new_user: { username: 'staff01', email: 'staff01@smartbook.vn' } },
+        ip_address: '192.168.1.100',
+        user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+        created_at: new Date('2024-03-01 08:15:00+07'),
+      },
+      {
+        actor_user_id: users[1].id,
+        action_name: 'USER_LOGIN',
+        entity_type: 'USER',
+        entity_id: users[1].id,
+        ip_address: '192.168.1.101',
+        user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari/605.1.15',
+        created_at: new Date('2024-03-01 09:00:00+07'),
+      },
+      {
+        actor_user_id: users[2].id,
+        action_name: 'USER_LOGIN',
+        entity_type: 'USER',
+        entity_id: users[2].id,
+        ip_address: '192.168.1.102',
+        user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile/15E148',
+        created_at: new Date('2024-03-01 10:00:00+07'),
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Created audit logs');
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // FINAL SUMMARY
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n═══════════════════════════════════════════════════════════════════════');
+  console.log('🔐 SMARTBOOK AUTH SEED COMPLETED SUCCESSFULLY!');
+  console.log('═══════════════════════════════════════════════════════════════════════');
+  console.log(`   • ${permissions.length} Permissions (organized by module)`);
+  console.log(`   • 5 Roles:`);
+  console.log(`     - ADMIN: Full access`);
+  console.log(`     - MANAGER: Monitor & approve`);
+  console.log(`     - STAFF: Basic operations`);
+  console.log(`     - WAREHOUSE_OPERATOR: Warehouse workflows`);
+  console.log(`     - CUSTOMER_SERVICE: Customer-facing`);
+  console.log(`   • ${users.length} Users`);
+  console.log(`     - hung (Admin)`);
+  console.log(`     - manager01 (Manager)`);
+  console.log(`     - staff01, staff02, staff03 (Staff)`);
+  console.log(`     - warehouse01 (Warehouse Operator)`);
+  console.log(`     - cs01 (Customer Service)`);
+  console.log(`     - inactive01 (Inactive)`);
+  console.log(`   • ${warehouseScopes.length} User Warehouse Scopes`);
+  console.log(`   • Sample audit logs`);
+  console.log('');
+  console.log('🔑 Default Password for all users: SmartBook@2024');
+  console.log('═══════════════════════════════════════════════════════════════════════\n');
 }
 
 main()

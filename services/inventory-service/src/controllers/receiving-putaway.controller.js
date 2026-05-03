@@ -889,6 +889,7 @@ async function transferReceivingToShelf(req, res) {
             created_by_user_id: req.user?.id || null,
             metadata: {
               direction: "RECEIVING_TO_SHELF",
+              movement_bucket: "PUTAWAY",
               source_receiving_location_id: sourceReceivingLocationId,
               reason: allocation.reason,
               scanned_location_barcode: allocation.scanned_location_barcode,
