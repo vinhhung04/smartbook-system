@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, MoreHorizontal, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle } from "lucide-react";
+import { Search, Plus, MoreHorizontal, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, AlertOctagon } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
@@ -46,6 +46,8 @@ export function CatalogPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newBook, setNewBook] = useState({ barcode: "", title: "", author: "", category: "", isbn: "" });
@@ -140,6 +142,21 @@ export function CatalogPage() {
       toast.error(getApiErrorMessage(error, "Them sach that bai"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteBook = async () => {
+    if (!deleteBook) return;
+    try {
+      setDeleting(deleteBook.id);
+      await bookService.delete(deleteBook.id);
+      toast.success(`Da xoa sach: ${deleteBook.title}`);
+      setDeleteBook(null);
+      await loadBooks();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Xoa sach that bai"));
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -461,8 +478,14 @@ export function CatalogPage() {
                           >
                             <Eye className="w-3.5 h-3.5 text-primary" />
                           </NavLink>
-                          <button className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors">
-                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteBook(book);
+                            }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
                           </button>
                         </div>
                       </td>
@@ -603,6 +626,64 @@ export function CatalogPage() {
         }}
         title="Quet barcode sach"
       />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteBook && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-50"
+              onClick={() => setDeleteBook(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-background rounded-2xl border border-border shadow-2xl z-50 overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
+                    <AlertOctagon className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-[15px] font-semibold">Delete Book</h3>
+                    <p className="text-[11px] text-muted-foreground">This action cannot be undone</p>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-muted/40 border border-border mb-5">
+                  <p className="text-[13px] font-medium mb-1">{deleteBook.title}</p>
+                  <p className="text-[12px] text-muted-foreground">
+                    ISBN: {deleteBook.barcode || "N/A"} | Stock: {deleteBook.quantity}
+                  </p>
+                </div>
+                <p className="text-[13px] text-muted-foreground mb-5">
+                  Are you sure you want to delete this book? This will permanently remove it from the catalog.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void handleDeleteBook()}
+                    disabled={deleting === deleteBook.id}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[13px] font-medium hover:bg-red-600 transition-colors disabled:opacity-60"
+                  >
+                    {deleting === deleteBook.id ? "Dang xoa..." : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteBook(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-border bg-background text-[13px] font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

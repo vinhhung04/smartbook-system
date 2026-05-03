@@ -2,14 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, ScanLine, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { PageWrapper, FadeItem } from '../motion-utils';
+import { NavLink } from 'react-router';
+import { FadeItem, PageWrapper } from '../motion-utils';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
-import { SectionCard } from '@/components/ui/section-card';
-import { EmptyState } from '@/components/ui/empty-state';
-import { FilterBar } from '@/components/ui/filter-bar';
 
 function taskLabel(taskType: 'outbound' | 'transfer'): string {
   return taskType === 'transfer' ? 'Warehouse Transfer' : 'Outbound';
@@ -135,7 +133,7 @@ export function OutboundPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-muted-foreground">Dang tai outbound queue...</p>
+        <p className="text-[13px] text-slate-500">Dang tai outbound queue...</p>
       </PageWrapper>
     );
   }
@@ -143,28 +141,30 @@ export function OutboundPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-100 to-cyan-50 flex items-center justify-center border border-sky-200/40">
-            <Send className="w-5 h-5 text-sky-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Outbound</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">Xac nhan xuat kho cho don da pick xong (READY_FOR_OUTBOUND)</p>
-          </div>
-        </div>
+        <NavLink
+          to="/orders"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+        >
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lai danh sach
+        </NavLink>
+      </FadeItem>
+
+      <FadeItem>
+        <h1 className="tracking-[-0.02em]">Outbound</h1>
+        <p className="text-[12px] text-slate-500 mt-1">Xac nhan xuat kho cho don da pick xong (READY_FOR_OUTBOUND)</p>
       </FadeItem>
 
       {!detail ? (
         <>
           <FadeItem>
-            <SectionCard>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <p className="text-[11px] text-muted-foreground mb-1 font-medium">Warehouse</p>
+                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
                   <select
                     value={selectedWarehouseId}
                     onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                    className="w-full rounded-lg border border-input px-3 py-2 text-[12px]"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                   >
                     <option value="">Chon warehouse</option>
                     {warehouses.map((warehouse) => (
@@ -174,25 +174,25 @@ export function OutboundPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <p className="text-[11px] text-muted-foreground mb-1 font-medium">Tim don outbound</p>
-                  <FilterBar
-                    searchValue={query}
-                    onSearchChange={setQuery}
-                    searchPlaceholder="Ma don / kho / loai don"
-                    showSearchClear
+                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tim don outbound</p>
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Ma don / kho / loai don"
+                    className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                   />
                 </div>
               </div>
-            </SectionCard>
+            </div>
           </FadeItem>
 
           <FadeItem>
-            <SectionCard noPadding>
+            <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
+                  <tr className="border-b border-slate-100 bg-gradient-to-r from-sky-50/30 to-transparent">
                     {["Ma don", "Loai", "Kho nguon", "Kho dich", "Trang thai", "Tong qty", "San sang", "Action"].map((head) => (
-                      <th key={head} className="text-left text-[11px] text-muted-foreground px-4 py-3 uppercase tracking-wider font-medium">
+                      <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">
                         {head}
                       </th>
                     ))}
@@ -201,23 +201,23 @@ export function OutboundPage() {
                 <tbody>
                   {filteredQueue.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-10 text-center">
-                        <EmptyState variant="no-data" title="Khong co don nao cho outbound" description="Cac don da pick xong se hien o day" className="py-0" />
+                      <td colSpan={8} className="py-10 text-center text-[13px] text-slate-400">
+                        Khong co don nao cho outbound
                       </td>
                     </tr>
                   ) : filteredQueue.map((task) => (
-                    <tr key={`${task.task_type}:${task.task_id}`} className="border-b border-border last:border-0 hover:bg-muted/40">
+                    <tr key={`${task.task_type}:${task.task_id}`} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
-                      <td className="px-4 py-3 text-[12px]">{taskLabel(task.task_type)}</td>
-                      <td className="px-4 py-3 text-[12px]">{task.source_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3 text-[12px]">{task.target_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3 text-[12px] text-sky-700 font-semibold">{task.status}</td>
-                      <td className="px-4 py-3 text-[12px]">{task.total_quantity}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-600">{taskLabel(task.task_type)}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.source_warehouse_code || '-'}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.target_warehouse_code || '-'}</td>
+                      <td className="px-4 py-3 text-[12px] text-sky-600 font-semibold">{task.status}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.total_quantity}</td>
                       <td className="px-4 py-3 text-[12px] font-semibold">{task.ready_quantity}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => void handleOpen(task)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-input px-2.5 py-1.5 text-[11px] hover:bg-muted"
+                          className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
                         >
                           Xem & outbound <ArrowRight className="w-3 h-3" />
                         </button>
@@ -226,18 +226,18 @@ export function OutboundPage() {
                   ))}
                 </tbody>
               </table>
-            </SectionCard>
+            </div>
           </FadeItem>
         </>
       ) : (
         <>
           <FadeItem>
-            <SectionCard>
+            <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Don dang thao tac outbound</p>
+                  <p className="text-[11px] text-slate-500 font-semibold">Don dang thao tac outbound</p>
                   <h2 className="text-[15px] font-semibold mt-1">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
-                  <p className="text-[12px] text-muted-foreground mt-1">
+                  <p className="text-[12px] text-slate-500 mt-1">
                     Nguon: {detail.source_warehouse_code || '-'}
                     {detail.target_warehouse_code ? ` | Dich: ${detail.target_warehouse_code}` : ''}
                     {` | Lines: ${detail.lines.length}`}
@@ -250,16 +250,18 @@ export function OutboundPage() {
                     setSelectedTaskType(null);
                     setScanCode('');
                   }}
-                  className="rounded-xl border border-input px-3 py-2 text-[12px] hover:bg-muted"
+                  className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Quay lai queue
                 </button>
               </div>
-            </SectionCard>
+            </div>
           </FadeItem>
 
           <FadeItem>
-            <SectionCard title="Scan code va confirm outbound" subtitle="Nhap tay hoac scan ma don de xac nhan outbound.">
+            <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+              <h3 className="text-[14px] font-semibold mb-3">Scan code va confirm outbound</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Nhap tay hoac scan ma don de xac nhan outbound.</p>
               <div className="flex gap-2 flex-wrap">
                 <input
                   value={scanCode}
@@ -271,67 +273,66 @@ export function OutboundPage() {
                     }
                   }}
                   placeholder="Ma don scan code"
-                  className="flex-1 min-w-[200px] rounded-lg border border-input px-3 py-2 text-[12px]"
+                  className="flex-1 min-w-[200px] rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 />
                 <button
                   onClick={() => setShowScanModal(true)}
                   disabled={confirming}
-                  className="rounded-lg border border-input px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
-                  title="Scan ma don"
+                  className="rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] hover:bg-slate-50 disabled:opacity-60 transition-colors"
                 >
-                  <ScanLine className="w-3.5 h-3.5" />
+                  <ScanLine className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => void handleConfirm()}
                   disabled={confirming}
-                  className="rounded-xl bg-sky-600 text-white px-4 py-2.5 text-[12px] font-semibold disabled:opacity-60"
+                  className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                 >
                   {confirming ? 'Dang outbound...' : 'Confirm outbound'}
                 </button>
               </div>
 
-              {loadingDetail ? <p className="text-[12px] text-muted-foreground mt-2">Dang tai chi tiet...</p> : null}
-            </SectionCard>
+              {loadingDetail ? <p className="text-[12px] text-slate-500 mt-3">Dang tai chi tiet...</p> : null}
+            </div>
           </FadeItem>
 
           <FadeItem>
-            <SectionCard noPadding>
+            <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-muted/50 border-b border-border text-[11px] text-muted-foreground">
-                    <th className="text-left px-3 py-2 font-medium">San pham</th>
-                    <th className="text-left px-3 py-2 font-medium">SKU/Barcode</th>
-                    <th className="text-left px-3 py-2 w-[120px] font-medium">Yeu cau</th>
-                    <th className="text-left px-3 py-2 w-[120px] font-medium">Da pick</th>
+                  <tr className="border-b border-slate-100 bg-gradient-to-r from-sky-50/30 to-transparent">
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">San pham</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">SKU/Barcode</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Yeu cau</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Da pick</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.lines.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-[12px] text-muted-foreground text-center">Khong co line nao</td>
+                      <td colSpan={4} className="px-4 py-6 text-[12px] text-slate-400 text-center">Khong co line nao</td>
                     </tr>
                   ) : detail.lines.map((line) => (
-                    <tr key={line.line_id} className="border-b border-border last:border-0 text-[12px]">
-                      <td className="px-3 py-2">
-                        <p className="text-foreground font-medium">{line.book_title}</p>
+                    <tr key={line.line_id} className="border-b border-slate-50 last:border-0 text-[12px]">
+                      <td className="px-4 py-3">
+                        <p className="text-slate-900 font-medium">{line.book_title}</p>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">{line.sku || line.barcode || '-'}</td>
-                      <td className="px-3 py-2">{line.quantity}</td>
-                      <td className="px-3 py-2 font-semibold">{line.ready_qty}</td>
+                      <td className="px-4 py-3 text-slate-500">{line.sku || line.barcode || '-'}</td>
+                      <td className="px-4 py-3 text-slate-600">{line.quantity}</td>
+                      <td className="px-4 py-3 font-semibold">{line.ready_qty}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </SectionCard>
+            </div>
           </FadeItem>
 
           <FadeItem>
-            <SectionCard className="border-emerald-200 bg-emerald-50/50">
+            <div className="rounded-[16px] border border-emerald-200/60 bg-emerald-50/50 p-4">
               <div className="flex items-center gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <p className="text-[12px] text-emerald-800">Transfer sau khi confirm outbound se tu dong tao Goods Receipt DRAFT o kho dich.</p>
               </div>
-            </SectionCard>
+            </div>
           </FadeItem>
 
           <BarcodeScanModal

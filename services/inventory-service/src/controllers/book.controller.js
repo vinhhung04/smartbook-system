@@ -789,6 +789,38 @@ async function updateBookDetails(req, res) {
   }
 }
 
+async function deleteBook(req, res) {
+  const bookId = parseId(req.params.id);
+
+  if (!bookId) {
+    return res.status(400).json({ message: 'Invalid book id' });
+  }
+
+  try {
+    const existingBook = await prisma.books.findUnique({
+      where: { id: bookId },
+    });
+
+    if (!existingBook) {
+      return res.status(404).json({ message: 'Book not found' });
+    }
+
+    await prisma.$transaction([
+      prisma.book_variants.deleteMany({
+        where: { book_id: bookId },
+      }),
+      prisma.books.delete({
+        where: { id: bookId },
+      }),
+    ]);
+
+    return res.status(200).json({ message: 'Book deleted successfully', id: bookId });
+  } catch (error) {
+    console.error('deleteBook error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   getAllBooks,
   getBookById,
@@ -796,4 +828,5 @@ module.exports = {
   findBookByIsbn13,
   createIncompleteBook,
   updateBookDetails,
+  deleteBook,
 };
