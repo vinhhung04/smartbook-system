@@ -36,6 +36,7 @@ const navGroups = [
     items: [
       { to: "/ai-import", icon: Sparkles, label: "AI Import", activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
       { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+      { to: "/reorder-suggestions", icon: Package, label: "AI Reorder", activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/reports", icon: BarChart3, label: "Reports", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
     ],
   },

@@ -31,6 +31,14 @@ export type TopBooksParams = AnalyticsDateParams & {
   limit?: number;
 };
 
+export type ReorderSuggestionsParams = AnalyticsDateParams & {
+  days?: number;
+  limit?: number;
+  leadTimeDays?: number;
+  priority?: 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  includeLowDemand?: boolean;
+};
+
 export type BorrowTrendItem = {
   date: string;
   loans: number;
@@ -98,6 +106,52 @@ export type ReservationFunnel = {
   conversion_rate: number;
 };
 
+export type ReorderSuggestionItem = {
+  book_id: string;
+  variant_id: string;
+  title: string;
+  author: string;
+  category: string;
+  isbn: string;
+  available_qty: number;
+  on_hand_qty: number;
+  reserved_qty: number;
+  borrowed_qty: number;
+  reorder_point: number;
+  borrow_count: number;
+  previous_borrow_count: number;
+  reservation_count: number;
+  wishlist_count: number;
+  availability_alert_count: number;
+  avg_daily_demand: number;
+  forecast_7d: number;
+  forecast_30d: number;
+  estimated_days_until_stockout: number | null;
+  demand_trend_pct: number;
+  demand_score: number;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  suggested_reorder_qty: number;
+  reason: string;
+};
+
+export type ReorderSuggestionsData = {
+  generated_at: string;
+  range: {
+    from: string;
+    to: string;
+    days: number;
+    leadTimeDays: number;
+  };
+  summary: {
+    total_candidates: number;
+    high_priority: number;
+    medium_priority: number;
+    low_priority: number;
+    estimated_total_reorder_qty: number;
+  };
+  items: ReorderSuggestionItem[];
+};
+
 async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T> {
   const response = await promise;
   return response.data.data;
@@ -131,6 +185,10 @@ export function getReservationFunnel() {
   return unwrap<ReservationFunnel>(gatewayAPI.get('/analytics/reservation-funnel'));
 }
 
+export function getReorderSuggestions(params?: ReorderSuggestionsParams) {
+  return unwrap<ReorderSuggestionsData>(gatewayAPI.get('/analytics/reorder-suggestions', { params }));
+}
+
 export const analyticsService = {
   getDashboardKpis,
   getBorrowTrends,
@@ -139,4 +197,5 @@ export const analyticsService = {
   getFineSummary,
   getWarehouseStockRisk,
   getReservationFunnel,
+  getReorderSuggestions,
 };

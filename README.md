@@ -153,6 +153,7 @@ Các endpoint chính:
 | GET | `/analytics/overdue-summary` | Tổng hợp loan/item quá hạn |
 | GET | `/analytics/fine-summary` | Tổng hợp fine đã thu, chưa thu, waived và theo loại |
 | GET | `/analytics/warehouse-stock-risk` | Rủi ro tồn kho thấp/hết hàng theo warehouse |
+| GET | `/analytics/reorder-suggestions` | AI demand forecasting và gợi ý nhập thêm sách từ lượt mượn, reservation, wishlist, cảnh báo chờ hàng và tồn kho |
 | GET | `/analytics/reservation-funnel` | Funnel reservation và tỷ lệ convert sang loan |
 
 Ví dụ response rút gọn:
@@ -169,6 +170,8 @@ Ví dụ response rút gọn:
   }
 }
 ```
+
+Endpoint `/analytics/reorder-suggestions` nhận các query phổ biến như `days=30`, `limit=20`, `leadTimeDays=14`, `priority=HIGH|MEDIUM|LOW|ALL`. Response gồm summary tổng số candidate, số lượng HIGH/MEDIUM/LOW, tổng số lượng đề xuất nhập thêm và danh sách sách với `forecast_7d`, `forecast_30d`, `estimated_days_until_stockout`, `priority`, `suggested_reorder_qty`, `reason`.
 
 ## Luồng Nghiệp Vụ Chính
 

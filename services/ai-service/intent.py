@@ -93,7 +93,19 @@ def detect_intent(message: str) -> dict:
     granularity = "month" if _contains_any(normalized, ["theo thang", "hang thang", "6 thang", "month"]) else "day"
 
     # More specific intents must be checked before broader stock/search rules.
-    if _contains_any(normalized, ["nhap them", "bo sung", "mua them", "reorder", "suggest reorder", "goi y nhap"]):
+    if _contains_any(normalized, [
+        "nhap them",
+        "bo sung",
+        "can bo sung",
+        "mua them",
+        "reorder",
+        "suggest reorder",
+        "reorder suggestion",
+        "goi y nhap",
+        "nen nhap them",
+        "du bao nhu cau",
+        "demand forecasting",
+    ]):
         return {
             "intent": REORDER_SUGGESTION_QUERY,
             "confidence": 0.9,

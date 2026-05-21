@@ -18,6 +18,7 @@ router.get('/top-books', analyticsController.getTopBooks);
 router.get('/overdue-summary', analyticsController.getOverdueSummary);
 router.get('/fine-summary', analyticsController.getFineSummary);
 router.get('/warehouse-stock-risk', analyticsController.getWarehouseStockRisk);
+router.get('/reorder-suggestions', analyticsController.getReorderSuggestions);
 router.get('/reservation-funnel', analyticsController.getReservationFunnel);
 
 module.exports = router;

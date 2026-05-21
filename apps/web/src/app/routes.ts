@@ -13,6 +13,7 @@ import { WarehousesPage } from "@/components/pages/warehouses";
 import { ShelvesPage } from "@/components/pages/shelves";
 import { AIImportPage } from "@/components/pages/ai-import";
 import { RecommendationsPage } from "@/components/pages/recommendations";
+import { ReorderSuggestionsPage } from "@/components/pages/reorder-suggestions";
 import { BorrowPage } from "@/components/pages/borrow";
 import { BorrowCustomersPage } from "@/components/pages/borrow-customers";
 import { BorrowReservationsPage } from "@/components/pages/borrow-reservations";
@@ -157,6 +158,7 @@ export const router = createBrowserRouter([
       { path: "shelves", Component: ShelvesPage },
       { path: "ai-import", Component: AIImportPage },
       { path: "recommendations", Component: RecommendationsPage },
+      { path: "reorder-suggestions", Component: ReorderSuggestionsPage },
       { path: "borrow", Component: BorrowPage },
       { path: "borrow/customers", Component: BorrowCustomersPage },
       { path: "borrow/reservations", Component: BorrowReservationsPage },

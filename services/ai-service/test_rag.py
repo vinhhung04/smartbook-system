@@ -31,6 +31,11 @@ class IntentDetectionTests(unittest.TestCase):
         self.assertEqual(info["intent"], TOP_BORROWED_BOOKS_QUERY)
         self.assertIsNotNone(info["time_range"])
 
+    def test_reorder_forecasting_keywords(self):
+        for message in ["demand forecasting", "reorder suggestion", "sach nao can bo sung"]:
+            with self.subTest(message=message):
+                self.assertEqual(detect_intent(message)["intent"], REORDER_SUGGESTION_QUERY)
+
 
 class RagContextTests(unittest.TestCase):
     def test_rag_context_handles_empty_and_error_sources(self):

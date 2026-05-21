@@ -35,6 +35,7 @@ SOURCE_NAMES = {
     "/analytics/overdue-summary": "Overdue Summary",
     "/analytics/borrow-trends": "Borrow Trends",
     "/analytics/reservation-funnel": "Reservation Funnel",
+    "/analytics/reorder-suggestions": "Reorder Suggestions",
     "/api/books": "Catalog Books",
 }
 
@@ -383,57 +384,43 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             summary = f"Ket qua tim sach cho '{query}':\n" + _limit_lines(lines, 10)
 
         elif intent == REORDER_SUGGESTION_QUERY:
-            params = {"limit": 20, **_time_params(intent_info, default_30_days=True)}
-            results = await asyncio.gather(
-                _fetch(client, "/analytics/top-books", auth_header, params),
-                _fetch(client, "/analytics/warehouse-stock-risk", auth_header),
-                _fetch(client, "/api/books", auth_header),
+            source, payload, warning = await _fetch(
+                client,
+                "/analytics/reorder-suggestions",
+                auth_header,
+                {"days": 30, "limit": 10},
             )
-            for source, payload, warning in results:
-                sources.append(source)
-                if warning:
-                    warnings.append(warning)
-                if payload is not None:
-                    raw[source["name"]] = _data(payload)
+            sources.append(source)
+            if warning:
+                warnings.append(warning)
+            data = _data(payload) or {}
+            raw["Reorder Suggestions"] = data
 
-            top_books = _as_list(raw.get("Top Books"))
-            books = [_compact_book(book) for book in _as_list(raw.get("Catalog Books"))]
-            by_book_id = {str(book.get("id")): book for book in books if book.get("id")}
-            by_title = {normalize_text(book.get("title", "")): book for book in books}
-            suggestions = []
-            for top in top_books:
-                if not isinstance(top, dict):
-                    continue
-                book = by_book_id.get(str(top.get("book_id"))) or by_title.get(normalize_text(str(top.get("title") or "")))
-                if not book:
-                    continue
-                quantity = _book_quantity(book)
-                borrow_count = _int(top.get("borrow_count"))
-                if quantity <= 5:
-                    priority = "HIGH"
-                    suggested_qty = max(5, borrow_count - quantity)
-                elif quantity <= 10:
-                    priority = "MEDIUM"
-                    suggested_qty = 5 if borrow_count >= 5 else 3
-                else:
-                    continue
-                suggestions.append({
-                    "book_id": book.get("id"),
-                    "title": book.get("title"),
-                    "quantity": quantity,
-                    "borrow_count": borrow_count,
-                    "priority": priority,
-                    "suggested_qty": suggested_qty,
-                })
+            summary_data = data.get("summary") if isinstance(data, dict) else {}
+            items = data.get("items") if isinstance(data, dict) else []
+            if not isinstance(summary_data, dict):
+                summary_data = {}
+            if not isinstance(items, list):
+                items = []
 
-            raw["reorder_suggestions"] = suggestions[:10]
             lines = [
-                f"- {row['title']}: {row['priority']}, con {row['quantity']} ban, {row['borrow_count']} luot muon/30 ngay, goi y nhap {row['suggested_qty']} ban."
-                for row in suggestions[:10]
+                "- {title}: {priority}, con {available} ban, forecast 30 ngay {forecast}, goi y nhap {qty} ban. Ly do: {reason}".format(
+                    title=row.get("title", "Khong ro ten"),
+                    priority=row.get("priority", "LOW"),
+                    available=_int(row.get("available_qty")),
+                    forecast=_int(row.get("forecast_30d")),
+                    qty=_int(row.get("suggested_reorder_qty")),
+                    reason=row.get("reason") or "Khong co ly do chi tiet.",
+                )
+                for row in items[:5]
+                if isinstance(row, dict)
             ]
             summary = "\n".join([
-                "Goi y nhap them la goi y ho tro, khong phai quyet dinh bat buoc.",
-                _limit_lines(lines, 10),
+                "Goi y nhap them la goi y ho tro ra quyet dinh, khong phai lenh bat buoc tao purchase order.",
+                f"Tong candidates: {_int(summary_data.get('total_candidates'))}; HIGH: {_int(summary_data.get('high_priority'))}; MEDIUM: {_int(summary_data.get('medium_priority'))}; LOW: {_int(summary_data.get('low_priority'))}.",
+                f"Tong so luong goi y nhap: {_int(summary_data.get('estimated_total_reorder_qty'))}.",
+                "Top sach can xem xet:",
+                _limit_lines(lines, 5),
             ])
 
         else:
