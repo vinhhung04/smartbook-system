@@ -73,6 +73,7 @@ API Gateway là cổng vào tập trung cho frontend:
 - `/auth`, `/iam` -> Auth Service.
 - `/api`, `/catalog` -> Inventory Service.
 - `/borrow`, `/my` -> Borrow Service.
+- `/analytics` -> Analytics Service.
 - `/ai`, `/api/ai` -> AI Service.
 
 Các service Node.js dùng Prisma ORM và PostgreSQL. Database được tách theo domain để giảm coupling:
@@ -137,9 +138,37 @@ AI Service hỗ trợ tự động hóa nhập liệu:
 
 Analytics Service là module dành cho báo cáo vận hành:
 
-- Tổng hợp KPI từ các domain.
-- Phục vụ dashboard/manager view.
-- Là nền cho các báo cáo như tồn kho, lưu thông, overdue/fine và hiệu quả vận hành.
+- Tổng hợp KPI thật từ `inventory_db` và `borrow_db`.
+- Phục vụ dashboard staff/manager/admin qua API Gateway prefix `/analytics`.
+- Là nơi duy nhất gom dữ liệu chéo domain cho báo cáo; các service nghiệp vụ không query chéo database.
+- Không dùng fake data hoặc số liệu hardcode ở frontend.
+
+Các endpoint chính:
+
+| Method | Endpoint | Ý nghĩa |
+|---|---|---|
+| GET | `/analytics/dashboard/kpis` | KPI tổng quan: đầu sách, bản sao, loan, reservation, pickup code, fine, low stock |
+| GET | `/analytics/borrow-trends` | Xu hướng mượn/trả/đặt sách theo ngày hoặc tháng |
+| GET | `/analytics/top-books` | Sách được mượn nhiều nhất |
+| GET | `/analytics/overdue-summary` | Tổng hợp loan/item quá hạn |
+| GET | `/analytics/fine-summary` | Tổng hợp fine đã thu, chưa thu, waived và theo loại |
+| GET | `/analytics/warehouse-stock-risk` | Rủi ro tồn kho thấp/hết hàng theo warehouse |
+| GET | `/analytics/reservation-funnel` | Funnel reservation và tỷ lệ convert sang loan |
+
+Ví dụ response rút gọn:
+
+```json
+{
+  "data": {
+    "total_titles": 120,
+    "total_copies": 850,
+    "active_loans": 42,
+    "overdue_loans": 7,
+    "unpaid_fine_amount": 350000,
+    "reservation_conversion_rate": 68.5
+  }
+}
+```
 
 ## Luồng Nghiệp Vụ Chính
 
@@ -218,12 +247,12 @@ Fine có thể được thanh toán, thanh toán một phần hoặc waive/reduc
 | Service | Cổng local | Vai trò | Endpoint tiêu biểu |
 |---|---:|---|---|
 | Web UI | 5173 | Giao diện admin/staff/customer | Dashboard, Catalog, Borrow, IAM, Customer Portal |
-| API Gateway | 3000 | Cổng vào tập trung | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/ai` |
+| API Gateway | 3000 | Cổng vào tập trung | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/analytics`, `/ai` |
 | Auth Service | 3004 -> 3002 | Xác thực và phân quyền | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
 | Inventory Service | 3003 -> 3001 | Catalog và tồn kho | `/api/books`, `/api/warehouses`, `/api/borrow-integration/*` |
 | Borrow Service | 3005 | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
 | AI Service | 8000 | OCR/metadata enrichment | `/health`, `/recognize-book`, `/lookup-book-by-isbn` |
-| Analytics Service | nội bộ | Báo cáo/KPI | dashboard/report aggregation |
+| Analytics Service | 3006 | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
 | PostgreSQL | 5432 | Lưu dữ liệu | `auth_db`, `inventory_db`, `borrow_db` |
 | pgAdmin | 8080 | Quản trị database | Web UI |
 | Ollama | 11434 | Local LLM runtime | inference nội bộ |
@@ -271,6 +300,7 @@ Các biến quan trọng:
 - `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
 - `AUTH_DB_NAME`, `INVENTORY_DB_NAME`, `BORROW_DB_NAME`
 - `JWT_SECRET`, `INTERNAL_SERVICE_KEY`
+- `ANALYTICS_SERVICE_URL`, `LOW_STOCK_THRESHOLD`
 - `VITE_API_BASE_URL`, `VITE_AUTH_BASE_URL`, `VITE_AI_BASE_URL`
 - `OLLAMA_HOST`, `SUMMARY_MODEL`
 
@@ -284,8 +314,8 @@ docker compose ps
 Khi chỉ cần rebuild các service vừa chỉnh:
 
 ```powershell
-docker compose build borrow-service smartbook-ui
-docker compose up -d borrow-service smartbook-ui
+docker compose build borrow-service analytics-service api-gateway smartbook-ui
+docker compose up -d borrow-service analytics-service api-gateway smartbook-ui
 ```
 
 Các service tự chạy `prisma db push` và seed khi container khởi động theo `docker-compose.yml`.
@@ -299,6 +329,7 @@ Các service tự chạy `prisma db push` và seed khi container khởi động 
 | Borrow Service | http://localhost:3005 |
 | Inventory Service | http://localhost:3003 |
 | Auth Service | http://localhost:3004 |
+| Analytics Service | http://localhost:3006 |
 | AI Service | http://localhost:8000 |
 | pgAdmin | http://localhost:8080 |
 | Ollama | http://localhost:11434 |
@@ -324,6 +355,29 @@ Một số tài khoản thường dùng:
 | `cs01` | Customer support |
 
 ## Kiểm Thử
+
+### Analytics dashboard integration
+
+Script này đăng nhập bằng tài khoản staff demo, gọi đủ 7 endpoint `/analytics` qua API Gateway, kiểm tra response có field `data`, kiểm tra kiểu dữ liệu cơ bản và xác nhận customer token bị chặn 403:
+
+```powershell
+node scripts\analytics-integration.mjs
+```
+
+Kết quả mong đợi:
+
+```text
+PASS analytics/dashboard/kpis
+PASS analytics/borrow-trends
+PASS analytics/top-books
+PASS analytics/overdue-summary
+PASS analytics/fine-summary
+PASS analytics/warehouse-stock-risk
+PASS analytics/reservation-funnel
+PASS analytics/customer-denied
+PASS=7 TOTAL=7
+ACCESS=1 TOTAL=1
+```
 
 ### Borrow phase 2 integration
 
@@ -396,6 +450,7 @@ smartbook-system/
 - Inventory Service: `docs/SERVICES/INVENTORY_SERVICE.md`
 - Borrow Service: `docs/SERVICES/BORROW_SERVICE.md`
 - AI Service: `docs/SERVICES/AI_SERVICE.md`
+- Analytics Dashboard: `scripts/analytics-integration.mjs`, `/analytics/*`
 - Test guides: `docs/TEST_GUIDES/`
 
 ## Ghi Chú Phát Triển
