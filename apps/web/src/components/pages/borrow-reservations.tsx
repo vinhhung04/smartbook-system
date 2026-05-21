@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import {
   borrowService,
   type Reservation,
@@ -79,6 +80,9 @@ export function BorrowReservationsPage() {
   const [pickupQuery, setPickupQuery] = useState('');
   const [pickupLocations, setPickupLocations] = useState<WarehouseLocation[]>([]);
   const [pickupLoading, setPickupLoading] = useState(false);
+  const [pickupCode, setPickupCode] = useState('');
+  const [pickupConverting, setPickupConverting] = useState(false);
+  const [pickupScannerOpen, setPickupScannerOpen] = useState(false);
 
   const loadReservations = async () => {
     try {
@@ -344,15 +348,23 @@ export function BorrowReservationsPage() {
     }
   };
 
-  const convertReservation = async (id: string) => {
-    if (!window.confirm('Convert this reservation to loan now?')) return;
+  const convertPickupCode = async (code = pickupCode) => {
+    const value = String(code || '').trim();
+    if (!value) {
+      toast.error('Pickup code is required');
+      return;
+    }
 
     try {
-      await borrowService.convertReservationToLoan(id);
-      toast.success('Reservation converted to loan');
+      setPickupConverting(true);
+      const response = await borrowService.convertPickupCodeToLoan(value);
+      toast.success(`Loan ${response.data.loan_number} created from pickup code`);
+      setPickupCode('');
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to convert reservation'));
+      toast.error(getApiErrorMessage(error, 'Failed to convert pickup code'));
+    } finally {
+      setPickupConverting(false);
     }
   };
 
@@ -438,6 +450,55 @@ export function BorrowReservationsPage() {
             New Direct Loan
           </Button>
         </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
+      >
+        <SectionCard title="Pickup counter">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <label className="flex-1 text-xs font-medium text-muted-foreground">
+              Pickup code / QR result
+              <div className="mt-1 flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-primary/20">
+                <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <input
+                  value={pickupCode}
+                  onChange={(event) => setPickupCode(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void convertPickupCode();
+                    }
+                  }}
+                  placeholder="PU-ABCD-1234 or SMARTBOOK:PICKUP:..."
+                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                />
+              </div>
+            </label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPickupScannerOpen(true)}
+                className="gap-2"
+              >
+                <ScanLine className="h-4 w-4" />
+                Scan QR
+              </Button>
+              <Button
+                type="button"
+                disabled={pickupConverting}
+                onClick={() => void convertPickupCode()}
+                className="gap-2"
+              >
+                {pickupConverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Convert to Loan
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
       </motion.div>
 
       {/* Filter Bar */}
@@ -534,7 +595,7 @@ export function BorrowReservationsPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {reservation.status === 'PENDING' ? (
                               <Button
                                 size="sm"
@@ -545,16 +606,13 @@ export function BorrowReservationsPage() {
                                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                                 Confirm
                               </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                onClick={() => void convertReservation(reservation.id)}
-                              >
-                                Convert
-                              </Button>
-                            )}
+                            ) : null}
+                            {reservation.status === 'READY_FOR_PICKUP' ? (
+                              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5">
+                                <p className="text-[10px] font-medium uppercase text-cyan-600">Pickup code</p>
+                                <p className="font-mono text-xs font-semibold text-cyan-900">{reservation.pickup_code || '-'}</p>
+                              </div>
+                            ) : null}
                             {reservation.status === 'CONFIRMED' && (
                               <Button
                                 size="sm"
@@ -855,6 +913,12 @@ export function BorrowReservationsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      <BarcodeScanModal
+        isOpen={pickupScannerOpen}
+        onClose={() => setPickupScannerOpen(false)}
+        onDetected={(code) => void convertPickupCode(code)}
+        title="Scan pickup QR"
+      />
     </div>
   );
 }

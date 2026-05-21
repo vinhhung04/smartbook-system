@@ -11,6 +11,7 @@ const {
 } = require('../services/inventory-integration.service');
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('../services/account.service');
 const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
+const { normalizePickupCode } = require('../utils/pickup-code');
 
 const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
@@ -28,6 +29,10 @@ function parseIdempotencyKey(req) {
   const header = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
   const value = String(header || '').trim();
   return value || null;
+}
+
+function parsePickupCodeFromBody(body) {
+  return normalizePickupCode(body?.pickup_code || body?.pickupCode || body?.code || body?.qr_code);
 }
 
 function deterministicUuid(seed) {
@@ -701,6 +706,28 @@ async function convertReservationToLoan(req, res) {
       });
     }
 
+    if (reservation.status === 'READY_FOR_PICKUP') {
+      if (!reservation.pickup_code) {
+        return res.status(409).json({ message: 'Pickup code has not been issued for this reservation' });
+      }
+
+      if (!req.pickupCodeVerified) {
+        return res.status(409).json({ message: 'Pickup code is required to convert a ready reservation to loan' });
+      }
+
+      if (reservation.pickup_code_used_at) {
+        return res.status(409).json({ message: 'Pickup code has already been used' });
+      }
+
+      if (normalizePickupCode(req.pickupCode) !== reservation.pickup_code) {
+        return res.status(409).json({ message: 'Pickup code does not match this reservation' });
+      }
+
+      if (reservation.pickup_code_expires_at && new Date(reservation.pickup_code_expires_at).getTime() <= Date.now()) {
+        return res.status(409).json({ message: 'Pickup code has expired' });
+      }
+    }
+
     if (new Date(reservation.expires_at).getTime() <= Date.now()) {
       return res.status(409).json({ message: 'Reservation already expired and cannot be converted' });
     }
@@ -832,7 +859,11 @@ async function convertReservationToLoan(req, res) {
 
         await tx.loan_reservations.update({
           where: { id: reservation.id },
-          data: { status: 'CONVERTED_TO_LOAN' },
+          data: {
+            status: 'CONVERTED_TO_LOAN',
+            ...(req.pickupCodeVerified ? { pickup_code_used_at: new Date() } : {}),
+            updated_at: new Date(),
+          },
         });
 
         await writeAuditLog(tx, {
@@ -901,6 +932,34 @@ async function convertReservationToLoan(req, res) {
     }
 
     console.error('Error while converting reservation to loan:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function convertReservationPickupCodeToLoan(req, res) {
+  const pickupCode = parsePickupCodeFromBody(req.body || {});
+
+  if (!pickupCode) {
+    return res.status(400).json({ message: 'pickup_code is required' });
+  }
+
+  try {
+    const reservation = await prisma.loan_reservations.findUnique({
+      where: { pickup_code: pickupCode },
+      select: { id: true },
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ message: 'Pickup code not found' });
+    }
+
+    req.params.id = reservation.id;
+    req.pickupCodeVerified = true;
+    req.pickupCode = pickupCode;
+
+    return convertReservationToLoan(req, res);
+  } catch (error) {
+    console.error('Error while converting reservation by pickup code:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -1101,6 +1160,7 @@ module.exports = {
   getLoanById,
   createDirectLoan,
   convertReservationToLoan,
+  convertReservationPickupCodeToLoan,
   listRenewalRequests,
   reviewLoanRenewal,
   returnLoan,

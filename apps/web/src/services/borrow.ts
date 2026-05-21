@@ -60,6 +60,10 @@ export interface Reservation {
   status: ReservationStatus;
   reserved_at: string;
   expires_at: string;
+  pickup_code: string | null;
+  pickup_code_issued_at: string | null;
+  pickup_code_expires_at: string | null;
+  pickup_code_used_at: string | null;
   notes: string | null;
   created_by_user_id: string | null;
   updated_at: string;
@@ -285,6 +289,13 @@ export const borrowService = {
 
   convertReservationToLoan: async (reservationId: string, idempotencyKey?: string) => {
     const response = await inventoryAPI.post(`/borrow/reservations/${reservationId}/convert-to-loan`, {}, {
+      headers: createIdempotencyHeaders(idempotencyKey),
+    });
+    return response.data as { data: Loan; idempotent?: boolean };
+  },
+
+  convertPickupCodeToLoan: async (pickupCode: string, idempotencyKey?: string) => {
+    const response = await inventoryAPI.post('/borrow/reservations/pickup/convert-to-loan', { pickup_code: pickupCode }, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };

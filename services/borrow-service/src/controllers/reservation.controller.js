@@ -4,6 +4,7 @@ const { resolveActiveMembership } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
+const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
 
 const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
 const RESERVATION_EXPIRY_BATCH_SIZE = 100;
@@ -460,11 +461,16 @@ async function confirmReservation(req, res) {
         return { code: 404, payload: { message: 'Reservation not found' } };
       }
 
-      if (existing.status === nextStatus) {
+      if (existing.status === nextStatus && (nextStatus !== 'READY_FOR_PICKUP' || existing.pickup_code)) {
         return { code: 200, payload: { data: existing, idempotent: true } };
       }
 
-      if (existing.status !== 'PENDING' && !(existing.status === 'CONFIRMED' && nextStatus === 'READY_FOR_PICKUP')) {
+      const canMoveToNextStatus =
+        existing.status === 'PENDING'
+        || (existing.status === 'CONFIRMED' && nextStatus === 'READY_FOR_PICKUP')
+        || (existing.status === 'READY_FOR_PICKUP' && nextStatus === 'READY_FOR_PICKUP' && !existing.pickup_code);
+
+      if (!canMoveToNextStatus) {
         return {
           code: 409,
           payload: { message: `Cannot confirm reservation from status ${existing.status}` },
@@ -478,12 +484,25 @@ async function confirmReservation(req, res) {
         };
       }
 
+      const pickupCode = nextStatus === 'READY_FOR_PICKUP'
+        ? existing.pickup_code || await generateUniquePickupCode(tx)
+        : null;
+      const now = new Date();
+
       const reservation = await tx.loan_reservations.update({
         where: { id },
         data: {
           status: nextStatus,
+          ...(pickupCode
+            ? {
+              pickup_code: pickupCode,
+              pickup_code_issued_at: existing.pickup_code_issued_at || now,
+              pickup_code_expires_at: existing.expires_at,
+              pickup_code_used_at: null,
+            }
+            : {}),
           ...(note ? { notes: existing.notes ? `${existing.notes}\n${note}` : note } : {}),
-          updated_at: new Date(),
+          updated_at: now,
         },
       });
 
@@ -502,7 +521,7 @@ async function confirmReservation(req, res) {
         template_code: 'RESERVATION_CONFIRMED',
         subject: nextStatus === 'READY_FOR_PICKUP' ? 'Reservation ready for pickup' : 'Reservation confirmed',
         body: nextStatus === 'READY_FOR_PICKUP'
-          ? `Reservation ${reservation.reservation_number} is ready for pickup.`
+          ? `Reservation ${reservation.reservation_number} is ready for pickup. Pickup code: ${reservation.pickup_code}.`
           : `Reservation ${reservation.reservation_number} has been confirmed by staff.`,
         reference_type: 'LOAN_RESERVATION',
         reference_id: reservation.id,
@@ -510,6 +529,8 @@ async function confirmReservation(req, res) {
           reservation_number: reservation.reservation_number,
           status: reservation.status,
           expires_at: reservation.expires_at,
+          pickup_code: reservation.pickup_code,
+          pickup_qr_value: createPickupQrValue(reservation.pickup_code),
         },
       });
 
