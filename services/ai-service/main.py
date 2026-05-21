@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import ollama
@@ -9,6 +9,15 @@ import re
 import logging
 import asyncio
 import xml.etree.ElementTree as ET
+from intent import detect_intent
+from rag import (
+    RAG_SYSTEM_RULES,
+    build_fallback_reply,
+    build_no_data_context,
+    build_rag_context,
+    ensure_source_line,
+)
+from retrieval import retrieve_context
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -52,6 +61,7 @@ ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() ==
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_SUMMARY_MODEL = os.getenv("GROQ_SUMMARY_MODEL", "llama-3.3-70b-versatile")
+CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
 PROMPT = (
     "Bạn là chuyên gia biên mục và giới thiệu sách cho thư viện. "
@@ -1529,7 +1539,7 @@ async def _chat_with_groq(messages: list[dict]) -> tuple[str | None, bool]:
     if not GROQ_API_KEY:
         return None, False
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
             resp = await http_client.post(
                 f"{GROQ_BASE_URL}/chat/completions",
                 headers={
@@ -1564,11 +1574,14 @@ async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
         prompt_parts.append("Assistant:")
         full_prompt = "\n".join(prompt_parts)
 
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            full_prompt,
-            {"temperature": 0.4, "num_predict": 800},
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                _ollama_generate_with_summary_fallback,
+                client,
+                full_prompt,
+                {"temperature": 0.4, "num_predict": 800},
+            ),
+            timeout=CHAT_LLM_TIMEOUT_SECONDS,
         )
         reply = (response.get("response") or "").strip()
         return reply or None, bool(reply)
@@ -1578,12 +1591,45 @@ async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, request: Request):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
 
-    context_block = _build_context_block(req.system_context)
-    system_content = CHAT_SYSTEM_PROMPT + context_block
+    auth_header = request.headers.get("authorization")
+    intent_info = detect_intent(req.message.strip())
+
+    retrieval = await retrieve_context(intent_info, auth_header)
+    warnings = list(retrieval.get("warnings") or [])
+    sources = list(retrieval.get("sources") or [])
+    ok_sources = any(source.get("status") == "ok" for source in sources)
+    missing_auth = any("Missing Authorization" in warning for warning in warnings)
+    used_legacy_context = False
+
+    # RAG is the primary path. Legacy frontend system_context remains only as a
+    # compatibility fallback when backend retrieval fails for non-auth reasons.
+    if not ok_sources and warnings and req.system_context and not missing_auth:
+        legacy_context = _build_context_block(req.system_context)
+        retrieval = {
+            **retrieval,
+            "summary": legacy_context,
+            "raw": {"legacy_system_context": req.system_context},
+            "sources": [
+                {
+                    "name": "Legacy Frontend System Context",
+                    "endpoint": "system_context",
+                    "status": "ok",
+                }
+            ],
+            "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
+        }
+        used_legacy_context = True
+
+    if retrieval.get("summary") or retrieval.get("raw") or retrieval.get("sources"):
+        context_block = build_rag_context(intent_info, retrieval)
+    else:
+        context_block = build_no_data_context(intent_info)
+
+    system_content = CHAT_SYSTEM_PROMPT + RAG_SYSTEM_RULES + context_block
 
     messages = [{"role": "system", "content": system_content}]
 
@@ -1592,17 +1638,32 @@ async def chat(req: ChatRequest):
 
     messages.append({"role": "user", "content": req.message.strip()})
 
+    metadata = {
+        "intent": intent_info.get("intent"),
+        "context_sources": retrieval.get("sources") or [],
+        "retrieval_warnings": retrieval.get("warnings") or [],
+    }
+
     reply, groq_ok = await _chat_with_groq(messages)
     if groq_ok and reply:
-        return {"reply": reply, "ai_provider": "groq"}
+        return {
+            "reply": ensure_source_line(reply, retrieval.get("sources") or []),
+            "ai_provider": "groq",
+            **metadata,
+        }
 
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
-        return {"reply": reply, "ai_provider": "ollama"}
+        return {
+            "reply": ensure_source_line(reply, retrieval.get("sources") or []),
+            "ai_provider": "ollama",
+            **metadata,
+        }
 
     return {
-        "reply": "Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏",
+        "reply": build_fallback_reply(intent_info, retrieval, used_legacy_context),
         "ai_provider": "fallback",
+        **metadata,
     }
 
 
