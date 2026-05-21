@@ -1,194 +1,244 @@
 # SmartBook System
 
-> Nền tảng quản lý kho và luân chuyển sách hiện đại, kết nối vận hành vật lý với nghiệp vụ lưu thông trên kiến trúc Microservices.
+SmartBook là hệ thống quản lý thư viện và kho sách theo kiến trúc microservices. Dự án kết nối ba lớp nghiệp vụ chính: quản trị người dùng, vận hành tồn kho vật lý và lưu thông sách giữa khách hàng với thư viện.
 
-![Status](https://img.shields.io/badge/status-Active%20Development-0a7f5a)
-![Version](https://img.shields.io/badge/version-1.0.0-2563eb)
-![Tech](https://img.shields.io/badge/stack-Node.js%20%7C%20React%20%7C%20FastAPI%20%7C%20PostgreSQL-ff6b00)
+## Mục Lục
 
-## Mục lục
-
-- [Sứ mệnh và tầm nhìn](#sứ-mệnh-và-tầm-nhìn)
-- [Kiến trúc cốt lõi](#kiến-trúc-cốt-lõi)
-- [Sơ đồ luồng Microservices](#sơ-đồ-luồng-microservices)
-- [Thiết kế dữ liệu](#thiết-kế-dữ-liệu)
-- [Tích hợp AI](#tích-hợp-ai)
-- [Business Domain và ma trận vai trò](#business-domain-và-ma-trận-vai-trò)
-- [Service Catalog](#service-catalog)
-- [Technical Stack](#technical-stack)
-- [Deployment Flow](#deployment-flow)
+- [Tổng quan](#tổng-quan)
+- [Kiến trúc](#kiến-trúc)
+- [Luồng demo chính](#luồng-demo-chính)
+- [Service catalog](#service-catalog)
+- [Technical stack](#technical-stack)
+- [Chạy bằng Docker](#chạy-bằng-docker)
+- [Tài khoản demo](#tài-khoản-demo)
+- [Kiểm thử](#kiểm-thử)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
-- [Chiến lược dọn dẹp tài liệu](#chiến-lược-dọn-dẹp-tài-liệu)
-- [Tài liệu chuyên sâu](#tài-liệu-chuyên-sâu)
+- [Tài liệu liên quan](#tài-liệu-liên-quan)
 
-## Sứ mệnh và tầm nhìn
+## Tổng Quan
 
-SmartBook không chỉ là phần mềm thư viện. Đây là giải pháp điều phối toàn chuỗi nghiệp vụ từ kho vật lý đến lưu thông sách:
+SmartBook tập trung vào các nghiệp vụ thư viện có trạng thái tồn kho thật:
 
-- 🏭 Tầng vận hành kho: barcode, vị trí kệ, nhập/xuất, kiểm kê.
-- 🔁 Tầng lưu thông: mượn/trả, giữ chỗ, gia hạn, phí phạt.
-- 🤖 Tầng hỗ trợ AI: nhận diện sách từ ảnh, trích xuất metadata, hỗ trợ nhập liệu tự động.
-- 🔐 Tầng quản trị: IAM, RBAC/PBAC, phân tách quyền theo vai trò và phạm vi kho.
+- Quản lý catalog sách, biến thể sách, barcode, kho, vị trí kệ và tồn kho.
+- Customer đặt sách, theo dõi reservation, nhận mã pickup/QR và xem lịch sử mượn trả.
+- Staff xác nhận reservation, phát sách tại quầy, xử lý trả sách, mất/hư sách và phí phạt.
+- Hệ thống tự cập nhật `available_qty`, `reserved_qty`, `borrowed_qty` giữa Borrow Service và Inventory Service.
+- AI Service hỗ trợ OCR/metadata enrichment cho quá trình nhập liệu sách.
+- Auth Service quản lý user, role, permission và JWT cho toàn bộ hệ thống.
 
-## Kiến trúc cốt lõi
-
-### 1. Microservices orchestration qua API Gateway
-
-- API Gateway là cổng vào duy nhất cho client tại cổng 3000.
-- Gateway định tuyến theo domain:
-  - /auth, /iam → Auth Service
-  - /api, /catalog → Inventory Service
-  - /borrow, /my → Borrow Service
-  - /ai, /api/ai → AI Service
-- Cấu trúc này giúp cô lập domain, giảm coupling và tối ưu khả năng scale từng service.
-
-### 2. Domain tách biệt theo nghiệp vụ
-
-- Auth: định danh, xác thực, phân quyền.
-- Inventory: danh mục, tồn kho, kho bãi, nhập/xuất.
-- Borrow: lưu thông, thành viên, phí phạt, thông báo.
-- AI: OCR, nhận diện sách, enrichment metadata.
-- Analytics: domain báo cáo và tổng hợp dữ liệu vận hành (đang hoàn thiện module thực thi).
-
-### 3. Khả năng mở rộng theo service
-
-- Mỗi service có vòng đời deploy độc lập.
-- Mỗi service có DATABASE_URL tách riêng theo cơ sở dữ liệu nghiệp vụ.
-- Hỗ trợ nâng cấp dần từng module mà không ảnh hưởng toàn hệ thống.
-
-## Sơ đồ luồng Microservices
+## Kiến Trúc
 
 ```mermaid
 flowchart LR
-    U[Web Client :5173] --> G[API Gateway :3000]
+    UI["Web UI :5173"] --> GW["API Gateway :3000"]
 
-    G --> A[Auth Service :3002]
-    G --> I[Inventory Service :3001]
-    G --> B[Borrow Service :3005]
-    G --> AI[AI Service :8000]
-    G --> AN[Analytics Service : Roadmap]
+    GW --> AUTH["Auth Service :3002"]
+    GW --> INV["Inventory Service :3001"]
+    GW --> BORROW["Borrow Service :3005"]
+    GW --> AI["AI Service :8000"]
 
-    A --> DB[(PostgreSQL :5432)]
-    I --> DB
-    B --> DB
-
-    AI --> O[Ollama :11434]
-    P[pgAdmin :8080] --> DB
+    AUTH --> PG[("PostgreSQL :5432")]
+    INV --> PG
+    BORROW --> PG
+    AI --> OLLAMA["Ollama :11434"]
+    PGADMIN["pgAdmin :8080"] --> PG
 ```
 
-## Thiết kế dữ liệu
+Gateway là cổng vào duy nhất cho frontend:
 
-SmartBook sử dụng PostgreSQL với Prisma ORM theo mô hình đa domain dữ liệu:
+- `/auth`, `/iam` chuyển tới Auth Service.
+- `/api`, `/catalog` chuyển tới Inventory Service.
+- `/borrow`, `/my` chuyển tới Borrow Service.
+- `/ai`, `/api/ai` chuyển tới AI Service.
 
-- auth_db: người dùng, vai trò, quyền, quan hệ role-permission.
-- inventory_db: catalog, biến thể, kho, vị trí, tồn kho, biến động.
-- borrow_db: thành viên, mượn/trả, đặt chỗ, phí phạt, thông báo.
+Mỗi service Node.js dùng Prisma và database riêng theo domain:
 
-Thiết kế hiện tại ưu tiên tách cơ sở dữ liệu theo service để giảm xung đột migration và dễ kiểm soát ownership dữ liệu. Prisma được dùng làm lớp truy cập dữ liệu chuẩn hóa cho các service Node.js.
+- `auth_db`: user, role, permission, session/auth metadata.
+- `inventory_db`: book catalog, variants, warehouses, locations, stock balances, stock movements.
+- `borrow_db`: customers, memberships, reservations, loans, fines, notifications, audit logs.
 
-## Tích hợp AI
+## Luồng Demo Chính
 
-AI Service được xây dựng bằng FastAPI và tích hợp Local LLM qua Ollama:
+### 1. Đặt sách, mượn sách, trả sách
 
-- OCR và nhận diện thông tin sách từ ảnh bìa.
-- Lookup metadata theo ISBN (kết hợp nhiều nguồn).
-- Tạo tóm tắt tiếng Việt hỗ trợ quy trình nhập liệu.
-- Chế độ chạy local giúp kiểm soát dữ liệu nội bộ và giảm phụ thuộc dịch vụ ngoài.
+Đây là flow nghiệp vụ cốt lõi của project:
 
-## Business Domain và ma trận vai trò
+1. Customer tạo reservation từ catalog.
+2. Borrow Service gọi Inventory Service để giữ tồn kho.
+3. Inventory giảm `available_qty`, tăng `reserved_qty`.
+4. Staff xác nhận reservation.
+5. Staff chuyển reservation sang `READY_FOR_PICKUP`.
+6. Customer đến quầy nhận sách.
+7. Staff convert reservation thành loan.
+8. Inventory giảm `reserved_qty`, tăng `borrowed_qty`.
+9. Khi trả sách, Inventory giảm `borrowed_qty`, tăng lại `available_qty`.
+10. Nếu sách quá hạn, mất hoặc hư, Borrow Service tự tạo fine tương ứng.
+11. Nếu reservation hết hạn, job tự release stock và chuyển reservation sang `EXPIRED`.
 
-Trong SmartBook, phân tách Librarian và Warehouse Staff là nguyên tắc bắt buộc:
+### 2. Reservation pickup code / QR code
 
-- Librarian tập trung lưu thông và trải nghiệm bạn đọc.
-- Warehouse Staff tập trung vận hành vật lý kho.
+Flow nhận sách tại quầy đã được hoàn thiện:
 
-| Vai trò | Trọng tâm nghiệp vụ | Quyền nghiệp vụ chính | Hệ thống liên quan |
-|---|---|---|---|
-| Customer | Tự phục vụ qua cổng khách hàng | Mượn, trả, đặt chỗ, thanh toán phí phạt, theo dõi tài khoản cá nhân | Borrow Portal |
-| Librarian | Lưu thông và hỗ trợ bạn đọc | Duyệt mượn/trả, xử lý gia hạn, giữ chỗ, xử lý vi phạm lưu thông | Borrow Service |
-| Warehouse Staff | Vận hành kho vật lý | Quản lý barcode, vị trí kệ, nhập/xuất, điều chuyển, kiểm kê | Inventory Service |
-| Manager | Quản trị vận hành cấp trung | Phê duyệt chênh lệch kiểm kê, quản lý nhà cung cấp, theo dõi KPI | Inventory + Analytics |
-| Admin | Quản trị nền tảng | Quản lý user/role/policy, RBAC/PBAC, cấu hình hệ thống | Auth + IAM |
+1. Customer đặt sách.
+2. Staff confirm reservation.
+3. Khi staff chuyển sang `READY_FOR_PICKUP`, hệ thống sinh pickup code dạng `PU-XXXX-XXXX`.
+4. Customer thấy pickup code và QR trong trang My Reservations.
+5. Staff nhập pickup code hoặc scan QR ở màn Borrow Reservations.
+6. Hệ thống kiểm tra code, trạng thái và hạn pickup.
+7. Nếu hợp lệ, reservation được convert thành loan.
+8. Pickup code được đánh dấu đã dùng bằng `pickup_code_used_at`.
+
+QR payload có dạng:
+
+```text
+SMARTBOOK:PICKUP:PU-XXXX-XXXX
+```
+
+Endpoint chính:
+
+```http
+POST /borrow/reservations/pickup/convert-to-loan
+Content-Type: application/json
+
+{
+  "pickup_code": "SMARTBOOK:PICKUP:PU-XXXX-XXXX"
+}
+```
+
+### 3. Fine tự động
+
+Borrow Service tự sinh fine trong các trường hợp:
+
+- `OVERDUE`: loan item quá hạn.
+- `LOST`: sách bị mất khi trả.
+- `DAMAGE`: sách hư/hỏng khi trả.
+
+Fine có thể được thanh toán một phần/toàn phần hoặc waive/reduce bởi staff có quyền.
 
 ## Service Catalog
 
-| Service | Cổng | Vai trò | Endpoint trọng yếu |
+| Service | Cổng local | Vai trò | Endpoint chính |
 |---|---:|---|---|
-| API Gateway | 3000 | Cổng vào tập trung và định tuyến domain | /health, /auth, /iam, /api, /borrow, /ai |
-| Auth Service | 3004 → 3002 | IAM, xác thực, token, phân quyền | /auth/login, /auth/me, /iam/users, /iam/roles |
-| Inventory Service | 3003 → 3001 | Catalog, kho, tồn, nhập/xuất, supplier | /api/books, /api/warehouses, /api/goods-receipts |
-| Borrow Service | 3005 | Mượn/trả, đặt chỗ, phí phạt, hồ sơ thành viên | /borrow/loans, /borrow/reservations, /borrow/fines, /borrow/my |
-| AI Service | 8000 | OCR, metadata enrichment, summary | /health, /recognize-book, /lookup-book-by-isbn |
-| Analytics Service | Roadmap | Báo cáo và phân tích vận hành đa domain | Đang chuẩn hóa module |
-| Web UI | 5173 | Giao diện quản trị và cổng nghiệp vụ | Dashboard, Catalog, Borrow, IAM |
-| PostgreSQL | 5432 | Lưu trữ dữ liệu giao dịch | auth_db, inventory_db, borrow_db |
-| pgAdmin | 8080 | Quản trị dữ liệu | UI quản trị DB |
-| Ollama | 11434 | Local LLM runtime cho AI | inference nội bộ |
+| Web UI | 5173 | Giao diện quản trị và customer portal | Dashboard, Catalog, Borrow, IAM |
+| API Gateway | 3000 | Cổng vào tập trung | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/ai` |
+| Auth Service | 3004 -> 3002 | Xác thực, IAM, RBAC/PBAC | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
+| Inventory Service | 3003 -> 3001 | Catalog, kho, tồn, nhập/xuất | `/api/books`, `/api/warehouses`, `/api/borrow-integration/*` |
+| Borrow Service | 3005 | Reservation, loan, return, fine, customer portal | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
+| AI Service | 8000 | OCR, metadata enrichment | `/health`, `/recognize-book`, `/lookup-book-by-isbn` |
+| PostgreSQL | 5432 | Lưu dữ liệu giao dịch | `auth_db`, `inventory_db`, `borrow_db` |
+| pgAdmin | 8080 | Quản trị PostgreSQL | Web UI |
+| Ollama | 11434 | Local LLM runtime | AI inference nội bộ |
 
 ## Technical Stack
 
-### 🧩 Backend
+- Backend: Node.js, Express, Prisma, PostgreSQL.
+- Frontend: React, Vite, TypeScript, Tailwind-style utility classes.
+- AI: FastAPI, Ollama, OCR/metadata integrations.
+- DevOps: Docker Compose, pgAdmin.
+- QR/scan: `qrcode` để render QR thật, `html5-qrcode` để scan camera/manual input.
 
-- Node.js + Express cho API Gateway, Auth, Inventory, Borrow.
-- FastAPI cho AI Service.
-- Prisma ORM cho các service Node.js sử dụng PostgreSQL.
+## Chạy Bằng Docker
 
-### 🎨 Frontend
+### Chuẩn bị
 
-- React + Vite + TypeScript.
-- Routing và API client tách lớp để dễ mở rộng theo domain.
-
-### ⚙️ DevOps và vận hành
-
-- Docker Compose cho local orchestration.
-- pgAdmin cho quản trị dữ liệu.
-- Ollama cho local model serving.
-
-## Deployment Flow
-
-### Bước 1: Chuẩn bị môi trường
-
-```bash
-git clone https://github.com/your-org/smartbook-system.git
-cd smartbook-system
+```powershell
 copy .env.example .env
 ```
 
-Biến quan trọng cần rà soát trong .env:
+Các biến môi trường cần chú ý:
 
-- DB_USER, DB_PASSWORD, DB_HOST, DB_PORT.
-- AUTH_DB_NAME, INVENTORY_DB_NAME, BORROW_DB_NAME.
-- JWT_SECRET, INTERNAL_SERVICE_KEY.
-- VITE_API_BASE_URL, VITE_AUTH_BASE_URL, VITE_AI_BASE_URL.
-- OLLAMA_HOST, SUMMARY_MODEL.
+- `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
+- `AUTH_DB_NAME`, `INVENTORY_DB_NAME`, `BORROW_DB_NAME`
+- `JWT_SECRET`, `INTERNAL_SERVICE_KEY`
+- `VITE_API_BASE_URL`, `VITE_AUTH_BASE_URL`, `VITE_AI_BASE_URL`
+- `OLLAMA_HOST`, `SUMMARY_MODEL`
 
-### Bước 2: Khởi chạy nhanh toàn stack
+### Chạy toàn bộ stack
 
-```cmd
-scripts\run-all.bat
-```
-
-### Bước 3: Hoặc khởi chạy thủ công bằng Docker Compose
-
-```bash
+```powershell
 docker compose up -d --build
-docker compose --profile dev run --rm auth-db-push
-docker compose --profile dev run --rm inventory-db-push
-docker compose --profile dev run --rm borrow-db-push
 docker compose ps
 ```
 
-### Bước 4: Kiểm tra sau triển khai
+Khi cần rebuild riêng flow borrow/web sau khi chỉnh code:
+
+```powershell
+docker compose build borrow-service smartbook-ui
+docker compose up -d borrow-service smartbook-ui
+```
+
+Các service tự chạy `prisma db push` và seed khi container khởi động theo cấu hình trong `docker-compose.yml`.
+
+### URL sau khi chạy
 
 | Thành phần | URL |
 |---|---|
 | Web UI | http://localhost:5173 |
 | API Gateway | http://localhost:3000 |
+| Borrow Service | http://localhost:3005 |
+| Inventory Service | http://localhost:3003 |
+| Auth Service | http://localhost:3004 |
 | AI Service | http://localhost:8000 |
 | pgAdmin | http://localhost:8080 |
 | Ollama | http://localhost:11434 |
 
-## Cấu trúc dự án
+## Tài Khoản Demo
+
+Seed Auth Service tạo các tài khoản demo dùng chung mật khẩu:
+
+```text
+Mật khẩu: 123456
+```
+
+Một số username thường dùng:
+
+- `hung`: admin/superuser.
+- `manager01`: manager.
+- `staff01`, `staff02`, `staff03`: staff.
+- `warehouse01`: warehouse staff.
+- `cs01`: customer support.
+
+## Kiểm Thử
+
+### Borrow phase 2 integration
+
+Script này kiểm tra các nghiệp vụ mượn/trả/fine chính qua Docker gateway:
+
+```powershell
+$env:TEST_VARIANT_ID='36c746bb-6c0f-459e-b5e6-62759ca94de7'
+$env:TEST_WAREHOUSE_ID='bae473df-be73-4e30-9348-5557217638ef'
+node scripts\borrow-phase2-integration.mjs
+```
+
+Kết quả gần nhất:
+
+```text
+PASS=15 TOTAL=15
+```
+
+### Pickup code / QR flow
+
+Flow pickup code đã được test end-to-end trên Docker qua API Gateway và PostgreSQL:
+
+- UI container response: pass.
+- Customer tạo reservation: pass.
+- Stock chuyển `available -> reserved`: pass.
+- Staff confirm: pass.
+- Staff mark `READY_FOR_PICKUP` và sinh pickup code: pass.
+- Customer nhìn thấy pickup code: pass.
+- Convert trực tiếp không có code bị chặn: pass.
+- Convert bằng QR payload `SMARTBOOK:PICKUP:<code>`: pass.
+- Stock chuyển `reserved -> borrowed`: pass.
+- Reservation được đánh dấu `CONVERTED_TO_LOAN` và `pickup_code_used_at`: pass.
+- Return loan và restore stock: pass.
+
+Kết quả gần nhất:
+
+```text
+Pickup code docker test: 19/19 passed
+```
+
+## Cấu Trúc Dự Án
 
 ```text
 smartbook-system/
@@ -199,12 +249,12 @@ smartbook-system/
 |  |- auth-service/
 |  |- inventory-service/
 |  |- borrow-service/
-|  |- ai-service/
-|  \- analytics-service/
+|  \- ai-service/
 |- packages/
 |  \- shared/
 |- db-init/
 |- docs/
+|  |- ARCHITECTURE/
 |  |- SERVICES/
 |  \- TEST_GUIDES/
 |- scripts/
@@ -212,31 +262,19 @@ smartbook-system/
 \- README.md
 ```
 
-## Chiến lược dọn dẹp tài liệu
+## Tài Liệu Liên Quan
 
-- Xóa các README boilerplate mặc định không mang giá trị nghiệp vụ.
-- Mọi giới thiệu hệ thống tập trung tại README root.
-- README trong từng service chỉ giữ thông tin đặc thù:
-  - Biến môi trường riêng.
-  - Endpoint quan trọng.
-  - Lệnh chạy local ngắn gọn.
-- Tài liệu chuyên sâu được tách theo domain trong docs/SERVICES.
+- Kiến trúc tổng quan: `docs/ARCHITECTURE/PROJECT_OVERVIEW.md`
+- Hướng dẫn Docker chi tiết: `docs/RUN_WITH_DOCKER.md`
+- Auth Service: `docs/SERVICES/AUTH_SERVICE.md`
+- Inventory Service: `docs/SERVICES/INVENTORY_SERVICE.md`
+- Borrow Service: `docs/SERVICES/BORROW_SERVICE.md`
+- AI Service: `docs/SERVICES/AI_SERVICE.md`
+- Test guides: `docs/TEST_GUIDES/`
 
-## Tài liệu chuyên sâu
+## Ghi Chú Phát Triển
 
-- Kiến trúc tổng quan: docs/PROJECT_OVERVIEW.md
-- Hướng dẫn chạy Docker chi tiết: docs/RUN_WITH_DOCKER.md
-- Domain AI: docs/SERVICES/AI_SERVICE.md
-- Domain Inventory: docs/SERVICES/INVENTORY_SERVICE.md
-- Domain Auth: docs/SERVICES/AUTH_SERVICE.md
-- Domain Borrow: docs/SERVICES/BORROW_SERVICE.md
-- Domain Analytics: docs/SERVICES/ANALYTICS_SERVICE.md
-- Test guide theo phase: docs/TEST_GUIDES/
-
-## Góp ý và đóng góp
-
-Nếu bạn là contributor mới, nên đi theo luồng đọc tài liệu sau:
-
-1. README root để nắm kiến trúc tổng quan.
-2. docs/RUN_WITH_DOCKER.md để dựng môi trường.
-3. docs/SERVICES tương ứng domain bạn phụ trách.
+- Không convert reservation `READY_FOR_PICKUP` trực tiếp bằng reservation id; staff phải nhập/scan pickup code.
+- Endpoint convert bằng pickup code chấp nhận cả mã thô `PU-XXXX-XXXX` và QR payload `SMARTBOOK:PICKUP:PU-XXXX-XXXX`.
+- QR được render bằng thư viện `qrcode`, modal scan dùng `html5-qrcode`.
+- Khi test dữ liệu tồn kho, nên đọc trực tiếp bảng `stock_balances` trong `inventory_db` để xác nhận `available_qty`, `reserved_qty`, `borrowed_qty`.
