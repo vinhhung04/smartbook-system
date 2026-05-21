@@ -1266,6 +1266,8 @@ async function getPickingTaskDetail(req, res) {
                   location_code: true,
                   location_type: true,
                   barcode: true,
+                  zone: true,
+                  shelf: true,
                 },
               },
               book_variants: {
@@ -1363,6 +1365,17 @@ async function getPickingTaskDetail(req, res) {
           }
         }
 
+        if (remainingQty > 0 && !sourceLocationId) {
+          console.warn("[picking] no inventory allocated for outbound line", {
+            order_id: order.id,
+            order_number: order.outbound_number,
+            warehouse_id: order.warehouse_id,
+            line_id: line.id,
+            variant_id: line.variant_id,
+            remaining_qty: remainingQty,
+          });
+        }
+
         lines.push({
           line_id: line.id,
           variant_id: line.variant_id,
@@ -1458,6 +1471,34 @@ async function getPickingTaskDetail(req, res) {
         });
       }
 
+      if (preparedCurrentLine && !preparedCurrentLine.source_location_id) {
+        return res.status(409).json({
+          message: "No inventory allocated for current picking line",
+        });
+      }
+
+      console.info("[picking] task detail loaded", {
+        task_type: "outbound",
+        order_id: order.id,
+        order_number: order.outbound_number,
+        warehouse_id: order.warehouse_id,
+        current_location_input: currentLocationInput || null,
+        allocated_inventory: remainingLines.map((line) => ({
+          line_id: line.line_id,
+          variant_id: line.variant_id,
+          source_location_id: line.source_location_id,
+          source_location_code: line.source_location_code,
+          remaining_qty: line.remaining_qty,
+          available_hint: line.source_available_hint,
+        })),
+        expected_location: preparedCurrentLine
+          ? {
+              id: preparedCurrentLine.source_location_id,
+              code: preparedCurrentLine.source_location_code,
+            }
+          : null,
+      });
+
       return res.json({
         task_type: "outbound",
         task_id: order.id,
@@ -1511,6 +1552,8 @@ async function getPickingTaskDetail(req, res) {
                 location_code: true,
                 location_type: true,
                 barcode: true,
+                zone: true,
+                shelf: true,
               },
             },
             locations_transfer_order_items_to_location_idTolocations: {
@@ -1620,6 +1663,17 @@ async function getPickingTaskDetail(req, res) {
         }
       }
 
+      if (remainingQty > 0 && !sourceLocationId) {
+        console.warn("[picking] no inventory allocated for transfer line", {
+          order_id: order.id,
+          order_number: order.transfer_number,
+          warehouse_id: order.from_warehouse_id,
+          line_id: line.id,
+          variant_id: line.variant_id,
+          remaining_qty: remainingQty,
+        });
+      }
+
       lines.push({
         line_id: line.id,
         variant_id: line.variant_id,
@@ -1717,6 +1771,34 @@ async function getPickingTaskDetail(req, res) {
         },
       });
     }
+
+    if (preparedCurrentLine && !preparedCurrentLine.source_location_id) {
+      return res.status(409).json({
+        message: "No inventory allocated for current picking line",
+      });
+    }
+
+    console.info("[picking] task detail loaded", {
+      task_type: "transfer",
+      order_id: order.id,
+      order_number: order.transfer_number,
+      warehouse_id: order.from_warehouse_id,
+      current_location_input: currentLocationInput || null,
+      allocated_inventory: remainingLines.map((line) => ({
+        line_id: line.line_id,
+        variant_id: line.variant_id,
+        source_location_id: line.source_location_id,
+        source_location_code: line.source_location_code,
+        remaining_qty: line.remaining_qty,
+        available_hint: line.source_available_hint,
+      })),
+      expected_location: preparedCurrentLine
+        ? {
+            id: preparedCurrentLine.source_location_id,
+            code: preparedCurrentLine.source_location_code,
+          }
+        : null,
+    });
 
     return res.json({
       task_type: "transfer",

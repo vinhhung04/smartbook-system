@@ -35,6 +35,129 @@ function createTransferNumber() {
   return `TO-${ts}-${suffix}`;
 }
 
+const OUTBOUND_REFERENCE_TYPES = new Set([
+  "TRANSFER_TO_STORE",
+  "WAREHOUSE_TRANSFER",
+  "RETURN_TO_SUPPLIER",
+  "SALES_ORDER",
+  "INTERNAL_REQUEST",
+  "ISSUE_REQUEST",
+  "RESERVATION",
+  "LOAN_REQUEST",
+  "MAINTENANCE",
+  "INVENTORY_ADJUSTMENT",
+  "DAMAGED_RETURN",
+  "PROMOTION",
+  "OTHER",
+]);
+
+const OUTBOUND_REFERENCE_PREFIXES = {
+  TRANSFER_TO_STORE: "STORE",
+  WAREHOUSE_TRANSFER: "WH-TRF",
+  RETURN_TO_SUPPLIER: "RTN-SUP",
+  SALES_ORDER: "SO",
+  INTERNAL_REQUEST: "REQ",
+  ISSUE_REQUEST: "ISSUE",
+  RESERVATION: "RES",
+  LOAN_REQUEST: "LOAN",
+  MAINTENANCE: "MT",
+  INVENTORY_ADJUSTMENT: "ADJ",
+  DAMAGED_RETURN: "DMG",
+  PROMOTION: "PROMO",
+  OTHER: "OTHER",
+};
+
+function normalizeReferenceType(value) {
+  const referenceType = String(value || "OTHER")
+    .trim()
+    .toUpperCase();
+  return OUTBOUND_REFERENCE_TYPES.has(referenceType) ? referenceType : null;
+}
+
+function getReferencePrefix(referenceType) {
+  return OUTBOUND_REFERENCE_PREFIXES[referenceType] || OUTBOUND_REFERENCE_PREFIXES.OTHER;
+}
+
+function formatReferenceCode(referenceType, number) {
+  const prefix = getReferencePrefix(referenceType);
+  const padded = String(Math.max(1, Number(number) || 1)).padStart(3, "0");
+  return `${prefix}-${padded}`;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function getMaxExistingReferenceNumber(tx, referenceType) {
+  const prefix = getReferencePrefix(referenceType);
+  const pattern = `^${escapeRegExp(prefix)}-([0-9]+)$`;
+  const rows = await tx.$queryRaw`
+    SELECT COALESCE(MAX((regexp_match(external_reference, ${pattern}))[1]::int), 0) AS max_number
+    FROM outbound_orders
+    WHERE reference_type = ${referenceType}::"OutboundReferenceType"
+      AND external_reference ~ ${pattern}
+  `;
+  return Number(rows?.[0]?.max_number || 0);
+}
+
+async function previewOutboundReferenceCode(req, res) {
+  const referenceType = normalizeReferenceType(req.query.reference_type);
+  if (!referenceType) {
+    return res.status(400).json({ message: "Invalid reference_type" });
+  }
+
+  try {
+    const [sequence, maxExisting] = await Promise.all([
+      prisma.outbound_reference_sequences.findUnique({
+        where: { reference_type: referenceType },
+      }),
+      getMaxExistingReferenceNumber(prisma, referenceType),
+    ]);
+    const nextNumber = Math.max(Number(sequence?.next_number || 1), maxExisting + 1);
+
+    return res.json({
+      reference_type: referenceType,
+      external_reference: formatReferenceCode(referenceType, nextNumber),
+      next_number: nextNumber,
+      reserved: false,
+    });
+  } catch (error) {
+    console.error("Error while previewing outbound reference code:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function allocateOutboundReferenceCode(tx, referenceType) {
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext(${`outbound_reference:${referenceType}`}))
+  `;
+
+  const sequence = await tx.outbound_reference_sequences.findUnique({
+    where: { reference_type: referenceType },
+  });
+  const maxExisting = await getMaxExistingReferenceNumber(tx, referenceType);
+  const nextNumber = Math.max(Number(sequence?.next_number || 1), maxExisting + 1);
+
+  if (sequence) {
+    await tx.outbound_reference_sequences.update({
+      where: { reference_type: referenceType },
+      data: {
+        next_number: nextNumber + 1,
+        updated_at: new Date(),
+      },
+    });
+  } else {
+    await tx.outbound_reference_sequences.create({
+      data: {
+        reference_type: referenceType,
+        next_number: nextNumber + 1,
+      },
+    });
+  }
+
+  return formatReferenceCode(referenceType, nextNumber);
+}
+
 async function resolveVariantIdByIdentifier(tx, payloadLine) {
   const directVariantId = parseId(payloadLine?.variant_id);
   if (directVariantId) {
@@ -58,6 +181,198 @@ async function resolveVariantIdByIdentifier(tx, payloadLine) {
     variant_id: variant?.id || null,
     isbn13,
   };
+}
+
+async function allocateOutboundOrderLines(tx, orderId, warehouseId) {
+  const lines = await tx.outbound_order_items.findMany({
+    where: { outbound_order_id: orderId },
+    select: {
+      id: true,
+      variant_id: true,
+      source_location_id: true,
+      quantity: true,
+      note: true,
+    },
+    orderBy: { id: "asc" },
+  });
+  const allocatedQtyByVariantLocation = new Map();
+  const allocationKey = (variantId, locationId) => `${variantId}:${locationId}`;
+
+  const openAllocatedLines = await tx.outbound_order_items.findMany({
+    where: {
+      outbound_order_id: { not: orderId },
+      source_location_id: { not: null },
+      outbound_orders: {
+        warehouse_id: warehouseId,
+        status: { in: ["APPROVED", "PICKING"] },
+      },
+    },
+    select: {
+      variant_id: true,
+      source_location_id: true,
+      quantity: true,
+      processed_qty: true,
+    },
+  });
+
+  openAllocatedLines.forEach((line) => {
+    const remainingQty = Math.max(
+      Number(line.quantity || 0) - Number(line.processed_qty || 0),
+      0,
+    );
+    if (remainingQty <= 0 || !line.source_location_id) return;
+    const key = allocationKey(line.variant_id, line.source_location_id);
+    allocatedQtyByVariantLocation.set(
+      key,
+      Number(allocatedQtyByVariantLocation.get(key) || 0) + remainingQty,
+    );
+  });
+
+  for (const line of lines) {
+    const requestedQty = Number(line.quantity || 0);
+    if (requestedQty <= 0) continue;
+
+    if (line.source_location_id) {
+      const fixedBalance = await tx.stock_balances.findUnique({
+        where: {
+          variant_id_location_id: {
+            variant_id: line.variant_id,
+            location_id: line.source_location_id,
+          },
+        },
+        select: {
+          available_qty: true,
+          locations: {
+            select: {
+              warehouse_id: true,
+              is_active: true,
+              is_pickable: true,
+              location_code: true,
+            },
+          },
+        },
+      });
+
+      const alreadyAllocated = Number(
+        allocatedQtyByVariantLocation.get(
+          allocationKey(line.variant_id, line.source_location_id),
+        ) || 0,
+      );
+      const effectiveAvailable =
+        Number(fixedBalance?.available_qty || 0) - alreadyAllocated;
+
+      if (
+        !fixedBalance ||
+        fixedBalance.locations?.warehouse_id !== warehouseId ||
+        !fixedBalance.locations?.is_active ||
+        !fixedBalance.locations?.is_pickable ||
+        effectiveAvailable < requestedQty
+      ) {
+        return {
+          invalid: true,
+          statusCode: 409,
+          message: `No inventory allocated for outbound line at selected source location (${fixedBalance?.locations?.location_code || line.source_location_id})`,
+        };
+      }
+      allocatedQtyByVariantLocation.set(
+        allocationKey(line.variant_id, line.source_location_id),
+        alreadyAllocated + requestedQty,
+      );
+      continue;
+    }
+
+    const balances = await tx.stock_balances.findMany({
+      where: {
+        warehouse_id: warehouseId,
+        variant_id: line.variant_id,
+        available_qty: { gt: 0 },
+        locations: {
+          is_active: true,
+          is_pickable: true,
+        },
+      },
+      include: {
+        locations: {
+          select: {
+            location_code: true,
+          },
+        },
+      },
+      orderBy: [
+        { available_qty: "desc" },
+        { locations: { location_code: "asc" } },
+      ],
+    });
+
+    let remainingToAllocate = requestedQty;
+    const allocations = [];
+    for (const balance of balances) {
+      if (remainingToAllocate <= 0) break;
+      const alreadyAllocated = Number(
+        allocatedQtyByVariantLocation.get(
+          allocationKey(line.variant_id, balance.location_id),
+        ) || 0,
+      );
+      const effectiveAvailable =
+        Number(balance.available_qty || 0) - alreadyAllocated;
+      const allocatedQty = Math.min(
+        remainingToAllocate,
+        effectiveAvailable,
+      );
+      if (allocatedQty <= 0) continue;
+      allocations.push({
+        location_id: balance.location_id,
+        location_code: balance.locations?.location_code || null,
+        quantity: allocatedQty,
+      });
+      remainingToAllocate -= allocatedQty;
+      allocatedQtyByVariantLocation.set(
+        allocationKey(line.variant_id, balance.location_id),
+        alreadyAllocated + allocatedQty,
+      );
+    }
+
+    if (remainingToAllocate > 0 || allocations.length === 0) {
+      return {
+        invalid: true,
+        statusCode: 409,
+        message: "No inventory allocated. Not enough pickable stock for outbound line.",
+      };
+    }
+
+    const [firstAllocation, ...extraAllocations] = allocations;
+    await tx.outbound_order_items.update({
+      where: { id: line.id },
+      data: {
+        source_location_id: firstAllocation.location_id,
+        quantity: firstAllocation.quantity,
+      },
+    });
+
+    if (extraAllocations.length > 0) {
+      await tx.outbound_order_items.createMany({
+        data: extraAllocations.map((allocation) => ({
+          outbound_order_id: orderId,
+          variant_id: line.variant_id,
+          source_location_id: allocation.location_id,
+          quantity: allocation.quantity,
+          processed_qty: 0,
+          note: line.note,
+        })),
+      });
+    }
+
+    console.info("[order-request] allocated outbound line", {
+      order_id: orderId,
+      warehouse_id: warehouseId,
+      line_id: line.id,
+      variant_id: line.variant_id,
+      requested_qty: requestedQty,
+      allocations,
+    });
+  }
+
+  return { success: true };
 }
 
 function mapOutboundSummary(order) {
@@ -89,6 +404,7 @@ function mapOutboundSummary(order) {
     requested_at: order.requested_at,
     updated_at: order.updated_at,
     note: order.note || null,
+    reference_type: order.reference_type || "OTHER",
     external_reference: order.external_reference || null,
   };
 }
@@ -130,6 +446,7 @@ function mapTransferSummary(order) {
     requested_at: order.requested_at,
     updated_at: order.updated_at,
     note: order.note || null,
+    reference_type: null,
     external_reference: null,
   };
 }
@@ -282,7 +599,9 @@ async function listOrderRequests(req, res) {
 async function createOutboundRequest(req, res) {
   const warehouseId = parseId(req.body?.warehouse_id);
   const outboundType = normalizeText(req.body?.outbound_type) || "MANUAL";
-  const externalReference = normalizeText(req.body?.external_reference);
+  const hasReferenceType = Object.prototype.hasOwnProperty.call(req.body || {}, "reference_type");
+  const referenceType = normalizeReferenceType(req.body?.reference_type);
+  const legacyExternalReference = normalizeText(req.body?.external_reference);
   const note = normalizeText(req.body?.note);
   const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
   const currentUserId = parseId(req.user?.id);
@@ -299,6 +618,10 @@ async function createOutboundRequest(req, res) {
     !["SALE", "DISPOSAL", "RETURN_TO_SUPPLIER", "MANUAL"].includes(outboundType)
   ) {
     return res.status(400).json({ message: "Invalid outbound_type" });
+  }
+
+  if (!referenceType) {
+    return res.status(400).json({ message: "Invalid reference_type" });
   }
 
   if (lines.length === 0) {
@@ -416,6 +739,10 @@ async function createOutboundRequest(req, res) {
         }
       }
 
+      const externalReference = hasReferenceType || !legacyExternalReference
+        ? await allocateOutboundReferenceCode(tx, referenceType)
+        : legacyExternalReference;
+
       const order = await tx.outbound_orders.create({
         data: {
           outbound_number: createOutboundNumber(),
@@ -423,6 +750,7 @@ async function createOutboundRequest(req, res) {
           outbound_type: outboundType,
           status: "PENDING_APPROVAL",
           requested_by_user_id: currentUserId,
+          reference_type: referenceType,
           external_reference: externalReference,
           note,
         },
@@ -827,6 +1155,7 @@ async function approveRequest(req, res) {
           where: { id: taskId },
           select: {
             id: true,
+            warehouse_id: true,
             status: true,
             note: true,
           },
@@ -849,6 +1178,15 @@ async function approveRequest(req, res) {
         const nextNote = note
           ? [order.note, `[APPROVED_NOTE] ${note}`].filter(Boolean).join("\n")
           : order.note;
+
+        const allocationResult = await allocateOutboundOrderLines(
+          tx,
+          order.id,
+          order.warehouse_id,
+        );
+        if (allocationResult.invalid) {
+          return allocationResult;
+        }
 
         const row = await tx.outbound_orders.update({
           where: { id: taskId },
@@ -1131,6 +1469,7 @@ async function rejectRequest(req, res) {
 module.exports = {
   searchVariants,
   listOrderRequests,
+  previewOutboundReferenceCode,
   createOutboundRequest,
   createTransferRequest,
   approveRequest,
