@@ -88,6 +88,8 @@ model book_variants {
   stock_reservations   stock_reservations[]
   supplier_variants    supplier_variants[]
   transfer_order_items transfer_order_items[]
+  smart_receiving_matched_variants smart_receiving_items[] @relation("smart_receiving_matched_variants")
+  smart_receiving_corrected_variants smart_receiving_items[] @relation("smart_receiving_corrected_variants")
 
   @@index([book_id], map: "idx_book_variants_book_id")
   @@index([isbn13], map: "idx_book_variants_isbn13")
@@ -147,6 +149,7 @@ model goods_receipt_items {
   goods_receipts   goods_receipts @relation(fields: [goods_receipt_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   locations        locations?     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
   book_variants    book_variants  @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  smart_receiving_items smart_receiving_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -168,6 +171,7 @@ model goods_receipts {
   goods_receipt_items goods_receipt_items[]
   purchase_orders     purchase_orders?      @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
   warehouses          warehouses            @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  smart_receiving_drafts smart_receiving_drafts[]
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
 }
@@ -625,4 +629,65 @@ model warehouses {
   transfer_orders_transfer_orders_from_warehouse_idTowarehouses transfer_orders[]    @relation("transfer_orders_from_warehouse_idTowarehouses")
   transfer_orders_transfer_orders_to_warehouse_idTowarehouses   transfer_orders[]    @relation("transfer_orders_to_warehouse_idTowarehouses")
   warehouse_settings                                            warehouse_settings?
+  smart_receiving_drafts                                       smart_receiving_drafts[]
+}
+
+/// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.
+model smart_receiving_drafts {
+  id                    String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouse_id          String                    @db.Uuid
+  supplier_name        String?
+  invoice_number       String?
+  invoice_date         DateTime?                 @db.Date
+  raw_extraction       Json                      @default("{}")
+  source_file_name     String?
+  source_file_type     String?                   @db.VarChar(20)
+  status               String                    @default("DRAFT") @db.VarChar(20)
+  created_by_user_id   String                    @db.Uuid
+  created_at           DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                  @default(now()) @db.Timestamptz(6)
+
+  goods_receipt_id     String?                   @db.Uuid
+  warehouses           warehouses                @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  goods_receipts       goods_receipts?           @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  smart_receiving_items smart_receiving_items[]
+
+  @@index([status, created_at], map: "idx_smart_receiving_drafts_status")
+}
+
+/// This table stores individual line items extracted from AI-scanned invoices with their matching results.
+model smart_receiving_items {
+  id                       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  smart_receiving_draft_id String                  @db.Uuid
+
+  // Extracted data from AI OCR
+  extracted_title          String?
+  extracted_isbn           String?
+  extracted_quantity       Int
+  extracted_unit_price     Decimal?                @default(0) @db.Decimal(12, 2)
+
+  // Match result
+  matched_variant_id       String?                 @db.Uuid
+  match_strategy           String?                 @db.VarChar(30)
+  match_confidence         Float?
+  match_status             String                  @default("UNMATCHED") @db.VarChar(30)
+
+  // User correction
+  corrected_variant_id      String?                 @db.Uuid
+  corrected_quantity        Int?
+  is_user_corrected        Boolean                 @default(false)
+
+  // Final goods_receipt_item reference
+  goods_receipt_item_id    String?                 @db.Uuid
+
+  created_at               DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                @default(now()) @db.Timestamptz(6)
+
+  smart_receiving_drafts   smart_receiving_drafts  @relation(fields: [smart_receiving_draft_id], references: [id], onDelete: Cascade)
+  book_variants            book_variants?          @relation("smart_receiving_matched_variants", fields: [matched_variant_id], references: [id], onUpdate: NoAction)
+  book_variants_corrected  book_variants?          @relation("smart_receiving_corrected_variants", fields: [corrected_variant_id], references: [id], onUpdate: NoAction)
+  goods_receipt_items      goods_receipt_items?    @relation(fields: [goods_receipt_item_id], references: [id], onUpdate: NoAction)
+
+  @@index([smart_receiving_draft_id], map: "idx_smart_receiving_items_draft_id")
+  @@index([match_status], map: "idx_smart_receiving_items_status")
 }

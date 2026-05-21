@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import ollama
@@ -9,6 +9,8 @@ import re
 import logging
 import asyncio
 import xml.etree.ElementTree as ET
+import hashlib
+from cache import response_cache, rate_limiter, summary_cache
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -166,6 +168,136 @@ async def scan_back_cover(file: UploadFile = File(...)):
 
     try:
         return _scan_back_cover_from_bytes(image_bytes)
+    except ollama.ResponseError as e:
+        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Smart Receiving AI — Receipt/Invoice OCR Scanning
+# ────────────────────────────────────────────────────────────────────────────────
+
+PROMPT_RECEIPT = (
+    "Bạn là một chuyên gia nhập liệu kho sách cho hệ thống thư viện SmartBook. "
+    "Nhìn vào hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho này. "
+    "Hãy trích xuất tất cả thông tin một cách chính xác nhất.\n\n"
+    "YÊU CẦU ĐẦU RA:\n"
+    "Trả về DUY NHẤT một JSON hợp lệ, không có markdown, không có giải thích, theo định dạng:\n\n"
+    "{\n"
+    '  "supplier_name": "...",\n'
+    '  "invoice_number": "...",\n'
+    '  "invoice_date": "YYYY-MM-DD",\n'
+    '  "line_items": [\n'
+    '    {\n'
+    '      "title": "...",\n'
+    '      "isbn": "...",\n'
+    '      "quantity": số_nguyên,\n'
+    '      "unit_price": số_thập_phân\n'
+    '    }\n'
+    '  ]\n'
+    "}\n\n"
+    "QUY TẮC:\n"
+    "- supplier_name: tên nhà cung cấp (nếu không thấy ghi null)\n"
+    "- invoice_number: số hóa đơn (nếu không thấy ghi null)\n"
+    "- invoice_date: ngày tháng theo định dạng YYYY-MM-DD (nếu không thấy ghi null)\n"
+    "- line_items: MẢNG các dòng sản phẩm, mỗi dòng gồm:\n"
+    "  * title: tên sách (bắt buộc)\n"
+    "  * isbn: mã ISBN (10 hoặc 13 số, có thể ghi null nếu không thấy)\n"
+    "  * quantity: số lượng (số nguyên dương, mặc định 1 nếu không thấy)\n"
+    "  * unit_price: đơn giá (số, có thể làm tròn, mặc định 0 nếu không thấy)\n"
+    "- Nếu không trích xuất được gì, trả về {\"error\": \"Không thể đọc nội dung hóa đơn\"}\n"
+    "- Đọc tất cả các dòng sản phẩm trong hóa đơn, không bỏ sót\n"
+    "- Ưu tiên ISBN chuẩn (13 số bắt đầu bằng 978)"
+)
+
+
+def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
+    """Extract structured data from receipt/invoice image using Ollama vision."""
+    client = ollama.Client(host=OLLAMA_HOST)
+    response = client.generate(
+        model=OLLAMA_MODEL,
+        prompt=PROMPT_RECEIPT,
+        images=[image_bytes],
+        options={"temperature": 0},
+    )
+    raw_text: str = response.get("response", "")
+
+    # Try to parse JSON from response
+    try:
+        return json.loads(raw_text.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Try to extract JSON from markdown code block
+    import re
+    block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+    if block:
+        try:
+            return json.loads(block.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try to find JSON object anywhere in text
+    obj = re.search(r"\{[\s\S]*\}", raw_text)
+    if obj:
+        try:
+            return json.loads(obj.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    return {"error": "Không thể trích xuất dữ liệu từ hình ảnh", "raw": raw_text}
+
+
+@app.post("/scan-receipt")
+async def scan_receipt(file: UploadFile = File(...)):
+    """
+    Trích xuất dữ liệu cấu trúc từ hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho.
+    Trả về: supplier_name, invoice_number, invoice_date, line_items[]
+    """
+    # Validate file type
+    content_type = file.content_type or ""
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    if not any(content_type.startswith(t) for t in allowed_types):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}"
+        )
+
+    image_bytes = _validate_and_read_image(file)
+
+    try:
+        result = _scan_receipt_from_bytes(image_bytes)
+
+        # Validate response structure
+        if "error" in result:
+            return {
+                "success": False,
+                "error": result["error"],
+                "raw": result.get("raw"),
+            }
+
+        # Normalize line_items
+        line_items = result.get("line_items") or []
+        normalized_items = []
+        for item in line_items:
+            normalized_item = {
+                "title": item.get("title") or "Không rõ",
+                "isbn": item.get("isbn"),
+                "quantity": max(1, int(item.get("quantity") or 1)),
+                "unit_price": float(item.get("unit_price") or 0),
+            }
+            normalized_items.append(normalized_item)
+
+        return {
+            "success": True,
+            "supplier_name": result.get("supplier_name"),
+            "invoice_number": result.get("invoice_number"),
+            "invoice_date": result.get("invoice_date"),
+            "line_items": normalized_items,
+            "total_items": len(normalized_items),
+        }
+
     except ollama.ResponseError as e:
         raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
     except Exception as e:
@@ -437,34 +569,33 @@ async def _call_groq(metadata: dict) -> tuple[str | None, list[str], bool]:
     if not GROQ_API_KEY:
         return None, [], False
 
-    description_hint = (_safe_text(metadata.get("description")) or "")[:800]
+    description_hint = (_safe_text(metadata.get("description")) or "")[:400]
     title = _safe_text(metadata.get("title")) or "Không rõ"
     authors = _safe_list(metadata.get("authors"))
     author_text = authors[0] if authors else "Không rõ"
     categories = _safe_list(metadata.get("categories"))
     category_text = ", ".join(categories[:3]) if categories else ""
 
-    system_prompt = (
-        "Bạn là chuyên gia biên mục sách cho thư viện. "
-        "Chỉ được paraphrase từ ngữ cảnh được cung cấp. "
-        "Không bịa đặt tên nhân vật, cốt truyện, giải thưởng cụ thể nếu không có trong ngữ cảnh. "
-        "Nếu không đủ thông tin, viết mô tả an toàn, khái quát."
-    )
+    # Prompt chuẩn theo mẫu user cung cấp
+    user_prompt = f"""Tên sách: {title}
+Tác giả: {author_text}
+Thể loại: {category_text or 'không rõ'}
+Mô tả gốc: {description_hint or 'không có'}
 
-    user_prompt = f"""Dựa trên thông tin sau, viết một đoạn mô tả sách tiếng Việt ngắn gọn (120-180 từ) cho hệ thống thư viện.
+VIẾT THEO FORMAT CHÍNH XÁC:
 
-Thông tin sách:
-- Tên sách: {title}
-- Tác giả: {author_text}
-- Chủ đề: {category_text or '(không có)'}
-- Mô tả tham khảo: {description_hint or '(không có)'}
+📚 [Tên sách tiếng Việt]
 
-Yêu cầu:
-- Viết 3-4 câu, văn phong trang trọng, ấm áp, hấp dẫn
-- Có thể dùng emoji nhẹ (📘, 🧠, ✨) làm điểm nhấn, tối đa 3 emoji
-- Xuống dòng hợp lý, không viết liền 1 đoạn
-- Trả về DUY NHẤT JSON: {{"summaryVi": "...", "keywords": ["...", "..."]}}
-- keywords: 3-5 từ khóa tiếng Việt, bám theo tên sách, tác giả, chủ đề"""
+"Một đoạn văn 2-3 câu mô tả nội dung, không bullet, không danh sách, kết thúc bằng emoji 🧠✨"
+
+Tags: chủ đề 1, chủ đề 2, chủ đề 3, chủ đề 4, chủ đề 5
+
+QUAN TRỌNG:
+- Đoạn văn phải trong dấu ngoặc kép ""
+- KHÔNG có tiêu đề con (Tổng quan, Nội dung...)
+- KHÔNG có bullet points
+- KHÔNG có dấu • hay -
+- Tags: 5 từ khóa về CHỦ ĐỀ, phân cách bằng dấu phẩy"""
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as http_client:
@@ -477,7 +608,7 @@ Yêu cầu:
                 json={
                     "model": GROQ_SUMMARY_MODEL,
                     "messages": [
-                        {"role": "system", "content": system_prompt},
+                        {"role": "system", "content": "Bạn là thủ thư chuyên nghiệp. Viết mô tả sách theo format chuẩn. Đoạn văn trong ngoặc kép. Không bullet. Tags 5 chủ đề."},
                         {"role": "user", "content": user_prompt},
                     ],
                     "temperature": 0.3,
@@ -487,17 +618,30 @@ Yêu cầu:
             resp.raise_for_status()
             data = resp.json()
             raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            parsed = _extract_json(raw)
 
-            summary_vi = _safe_text(parsed.get("summaryVi")) or None
-            keywords = _safe_list(parsed.get("keywords"))
+            # Parse output - trích xuất title, description và tags
+            lines = raw.strip().split('\n')
+            title_vi = ""
+            description = ""
+            tags = []
 
-            if not summary_vi:
-                text = raw.strip()
-                if text and not text.startswith("{"):
-                    summary_vi = text
+            for line in lines:
+                line = line.strip()
+                if line.startswith('📚'):
+                    title_vi = line.replace('📚', '').strip()
+                elif line.startswith('Tags:') or line.startswith('tags:'):
+                    tags_str = line.replace('Tags:', '').replace('tags:', '').strip()
+                    tags = [t.strip() for t in tags_str.split(',') if t.strip()]
+                elif line.startswith('"'):
+                    description = line.strip('"').strip()
 
-            return summary_vi, keywords, bool(summary_vi)
+            # Nếu không parse được, thử extract JSON
+            if not description:
+                parsed = _extract_json(raw)
+                description = _safe_text(parsed.get("mo_ta")) or _safe_text(parsed.get("description")) or _safe_text(parsed.get("summaryVi")) or raw.strip()
+                tags = _safe_list(parsed.get("tags")) or _safe_list(parsed.get("keywords")) or []
+
+            return description, tags, bool(description)
     except Exception as exc:
         logger.warning("Groq call failed: %s", exc)
         return None, [], False
@@ -1196,6 +1340,12 @@ async def generate_summary_vi(req: SummaryViRequest):
     if not req.title.strip():
         raise HTTPException(status_code=400, detail="Thiếu tên sách (title).")
 
+    # Cache key từ title + author
+    cache_key = f"summary:{req.title.strip().lower()}:{req.author.strip().lower()}"
+    cached = summary_cache.get(cache_key)
+    if cached:
+        return {**cached, "ai_provider": "cached"}
+
     metadata = {
         "title": req.title.strip(),
         "authors": [req.author] if req.author else [],
@@ -1207,13 +1357,17 @@ async def generate_summary_vi(req: SummaryViRequest):
     summary_vi, keywords, groq_ok = await _call_groq(metadata)
     if groq_ok:
         description = _format_summary_description(summary_vi or "", metadata)
-        return {"summaryVi": description, "keywords": keywords, "ai_provider": "groq"}
+        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "groq"}
+        summary_cache.set(cache_key, result)
+        return result
 
     # Fallback Ollama
     summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
     if ollama_ok:
         description = _format_summary_description(summary_vi or "", metadata)
-        return {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
+        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
+        summary_cache.set(cache_key, result)
+        return result
 
     raise HTTPException(status_code=503, detail="Không thể sinh summary. Vui lòng nhập tay.")
 
@@ -1448,9 +1602,26 @@ async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(request: Request, req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    # Rate limiting — dùng IP làm key
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, reason = await rate_limiter.acquire(key=client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    # Build cache key từ message + recent history
+    history_hash = ""
+    if req.conversation_history:
+        hist_text = "|".join(m.content[:100] for m in req.conversation_history[-3:])
+        history_hash = hashlib.md5(hist_text.encode()).hexdigest()[:8]
+
+    # Check cache trước
+    cached_reply = response_cache.get(req.message, history_hash)
+    if cached_reply:
+        return {"reply": cached_reply, "ai_provider": "cached"}
 
     context_block = _build_context_block(req.system_context)
     system_content = CHAT_SYSTEM_PROMPT + context_block
@@ -1464,15 +1635,34 @@ async def chat(req: ChatRequest):
 
     reply, groq_ok = await _chat_with_groq(messages)
     if groq_ok and reply:
+        response_cache.set(req.message, reply, history_hash)
         return {"reply": reply, "ai_provider": "groq"}
 
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
+        response_cache.set(req.message, reply, history_hash)
         return {"reply": reply, "ai_provider": "ollama"}
 
     return {
         "reply": "Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏",
         "ai_provider": "fallback",
+    }
+
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Xóa response cache (admin endpoint)."""
+    response_cache.clear()
+    return {"status": "ok", "message": "Cache đã được xóa"}
+
+
+@app.get("/cache/stats")
+async def cache_stats():
+    """Xem thống kê cache."""
+    return {
+        "cached_responses": len(response_cache._cache),
+        "max_size": response_cache.max_size,
+        "ttl_seconds": response_cache.ttl,
     }
 
 
@@ -1670,3 +1860,172 @@ async def get_reading_stats(req: ReadingStatsRequest):
         "top_authors": [{"name": n, "count": c} for n, c in top_authors],
         "badges": badges,
     }
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# AI Storage Suggestion Explanation — Gợi ý vị trí lưu trữ sách
+# ────────────────────────────────────────────────────────────────────────────────
+
+STORAGE_SUGGESTION_PROMPT = """Bạn là chuyên gia quản lý kho sách cho thư viện SmartBook.
+Nhiệm vụ của bạn là giải thích ngắn gọn lý do nên đặt sách tại các vị trí được gợi ý.
+
+Dữ liệu đầu vào:
+- Thông tin sách: tiêu đề, thể loại, tác giả
+- Danh sách vị trí được gợi ý với điểm số và lý do rule-based
+
+YÊU CẦU:
+1. Với mỗi vị trí, viết 1 câu giải thích ngắn gọn (1-2 dòng) bằng tiếng Việt
+2. Giải thích phải TỰ NHIÊN, không copy lý do rule-based
+3. Ưu tiên lý do thực tế: thuận tiện picking, gom hàng cùng loại, tránh phân tán
+4. Độ dài mỗi câu: 30-80 ký tự
+5. Trả về JSON array, mỗi phần tử là một câu giải thích
+
+Ví dụ:
+Input: {"location_code": "IT-A01-S02-B03", "score": 92, "reasons": ["Cùng variant", "Đủ sức chứa"]}
+Output: ["Nên đặt tại kệ IT-A01-S02-B03 vì đây là khu IT, hiện có sách cùng chủ đề và còn trống."]
+
+CHỈ trả về JSON array, không có markdown, không giải thích thêm."""
+
+
+class StorageSuggestionRequest(BaseModel):
+    book: dict
+    suggestions: list[dict]
+
+
+@app.post("/explain-storage-suggestion")
+async def explain_storage_suggestion(req: StorageSuggestionRequest):
+    """
+    Tạo câu giải thích tự nhiên cho các gợi ý vị trí lưu trữ sách.
+    Dùng Ollama hoặc Groq để sinh text tự nhiên.
+    """
+    if not req.suggestions:
+        return {"explanations": []}
+
+    book_info = req.book or {}
+    book_title = book_info.get("title", "cuốn sách")
+    categories = book_info.get("categories", [])
+    authors = book_info.get("authors", [])
+
+    category_text = ", ".join(categories[:3]) if categories else "nhiều thể loại"
+    author_text = ", ".join(authors[:2]) if authors else "tác giả"
+
+    prompt = f"""Bạn là chuyên gia quản lý kho sách SmartBook.
+
+Sách cần xếp: "{book_title}" của {author_text}
+Thể loại: {category_text}
+
+Các vị trí được gợi ý:
+{json.dumps(req.suggestions, ensure_ascii=False, indent=2)}
+
+Hãy viết câu giải thích ngắn gọn cho TỪNG vị trí (1 câu mỗi vị trí, 30-80 ký tự).
+Giải thích phải tự nhiên, không liệt kê rules.
+
+Trả về JSON array với đúng {len(req.suggestions)} câu:
+["câu giải thích 1", "câu giải thích 2", ...]
+
+CHỈ trả về JSON, không markdown."""
+
+    # Thử Groq trước
+    explanations = await _get_ai_explanations(prompt, len(req.suggestions))
+    
+    if explanations and len(explanations) == len(req.suggestions):
+        return {"explanations": explanations, "ai_provider": "groq"}
+
+    # Fallback: dùng rule-based explanation
+    explanations = _generate_rule_based_explanation(book_title, req.suggestions)
+    return {"explanations": explanations, "ai_provider": "fallback"}
+
+
+async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | None:
+    """Gọi Groq hoặc Ollama để sinh explanations."""
+    # Thử Groq
+    if GROQ_API_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as http_client:
+                resp = await http_client.post(
+                    f"{GROQ_BASE_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": GROQ_SUMMARY_MODEL,
+                        "messages": [
+                            {"role": "system", "content": "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 300,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                explanations = _parse_json_array(raw)
+                if explanations and len(explanations) >= expected_count // 2:
+                    return explanations[:expected_count]
+        except Exception as exc:
+            logger.warning(f"Groq storage explanation failed: {exc}")
+
+    # Thử Ollama
+    try:
+        client = ollama.Client(host=OLLAMA_HOST)
+        response = client.generate(
+            model=OLLAMA_MODEL,
+            prompt=prompt,
+            options={"temperature": 0.3, "num_predict": 200},
+        )
+        raw = response.get("response", "")
+        explanations = _parse_json_array(raw)
+        if explanations and len(explanations) >= expected_count // 2:
+            return explanations[:expected_count]
+    except Exception as exc:
+        logger.warning(f"Ollama storage explanation failed: {exc}")
+
+    return None
+
+
+def _parse_json_array(text: str) -> list[str]:
+    """Parse JSON array từ response text."""
+    text = text.strip()
+    
+    # Thử parse trực tiếp
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return [str(item) for item in data if item]
+    except json.JSONDecodeError:
+        pass
+
+    # Tìm JSON array trong text
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1:
+        try:
+            data = json.loads(text[start:end + 1])
+            if isinstance(data, list):
+                return [str(item) for item in data if item]
+        except json.JSONDecodeError:
+            pass
+
+    return []
+
+
+def _generate_rule_based_explanation(book_title: str, suggestions: list[dict]) -> list[str]:
+    """Fallback: tạo giải thích đơn giản từ rules."""
+    explanations = []
+    
+    for suggestion in suggestions:
+        score = suggestion.get("score", 0)
+        reasons = suggestion.get("reasons", [])
+        location_code = suggestion.get("location_code", "vị trí này")
+        
+        if score >= 80:
+            explanations.append(f"Nên đặt '{book_title}' tại {location_code} - vị trí rất phù hợp với điểm số cao.")
+        elif score >= 50:
+            explanations.append(f"Đặt '{book_title}' tại {location_code} - có đủ sức chứa và thuận tiện quản lý.")
+        else:
+            explanations.append(f"Có thể đặt '{book_title}' tại {location_code} nếu các vị trí khác đã đầy.")
+    
+    return explanations

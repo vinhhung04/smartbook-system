@@ -616,6 +616,9 @@ async function transferReceivingToShelf(req, res) {
   const allocations = Array.isArray(req.body?.allocations)
     ? req.body.allocations
     : [];
+  const clientIdempotencyKey = req.body?.idempotency_key
+    ? String(req.body.idempotency_key).slice(0, 100)
+    : null;
 
   if (!warehouseId || !sourceReceivingLocationId || !variantId) {
     return res
@@ -747,6 +750,7 @@ async function transferReceivingToShelf(req, res) {
           };
         }
 
+        // Verify target locations (Prisma ORM handles types correctly)
         for (const location of targetLocations) {
           if (
             normalizeLocationType(location.location_type) !==
@@ -759,12 +763,7 @@ async function transferReceivingToShelf(req, res) {
           }
         }
 
-        // Lock target locations to prevent concurrent capacity over-allocation.
-        await tx.$queryRawUnsafe(
-          "SELECT id FROM locations WHERE id = ANY($1::uuid[]) FOR UPDATE",
-          targetIds,
-        );
-
+        // Get source stock balance
         const sourceBalance = await tx.stock_balances.findUnique({
           where: {
             variant_id_location_id: {
@@ -772,36 +771,33 @@ async function transferReceivingToShelf(req, res) {
               location_id: sourceReceivingLocationId,
             },
           },
-          select: {
-            id: true,
-            on_hand_qty: true,
-            available_qty: true,
-          },
         });
 
-        if (
-          !sourceBalance ||
-          Number(sourceBalance.on_hand_qty || 0) < totalQuantity
-        ) {
+        if (!sourceBalance) {
+          return {
+            invalid: true,
+            message: "No stock balance found in selected RECEIVING source",
+          };
+        }
+
+        if (Number(sourceBalance.on_hand_qty || 0) < totalQuantity) {
           return {
             invalid: true,
             message: "Not enough on_hand quantity in selected RECEIVING source",
           };
         }
 
-        const occupancy = await tx.stock_balances.groupBy({
-          by: ["location_id"],
+        // Get target stock balances for capacity check
+        const targetBalanceRows = await tx.stock_balances.findMany({
           where: {
             location_id: { in: targetIds },
-          },
-          _sum: {
-            on_hand_qty: true,
           },
         });
 
         const occupancyMap = new Map();
-        occupancy.forEach((row) => {
-          occupancyMap.set(row.location_id, Number(row._sum.on_hand_qty || 0));
+        targetBalanceRows.forEach((row) => {
+          const current = occupancyMap.get(row.location_id) || 0;
+          occupancyMap.set(row.location_id, current + Number(row.on_hand_qty || 0));
         });
 
         const targetMap = new Map(
@@ -869,10 +865,13 @@ async function transferReceivingToShelf(req, res) {
         }
 
         const baseTimestamp = Date.now();
+        const shortKey = clientIdempotencyKey
+          ? clientIdempotencyKey.slice(-8)
+          : Math.random().toString(36).slice(2, 6).toUpperCase();
 
         await tx.stock_movements.createMany({
           data: mergedAllocations.map((allocation, index) => ({
-            movement_number: createMovementNumber(baseTimestamp, index),
+            movement_number: `MV-${(baseTimestamp % 1000000)}-${index + 1}-${shortKey}`,
             movement_type: "TRANSFER",
             movement_status: "POSTED",
             warehouse_id: warehouseId,
@@ -884,9 +883,13 @@ async function transferReceivingToShelf(req, res) {
             source_service: "INVENTORY_SERVICE",
             reference_type: "RECEIVING_SHELF_PUTAWAY",
             reference_id: null,
+            idempotency_key: clientIdempotencyKey
+              ? `${clientIdempotencyKey}:${allocation.target_location_id}`.slice(-99)
+              : null,
             created_by_user_id: req.user?.id || null,
             metadata: {
               direction: "RECEIVING_TO_SHELF",
+              movement_bucket: "PUTAWAY",
               source_receiving_location_id: sourceReceivingLocationId,
               reason: allocation.reason,
               scanned_location_barcode: allocation.scanned_location_barcode,
@@ -933,6 +936,9 @@ async function reverseShelfToReceiving(req, res) {
   const variantId = parseId(req.body?.variant_id);
   const quantity = toInt(req.body?.quantity);
   const reason = normalizeText(req.body?.reason);
+  const clientIdempotencyKey = req.body?.idempotency_key
+    ? String(req.body.idempotency_key).slice(0, 100)
+    : null;
 
   if (
     !warehouseId ||
@@ -1018,12 +1024,7 @@ async function reverseShelfToReceiving(req, res) {
           };
         }
 
-        // Lock both locations so concurrent operations cannot overdraw capacity/stock in opposite directions.
-        await tx.$queryRawUnsafe(
-          "SELECT id FROM locations WHERE id = ANY($1::uuid[]) FOR UPDATE",
-          [sourceCompartmentId, targetReceivingId],
-        );
-
+        // Get source stock balance
         const sourceBalance = await tx.stock_balances.findUnique({
           where: {
             variant_id_location_id: {
@@ -1031,17 +1032,16 @@ async function reverseShelfToReceiving(req, res) {
               location_id: sourceCompartmentId,
             },
           },
-          select: {
-            id: true,
-            on_hand_qty: true,
-            available_qty: true,
-          },
         });
 
-        if (
-          !sourceBalance ||
-          Number(sourceBalance.on_hand_qty || 0) < quantity
-        ) {
+        if (!sourceBalance) {
+          return {
+            invalid: true,
+            message: "No stock balance found in selected shelf compartment",
+          };
+        }
+
+        if (Number(sourceBalance.on_hand_qty || 0) < quantity) {
           return {
             invalid: true,
             message: "Not enough stock in selected shelf compartment",
@@ -1095,9 +1095,14 @@ async function reverseShelfToReceiving(req, res) {
           },
         });
 
+        const baseTimestamp = Date.now();
+        const shortKey = clientIdempotencyKey
+          ? clientIdempotencyKey.slice(-8)
+          : Math.random().toString(36).slice(2, 6).toUpperCase();
+
         await tx.stock_movements.create({
           data: {
-            movement_number: createMovementNumber(Date.now(), 0),
+            movement_number: `MV-REV-${(baseTimestamp % 1000000)}-${shortKey}`,
             movement_type: "TRANSFER",
             movement_status: "POSTED",
             warehouse_id: warehouseId,
@@ -1109,6 +1114,7 @@ async function reverseShelfToReceiving(req, res) {
             source_service: "INVENTORY_SERVICE",
             reference_type: "RECEIVING_SHELF_PUTAWAY",
             reference_id: null,
+            idempotency_key: clientIdempotencyKey?.slice(-99) || null,
             created_by_user_id: req.user?.id || null,
             metadata: {
               direction: "SHELF_TO_RECEIVING",

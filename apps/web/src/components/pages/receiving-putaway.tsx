@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { PageWrapper, FadeItem } from "../motion-utils";
 import { ArrowRightLeft, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "motion/react";
+import { FadeItem, PageWrapper } from "../motion-utils";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import {
@@ -11,6 +12,7 @@ import {
   type ReceivingLocation,
   type VariantLookupMatch,
 } from "@/services/receiving-putaway";
+import { StorageSuggestionPanel } from "@/components/inventory/StorageSuggestionPanel";
 
 interface DraftAllocationLine {
   id: string;
@@ -53,6 +55,10 @@ export function ReceivingPutawayPage() {
   const [reverseReceivingId, setReverseReceivingId] = useState("");
   const [reverseQuantity, setReverseQuantity] = useState(0);
   const [reverseReason, setReverseReason] = useState("");
+
+  // Storage suggestion state
+  const [showStorageSuggestion, setShowStorageSuggestion] = useState(false);
+  const [suggestionQuantity, setSuggestionQuantity] = useState(1);
 
   const selectedVariantItem = useMemo(
     () => receivingItems.find((item) => item.variant_id === selectedVariantId) || null,
@@ -359,6 +365,8 @@ export function ReceivingPutawayPage() {
       return;
     }
 
+    if (savingTransfer) return;
+
     const validationError = validateDraft();
     if (validationError) {
       toast.error(validationError);
@@ -367,6 +375,7 @@ export function ReceivingPutawayPage() {
 
     try {
       setSavingTransfer(true);
+      const idempotencyKey = `transfer-${selectedReceivingId}-${selectedVariantId}-${Date.now()}`;
       const payload = {
         warehouse_id: selectedWarehouseId,
         source_receiving_location_id: selectedReceivingId,
@@ -378,11 +387,11 @@ export function ReceivingPutawayPage() {
           scanned_location_barcode: line.scanned_location_barcode || null,
           scanned_product_barcode: line.scanned_product_barcode || null,
         })),
+        idempotency_key: idempotencyKey,
       };
 
       const res = await receivingPutawayService.transfer(payload);
 
-      // Draft remains frontend-only and is fully cleared after successful commit.
       setDraftLines([]);
       setScanSkuInput("");
       setScanTargetBarcodeInput("");
@@ -407,6 +416,8 @@ export function ReceivingPutawayPage() {
       return;
     }
 
+    if (savingReverse) return;
+
     const qty = Number(reverseQuantity || 0);
     if (!Number.isFinite(qty) || qty <= 0) {
       toast.error("So luong reverse phai > 0");
@@ -425,6 +436,7 @@ export function ReceivingPutawayPage() {
 
     try {
       setSavingReverse(true);
+      const idempotencyKey = `reverse-${selectedReverseCompartmentId}-${reverseVariantId}-${Date.now()}`;
       const res = await receivingPutawayService.reverse({
         warehouse_id: selectedWarehouseId,
         source_compartment_location_id: selectedReverseCompartmentId,
@@ -432,6 +444,7 @@ export function ReceivingPutawayPage() {
         variant_id: reverseVariantId,
         quantity: qty,
         reason: reverseReason.trim(),
+        idempotency_key: idempotencyKey,
       });
 
       setReverseReason("");
@@ -451,10 +464,42 @@ export function ReceivingPutawayPage() {
     }
   };
 
+  // Handle storage suggestion selection
+  const handleSelectSuggestedLocation = (location: {
+    locationId: string;
+    locationCode: string;
+    zone: string | null;
+    shelf: string | null;
+    bin: string | null;
+  }) => {
+    if (draftLines.length > 0) {
+      // Update first draft line with suggested location
+      const firstLine = draftLines[0];
+      updateLine(firstLine.id, {
+        target_location_id: location.locationId,
+      });
+      toast.success(`Da ap dung vi tri goi y: ${location.locationCode}`);
+    } else {
+      // Create new draft line with suggested location
+      setDraftLines([
+        {
+          id: makeLineId(),
+          target_location_id: location.locationId,
+          quantity: suggestionQuantity,
+          reason: "Goi y tu he thong",
+          scanned_location_barcode: "",
+          scanned_product_barcode: "",
+        },
+      ]);
+      toast.success(`Da tao dong allocation voi vi tri: ${location.locationCode}`);
+    }
+    setShowStorageSuggestion(false);
+  };
+
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-400">Dang tai module Receiving - Shelf Putaway...</p>
+        <p className="text-[13px] text-slate-500">Dang tai module Receiving - Shelf Putaway...</p>
       </PageWrapper>
     );
   }
@@ -462,67 +507,65 @@ export function ReceivingPutawayPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-amber-100 to-orange-50 flex items-center justify-center border border-amber-200/40">
-            <ArrowRightLeft className="w-5 h-5 text-amber-700" />
-          </div>
-          <div>
-            <h1 className="tracking-[-0.02em]">Receiving - Shelf Putaway</h1>
-            <p className="text-[12px] text-slate-400 mt-0.5">Chuyen hang tu RECEIVING len SHELF_COMPARTMENT va reverse nguoc lai</p>
-          </div>
-        </div>
+        <h1 className="tracking-[-0.02em]">Receiving - Shelf Putaway</h1>
+        <p className="text-[12px] text-slate-500 mt-1">Chuyen hang tu RECEIVING len SHELF_COMPARTMENT va reverse nguoc lai</p>
       </FadeItem>
 
+      {/* Warehouse Filter */}
       <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <p className="text-[11px] text-slate-500 mb-1">Warehouse</p>
-            <select
-              value={selectedWarehouseId}
-              onChange={(event) => setSelectedWarehouseId(event.target.value)}
-              className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-            >
-              <option value="">Chon warehouse</option>
-              {warehouses.map((warehouse) => (
-                <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-500 mb-1">Receiving source</p>
-            <select
-              value={selectedReceivingId}
-              onChange={(event) => setSelectedReceivingId(event.target.value)}
-              className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
-            >
-              <option value="">Chon RECEIVING/STAGING</option>
-              {receivings.map((location) => (
-                <option key={location.id} value={location.id}>{location.location_code} ({location.location_type})</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end justify-end">
-            <button
-              onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}
-              className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Reload
-            </button>
-          </div>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-          <h2 className="text-[13px]" style={{ fontWeight: 650 }}>A. Receiving -&gt; Shelf</h2>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">SKU trong RECEIVING</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
+              <select
+                value={selectedWarehouseId}
+                onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+              >
+                <option value="">Chon warehouse</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Receiving source</p>
+              <select
+                value={selectedReceivingId}
+                onChange={(event) => setSelectedReceivingId(event.target.value)}
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+              >
+                <option value="">Chon RECEIVING/STAGING</option>
+                {receivings.map((location) => (
+                  <option key={location.id} value={location.id}>{location.location_code} ({location.location_type})</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end justify-end">
+              <button
+                onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 px-4 py-2.5 text-[13px] hover:bg-slate-50 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      </FadeItem>
+
+      {/* Section A: Receiving -> Shelf */}
+      <FadeItem>
+        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+          <h2 className="text-[14px] font-semibold mb-1">A. Receiving → Shelf</h2>
+          <p className="text-[11px] text-slate-500 mb-4">Chuyen sach tu vung nhan hang len ke</p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong RECEIVING</p>
               <select
                 value={selectedVariantId}
                 onChange={(event) => setSelectedVariantId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
                 <option value="">Chon SKU</option>
                 {receivingItems.map((item) => (
@@ -534,41 +577,41 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Scan ISBN13 cua sach</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Scan ISBN13</p>
               <div className="flex gap-2">
                 <input
                   value={scanSkuInput}
                   onChange={(event) => setScanSkuInput(event.target.value)}
                   placeholder="Nhap ISBN13"
-                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 />
-                <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50">
-                  <ScanLine className="w-3.5 h-3.5" />
+                <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                  <ScanLine className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Scan barcode vi tri dich</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Scan vi tri dich</p>
               <div className="flex gap-2">
                 <input
                   value={scanTargetBarcodeInput}
                   onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
-                  placeholder="locations.barcode (SHELF_COMPARTMENT)"
-                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                  placeholder="locations.barcode"
+                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 />
-                <button onClick={handleScanTargetLocation} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50">
-                  <ScanLine className="w-3.5 h-3.5" />
+                <button onClick={handleScanTargetLocation} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                  <ScanLine className="w-4 h-4" />
                 </button>
               </div>
             </div>
           </div>
 
           {ambiguousVariantMatches.length > 0 ? (
-            <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-3">
-              <p className="text-[12px] text-amber-800" style={{ fontWeight: 600 }}>ISBN13 trung nhieu SKU, vui long chon thu cong:</p>
+            <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 bg-amber-50/50">
+              <p className="text-[12px] text-amber-800 font-semibold">ISBN13 trung nhieu SKU, vui long chon thu cong:</p>
               <select
-                className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2 text-[12px]"
+                className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2.5 text-[12px]"
                 onChange={(event) => {
                   const variantId = event.target.value;
                   if (!variantId) return;
@@ -587,63 +630,89 @@ export function ReceivingPutawayPage() {
             </div>
           ) : null}
 
-          <div className="rounded-[10px] border border-slate-200 overflow-hidden">
+          <div className="mt-4 overflow-hidden rounded-[12px] border border-slate-100">
             <table className="w-full">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  {[
-                    'Compartment',
-                    'Zone',
-                    'Shelf',
-                    'Current',
-                    'Max',
-                    'Remaining',
-                    'Mixed SKU',
-                    'Priority',
-                  ].map((head) => (
-                    <th key={head} className="px-3 py-2 text-left text-[11px] text-slate-500 uppercase">{head}</th>
+                <tr className="bg-slate-50/50 border-b border-slate-100">
+                  {['Compartment', 'Zone', 'Shelf', 'Current', 'Max', 'Remaining', 'Mixed SKU', 'Priority'].map((head) => (
+                    <th key={head} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">{head}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loadingCandidates ? (
-                  <tr><td colSpan={8} className="px-3 py-6 text-center text-[12px] text-slate-400">Dang tinh goi y vi tri...</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Dang tinh goi y vi tri...</td></tr>
                 ) : candidates.length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-6 text-center text-[12px] text-slate-400">Khong co compartment con cho trong</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Khong co compartment con cho trong</td></tr>
                 ) : candidates.map((candidate) => (
-                  <tr key={candidate.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-3 py-2 text-[12px]" style={{ fontWeight: 600 }}>{candidate.location_code}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.zone_code}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.shelf_code}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.current_on_hand}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.max_capacity}</td>
-                    <td className="px-3 py-2 text-[12px] text-emerald-700" style={{ fontWeight: 600 }}>{candidate.remaining_capacity}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.mixed_sku_count}</td>
-                    <td className="px-3 py-2 text-[12px]">{candidate.priority_group === 0 ? 'Same shelf' : candidate.priority_group === 1 ? 'Same zone' : 'Other'}</td>
+                  <tr key={candidate.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-2.5 text-[12px] font-semibold">{candidate.location_code}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.zone_code}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.shelf_code}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.current_on_hand}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.max_capacity}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-emerald-600 font-semibold">{candidate.remaining_capacity}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.mixed_sku_count}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.priority_group === 0 ? 'Same shelf' : candidate.priority_group === 1 ? 'Same zone' : 'Other'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] text-slate-500">Draft allocation frontend-only. Tong draft: {totalDraftQty} / on_hand source: {selectedVariantItem?.on_hand_qty || 0}</p>
-            <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[12px] hover:bg-slate-50">Them dong allocation</button>
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-[12px] text-slate-500">Tong draft: {totalDraftQty} / on_hand source: {selectedVariantItem?.on_hand_qty || 0}</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
+                className="rounded-[10px] border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                {showStorageSuggestion ? "An goi y" : "Goi y vi tri (AI)"}
+              </button>
+              <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Them dong allocation</button>
+            </div>
           </div>
 
-          <div className="space-y-2">
+          {/* Storage Suggestion Panel */}
+          {showStorageSuggestion && selectedWarehouseId && selectedVariantId && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4"
+            >
+              <div className="mb-3 flex items-center gap-3">
+                <label className="text-[12px] text-slate-600">So luong can goi y:</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={suggestionQuantity}
+                  onChange={(e) => setSuggestionQuantity(Math.max(1, Number(e.target.value)))}
+                  className="w-20 rounded-[8px] border border-slate-200 px-2 py-1.5 text-[12px]"
+                />
+              </div>
+              <StorageSuggestionPanel
+                warehouseId={selectedWarehouseId}
+                variantId={selectedVariantId}
+                quantity={suggestionQuantity}
+                onSelectLocation={handleSelectSuggestedLocation}
+              />
+            </motion.div>
+          )}
+
+          <div className="mt-3 space-y-2">
             {draftLines.length === 0 ? (
-              <p className="text-[12px] text-slate-400">Chua co draft allocation.</p>
+              <p className="text-[12px] text-slate-400 text-center py-4">Chua co draft allocation</p>
             ) : draftLines.map((line) => {
               const lineCandidate = candidateMap.get(line.target_location_id);
               return (
-                <div key={line.id} className="rounded-[10px] border border-slate-200 p-3 grid grid-cols-1 lg:grid-cols-6 gap-2 items-end">
+                <div key={line.id} className="rounded-[12px] border border-slate-100 p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1">Compartment</p>
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Compartment</p>
                     <select
                       value={line.target_location_id}
                       onChange={(event) => updateLine(line.id, { target_location_id: event.target.value })}
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     >
                       <option value="">Chon vi tri dich</option>
                       {candidates.map((candidate) => (
@@ -652,33 +721,29 @@ export function ReceivingPutawayPage() {
                     </select>
                   </div>
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1">Quantity</p>
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quantity</p>
                     <input
                       type="number"
                       min={1}
                       max={lineCandidate?.remaining_capacity || 1}
                       value={line.quantity}
                       onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     />
                   </div>
-                  <div className="lg:col-span-2">
-                    <p className="text-[11px] text-slate-500 mb-1">Ly do (bat buoc)</p>
+                  <div className="md:col-span-2">
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ly do (bat buoc)</p>
                     <input
                       value={line.reason}
                       onChange={(event) => updateLine(line.id, { reason: event.target.value })}
-                      placeholder="Vi du: sap xep lai de de thao tac"
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                      placeholder="Vi du: sap xep lai"
+                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-500 mb-1">Scan tags</p>
-                    <p className="text-[11px] text-slate-400 truncate">{line.scanned_location_barcode || '-'} | {line.scanned_product_barcode || '-'}</p>
                   </div>
                   <div>
                     <button
                       onClick={() => removeLine(line.id)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700"
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-600 hover:bg-red-100 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Xoa
                     </button>
@@ -688,31 +753,33 @@ export function ReceivingPutawayPage() {
             })}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-4">
             <button
               onClick={handleConfirmTransfer}
               disabled={savingTransfer || draftLines.length === 0}
-              className="rounded-[10px] bg-violet-600 text-white px-4 py-2.5 text-[12px] font-semibold disabled:opacity-60"
+              className="rounded-[10px] bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
             >
-              {savingTransfer ? 'Dang chuyen...' : 'Xac nhan chuyen tu RECEIVING len ke'}
+              {savingTransfer ? 'Dang chuyen...' : 'Xac nhan chuyen len ke'}
             </button>
           </div>
         </div>
       </FadeItem>
 
+      {/* Section B: Reverse */}
       <FadeItem>
-        <div className="rounded-[12px] border border-slate-200 bg-white p-4 space-y-3">
-          <h2 className="text-[13px]" style={{ fontWeight: 650 }}>B. Reverse tu Shelf ve Receiving</h2>
+        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+          <h2 className="text-[14px] font-semibold mb-1">B. Reverse tu Shelf ve Receiving</h2>
+          <p className="text-[11px] text-slate-500 mb-4">Tra sach tu ke ve vung nhan hang</p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Source compartment</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Source compartment</p>
               <select
                 value={selectedReverseCompartmentId}
                 onChange={(event) => setSelectedReverseCompartmentId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
-                <option value="">Chon compartment co hang</option>
+                <option value="">Chon compartment</option>
                 {occupiedCompartments.map((compartment) => (
                   <option key={compartment.id} value={compartment.id}>{compartment.location_code} (on_hand {compartment.on_hand_qty})</option>
                 ))}
@@ -720,11 +787,11 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">SKU trong compartment</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong compartment</p>
               <select
                 value={reverseVariantId}
                 onChange={(event) => setReverseVariantId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 disabled={loadingReverseItems}
               >
                 <option value="">Chon SKU</option>
@@ -737,13 +804,13 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Receiving dich</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Receiving dich</p>
               <select
                 value={reverseReceivingId}
                 onChange={(event) => setReverseReceivingId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
-                <option value="">Chon RECEIVING dich</option>
+                <option value="">Chon RECEIVING</option>
                 {receivings.map((receiving) => (
                   <option key={receiving.id} value={receiving.id}>{receiving.location_code}</option>
                 ))}
@@ -751,33 +818,33 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Quantity reverse</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quantity</p>
               <input
                 type="number"
                 min={1}
                 max={reverseItem?.on_hand_qty || 1}
                 value={reverseQuantity}
                 onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(event.target.value || 0))))}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               />
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1">Ly do reverse</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ly do</p>
               <input
                 value={reverseReason}
                 onChange={(event) => setReverseReason(event.target.value)}
                 placeholder="Ly do bat buoc"
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[12px]"
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               />
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-4">
             <button
               onClick={handleReverse}
               disabled={savingReverse}
-              className="rounded-[10px] bg-amber-600 text-white px-4 py-2.5 text-[12px] font-semibold disabled:opacity-60"
+              className="rounded-[10px] bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
             >
               {savingReverse ? 'Dang reverse...' : 'Reverse ve RECEIVING'}
             </button>

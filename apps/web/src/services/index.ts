@@ -13,4 +13,5 @@ export * from './ai';
 export * from './user';
 export * from './role';
 export * from './borrow';
+export * from './storage-suggestion';
 export { authAPI, inventoryAPI, aiAPI } from './http-clients';

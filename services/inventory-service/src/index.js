@@ -18,6 +18,8 @@ const pickingRoutes = require('./routes/picking.routes');
 const orderRequestRoutes = require('./routes/order-request.routes');
 const outboundRoutes = require('./routes/outbound.routes');
 const supplierRoutes = require('./routes/supplier.routes');
+const receivingSmartRoutes = require('./routes/receiving-smart.routes');
+const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +45,8 @@ app.use('/api/picking', pickingRoutes);
 app.use('/api/order-requests', orderRequestRoutes);
 app.use('/api/outbound', outboundRoutes);
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/receiving-smart', receivingSmartRoutes);
+app.use('/api/storage-suggestions', storageSuggestionRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

@@ -1,12 +1,13 @@
 const express = require('express');
 
 const {
-	getAllBooks,
-	getBookById,
-	findBookByBarcode,
-	findBookByIsbn13,
-	createIncompleteBook,
-	updateBookDetails,
+  getAllBooks,
+  getBookById,
+  findBookByBarcode,
+  findBookByIsbn13,
+  createIncompleteBook,
+  updateBookDetails,
+  deleteBook,
 } = require('../controllers/book.controller');
 const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
@@ -18,5 +19,6 @@ router.get('/isbn13/:isbn13', authorizeAnyPermission(['inventory.catalog.read', 
 router.post('/incomplete', authorizeAnyPermission(['inventory.catalog.write']), createIncompleteBook);
 router.get('/:id', authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']), getBookById);
 router.patch('/:id', authorizeAnyPermission(['inventory.catalog.write']), updateBookDetails);
+router.delete('/:id', authorizeAnyPermission(['inventory.catalog.write']), deleteBook);
 
 module.exports = router;

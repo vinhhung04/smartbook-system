@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 
 const READY_PUTAWAY_STATUS = 'POSTED';
 const POSTING_REFERENCE_TYPE = 'GOODS_RECEIPT';
+const PUTAWAY_REFERENCE_TYPE = 'RECEIVING_SHELF_PUTAWAY';
 const PUTAWAY_MOVEMENT_TYPE = 'INBOUND';
 
 const { parseId } = require('../utils/validation');
@@ -121,17 +122,48 @@ async function getReadyReceipts(req, res) {
     const postedMovements = receiptIds.length > 0
       ? await prisma.stock_movements.findMany({
         where: {
-          reference_type: POSTING_REFERENCE_TYPE,
+          reference_type: { in: [POSTING_REFERENCE_TYPE, PUTAWAY_REFERENCE_TYPE] },
           movement_status: 'POSTED',
           reference_id: { in: receiptIds },
         },
         select: {
           reference_id: true,
+          variant_id: true,
           quantity: true,
           metadata: true,
         },
       })
       : [];
+
+    // Also fetch transfer movements (RECEIVING_SHELF_PUTAWAY with null reference_id)
+    const transferMovements = receiptIds.length > 0
+      ? await prisma.stock_movements.findMany({
+        where: {
+          reference_type: PUTAWAY_REFERENCE_TYPE,
+          reference_id: null,
+          movement_status: 'POSTED',
+          metadata: {
+            path: ['movement_bucket'],
+            equals: 'PUTAWAY',
+          },
+        },
+        select: {
+          variant_id: true,
+          quantity: true,
+          metadata: true,
+        },
+      })
+      : [];
+
+    // Build map of variant_id -> goods_receipt_item_id for this warehouse's receipts
+    const variantToItemMap = new Map();
+    const variantIds = new Set();
+    receipts.forEach((receipt) => {
+      receipt.goods_receipt_items.forEach((item) => {
+        variantToItemMap.set(String(item.variant_id), String(item.id));
+        variantIds.add(String(item.variant_id));
+      });
+    });
 
     // Sum PUTAWAY bucket per receipt line (same rules as getReadyReceiptDetail).
     const putawayQtyByReceiptItem = new Map();
@@ -146,6 +178,23 @@ async function getReadyReceipts(req, res) {
         key,
         (putawayQtyByReceiptItem.get(key) || 0) + Number(movement.quantity || 0),
       );
+    });
+
+    // Add transfer movements using variant_id matching
+    transferMovements.forEach((movement) => {
+      const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
+      const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
+      if (bucket !== 'PUTAWAY' || !movement.variant_id) return;
+      const itemId = variantToItemMap.get(String(movement.variant_id));
+      if (!itemId) return;
+      // Transfer movements have null reference_id, need to find which receipt contains this variant
+      receipts.forEach((receipt) => {
+        const key = `${receipt.id}::${itemId}`;
+        putawayQtyByReceiptItem.set(
+          key,
+          (putawayQtyByReceiptItem.get(key) || 0) + Number(movement.quantity || 0),
+        );
+      });
     });
 
     const data = receipts.map((receipt) => {
@@ -243,7 +292,7 @@ async function getReadyReceiptDetail(req, res) {
 
     const postedMovements = await prisma.stock_movements.findMany({
       where: {
-        reference_type: POSTING_REFERENCE_TYPE,
+        reference_type: { in: [POSTING_REFERENCE_TYPE, PUTAWAY_REFERENCE_TYPE] },
         reference_id: receiptId,
         movement_status: 'POSTED',
       },
@@ -252,6 +301,28 @@ async function getReadyReceiptDetail(req, res) {
         metadata: true,
       },
     });
+
+    // Fetch transfer movements (RECEIVING_SHELF_PUTAWAY with null reference_id and PUTAWAY bucket)
+    const variantIds = receipt.goods_receipt_items.map((item) => item.variant_id);
+    const transferMovements = variantIds.length > 0
+      ? await prisma.stock_movements.findMany({
+        where: {
+          reference_type: PUTAWAY_REFERENCE_TYPE,
+          reference_id: null,
+          movement_status: 'POSTED',
+          variant_id: { in: variantIds },
+          metadata: {
+            path: ['movement_bucket'],
+            equals: 'PUTAWAY',
+          },
+        },
+        select: {
+          variant_id: true,
+          quantity: true,
+          metadata: true,
+        },
+      })
+      : [];
 
     const putawayQtyByItem = new Map();
     postedMovements.forEach((movement) => {
@@ -263,6 +334,17 @@ async function getReadyReceiptDetail(req, res) {
       }
       const current = putawayQtyByItem.get(itemId) || 0;
       putawayQtyByItem.set(itemId, current + Number(movement.quantity || 0));
+    });
+
+    // Add transfer movements using variant_id matching
+    transferMovements.forEach((movement) => {
+      const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
+      const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
+      if (bucket !== 'PUTAWAY' || !movement.variant_id) return;
+      const item = receipt.goods_receipt_items.find((i) => String(i.variant_id) === String(movement.variant_id));
+      if (!item) return;
+      const current = putawayQtyByItem.get(String(item.id)) || 0;
+      putawayQtyByItem.set(String(item.id), current + Number(movement.quantity || 0));
     });
 
     const items = receipt.goods_receipt_items.map((item) => {
@@ -513,11 +595,11 @@ async function confirmPutaway(req, res) {
       // Build a map of already-posted putaway quantities per item.
       const existingPostedMovements = await tx.stock_movements.findMany({
         where: {
-          reference_type: POSTING_REFERENCE_TYPE,
+          reference_type: { in: [POSTING_REFERENCE_TYPE, PUTAWAY_REFERENCE_TYPE] },
           reference_id: receiptId,
           movement_status: 'POSTED',
         },
-        select: { quantity: true, metadata: true },
+        select: { variant_id: true, quantity: true, metadata: true },
       });
 
       const alreadyPutawayQtyByItem = new Map();
@@ -529,6 +611,35 @@ async function confirmPutaway(req, res) {
         const current = alreadyPutawayQtyByItem.get(itemId) || 0;
         alreadyPutawayQtyByItem.set(itemId, current + Number(m.quantity || 0));
       });
+
+      // Also check transfer movements (RECEIVING_SHELF_PUTAWAY with null reference_id)
+      const variantIds = receiptItems.map((item) => item.variant_id);
+      if (variantIds.length > 0) {
+        const transferMovements = await tx.stock_movements.findMany({
+          where: {
+            reference_type: PUTAWAY_REFERENCE_TYPE,
+            reference_id: null,
+            movement_status: 'POSTED',
+            variant_id: { in: variantIds },
+            metadata: {
+              path: ['movement_bucket'],
+              equals: 'PUTAWAY',
+            },
+          },
+          select: { variant_id: true, quantity: true, metadata: true },
+        });
+
+        const itemVariantMap = new Map(receiptItems.map((item) => [String(item.variant_id), String(item.id)]));
+        transferMovements.forEach((m) => {
+          const meta = m.metadata && typeof m.metadata === 'object' ? m.metadata : null;
+          const bucket = meta?.movement_bucket ? String(meta.movement_bucket) : null;
+          if (bucket !== 'PUTAWAY' || !m.variant_id) return;
+          const itemId = itemVariantMap.get(String(m.variant_id));
+          if (!itemId) return;
+          const current = alreadyPutawayQtyByItem.get(itemId) || 0;
+          alreadyPutawayQtyByItem.set(itemId, current + Number(m.quantity || 0));
+        });
+      }
 
       // Items that still need to be putaway (fully or partially).
       const itemsToProcess = receiptItems.filter((item) => {

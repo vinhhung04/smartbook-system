@@ -115,13 +115,14 @@ async function register(req, res) {
         },
       });
 
-      await tx.$executeRawUnsafe(
-        `
-        INSERT INTO roles (code, name)
-        VALUES ('CUSTOMER', 'Customer')
-        ON CONFLICT (code) DO NOTHING
-        `
-      );
+      await tx.role.upsert({
+        where: { code: 'CUSTOMER' },
+        update: {},
+        create: {
+          code: 'CUSTOMER',
+          name: 'Customer',
+        },
+      });
 
       await tx.$executeRawUnsafe(
         `

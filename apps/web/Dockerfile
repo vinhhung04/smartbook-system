@@ -2,18 +2,18 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install -g pnpm && pnpm install
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 # Development stage
 FROM node:20-alpine AS development
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install -g pnpm && pnpm install
 COPY . .
 EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["pnpm", "run", "dev", "--", "--host"]
 
 # Production stage
 FROM node:20-alpine AS production
