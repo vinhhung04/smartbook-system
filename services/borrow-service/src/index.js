@@ -13,6 +13,7 @@ const auditRoutes = require('./routes/audit.routes');
 const membershipPlanRoutes = require('./routes/membership-plan.routes');
 const notificationAdminRoutes = require('./routes/notification-admin.routes');
 const { startOverdueSweepJob } = require('./jobs/overdue.job');
+const { startReservationExpiryJob } = require('./jobs/reservation-expiry.job');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -92,4 +93,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Borrow Service running on http://localhost:${PORT}`);
   startOverdueSweepJob();
+  startReservationExpiryJob();
 });

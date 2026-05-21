@@ -9,6 +9,9 @@ export interface CustomerCatalogBook {
   category?: string;
   publisher?: string;
   isbn?: string;
+  language?: string;
+  publish_year?: number | null;
+  summary_vi?: string | null;
   cover_image_url?: string | null;
   quantity: number;
   variant_id?: string | null;

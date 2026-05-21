@@ -96,6 +96,10 @@ model loan_reservations {
   status             String    @default("PENDING") @db.VarChar(30)
   reserved_at        DateTime  @default(now()) @db.Timestamptz(6)
   expires_at         DateTime  @db.Timestamptz(6)
+  pickup_code        String?   @unique @db.VarChar(24)
+  pickup_code_issued_at DateTime? @db.Timestamptz(6)
+  pickup_code_expires_at DateTime? @db.Timestamptz(6)
+  pickup_code_used_at DateTime? @db.Timestamptz(6)
   notes              String?
   created_by_user_id String?   @db.Uuid
   updated_at         DateTime  @default(now()) @db.Timestamptz(6)

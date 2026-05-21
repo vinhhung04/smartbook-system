@@ -4,8 +4,10 @@ const { resolveActiveMembership } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
+const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
 
 const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+const RESERVATION_EXPIRY_BATCH_SIZE = 100;
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -438,9 +440,241 @@ async function cancelReservation(req, res) {
   }
 }
 
+async function confirmReservation(req, res) {
+  const id = parseId(req.params.id);
+  const actorUserId = req.user?.id || null;
+  const nextStatus = String(req.body?.status || 'CONFIRMED').trim().toUpperCase();
+  const note = String(req.body?.notes || '').trim() || null;
+
+  if (!id || !isUuid(id)) {
+    return res.status(400).json({ message: 'Invalid reservation id' });
+  }
+
+  if (!['CONFIRMED', 'READY_FOR_PICKUP'].includes(nextStatus)) {
+    return res.status(400).json({ message: 'status must be CONFIRMED or READY_FOR_PICKUP' });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.loan_reservations.findUnique({ where: { id } });
+      if (!existing) {
+        return { code: 404, payload: { message: 'Reservation not found' } };
+      }
+
+      if (existing.status === nextStatus && (nextStatus !== 'READY_FOR_PICKUP' || existing.pickup_code)) {
+        return { code: 200, payload: { data: existing, idempotent: true } };
+      }
+
+      const canMoveToNextStatus =
+        existing.status === 'PENDING'
+        || (existing.status === 'CONFIRMED' && nextStatus === 'READY_FOR_PICKUP')
+        || (existing.status === 'READY_FOR_PICKUP' && nextStatus === 'READY_FOR_PICKUP' && !existing.pickup_code);
+
+      if (!canMoveToNextStatus) {
+        return {
+          code: 409,
+          payload: { message: `Cannot confirm reservation from status ${existing.status}` },
+        };
+      }
+
+      if (new Date(existing.expires_at).getTime() <= Date.now()) {
+        return {
+          code: 409,
+          payload: { message: 'Reservation already expired and cannot be confirmed' },
+        };
+      }
+
+      const pickupCode = nextStatus === 'READY_FOR_PICKUP'
+        ? existing.pickup_code || await generateUniquePickupCode(tx)
+        : null;
+      const now = new Date();
+
+      const reservation = await tx.loan_reservations.update({
+        where: { id },
+        data: {
+          status: nextStatus,
+          ...(pickupCode
+            ? {
+              pickup_code: pickupCode,
+              pickup_code_issued_at: existing.pickup_code_issued_at || now,
+              pickup_code_expires_at: existing.expires_at,
+              pickup_code_used_at: null,
+            }
+            : {}),
+          ...(note ? { notes: existing.notes ? `${existing.notes}\n${note}` : note } : {}),
+          updated_at: now,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        actor_user_id: actorUserId,
+        action_name: nextStatus === 'READY_FOR_PICKUP' ? 'MARK_RESERVATION_READY' : 'CONFIRM_RESERVATION',
+        entity_type: 'LOAN_RESERVATION',
+        entity_id: reservation.id,
+        before_data: existing,
+        after_data: reservation,
+      });
+
+      await createNotificationRecord(tx, {
+        customer_id: reservation.customer_id,
+        channel: 'IN_APP',
+        template_code: 'RESERVATION_CONFIRMED',
+        subject: nextStatus === 'READY_FOR_PICKUP' ? 'Reservation ready for pickup' : 'Reservation confirmed',
+        body: nextStatus === 'READY_FOR_PICKUP'
+          ? `Reservation ${reservation.reservation_number} is ready for pickup. Pickup code: ${reservation.pickup_code}.`
+          : `Reservation ${reservation.reservation_number} has been confirmed by staff.`,
+        reference_type: 'LOAN_RESERVATION',
+        reference_id: reservation.id,
+        metadata: {
+          reservation_number: reservation.reservation_number,
+          status: reservation.status,
+          expires_at: reservation.expires_at,
+          pickup_code: reservation.pickup_code,
+          pickup_qr_value: createPickupQrValue(reservation.pickup_code),
+        },
+      });
+
+      return { code: 200, payload: { data: reservation } };
+    });
+
+    return res.status(result.code).json(result.payload);
+  } catch (error) {
+    console.error('Error while confirming reservation:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function releaseExpiredReservation(reservation, options = {}) {
+  const idempotencyKey = `expire:${reservation.id}:${new Date(reservation.expires_at).getTime()}`;
+
+  await releaseReservation({
+    reservation_id: reservation.id,
+    reason: 'EXPIRED',
+    idempotency_key: idempotencyKey,
+    authHeader: options.authHeader,
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.loan_reservations.findUnique({ where: { id: reservation.id } });
+    if (!current) {
+      return { skipped: true, reason: 'NOT_FOUND' };
+    }
+
+    if (!ACTIVE_RESERVATION_STATUSES.includes(current.status)) {
+      return { skipped: true, reason: `STATUS_${current.status}`, data: current };
+    }
+
+    const expired = await tx.loan_reservations.update({
+      where: { id: current.id },
+      data: {
+        status: 'EXPIRED',
+        updated_at: new Date(),
+      },
+    });
+
+    await writeAuditLog(tx, {
+      actor_user_id: options.actorUserId || null,
+      action_name: 'EXPIRE_RESERVATION',
+      entity_type: 'LOAN_RESERVATION',
+      entity_id: expired.id,
+      before_data: current,
+      after_data: {
+        ...expired,
+        idempotency_key: idempotencyKey,
+      },
+    });
+
+    await createNotificationRecord(tx, {
+      customer_id: expired.customer_id,
+      channel: 'IN_APP',
+      template_code: 'RESERVATION_EXPIRED',
+      subject: 'Reservation expired',
+      body: `Reservation ${expired.reservation_number} has expired and the reserved stock was released.`,
+      reference_type: 'LOAN_RESERVATION',
+      reference_id: expired.id,
+      metadata: {
+        reservation_number: expired.reservation_number,
+        expires_at: expired.expires_at,
+      },
+    });
+
+    return { data: expired };
+  });
+}
+
+async function runExpiredReservationSweep(prismaClient = prisma, options = {}) {
+  const now = options.now || new Date();
+  const limit = Math.min(
+    500,
+    Math.max(1, Number.parseInt(String(options.limit || process.env.RESERVATION_EXPIRY_BATCH_SIZE || RESERVATION_EXPIRY_BATCH_SIZE), 10) || RESERVATION_EXPIRY_BATCH_SIZE)
+  );
+
+  const expiredReservations = await prismaClient.loan_reservations.findMany({
+    where: {
+      status: { in: ACTIVE_RESERVATION_STATUSES },
+      expires_at: { lte: now },
+    },
+    orderBy: [{ expires_at: 'asc' }],
+    take: limit,
+  });
+
+  const result = {
+    scanned: expiredReservations.length,
+    expired: 0,
+    skipped: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  for (const reservation of expiredReservations) {
+    try {
+      const released = await releaseExpiredReservation(reservation, {
+        authHeader: options.authHeader,
+        actorUserId: options.actorUserId || null,
+      });
+
+      if (released.skipped) {
+        result.skipped += 1;
+      } else {
+        result.expired += 1;
+      }
+    } catch (error) {
+      result.failed += 1;
+      result.errors.push({
+        reservation_id: reservation.id,
+        message: error?.message || 'Unknown error',
+      });
+    }
+  }
+
+  return result;
+}
+
+async function runExpiredReservationSweepNow(req, res) {
+  try {
+    const result = await runExpiredReservationSweep(prisma, {
+      limit: Number(req.body?.limit || req.query?.limit || RESERVATION_EXPIRY_BATCH_SIZE),
+      authHeader: req.headers.authorization,
+      actorUserId: req.user?.id || null,
+    });
+
+    return res.json({
+      message: 'Expired reservation sweep completed',
+      data: result,
+    });
+  } catch (error) {
+    console.error('runExpiredReservationSweepNow error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
+  ACTIVE_RESERVATION_STATUSES,
   listReservations,
   getReservationById,
   createReservation,
   cancelReservation,
+  confirmReservation,
+  runExpiredReservationSweep,
+  runExpiredReservationSweepNow,
 };

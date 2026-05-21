@@ -11,8 +11,9 @@ const {
 } = require('../services/inventory-integration.service');
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('../services/account.service');
 const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
+const { normalizePickupCode } = require('../utils/pickup-code');
 
-const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
 
 function isUuid(value) {
@@ -28,6 +29,10 @@ function parseIdempotencyKey(req) {
   const header = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
   const value = String(header || '').trim();
   return value || null;
+}
+
+function parsePickupCodeFromBody(body) {
+  return normalizePickupCode(body?.pickup_code || body?.pickupCode || body?.code || body?.qr_code);
 }
 
 function deterministicUuid(seed) {
@@ -693,8 +698,34 @@ async function convertReservationToLoan(req, res) {
       return res.json({ data: existingLoan, idempotent: true });
     }
 
-    if (!ACTIVE_RESERVATION_STATUSES.includes(reservation.status)) {
-      return res.status(409).json({ message: `Reservation is not convertible from status ${reservation.status}` });
+    if (!CONVERTIBLE_RESERVATION_STATUSES.includes(reservation.status)) {
+      return res.status(409).json({
+        message: reservation.status === 'PENDING'
+          ? 'Reservation must be confirmed by staff before conversion'
+          : `Reservation is not convertible from status ${reservation.status}`,
+      });
+    }
+
+    if (reservation.status === 'READY_FOR_PICKUP') {
+      if (!reservation.pickup_code) {
+        return res.status(409).json({ message: 'Pickup code has not been issued for this reservation' });
+      }
+
+      if (!req.pickupCodeVerified) {
+        return res.status(409).json({ message: 'Pickup code is required to convert a ready reservation to loan' });
+      }
+
+      if (reservation.pickup_code_used_at) {
+        return res.status(409).json({ message: 'Pickup code has already been used' });
+      }
+
+      if (normalizePickupCode(req.pickupCode) !== reservation.pickup_code) {
+        return res.status(409).json({ message: 'Pickup code does not match this reservation' });
+      }
+
+      if (reservation.pickup_code_expires_at && new Date(reservation.pickup_code_expires_at).getTime() <= Date.now()) {
+        return res.status(409).json({ message: 'Pickup code has expired' });
+      }
     }
 
     if (new Date(reservation.expires_at).getTime() <= Date.now()) {
@@ -828,7 +859,11 @@ async function convertReservationToLoan(req, res) {
 
         await tx.loan_reservations.update({
           where: { id: reservation.id },
-          data: { status: 'CONVERTED_TO_LOAN' },
+          data: {
+            status: 'CONVERTED_TO_LOAN',
+            ...(req.pickupCodeVerified ? { pickup_code_used_at: new Date() } : {}),
+            updated_at: new Date(),
+          },
         });
 
         await writeAuditLog(tx, {
@@ -901,6 +936,34 @@ async function convertReservationToLoan(req, res) {
   }
 }
 
+async function convertReservationPickupCodeToLoan(req, res) {
+  const pickupCode = parsePickupCodeFromBody(req.body || {});
+
+  if (!pickupCode) {
+    return res.status(400).json({ message: 'pickup_code is required' });
+  }
+
+  try {
+    const reservation = await prisma.loan_reservations.findUnique({
+      where: { pickup_code: pickupCode },
+      select: { id: true },
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ message: 'Pickup code not found' });
+    }
+
+    req.params.id = reservation.id;
+    req.pickupCodeVerified = true;
+    req.pickupCode = pickupCode;
+
+    return convertReservationToLoan(req, res);
+  } catch (error) {
+    console.error('Error while converting reservation by pickup code:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function returnLoan(req, res) {
   const loanId = parseId(req.params.id);
   const actorUserId = req.user?.id || null;
@@ -957,25 +1020,24 @@ async function returnLoan(req, res) {
       return res.status(409).json({ message: 'No active loan items to return' });
     }
 
-    // If this is a damage return (items reported as DAMAGED/POOR), skip returning stock
-    const isDamageReturn = (item_condition_on_return || '').toUpperCase() === 'DAMAGED' || (item_condition_on_return || '').toUpperCase() === 'POOR';
+    const normalizedReturnCondition = String(item_condition_on_return || 'GOOD').trim().toUpperCase();
 
-    if (!markLost && !isDamageReturn) {
-      for (let index = 0; index < targets.length; index += 1) {
-        const item = targets[index];
-        await returnBorrowedStock({
-          loan_id: loan.id,
-          loan_item_id: item.id,
-          variant_id: item.variant_id,
-          warehouse_id: loan.warehouse_id,
-          quantity: 1,
-          location_id: returned_to_location_id || null,
-          inventory_unit_id: item.inventory_unit_id || null,
-          idempotency_key: `${idempotencyKey}:${index + 1}`,
-          handled_by_user_id: actorUserId,
-          authHeader,
-        });
-      }
+    for (let index = 0; index < targets.length; index += 1) {
+      const item = targets[index];
+      await returnBorrowedStock({
+        loan_id: loan.id,
+        loan_item_id: item.id,
+        variant_id: item.variant_id,
+        warehouse_id: loan.warehouse_id,
+        quantity: 1,
+        location_id: returned_to_location_id || null,
+        inventory_unit_id: item.inventory_unit_id || null,
+        item_condition_on_return: markLost ? 'LOST' : normalizedReturnCondition,
+        mark_lost: markLost,
+        idempotency_key: `${idempotencyKey}:${index + 1}`,
+        handled_by_user_id: actorUserId,
+        authHeader,
+      });
     }
 
     const returnedAt = new Date();
@@ -991,7 +1053,7 @@ async function returnLoan(req, res) {
           return_date: markLost ? null : returnedAt,
           returned_to_warehouse_id: markLost ? null : loan.warehouse_id,
           returned_to_location_id: markLost ? null : (returned_to_location_id || null),
-          item_condition_on_return: markLost ? null : (item_condition_on_return || 'GOOD'),
+          item_condition_on_return: markLost ? null : normalizedReturnCondition,
           ...(notes ? { notes: String(notes) } : {}),
         },
       });
@@ -1004,7 +1066,7 @@ async function returnLoan(req, res) {
         actorUserId,
         membershipLimits: membershipInfo?.limits,
         markLost,
-        itemConditionOnReturn: item_condition_on_return || 'GOOD',
+        itemConditionOnReturn: normalizedReturnCondition,
       });
 
       const remaining = await tx.loan_items.count({
@@ -1098,6 +1160,7 @@ module.exports = {
   getLoanById,
   createDirectLoan,
   convertReservationToLoan,
+  convertReservationPickupCodeToLoan,
   listRenewalRequests,
   reviewLoanRenewal,
   returnLoan,
