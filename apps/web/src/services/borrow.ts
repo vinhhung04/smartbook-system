@@ -278,11 +278,30 @@ export const borrowService = {
     return response.data as { data: Reservation };
   },
 
+  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }) => {
+    const response = await inventoryAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {});
+    return response.data as { data: Reservation; idempotent?: boolean };
+  },
+
   convertReservationToLoan: async (reservationId: string, idempotencyKey?: string) => {
     const response = await inventoryAPI.post(`/borrow/reservations/${reservationId}/convert-to-loan`, {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };
+  },
+
+  runExpiredReservationSweep: async (limit?: number) => {
+    const response = await inventoryAPI.post('/borrow/reservations/jobs/expire', { limit });
+    return response.data as {
+      message: string;
+      data: {
+        scanned: number;
+        expired: number;
+        skipped: number;
+        failed: number;
+        errors: Array<{ reservation_id: string; message: string }>;
+      };
+    };
   },
 
   createDirectLoan: async (payload: ReservationPayload, idempotencyKey?: string) => {

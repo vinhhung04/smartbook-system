@@ -41,7 +41,7 @@ export function CustomerReservationsPage() {
 
   const pendingCount = rows.filter(r => r.status === 'PENDING').length;
   const readyCount = rows.filter(r => r.status === 'READY_FOR_PICKUP').length;
-  const completedCount = rows.filter(r => r.status === 'PICKED_UP' || r.status === 'COMPLETED' || r.status === 'CANCELLED' || r.status === 'EXPIRED').length;
+  const completedCount = rows.filter(r => r.status === 'CONVERTED_TO_LOAN' || r.status === 'CANCELLED' || r.status === 'EXPIRED').length;
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">

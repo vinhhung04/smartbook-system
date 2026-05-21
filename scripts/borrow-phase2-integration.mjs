@@ -116,17 +116,27 @@ async function run() {
     add('3.reservation->loan convert', false, `reservation fail: ${JSON.stringify(reservation.data)}`);
   } else {
     const reservationId = reservation.data?.data?.id;
-    const converted = await request(
-      'POST',
-      `/borrow/reservations/${reservationId}/convert-to-loan`,
-      {},
-      { 'Idempotency-Key': crypto.randomUUID() }
+    const confirmed = await request(
+      'PATCH',
+      `/borrow/reservations/${reservationId}/confirm`,
+      { status: 'CONFIRMED', notes: 'integration staff confirmation' }
     );
-    if (converted.ok) {
-      reservationLoanId = converted.data?.data?.id;
-      add('3.reservation->loan convert', true, reservationLoanId);
+
+    if (!confirmed.ok) {
+      add('3.reservation->loan convert', false, `confirm fail: ${JSON.stringify(confirmed.data)}`);
     } else {
-      add('3.reservation->loan convert', false, JSON.stringify(converted.data));
+      const converted = await request(
+        'POST',
+        `/borrow/reservations/${reservationId}/convert-to-loan`,
+        {},
+        { 'Idempotency-Key': crypto.randomUUID() }
+      );
+      if (converted.ok) {
+        reservationLoanId = converted.data?.data?.id;
+        add('3.reservation->loan convert', true, reservationLoanId);
+      } else {
+        add('3.reservation->loan convert', false, JSON.stringify(converted.data));
+      }
     }
   }
 

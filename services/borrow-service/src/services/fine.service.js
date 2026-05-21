@@ -108,6 +108,7 @@ async function applyReturnFines(tx, input) {
     itemConditionOnReturn = 'GOOD',
   } = input;
 
+  const normalizedCondition = String(itemConditionOnReturn || 'GOOD').trim().toUpperCase();
   const finePerDay = normalizeMoney(membershipLimits?.fine_per_day || 0);
   const lostMultiplier = Number(membershipLimits?.lost_item_fee_multiplier || 1);
   const baseLostFee = normalizeMoney(process.env.LOST_ITEM_BASE_FEE || 100000);
@@ -146,14 +147,14 @@ async function applyReturnFines(tx, input) {
       continue;
     }
 
-    if (itemConditionOnReturn === 'DAMAGED' || itemConditionOnReturn === 'POOR') {
+    if (normalizedCondition === 'DAMAGED' || normalizedCondition === 'POOR') {
       const damageFine = await upsertFine(tx, {
         customerId,
         loanItemId: item.id,
         fineType: 'DAMAGE',
         amount: baseDamageFee,
         actorUserId,
-        note: `Damage fine generated for condition ${itemConditionOnReturn}`,
+        note: `Damage fine generated for condition ${normalizedCondition}`,
       });
       if (damageFine) {
         createdOrUpdated.push(damageFine);
@@ -204,7 +205,7 @@ async function runOverdueSweep(prisma, options = {}) {
 
   const overdueItems = await prisma.loan_items.findMany({
     where: {
-      status: 'BORROWED',
+      status: { in: ['BORROWED', 'OVERDUE'] },
       return_date: null,
       due_date: { lt: now },
     },
@@ -244,10 +245,12 @@ async function runOverdueSweep(prisma, options = {}) {
     const amount = normalizeMoney(overdueDayCount * finePerDay);
 
     await prisma.$transaction(async (tx) => {
-      await tx.loan_items.update({
-        where: { id: item.id },
-        data: { status: 'OVERDUE' },
-      });
+      if (item.status !== 'OVERDUE') {
+        await tx.loan_items.update({
+          where: { id: item.id },
+          data: { status: 'OVERDUE' },
+        });
+      }
 
       if (loan.status === 'BORROWED') {
         await tx.loan_transactions.update({
@@ -271,22 +274,24 @@ async function runOverdueSweep(prisma, options = {}) {
         }
       }
 
-      await createNotificationRecord(tx, {
-        customer_id: loan.customer_id,
-        channel: 'IN_APP',
-        template_code: 'LOAN_OVERDUE',
-        subject: 'Loan item overdue',
-        body: `Loan ${loan.loan_number} has overdue item(s). Please return as soon as possible.`,
-        reference_type: 'LOAN_TRANSACTION',
-        reference_id: loan.id,
-        metadata: {
-          loan_id: loan.id,
-          loan_number: loan.loan_number,
-          loan_item_id: item.id,
-          overdue_days: overdueDayCount,
-          overdue_fine_amount: amount,
-        },
-      });
+      if (item.status !== 'OVERDUE') {
+        await createNotificationRecord(tx, {
+          customer_id: loan.customer_id,
+          channel: 'IN_APP',
+          template_code: 'LOAN_OVERDUE',
+          subject: 'Loan item overdue',
+          body: `Loan ${loan.loan_number} has overdue item(s). Please return as soon as possible.`,
+          reference_type: 'LOAN_TRANSACTION',
+          reference_id: loan.id,
+          metadata: {
+            loan_id: loan.id,
+            loan_number: loan.loan_number,
+            loan_item_id: item.id,
+            overdue_days: overdueDayCount,
+            overdue_fine_amount: amount,
+          },
+        });
+      }
 
       await writeAuditLog(tx, {
         actor_user_id: null,

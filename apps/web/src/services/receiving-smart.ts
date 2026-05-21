@@ -6,7 +6,7 @@ import { inventoryAPI } from './http-clients';
 
 export interface ExtractedLineItem {
   title: string;
-  isbn?: string;
+  isbn?: string | null;
   quantity: number;
   unit_price: number;
 }

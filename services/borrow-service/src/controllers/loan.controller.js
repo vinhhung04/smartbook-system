@@ -12,7 +12,7 @@ const {
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('../services/account.service');
 const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
 
-const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
 
 function isUuid(value) {
@@ -693,8 +693,12 @@ async function convertReservationToLoan(req, res) {
       return res.json({ data: existingLoan, idempotent: true });
     }
 
-    if (!ACTIVE_RESERVATION_STATUSES.includes(reservation.status)) {
-      return res.status(409).json({ message: `Reservation is not convertible from status ${reservation.status}` });
+    if (!CONVERTIBLE_RESERVATION_STATUSES.includes(reservation.status)) {
+      return res.status(409).json({
+        message: reservation.status === 'PENDING'
+          ? 'Reservation must be confirmed by staff before conversion'
+          : `Reservation is not convertible from status ${reservation.status}`,
+      });
     }
 
     if (new Date(reservation.expires_at).getTime() <= Date.now()) {
@@ -957,25 +961,24 @@ async function returnLoan(req, res) {
       return res.status(409).json({ message: 'No active loan items to return' });
     }
 
-    // If this is a damage return (items reported as DAMAGED/POOR), skip returning stock
-    const isDamageReturn = (item_condition_on_return || '').toUpperCase() === 'DAMAGED' || (item_condition_on_return || '').toUpperCase() === 'POOR';
+    const normalizedReturnCondition = String(item_condition_on_return || 'GOOD').trim().toUpperCase();
 
-    if (!markLost && !isDamageReturn) {
-      for (let index = 0; index < targets.length; index += 1) {
-        const item = targets[index];
-        await returnBorrowedStock({
-          loan_id: loan.id,
-          loan_item_id: item.id,
-          variant_id: item.variant_id,
-          warehouse_id: loan.warehouse_id,
-          quantity: 1,
-          location_id: returned_to_location_id || null,
-          inventory_unit_id: item.inventory_unit_id || null,
-          idempotency_key: `${idempotencyKey}:${index + 1}`,
-          handled_by_user_id: actorUserId,
-          authHeader,
-        });
-      }
+    for (let index = 0; index < targets.length; index += 1) {
+      const item = targets[index];
+      await returnBorrowedStock({
+        loan_id: loan.id,
+        loan_item_id: item.id,
+        variant_id: item.variant_id,
+        warehouse_id: loan.warehouse_id,
+        quantity: 1,
+        location_id: returned_to_location_id || null,
+        inventory_unit_id: item.inventory_unit_id || null,
+        item_condition_on_return: markLost ? 'LOST' : normalizedReturnCondition,
+        mark_lost: markLost,
+        idempotency_key: `${idempotencyKey}:${index + 1}`,
+        handled_by_user_id: actorUserId,
+        authHeader,
+      });
     }
 
     const returnedAt = new Date();
@@ -991,7 +994,7 @@ async function returnLoan(req, res) {
           return_date: markLost ? null : returnedAt,
           returned_to_warehouse_id: markLost ? null : loan.warehouse_id,
           returned_to_location_id: markLost ? null : (returned_to_location_id || null),
-          item_condition_on_return: markLost ? null : (item_condition_on_return || 'GOOD'),
+          item_condition_on_return: markLost ? null : normalizedReturnCondition,
           ...(notes ? { notes: String(notes) } : {}),
         },
       });
@@ -1004,7 +1007,7 @@ async function returnLoan(req, res) {
         actorUserId,
         membershipLimits: membershipInfo?.limits,
         markLost,
-        itemConditionOnReturn: item_condition_on_return || 'GOOD',
+        itemConditionOnReturn: normalizedReturnCondition,
       });
 
       const remaining = await tx.loan_items.count({

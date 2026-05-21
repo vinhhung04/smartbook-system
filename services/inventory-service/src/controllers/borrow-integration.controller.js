@@ -532,11 +532,16 @@ async function returnBorrowedLoan(req, res) {
     quantity,
     location_id,
     inventory_unit_id,
+    item_condition_on_return,
+    mark_lost,
     idempotency_key,
     handled_by_user_id,
   } = req.body;
 
   const normalizedQuantity = parsePositiveInteger(quantity, 1);
+  const normalizedCondition = String(item_condition_on_return || 'GOOD').trim().toUpperCase();
+  const isLost = mark_lost === true || normalizedCondition === 'LOST';
+  const isDamaged = !isLost && ['DAMAGED', 'POOR'].includes(normalizedCondition);
 
   if (!loan_id || !variant_id || !warehouse_id || !normalizedQuantity) {
     return res.status(400).json({ message: 'loan_id, variant_id, warehouse_id and quantity are required' });
@@ -572,13 +577,35 @@ async function returnBorrowedLoan(req, res) {
           variant_id,
           warehouse_id,
           borrowed_qty: { gte: normalizedQuantity },
-          ...(location_id ? { location_id } : {}),
         },
         orderBy: [{ borrowed_qty: 'desc' }],
       });
 
       if (!balance) {
         throw new Error('BORROWED_STOCK_NOT_FOUND');
+      }
+
+      if (isLost && balance.on_hand_qty < normalizedQuantity) {
+        throw new Error('ON_HAND_STOCK_NOT_FOUND');
+      }
+
+      const targetLocationId = location_id || balance.location_id;
+      const isSameLocation = targetLocationId === balance.location_id;
+      const sourceUpdate = {
+        borrowed_qty: { decrement: normalizedQuantity },
+        last_movement_at: new Date(),
+      };
+
+      if (isLost || !isSameLocation) {
+        sourceUpdate.on_hand_qty = { decrement: normalizedQuantity };
+      }
+
+      if (!isLost && isSameLocation) {
+        if (isDamaged) {
+          sourceUpdate.damaged_qty = { increment: normalizedQuantity };
+        } else {
+          sourceUpdate.available_qty = { increment: normalizedQuantity };
+        }
       }
 
       await tx.stock_balances.update({
@@ -588,34 +615,60 @@ async function returnBorrowedLoan(req, res) {
             location_id: balance.location_id,
           },
         },
-        data: {
-          borrowed_qty: { decrement: normalizedQuantity },
-          available_qty: { increment: normalizedQuantity },
-          last_movement_at: new Date(),
-        },
+        data: sourceUpdate,
       });
+
+      if (!isLost && !isSameLocation) {
+        await tx.stock_balances.upsert({
+          where: {
+            variant_id_location_id: {
+              variant_id,
+              location_id: targetLocationId,
+            },
+          },
+          create: {
+            warehouse_id,
+            variant_id,
+            location_id: targetLocationId,
+            on_hand_qty: normalizedQuantity,
+            available_qty: isDamaged ? 0 : normalizedQuantity,
+            reserved_qty: 0,
+            borrowed_qty: 0,
+            damaged_qty: isDamaged ? normalizedQuantity : 0,
+            last_movement_at: new Date(),
+          },
+          update: {
+            on_hand_qty: { increment: normalizedQuantity },
+            ...(isDamaged
+              ? { damaged_qty: { increment: normalizedQuantity } }
+              : { available_qty: { increment: normalizedQuantity } }),
+            last_movement_at: new Date(),
+          },
+        });
+      }
 
       if (inventory_unit_id) {
         await tx.inventory_units.update({
           where: { id: inventory_unit_id },
           data: {
-            status: 'AVAILABLE',
-            current_location_id: balance.location_id,
+            status: isLost ? 'LOST' : (isDamaged ? 'DAMAGED' : 'AVAILABLE'),
+            current_location_id: isLost ? null : targetLocationId,
             last_seen_at: new Date(),
           },
         }).catch(() => undefined);
       }
 
+      const movementType = (isLost || isDamaged) ? 'ADJUSTMENT' : 'RETURN';
       const movement = await tx.stock_movements.create({
         data: {
           movement_number: createMovementNumber(Date.now(), 0),
-          movement_type: 'RETURN',
+          movement_type: movementType,
           movement_status: 'POSTED',
           warehouse_id,
           variant_id,
           inventory_unit_id: inventory_unit_id || null,
           from_location_id: balance.location_id,
-          to_location_id: balance.location_id,
+          to_location_id: isLost ? null : targetLocationId,
           quantity: normalizedQuantity,
           unit_cost: 0,
           source_service: 'BORROW_SERVICE',
@@ -623,8 +676,11 @@ async function returnBorrowedLoan(req, res) {
           reference_id: loan_id,
           idempotency_key: movementIdempotency,
           created_by_user_id: handled_by_user_id || req.user?.id || null,
+          reason_code: isLost ? 'LOST' : (isDamaged ? 'DAMAGED_RETURN' : 'RETURNED'),
           metadata: {
             loan_item_id: loan_item_id || null,
+            item_condition_on_return: normalizedCondition,
+            mark_lost: isLost,
           },
         },
       });
@@ -636,6 +692,9 @@ async function returnBorrowedLoan(req, res) {
   } catch (error) {
     if (error.message === 'BORROWED_STOCK_NOT_FOUND') {
       return res.status(409).json({ message: 'No borrowed stock available to return for this variant/warehouse' });
+    }
+    if (error.message === 'ON_HAND_STOCK_NOT_FOUND') {
+      return res.status(409).json({ message: 'No on-hand stock available to mark as lost for this variant/warehouse' });
     }
     console.error('Error while returning borrowed stock:', error);
     return res.status(500).json({ message: 'Internal server error' });

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { borrowService, type Loan, type LoanStatus, type RenewalRequest } from '@/services/borrow';
+import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -29,7 +29,8 @@ export function BorrowLoansPage() {
   const [showDirectLoan, setShowDirectLoan] = useState(false);
   const [dlCustomers, setDlCustomers] = useState<any[]>([]);
   const [dlBooks, setDlBooks] = useState<any[]>([]);
-  const [dlForm, setDlForm] = useState({ customer_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[], borrow_days: 14 });
+  const [dlWarehouses, setDlWarehouses] = useState<WarehouseLookupItem[]>([]);
+  const [dlForm, setDlForm] = useState({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[] });
   const [dlSaving, setDlSaving] = useState(false);
   const [dlBookSearch, setDlBookSearch] = useState('');
 
@@ -116,26 +117,33 @@ export function BorrowLoansPage() {
 
   const openDirectLoanModal = async () => {
     setShowDirectLoan(true);
-    setDlForm({ customer_id: '', items: [{ variant_id: '', quantity: 1 }], borrow_days: 14 });
+    setDlForm({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] });
     try {
-      const [custRes, bookRes] = await Promise.all([borrowService.getCustomers(), bookService.getAll({ page: 1, pageSize: 200 })]);
+      const [custRes, bookRes, warehouseRes] = await Promise.all([
+        borrowService.getCustomers(),
+        bookService.getAll({ page: 1, pageSize: 200 }),
+        borrowService.searchWarehouses({ limit: 20 }),
+      ]);
       setDlCustomers(custRes.data ?? []);
       setDlBooks(Array.isArray(bookRes) ? bookRes : bookRes?.data ?? []);
+      setDlWarehouses(warehouseRes.data ?? []);
     } catch { /* ignore */ }
   };
 
   const submitDirectLoan = async () => {
     if (!dlForm.customer_id) { toast.error('Select a customer'); return; }
+    if (!dlForm.warehouse_id) { toast.error('Select a warehouse'); return; }
     const validItems = dlForm.items.filter((i) => i.variant_id);
     if (validItems.length === 0) { toast.error('Add at least one book'); return; }
     try {
       setDlSaving(true);
-      await borrowService.createDirectLoan({
+      await Promise.all(validItems.map((item) => borrowService.createDirectLoan({
         customer_id: dlForm.customer_id,
-        source: 'COUNTER',
-        items: validItems,
-        borrow_days: dlForm.borrow_days,
-      });
+        variant_id: item.variant_id,
+        warehouse_id: dlForm.warehouse_id,
+        quantity: item.quantity,
+        source_channel: 'COUNTER',
+      })));
       toast.success('Direct loan created');
       setShowDirectLoan(false);
       await loadLoans();
@@ -399,9 +407,12 @@ export function BorrowLoansPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Borrow Days</label>
-                <input type="number" value={dlForm.borrow_days} onChange={(e) => setDlForm({ ...dlForm, borrow_days: Number(e.target.value) || 14 })}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" min={1} max={90} />
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Warehouse</label>
+                <select value={dlForm.warehouse_id} onChange={(e) => setDlForm({ ...dlForm, warehouse_id: e.target.value })}
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400">
+                  <option value="">Select warehouse...</option>
+                  {dlWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name} ({warehouse.code})</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Books</label>

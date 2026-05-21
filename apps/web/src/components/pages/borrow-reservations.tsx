@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, Plus, Search } from 'lucide-react';
+import { CheckCircle2, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -356,6 +356,26 @@ export function BorrowReservationsPage() {
     }
   };
 
+  const confirmReservation = async (id: string, status: 'CONFIRMED' | 'READY_FOR_PICKUP' = 'CONFIRMED') => {
+    try {
+      await borrowService.confirmReservation(id, { status });
+      toast.success(status === 'READY_FOR_PICKUP' ? 'Reservation marked ready for pickup' : 'Reservation confirmed');
+      await loadReservations();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to confirm reservation'));
+    }
+  };
+
+  const releaseExpiredReservations = async () => {
+    try {
+      const response = await borrowService.runExpiredReservationSweep();
+      toast.success(`Expired reservations released: ${response.data.expired}`);
+      await loadReservations();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to release expired reservations'));
+    }
+  };
+
   const openReservationForm = () => {
     setFormOpen(true);
     setFormMode('RESERVATION');
@@ -405,6 +425,10 @@ export function BorrowReservationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Release Expired
+          </Button>
           <Button size="sm" onClick={openReservationForm} className="gap-2">
             <Plus className="w-4 h-4" />
             New Reservation
@@ -511,14 +535,36 @@ export function BorrowReservationsPage() {
                       <td className="px-5 py-3.5">
                         {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                              onClick={() => void convertReservation(reservation.id)}
-                            >
-                              Convert
-                            </Button>
+                            {reservation.status === 'PENDING' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-sky-200 text-sky-700 hover:bg-sky-50"
+                                onClick={() => void confirmReservation(reservation.id)}
+                              >
+                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                Confirm
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => void convertReservation(reservation.id)}
+                              >
+                                Convert
+                              </Button>
+                            )}
+                            {reservation.status === 'CONFIRMED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-cyan-200 text-cyan-700 hover:bg-cyan-50"
+                                onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
+                              >
+                                Ready
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"

@@ -8,7 +8,7 @@ interface ReservationItemProps {
 
 export function ReservationItem({ item, onCancel }: ReservationItemProps) {
   const status = String(item.status || '').toUpperCase();
-  const canCancel = status === 'PENDING';
+  const canCancel = status === 'PENDING' || status === 'CONFIRMED' || status === 'READY_FOR_PICKUP';
   const isReady = status === 'READY_FOR_PICKUP';
   const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
   const hoursToExpire = expiresAt ? Math.floor((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000)) : null;
