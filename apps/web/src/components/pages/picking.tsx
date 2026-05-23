@@ -139,26 +139,6 @@ export function PickingPage() {
       const preservePresence = options?.preservePresence === true;
       const currentLocationInput = options?.currentLocationInput || (preservePresence ? presenceResolvedLocationInput : "");
       const data = await pickingService.getTaskDetail(taskType, taskId, currentLocationInput || undefined);
-      console.debug("[picking] detail loaded", {
-        task_type: taskType,
-        task_id: taskId,
-        order_number: data.order_number,
-        warehouse_id: data.source_warehouse_id,
-        current_location_input: currentLocationInput || null,
-        allocated_inventory: (data.lines || []).map((line) => ({
-          line_id: line.line_id,
-          variant_id: line.variant_id,
-          source_location_id: line.source_location_id,
-          source_location_code: line.source_location_code,
-          remaining_qty: line.remaining_qty,
-        })),
-        expected_location: data.current_line
-          ? {
-              id: data.current_line.source_location_id,
-              code: data.current_line.source_location_code,
-            }
-          : null,
-      });
       setDetail(data);
       setSelectedTaskType(taskType);
       setSelectedTaskId(taskId);
@@ -438,12 +418,6 @@ export function PickingPage() {
       .map((value) => String(value).trim().toLowerCase());
 
     if (expected.includes(input)) {
-      console.debug("[picking] scan location result", {
-        order_number: detail?.order_number || null,
-        expected_location: currentLine.source_location_code || currentLine.source_location_id,
-        scanned_location: sourceInput.trim(),
-        result: "PASS",
-      });
       setLocationVerified(true);
       setProductVerified(false);
       setProductBarcodeInput("");
@@ -456,12 +430,6 @@ export function PickingPage() {
 
     setLocationVerified(false);
     setProductVerified(false);
-    console.debug("[picking] scan location result", {
-      order_number: detail?.order_number || null,
-      expected_location: currentLine.source_location_code || currentLine.source_location_id,
-      scanned_location: sourceInput.trim(),
-      result: "FAIL",
-    });
     toast.error(`Sai location. Can den ${currentLine.source_location_code || "vi tri duoc chi dinh"}`);
   };
 
