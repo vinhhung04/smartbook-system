@@ -3,7 +3,6 @@ const express = require('express');
 const {
   searchVariants,
   listOrderRequests,
-  previewOutboundReferenceCode,
   createOutboundRequest,
   createTransferRequest,
   approveRequest,
@@ -18,7 +17,6 @@ const canReadRequests = authorizeAnyPermission(['inventory.stock.read', 'invento
 const canApprove = authorizeAnyPermission(['inventory.purchase.approve']);
 
 router.get('/variants/search', canOperateStock, searchVariants);
-router.get('/outbound/reference-code', canOperateStock, previewOutboundReferenceCode);
 router.get('/', canReadRequests, listOrderRequests);
 router.post('/outbound', canOperateStock, createOutboundRequest);
 router.post('/transfer', canOperateStock, createTransferRequest);

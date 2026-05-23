@@ -307,7 +307,6 @@ model outbound_orders {
   requested_by_user_id String                 @db.Uuid
   approved_by_user_id  String?                @db.Uuid
   processed_by_user_id String?                @db.Uuid
-  reference_type       OutboundReferenceType  @default(OTHER)
   external_reference   String?
   requested_at         DateTime               @default(now()) @db.Timestamptz(6)
   completed_at         DateTime?              @db.Timestamptz(6)
@@ -318,29 +317,6 @@ model outbound_orders {
   warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
   @@index([status, requested_at], map: "idx_outbound_orders_status")
-}
-
-model outbound_reference_sequences {
-  reference_type OutboundReferenceType @id
-  next_number    Int                   @default(1)
-  created_at     DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime              @default(now()) @db.Timestamptz(6)
-}
-
-enum OutboundReferenceType {
-  TRANSFER_TO_STORE
-  WAREHOUSE_TRANSFER
-  RETURN_TO_SUPPLIER
-  SALES_ORDER
-  INTERNAL_REQUEST
-  ISSUE_REQUEST
-  RESERVATION
-  LOAN_REQUEST
-  MAINTENANCE
-  INVENTORY_ADJUSTMENT
-  DAMAGED_RETURN
-  PROMOTION
-  OTHER
 }
 
 model publishers {
