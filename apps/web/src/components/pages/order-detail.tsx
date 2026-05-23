@@ -23,6 +23,9 @@ interface ReceiptDetailItem {
 interface ReceiptDetail {
   id: string;
   receipt_number: string;
+  purchase_order_id?: string | null;
+  po_number?: string | null;
+  source_type?: string | null;
   warehouse_code?: string;
   warehouse_name?: string;
   status: 'DRAFT' | 'POSTED' | 'CANCELLED';
@@ -226,6 +229,17 @@ export function OrderDetailPage() {
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Warehouse</p>
                   <p className="text-[13px] font-medium mt-1">{receipt.warehouse_code || receipt.warehouse_name || "-"}</p>
                 </div>
+                {receipt.purchase_order_id && (
+                  <>
+                    <div className="h-px bg-blue-200/40" />
+                    <div>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Linked PO</p>
+                      <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
+                        {receipt.po_number || receipt.purchase_order_id}
+                      </NavLink>
+                    </div>
+                  </>
+                )}
                 <div className="h-px bg-blue-200/40" />
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Created By</p>

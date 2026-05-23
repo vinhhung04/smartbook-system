@@ -94,6 +94,9 @@ export interface ChatMessage {
 export interface ChatResponse {
   reply: string;
   ai_provider: string;
+  intent?: string;
+  context_sources?: Array<{ name: string; endpoint?: string; status?: string }>;
+  retrieval_warnings?: string[];
 }
 
 export interface SystemContext {

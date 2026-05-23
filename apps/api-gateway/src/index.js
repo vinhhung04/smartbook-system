@@ -17,6 +17,8 @@ const inventoryTarget =
   process.env.INVENTORY_SERVICE_URL || "http://inventory-service:3001";
 const borrowTarget =
   process.env.BORROW_SERVICE_URL || "http://borrow-service:3005";
+const analyticsTarget =
+  process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
 
 const JWT_SECRET = process.env.JWT_SECRET || "smartbook_shared_jwt_secret";
@@ -115,6 +117,7 @@ app.get("/health", (_req, res) => {
     authTarget,
     inventoryTarget,
     borrowTarget,
+    analyticsTarget,
     aiTarget,
     connectedSockets: io.engine?.clientsCount || 0,
   });
@@ -160,6 +163,15 @@ app.use(
   createProxyMiddleware({
     pathFilter: "/borrow",
     target: borrowTarget,
+    changeOrigin: true,
+    xfwd: true,
+  }),
+);
+
+app.use(
+  createProxyMiddleware({
+    pathFilter: "/analytics",
+    target: analyticsTarget,
     changeOrigin: true,
     xfwd: true,
   }),

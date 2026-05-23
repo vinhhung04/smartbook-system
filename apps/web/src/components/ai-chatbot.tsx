@@ -150,7 +150,7 @@ export function AIChatbot() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [contextReady, setContextReady] = useState(false);
+  const [contextReady, setContextReady] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const systemContextRef = useRef<SystemContext | undefined>(undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -169,9 +169,9 @@ export function AIChatbot() {
 
   useEffect(() => {
     if (open && !systemContextRef.current) {
-      void refreshContext();
+      setContextReady(true);
     }
-  }, [open, refreshContext]);
+  }, [open]);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -225,7 +225,8 @@ export function AIChatbot() {
     setMessages([]);
     setInput('');
     setShowSuggestions(true);
-    void refreshContext();
+    systemContextRef.current = undefined;
+    setContextReady(true);
   };
 
   const welcomeVisible = messages.length === 0 && !loading;
@@ -249,14 +250,14 @@ export function AIChatbot() {
                     <>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       <span className="text-emerald-200 text-[10px]">
-                        Đã kết nối dữ liệu
+                        AI sẽ truy xuất dữ liệu khi bạn đặt câu hỏi
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                       <span className="text-amber-200 text-[10px]">
-                        Đang tải dữ liệu...
+                        Đang nạp fallback context...
                       </span>
                     </>
                   )}
@@ -267,14 +268,14 @@ export function AIChatbot() {
               <button
                 onClick={() => void refreshContext()}
                 className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                title="Cập nhật dữ liệu"
+                title="Nạp fallback context"
               >
                 <Database size={13} />
               </button>
               <button
                 onClick={handleReset}
                 className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                title="Cuộc trò chuyện mới"
+                title="Làm mới phiên chat"
               >
                 <RotateCcw size={13} />
               </button>
@@ -314,7 +315,7 @@ export function AIChatbot() {
                         <button
                           key={s}
                           onClick={() => void sendMessage(s)}
-                          disabled={loading || !contextReady}
+                          disabled={loading}
                           className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {s}
@@ -399,17 +400,13 @@ export function AIChatbot() {
                   void sendMessage(input);
                 }
               }}
-              placeholder={
-                contextReady
-                  ? 'Hỏi về sách, tồn kho, mượn/trả...'
-                  : 'Đang tải dữ liệu...'
-              }
-              disabled={loading || !contextReady}
+              placeholder="Hỏi về sách, tồn kho, mượn/trả..."
+              disabled={loading}
               className="flex-1 text-sm bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             />
             <button
               onClick={() => void sendMessage(input)}
-              disabled={!input.trim() || loading || !contextReady}
+              disabled={!input.trim() || loading}
               className="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg transition-colors shrink-0"
             >
               <Send size={15} />

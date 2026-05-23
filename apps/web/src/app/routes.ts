@@ -8,11 +8,15 @@ import { InventoryPage } from "@/components/pages/inventory";
 import { OrdersPage } from "@/components/pages/orders";
 import { OrderDetailPage } from "@/components/pages/order-detail";
 import { GoodsReceiptPage } from "@/components/pages/goods-receipt";
+import { PurchaseOrdersPage } from "@/components/pages/purchase-orders";
+import { PurchaseOrderDetailPage } from "@/components/pages/purchase-order-detail";
+import { PurchaseOrderFormPage } from "@/components/pages/purchase-order-form";
 import { MovementsPage } from "@/components/pages/movements";
 import { WarehousesPage } from "@/components/pages/warehouses";
 import { ShelvesPage } from "@/components/pages/shelves";
 import { AIImportPage } from "@/components/pages/ai-import";
 import { RecommendationsPage } from "@/components/pages/recommendations";
+import { ReorderSuggestionsPage } from "@/components/pages/reorder-suggestions";
 import { BorrowPage } from "@/components/pages/borrow";
 import { BorrowCustomersPage } from "@/components/pages/borrow-customers";
 import { BorrowReservationsPage } from "@/components/pages/borrow-reservations";
@@ -144,6 +148,10 @@ export const router = createBrowserRouter([
       { path: "orders", Component: OrdersPage },
       { path: "orders/new", Component: GoodsReceiptPage },
       { path: "orders/:id", Component: OrderDetailPage },
+      { path: "purchase-orders", Component: PurchaseOrdersPage },
+      { path: "purchase-orders/new", Component: PurchaseOrderFormPage },
+      { path: "purchase-orders/:id", Component: PurchaseOrderDetailPage },
+      { path: "purchase-orders/:id/edit", Component: PurchaseOrderFormPage },
       { path: "putaway", Component: PutawayPage },
       { path: "putaway/:id", Component: PutawayDetailPage },
       { path: "putaway/:id/execute", Component: PutawayExecutePage },
@@ -157,6 +165,7 @@ export const router = createBrowserRouter([
       { path: "shelves", Component: ShelvesPage },
       { path: "ai-import", Component: AIImportPage },
       { path: "recommendations", Component: RecommendationsPage },
+      { path: "reorder-suggestions", Component: ReorderSuggestionsPage },
       { path: "borrow", Component: BorrowPage },
       { path: "borrow/customers", Component: BorrowCustomersPage },
       { path: "borrow/reservations", Component: BorrowReservationsPage },

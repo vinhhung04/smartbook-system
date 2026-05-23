@@ -23,6 +23,7 @@ const breadcrumbMap: Record<string, { crumbs: { label: string; to?: string }[]; 
   "/movements": { crumbs: [{ label: "Stock Movements" }], color: "text-blue-600" },
   "/ai-import": { crumbs: [{ label: "AI Import" }], color: "text-cyan-600" },
   "/recommendations": { crumbs: [{ label: "Recommendations" }], color: "text-violet-600" },
+  "/reorder-suggestions": { crumbs: [{ label: "AI Reorder Suggestions" }], color: "text-emerald-600" },
   "/reports": { crumbs: [{ label: "Reports" }], color: "text-emerald-600" },
   "/borrow": { crumbs: [{ label: "Borrow" }], color: "text-amber-600" },
   "/users": { crumbs: [{ label: "Users" }], color: "text-slate-600" },

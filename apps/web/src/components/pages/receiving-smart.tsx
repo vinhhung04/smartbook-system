@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { warehouseService } from "@/services/warehouse";
 import { aiService } from "@/services/ai";
+import { authService } from "@/services/auth";
 import { receivingSmartService, MatchResult, SmartReceivingDraft } from "@/services/receiving-smart";
 import { getApiErrorMessage } from "@/services/api";
 import { PageHeader } from "../ui/page-header";
@@ -209,9 +210,11 @@ export function SmartReceivingPage() {
 
     setIsCreatingDraft(true);
     try {
-      // Get user_id from localStorage (mock for now)
-      const userStr = localStorage.getItem("user");
-      const user_id = userStr ? JSON.parse(userStr).id : "00000000-0000-0000-0000-000000000000";
+      const user_id = authService.getCurrentUser()?.id;
+      if (!user_id) {
+        toast.error("Khong tim thay nguoi dung dang nhap");
+        return;
+      }
 
       const response = await receivingSmartService.createDraft({
         warehouse_id: selectedWarehouse,

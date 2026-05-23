@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   ScrollText, RefreshCw, ChevronLeft, ChevronRight, Search, Eye, X,
 } from 'lucide-react';
-import { inventoryAPI } from '@/services/http-clients';
+import { gatewayAPI } from '@/services/http-clients';
 import { toast } from 'sonner';
 
 interface AuditLog {
@@ -49,7 +49,7 @@ export function AuditTrailPage() {
       if (entityFilter) params.entity_type = entityFilter;
       if (searchAction) params.action_name = searchAction;
 
-      const resp = await inventoryAPI.get('/borrow/audit-logs', { params });
+      const resp = await gatewayAPI.get('/borrow/audit-logs', { params });
       setLogs(resp.data?.data || []);
       setTotalPages(resp.data?.meta?.totalPages || 1);
     } catch (err) {

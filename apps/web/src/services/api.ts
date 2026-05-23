@@ -21,6 +21,7 @@ import {
 } from './http-clients';
 import { roleService, type RoleCreateRequest } from './role';
 import { stockMovementService } from './stock-movement';
+import { analyticsService } from './analytics';
 import { userService, type UserCreateRequest, type UserUpdateRequest } from './user';
 import { warehouseService, type WarehouseCreateRequest } from './warehouse';
 
@@ -151,3 +152,4 @@ export {
 };
 
 export { authAPI, inventoryAPI, aiAPI, gatewayAPI };
+export { analyticsService };

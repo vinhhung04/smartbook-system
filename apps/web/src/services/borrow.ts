@@ -1,4 +1,4 @@
-import { inventoryAPI } from './http-clients';
+import { gatewayAPI } from './http-clients';
 
 export type CustomerStatus = 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'INACTIVE';
 export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'READY_FOR_PICKUP' | 'CANCELLED' | 'EXPIRED' | 'CONVERTED_TO_LOAN';
@@ -224,85 +224,85 @@ function createIdempotencyHeaders(idempotencyKey?: string) {
 
 export const borrowService = {
   getCustomers: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/borrow/customers', { params });
+    const response = await gatewayAPI.get('/borrow/customers', { params });
     return response.data as PaginatedResponse<Customer>;
   },
 
   getCustomerById: async (id: string) => {
-    const response = await inventoryAPI.get(`/borrow/customers/${id}`);
+    const response = await gatewayAPI.get(`/borrow/customers/${id}`);
     return response.data as { data: Customer };
   },
 
   createCustomer: async (payload: CustomerPayload) => {
-    const response = await inventoryAPI.post('/borrow/customers', payload);
+    const response = await gatewayAPI.post('/borrow/customers', payload);
     return response.data as { data: Customer };
   },
 
   updateCustomer: async (id: string, payload: CustomerPayload) => {
-    const response = await inventoryAPI.patch(`/borrow/customers/${id}`, payload);
+    const response = await gatewayAPI.patch(`/borrow/customers/${id}`, payload);
     return response.data as { data: Customer };
   },
 
   getActiveMembership: async (id: string) => {
-    const response = await inventoryAPI.get(`/borrow/customers/${id}/membership/active`);
+    const response = await gatewayAPI.get(`/borrow/customers/${id}/membership/active`);
     return response.data as { data: MembershipEligibility };
   },
 
   getReservations: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/borrow/reservations', { params });
+    const response = await gatewayAPI.get('/borrow/reservations', { params });
     return response.data as PaginatedResponse<Reservation>;
   },
 
   searchVariants: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/api/borrow-integration/variants/search', { params });
+    const response = await gatewayAPI.get('/api/borrow-integration/variants/search', { params });
     return response.data as { data: VariantLookupItem[] };
   },
 
   searchWarehouses: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/api/borrow-integration/warehouses', { params });
+    const response = await gatewayAPI.get('/api/borrow-integration/warehouses', { params });
     return response.data as { data: WarehouseLookupItem[] };
   },
 
   getReservationById: async (id: string) => {
-    const response = await inventoryAPI.get(`/borrow/reservations/${id}`);
+    const response = await gatewayAPI.get(`/borrow/reservations/${id}`);
     return response.data as { data: Reservation };
   },
 
   createReservation: async (payload: ReservationPayload) => {
-    const response = await inventoryAPI.post('/borrow/reservations', payload, {
+    const response = await gatewayAPI.post('/borrow/reservations', payload, {
       headers: createIdempotencyHeaders(),
     });
     return response.data as { data: Reservation };
   },
 
   cancelReservation: async (id: string, idempotencyKey?: string) => {
-    const response = await inventoryAPI.patch(`/borrow/reservations/${id}/cancel`, {}, {
+    const response = await gatewayAPI.patch(`/borrow/reservations/${id}/cancel`, {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Reservation };
   },
 
   confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }) => {
-    const response = await inventoryAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {});
+    const response = await gatewayAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {});
     return response.data as { data: Reservation; idempotent?: boolean };
   },
 
   convertReservationToLoan: async (reservationId: string, idempotencyKey?: string) => {
-    const response = await inventoryAPI.post(`/borrow/reservations/${reservationId}/convert-to-loan`, {}, {
+    const response = await gatewayAPI.post(`/borrow/reservations/${reservationId}/convert-to-loan`, {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };
   },
 
   convertPickupCodeToLoan: async (pickupCode: string, idempotencyKey?: string) => {
-    const response = await inventoryAPI.post('/borrow/reservations/pickup/convert-to-loan', { pickup_code: pickupCode }, {
+    const response = await gatewayAPI.post('/borrow/reservations/pickup/convert-to-loan', { pickup_code: pickupCode }, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };
   },
 
   runExpiredReservationSweep: async (limit?: number) => {
-    const response = await inventoryAPI.post('/borrow/reservations/jobs/expire', { limit });
+    const response = await gatewayAPI.post('/borrow/reservations/jobs/expire', { limit });
     return response.data as {
       message: string;
       data: {
@@ -316,24 +316,24 @@ export const borrowService = {
   },
 
   createDirectLoan: async (payload: ReservationPayload, idempotencyKey?: string) => {
-    const response = await inventoryAPI.post('/borrow/loans/direct', payload, {
+    const response = await gatewayAPI.post('/borrow/loans/direct', payload, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };
   },
 
   getLoans: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/borrow/loans', { params });
+    const response = await gatewayAPI.get('/borrow/loans', { params });
     return response.data as PaginatedResponse<Loan>;
   },
 
   getRenewalRequests: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/borrow/loans/renewal-requests', { params });
+    const response = await gatewayAPI.get('/borrow/loans/renewal-requests', { params });
     return response.data as PaginatedResponse<RenewalRequest>;
   },
 
   reviewLoanRenewal: async (loanId: string, payload: { decision: 'APPROVE' | 'REJECT'; extension_days?: number; reason?: string }) => {
-    const response = await inventoryAPI.post(`/borrow/loans/${loanId}/renewals/review`, payload);
+    const response = await gatewayAPI.post(`/borrow/loans/${loanId}/renewals/review`, payload);
     return response.data as {
       message: string;
       data: {
@@ -347,29 +347,29 @@ export const borrowService = {
   },
 
   getLoanById: async (id: string) => {
-    const response = await inventoryAPI.get(`/borrow/loans/${id}`);
+    const response = await gatewayAPI.get(`/borrow/loans/${id}`);
     return response.data as { data: Loan };
   },
 
   returnLoan: async (id: string, payload?: { loan_item_id?: string; returned_to_location_id?: string; item_condition_on_return?: string; notes?: string; mark_lost?: boolean }, idempotencyKey?: string) => {
-    const response = await inventoryAPI.post(`/borrow/loans/${id}/return`, payload || {}, {
+    const response = await gatewayAPI.post(`/borrow/loans/${id}/return`, payload || {}, {
         headers: createIdempotencyHeaders(idempotencyKey),
       });
     return response.data as { data: Loan };
   },
 
   getFines: async (params?: Record<string, unknown>) => {
-    const response = await inventoryAPI.get('/borrow/fines', { params });
+    const response = await gatewayAPI.get('/borrow/fines', { params });
     return response.data as PaginatedResponse<Fine>;
   },
 
   getFineById: async (id: string) => {
-    const response = await inventoryAPI.get(`/borrow/fines/${id}`);
+    const response = await gatewayAPI.get(`/borrow/fines/${id}`);
     return response.data as { data: Fine };
   },
 
   recordFinePayment: async (id: string, payload: { amount: number; payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET'; transaction_reference?: string; note?: string }) => {
-    const response = await inventoryAPI.post(`/borrow/fines/${id}/payments`, payload);
+    const response = await gatewayAPI.post(`/borrow/fines/${id}/payments`, payload);
     return response.data as {
       message: string;
       data: {
@@ -384,27 +384,27 @@ export const borrowService = {
   },
 
   getMembershipPlans: async () => {
-    const response = await inventoryAPI.get('/borrow/membership-plans');
+    const response = await gatewayAPI.get('/borrow/membership-plans');
     return response.data;
   },
 
   createMembershipPlan: async (payload: Record<string, unknown>) => {
-    const response = await inventoryAPI.post('/borrow/membership-plans', payload);
+    const response = await gatewayAPI.post('/borrow/membership-plans', payload);
     return response.data;
   },
 
   updateMembershipPlan: async (id: string, payload: Record<string, unknown>) => {
-    const response = await inventoryAPI.patch(`/borrow/membership-plans/${id}`, payload);
+    const response = await gatewayAPI.patch(`/borrow/membership-plans/${id}`, payload);
     return response.data;
   },
 
   sendNotificationToCustomer: async (payload: { customer_id: string; subject: string; body: string }) => {
-    const response = await inventoryAPI.post('/borrow/notifications/send', payload);
+    const response = await gatewayAPI.post('/borrow/notifications/send', payload);
     return response.data;
   },
 
   waiveFine: async (id: string, payload: { amount?: number; note?: string }) => {
-    const response = await inventoryAPI.patch(`/borrow/fines/${id}/waive`, payload);
+    const response = await gatewayAPI.patch(`/borrow/fines/${id}/waive`, payload);
     return response.data as {
       message: string;
       data: {

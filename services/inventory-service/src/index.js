@@ -20,6 +20,7 @@ const outboundRoutes = require('./routes/outbound.routes');
 const supplierRoutes = require('./routes/supplier.routes');
 const receivingSmartRoutes = require('./routes/receiving-smart.routes');
 const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
+const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,10 @@ const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '8mb';
 app.use(cors());
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+
+app.get('/health', (_req, res) => {
+  res.json({ service: 'inventory-service', status: 'ok' });
+});
 
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
@@ -47,6 +52,7 @@ app.use('/api/outbound', outboundRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/receiving-smart', receivingSmartRoutes);
 app.use('/api/storage-suggestions', storageSuggestionRoutes);
+app.use('/api/purchase-orders', purchaseOrderRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
