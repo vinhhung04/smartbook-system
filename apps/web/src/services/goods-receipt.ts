@@ -3,6 +3,9 @@ import { inventoryAPI } from './http-clients';
 export interface GoodsReceipt {
   id: string;
   receipt_number: string;
+  purchase_order_id?: string | null;
+  po_number?: string | null;
+  source_type?: string | null;
   warehouse_id: string;
   warehouse_name?: string;
   warehouse_code?: string;
@@ -26,6 +29,7 @@ export interface GoodsReceiptItem {
 
 export interface GoodsReceiptCreateRequest {
   warehouse_id: string;
+  purchase_order_id?: string | null;
   items: GoodsReceiptItem[];
   note?: string;
 }

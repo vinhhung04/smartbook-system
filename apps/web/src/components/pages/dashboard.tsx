@@ -1,340 +1,471 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
 import {
-  BookOpen, Package, AlertTriangle, PackageX, FileText,
-  ScanBarcode, Plus, Sparkles, ArrowRight, Clock, TrendingUp,
-  RefreshCw, BookMarked, Receipt, Crown,
+  AlertTriangle,
+  ArrowRight,
+  BookMarked,
+  BookOpen,
+  Clock,
+  Crown,
+  FileText,
+  Package,
+  PackageCheck,
+  Receipt,
+  RefreshCw,
+  ShieldOff,
+  TicketCheck,
+  TrendingUp,
+  Warehouse,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  AreaChart, Area, PieChart, Pie, Cell,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { StatCard } from '@/components/ui/stat-card';
-import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { stockMovementService } from '@/services/stock-movement';
-import { bookService } from '@/services/book';
-import { goodsReceiptService } from '@/services/goods-receipt';
-import { borrowService } from '@/services/borrow';
-import { getApiErrorMessage } from '@/services/http-clients';
+import { LoadingOverlay } from '@/components/ui/loading-state';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatCard } from '@/components/ui/stat-card';
+import {
+  analyticsService,
+  type BorrowTrendItem,
+  type DashboardKpis,
+  type FineSummary,
+  type OverdueSummary,
+  type ReservationFunnel,
+  type TopBookItem,
+  type WarehouseStockRiskItem,
+} from '@/services/analytics';
+import { getApiErrorMessage, hasAnyPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 
-const PIE_COLORS = ['#6366f1', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#38bdf8', '#34d399', '#fbbf24'];
+const CHART_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
+
+type DashboardState = {
+  kpis: DashboardKpis;
+  trends: BorrowTrendItem[];
+  topBooks: TopBookItem[];
+  overdue: OverdueSummary;
+  fines: FineSummary;
+  stockRisk: WarehouseStockRiskItem[];
+  funnel: ReservationFunnel;
+};
+
+const emptyKpis: DashboardKpis = {
+  total_titles: 0,
+  total_copies: 0,
+  active_loans: 0,
+  overdue_loans: 0,
+  pending_reservations: 0,
+  confirmed_reservations: 0,
+  ready_for_pickup_reservations: 0,
+  pickup_codes_expiring_soon: 0,
+  unpaid_fine_amount: 0,
+  low_stock_variants: 0,
+  reservation_conversion_rate: 0,
+};
+
+const emptyOverdue: OverdueSummary = {
+  total_overdue_items: 0,
+  total_overdue_loans: 0,
+  average_overdue_days: 0,
+  oldest_overdue_days: 0,
+  items: [],
+};
+
+const emptyFines: FineSummary = {
+  total_unpaid: 0,
+  total_paid: 0,
+  total_waived: 0,
+  unpaid_count: 0,
+  paid_count: 0,
+  by_type: [],
+};
+
+const emptyFunnel: ReservationFunnel = {
+  total: 0,
+  pending: 0,
+  confirmed: 0,
+  ready_for_pickup: 0,
+  converted_to_loan: 0,
+  cancelled: 0,
+  expired: 0,
+  conversion_rate: 0,
+};
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function formatPercent(value: number) {
+  return `${Number(value || 0).toFixed(1)}%`;
+}
+
+function compactTitle(title: string, length = 22) {
+  return title.length > length ? `${title.slice(0, length)}...` : title;
+}
+
+function hasRealData(state: DashboardState | null) {
+  if (!state) return false;
+  const kpiTotal = Object.values(state.kpis).reduce((sum, value) => sum + Number(value || 0), 0);
+  return (
+    kpiTotal > 0 ||
+    state.trends.some((item) => item.loans || item.returns || item.reservations) ||
+    state.topBooks.length > 0 ||
+    state.stockRisk.length > 0 ||
+    state.funnel.total > 0
+  );
+}
 
 export function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [kpi, setKpi] = useState({
-    totalTitles: 0, totalUnits: 0, lowStock: 0, outOfStock: 0,
-    draftReceipts: 0, postedToday: 0, overdueBorrows: 0,
-    activeLoans: 0, totalCustomers: 0, totalReservations: 0, totalFines: 0,
-  });
-  const [recentMovements, setRecentMovements] = useState<any[]>([]);
-  const [topBooks, setTopBooks] = useState<{ name: string; loans: number }[]>([]);
-  const [loanTrend, setLoanTrend] = useState<{ date: string; count: number }[]>([]);
-  const [categoryDist, setCategoryDist] = useState<{ name: string; value: number }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardState | null>(null);
+  const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
 
   const loadDashboard = useCallback(async () => {
+    if (!canViewAnalytics) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const [bookResp, receiptResp, borrowResp, movementResp, reservationResp, finesResp] = await Promise.allSettled([
-        bookService.getAll(),
-        goodsReceiptService.getAll({ pageSize: 50 }),
-        borrowService.getLoans({ pageSize: 200 }),
-        stockMovementService.getAll({ pageSize: 5 }),
-        borrowService.getReservations({ pageSize: 50 }),
-        borrowService.getFines({ pageSize: 100 }),
+      setError(null);
+
+      const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel] = await Promise.all([
+        analyticsService.getDashboardKpis(),
+        analyticsService.getBorrowTrends({ granularity: 'day' }),
+        analyticsService.getTopBooks({ limit: 8 }),
+        analyticsService.getOverdueSummary(),
+        analyticsService.getFineSummary(),
+        analyticsService.getWarehouseStockRisk(),
+        analyticsService.getReservationFunnel(),
       ]);
 
-      let totalUnits = 0, totalTitles = 0, lowStock = 0, outOfStock = 0;
-      const books: any[] = [];
-      if (bookResp.status === 'fulfilled') {
-        const bks = Array.isArray(bookResp.value) ? bookResp.value : [];
-        books.push(...bks);
-        totalTitles = bks.length;
-        totalUnits = bks.reduce((sum: number, b: any) => sum + Number(b.quantity || 0), 0);
-        lowStock = bks.filter((b: any) => Number(b.quantity || 0) > 0 && Number(b.quantity || 0) <= 10).length;
-        outOfStock = bks.filter((b: any) => Number(b.quantity || 0) === 0).length;
-
-        const catMap: Record<string, number> = {};
-        bks.forEach((b: any) => { const c = b.category || 'Other'; catMap[c] = (catMap[c] || 0) + 1; });
-        setCategoryDist(Object.entries(catMap).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, value]) => ({ name, value })));
-      }
-
-      let draftReceipts = 0, postedToday = 0;
-      const today = new Date().toDateString();
-      if (receiptResp.status === 'fulfilled') {
-        const rawReceipts = receiptResp.value;
-        const receipts = Array.isArray(rawReceipts) ? rawReceipts : Array.isArray(rawReceipts?.data) ? rawReceipts.data : [];
-        draftReceipts = receipts.filter((r: any) => r.status === 'DRAFT').length;
-        postedToday = receipts.filter((r: any) => new Date(r.updated_at || r.created_at).toDateString() === today && r.status === 'POSTED').length;
-      }
-
-      let overdueBorrows = 0, activeLoans = 0;
-      const allLoans: any[] = [];
-      if (borrowResp.status === 'fulfilled') {
-        const loans = Array.isArray(borrowResp.value?.data) ? borrowResp.value.data : [];
-        allLoans.push(...loans);
-        overdueBorrows = loans.filter((l: any) => l.status === 'OVERDUE').length;
-        activeLoans = loans.filter((l: any) => ['BORROWED', 'OVERDUE'].includes(l.status)).length;
-
-        const bookLoanCount: Record<string, number> = {};
-        loans.forEach((l: any) => {
-          (l.loan_items || []).forEach((item: any) => {
-            const book = books.find((b: any) => b.variants?.some((v: any) => v.id === item.variant_id) || b.id === item.variant_id);
-            const title = book?.title || item.variant_id?.slice(0, 8) || 'Unknown';
-            bookLoanCount[title] = (bookLoanCount[title] || 0) + 1;
-          });
-        });
-        setTopBooks(Object.entries(bookLoanCount).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, loans]) => ({
-          name: name.length > 18 ? name.slice(0, 18) + '…' : name, loans,
-        })));
-
-        const trendMap: Record<string, number> = {};
-        const now = new Date();
-        for (let i = 29; i >= 0; i--) {
-          const d = new Date(now); d.setDate(d.getDate() - i);
-          trendMap[d.toISOString().slice(0, 10)] = 0;
-        }
-        loans.forEach((l: any) => {
-          const d = (l.borrow_date || l.created_at || '').slice(0, 10);
-          if (d in trendMap) trendMap[d]++;
-        });
-        setLoanTrend(Object.entries(trendMap).map(([date, count]) => ({ date: date.slice(5), count })));
-
-      }
-
-      let totalReservations = 0;
-      if (reservationResp.status === 'fulfilled') {
-        totalReservations = reservationResp.value?.meta?.total || (Array.isArray(reservationResp.value?.data) ? reservationResp.value.data.length : 0);
-      }
-
-      let totalFines = 0;
-      if (finesResp.status === 'fulfilled') {
-        const fines = Array.isArray(finesResp.value?.data) ? finesResp.value.data : [];
-        totalFines = fines.filter((f: any) => f.status === 'UNPAID' || f.status === 'PARTIALLY_PAID').reduce((s: number, f: any) => s + Number(f.amount || 0) - Number(f.waived_amount || 0), 0);
-      }
-
-      setKpi({ totalTitles, totalUnits, lowStock, outOfStock, draftReceipts, postedToday, overdueBorrows, activeLoans, totalCustomers: 0, totalReservations, totalFines });
-
-      if (movementResp.status === 'fulfilled') {
-        setRecentMovements(Array.isArray(movementResp.value) ? movementResp.value.slice(0, 5) : []);
-      }
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load dashboard'));
+      setDashboard({
+        kpis: kpis || emptyKpis,
+        trends: Array.isArray(trends) ? trends : [],
+        topBooks: Array.isArray(topBooks) ? topBooks : [],
+        overdue: overdue || emptyOverdue,
+        fines: fines || emptyFines,
+        stockRisk: Array.isArray(stockRisk) ? stockRisk : [],
+        funnel: funnel || emptyFunnel,
+      });
+    } catch (err) {
+      const message = getApiErrorMessage(err, 'Failed to load analytics dashboard.');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canViewAnalytics]);
 
-  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  const trendData = useMemo(
+    () =>
+      (dashboard?.trends || []).map((item) => ({
+        ...item,
+        label: item.date.length === 10 ? item.date.slice(5) : item.date,
+      })),
+    [dashboard?.trends],
+  );
+
+  const topBookData = useMemo(
+    () =>
+      (dashboard?.topBooks || []).map((item) => ({
+        ...item,
+        name: compactTitle(item.title),
+      })),
+    [dashboard?.topBooks],
+  );
+
+  const funnelData = useMemo(() => {
+    const funnel = dashboard?.funnel || emptyFunnel;
+    return [
+      { name: 'Pending', value: funnel.pending },
+      { name: 'Confirmed', value: funnel.confirmed },
+      { name: 'Ready', value: funnel.ready_for_pickup },
+      { name: 'Converted', value: funnel.converted_to_loan },
+      { name: 'Cancelled', value: funnel.cancelled },
+      { name: 'Expired', value: funnel.expired },
+    ];
+  }, [dashboard?.funnel]);
+
+  const kpis = dashboard?.kpis || emptyKpis;
+  const overdue = dashboard?.overdue || emptyOverdue;
+  const fines = dashboard?.fines || emptyFines;
+  const stockRisk = dashboard?.stockRisk || [];
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Hero Header */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.12)_0%,transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-60 h-60 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3" />
-        <div className="relative flex items-center justify-between gap-4">
-          <div className="text-white">
-            <h1 className="tracking-[-0.03em] text-white" style={{ fontWeight: 700, fontSize: 22 }}>SmartBook Dashboard</h1>
-            <p className="text-white/65 text-[13px] mt-1">
-              {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Tổng quan hệ thống
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Analytics Dashboard</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Real-time reporting from Inventory, Borrow, Reservation, Loan, Return and Fine data.
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-2.5">
-            <NavLink to="/orders/new" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-indigo-700 text-[13px] shadow-md hover:shadow-lg hover:bg-indigo-50 active:scale-[0.98] transition-all" style={{ fontWeight: 600 }}>
-              <ScanBarcode className="w-4 h-4" /> Nhập kho
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadDashboard()}
+              disabled={loading || !canViewAnalytics}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <NavLink
+              to="/reports"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
+            >
+              Reports <ArrowRight className="h-4 w-4" />
             </NavLink>
           </div>
         </div>
       </motion.div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        {[
-          { label: 'Đầu sách', value: kpi.totalTitles, icon: BookOpen, variant: 'default' as const },
-          { label: 'Tổng bản', value: kpi.totalUnits, icon: Package, variant: 'success' as const },
-          { label: 'Tồn thấp', value: kpi.lowStock, icon: AlertTriangle, variant: 'warning' as const },
-          { label: 'Hết hàng', value: kpi.outOfStock, icon: PackageX, variant: 'danger' as const },
-          { label: 'Đang mượn', value: kpi.activeLoans, icon: BookMarked, variant: 'info' as const },
-          { label: 'Quá hạn', value: kpi.overdueBorrows, icon: Clock, variant: 'danger' as const },
-          { label: 'Đặt trước', value: kpi.totalReservations, icon: FileText, variant: 'primary' as const },
-          { label: 'Phạt chờ thu', value: `${Math.round(kpi.totalFines / 1000)}K`, icon: Receipt, variant: 'warning' as const },
-        ].map((item, i) => (
-          <motion.div key={item.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-            <StatCard label={item.label} value={item.value} icon={item.icon} variant={item.variant} />
-          </motion.div>
-        ))}
-      </div>
+      {!canViewAnalytics ? (
+        <SectionCard>
+          <EmptyState
+            variant="no-permission"
+            icon={ShieldOff}
+            title="No analytics permission"
+            description="Your account cannot view analytics dashboards. Please use a staff, manager, or admin account."
+          />
+        </SectionCard>
+      ) : loading ? (
+        <SectionCard>
+          <LoadingOverlay />
+        </SectionCard>
+      ) : error ? (
+        <SectionCard>
+          <EmptyState
+            variant="error"
+            title="Unable to load analytics"
+            description={error}
+            action={
+              <button
+                type="button"
+                onClick={() => void loadDashboard()}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground"
+              >
+                <RefreshCw className="h-4 w-4" /> Retry
+              </button>
+            }
+          />
+        </SectionCard>
+      ) : (
+        <>
+          {!hasRealData(dashboard) && (
+            <SectionCard>
+              <EmptyState
+                variant="no-data"
+                title="No analytics data yet"
+                description="Once books, stock, reservations, loans and fines exist, this dashboard will populate automatically."
+              />
+            </SectionCard>
+          )}
 
-      {/* Quick Actions */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Nhập kho", icon: ScanBarcode, to: "/orders/new", style: "bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 text-white shadow-lg shadow-indigo-500/15" },
-            { label: "Thêm sách", icon: Plus, to: "/catalog", style: "bg-white text-blue-700 border border-blue-100 shadow-sm" },
-            { label: "AI Import", icon: Sparkles, to: "/ai-import", style: "bg-white text-cyan-700 border border-cyan-100 shadow-sm" },
-            { label: "Báo cáo", icon: TrendingUp, to: "/reports", style: "bg-white text-emerald-700 border border-emerald-100 shadow-sm" },
-          ].map((a) => (
-            <NavLink key={a.label} to={a.to} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-[13px] transition-all hover:shadow-md ${a.style}`} style={{ fontWeight: 550 }}>
-              <a.icon className="w-4.5 h-4.5" /> {a.label}
-            </NavLink>
-          ))}
-        </div>
-      </motion.div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+            <StatCard label="Titles" value={kpis.total_titles} icon={BookOpen} variant="default" />
+            <StatCard label="Copies" value={kpis.total_copies} icon={Package} variant="success" />
+            <StatCard label="Borrowed" value={kpis.active_loans} icon={BookMarked} variant="info" />
+            <StatCard label="Overdue" value={kpis.overdue_loans} icon={Clock} variant="danger" />
+            <StatCard label="Low stock" value={kpis.low_stock_variants} icon={AlertTriangle} variant="warning" />
+            <StatCard label="Unpaid fines" value={formatMoney(kpis.unpaid_fine_amount)} icon={Receipt} variant="warning" />
+            <StatCard label="Pending" value={kpis.pending_reservations} icon={FileText} variant="primary" />
+            <StatCard label="Confirmed" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" />
+            <StatCard label="Ready" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" />
+            <StatCard label="Pickup expiring" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" />
+            <StatCard label="Convert rate" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
+            <StatCard label="Overdue items" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" />
+          </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-2">
-          <SectionCard title="Xu hướng mượn sách" subtitle="30 ngày gần đây">
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={loanTrend} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <defs>
-                  <linearGradient id="loanGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={28} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #e2e4ed' }} />
-                <Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} fill="url(#loanGrad)" name="Lượt mượn" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </SectionCard>
-        </motion.div>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <section className="xl:col-span-2">
+              <SectionCard title="Borrow trends" subtitle="Loans, returns and reservations in the latest date range" icon={TrendingUp}>
+                {trendData.length ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+                      <defs>
+                        <linearGradient id="loansGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2563eb" stopOpacity={0.28} />
+                          <stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={32} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Area type="monotone" dataKey="loans" stroke="#2563eb" fill="url(#loansGrad)" strokeWidth={2} name="Loans" />
+                      <Area type="monotone" dataKey="returns" stroke="#10b981" fill="#10b98122" strokeWidth={2} name="Returns" />
+                      <Area type="monotone" dataKey="reservations" stroke="#f59e0b" fill="#f59e0b22" strokeWidth={2} name="Reservations" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <EmptyState variant="no-data" title="No trend data" description="No loan or reservation activity in the selected range." />
+                )}
+              </SectionCard>
+            </section>
 
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <SectionCard title="Phân bố thể loại" subtitle="Tỷ lệ sách theo thể loại">
-            {categoryDist.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={categoryDist} cx="50%" cy="50%" outerRadius={85} innerRadius={45} dataKey="value"
-                    label={({ name, percent }) => `${name.length > 10 ? name.slice(0, 10) + '…' : name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                    {categoryDist.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '1px solid #e2e8f0' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Thêm sách để xem phân bố." />
-            )}
-          </SectionCard>
-        </motion.div>
-      </div>
+            <SectionCard title="Reservation funnel" subtitle={`Conversion ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
+              {funnelData.some((item) => item.value > 0) ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={28} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Reservations">
+                      {funnelData.map((_, index) => (
+                        <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState variant="no-data" title="No reservations" description="Reservation funnel will appear after customer reservations are created." />
+              )}
+            </SectionCard>
+          </div>
 
-      {/* Top Books + Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <SectionCard title="Top sách mượn nhiều nhất" subtitle="Xếp hạng theo lượt mượn" icon={Crown}>
-            {topBooks.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={topBooks} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} />
-                  <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11, fill: '#475569' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '1px solid #e2e8f0' }} />
-                  <Bar dataKey="loans" radius={[0, 8, 8, 0]} name="Lượt mượn">
-                    {topBooks.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Dữ liệu mượn sách sẽ hiển thị ở đây." />
-            )}
-          </SectionCard>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <div className="space-y-4">
-            <SectionCard title="Cảnh báo" subtitle="Cần chú ý">
-              <div className="space-y-2">
-                {[
-                  { message: `${kpi.lowStock} sách tồn kho thấp (≤10)`, type: 'warning' as const, icon: AlertTriangle, bg: 'bg-amber-50/80 border-amber-100/60', color: 'text-amber-500' },
-                  { message: `${kpi.overdueBorrows} phiếu mượn quá hạn`, type: 'danger' as const, icon: Clock, bg: 'bg-rose-50/80 border-rose-100/60', color: 'text-rose-500' },
-                  { message: `${kpi.draftReceipts} phiếu nhập chờ duyệt`, type: 'info' as const, icon: FileText, bg: 'bg-sky-50/80 border-sky-100/60', color: 'text-sky-500' },
-                  { message: `${kpi.outOfStock} sách hết hàng`, type: 'danger' as const, icon: PackageX, bg: 'bg-rose-50/80 border-rose-100/60', color: 'text-rose-500' },
-                ].map((a, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}
-                    className={`flex items-start gap-2.5 p-3 rounded-xl border ${a.bg}`}>
-                    <a.icon className={`w-4 h-4 mt-0.5 shrink-0 ${a.color}`} />
-                    <span className="text-[12px]" style={{ lineHeight: 1.5 }}>{a.message}</span>
-                  </motion.div>
-                ))}
-              </div>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title="Top borrowed books" subtitle="Ranked by loan item count" icon={Crown}>
+              {topBookData.length ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: '#334155' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                    <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Borrow count">
+                      {topBookData.map((_, index) => (
+                        <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyState variant="no-data" title="No borrowed books" description="Books will be ranked after loan transactions exist." />
+              )}
             </SectionCard>
 
-            <div className="relative overflow-hidden rounded-xl border border-cyan-100/60 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-50/90 via-blue-50/50 to-violet-50/40" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-cyan-500/20 to-violet-500/15 flex items-center justify-center border border-cyan-200/40">
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-600" />
-                  </div>
-                  <span className="text-[12px] text-cyan-700" style={{ fontWeight: 650 }}>AI Insights</span>
+            <SectionCard title="Fine summary" subtitle="Unpaid, paid and waived amounts" icon={Receipt}>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-[11px] uppercase text-muted-foreground">Unpaid</p>
+                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
                 </div>
-                <p className="text-[12px] text-slate-600" style={{ lineHeight: 1.6 }}>
-                  {kpi.lowStock > 0 ? `⚠️ ${kpi.lowStock} sách cần nhập thêm. ` : ''}
-                  {kpi.overdueBorrows > 0 ? `📋 ${kpi.overdueBorrows} phiếu mượn quá hạn cần xử lý. ` : ''}
-                  {kpi.totalFines > 0 ? `💰 ${Math.round(kpi.totalFines).toLocaleString()}đ phạt chưa thu. ` : ''}
-                  Xem AI gợi ý để tối ưu hóa thư viện.
-                </p>
-                <NavLink to="/recommendations" className="inline-flex items-center gap-1 text-[11px] text-indigo-600 mt-3 hover:underline" style={{ fontWeight: 550 }}>
-                  Xem gợi ý AI <ArrowRight className="w-3 h-3" />
-                </NavLink>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-[11px] uppercase text-muted-foreground">Paid</p>
+                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_paid)}</p>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-[11px] uppercase text-muted-foreground">Waived</p>
+                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_waived)}</p>
+                </div>
               </div>
-            </div>
+              <div className="mt-4 space-y-2">
+                {fines.by_type.length ? (
+                  fines.by_type.map((item) => (
+                    <div key={item.fine_type} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                      <div>
+                        <p className="text-[13px] font-medium">{item.fine_type}</p>
+                        <p className="text-[12px] text-muted-foreground">{item.count} fines</p>
+                      </div>
+                      <p className="text-[13px] font-semibold">{formatMoney(item.amount)}</p>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState variant="no-data" title="No fines" description="Fine breakdown will appear when fines are issued." className="py-8" />
+                )}
+              </div>
+            </SectionCard>
           </div>
-        </motion.div>
-      </div>
 
-      {/* Recent Stock Movements */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-        <SectionCard title="Biến động kho gần đây" subtitle="Cập nhật mới nhất"
-          actions={
-            <div className="flex items-center gap-2">
-              <button onClick={() => void loadDashboard()} className="inline-flex items-center gap-1.5 h-8 rounded-lg border border-input bg-background px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" style={{ fontWeight: 500 }}>
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Làm mới
-              </button>
-              <NavLink to="/movements" className="text-[12px] text-primary font-medium hover:underline">Xem tất cả</NavLink>
-            </div>
-          }>
-          {recentMovements.length === 0 ? (
-            <EmptyState variant="no-data" title="Chưa có biến động" description="Dữ liệu kho sẽ hiển thị ở đây." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {['ID', 'Sách', 'Loại', 'SL', 'Kho', 'Thời gian'].map((h, i) => (
-                      <th key={h} className={`${i === 5 ? 'text-right' : 'text-left'} text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3`} style={{ fontWeight: 550 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentMovements.map((m, i) => (
-                    <motion.tr key={m.id || i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                      <td className="px-5 py-3.5 text-[13px] font-mono" style={{ fontWeight: 550 }}>{m.id ? String(m.id).slice(0, 8) : `SM-${String(i + 1).padStart(3, '0')}`}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{m.book_title || m.reference_type || '-'}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge label={m.movement_type || m.type || 'Transfer'} variant={['INBOUND', 'inbound'].includes(m.movement_type || m.type) ? 'success' : ['OUTBOUND', 'outbound'].includes(m.movement_type || m.type) ? 'danger' : 'info'} dot />
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px] font-mono" style={{ fontWeight: 550 }}>{m.quantity > 0 ? `+${m.quantity}` : m.quantity}</td>
-                      <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{m.warehouse_name || '-'}</td>
-                      <td className="px-5 py-3.5 text-[12px] text-muted-foreground text-right">{m.created_at ? new Date(m.created_at).toLocaleString('vi-VN') : '-'}</td>
-                    </motion.tr>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <SectionCard title="Warehouse stock risk" subtitle="Low stock and out of stock variants by warehouse" icon={Warehouse}>
+              {stockRisk.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-[13px]">
+                    <thead className="text-[11px] uppercase text-muted-foreground">
+                      <tr className="border-b border-border">
+                        <th className="py-2 pr-3 font-medium">Warehouse</th>
+                        <th className="py-2 pr-3 font-medium">Low</th>
+                        <th className="py-2 pr-3 font-medium">Out</th>
+                        <th className="py-2 pr-3 font-medium">Available</th>
+                        <th className="py-2 pr-3 font-medium">Reserved</th>
+                        <th className="py-2 pr-3 font-medium">Borrowed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockRisk.map((item) => (
+                        <tr key={item.warehouse_id} className="border-b border-border/60 last:border-0">
+                          <td className="py-3 pr-3 font-medium">{item.warehouse_name}</td>
+                          <td className="py-3 pr-3 text-amber-700">{item.low_stock_variants}</td>
+                          <td className="py-3 pr-3 text-rose-700">{item.out_of_stock_variants}</td>
+                          <td className="py-3 pr-3">{item.total_available_qty}</td>
+                          <td className="py-3 pr-3">{item.total_reserved_qty}</td>
+                          <td className="py-3 pr-3">{item.total_borrowed_qty}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState variant="no-data" title="No warehouse stock" description="Stock risk will appear after inventory balances are available." />
+              )}
+            </SectionCard>
+
+            <SectionCard title="Overdue loans" subtitle={`Average ${overdue.average_overdue_days} days overdue`} icon={Clock}>
+              {overdue.items.length ? (
+                <div className="space-y-2">
+                  {overdue.items.slice(0, 6).map((item) => (
+                    <div key={item.loan_id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium">{item.loan_number}</p>
+                        <p className="truncate text-[12px] text-muted-foreground">{item.customer_name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-semibold text-rose-700">{item.overdue_days} days</p>
+                        <p className="text-[12px] text-muted-foreground">{item.due_date ? item.due_date.slice(0, 10) : 'No due date'}</p>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      </motion.div>
+                </div>
+              ) : (
+                <EmptyState variant="no-data" title="No overdue loans" description="Great: there are no overdue loan items right now." />
+              )}
+            </SectionCard>
+          </div>
+        </>
+      )}
     </div>
   );
 }

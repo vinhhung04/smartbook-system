@@ -204,6 +204,7 @@ async function main() {
     'inventory.catalog.read', 'inventory.stock.read', 'inventory.stock.write',
     'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute',
     'borrow.customers.read', 'borrow.loans.read', 'borrow.loans.write',
+    'analytics.reports.view',
   ];
   for (const code of staffPermCodes) {
     if (permMap[code]) {

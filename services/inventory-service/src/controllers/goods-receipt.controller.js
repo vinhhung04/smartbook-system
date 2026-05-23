@@ -20,6 +20,154 @@ function createReceiptNumber(baseTimestamp) {
   return `GR-${baseTimestamp}-${suffix}`;
 }
 
+function calculatePoStatus(totalOrderedQty, totalReceivedQty) {
+  if (totalReceivedQty <= 0) return "APPROVED";
+  if (totalReceivedQty >= totalOrderedQty) return "RECEIVED";
+  return "PARTIALLY_RECEIVED";
+}
+
+function aggregateQuantitiesByVariant(items) {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = String(item.variant_id);
+    map.set(key, Number(map.get(key) || 0) + Number(item.quantity || 0));
+  });
+  return map;
+}
+
+async function getPoTotals(tx, purchaseOrderId) {
+  const items = await tx.purchase_order_items.findMany({
+    where: { purchase_order_id: purchaseOrderId },
+    select: { ordered_qty: true, received_qty: true },
+  });
+  return items.reduce(
+    (acc, item) => {
+      acc.total_ordered_qty += Number(item.ordered_qty || 0);
+      acc.total_received_qty += Number(item.received_qty || 0);
+      return acc;
+    },
+    { total_ordered_qty: 0, total_received_qty: 0 },
+  );
+}
+
+async function updatePurchaseOrderStatusFromTotals(tx, purchaseOrderId) {
+  const totals = await getPoTotals(tx, purchaseOrderId);
+  const nextStatus = calculatePoStatus(
+    totals.total_ordered_qty,
+    totals.total_received_qty,
+  );
+  await tx.purchase_orders.update({
+    where: { id: purchaseOrderId },
+    data: { status: nextStatus, updated_at: new Date() },
+  });
+  return { ...totals, status: nextStatus };
+}
+
+async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
+  if (!goodsReceipt.purchase_order_id) return;
+
+  const receiptItems = await tx.goods_receipt_items.findMany({
+    where: { goods_receipt_id: goodsReceipt.id },
+    select: { variant_id: true, quantity: true },
+  });
+  const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
+  const variantIds = Array.from(qtyByVariant.keys());
+
+  const poItems = await tx.purchase_order_items.findMany({
+    where: {
+      purchase_order_id: goodsReceipt.purchase_order_id,
+      variant_id: { in: variantIds },
+    },
+    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true },
+  });
+
+  if (poItems.length !== variantIds.length) {
+    throw new Error("PO_RECEIPT_VARIANT_MISMATCH");
+  }
+
+  for (const poItem of poItems) {
+    const receiptQty = Number(qtyByVariant.get(String(poItem.variant_id)) || 0);
+    const nextReceived = Number(poItem.received_qty || 0) + receiptQty;
+    if (nextReceived > Number(poItem.ordered_qty || 0)) {
+      throw new Error("PO_RECEIPT_OVER_RECEIVED");
+    }
+    await tx.purchase_order_items.update({
+      where: { id: poItem.id },
+      data: { received_qty: { increment: receiptQty } },
+    });
+  }
+
+  const totals = await updatePurchaseOrderStatusFromTotals(
+    tx,
+    goodsReceipt.purchase_order_id,
+  );
+
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: userId,
+      action_name: "PURCHASE_ORDER_RECEIVED_AGAINST_GR",
+      entity_type: "PURCHASE_ORDER",
+      entity_id: goodsReceipt.purchase_order_id,
+      after_data: {
+        goods_receipt_id: goodsReceipt.id,
+        receipt_number: goodsReceipt.receipt_number,
+        total_received_qty: totals.total_received_qty,
+        total_ordered_qty: totals.total_ordered_qty,
+        status: totals.status,
+      },
+    },
+  });
+}
+
+async function reversePurchaseOrderReceipt(tx, goodsReceipt, userId) {
+  if (!goodsReceipt.purchase_order_id) return;
+
+  const receiptItems = await tx.goods_receipt_items.findMany({
+    where: { goods_receipt_id: goodsReceipt.id },
+    select: { variant_id: true, quantity: true },
+  });
+  const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
+  const variantIds = Array.from(qtyByVariant.keys());
+
+  const poItems = await tx.purchase_order_items.findMany({
+    where: {
+      purchase_order_id: goodsReceipt.purchase_order_id,
+      variant_id: { in: variantIds },
+    },
+    select: { id: true, variant_id: true, received_qty: true },
+  });
+
+  for (const poItem of poItems) {
+    const receiptQty = Number(qtyByVariant.get(String(poItem.variant_id)) || 0);
+    const currentReceived = Number(poItem.received_qty || 0);
+    await tx.purchase_order_items.update({
+      where: { id: poItem.id },
+      data: { received_qty: Math.max(0, currentReceived - receiptQty) },
+    });
+  }
+
+  const totals = await updatePurchaseOrderStatusFromTotals(
+    tx,
+    goodsReceipt.purchase_order_id,
+  );
+
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: userId,
+      action_name: "PURCHASE_ORDER_RECEIPT_CANCELLED",
+      entity_type: "PURCHASE_ORDER",
+      entity_id: goodsReceipt.purchase_order_id,
+      after_data: {
+        goods_receipt_id: goodsReceipt.id,
+        receipt_number: goodsReceipt.receipt_number,
+        total_received_qty: totals.total_received_qty,
+        total_ordered_qty: totals.total_ordered_qty,
+        status: totals.status,
+      },
+    },
+  });
+}
+
 async function resolveVariantIdByIsbn13(tx, isbn13) {
   if (!isbn13) return null;
 
@@ -48,6 +196,12 @@ async function getGoodsReceipts(req, res) {
             code: true,
           },
         },
+        purchase_orders: {
+          select: {
+            id: true,
+            po_number: true,
+          },
+        },
         goods_receipt_items: {
           select: {
             id: true,
@@ -67,6 +221,9 @@ async function getGoodsReceipts(req, res) {
       return {
         id: receipt.id,
         receipt_number: receipt.receipt_number,
+        purchase_order_id: receipt.purchase_order_id,
+        po_number: receipt.purchase_orders?.po_number || null,
+        source_type: receipt.source_type,
         warehouse_id: receipt.warehouse_id,
         warehouse_name: receipt.warehouses?.name || null,
         warehouse_code: receipt.warehouses?.code || null,
@@ -104,6 +261,13 @@ async function getGoodsReceiptById(req, res) {
             id: true,
             name: true,
             code: true,
+          },
+        },
+        purchase_orders: {
+          select: {
+            id: true,
+            po_number: true,
+            status: true,
           },
         },
         goods_receipt_items: {
@@ -159,6 +323,9 @@ async function getGoodsReceiptById(req, res) {
     return res.json({
       id: receipt.id,
       receipt_number: receipt.receipt_number,
+      purchase_order_id: receipt.purchase_order_id,
+      po_number: receipt.purchase_orders?.po_number || null,
+      source_type: receipt.source_type,
       warehouse_id: receipt.warehouse_id,
       warehouse_name: receipt.warehouses?.name || null,
       warehouse_code: receipt.warehouses?.code || null,
@@ -179,16 +346,16 @@ async function getGoodsReceiptById(req, res) {
 }
 
 async function createGoodsReceipt(req, res) {
-  const { warehouse_id, note, items } = req.body;
+  const { warehouse_id, note, items, purchase_order_id } = req.body;
   const userId = req.user?.id;
 
   if (!userId) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  if (!warehouse_id || !Array.isArray(items) || items.length === 0) {
+  if ((!warehouse_id && !purchase_order_id) || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      message: "warehouse_id and non-empty items are required",
+      message: "warehouse_id (or purchase_order_id) and non-empty items are required",
     });
   }
 
@@ -220,8 +387,36 @@ async function createGoodsReceipt(req, res) {
     const baseTimestamp = Date.now();
 
     const result = await prisma.$transaction(async (tx) => {
+      let linkedPo = null;
+      let effectiveWarehouseId = warehouse_id;
+      if (purchase_order_id) {
+        linkedPo = await tx.purchase_orders.findUnique({
+          where: { id: purchase_order_id },
+          include: {
+            purchase_order_items: {
+              select: {
+                id: true,
+                variant_id: true,
+                ordered_qty: true,
+                received_qty: true,
+              },
+            },
+          },
+        });
+        if (!linkedPo) {
+          throw new Error("PURCHASE_ORDER_NOT_FOUND");
+        }
+        if (!["APPROVED", "PARTIALLY_RECEIVED"].includes(linkedPo.status)) {
+          throw new Error("PURCHASE_ORDER_NOT_RECEIVABLE");
+        }
+        if (warehouse_id && warehouse_id !== linkedPo.warehouse_id) {
+          throw new Error("PURCHASE_ORDER_WAREHOUSE_MISMATCH");
+        }
+        effectiveWarehouseId = linkedPo.warehouse_id;
+      }
+
       const warehouse = await tx.warehouses.findUnique({
-        where: { id: warehouse_id },
+        where: { id: effectiveWarehouseId },
       });
       if (!warehouse) {
         throw new Error("WAREHOUSE_NOT_FOUND");
@@ -271,7 +466,7 @@ async function createGoodsReceipt(req, res) {
         const locations = await tx.locations.findMany({
           where: {
             id: { in: locationIds },
-            warehouse_id,
+            warehouse_id: effectiveWarehouseId,
           },
           select: { id: true },
         });
@@ -281,10 +476,32 @@ async function createGoodsReceipt(req, res) {
         }
       }
 
+      if (linkedPo) {
+        const poItemsByVariant = new Map();
+        linkedPo.purchase_order_items.forEach((item) => {
+          poItemsByVariant.set(String(item.variant_id), item);
+        });
+        const qtyByVariant = aggregateQuantitiesByVariant(normalizedItems);
+        for (const [variantId, quantity] of qtyByVariant.entries()) {
+          const poItem = poItemsByVariant.get(variantId);
+          if (!poItem) {
+            throw new Error("PURCHASE_ORDER_ITEM_MISMATCH");
+          }
+          const remainingQty =
+            Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
+          if (quantity > remainingQty) {
+            throw new Error("PURCHASE_ORDER_OVER_RECEIVED");
+          }
+        }
+      }
+
       const goodsReceipt = await tx.goods_receipts.create({
         data: {
           receipt_number: createReceiptNumber(baseTimestamp),
-          warehouse_id,
+          warehouse_id: effectiveWarehouseId,
+          purchase_order_id: linkedPo?.id || null,
+          source_type: linkedPo ? "PURCHASE_ORDER" : "MANUAL",
+          source_reference_id: linkedPo?.id || null,
           status: "DRAFT",
           received_by_user_id: userId,
           note: note || null,
@@ -334,6 +551,29 @@ async function createGoodsReceipt(req, res) {
   } catch (error) {
     if (error.message === "WAREHOUSE_NOT_FOUND") {
       return res.status(404).json({ message: "Warehouse not found" });
+    }
+    if (error.message === "PURCHASE_ORDER_NOT_FOUND") {
+      return res.status(404).json({ message: "Purchase order not found" });
+    }
+    if (error.message === "PURCHASE_ORDER_NOT_RECEIVABLE") {
+      return res
+        .status(400)
+        .json({ message: "Purchase order must be APPROVED or PARTIALLY_RECEIVED" });
+    }
+    if (error.message === "PURCHASE_ORDER_WAREHOUSE_MISMATCH") {
+      return res
+        .status(400)
+        .json({ message: "warehouse_id must match purchase order warehouse" });
+    }
+    if (error.message === "PURCHASE_ORDER_ITEM_MISMATCH") {
+      return res
+        .status(400)
+        .json({ message: "One or more receipt variants do not belong to the purchase order" });
+    }
+    if (error.message === "PURCHASE_ORDER_OVER_RECEIVED") {
+      return res
+        .status(400)
+        .json({ message: "Cannot receive more than remaining purchase order quantity" });
     }
     if (error.message === "INVALID_VARIANTS") {
       return res
@@ -753,12 +993,14 @@ async function updateGoodsReceipt(req, res) {
         if (existing.source_type === "TRANSFER") {
           await postTransferReceiptToReceiving(tx, updated, userId);
         } else {
+          await applyPurchaseOrderReceipt(tx, updated, userId);
           await postDraftGoodsReceipt(tx, updated, userId);
         }
       }
 
       if (targetStatus === "CANCELLED" && existing.status === "POSTED") {
         await cancelStockMovements(tx, id);
+        await reversePurchaseOrderReceipt(tx, updated, userId);
       }
 
       return { data: updated };
@@ -784,6 +1026,16 @@ async function updateGoodsReceipt(req, res) {
         .json({
           message: "Receipt contains locations outside the selected warehouse",
         });
+    }
+    if (error.message === "PO_RECEIPT_VARIANT_MISMATCH") {
+      return res
+        .status(400)
+        .json({ message: "Receipt contains variants outside the linked purchase order" });
+    }
+    if (error.message === "PO_RECEIPT_OVER_RECEIVED") {
+      return res
+        .status(400)
+        .json({ message: "Cannot post receipt because it exceeds remaining purchase order quantity" });
     }
     return res.status(500).json({ message: "Internal server error" });
   }

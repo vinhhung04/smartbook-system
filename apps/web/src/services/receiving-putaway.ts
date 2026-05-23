@@ -88,12 +88,7 @@ export const receivingPutawayService = {
         barcode,
       },
     });
-    return response.data as {
-      id: string;
-      location_code: string;
-      location_type: string;
-      lookup_match_field?: 'barcode' | 'location_code';
-    };
+    return response.data as { id: string; location_code: string; location_type: string };
   },
 
   lookupVariantByIsbn13: async (isbn13: string) => {

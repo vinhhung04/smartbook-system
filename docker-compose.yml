@@ -106,6 +106,22 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  analytics-service:
+    build: ./services/analytics-service
+    container_name: analytics-service
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - INVENTORY_DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
+      - BORROW_DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
   ai-service:
     build: ./services/ai-service
     container_name: ai-service
@@ -115,6 +131,9 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
+      - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
+      - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
       # Mặc định là llama3 (LLM text) thay vì llava — llava là vision model, không phù hợp cho tóm tắt văn bản
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
@@ -138,6 +157,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:3002
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - BORROW_SERVICE_URL=http://borrow-service:3005
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AI_SERVICE_URL=http://ai-service:8000
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
@@ -145,6 +165,7 @@ services:
       - auth-service
       - inventory-service
       - borrow-service
+      - analytics-service
       - ai-service
 
   smartbook-ui:
@@ -162,6 +183,7 @@ services:
       - inventory-service
       - auth-service
       - borrow-service
+      - analytics-service
 
   ollama:
     image: ollama/ollama:latest
