@@ -29,7 +29,7 @@ function mapBookSummary(book) {
 
   const quantity = variants.reduce((bookSum, variant) => {
     const stockQty = (variant.stock_balances || []).reduce((sum, stock) => {
-      const currentQty = stock.available_qty || 0;
+      const currentQty = stock.on_hand_qty || 0;
 
       if (currentQty > 0) {
         const locationCode = stock.locations?.location_code || '-';

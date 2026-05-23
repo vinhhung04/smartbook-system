@@ -1,6 +1,5 @@
 import { formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
-import { QRCode } from '@/components/ui/qr-code';
 
 interface ReservationItemProps {
   item: any;
@@ -9,9 +8,8 @@ interface ReservationItemProps {
 
 export function ReservationItem({ item, onCancel }: ReservationItemProps) {
   const status = String(item.status || '').toUpperCase();
-  const canCancel = status === 'PENDING' || status === 'CONFIRMED' || status === 'READY_FOR_PICKUP';
+  const canCancel = status === 'PENDING';
   const isReady = status === 'READY_FOR_PICKUP';
-  const pickupCode = String(item.pickup_code || '').trim();
   const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
   const hoursToExpire = expiresAt ? Math.floor((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000)) : null;
   const isExpiringSoon = status === 'PENDING' && hoursToExpire !== null && hoursToExpire >= 0 && hoursToExpire <= 72;
@@ -38,19 +36,6 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
           </button>
         </div>
       </div>
-
-      {isReady && pickupCode ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-[10px] border border-cyan-200 bg-white/80 p-3 sm:flex-row sm:items-center">
-          <div className="w-fit rounded-[8px] border border-slate-200 bg-white p-2">
-            <QRCode value={`SMARTBOOK:PICKUP:${pickupCode}`} size={112} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.04em] text-cyan-700" style={{ fontWeight: 700 }}>Pickup code</div>
-            <div className="mt-1 break-all font-mono text-lg text-slate-950" style={{ fontWeight: 800 }}>{pickupCode}</div>
-            <div className="mt-1 text-[12px] text-slate-500">Valid until {formatDateTime(item.pickup_code_expires_at || item.expires_at)}</div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

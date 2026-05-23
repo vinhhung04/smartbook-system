@@ -5,7 +5,6 @@ const TEMPLATE_TO_EVENT = {
   RESERVATION_CREATED: 'reservation:status_changed',
   RESERVATION_CONFIRMED: 'reservation:status_changed',
   RESERVATION_CANCELLED: 'reservation:status_changed',
-  RESERVATION_EXPIRED: 'reservation:status_changed',
   LOAN_CREATED: 'loan:status_changed',
   LOAN_RETURNED: 'loan:status_changed',
   LOAN_OVERDUE: 'loan:status_changed',

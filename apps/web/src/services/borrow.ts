@@ -60,10 +60,6 @@ export interface Reservation {
   status: ReservationStatus;
   reserved_at: string;
   expires_at: string;
-  pickup_code: string | null;
-  pickup_code_issued_at: string | null;
-  pickup_code_expires_at: string | null;
-  pickup_code_used_at: string | null;
   notes: string | null;
   created_by_user_id: string | null;
   updated_at: string;
@@ -282,37 +278,11 @@ export const borrowService = {
     return response.data as { data: Reservation };
   },
 
-  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }) => {
-    const response = await inventoryAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {});
-    return response.data as { data: Reservation; idempotent?: boolean };
-  },
-
   convertReservationToLoan: async (reservationId: string, idempotencyKey?: string) => {
     const response = await inventoryAPI.post(`/borrow/reservations/${reservationId}/convert-to-loan`, {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
     return response.data as { data: Loan; idempotent?: boolean };
-  },
-
-  convertPickupCodeToLoan: async (pickupCode: string, idempotencyKey?: string) => {
-    const response = await inventoryAPI.post('/borrow/reservations/pickup/convert-to-loan', { pickup_code: pickupCode }, {
-      headers: createIdempotencyHeaders(idempotencyKey),
-    });
-    return response.data as { data: Loan; idempotent?: boolean };
-  },
-
-  runExpiredReservationSweep: async (limit?: number) => {
-    const response = await inventoryAPI.post('/borrow/reservations/jobs/expire', { limit });
-    return response.data as {
-      message: string;
-      data: {
-        scanned: number;
-        expired: number;
-        skipped: number;
-        failed: number;
-        errors: Array<{ reservation_id: string; message: string }>;
-      };
-    };
   },
 
   createDirectLoan: async (payload: ReservationPayload, idempotencyKey?: string) => {

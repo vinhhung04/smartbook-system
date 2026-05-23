@@ -22,7 +22,6 @@ export interface CustomerProfile {
 
 export interface MembershipInfo {
   customer_id: string;
-  customer_name?: string;
   membership_id: string;
   card_number?: string;
   plan_id: string;
@@ -32,7 +31,6 @@ export interface MembershipInfo {
     max_active_loans: number;
     max_loan_days: number;
     max_renewal_count: number;
-    max_active_reservations?: number;
     reservation_hold_hours: number;
     fine_per_day: number;
     lost_item_fee_multiplier: number;
