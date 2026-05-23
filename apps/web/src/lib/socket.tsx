@@ -4,7 +4,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useCallback,
   type ReactNode,
 } from 'react';
 import { io, type Socket } from 'socket.io-client';

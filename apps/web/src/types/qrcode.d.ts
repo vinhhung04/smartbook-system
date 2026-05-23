@@ -9,15 +9,15 @@ declare module 'qrcode' {
     };
   }
 
-  function toCanvas(
-    canvas: HTMLCanvasElement,
-    text: string,
-    options?: QRCodeToCanvasOptions,
-  ): Promise<void>;
+  interface QRCodeModule {
+    toCanvas(
+      canvas: HTMLCanvasElement,
+      text: string,
+      options?: QRCodeToCanvasOptions,
+    ): Promise<void>;
+  }
 
-  const QRCode: {
-    toCanvas: typeof toCanvas;
-  };
+  const QRCode: QRCodeModule;
 
   export default QRCode;
 }

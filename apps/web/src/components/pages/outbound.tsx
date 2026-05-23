@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, ScanLine, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { motion } from 'motion/react';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';

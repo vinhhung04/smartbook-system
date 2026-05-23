@@ -52,7 +52,7 @@ export function AuditTrailPage() {
       const resp = await gatewayAPI.get('/borrow/audit-logs', { params });
       setLogs(resp.data?.data || []);
       setTotalPages(resp.data?.meta?.totalPages || 1);
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to load audit logs');
     } finally {
       setLoading(false);
