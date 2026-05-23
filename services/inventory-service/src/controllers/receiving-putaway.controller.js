@@ -348,29 +348,50 @@ async function getCompartmentCandidates(req, res) {
 
 async function lookupCompartmentByBarcode(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
-  const barcode = normalizeText(req.query.barcode);
+  const scannedInput = normalizeText(req.query.barcode);
+  const normalizedLocationCode = scannedInput?.toUpperCase() || null;
+  const looksLikeLocationCode = Boolean(
+    normalizedLocationCode && /^[A-Z]-\d{2}-\d{3}$/.test(normalizedLocationCode),
+  );
 
-  if (!warehouseId || !barcode) {
+  if (!warehouseId || !scannedInput) {
     return res
       .status(400)
       .json({ message: "warehouse_id and barcode are required" });
   }
 
   try {
+    console.info("[receiving-putaway] lookup location scan", {
+      input: scannedInput,
+      normalized_location_code: normalizedLocationCode,
+      expected_location_code_format: "X-YY-ZZZ",
+      matches_expected_location_code_format: looksLikeLocationCode,
+      query_fields: ["locations.barcode", "locations.location_code"],
+    });
+
     const location = await prisma.locations.findFirst({
       where: {
         warehouse_id: warehouseId,
-        barcode,
         is_active: true,
+        OR: [
+          { barcode: scannedInput },
+          { barcode: normalizedLocationCode },
+          { location_code: normalizedLocationCode },
+        ],
       },
       select: {
         id: true,
         location_code: true,
         location_type: true,
+        barcode: true,
       },
     });
 
     if (!location) {
+      console.info("[receiving-putaway] lookup location scan result", {
+        input: scannedInput,
+        result: "not_found",
+      });
       return res.status(404).json({ message: "Location barcode not found" });
     }
 
@@ -384,10 +405,25 @@ async function lookupCompartmentByBarcode(req, res) {
         });
     }
 
+    const lookupMatchField =
+      location.barcode === scannedInput || location.barcode === normalizedLocationCode
+        ? "barcode"
+        : "location_code";
+
+    console.info("[receiving-putaway] lookup location scan result", {
+      input: scannedInput,
+      result: "found",
+      matched_field: lookupMatchField,
+      location_id: location.id,
+      location_code: location.location_code,
+      location_type: location.location_type,
+    });
+
     return res.json({
       id: location.id,
       location_code: location.location_code,
       location_type: location.location_type,
+      lookup_match_field: lookupMatchField,
     });
   } catch (error) {
     console.error("Error while looking up compartment barcode:", error);
