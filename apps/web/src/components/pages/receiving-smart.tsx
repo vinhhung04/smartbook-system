@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
 import { NavLink } from "react-router";
 import {
   AlertCircle,
@@ -92,7 +91,6 @@ export function SmartReceivingPage() {
 
   // Draft
   const [createdDraft, setCreatedDraft] = useState<SmartReceivingDraft | null>(null);
-  const [draftId, setDraftId] = useState<string | null>(null);
 
   // Edit item modal
   const [editingItem, setEditingItem] = useState<{ index: number; result: MatchResult } | null>(null);
@@ -238,7 +236,6 @@ export function SmartReceivingPage() {
       });
 
       if (response.success) {
-        setDraftId(response.draft_id);
         setCreatedDraft(response.draft as any);
         setStep("draft");
         toast.success("Đã tạo phiếu nhập thông minh thành công!");
@@ -260,6 +257,11 @@ export function SmartReceivingPage() {
   const handleSaveItemEdit = () => {
     if (!editingItem) return;
 
+    if (!editingItem.result.matched_variant_id) {
+      toast.error("Không thể xác nhận dòng chưa khớp với biến thể sách. Vui lòng tạo/sửa sách trong catalog trước.");
+      return;
+    }
+
     setMatchResults((prev) =>
       prev.map((r, i) =>
         i === editingItem.index
@@ -275,16 +277,14 @@ export function SmartReceivingPage() {
     setMatchSummary((prev) => {
       if (!prev) return prev;
       const oldStatus = matchResults[editingItem.index]?.match_status;
-      const newStatus = "MANUAL_CORRECTED";
-
       const updated = { ...prev };
-      if (oldStatus === "MATCHED") updated.matched--;
-      else if (oldStatus === "LOW_CONFIDENCE") updated.low_confidence--;
-      else if (oldStatus === "UNMATCHED") updated.unmatched--;
-
-      // MANUAL_CORRECTED counts as matched for conversion
-      updated.matched++;
-      updated.unmatched--;
+      if (oldStatus === "LOW_CONFIDENCE") {
+        updated.low_confidence = Math.max(0, updated.low_confidence - 1);
+        updated.matched += 1;
+      } else if (oldStatus === "UNMATCHED") {
+        updated.unmatched = Math.max(0, updated.unmatched - 1);
+        updated.matched += 1;
+      }
 
       return updated;
     });
@@ -496,8 +496,9 @@ export function SmartReceivingPage() {
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => handleEditItem(index, result)}
-                      className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
-                      title="Sửa"
+                      disabled={!result.matched_variant_id}
+                      className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
+                      title={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
@@ -541,6 +542,44 @@ export function SmartReceivingPage() {
           )}
         </button>
       </div>
+
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900">Xác nhận item đã sửa</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Đánh dấu dòng "{editingItem.result.title || "-"}" là đã được kiểm tra thủ công.
+              Dòng này sẽ được tính là hợp lệ khi tạo phiếu nháp.
+            </p>
+            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-500">ISBN</span>
+                <span className="font-mono">{editingItem.result.isbn || "-"}</span>
+              </div>
+              <div className="mt-1 flex justify-between gap-3">
+                <span className="text-gray-500">Số lượng</span>
+                <span>{editingItem.result.quantity}</span>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveItemEdit}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Xác nhận đã sửa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -590,7 +629,6 @@ export function SmartReceivingPage() {
             setMatchSummary(null);
             setExtractedData(null);
             setCreatedDraft(null);
-            setDraftId(null);
             setSelectedFile(null);
             setFilePreview(null);
           }}

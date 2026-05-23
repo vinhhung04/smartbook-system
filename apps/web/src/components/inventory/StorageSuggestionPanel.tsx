@@ -66,9 +66,7 @@ export function StorageSuggestionPanel({
 }: StorageSuggestionPanelProps) {
   const [suggestions, setSuggestions] = useState<StorageSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingContext, setIsLoadingContext] = useState(false);
   const [hasPermissionToRead, setHasPermissionToRead] = useState<boolean | null>(null);
-  const [hasPermissionToWrite, setHasPermissionToWrite] = useState<boolean | null>(null);
   const [fallback, setFallback] = useState(false);
   const [message, setMessage] = useState<string | undefined>();
   const [bookTitle, setBookTitle] = useState<string | undefined>();
@@ -89,7 +87,6 @@ export function StorageSuggestionPanel({
     }
 
     setHasPermissionToRead(canRead);
-    setHasPermissionToWrite(canWrite);
 
     if (!canRead) {
       toast.error("Bạn không có quyền xem gợi ý vị trí");
@@ -129,7 +126,7 @@ export function StorageSuggestionPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [warehouseId, bookId, variantId, quantity, canRead, canWrite]);
+  }, [warehouseId, bookId, variantId, quantity, canRead]);
 
   const handleSelectLocation = useCallback(
     (suggestion: StorageSuggestion) => {
