@@ -6,6 +6,8 @@ const router = express.Router();
 
 const readAnalytics = authorizeAnyPermission([
   'analytics.reports.view',
+  'analytics.dashboard.read',
+  'analytics.forecast.view',
   'analytics.read',
   'reports.read',
 ]);

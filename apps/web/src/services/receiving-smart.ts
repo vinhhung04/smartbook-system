@@ -160,7 +160,7 @@ export const receivingSmartService = {
     items: ExtractedLineItem[],
     warehouse_id?: string,
   ): Promise<MatchResponse> => {
-    const response = await inventoryAPI.post('/receiving-smart/match', {
+    const response = await inventoryAPI.post('/api/receiving-smart/match', {
       items,
       warehouse_id,
     });
@@ -171,7 +171,7 @@ export const receivingSmartService = {
    * Create a smart receiving draft
    */
   createDraft: async (payload: CreateDraftRequest): Promise<CreateDraftResponse> => {
-    const response = await inventoryAPI.post('/receiving-smart/drafts', payload);
+    const response = await inventoryAPI.post('/api/receiving-smart/drafts', payload);
     return response.data;
   },
 
@@ -179,7 +179,7 @@ export const receivingSmartService = {
    * Get draft details
    */
   getDraft: async (draftId: string): Promise<{ success: boolean; draft: SmartReceivingDraft }> => {
-    const response = await inventoryAPI.get(`/receiving-smart/drafts/${draftId}`);
+    const response = await inventoryAPI.get(`/api/receiving-smart/drafts/${draftId}`);
     return response.data;
   },
 
@@ -192,7 +192,7 @@ export const receivingSmartService = {
     page?: number;
     limit?: number;
   }): Promise<ListDraftsResponse> => {
-    const response = await inventoryAPI.get('/receiving-smart/drafts', { params });
+    const response = await inventoryAPI.get('/api/receiving-smart/drafts', { params });
     return response.data;
   },
 
@@ -203,7 +203,7 @@ export const receivingSmartService = {
     draftId: string,
     payload: UpdateDraftRequest,
   ): Promise<{ success: boolean; draft: SmartReceivingDraft }> => {
-    const response = await inventoryAPI.put(`/receiving-smart/drafts/${draftId}`, payload);
+    const response = await inventoryAPI.put(`/api/receiving-smart/drafts/${draftId}`, payload);
     return response.data;
   },
 
@@ -214,7 +214,7 @@ export const receivingSmartService = {
     draftId: string,
     user_id: string,
   ): Promise<ConvertDraftResponse> => {
-    const response = await inventoryAPI.post(`/receiving-smart/drafts/${draftId}/convert`, {
+    const response = await inventoryAPI.post(`/api/receiving-smart/drafts/${draftId}/convert`, {
       user_id,
     });
     return response.data;
@@ -224,7 +224,7 @@ export const receivingSmartService = {
    * Cancel a draft
    */
   cancelDraft: async (draftId: string): Promise<{ success: boolean; message: string }> => {
-    const response = await inventoryAPI.delete(`/receiving-smart/drafts/${draftId}`);
+    const response = await inventoryAPI.delete(`/api/receiving-smart/drafts/${draftId}`);
     return response.data;
   },
 };

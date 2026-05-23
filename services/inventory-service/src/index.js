@@ -28,6 +28,10 @@ app.use(cors());
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
+app.get('/health', (_req, res) => {
+  res.json({ service: 'inventory-service', status: 'ok' });
+});
+
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
 
