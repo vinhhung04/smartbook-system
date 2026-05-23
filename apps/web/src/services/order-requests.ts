@@ -2,6 +2,20 @@ import { inventoryAPI } from './http-clients';
 
 export type RequestTaskType = 'outbound' | 'transfer';
 export type RequestViewType = 'my' | 'approval';
+export type OutboundReferenceType =
+  | 'TRANSFER_TO_STORE'
+  | 'WAREHOUSE_TRANSFER'
+  | 'RETURN_TO_SUPPLIER'
+  | 'SALES_ORDER'
+  | 'INTERNAL_REQUEST'
+  | 'ISSUE_REQUEST'
+  | 'RESERVATION'
+  | 'LOAN_REQUEST'
+  | 'MAINTENANCE'
+  | 'INVENTORY_ADJUSTMENT'
+  | 'DAMAGED_RETURN'
+  | 'PROMOTION'
+  | 'OTHER';
 
 export interface OrderRequestVariant {
   variant_id: string;
@@ -32,6 +46,7 @@ export interface OrderRequestSummary {
   requested_at: string;
   updated_at: string;
   note: string | null;
+  reference_type: OutboundReferenceType | null;
   external_reference: string | null;
 }
 
@@ -70,9 +85,22 @@ export const orderRequestService = {
     return response.data as { data: OrderRequestSummary[] };
   },
 
+  getNextOutboundReferenceCode: async (referenceType: OutboundReferenceType) => {
+    const response = await inventoryAPI.get('/api/order-requests/outbound/reference-code', {
+      params: { reference_type: referenceType },
+    });
+    return response.data as {
+      reference_type: OutboundReferenceType;
+      external_reference: string;
+      next_number: number;
+      reserved: boolean;
+    };
+  },
+
   createOutboundRequest: async (payload: {
     warehouse_id: string;
     outbound_type?: 'SALE' | 'DISPOSAL' | 'RETURN_TO_SUPPLIER' | 'MANUAL';
+    reference_type?: OutboundReferenceType;
     external_reference?: string | null;
     note?: string | null;
     lines: OutboundRequestLineInput[];

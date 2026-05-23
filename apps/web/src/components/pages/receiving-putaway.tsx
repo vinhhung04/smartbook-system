@@ -305,13 +305,49 @@ export function ReceivingPutawayPage() {
     }
 
     const barcode = scanTargetBarcodeInput.trim();
+    const normalizedLocationCode = barcode.toUpperCase();
     if (!barcode) {
       toast.error("Nhap barcode vi tri dich truoc khi scan");
       return;
     }
 
     try {
+      console.debug("[receiving-putaway] scan target location", {
+        input: barcode,
+        normalized_location_code: normalizedLocationCode,
+        local_fields: ["candidates.location_code"],
+        api: "/api/receiving-putaway/lookup/location-by-barcode",
+        query_fields: ["locations.barcode", "locations.location_code"],
+      });
+
+      const localCandidate = candidates.find(
+        (candidate) => candidate.location_code.toUpperCase() === normalizedLocationCode,
+      );
+      if (localCandidate) {
+        const firstLineId = draftLines[0].id;
+        updateLine(firstLineId, {
+          target_location_id: localCandidate.id,
+          scanned_location_barcode: barcode,
+        });
+        console.debug("[receiving-putaway] scan target location result", {
+          input: barcode,
+          matched_field: "candidates.location_code",
+          location_id: localCandidate.id,
+          location_code: localCandidate.location_code,
+        });
+        toast.success(`Da ap dung vi tri ${localCandidate.location_code} cho dong dau tien`);
+        return;
+      }
+
       const location = await receivingPutawayService.lookupLocationByBarcode(selectedWarehouseId, barcode);
+      console.debug("[receiving-putaway] scan target location result", {
+        input: barcode,
+        matched_field: location.lookup_match_field || "unknown",
+        location_id: location.id,
+        location_code: location.location_code,
+        location_type: location.location_type,
+      });
+
       if (!candidateMap.has(location.id)) {
         toast.error("Vi tri scan duoc khong nam trong danh sach compartment con cho trong");
         return;
