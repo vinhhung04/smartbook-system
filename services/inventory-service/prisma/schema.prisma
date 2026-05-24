@@ -81,6 +81,8 @@ model book_variants {
   inventory_units      inventory_units[]
   outbound_order_items outbound_order_items[]
   purchase_order_items purchase_order_items[]
+  supplier_delivery_invoice_items supplier_delivery_invoice_items[]
+  supplier_shortage_report_items supplier_shortage_report_items[]
   stock_alerts         stock_alerts[]
   stock_audit_lines    stock_audit_lines[]
   stock_balances       stock_balances[]
@@ -160,6 +162,7 @@ model goods_receipts {
   warehouse_id        String                @db.Uuid
   source_type         String                @default("PURCHASE_ORDER") @db.VarChar(20)
   source_reference_id String?               @db.Uuid
+  supplier_delivery_invoice_id String?       @db.Uuid
   status              String                @default("DRAFT") @db.VarChar(20)
   received_by_user_id String                @db.Uuid
   received_at         DateTime?             @db.Timestamptz(6)
@@ -170,8 +173,10 @@ model goods_receipts {
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
   goods_receipt_items goods_receipt_items[]
   purchase_orders     purchase_orders?      @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
+  supplier_delivery_invoices supplier_delivery_invoices? @relation(fields: [supplier_delivery_invoice_id], references: [id], onUpdate: NoAction)
   warehouses          warehouses            @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
   smart_receiving_drafts smart_receiving_drafts[]
+  supplier_shortage_reports supplier_shortage_reports[]
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
 }
@@ -367,6 +372,8 @@ model purchase_order_items {
   note              String?
   purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   book_variants     book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  supplier_delivery_invoice_items supplier_delivery_invoice_items[]
+  supplier_shortage_report_items supplier_shortage_report_items[]
 
   @@unique([purchase_order_id, variant_id])
 }
@@ -387,6 +394,9 @@ model purchase_orders {
   updated_at           DateTime               @default(now()) @db.Timestamptz(6)
   goods_receipts       goods_receipts[]
   purchase_order_items purchase_order_items[]
+  supplier_order_dispatches supplier_order_dispatches[]
+  supplier_delivery_invoices supplier_delivery_invoices[]
+  supplier_shortage_reports supplier_shortage_reports[]
   suppliers            suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
   warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
@@ -566,7 +576,111 @@ model suppliers {
   created_at        DateTime            @default(now()) @db.Timestamptz(6)
   updated_at        DateTime            @default(now()) @db.Timestamptz(6)
   purchase_orders   purchase_orders[]
+  supplier_order_dispatches supplier_order_dispatches[]
+  supplier_delivery_invoices supplier_delivery_invoices[]
+  supplier_shortage_reports supplier_shortage_reports[]
   supplier_variants supplier_variants[]
+}
+
+model supplier_order_dispatches {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id    String          @db.Uuid
+  supplier_id          String          @db.Uuid
+  dispatch_number      String          @unique @db.VarChar(40)
+  channel              String          @default("MOCK") @db.VarChar(20)
+  status               String          @default("SENT") @db.VarChar(20)
+  sent_to_email        String?         @db.VarChar(150)
+  sent_at              DateTime?       @db.Timestamptz(6)
+  acknowledged_at      DateTime?       @db.Timestamptz(6)
+  payload              Json            @default("{}")
+  created_by_user_id   String          @db.Uuid
+  created_at           DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime        @default(now()) @db.Timestamptz(6)
+  purchase_orders      purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers            suppliers       @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+
+  @@index([purchase_order_id, status], map: "idx_supplier_dispatch_po_status")
+}
+
+model supplier_delivery_invoices {
+  id                    String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id     String                            @db.Uuid
+  supplier_id           String                            @db.Uuid
+  invoice_number        String                            @db.VarChar(80)
+  delivery_number       String?                           @db.VarChar(80)
+  invoice_date          DateTime?                         @db.Date
+  expected_delivery_date DateTime?                        @db.Date
+  status                String                            @default("SUBMITTED") @db.VarChar(30)
+  supplier_note         String?
+  uploaded_file_name    String?
+  uploaded_file_type    String?                           @db.VarChar(50)
+  raw_payload           Json                              @default("{}")
+  created_by_user_id    String?                           @db.Uuid
+  created_at            DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                          @default(now()) @db.Timestamptz(6)
+  purchase_orders       purchase_orders                   @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers             suppliers                         @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  supplier_delivery_invoice_items supplier_delivery_invoice_items[]
+  goods_receipts        goods_receipts[]
+  supplier_shortage_reports supplier_shortage_reports[]
+
+  @@unique([supplier_id, invoice_number])
+  @@index([purchase_order_id, status], map: "idx_supplier_invoices_po_status")
+}
+
+model supplier_delivery_invoice_items {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_id               String                     @db.Uuid
+  purchase_order_item_id   String?                    @db.Uuid
+  variant_id               String                     @db.Uuid
+  invoiced_qty             Int
+  delivered_qty            Int?
+  accepted_qty             Int                        @default(0)
+  unit_cost                Decimal                    @default(0) @db.Decimal(12, 2)
+  note                     String?
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  supplier_delivery_invoices supplier_delivery_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  purchase_order_items     purchase_order_items?      @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+  book_variants            book_variants              @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+
+  @@index([invoice_id], map: "idx_supplier_invoice_items_invoice")
+}
+
+model supplier_shortage_reports {
+  id                   String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id    String                         @db.Uuid
+  supplier_id          String                         @db.Uuid
+  goods_receipt_id     String?                        @db.Uuid
+  invoice_id           String?                        @db.Uuid
+  status               String                         @default("OPEN") @db.VarChar(30)
+  reason               String?
+  created_by_user_id   String                         @db.Uuid
+  sent_at              DateTime?                      @db.Timestamptz(6)
+  resolved_at          DateTime?                      @db.Timestamptz(6)
+  created_at           DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                       @default(now()) @db.Timestamptz(6)
+  purchase_orders      purchase_orders                @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers            suppliers                      @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  goods_receipts       goods_receipts?                 @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  supplier_delivery_invoices supplier_delivery_invoices? @relation(fields: [invoice_id], references: [id], onUpdate: NoAction)
+  supplier_shortage_report_items supplier_shortage_report_items[]
+
+  @@index([purchase_order_id, status], map: "idx_supplier_shortages_po_status")
+}
+
+model supplier_shortage_report_items {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shortage_report_id       String                    @db.Uuid
+  purchase_order_item_id   String                    @db.Uuid
+  variant_id               String                    @db.Uuid
+  ordered_qty              Int
+  received_qty             Int
+  shortage_qty             Int
+  note                     String?
+  supplier_shortage_reports supplier_shortage_reports @relation(fields: [shortage_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  purchase_order_items     purchase_order_items      @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+  book_variants            book_variants             @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.

@@ -54,6 +54,7 @@ import { CustomerWishlistPage } from "@/components/pages/customer/wishlist";
 import { AuditTrailPage } from "@/components/pages/audit-trail";
 import { MembershipPlansPage } from "@/components/pages/membership-plans";
 import { SuppliersPage } from "@/components/pages/suppliers";
+import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
 import { NotFoundPage } from "@/components/pages/not-found";
 import { authService } from "@/services/auth";
 
@@ -135,6 +136,10 @@ export const router = createBrowserRouter([
       { path: 'reading-analytics', Component: CustomerReadingAnalyticsPage },
       { path: 'wishlist', Component: CustomerWishlistPage },
     ],
+  },
+  {
+    path: "/supplier/portal/:token",
+    Component: SupplierPortalPage,
   },
   {
     path: "/",

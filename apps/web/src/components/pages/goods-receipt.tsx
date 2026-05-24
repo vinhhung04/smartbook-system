@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { NavLink } from "react-router";
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Plus, ScanBarcode, Trash2 } from "lucide-react";
+import { NavLink, useNavigate, useSearchParams } from "react-router";
+import { AlertCircle, ArrowLeft, CheckCircle2, ClipboardCheck, Loader2, Plus, ScanBarcode, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { warehouseService } from "@/services/warehouse";
 import { bookService } from "@/services/book";
 import { goodsReceiptService } from "@/services/goods-receipt";
+import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 
@@ -39,8 +40,13 @@ function makeRowId() {
 }
 
 export function GoodsReceiptPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const supplierDeliveryInvoiceId = searchParams.get("supplier_delivery_invoice_id");
+  const [receivingMode, setReceivingMode] = useState<"supplier" | "manual">("supplier");
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [supplierDeliveries, setSupplierDeliveries] = useState<SupplierDeliveryDetail[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [isbn13Input, setIsbn13Input] = useState("");
   const [items, setItems] = useState<ReceiptItemForm[]>([]);
@@ -55,29 +61,59 @@ export function GoodsReceiptPage() {
   const [isCreatingNewBook, setIsCreatingNewBook] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successReceiptNumber, setSuccessReceiptNumber] = useState("");
+  const [invoice, setInvoice] = useState<SupplierDeliveryDetail | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const [countedQty, setCountedQty] = useState<Record<string, number>>({});
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const loadWarehouses = async () => {
+    if (supplierDeliveryInvoiceId) return;
+    const loadReceivingContext = async () => {
       try {
         setIsLoading(true);
-        const data = await warehouseService.getAll();
-        const rows = (Array.isArray(data) ? data : []).map((warehouse: any) => ({
+        const [warehouseRows, deliveryRows] = await Promise.all([
+          warehouseService.getAll(),
+          supplierDeliveryService.getAll(),
+        ]);
+        const rows = (Array.isArray(warehouseRows) ? warehouseRows : []).map((warehouse: any) => ({
           id: warehouse.id,
           code: warehouse.code,
           name: warehouse.name,
         }));
         setWarehouses(rows);
+        setSupplierDeliveries(Array.isArray(deliveryRows.data) ? deliveryRows.data : []);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach kho"));
+        toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu nhap kho"));
       } finally {
         setIsLoading(false);
       }
     };
 
-    void loadWarehouses();
-  }, []);
+    void loadReceivingContext();
+  }, [supplierDeliveryInvoiceId]);
+
+  useEffect(() => {
+    if (!supplierDeliveryInvoiceId) return;
+    const loadInvoice = async () => {
+      try {
+        setInvoiceLoading(true);
+        const response = await supplierDeliveryService.getById(supplierDeliveryInvoiceId);
+        setInvoice(response.data);
+        const nextQty: Record<string, number> = {};
+        response.data.items.forEach((item) => {
+          nextQty[item.id] = Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0));
+        });
+        setCountedQty(nextQty);
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, "Khong tai duoc supplier invoice"));
+      } finally {
+        setInvoiceLoading(false);
+      }
+    };
+    void loadInvoice();
+  }, [supplierDeliveryInvoiceId]);
 
   const handleSelectWarehouse = async (warehouseId: string) => {
     setSelectedWarehouse(warehouseId);
@@ -220,6 +256,44 @@ export function GoodsReceiptPage() {
     () => items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_cost || 0), 0),
     [items],
   );
+
+  const invoiceTotalQty = useMemo(() => {
+    if (!invoice) return 0;
+    return invoice.items.reduce((sum, item) => sum + Number(countedQty[item.id] || 0), 0);
+  }, [countedQty, invoice]);
+
+  const createFromInvoice = async () => {
+    if (!invoice || !supplierDeliveryInvoiceId) return;
+    const payloadItems = invoice.items
+      .filter((item) => Number(countedQty[item.id] || 0) > 0)
+      .map((item) => ({
+        invoice_item_id: item.id,
+        purchase_order_item_id: item.purchase_order_item_id,
+        variant_id: item.variant_id,
+        delivered_qty: Number(countedQty[item.id] || 0),
+        unit_cost: item.unit_cost,
+        location_id: null,
+        note: Number(countedQty[item.id] || 0) < item.remaining_qty ? "Supplier delivered short" : null,
+      }));
+    if (payloadItems.length === 0) {
+      toast.error("Nhap it nhat mot dong hang thuc nhan");
+      return;
+    }
+    try {
+      setInvoiceSaving(true);
+      const response = await supplierDeliveryService.createGoodsReceiptFromInvoice(supplierDeliveryInvoiceId, {
+        warehouse_id: invoice.warehouse_id || "",
+        note: `Receive supplier invoice ${invoice.invoice_number}`,
+        items: payloadItems,
+      });
+      toast.success(`Da tao GR ${response.data.receipt_number} o trang thai DRAFT`);
+      navigate(`/orders/${response.data.id}`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Tao goods receipt tu invoice that bai"));
+    } finally {
+      setInvoiceSaving(false);
+    }
+  };
   const handleCreateDraftReceipt = async () => {
     if (!selectedWarehouse) {
       toast.error("Vui long chon kho");
@@ -296,6 +370,242 @@ export function GoodsReceiptPage() {
     );
   }
 
+  if (supplierDeliveryInvoiceId) {
+    if (invoiceLoading) {
+      return <PageWrapper><div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Dang tai supplier invoice...</div></PageWrapper>;
+    }
+
+    if (!invoice) {
+      return (
+        <PageWrapper>
+          <NavLink to="/purchase-orders" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-blue-600">
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai
+          </NavLink>
+          <div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Khong tim thay supplier invoice.</div>
+        </PageWrapper>
+      );
+    }
+
+    return (
+      <PageWrapper className="space-y-5">
+        <FadeItem>
+          <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-blue-600">
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai Purchase Order
+          </NavLink>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="flex flex-col gap-1">
+            <h1 className="tracking-[-0.02em]">Receive Supplier Delivery</h1>
+            <p className="text-[13px] text-slate-500">
+              {invoice.po_number || "-"} - {invoice.supplier_name || "-"} - Invoice {invoice.invoice_number}
+            </p>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Warehouse</p>
+              <p className="mt-1 text-[13px] font-semibold">{invoice.warehouse_code || "-"} - {invoice.warehouse_name || ""}</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Invoice status</p>
+              <p className="mt-1 text-[13px] font-semibold">{invoice.status}</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Counted qty</p>
+              <p className="mt-1 text-[18px] font-bold">{invoiceTotalQty}</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Expected delivery</p>
+              <p className="mt-1 text-[13px] font-semibold">{invoice.expected_delivery_date ? new Date(invoice.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}</p>
+            </div>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="overflow-hidden rounded-[12px] border border-slate-200 bg-white">
+            <table className="w-full min-w-[1000px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  {["Title", "ISBN/SKU", "Ordered", "Previously received", "Remaining", "Invoiced", "Staff counted", "Shortage", "Status"].map((heading) => (
+                    <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-500">{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.items.map((item) => {
+                  const qty = Number(countedQty[item.id] || 0);
+                  const shortage = Math.max(0, Number(item.remaining_qty || 0) - qty);
+                  const over = qty > Number(item.remaining_qty || 0);
+                  const status = over ? "OVER_BLOCKED" : shortage > 0 ? "SHORTAGE" : "MATCHED";
+                  return (
+                    <tr key={item.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3 text-[13px] font-semibold">{item.title || "-"}</td>
+                      <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{item.isbn13 || item.sku || item.variant_id}</td>
+                      <td className="px-4 py-3 text-[13px]">{item.ordered_qty}</td>
+                      <td className="px-4 py-3 text-[13px]">{item.previously_received_qty}</td>
+                      <td className="px-4 py-3 text-[13px]">{item.remaining_qty}</td>
+                      <td className="px-4 py-3 text-[13px]">{item.invoiced_qty}</td>
+                      <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={item.remaining_qty}
+                          value={qty}
+                          onChange={(event) => {
+                            const next = Math.min(Number(item.remaining_qty || 0), Math.max(0, Number(event.target.value) || 0));
+                            setCountedQty((current) => ({ ...current, [item.id]: next }));
+                          }}
+                          className="w-24 rounded-[8px] border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-400"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-[13px]">{shortage}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${status === "MATCHED" ? "bg-emerald-50 text-emerald-700" : status === "SHORTAGE" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>
+                          {status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </FadeItem>
+
+        {invoice.items.some((item) => Number(countedQty[item.id] || 0) < item.remaining_qty) ? (
+          <FadeItem>
+            <div className="flex items-start gap-3 rounded-[12px] border border-amber-200 bg-amber-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />
+              <p className="text-[13px] text-amber-800">Shortage will be reported to supplier for lines counted below remaining quantity.</p>
+            </div>
+          </FadeItem>
+        ) : null}
+
+        <FadeItem>
+          <div className="flex justify-end">
+            <button
+              onClick={() => void createFromInvoice()}
+              disabled={invoiceSaving || invoiceTotalQty <= 0}
+              className="rounded-[10px] bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+            >
+              {invoiceSaving ? "Dang tao..." : "Create Goods Receipt Draft"}
+            </button>
+          </div>
+        </FadeItem>
+      </PageWrapper>
+    );
+  }
+
+  const receivableDeliveries = supplierDeliveries.filter((delivery) =>
+    ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(delivery.status),
+  );
+
+  if (receivingMode === "supplier") {
+    return (
+      <PageWrapper className="space-y-5">
+        <FadeItem>
+          <NavLink
+            to="/orders"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
+          </NavLink>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="tracking-[-0.02em]">Receive Supplier Delivery</h1>
+              <p className="mt-1 text-[13px] text-slate-500">Doi chieu PO, phieu giao hang/invoice va so luong nhan thuc te.</p>
+            </div>
+            <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
+              <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
+                <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+              </button>
+              <button
+                onClick={() => setReceivingMode("manual")}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+              </button>
+            </div>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Ready documents</p>
+              <p className="mt-1 text-[20px] font-bold">{receivableDeliveries.length}</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Workflow</p>
+              <p className="mt-1 text-[13px] font-semibold">Draft first, post later</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Validation</p>
+              <p className="mt-1 text-[13px] font-semibold">Over-receive blocked</p>
+            </div>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="overflow-hidden rounded-[12px] border border-slate-200 bg-white">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
+              <ClipboardCheck className="h-4 w-4 text-slate-500" />
+              <h2 className="text-[14px] font-semibold">Supplier invoices / delivery notes</h2>
+            </div>
+            {isLoading ? (
+              <div className="p-6 text-[13px] text-slate-500">Dang tai danh sach phieu giao hang...</div>
+            ) : receivableDeliveries.length === 0 ? (
+              <div className="p-6 text-[13px] text-slate-500">
+                Chua co supplier invoice/delivery note nao san sang nhap. Hay gui PO cho supplier va de supplier confirm tao invoice truoc.
+              </div>
+            ) : (
+              <table className="w-full min-w-[920px]">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    {["Invoice", "PO", "Supplier", "Warehouse", "Expected", "Lines", "Status", "Action"].map((heading) => (
+                      <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {receivableDeliveries.map((delivery) => (
+                    <tr key={delivery.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-5 py-3.5 text-[13px] font-semibold">{delivery.invoice_number}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.po_number || "-"}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.supplier_name || "-"}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.warehouse_code || delivery.warehouse_name || "-"}</td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-500">
+                        {delivery.expected_delivery_date ? new Date(delivery.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.items.length}</td>
+                      <td className="px-5 py-3.5">
+                        <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">{delivery.status}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => navigate(`/orders/new?supplier_delivery_invoice_id=${delivery.id}`)}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5" /> Doi chieu & nhap hang
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </FadeItem>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
@@ -308,7 +618,23 @@ export function GoodsReceiptPage() {
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Dung cho phieu nhap thu cong khong gan Purchase Order.</p>
+          </div>
+          <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setReceivingMode("supplier")}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+            </button>
+            <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
+              <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+            </button>
+          </div>
+        </div>
       </FadeItem>
 
       {step === "warehouse" ? (
