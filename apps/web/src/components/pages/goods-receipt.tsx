@@ -439,7 +439,8 @@ export function GoodsReceiptPage() {
                   const qty = Number(countedQty[item.id] || 0);
                   const shortage = Math.max(0, Number(item.remaining_qty || 0) - qty);
                   const over = qty > Number(item.remaining_qty || 0);
-                  const status = over ? "OVER_BLOCKED" : shortage > 0 ? "SHORTAGE" : "MATCHED";
+        const invoiceOver = qty > Number(item.invoiced_qty || 0);
+        const status = over || invoiceOver ? "OVER_BLOCKED" : shortage > 0 ? "SHORTAGE" : "MATCHED";
                   return (
                     <tr key={item.id} className="border-b border-slate-100 last:border-0">
                       <td className="px-4 py-3 text-[13px] font-semibold">{item.title || "-"}</td>
@@ -452,10 +453,11 @@ export function GoodsReceiptPage() {
                         <input
                           type="number"
                           min={0}
-                          max={item.remaining_qty}
+                          max={Math.min(item.remaining_qty, item.invoiced_qty)}
                           value={qty}
                           onChange={(event) => {
-                            const next = Math.min(Number(item.remaining_qty || 0), Math.max(0, Number(event.target.value) || 0));
+                            const max = Math.min(Number(item.remaining_qty || 0), Number(item.invoiced_qty || 0));
+                            const next = Math.min(max, Math.max(0, Number(event.target.value) || 0));
                             setCountedQty((current) => ({ ...current, [item.id]: next }));
                           }}
                           className="w-24 rounded-[8px] border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-400"
@@ -589,7 +591,7 @@ export function GoodsReceiptPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <button
-                          onClick={() => navigate(`/orders/new?supplier_delivery_invoice_id=${delivery.id}`)}
+                          onClick={() => navigate(`/supplier-deliveries/${delivery.id}`)}
                           className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
                         >
                           <ClipboardCheck className="h-3.5 w-3.5" /> Doi chieu & nhap hang

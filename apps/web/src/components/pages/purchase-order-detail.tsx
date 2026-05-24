@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router";
-import { ArrowLeft, CheckCircle, Edit, ExternalLink, FileText, RefreshCw, Send, Truck, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, Clipboard, Edit, ExternalLink, FileText, RefreshCw, Send, Truck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderDetail, type ReconciliationResponse, type SupplierDocumentsResponse } from "@/services/purchase-order";
 import { getApiErrorMessage } from "@/services/api";
@@ -90,6 +90,11 @@ export function PurchaseOrderDetailPage() {
     void runAction("Purchase order sent to supplier", () => purchaseOrderService.sendToSupplier(id));
   };
 
+  const copyText = async (value: string, label: string) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
+  };
+
   const reject = () => {
     if (!id) return;
     const reason = window.prompt("Reject reason", "Rejected from UI");
@@ -141,7 +146,7 @@ export function PurchaseOrderDetailPage() {
           {canSendToSupplier && <Button size="sm" onClick={sendToSupplier} disabled={working}><Send className="h-3.5 w-3.5" />Send to Supplier</Button>}
           {po.status === "SUPPLIER_CONFIRMED" && latestOpenInvoice ? (
             <Button asChild size="sm" disabled={working}>
-              <NavLink to={`/orders/new?supplier_delivery_invoice_id=${latestOpenInvoice.id}`}>
+              <NavLink to={`/supplier-deliveries/${latestOpenInvoice.id}`}>
                 <Truck className="h-3.5 w-3.5" />Create GR from Invoice
               </NavLink>
             </Button>
@@ -197,9 +202,18 @@ export function PurchaseOrderDetailPage() {
                   <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{dispatch.channel}{dispatch.sent_to_email ? ` - ${dispatch.sent_to_email}` : " - demo/manual channel"}</td>
                   <td className="px-5 py-3.5 text-right">
                     {dispatch.portal_token ? (
-                      <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
-                        Supplier portal <ExternalLink className="h-3.5 w-3.5" />
-                      </NavLink>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void copyText(`${window.location.origin}/supplier/portal/${dispatch.portal_token}`, "Portal link")}
+                        >
+                          <Clipboard className="h-3.5 w-3.5" /> Copy Link
+                        </Button>
+                        <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
+                          Open <ExternalLink className="h-3.5 w-3.5" />
+                        </NavLink>
+                      </div>
                     ) : null}
                   </td>
                 </tr>
@@ -228,7 +242,7 @@ export function PurchaseOrderDetailPage() {
                   <td className="px-5 py-3.5 text-[13px]">{invoice.items.length}</td>
                   <td className="px-5 py-3.5">
                     {po.status !== "RECEIVED" && totalRemaining > 0 ? (
-                      <NavLink to={`/orders/new?supplier_delivery_invoice_id=${invoice.id}`} className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium">
+                      <NavLink to={`/supplier-deliveries/${invoice.id}`} className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium">
                         <Truck className="h-3.5 w-3.5" /> Receive
                       </NavLink>
                     ) : (
@@ -256,6 +270,9 @@ export function PurchaseOrderDetailPage() {
                     <td className="px-5 py-3.5 text-right">
                       {report.status === "OPEN" ? (
                         <Button variant="outline" size="sm" onClick={() => id && runAction("Shortage report sent", () => purchaseOrderService.sendShortageReport(id, report.id))} disabled={working}>Send to Supplier</Button>
+                      ) : null}
+                      {["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status) ? (
+                        <Button variant="outline" size="sm" onClick={() => id && window.confirm("Resolve this shortage report?") && runAction("Shortage report resolved", () => purchaseOrderService.resolveShortageReport(id, report.id))} disabled={working}>Resolve</Button>
                       ) : null}
                     </td>
                   </tr>

@@ -19,6 +19,7 @@ const navGroups = [
       { to: "/inventory", icon: Package, label: "Inventory", activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/putaway", icon: MapPinned, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
       { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
       { to: "/order-requests", icon: ListOrdered, label: "Order Requests", activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },

@@ -23,6 +23,7 @@ const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
 const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
+const supplierAccountRoutes = require('./routes/supplier-account.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -59,6 +60,7 @@ app.use('/api/receiving-smart', receivingSmartRoutes);
 app.use('/api/storage-suggestions', storageSuggestionRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
+app.use('/api/supplier-account', supplierAccountRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

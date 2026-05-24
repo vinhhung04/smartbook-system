@@ -271,6 +271,9 @@ async function createGoodsReceiptFromInvoice(req, res) {
         if (deliveredQty > remainingQty) {
           return { invalid: true, message: "Cannot receive more than remaining purchase order quantity" };
         }
+        if (deliveredQty > Number(invoiceItem.invoiced_qty || 0)) {
+          return { invalid: true, message: "Cannot receive more than supplier invoiced quantity" };
+        }
 
         const locationId = parseId(rawLine?.location_id);
         receiptItems.push({

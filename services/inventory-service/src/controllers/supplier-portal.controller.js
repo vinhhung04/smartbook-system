@@ -10,6 +10,7 @@ function getPortalTokenWhere(token) {
 
 function mapPortalOrder(dispatch) {
   const po = dispatch.purchase_orders;
+  const poItemsById = new Map((po.purchase_order_items || []).map((item) => [String(item.id), item]));
   return {
     dispatch: {
       id: dispatch.id,
@@ -40,15 +41,56 @@ function mapPortalOrder(dispatch) {
     invoices: (po.supplier_delivery_invoices || []).map((invoice) => ({
       id: invoice.id,
       invoice_number: invoice.invoice_number,
+      delivery_number: invoice.delivery_number,
       status: invoice.status,
       invoice_date: invoice.invoice_date,
       expected_delivery_date: invoice.expected_delivery_date,
+      supplier_note: invoice.supplier_note,
+      raw_payload: invoice.raw_payload || {},
+      goods_receipts: (invoice.goods_receipts || []).map((receipt) => ({
+        id: receipt.id,
+        receipt_number: receipt.receipt_number,
+        status: receipt.status,
+      })),
       items: invoice.supplier_delivery_invoice_items.map((item) => ({
         id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
+        title: item.book_variants?.books?.title || null,
+        sku: item.book_variants?.sku || null,
+        isbn13: item.book_variants?.isbn13 || null,
+        ordered_qty: Number(poItemsById.get(String(item.purchase_order_item_id))?.ordered_qty || 0),
+        received_qty: Number(poItemsById.get(String(item.purchase_order_item_id))?.received_qty || 0),
         invoiced_qty: Number(item.invoiced_qty || 0),
+        delivered_qty: item.delivered_qty == null ? null : Number(item.delivered_qty),
+        accepted_qty: Number(item.accepted_qty || 0),
         unit_cost: Number(item.unit_cost || 0),
+        note: item.note,
+      })),
+    })),
+    shortage_reports: (po.supplier_shortage_reports || []).map((report) => ({
+      id: report.id,
+      purchase_order_id: report.purchase_order_id,
+      supplier_id: report.supplier_id,
+      goods_receipt_id: report.goods_receipt_id,
+      invoice_id: report.invoice_id,
+      status: report.status,
+      reason: report.reason,
+      sent_at: report.sent_at,
+      resolved_at: report.resolved_at,
+      created_at: report.created_at,
+      updated_at: report.updated_at,
+      items: report.supplier_shortage_report_items.map((item) => ({
+        id: item.id,
+        purchase_order_item_id: item.purchase_order_item_id,
+        variant_id: item.variant_id,
+        title: item.book_variants?.books?.title || null,
+        sku: item.book_variants?.sku || null,
+        isbn13: item.book_variants?.isbn13 || null,
+        ordered_qty: Number(item.ordered_qty || 0),
+        received_qty: Number(item.received_qty || 0),
+        shortage_qty: Number(item.shortage_qty || 0),
+        note: item.note,
       })),
     })),
   };
@@ -69,13 +111,108 @@ async function findDispatchByToken(token) {
             orderBy: { id: "asc" },
           },
           supplier_delivery_invoices: {
-            include: { supplier_delivery_invoice_items: true },
+            include: {
+              goods_receipts: { select: { id: true, receipt_number: true, status: true } },
+              supplier_delivery_invoice_items: {
+                include: {
+                  book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+                },
+                orderBy: { id: "asc" },
+              },
+            },
+            orderBy: { created_at: "desc" },
+          },
+          supplier_shortage_reports: {
+            include: {
+              supplier_shortage_report_items: {
+                include: {
+                  book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+                },
+                orderBy: { id: "asc" },
+              },
+            },
             orderBy: { created_at: "desc" },
           },
         },
       },
     },
   });
+}
+
+function canUseSupplierAccount(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return roles.includes("SUPPLIER") || permissions.includes("supplier.portal.read") || permissions.includes("supplier.portal.write");
+}
+
+async function findAuthenticatedSupplier(req) {
+  if (!canUseSupplierAccount(req.user)) {
+    const error = new Error("Supplier account role is required");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const email = (normalizeText(req.user?.email) || "").toLowerCase();
+  if (!email) {
+    const error = new Error("Supplier account email is required");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const supplier = await prisma.suppliers.findFirst({
+    where: {
+      status: "ACTIVE",
+      email: { equals: email, mode: "insensitive" },
+    },
+  });
+
+  if (!supplier) {
+    const error = new Error("No active supplier is linked to this account email");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  return supplier;
+}
+
+async function findAuthenticatedDispatch(req, poId) {
+  if (!poId) {
+    const error = new Error("Invalid purchase order id");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const supplier = await findAuthenticatedSupplier(req);
+  const dispatch = await prisma.supplier_order_dispatches.findFirst({
+    where: {
+      purchase_order_id: poId,
+      supplier_id: supplier.id,
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (!dispatch) {
+    const error = new Error("Supplier order not found for this account");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const token = dispatch.payload?.portal_token;
+  if (!token) {
+    const error = new Error("Supplier order is missing portal token metadata");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  return { supplier, dispatch, token };
+}
+
+function handleSupplierAccountError(res, error, label) {
+  if (error?.statusCode) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+  console.error(label, error);
+  return res.status(500).json({ message: "Internal server error" });
 }
 
 async function getPortalOrder(req, res) {
@@ -118,7 +255,7 @@ async function confirmPortalOrder(req, res) {
       });
       await tx.inventory_audit_logs.create({
         data: {
-          actor_user_id: null,
+          actor_user_id: parseId(req.user?.id) || null,
           action_name: "SUPPLIER_ORDER_ACKNOWLEDGED",
           entity_type: "PURCHASE_ORDER",
           entity_id: po.id,
@@ -139,6 +276,7 @@ async function confirmPortalOrder(req, res) {
 async function createPortalInvoice(req, res) {
   const token = normalizeText(req.params.token);
   const invoiceNumber = normalizeText(req.body?.invoice_number);
+  const sourceShortageReportId = parseId(req.body?.source_shortage_report_id || req.body?.shortage_report_id);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   if (!token) return res.status(400).json({ message: "Portal token is required" });
   if (!invoiceNumber) return res.status(400).json({ message: "invoice_number is required" });
@@ -167,6 +305,26 @@ async function createPortalInvoice(req, res) {
         });
       }
 
+      let shortageReport = null;
+      let shortageItemsByPoItemId = new Map();
+      if (sourceShortageReportId) {
+        shortageReport = await tx.supplier_shortage_reports.findFirst({
+          where: {
+            id: sourceShortageReportId,
+            purchase_order_id: po.id,
+            supplier_id: po.supplier_id,
+            status: { in: ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"] },
+          },
+          include: { supplier_shortage_report_items: true },
+        });
+        if (!shortageReport) {
+          return { invalid: true, statusCode: 404, message: "Shortage report not found for this supplier order" };
+        }
+        shortageItemsByPoItemId = new Map(
+          shortageReport.supplier_shortage_report_items.map((item) => [String(item.purchase_order_item_id), item]),
+        );
+      }
+
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
       const invoiceItems = [];
       const seen = new Set();
@@ -182,6 +340,15 @@ async function createPortalInvoice(req, res) {
         seen.add(poItem.variant_id);
         const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
         if (invoicedQty > remainingQty) return { invalid: true, message: "Invoice quantity cannot exceed remaining purchase order quantity" };
+        if (sourceShortageReportId) {
+          const shortageItem = shortageItemsByPoItemId.get(String(poItem.id));
+          if (!shortageItem) {
+            return { invalid: true, message: "Redelivery invoice can only include items from the shortage report" };
+          }
+          if (invoicedQty > Number(shortageItem.shortage_qty || 0)) {
+            return { invalid: true, message: "Redelivery quantity cannot exceed shortage quantity" };
+          }
+        }
         invoiceItems.push({
           purchase_order_item_id: poItem.id,
           variant_id: poItem.variant_id,
@@ -201,8 +368,11 @@ async function createPortalInvoice(req, res) {
           expected_delivery_date: req.body?.expected_delivery_date ? new Date(req.body.expected_delivery_date) : null,
           status: "SUBMITTED",
           supplier_note: normalizeText(req.body?.supplier_note),
-          raw_payload: req.body || {},
-          created_by_user_id: null,
+          raw_payload: {
+            ...(req.body || {}),
+            ...(sourceShortageReportId ? { source_shortage_report_id: sourceShortageReportId, redelivery: true } : {}),
+          },
+          created_by_user_id: parseId(req.user?.id) || null,
         },
       });
 
@@ -211,13 +381,24 @@ async function createPortalInvoice(req, res) {
       });
       await tx.inventory_audit_logs.create({
         data: {
-          actor_user_id: null,
-          action_name: "SUPPLIER_INVOICE_CREATED",
+          actor_user_id: parseId(req.user?.id) || null,
+          action_name: sourceShortageReportId ? "SUPPLIER_REDELIVERY_INVOICE_CREATED" : "SUPPLIER_INVOICE_CREATED",
           entity_type: "SUPPLIER_DELIVERY_INVOICE",
           entity_id: invoice.id,
-          after_data: { purchase_order_id: po.id, invoice_number: invoice.invoice_number, source: "SUPPLIER_PORTAL" },
+          after_data: {
+            purchase_order_id: po.id,
+            invoice_number: invoice.invoice_number,
+            source: "SUPPLIER_PORTAL",
+            source_shortage_report_id: sourceShortageReportId || null,
+          },
         },
       });
+      if (sourceShortageReportId && ["OPEN", "SENT_TO_SUPPLIER"].includes(shortageReport.status)) {
+        await tx.supplier_shortage_reports.update({
+          where: { id: sourceShortageReportId },
+          data: { status: "ACKNOWLEDGED", updated_at: new Date() },
+        });
+      }
       return { data: invoice };
     });
 
@@ -230,6 +411,219 @@ async function createPortalInvoice(req, res) {
   }
 }
 
+async function acknowledgeShortageReport(req, res) {
+  const token = normalizeText(req.params.token);
+  const reportId = parseId(req.params.reportId);
+  if (!token) return res.status(400).json({ message: "Portal token is required" });
+  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const dispatch = await tx.supplier_order_dispatches.findFirst({
+        where: getPortalTokenWhere(token),
+        include: { purchase_orders: true },
+      });
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      const po = dispatch.purchase_orders;
+      const report = await tx.supplier_shortage_reports.findFirst({
+        where: { id: reportId, purchase_order_id: po.id, supplier_id: po.supplier_id },
+      });
+      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (!["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
+        return { invalid: true, message: "Shortage report cannot be acknowledged from current status" };
+      }
+
+      const updated = await tx.supplier_shortage_reports.update({
+        where: { id: report.id },
+        data: { status: "ACKNOWLEDGED", updated_at: new Date() },
+      });
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: parseId(req.user?.id) || null,
+          action_name: "SUPPLIER_SHORTAGE_ACKNOWLEDGED",
+          entity_type: "SUPPLIER_SHORTAGE_REPORT",
+          entity_id: report.id,
+          before_data: { status: report.status },
+          after_data: { status: updated.status, purchase_order_id: po.id },
+        },
+      });
+      return { data: updated };
+    });
+
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.json({ message: "Shortage report acknowledged", data: result.data });
+  } catch (error) {
+    console.error("Error while acknowledging supplier shortage report:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function cannotFulfillShortageReport(req, res) {
+  const token = normalizeText(req.params.token);
+  const reportId = parseId(req.params.reportId);
+  const reason = normalizeText(req.body?.reason) || "Supplier cannot fulfill remaining shortage";
+  if (!token) return res.status(400).json({ message: "Portal token is required" });
+  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const dispatch = await tx.supplier_order_dispatches.findFirst({
+        where: getPortalTokenWhere(token),
+        include: { purchase_orders: true },
+      });
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      const po = dispatch.purchase_orders;
+      const report = await tx.supplier_shortage_reports.findFirst({
+        where: { id: reportId, purchase_order_id: po.id, supplier_id: po.supplier_id },
+      });
+      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (!["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
+        return { invalid: true, message: "Shortage report cannot be updated from current status" };
+      }
+
+      const nextReason = [report.reason, `[SUPPLIER_CANNOT_FULFILL] ${reason}`].filter(Boolean).join("\n");
+      const updated = await tx.supplier_shortage_reports.update({
+        where: { id: report.id },
+        data: { status: "ACKNOWLEDGED", reason: nextReason, updated_at: new Date() },
+      });
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: parseId(req.user?.id) || null,
+          action_name: "SUPPLIER_SHORTAGE_CANNOT_FULFILL",
+          entity_type: "SUPPLIER_SHORTAGE_REPORT",
+          entity_id: report.id,
+          before_data: { status: report.status, reason: report.reason },
+          after_data: { status: updated.status, reason, purchase_order_id: po.id },
+        },
+      });
+      return { data: updated };
+    });
+
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.json({ message: "Shortage report updated", data: result.data });
+  } catch (error) {
+    console.error("Error while marking supplier shortage cannot fulfill:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+function createRedeliveryInvoice(req, res) {
+  const reportId = parseId(req.params.reportId);
+  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+  req.body = {
+    ...(req.body || {}),
+    source_shortage_report_id: reportId,
+    redelivery: true,
+  };
+  return createPortalInvoice(req, res);
+}
+
+async function getSupplierAccountOrders(req, res) {
+  try {
+    const supplier = await findAuthenticatedSupplier(req);
+    const dispatches = await prisma.supplier_order_dispatches.findMany({
+      where: { supplier_id: supplier.id },
+      include: {
+        purchase_orders: {
+          include: {
+            suppliers: { select: { id: true, code: true, name: true } },
+            warehouses: { select: { id: true, code: true, name: true } },
+            purchase_order_items: {
+              include: {
+                book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+              },
+              orderBy: { id: "asc" },
+            },
+            supplier_delivery_invoices: {
+              include: {
+                goods_receipts: { select: { id: true, receipt_number: true, status: true } },
+                supplier_delivery_invoice_items: {
+                  include: {
+                    book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+                  },
+                  orderBy: { id: "asc" },
+                },
+              },
+              orderBy: { created_at: "desc" },
+            },
+            supplier_shortage_reports: {
+              include: {
+                supplier_shortage_report_items: {
+                  include: {
+                    book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+                  },
+                  orderBy: { id: "asc" },
+                },
+              },
+              orderBy: { created_at: "desc" },
+            },
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    return res.json({
+      data: {
+        supplier: { id: supplier.id, code: supplier.code, name: supplier.name, email: supplier.email },
+        orders: dispatches.map(mapPortalOrder),
+      },
+    });
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while loading supplier account orders:");
+  }
+}
+
+async function confirmSupplierAccountOrder(req, res) {
+  try {
+    const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    req.params.token = token;
+    return confirmPortalOrder(req, res);
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while confirming supplier account order:");
+  }
+}
+
+async function createSupplierAccountInvoice(req, res) {
+  try {
+    const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    req.params.token = token;
+    return createPortalInvoice(req, res);
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while creating supplier account invoice:");
+  }
+}
+
+async function acknowledgeSupplierAccountShortage(req, res) {
+  try {
+    const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    req.params.token = token;
+    return acknowledgeShortageReport(req, res);
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while acknowledging supplier account shortage:");
+  }
+}
+
+async function cannotFulfillSupplierAccountShortage(req, res) {
+  try {
+    const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    req.params.token = token;
+    return cannotFulfillShortageReport(req, res);
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while marking supplier account shortage cannot fulfill:");
+  }
+}
+
+async function createSupplierAccountRedeliveryInvoice(req, res) {
+  try {
+    const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    req.params.token = token;
+    return createRedeliveryInvoice(req, res);
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while creating supplier account redelivery:");
+  }
+}
+
 function supplierCannotPostStock(_req, res) {
   return res.status(403).json({ message: "Supplier portal cannot create or post goods receipts" });
 }
@@ -238,5 +632,14 @@ module.exports = {
   getPortalOrder,
   confirmPortalOrder,
   createPortalInvoice,
+  acknowledgeShortageReport,
+  cannotFulfillShortageReport,
+  createRedeliveryInvoice,
+  getSupplierAccountOrders,
+  confirmSupplierAccountOrder,
+  createSupplierAccountInvoice,
+  acknowledgeSupplierAccountShortage,
+  cannotFulfillSupplierAccountShortage,
+  createSupplierAccountRedeliveryInvoice,
   supplierCannotPostStock,
 };

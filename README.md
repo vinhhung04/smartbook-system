@@ -394,6 +394,70 @@ Expected summary:
 PASS=13 TOTAL=13
 ```
 
+### Supplier Portal / Shortage Redelivery
+
+Supplier Portal supports two vendor entry points:
+
+- Authenticated supplier account: supplier signs in at `/login` and is routed to `/supplier`.
+- Public token fallback: staff can still open `/supplier/portal/:token` from a PO dispatch link.
+
+Demo supplier accounts use the same default password:
+
+```text
+supplier-sv / 123456
+supplier-phuongnam / 123456
+supplier-ibd / 123456
+```
+
+Authenticated supplier access is scoped by matching the login email to the
+inventory supplier email. Supplier accounts have only `supplier.portal.*`
+permissions and cannot access stock receiving endpoints.
+
+```text
+Manager approves PO
+-> Purchase staff sends to supplier
+-> Supplier confirms
+-> Supplier submits invoice / delivery note
+-> Warehouse staff creates Goods Receipt draft from invoice
+-> Staff posts Goods Receipt
+-> Shortage report if counted quantity is short
+-> Supplier acknowledges shortage
+-> Supplier submits redelivery invoice
+-> Staff receives redelivery and resolves shortage
+```
+
+Business rules:
+
+- Supplier can confirm orders and submit invoice, delivery note, or redelivery note only.
+- Supplier cannot create Goods Receipts, post Goods Receipts, mutate stock, or edit stock.
+- Stock increases only when a Goods Receipt is `POSTED`; `DRAFT` receipts do not affect stock.
+- Supplier invoice quantity cannot exceed Purchase Order remaining quantity.
+- Redelivery quantity cannot exceed the linked shortage report quantity or PO remaining quantity.
+- Staff receiving from supplier invoice cannot receive more than the invoice quantity or PO remaining quantity.
+- Shortage reports are visible to staff and supplier, can be sent to supplier, acknowledged, redelivered, and resolved.
+
+Frontend entry points:
+
+```text
+/supplier
+/supplier/portal/:token
+/supplier-deliveries
+/supplier-deliveries/:id
+/purchase-orders/:id
+```
+
+Docker integration test:
+
+```powershell
+node scripts\supplier-portal-integration.mjs
+```
+
+Expected summary:
+
+```text
+PASS=22 TOTAL=22
+```
+
 ### Analytics dashboard integration
 
 Script này đăng nhập bằng tài khoản staff demo, gọi đủ 7 endpoint `/analytics` qua API Gateway, kiểm tra response có field `data`, kiểm tra kiểu dữ liệu cơ bản và xác nhận customer token bị chặn 403:

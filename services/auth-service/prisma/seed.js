@@ -56,6 +56,10 @@ async function main() {
     { code: 'inventory.purchase.write', module_name: 'inventory', action_name: 'write', description: 'Create and manage purchase orders' },
     { code: 'inventory.purchase.approve', module_name: 'inventory', action_name: 'write', description: 'Approve purchase orders' },
 
+    // Supplier account module
+    { code: 'supplier.portal.read', module_name: 'supplier', action_name: 'read', description: 'View supplier account purchase orders and delivery documents' },
+    { code: 'supplier.portal.write', module_name: 'supplier', action_name: 'write', description: 'Confirm supplier orders and submit delivery documents' },
+
     // Transfer module
     { code: 'inventory.transfer.read', module_name: 'inventory', action_name: 'read', description: 'View transfer orders' },
     { code: 'inventory.transfer.write', module_name: 'inventory', action_name: 'write', description: 'Create and manage transfer orders' },
@@ -161,6 +165,17 @@ async function main() {
   // STEP 3: ASSIGN PERMISSIONS TO ROLES
   // ═══════════════════════════════════════════════════════════════════════════════
 
+  const supplierRole = await prisma.role.upsert({
+    where: { code: 'SUPPLIER' },
+    update: {},
+    create: {
+      code: 'SUPPLIER',
+      name: 'Supplier',
+      description: 'External supplier account for confirming purchase orders and submitting delivery documents',
+      is_system: true,
+    },
+  });
+
   const allPerms = await prisma.permission.findMany();
   const permMap = {};
   for (const p of allPerms) {
@@ -255,6 +270,22 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════════════════
   // STEP 4: USERS
   // ═══════════════════════════════════════════════════════════════════════════════
+
+  // SUPPLIER: External account only. No stock mutation or warehouse receiving permissions.
+  const supplierPermCodes = [
+    'supplier.portal.read',
+    'supplier.portal.write',
+  ];
+  for (const code of supplierPermCodes) {
+    if (permMap[code]) {
+      await prisma.rolePermission.upsert({
+        where: { role_id_permission_id: { role_id: supplierRole.id, permission_id: permMap[code].id } },
+        update: {},
+        create: { role_id: supplierRole.id, permission_id: permMap[code].id },
+      });
+    }
+  }
+  console.log(`âœ… Assigned ${supplierPermCodes.length} permissions to SUPPLIER`);
 
   const passwordHash = await bcrypt.hash('123456', 12);
 
@@ -369,6 +400,46 @@ async function main() {
         is_superuser: false,
       },
     }),
+    // Demo supplier users. Emails match inventory suppliers for supplier account scoping.
+    prisma.user.upsert({
+      where: { username: 'supplier-sv' },
+      update: {},
+      create: {
+        username: 'supplier-sv',
+        email: 'minh@nppsv.com.vn',
+        password_hash: passwordHash,
+        full_name: 'NPP Sach Viet Supplier',
+        phone: '+84901234575',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    prisma.user.upsert({
+      where: { username: 'supplier-phuongnam' },
+      update: {},
+      create: {
+        username: 'supplier-phuongnam',
+        email: 'hong@ppnps.com.vn',
+        password_hash: passwordHash,
+        full_name: 'Phuong Nam Supplier',
+        phone: '+84901234576',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    prisma.user.upsert({
+      where: { username: 'supplier-ibd' },
+      update: {},
+      create: {
+        username: 'supplier-ibd',
+        email: 'john@ibd.com',
+        password_hash: passwordHash,
+        full_name: 'International Book Distributor',
+        phone: '+84901234577',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
   ]);
 
   console.log(`✅ Created ${users.length} users`);
@@ -424,6 +495,14 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════════════════
   // STEP 6: USER WAREHOUSE SCOPES
   // ═══════════════════════════════════════════════════════════════════════════════
+
+  for (const supplierUser of users.slice(8, 11)) {
+    await prisma.userRole.upsert({
+      where: { user_id_role_id: { user_id: supplierUser.id, role_id: supplierRole.id } },
+      update: {},
+      create: { user_id: supplierUser.id, role_id: supplierRole.id },
+    });
+  }
 
   // Placeholder warehouse IDs - these should match actual warehouse IDs from inventory service
   const warehouseIds = {
