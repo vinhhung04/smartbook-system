@@ -12,11 +12,11 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getAllWarehouses);
-router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getWarehouseById);
-router.post('/', authorizeAnyPermission(['inventory.stock.write']), createWarehouse);
-router.put('/:id', authorizeAnyPermission(['inventory.stock.write']), updateWarehouse);
-router.delete('/:id', authorizeAnyPermission(['inventory.stock.write']), deleteWarehouse);
-router.get('/:warehouseId/locations', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getZonesAndBinsByWarehouse);
+router.get('/', authorizeAnyPermission(['inventory.warehouse.read', 'inventory.warehouse.write']), getAllWarehouses);
+router.get('/:id', authorizeAnyPermission(['inventory.warehouse.read', 'inventory.warehouse.write']), getWarehouseById);
+router.post('/', authorizeAnyPermission(['inventory.warehouse.write']), createWarehouse);
+router.put('/:id', authorizeAnyPermission(['inventory.warehouse.write']), updateWarehouse);
+router.delete('/:id', authorizeAnyPermission(['inventory.warehouse.write']), deleteWarehouse);
+router.get('/:warehouseId/locations', authorizeAnyPermission(['inventory.warehouse.read', 'inventory.warehouse.write']), getZonesAndBinsByWarehouse);
 
 module.exports = router;

@@ -15,10 +15,12 @@ const canRead = authorizeAnyPermission([
   "inventory.purchase.write",
   "inventory.stock.read",
   "inventory.stock.write",
+  "inventory.receiving.read",
+  "inventory.receiving.write",
 ]);
 const canWrite = authorizeAnyPermission([
   "inventory.purchase.write",
-  "inventory.stock.write",
+  "inventory.receiving.write",
 ]);
 
 router.get("/", canRead, getSupplierDeliveries);

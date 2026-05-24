@@ -59,12 +59,6 @@ async function getUserRolesAndPermissions(userId) {
   const roles = roleRows.map((r) => r.code);
   const permissions = new Set(permissionRows.map((p) => p.code));
 
-  if (roles.includes('CUSTOMER')) {
-    permissions.add('inventory.catalog.read');
-    permissions.add('borrow.read');
-    permissions.add('borrow.write');
-  }
-
   return {
     roles,
     permissions: Array.from(permissions.values()),
@@ -140,8 +134,13 @@ async function register(req, res) {
         INSERT INTO permissions (code, module_name, action_name, description)
         VALUES
           ('inventory.catalog.read', 'inventory', 'read', 'View catalog and variants'),
-          ('borrow.read', 'borrow', 'read', 'View customers, reservations and loans'),
-          ('borrow.write', 'borrow', 'write', 'Create reservations, loans and returns')
+          ('customer.self.read', 'customer', 'read', 'View own customer profile'),
+          ('customer.self.write', 'customer', 'write', 'Update own customer profile'),
+          ('borrow.self.read', 'borrow', 'read', 'View own borrow data'),
+          ('borrow.self.write', 'borrow', 'write', 'Create own reservations and requests'),
+          ('fine.self.read', 'borrow', 'read', 'View own fines'),
+          ('notification.self.read', 'borrow', 'read', 'View own notifications'),
+          ('account.self.read', 'borrow', 'read', 'View own account ledger')
         ON CONFLICT (code) DO NOTHING
         `
       );
@@ -152,7 +151,16 @@ async function register(req, res) {
         SELECT r.id, p.id
         FROM roles r
         JOIN permissions p
-          ON p.code IN ('inventory.catalog.read', 'borrow.read', 'borrow.write')
+          ON p.code IN (
+            'inventory.catalog.read',
+            'customer.self.read',
+            'customer.self.write',
+            'borrow.self.read',
+            'borrow.self.write',
+            'fine.self.read',
+            'notification.self.read',
+            'account.self.read'
+          )
         WHERE r.code = 'CUSTOMER'
         ON CONFLICT DO NOTHING
         `
@@ -326,6 +334,7 @@ async function login(req, res) {
         sub: user.id,
         username: user.username,
         email: user.email,
+        full_name: user.full_name,
         status: user.status,
         is_superuser: user.is_superuser,
         roles,

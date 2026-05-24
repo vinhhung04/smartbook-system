@@ -12,6 +12,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { hasPermission } from "@/lib/rbac";
 
 const filters = ["All", "Complete", "Incomplete", "Low Stock", "Out of Stock"];
 
@@ -49,6 +50,7 @@ export function CatalogPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const canWriteCatalog = hasPermission("inventory.catalog.write");
 
   const [newBook, setNewBook] = useState({ barcode: "", title: "", author: "", category: "", isbn: "" });
 
@@ -226,14 +228,14 @@ export function CatalogPage() {
               <Sparkles className="w-4 h-4" />
               AI Import
             </NavLink>
-            <button
+            {canWriteCatalog ? <button
               onClick={() => setShowDrawer(true)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-blue-700 text-[13px] shadow-lg hover:shadow-xl hover:bg-blue-50 active:scale-[0.98] transition-all"
               style={{ fontWeight: 600 }}
             >
               <Plus className="w-4 h-4" />
               Add Book
-            </button>
+            </button> : null}
           </div>
         </div>
       </motion.div>
@@ -478,7 +480,7 @@ export function CatalogPage() {
                           >
                             <Eye className="w-3.5 h-3.5 text-primary" />
                           </NavLink>
-                          <button
+                          {canWriteCatalog ? <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteBook(book);
@@ -486,7 +488,7 @@ export function CatalogPage() {
                             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                          </button>
+                          </button> : null}
                         </div>
                       </td>
                     </motion.tr>
@@ -503,7 +505,7 @@ export function CatalogPage() {
 
       {/* Drawer */}
       <AnimatePresence>
-        {showDrawer && (
+        {showDrawer && canWriteCatalog && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
@@ -629,7 +631,7 @@ export function CatalogPage() {
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
-        {deleteBook && (
+        {deleteBook && canWriteCatalog && (
           <>
             <motion.div
               initial={{ opacity: 0 }}

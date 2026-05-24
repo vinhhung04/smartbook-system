@@ -210,6 +210,24 @@ const customers = await Promise.all([
       total_fine_balance: 0,
     },
   }),
+  prisma.customers.upsert({
+    where: { customer_code: 'CUST-DEMO-001' },
+    update: {
+      email: 'customer01@smartbook.vn',
+      full_name: 'Customer Demo',
+      status: 'ACTIVE',
+    },
+    create: {
+      customer_code: 'CUST-DEMO-001',
+      full_name: 'Customer Demo',
+      email: 'customer01@smartbook.vn',
+      phone: '+84901234562',
+      birth_date: new Date('1998-09-09'),
+      address: 'SmartBook Demo Customer Address',
+      status: 'ACTIVE',
+      total_fine_balance: 0,
+    },
+  }),
 ]);
 
 console.log(`✅ Created ${customers.length} customers`);
@@ -282,6 +300,14 @@ await prisma.customer_memberships.createMany({
       card_number: 'CARD-008-GOLD',
       start_date: new Date('2024-06-01'),
       end_date: new Date('2025-06-01'),
+      status: 'ACTIVE',
+    },
+    {
+      customer_id: customers[8].id,
+      plan_id: plans[0].id, // BASIC
+      card_number: 'CARD-DEMO-001',
+      start_date: new Date('2024-01-01'),
+      end_date: new Date('2027-01-01'),
       status: 'ACTIVE',
     },
   ],
@@ -383,6 +409,15 @@ await prisma.customer_accounts.createMany({
       available_balance: 300000,
       held_balance: 0,
       total_credited: 300000,
+      total_debited: 0,
+    },
+    {
+      customer_id: customers[8].id,
+      currency_code: 'VND',
+      status: 'ACTIVE',
+      available_balance: 250000,
+      held_balance: 0,
+      total_credited: 250000,
       total_debited: 0,
     },
   ],

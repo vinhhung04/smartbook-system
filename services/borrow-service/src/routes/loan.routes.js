@@ -13,13 +13,13 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['borrow.read', 'borrow.write']), listLoans);
-router.get('/renewal-requests', authorizeAnyPermission(['borrow.read', 'borrow.write']), listRenewalRequests);
-router.post('/direct', authorizeAnyPermission(['borrow.write']), createDirectLoan);
-router.post('/:id/renewals/review', authorizeAnyPermission(['borrow.write']), reviewLoanRenewal);
-router.get('/:id', authorizeAnyPermission(['borrow.read', 'borrow.write']), getLoanById);
-router.post('/from-reservation/:id', authorizeAnyPermission(['borrow.write']), convertReservationToLoan);
-router.post('/:id/return', authorizeAnyPermission(['borrow.write']), returnLoan);
-router.post('/jobs/overdue-sweep', authorizeAnyPermission(['borrow.write']), runOverdueSweepNow);
+router.get('/', authorizeAnyPermission(['borrow.loans.read', 'borrow.loans.write']), listLoans);
+router.get('/renewal-requests', authorizeAnyPermission(['borrow.loans.read', 'borrow.loans.write']), listRenewalRequests);
+router.post('/direct', authorizeAnyPermission(['borrow.loans.write']), createDirectLoan);
+router.post('/:id/renewals/review', authorizeAnyPermission(['borrow.loans.write']), reviewLoanRenewal);
+router.get('/:id', authorizeAnyPermission(['borrow.loans.read', 'borrow.loans.write']), getLoanById);
+router.post('/from-reservation/:id', authorizeAnyPermission(['borrow.loans.write']), convertReservationToLoan);
+router.post('/:id/return', authorizeAnyPermission(['borrow.loans.write']), returnLoan);
+router.post('/jobs/overdue-sweep', authorizeAnyPermission(['borrow.loans.write']), runOverdueSweepNow);
 
 module.exports = router;

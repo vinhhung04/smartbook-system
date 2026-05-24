@@ -13,8 +13,8 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-const canOperateStock = authorizeAnyPermission(['inventory.stock.write']);
-const canReadRequests = authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write', 'inventory.purchase.approve']);
+const canOperateStock = authorizeAnyPermission(['inventory.transfer.write', 'inventory.stock.write']);
+const canReadRequests = authorizeAnyPermission(['inventory.transfer.read', 'inventory.transfer.write', 'inventory.stock.read', 'inventory.stock.write', 'inventory.purchase.approve']);
 const canApprove = authorizeAnyPermission(['inventory.purchase.approve']);
 
 router.get('/variants/search', canOperateStock, searchVariants);

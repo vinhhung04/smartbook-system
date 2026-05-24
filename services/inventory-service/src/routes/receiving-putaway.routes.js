@@ -14,10 +14,11 @@ const {
 const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canOperateStock = authorizeAnyPermission(['inventory.stock.write']);
+const canOperateStock = authorizeAnyPermission(['inventory.putaway.execute']);
+const canReadReceiving = authorizeAnyPermission(['inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute']);
 
-router.get('/warehouses/:warehouseId/receivings', canOperateStock, getWarehouseReceivings);
-router.get('/receivings/:receivingId/items', canOperateStock, getReceivingItems);
+router.get('/warehouses/:warehouseId/receivings', canReadReceiving, getWarehouseReceivings);
+router.get('/receivings/:receivingId/items', canReadReceiving, getReceivingItems);
 router.get('/receivings/:receivingId/candidates', canOperateStock, getCompartmentCandidates);
 router.get('/lookup/location-by-barcode', canOperateStock, lookupCompartmentByBarcode);
 router.get('/lookup/variant-by-barcode', canOperateStock, lookupVariantByBarcode);

@@ -16,6 +16,7 @@ import {
 } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
+import { hasPermission } from '@/lib/rbac';
 
 const statuses: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'];
 
@@ -63,6 +64,7 @@ export function BorrowReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const canWriteLoans = hasPermission('borrow.loans.write');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ReservationStatus>('ALL');
   const [formOpen, setFormOpen] = useState(false);
@@ -436,7 +438,7 @@ export function BorrowReservationsPage() {
             <p className="text-sm text-muted-foreground">{reservations.length} reservations</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        {canWriteLoans ? <div className="flex items-center gap-3">
           <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2">
             <RefreshCw className="w-4 h-4" />
             Release Expired
@@ -449,10 +451,10 @@ export function BorrowReservationsPage() {
             <Plus className="w-4 h-4" />
             New Direct Loan
           </Button>
-        </div>
+        </div> : null}
       </motion.div>
 
-      <motion.div
+      {canWriteLoans ? <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
@@ -499,7 +501,7 @@ export function BorrowReservationsPage() {
             </div>
           </div>
         </SectionCard>
-      </motion.div>
+      </motion.div> : null}
 
       {/* Filter Bar */}
       <motion.div
@@ -594,7 +596,7 @@ export function BorrowReservationsPage() {
                         <Badge variant={getBadgeVariant(reservation.status)}>{reservation.status}</Badge>
                       </td>
                       <td className="px-5 py-3.5">
-                        {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
+                        {canWriteLoans && ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
                           <div className="flex flex-wrap items-center gap-2">
                             {reservation.status === 'PENDING' ? (
                               <Button
@@ -647,7 +649,7 @@ export function BorrowReservationsPage() {
 
       {/* Create Form Modal */}
       <AnimatePresence>
-        {formOpen && (
+        {formOpen && canWriteLoans && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -913,12 +915,12 @@ export function BorrowReservationsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-      <BarcodeScanModal
+      {canWriteLoans ? <BarcodeScanModal
         isOpen={pickupScannerOpen}
         onClose={() => setPickupScannerOpen(false)}
         onDetected={(code) => void convertPickupCode(code)}
         title="Scan pickup QR"
-      />
+      /> : null}
     </div>
   );
 }

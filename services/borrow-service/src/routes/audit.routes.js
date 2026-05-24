@@ -1,9 +1,10 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma');
+const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', authorizeAnyPermission(['observability.logs.read']), async (req, res) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));

@@ -10,9 +10,9 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getGoodsReceipts);
-router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getGoodsReceiptById);
-router.post('/', authorizeAnyPermission(['inventory.stock.write']), createGoodsReceipt);
-router.patch('/:id', authorizeAnyPermission(['inventory.stock.write']), updateGoodsReceipt);
+router.get('/', authorizeAnyPermission(['inventory.receiving.read', 'inventory.receiving.write']), getGoodsReceipts);
+router.get('/:id', authorizeAnyPermission(['inventory.receiving.read', 'inventory.receiving.write']), getGoodsReceiptById);
+router.post('/', authorizeAnyPermission(['inventory.receiving.write']), createGoodsReceipt);
+router.patch('/:id', authorizeAnyPermission(['inventory.receiving.write']), updateGoodsReceipt);
 
 module.exports = router;

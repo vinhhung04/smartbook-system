@@ -501,8 +501,8 @@ async function createRole(req, res) {
 
       const inserted = await tx.$queryRawUnsafe(
         `
-          INSERT INTO roles (code, name, description, is_system)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO roles (code, name, description, is_system, updated_at)
+          VALUES ($1, $2, $3, $4, NOW())
           RETURNING id, code, name, description, is_system, created_at, updated_at
         `,
         code,

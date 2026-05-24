@@ -26,28 +26,31 @@ const {
   subscribeAvailabilityAlert,
   unsubscribeAvailabilityAlert,
 } = require('../controllers/wishlist.controller');
+const { authorizeAnyPermission, authorizeAnyRole } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/profile', require('../controllers/customer.controller').getMyProfile);
-router.patch('/profile', require('../controllers/customer.controller').updateMyProfile);
-router.get('/membership', require('../controllers/customer.controller').getMyMembership);
+router.use(authorizeAnyRole(['CUSTOMER']));
 
-router.get('/reservations', getMyReservations);
-router.post('/reservations', createMyReservation);
-router.patch('/reservations/:id/cancel', cancelMyReservation);
+router.get('/profile', authorizeAnyPermission(['customer.self.read']), require('../controllers/customer.controller').getMyProfile);
+router.patch('/profile', authorizeAnyPermission(['customer.self.write']), require('../controllers/customer.controller').updateMyProfile);
+router.get('/membership', authorizeAnyPermission(['customer.self.read']), require('../controllers/customer.controller').getMyMembership);
 
-router.get('/loans', getMyLoans);
-router.get('/loans/:id', getMyLoanById);
-router.post('/loans/:id/renew-request', requestMyLoanRenewal);
+router.get('/reservations', authorizeAnyPermission(['borrow.self.read']), getMyReservations);
+router.post('/reservations', authorizeAnyPermission(['borrow.self.write']), createMyReservation);
+router.patch('/reservations/:id/cancel', authorizeAnyPermission(['borrow.self.write']), cancelMyReservation);
 
-router.get('/account', getMyAccount);
-router.post('/account/topup', topupMyAccount);
-router.get('/account/ledger', getMyAccountLedger);
-router.get('/fines', getMyFines);
-router.post('/fines/payments', payMyFine);
-router.get('/notifications', getMyNotifications);
-router.patch('/notifications/:id/read', async (req, res) => {
+router.get('/loans', authorizeAnyPermission(['borrow.self.read']), getMyLoans);
+router.get('/loans/:id', authorizeAnyPermission(['borrow.self.read']), getMyLoanById);
+router.post('/loans/:id/renew-request', authorizeAnyPermission(['borrow.self.write']), requestMyLoanRenewal);
+
+router.get('/account', authorizeAnyPermission(['account.self.read']), getMyAccount);
+router.post('/account/topup', authorizeAnyPermission(['account.self.read']), topupMyAccount);
+router.get('/account/ledger', authorizeAnyPermission(['account.self.read']), getMyAccountLedger);
+router.get('/fines', authorizeAnyPermission(['fine.self.read']), getMyFines);
+router.post('/fines/payments', authorizeAnyPermission(['borrow.self.write']), payMyFine);
+router.get('/notifications', authorizeAnyPermission(['notification.self.read']), getMyNotifications);
+router.patch('/notifications/:id/read', authorizeAnyPermission(['notification.self.read']), async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
@@ -63,7 +66,7 @@ router.patch('/notifications/:id/read', async (req, res) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
-router.patch('/notifications/read-all', async (req, res) => {
+router.patch('/notifications/read-all', authorizeAnyPermission(['notification.self.read']), async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
@@ -80,7 +83,7 @@ router.patch('/notifications/read-all', async (req, res) => {
   }
 });
 
-router.get('/preferences', async (req, res) => {
+router.get('/preferences', authorizeAnyPermission(['customer.self.read']), async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
@@ -98,7 +101,7 @@ router.get('/preferences', async (req, res) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
-router.patch('/preferences', async (req, res) => {
+router.patch('/preferences', authorizeAnyPermission(['customer.self.write']), async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
@@ -123,16 +126,16 @@ router.patch('/preferences', async (req, res) => {
   }
 });
 
-router.post('/reviews', createOrUpdateMyReview);
-router.get('/reviews/book/:bookId', getMyReviewForBook);
-router.delete('/reviews/book/:bookId', deleteMyReview);
+router.post('/reviews', authorizeAnyPermission(['borrow.self.write']), createOrUpdateMyReview);
+router.get('/reviews/book/:bookId', authorizeAnyPermission(['borrow.self.read']), getMyReviewForBook);
+router.delete('/reviews/book/:bookId', authorizeAnyPermission(['borrow.self.write']), deleteMyReview);
 
-router.get('/wishlists', getMyWishlist);
-router.post('/wishlists', addToWishlist);
-router.delete('/wishlists/:bookId', removeFromWishlist);
+router.get('/wishlists', authorizeAnyPermission(['borrow.self.read']), getMyWishlist);
+router.post('/wishlists', authorizeAnyPermission(['borrow.self.write']), addToWishlist);
+router.delete('/wishlists/:bookId', authorizeAnyPermission(['borrow.self.write']), removeFromWishlist);
 
-router.get('/availability-alerts', getMyAvailabilityAlerts);
-router.post('/availability-alerts', subscribeAvailabilityAlert);
-router.delete('/availability-alerts/:bookId', unsubscribeAvailabilityAlert);
+router.get('/availability-alerts', authorizeAnyPermission(['borrow.self.read']), getMyAvailabilityAlerts);
+router.post('/availability-alerts', authorizeAnyPermission(['borrow.self.write']), subscribeAvailabilityAlert);
+router.delete('/availability-alerts/:bookId', authorizeAnyPermission(['borrow.self.write']), unsubscribeAvailabilityAlert);
 
 module.exports = router;

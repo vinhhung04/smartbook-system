@@ -11,10 +11,10 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/tree/:warehouseId', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationTreeByWarehouse);
-router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationById);
-router.post('/', authorizeAnyPermission(['inventory.stock.write']), createLocation);
-router.put('/:id', authorizeAnyPermission(['inventory.stock.write']), updateLocation);
-router.delete('/:id', authorizeAnyPermission(['inventory.stock.write']), deleteLocation);
+router.get('/tree/:warehouseId', authorizeAnyPermission(['inventory.warehouse.read', 'inventory.warehouse.write']), getLocationTreeByWarehouse);
+router.get('/:id', authorizeAnyPermission(['inventory.warehouse.read', 'inventory.warehouse.write']), getLocationById);
+router.post('/', authorizeAnyPermission(['inventory.warehouse.write']), createLocation);
+router.put('/:id', authorizeAnyPermission(['inventory.warehouse.write']), updateLocation);
+router.delete('/:id', authorizeAnyPermission(['inventory.warehouse.write']), deleteLocation);
 
 module.exports = router;

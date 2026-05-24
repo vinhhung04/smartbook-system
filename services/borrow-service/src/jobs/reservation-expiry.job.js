@@ -38,8 +38,11 @@ function startReservationExpiryJob() {
     timer.unref();
   }
 
-  console.log('[borrow-service][job] reservation expiry started', { intervalMs });
-  void executeReservationExpirySweep();
+  const initialDelayMs = Math.max(0, Number(process.env.RESERVATION_EXPIRY_INITIAL_DELAY_MS || 30_000));
+  console.log('[borrow-service][job] reservation expiry started', { intervalMs, initialDelayMs });
+  setTimeout(() => {
+    void executeReservationExpirySweep();
+  }, initialDelayMs).unref?.();
 }
 
 function stopReservationExpiryJob() {

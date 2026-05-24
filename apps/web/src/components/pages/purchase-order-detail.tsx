@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { hasPermission } from "@/lib/rbac";
 
 function statusVariant(status: string) {
   if (status === "RECEIVED" || status === "MATCHED" || status === "FULLY_RECEIVED") return "success";
@@ -115,11 +116,13 @@ export function PurchaseOrderDetailPage() {
     return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><EmptyState variant="no-data" title="Purchase order not found" description="This PO may have been deleted or does not exist" /></div>;
   }
 
-  const canEdit = ["DRAFT", "REJECTED"].includes(po.status);
-  const canSubmit = ["DRAFT", "REJECTED"].includes(po.status);
-  const canApprove = po.status === "PENDING_APPROVAL";
-  const canSendToSupplier = po.status === "APPROVED";
-  const canCancel = ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
+  const canWritePurchase = hasPermission("inventory.purchase.write");
+  const canApprovePurchase = hasPermission("inventory.purchase.approve");
+  const canEdit = canWritePurchase && ["DRAFT", "REJECTED"].includes(po.status);
+  const canSubmit = canWritePurchase && ["DRAFT", "REJECTED"].includes(po.status);
+  const canApprove = canApprovePurchase && po.status === "PENDING_APPROVAL";
+  const canSendToSupplier = canWritePurchase && po.status === "APPROVED";
+  const canCancel = canWritePurchase && ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
   const latestOpenInvoice = supplierDocs?.invoices.find((invoice) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status));
 
   return (

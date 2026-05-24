@@ -14,7 +14,7 @@ const {
 const { authorizeAnyPermission } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
-const canOperateStock = authorizeAnyPermission(["inventory.stock.write"]);
+const canOperateStock = authorizeAnyPermission(["inventory.transfer.write", "inventory.stock.write"]);
 
 router.get("/tasks", canOperateStock, listPickingTasks);
 router.post(

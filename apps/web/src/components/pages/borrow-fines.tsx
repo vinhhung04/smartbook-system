@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { borrowService, type Fine } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { hasPermission } from '@/lib/rbac';
 
 function getBadgeVariant(status: string) {
   if (status === 'PAID') return 'default';
@@ -20,6 +21,7 @@ export function BorrowFinesPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'WAIVED'>('ALL');
+  const canManageFines = hasPermission('borrow.fines.manage');
 
   const loadFines = async () => {
     try {
@@ -242,7 +244,7 @@ export function BorrowFinesPage() {
                           >
                             Detail
                           </Button>
-                          <Button
+                          {canManageFines ? <Button
                             size="sm"
                             variant="outline"
                             className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
@@ -250,8 +252,8 @@ export function BorrowFinesPage() {
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >
                             Pay
-                          </Button>
-                          <Button
+                          </Button> : null}
+                          {canManageFines ? <Button
                             size="sm"
                             variant="outline"
                             className="border-amber-200 text-amber-700 hover:bg-amber-50"
@@ -259,7 +261,7 @@ export function BorrowFinesPage() {
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >
                             Waive/Reduce
-                          </Button>
+                          </Button> : null}
                         </div>
                       </td>
                     </motion.tr>

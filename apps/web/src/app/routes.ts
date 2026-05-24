@@ -58,9 +58,12 @@ import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
 import { SupplierAccountPage } from "@/components/pages/supplier/supplier-account";
 import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
 import { NotFoundPage } from "@/components/pages/not-found";
+import { NotAuthorizedPage } from "@/components/pages/not-authorized";
+import { AdminDashboardPage, LibrarianDashboardPage, ManagerDashboardPage, StaffDashboardPage } from "@/components/pages/actor-dashboard";
 import { authService } from "@/services/auth";
+import { canAccessRoute, getDefaultRouteForUser, type RouteAccessRule } from "@/lib/rbac";
 
-async function requireAuthLoader() {
+async function requireInternalAuthLoader(rule: RouteAccessRule = {}) {
   const user = await authService.hydrateCurrentUser();
   if (!user) {
     throw redirect("/login");
@@ -71,7 +74,18 @@ async function requireAuthLoader() {
   if (Array.isArray(user.roles) && user.roles.includes("SUPPLIER")) {
     throw redirect("/supplier");
   }
+  if (!canAccessRoute(rule, user)) {
+    throw redirect("/403");
+  }
   return null;
+}
+
+async function rootIndexLoader() {
+  const user = await authService.hydrateCurrentUser();
+  if (!user) {
+    throw redirect("/login");
+  }
+  throw redirect(getDefaultRouteForUser(user));
 }
 
 function publicOnlyLoader() {
@@ -82,7 +96,7 @@ function publicOnlyLoader() {
     if (authService.isSupplier()) {
       throw redirect("/supplier");
     }
-    throw redirect("/");
+    throw redirect(getDefaultRouteForUser(authService.getCurrentUser()));
   }
   return null;
 }
@@ -93,7 +107,7 @@ async function requireCustomerAuthLoader() {
     throw redirect('/customer/login');
   }
   if (!Array.isArray(user.roles) || !user.roles.includes('CUSTOMER')) {
-    throw redirect('/');
+    throw redirect('/403');
   }
   return null;
 }
@@ -105,7 +119,7 @@ function customerPublicOnlyLoader() {
   if (authService.isCustomer()) {
     throw redirect('/customer');
   }
-  throw redirect('/');
+  throw redirect(getDefaultRouteForUser(authService.getCurrentUser()));
 }
 
 async function requireSupplierAuthLoader() {
@@ -114,9 +128,13 @@ async function requireSupplierAuthLoader() {
     throw redirect('/login');
   }
   if (!Array.isArray(user.roles) || !user.roles.includes('SUPPLIER')) {
-    throw redirect('/');
+    throw redirect('/403');
   }
   return null;
+}
+
+function guarded(rule: RouteAccessRule) {
+  return () => requireInternalAuthLoader(rule);
 }
 
 export const router = createBrowserRouter([
@@ -169,49 +187,58 @@ export const router = createBrowserRouter([
     Component: SupplierAccountPage,
   },
   {
+    path: "/403",
+    Component: NotAuthorizedPage,
+  },
+  {
     path: "/",
-    loader: requireAuthLoader,
+    loader: () => requireInternalAuthLoader(),
     Component: AppLayout,
     children: [
-      { index: true, Component: DashboardPage },
-      { path: "catalog", Component: CatalogPage },
-      { path: "book/:id", Component: BookDetailPage },
-      { path: "inventory", Component: InventoryPage },
-      { path: "orders", Component: OrdersPage },
-      { path: "orders/new", Component: GoodsReceiptPage },
-      { path: "orders/:id", Component: OrderDetailPage },
-      { path: "purchase-orders", Component: PurchaseOrdersPage },
-      { path: "purchase-orders/new", Component: PurchaseOrderFormPage },
-      { path: "purchase-orders/:id", Component: PurchaseOrderDetailPage },
-      { path: "purchase-orders/:id/edit", Component: PurchaseOrderFormPage },
-      { path: "supplier-deliveries", Component: SupplierDeliveriesPage },
-      { path: "supplier-deliveries/:id", Component: SupplierDeliveriesPage },
-      { path: "putaway", Component: PutawayPage },
-      { path: "putaway/:id", Component: PutawayDetailPage },
-      { path: "putaway/:id/execute", Component: PutawayExecutePage },
-      { path: "receiving-putaway", Component: ReceivingPutawayPage },
-      { path: "receiving-smart", Component: SmartReceivingPage },
-      { path: "picking", Component: PickingPage },
-      { path: "order-requests", Component: OrderRequestsPage },
-      { path: "movements", Component: MovementsPage },
-      { path: "outbound", Component: OutboundPage },
-      { path: "warehouses", Component: WarehousesPage },
-      { path: "shelves", Component: ShelvesPage },
-      { path: "ai-import", Component: AIImportPage },
-      { path: "recommendations", Component: RecommendationsPage },
-      { path: "reorder-suggestions", Component: ReorderSuggestionsPage },
-      { path: "borrow", Component: BorrowPage },
-      { path: "borrow/customers", Component: BorrowCustomersPage },
-      { path: "borrow/reservations", Component: BorrowReservationsPage },
-      { path: "borrow/loans", Component: BorrowLoansPage },
-      { path: "borrow/loans/:id", Component: BorrowLoanDetailPage },
-      { path: "borrow/fines", Component: BorrowFinesPage },
-      { path: "reports", Component: ReportsPage },
-      { path: "audit-trail", Component: AuditTrailPage },
-      { path: "membership-plans", Component: MembershipPlansPage },
-      { path: "suppliers", Component: SuppliersPage },
-      { path: "users", Component: UsersPage },
-      { path: "roles", Component: RolesPage },
+      { index: true, loader: rootIndexLoader },
+      { path: "admin", loader: guarded({ allowedRoles: ["ADMIN"], requiredPermissions: ["auth.users.read", "auth.roles.read"] }), Component: AdminDashboardPage },
+      { path: "manager", loader: guarded({ allowedRoles: ["MANAGER"], requiredPermissions: ["analytics.reports.view", "inventory.purchase.approve"] }), Component: ManagerDashboardPage },
+      { path: "librarian", loader: guarded({ allowedRoles: ["LIBRARIAN", "CUSTOMER_SERVICE"], requiredPermissions: ["borrow.loans.read"] }), Component: LibrarianDashboardPage },
+      { path: "staff", loader: guarded({ allowedRoles: ["STAFF", "WAREHOUSE_OPERATOR"], requiredPermissions: ["inventory.stock.read", "inventory.receiving.read"] }), Component: StaffDashboardPage },
+      { path: "dashboard", loader: guarded({ requiredPermissions: ["analytics.reports.view"] }), Component: DashboardPage },
+      { path: "catalog", loader: guarded({ requiredPermissions: ["inventory.catalog.read"] }), Component: CatalogPage },
+      { path: "book/:id", loader: guarded({ requiredPermissions: ["inventory.catalog.read"] }), Component: BookDetailPage },
+      { path: "inventory", loader: guarded({ requiredPermissions: ["inventory.stock.read"] }), Component: InventoryPage },
+      { path: "orders", loader: guarded({ requiredPermissions: ["inventory.receiving.read", "inventory.receiving.write"] }), Component: OrdersPage },
+      { path: "orders/new", loader: guarded({ requiredPermissions: ["inventory.receiving.write"] }), Component: GoodsReceiptPage },
+      { path: "orders/:id", loader: guarded({ requiredPermissions: ["inventory.receiving.read", "inventory.receiving.write"] }), Component: OrderDetailPage },
+      { path: "purchase-orders", loader: guarded({ requiredPermissions: ["inventory.purchase.read", "inventory.purchase.write", "inventory.purchase.approve"] }), Component: PurchaseOrdersPage },
+      { path: "purchase-orders/new", loader: guarded({ requiredPermissions: ["inventory.purchase.write"] }), Component: PurchaseOrderFormPage },
+      { path: "purchase-orders/:id", loader: guarded({ requiredPermissions: ["inventory.purchase.read", "inventory.purchase.write", "inventory.purchase.approve"] }), Component: PurchaseOrderDetailPage },
+      { path: "purchase-orders/:id/edit", loader: guarded({ requiredPermissions: ["inventory.purchase.write"] }), Component: PurchaseOrderFormPage },
+      { path: "supplier-deliveries", loader: guarded({ requiredPermissions: ["inventory.purchase.read", "inventory.receiving.read", "inventory.receiving.write"] }), Component: SupplierDeliveriesPage },
+      { path: "supplier-deliveries/:id", loader: guarded({ requiredPermissions: ["inventory.purchase.read", "inventory.receiving.read", "inventory.receiving.write"] }), Component: SupplierDeliveriesPage },
+      { path: "putaway", loader: guarded({ requiredPermissions: ["inventory.putaway.execute"] }), Component: PutawayPage },
+      { path: "putaway/:id", loader: guarded({ requiredPermissions: ["inventory.putaway.execute"] }), Component: PutawayDetailPage },
+      { path: "putaway/:id/execute", loader: guarded({ requiredPermissions: ["inventory.putaway.execute"] }), Component: PutawayExecutePage },
+      { path: "receiving-putaway", loader: guarded({ requiredPermissions: ["inventory.putaway.execute"] }), Component: ReceivingPutawayPage },
+      { path: "receiving-smart", loader: guarded({ requiredPermissions: ["inventory.receiving.write", "ai.scan.receipt"] }), Component: SmartReceivingPage },
+      { path: "picking", loader: guarded({ requiredPermissions: ["inventory.transfer.write", "inventory.stock.write"] }), Component: PickingPage },
+      { path: "order-requests", loader: guarded({ requiredPermissions: ["inventory.transfer.read", "inventory.transfer.write", "inventory.purchase.approve"] }), Component: OrderRequestsPage },
+      { path: "movements", loader: guarded({ requiredPermissions: ["inventory.stock.read"] }), Component: MovementsPage },
+      { path: "outbound", loader: guarded({ requiredPermissions: ["inventory.transfer.write", "inventory.stock.write"] }), Component: OutboundPage },
+      { path: "warehouses", loader: guarded({ requiredPermissions: ["inventory.warehouse.read"] }), Component: WarehousesPage },
+      { path: "shelves", loader: guarded({ requiredPermissions: ["inventory.stock.read"] }), Component: ShelvesPage },
+      { path: "ai-import", loader: guarded({ requiredPermissions: ["ai.ocr.process", "ai.catalog.assist", "ai.scan.receipt"] }), Component: AIImportPage },
+      { path: "recommendations", loader: guarded({ requiredPermissions: ["ai.recommendation.view"] }), Component: RecommendationsPage },
+      { path: "reorder-suggestions", loader: guarded({ requiredPermissions: ["analytics.forecast.view", "ai.recommendation.view"] }), Component: ReorderSuggestionsPage },
+      { path: "borrow", loader: guarded({ requiredPermissions: ["borrow.loans.read"] }), Component: BorrowPage },
+      { path: "borrow/customers", loader: guarded({ requiredPermissions: ["borrow.customers.read"] }), Component: BorrowCustomersPage },
+      { path: "borrow/reservations", loader: guarded({ requiredPermissions: ["borrow.loans.read"] }), Component: BorrowReservationsPage },
+      { path: "borrow/loans", loader: guarded({ requiredPermissions: ["borrow.loans.read"] }), Component: BorrowLoansPage },
+      { path: "borrow/loans/:id", loader: guarded({ requiredPermissions: ["borrow.loans.read"] }), Component: BorrowLoanDetailPage },
+      { path: "borrow/fines", loader: guarded({ requiredPermissions: ["borrow.fines.read", "borrow.fines.manage"] }), Component: BorrowFinesPage },
+      { path: "reports", loader: guarded({ requiredPermissions: ["analytics.reports.view"] }), Component: ReportsPage },
+      { path: "audit-trail", loader: guarded({ requiredPermissions: ["auth.audit.read", "observability.logs.read"] }), Component: AuditTrailPage },
+      { path: "membership-plans", loader: guarded({ requiredPermissions: ["borrow.memberships.manage"] }), Component: MembershipPlansPage },
+      { path: "suppliers", loader: guarded({ requiredPermissions: ["inventory.purchase.read", "inventory.purchase.write"] }), Component: SuppliersPage },
+      { path: "users", loader: guarded({ requiredPermissions: ["auth.users.read"] }), Component: UsersPage },
+      { path: "roles", loader: guarded({ requiredPermissions: ["auth.roles.read", "auth.permissions.read"] }), Component: RolesPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

@@ -2,20 +2,25 @@ const jwt = require('jsonwebtoken');
 
 const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL || 'http://inventory-service:3001';
 const SERVICE_ACTOR_ID = '00000000-0000-0000-0000-000000000001';
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key';
 
-function getInventoryAuthHeader(authHeader) {
-  if (authHeader) {
-    return authHeader;
-  }
-
+function getInventoryAuthHeader() {
   const token = jwt.sign(
     {
       id: SERVICE_ACTOR_ID,
       sub: SERVICE_ACTOR_ID,
       email: 'borrow-service@smartbook.local',
       full_name: 'Borrow Service',
-      is_superuser: true,
-      permissions: ['borrow.read', 'borrow.write', 'inventory.stock.read', 'inventory.stock.write'],
+      is_superuser: false,
+      roles: ['SERVICE'],
+      permissions: [
+        'borrow.loans.read',
+        'borrow.loans.write',
+        'inventory.catalog.read',
+        'inventory.stock.read',
+        'inventory.stock.write',
+        'inventory.warehouse.read',
+      ],
     },
     process.env.JWT_SECRET,
     { expiresIn: '10m' }
@@ -56,6 +61,7 @@ async function reserveStock({ reservation_id, reservation_number, customer_id, v
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
     },
     body: JSON.stringify({
       reservation_id,
@@ -77,6 +83,7 @@ async function releaseReservation({ reservation_id, reason, idempotency_key, aut
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
     },
     body: JSON.stringify({
       reservation_id,
@@ -92,6 +99,7 @@ async function consumeReservation({ reservation_id, loan_id, loan_number, wareho
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
     },
     body: JSON.stringify({
       reservation_id,
@@ -123,6 +131,7 @@ async function returnBorrowedStock({
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
     },
     body: JSON.stringify({
       loan_id,

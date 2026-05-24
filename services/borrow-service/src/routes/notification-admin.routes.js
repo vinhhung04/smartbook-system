@@ -1,10 +1,11 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma');
 const { createNotificationRecord } = require('../lib/notifications');
+const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.post('/send', async (req, res) => {
+router.post('/send', authorizeAnyPermission(['borrow.notifications.manage']), async (req, res) => {
   try {
     const { customer_id, subject, body } = req.body;
     if (!customer_id || !body) return res.status(400).json({ message: 'customer_id and body are required' });

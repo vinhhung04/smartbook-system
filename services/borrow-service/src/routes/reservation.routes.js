@@ -15,13 +15,13 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['borrow.read', 'borrow.write']), listReservations);
-router.post('/jobs/expire', authorizeAnyPermission(['borrow.write']), runExpiredReservationSweepNow);
-router.post('/pickup/convert-to-loan', authorizeAnyPermission(['borrow.write']), convertReservationPickupCodeToLoan);
-router.get('/:id', authorizeAnyPermission(['borrow.read', 'borrow.write']), getReservationById);
-router.post('/', authorizeAnyPermission(['borrow.write']), createReservation);
-router.patch('/:id/confirm', authorizeAnyPermission(['borrow.write']), confirmReservation);
-router.patch('/:id/cancel', authorizeAnyPermission(['borrow.write']), cancelReservation);
-router.post('/:id/convert-to-loan', authorizeAnyPermission(['borrow.write']), convertReservationToLoan);
+router.get('/', authorizeAnyPermission(['borrow.loans.read', 'borrow.loans.write']), listReservations);
+router.post('/jobs/expire', authorizeAnyPermission(['borrow.loans.write']), runExpiredReservationSweepNow);
+router.post('/pickup/convert-to-loan', authorizeAnyPermission(['borrow.loans.write']), convertReservationPickupCodeToLoan);
+router.get('/:id', authorizeAnyPermission(['borrow.loans.read', 'borrow.loans.write']), getReservationById);
+router.post('/', authorizeAnyPermission(['borrow.loans.write']), createReservation);
+router.patch('/:id/confirm', authorizeAnyPermission(['borrow.loans.write']), confirmReservation);
+router.patch('/:id/cancel', authorizeAnyPermission(['borrow.loans.write']), cancelReservation);
+router.post('/:id/convert-to-loan', authorizeAnyPermission(['borrow.loans.write']), convertReservationToLoan);
 
 module.exports = router;

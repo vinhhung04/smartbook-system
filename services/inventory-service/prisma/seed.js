@@ -1304,6 +1304,23 @@ const suppliers = await Promise.all([
       status: 'ACTIVE',
     },
   }),
+  prisma.suppliers.upsert({
+    where: { name: 'SmartBook Demo Supplier' },
+    update: {
+      email: 'supplier01@smartbook.vn',
+      status: 'ACTIVE',
+    },
+    create: {
+      code: 'SUP-DEMO-001',
+      name: 'SmartBook Demo Supplier',
+      contact_name: 'Supplier Demo',
+      phone: '+84901234563',
+      email: 'supplier01@smartbook.vn',
+      address: 'SmartBook Supplier Demo Address',
+      tax_code: 'DEMO-SUPPLIER-001',
+      status: 'ACTIVE',
+    },
+  }),
 ]);
 
 console.log(`✅ Created ${suppliers.length} suppliers`);

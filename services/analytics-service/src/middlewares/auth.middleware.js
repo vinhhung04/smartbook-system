@@ -18,6 +18,7 @@ function authenticateToken(req, res, next) {
       permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     };
+    req.auth = req.user;
     return next();
   } catch (_error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
@@ -43,7 +44,27 @@ function authorizeAnyPermission(permissions = []) {
   };
 }
 
+function authorizeAllPermissions(permissions = []) {
+  return (req, res, next) => {
+    const user = req.user || req.auth || {};
+
+    if (user.is_superuser === true || user.is_superuser === 'true') {
+      return next();
+    }
+
+    const userPermissions = new Set(Array.isArray(user.permissions) ? user.permissions : []);
+    const allowed = permissions.every((permission) => userPermissions.has(permission));
+
+    if (!allowed) {
+      return res.status(403).json({ message: 'Insufficient permission' });
+    }
+
+    return next();
+  };
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
+  authorizeAllPermissions,
 };

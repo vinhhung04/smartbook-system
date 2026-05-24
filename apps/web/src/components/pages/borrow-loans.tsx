@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
+import { hasPermission } from '@/lib/rbac';
 
 const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
 
@@ -33,6 +34,7 @@ export function BorrowLoansPage() {
   const [dlForm, setDlForm] = useState({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[] });
   const [dlSaving, setDlSaving] = useState(false);
   const [dlBookSearch, setDlBookSearch] = useState('');
+  const canWriteLoans = hasPermission('borrow.loans.write');
 
   const loadLoans = async () => {
     try {
@@ -190,9 +192,9 @@ export function BorrowLoansPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
+          {canWriteLoans ? <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
             <Plus className="w-4 h-4" /> Direct Loan
-          </Button>
+          </Button> : null}
           <Button variant="outline" size="sm" onClick={() => void loadLoans()} className="gap-2">
             <RefreshCw className="w-4 h-4" /> Refresh
           </Button>
@@ -259,7 +261,7 @@ export function BorrowLoansPage() {
                       Requested extension: {request.requested_extension_days ?? '-'} day(s) | Requested at {new Date(request.requested_at).toLocaleString('vi-VN')}
                     </p>
                   </div>
-                  {request.loan?.id ? (
+                  {request.loan?.id && canWriteLoans ? (
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
@@ -349,7 +351,7 @@ export function BorrowLoansPage() {
                         <Badge variant={getBadgeVariant(loan.status)}>{loan.status}</Badge>
                       </td>
                       <td className="px-5 py-3.5">
-                        {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (
+                        {canWriteLoans && (loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED') ? (
                           <div className="flex items-center gap-2">
                             <Button
                               size="sm"
@@ -389,7 +391,7 @@ export function BorrowLoansPage() {
         </SectionCard>
       </motion.div>
 
-      {showDirectLoan && (
+      {showDirectLoan && canWriteLoans && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6">

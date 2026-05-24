@@ -55,6 +55,7 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
     depends_on:

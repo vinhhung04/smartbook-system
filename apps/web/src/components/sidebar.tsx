@@ -7,28 +7,45 @@ import {
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck,
 } from "lucide-react";
 import { authService } from "@/services/auth";
+import { canAccessRoute, getPrimaryRoleLabel, type ActorRole } from "@/lib/rbac";
 
-const navGroups = [
+type NavItem = {
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  activeColor: string;
+  textColor: string;
+  iconBg: string;
+  allowedRoles?: ActorRole[];
+  requiredPermissions?: string[];
+};
+
+const navGroups: Array<{
+  label: string;
+  color: string;
+  dotColor: string;
+  items: NavItem[];
+}> = [
   {
     label: "Core Operations",
     color: "text-indigo-400",
     dotColor: "bg-indigo-400",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard", activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/catalog", icon: BookOpen, label: "Catalog", activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/inventory", icon: Package, label: "Inventory", activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/orders", icon: FileText, label: "Goods Receipts", activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
-      { to: "/putaway", icon: MapPinned, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-      { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
-      { to: "/order-requests", icon: ListOrdered, label: "Order Requests", activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/picking", icon: Hand, label: "Picking", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
-      { to: "/outbound", icon: Truck, label: "Outbound", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
-      { to: "/warehouses", icon: Warehouse, label: "Warehouses", activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/shelves", icon: Layers3, label: "Shelves", activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/movements", icon: Activity, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/suppliers", icon: Truck, label: "Suppliers", activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
+      { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10", requiredPermissions: ["analytics.reports.view"] },
+      { to: "/catalog", icon: BookOpen, label: "Catalog", activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10", requiredPermissions: ["inventory.catalog.read"] },
+      { to: "/inventory", icon: Package, label: "Inventory", activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10", requiredPermissions: ["inventory.stock.read"] },
+      { to: "/orders", icon: FileText, label: "Goods Receipts", activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10", requiredPermissions: ["inventory.receiving.read", "inventory.receiving.write"] },
+      { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10", requiredPermissions: ["inventory.purchase.read", "inventory.purchase.write", "inventory.purchase.approve"] },
+      { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10", requiredPermissions: ["inventory.purchase.read", "inventory.receiving.read", "inventory.receiving.write"] },
+      { to: "/putaway", icon: MapPinned, label: "Putaway", activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10", requiredPermissions: ["inventory.putaway.execute"] },
+      { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10", requiredPermissions: ["inventory.putaway.execute"] },
+      { to: "/order-requests", icon: ListOrdered, label: "Order Requests", activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10", requiredPermissions: ["inventory.transfer.read", "inventory.transfer.write", "inventory.purchase.approve"] },
+      { to: "/picking", icon: Hand, label: "Picking", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10", requiredPermissions: ["inventory.transfer.write", "inventory.stock.write"] },
+      { to: "/outbound", icon: Truck, label: "Outbound", activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10", requiredPermissions: ["inventory.transfer.write", "inventory.stock.write"] },
+      { to: "/warehouses", icon: Warehouse, label: "Warehouses", activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10", requiredPermissions: ["inventory.warehouse.read"] },
+      { to: "/shelves", icon: Layers3, label: "Shelves", activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10", requiredPermissions: ["inventory.stock.read"] },
+      { to: "/movements", icon: Activity, label: "Stock Movements", activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10", requiredPermissions: ["inventory.stock.read"] },
+      { to: "/suppliers", icon: Truck, label: "Suppliers", activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10", requiredPermissions: ["inventory.purchase.read", "inventory.purchase.write"] },
     ],
   },
   {
@@ -36,10 +53,10 @@ const navGroups = [
     color: "text-violet-400",
     dotColor: "bg-violet-400",
     items: [
-      { to: "/ai-import", icon: Sparkles, label: "AI Import", activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
-      { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-      { to: "/reorder-suggestions", icon: Package, label: "AI Reorder", activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/reports", icon: BarChart3, label: "Reports", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/ai-import", icon: Sparkles, label: "AI Import", activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10", requiredPermissions: ["ai.ocr.process", "ai.catalog.assist", "ai.scan.receipt"] },
+      { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10", requiredPermissions: ["ai.recommendation.view"] },
+      { to: "/reorder-suggestions", icon: Package, label: "AI Reorder", activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10", requiredPermissions: ["analytics.forecast.view", "ai.recommendation.view"] },
+      { to: "/reports", icon: BarChart3, label: "Reports", activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10", requiredPermissions: ["analytics.reports.view"] },
     ],
   },
   {
@@ -47,12 +64,12 @@ const navGroups = [
     color: "text-amber-400",
     dotColor: "bg-amber-400",
     items: [
-      { to: "/borrow", icon: BookMarked, label: "Borrow", activeColor: "from-amber-500/15 to-orange-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
-      { to: "/borrow/customers", icon: UserRound, label: "Borrow Customers", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
-      { to: "/borrow/reservations", icon: CalendarClock, label: "Reservations", activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10" },
-      { to: "/borrow/loans", icon: HandCoins, label: "Loans", activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/borrow/fines", icon: Receipt, label: "Fines", activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
-      { to: "/membership-plans", icon: Crown, label: "Membership Plans", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+      { to: "/borrow", icon: BookMarked, label: "Borrow", activeColor: "from-amber-500/15 to-orange-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10", requiredPermissions: ["borrow.loans.read"] },
+      { to: "/borrow/customers", icon: UserRound, label: "Borrow Customers", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10", requiredPermissions: ["borrow.customers.read"] },
+      { to: "/borrow/reservations", icon: CalendarClock, label: "Reservations", activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10", requiredPermissions: ["borrow.loans.read"] },
+      { to: "/borrow/loans", icon: HandCoins, label: "Loans", activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10", requiredPermissions: ["borrow.loans.read"] },
+      { to: "/borrow/fines", icon: Receipt, label: "Fines", activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10", requiredPermissions: ["borrow.fines.read", "borrow.fines.manage"] },
+      { to: "/membership-plans", icon: Crown, label: "Membership Plans", activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10", requiredPermissions: ["borrow.memberships.manage"] },
     ],
   },
   {
@@ -60,15 +77,22 @@ const navGroups = [
     color: "text-slate-400",
     dotColor: "bg-slate-400",
     items: [
-      { to: "/users", icon: Users, label: "Users", activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
-      { to: "/roles", icon: Shield, label: "Roles", activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/audit-trail", icon: ScrollText, label: "Audit Trail", activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
+      { to: "/users", icon: Users, label: "Users", activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10", requiredPermissions: ["auth.users.read"] },
+      { to: "/roles", icon: Shield, label: "Roles", activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10", requiredPermissions: ["auth.roles.read", "auth.permissions.read"] },
+      { to: "/audit-trail", icon: ScrollText, label: "Audit Trail", activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10", requiredPermissions: ["auth.audit.read", "observability.logs.read"] },
     ],
   },
 ];
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const user = authService.getCurrentUser();
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessRoute(item, user)),
+    }))
+    .filter((group) => group.items.length > 0);
+  const canScanAndReceive = canAccessRoute({ requiredPermissions: ["inventory.receiving.write"] }, user);
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)
@@ -104,7 +128,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       {/* Scan CTA */}
-      <div className="px-3 pt-4 pb-1">
+      {canScanAndReceive ? <div className="px-3 pt-4 pb-1">
         <NavLink
           to="/orders/new"
           className={`group flex items-center gap-2.5 rounded-[10px] bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 text-white text-[13px] shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:shadow-indigo-500/30 active:scale-[0.98] transition-all duration-140 ${collapsed ? "justify-center px-0 py-2.5" : "px-3.5 py-2.5"}`}
@@ -122,11 +146,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             )}
           </AnimatePresence>
         </NavLink>
-      </div>
+      </div> : null}
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className="pt-4 first:pt-1">
             <AnimatePresence>
               {!collapsed && (
@@ -188,7 +212,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             {!collapsed && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
                 <div className="text-[13px] truncate" style={{ fontWeight: 550 }}>{user?.full_name || user?.username || "Admin User"}</div>
-                <div className="text-[11px] text-indigo-400 truncate">{user?.email || "admin@smartbook.vn"}</div>
+                <div className="text-[11px] text-indigo-400 truncate">{getPrimaryRoleLabel(user)}</div>
               </motion.div>
             )}
           </AnimatePresence>

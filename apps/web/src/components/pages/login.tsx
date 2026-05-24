@@ -5,6 +5,7 @@ import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
+import { getDefaultRouteForUser } from "@/lib/rbac";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -33,13 +34,7 @@ export function LoginPage() {
         localStorage.removeItem('smartbook-saved-identifier');
       }
       toast.success("Login successful");
-      if (Array.isArray(loginData.user?.roles) && loginData.user.roles.includes('CUSTOMER')) {
-        navigate('/customer');
-      } else if (Array.isArray(loginData.user?.roles) && loginData.user.roles.includes('SUPPLIER')) {
-        navigate('/supplier');
-      } else {
-        navigate('/');
-      }
+      navigate(getDefaultRouteForUser(loginData.user));
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Login failed"));
     } finally {

@@ -7,6 +7,7 @@ import { warehouseService, type LocationNode, type Warehouse } from "@/services/
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { hasPermission } from "@/lib/rbac";
 
 type WarehouseMode = "create" | "edit";
 type LocationMode = "create-root" | "create-child" | "edit";
@@ -156,6 +157,7 @@ export function WarehousesPage() {
   const [pageError, setPageError] = useState("");
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
   const [showLocationForm, setShowLocationForm] = useState(false);
+  const canWriteWarehouse = hasPermission("inventory.warehouse.write");
 
   const selectedWarehouse = useMemo(
     () => warehouses.find((item) => item.id === selectedWarehouseId) || null,
@@ -529,10 +531,10 @@ export function WarehousesPage() {
             transition={{ duration: 0.3, delay: 0.05 }}
             className="flex items-center justify-end"
           >
-            <Button onClick={startCreateWarehouse} size="sm">
+            {canWriteWarehouse ? <Button onClick={startCreateWarehouse} size="sm">
               <Plus className="w-3.5 h-3.5" />
               Them kho
-            </Button>
+            </Button> : null}
           </motion.div>
 
           {loadingWarehouses ? (
@@ -582,12 +584,12 @@ export function WarehousesPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={startEditWarehouse}>
+              {canWriteWarehouse ? <Button variant="outline" size="sm" onClick={startEditWarehouse}>
                 <Pencil className="w-3.5 h-3.5" /> Sua kho
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleDeleteWarehouse} disabled={deletingWarehouse}>
+              </Button> : null}
+              {canWriteWarehouse ? <Button variant="destructive" size="sm" onClick={handleDeleteWarehouse} disabled={deletingWarehouse}>
                 <Trash2 className="w-3.5 h-3.5" /> {deletingWarehouse ? "Dang xoa..." : "Xoa kho"}
-              </Button>
+              </Button> : null}
             </div>
           </motion.div>
 
@@ -600,18 +602,18 @@ export function WarehousesPage() {
               title="Cau truc vi tri trong kho"
               actions={
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={startCreateRootLocation}>
+                  {canWriteWarehouse ? <Button variant="outline" size="sm" onClick={startCreateRootLocation}>
                     <Plus className="w-3.5 h-3.5" /> Them vi tri
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={startCreateChildLocation} disabled={!selectedLocationId}>
+                  </Button> : null}
+                  {canWriteWarehouse ? <Button variant="outline" size="sm" onClick={startCreateChildLocation} disabled={!selectedLocationId}>
                     <Plus className="w-3.5 h-3.5" /> Them node con
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={startEditLocation} disabled={!selectedLocationId}>
+                  </Button> : null}
+                  {canWriteWarehouse ? <Button variant="outline" size="sm" onClick={startEditLocation} disabled={!selectedLocationId}>
                     <Pencil className="w-3.5 h-3.5" /> Sua
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={handleDeleteLocation} disabled={!selectedLocationId || deletingLocation}>
+                  </Button> : null}
+                  {canWriteWarehouse ? <Button variant="destructive" size="sm" onClick={handleDeleteLocation} disabled={!selectedLocationId || deletingLocation}>
                     <Trash2 className="w-3.5 h-3.5" /> {deletingLocation ? "Dang xoa..." : "Xoa"}
-                  </Button>
+                  </Button> : null}
                 </div>
               }
             >
@@ -638,7 +640,7 @@ export function WarehousesPage() {
         </div>
       )}
 
-      {showWarehouseForm ? (
+      {showWarehouseForm && canWriteWarehouse ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
@@ -675,7 +677,7 @@ export function WarehousesPage() {
         </div>
       ) : null}
 
-      {showLocationForm ? (
+      {showLocationForm && canWriteWarehouse ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
