@@ -348,29 +348,60 @@ async function getCompartmentCandidates(req, res) {
 
 async function lookupCompartmentByBarcode(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
-  const barcode = normalizeText(req.query.barcode);
+  const rawInput = normalizeText(req.query.barcode);
+  const normalizedInput = rawInput?.toUpperCase() || null;
+  const locationCodePattern = /^[A-Z]-\d{2}-\d{3}$/;
+  const barcodePattern = /^LOC-[A-Z]-\d{2}-\d{3}$/;
 
-  if (!warehouseId || !barcode) {
+  if (!warehouseId || !rawInput) {
     return res
       .status(400)
       .json({ message: "warehouse_id and barcode are required" });
   }
 
+  if (
+    !locationCodePattern.test(normalizedInput) &&
+    !barcodePattern.test(normalizedInput)
+  ) {
+    console.info("[receiving-putaway] lookup location scan result", {
+      raw_input: rawInput,
+      normalized_input: normalizedInput,
+      result: "invalid_format",
+    });
+    return res.status(400).json({ message: "Location format invalid" });
+  }
+
+  const normalizedBarcode = normalizedInput.startsWith("LOC-")
+    ? normalizedInput
+    : `LOC-${normalizedInput}`;
+
   try {
+    console.info("[receiving-putaway] lookup location scan", {
+      raw_input: rawInput,
+      normalized_barcode: normalizedBarcode,
+      query_field: "locations.barcode",
+    });
+
     const location = await prisma.locations.findFirst({
       where: {
         warehouse_id: warehouseId,
-        barcode,
+        barcode: normalizedBarcode,
         is_active: true,
       },
       select: {
         id: true,
         location_code: true,
         location_type: true,
+        barcode: true,
       },
     });
 
     if (!location) {
+      console.info("[receiving-putaway] lookup location scan result", {
+        raw_input: rawInput,
+        normalized_barcode: normalizedBarcode,
+        result: "not_found",
+      });
       return res.status(404).json({ message: "Location barcode not found" });
     }
 
@@ -384,10 +415,21 @@ async function lookupCompartmentByBarcode(req, res) {
         });
     }
 
+    console.info("[receiving-putaway] lookup location scan result", {
+      raw_input: rawInput,
+      normalized_barcode: normalizedBarcode,
+      matched_location_id: location.id,
+      matched_location_code: location.location_code,
+      matched_compartment: location.location_code,
+      result: "SUCCESS",
+    });
+
     return res.json({
       id: location.id,
       location_code: location.location_code,
       location_type: location.location_type,
+      barcode: location.barcode,
+      normalized_barcode: normalizedBarcode,
     });
   } catch (error) {
     console.error("Error while looking up compartment barcode:", error);

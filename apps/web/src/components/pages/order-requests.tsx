@@ -7,6 +7,7 @@ import { authService } from "@/services/auth";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import {
   orderRequestService,
+  type OutboundReferenceType,
   type OrderRequestSummary,
   type OrderRequestVariant,
   type RequestTaskType,
@@ -19,6 +20,25 @@ import { LoadingSpinner } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
 
 type RequestType = "outbound" | "transfer";
+
+const OUTBOUND_REFERENCE_OPTIONS: Array<{
+  value: OutboundReferenceType;
+  label: string;
+}> = [
+  { value: "TRANSFER_TO_STORE", label: "Xuat hang toi cua hang ban le" },
+  { value: "WAREHOUSE_TRANSFER", label: "Dieu chuyen giua kho" },
+  { value: "RETURN_TO_SUPPLIER", label: "Tra hang nha cung cap" },
+  { value: "SALES_ORDER", label: "Xuat theo don ban hang" },
+  { value: "INTERNAL_REQUEST", label: "Xuat theo yeu cau noi bo" },
+  { value: "ISSUE_REQUEST", label: "Xuat theo phieu cap phat" },
+  { value: "RESERVATION", label: "Xuat cho don dat truoc" },
+  { value: "LOAN_REQUEST", label: "Xuat cho phieu muon thu vien" },
+  { value: "MAINTENANCE", label: "Xuat de bao tri/kiem ke" },
+  { value: "INVENTORY_ADJUSTMENT", label: "Xuat do dieu chinh ton kho" },
+  { value: "DAMAGED_RETURN", label: "Xuat hang loi/hong" },
+  { value: "PROMOTION", label: "Xuat theo khuyen mai/tang" },
+  { value: "OTHER", label: "Khac" },
+];
 
 type DraftLine = {
   isbn13: string;
@@ -105,7 +125,10 @@ export function OrderRequestsPage() {
 
   const [requestType, setRequestType] = useState<RequestType>("outbound");
   const [requestNote, setRequestNote] = useState("");
+  const [referenceType, setReferenceType] = useState<OutboundReferenceType>("SALES_ORDER");
   const [externalReference, setExternalReference] = useState("");
+  const [loadingReferenceCode, setLoadingReferenceCode] = useState(false);
+  const [referencePreviewRefreshKey, setReferencePreviewRefreshKey] = useState(0);
 
   const [variantQuery, setVariantQuery] = useState("");
   const [searchingVariant, setSearchingVariant] = useState(false);
@@ -163,6 +186,35 @@ export function OrderRequestsPage() {
       toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach request"));
     });
   }, [listView, selectedWarehouseId]);
+
+  useEffect(() => {
+    if (requestType !== "outbound") return;
+
+    let cancelled = false;
+    setLoadingReferenceCode(true);
+    setExternalReference("");
+
+    orderRequestService.previewOutboundReferenceCode(referenceType)
+      .then((response) => {
+        if (!cancelled) {
+          setExternalReference(response.data.external_reference);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast.error(getApiErrorMessage(error, "Khong sinh duoc Reference Code"));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingReferenceCode(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [referencePreviewRefreshKey, referenceType, requestType]);
 
   const handleSearchVariant = async () => {
     const q = variantQuery.trim();
@@ -226,7 +278,9 @@ export function OrderRequestsPage() {
 
   const resetForm = () => {
     setRequestNote("");
+    setReferenceType("SALES_ORDER");
     setExternalReference("");
+    setReferencePreviewRefreshKey((prev) => prev + 1);
     setVariantQuery("");
     setVariantResults([]);
     setDraftLines([]);
@@ -250,7 +304,7 @@ export function OrderRequestsPage() {
         await orderRequestService.createOutboundRequest({
           warehouse_id: selectedWarehouseId,
           outbound_type: "MANUAL",
-          external_reference: externalReference.trim() || null,
+          reference_type: referenceType,
           note: requestNote.trim() || null,
           lines: draftLines.map((line) => ({
             isbn13: line.isbn13,
@@ -388,14 +442,28 @@ export function OrderRequestsPage() {
                 </select>
               </div>
             ) : (
-              <div>
-                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">External reference</p>
-                <input
-                  value={externalReference}
-                  onChange={(event) => setExternalReference(event.target.value)}
-                  placeholder="SO-001 / Ticket code..."
-                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Type</p>
+                  <select
+                    value={referenceType}
+                    onChange={(event) => setReferenceType(event.target.value as OutboundReferenceType)}
+                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                  >
+                    {OUTBOUND_REFERENCE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Code</p>
+                  <input
+                    value={externalReference}
+                    readOnly
+                    placeholder={loadingReferenceCode ? "Dang sinh ma..." : "Auto generated"}
+                    className="h-9 w-full rounded-lg border border-input bg-muted/50 px-3 text-[12px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                  />
+                </div>
               </div>
             )}
 

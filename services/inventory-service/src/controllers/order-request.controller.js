@@ -35,6 +35,144 @@ function createTransferNumber() {
   return `TO-${ts}-${suffix}`;
 }
 
+const OUTBOUND_REFERENCE_PREFIXES = {
+  TRANSFER_TO_STORE: "STORE",
+  WAREHOUSE_TRANSFER: "WH-TRF",
+  RETURN_TO_SUPPLIER: "RTN-SUP",
+  SALES_ORDER: "SO",
+  INTERNAL_REQUEST: "REQ",
+  ISSUE_REQUEST: "ISSUE",
+  RESERVATION: "RES",
+  LOAN_REQUEST: "LOAN",
+  MAINTENANCE: "MT",
+  INVENTORY_ADJUSTMENT: "ADJ",
+  DAMAGED_RETURN: "DMG",
+  PROMOTION: "PROMO",
+  OTHER: "OTHER",
+};
+
+function formatOutboundReferenceCode(referenceType, sequenceNumber) {
+  const prefix = OUTBOUND_REFERENCE_PREFIXES[referenceType];
+  return `${prefix}-${String(sequenceNumber).padStart(3, "0")}`;
+}
+
+function normalizeOutboundReferenceType(value) {
+  const referenceType = normalizeText(value)?.toUpperCase();
+  if (!Object.prototype.hasOwnProperty.call(OUTBOUND_REFERENCE_PREFIXES, referenceType)) {
+    return null;
+  }
+  return referenceType;
+}
+
+async function getCurrentReferenceSequence(tx, referenceType) {
+  const prefix = OUTBOUND_REFERENCE_PREFIXES[referenceType];
+  const pattern = `^${prefix}-([0-9]+)$`;
+  const [sequenceRow, maxReferenceRows] = await Promise.all([
+    tx.outbound_reference_sequences.findUnique({
+      where: { reference_type: referenceType },
+      select: { last_number: true },
+    }),
+    tx.$queryRaw`
+      SELECT COALESCE(MAX((substring("external_reference" from ${pattern}))::int), 0)::int AS max_number
+      FROM "outbound_orders"
+      WHERE "reference_type"::text = ${referenceType}
+        AND "external_reference" ~ ${pattern}
+    `,
+  ]);
+
+  return Math.max(
+    Number(sequenceRow?.last_number || 0),
+    Number(maxReferenceRows?.[0]?.max_number || 0),
+  );
+}
+
+async function previewOutboundReferenceCode(req, res) {
+  const referenceType = normalizeOutboundReferenceType(req.query?.reference_type);
+  if (!referenceType) {
+    return res.status(400).json({ message: "Invalid reference_type" });
+  }
+
+  try {
+    const currentSequence = await getCurrentReferenceSequence(prisma, referenceType);
+    return res.json({
+      data: {
+        reference_type: referenceType,
+        external_reference: formatOutboundReferenceCode(referenceType, currentSequence + 1),
+      },
+    });
+  } catch (error) {
+    console.error("Error while previewing outbound reference code:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function allocateOutboundReferenceCode(tx, referenceType) {
+  const currentSequence = await getCurrentReferenceSequence(tx, referenceType);
+
+  await tx.outbound_reference_sequences.upsert({
+    where: { reference_type: referenceType },
+    create: {
+      reference_type: referenceType,
+      last_number: currentSequence,
+    },
+    update: {},
+  });
+
+  await tx.outbound_reference_sequences.updateMany({
+    where: {
+      reference_type: referenceType,
+      last_number: { lt: currentSequence },
+    },
+    data: {
+      last_number: currentSequence,
+      updated_at: new Date(),
+    },
+  });
+
+  const sequenceRow = await tx.outbound_reference_sequences.update({
+    where: { reference_type: referenceType },
+    data: {
+      last_number: { increment: 1 },
+      updated_at: new Date(),
+    },
+    select: { last_number: true },
+  });
+
+  return formatOutboundReferenceCode(referenceType, sequenceRow.last_number);
+}
+
+function validateOutboundReferenceRequest(payload) {
+  const hasReferenceType = Object.prototype.hasOwnProperty.call(
+    payload || {},
+    "reference_type",
+  );
+  const referenceType = hasReferenceType ? normalizeOutboundReferenceType(payload.reference_type) : "OTHER";
+  const rawExternalReference = normalizeText(payload?.external_reference);
+
+  if (!referenceType) {
+    return {
+      valid: false,
+      message: "Invalid reference_type",
+    };
+  }
+
+  if (!hasReferenceType) {
+    return {
+      valid: true,
+      reference_type: referenceType,
+      external_reference: rawExternalReference,
+      should_generate: false,
+    };
+  }
+
+  return {
+    valid: true,
+    reference_type: referenceType,
+    external_reference: null,
+    should_generate: true,
+  };
+}
+
 async function resolveVariantIdByIdentifier(tx, payloadLine) {
   const directVariantId = parseId(payloadLine?.variant_id);
   if (directVariantId) {
@@ -89,6 +227,7 @@ function mapOutboundSummary(order) {
     requested_at: order.requested_at,
     updated_at: order.updated_at,
     note: order.note || null,
+    reference_type: order.reference_type || "OTHER",
     external_reference: order.external_reference || null,
   };
 }
@@ -130,6 +269,7 @@ function mapTransferSummary(order) {
     requested_at: order.requested_at,
     updated_at: order.updated_at,
     note: order.note || null,
+    reference_type: null,
     external_reference: null,
   };
 }
@@ -282,7 +422,7 @@ async function listOrderRequests(req, res) {
 async function createOutboundRequest(req, res) {
   const warehouseId = parseId(req.body?.warehouse_id);
   const outboundType = normalizeText(req.body?.outbound_type) || "MANUAL";
-  const externalReference = normalizeText(req.body?.external_reference);
+  const referenceValidation = validateOutboundReferenceRequest(req.body);
   const note = normalizeText(req.body?.note);
   const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
   const currentUserId = parseId(req.user?.id);
@@ -299,6 +439,10 @@ async function createOutboundRequest(req, res) {
     !["SALE", "DISPOSAL", "RETURN_TO_SUPPLIER", "MANUAL"].includes(outboundType)
   ) {
     return res.status(400).json({ message: "Invalid outbound_type" });
+  }
+
+  if (!referenceValidation.valid) {
+    return res.status(400).json({ message: referenceValidation.message });
   }
 
   if (lines.length === 0) {
@@ -416,6 +560,10 @@ async function createOutboundRequest(req, res) {
         }
       }
 
+      const externalReference = referenceValidation.should_generate
+        ? await allocateOutboundReferenceCode(tx, referenceValidation.reference_type)
+        : referenceValidation.external_reference;
+
       const order = await tx.outbound_orders.create({
         data: {
           outbound_number: createOutboundNumber(),
@@ -423,6 +571,7 @@ async function createOutboundRequest(req, res) {
           outbound_type: outboundType,
           status: "PENDING_APPROVAL",
           requested_by_user_id: currentUserId,
+          reference_type: referenceValidation.reference_type,
           external_reference: externalReference,
           note,
         },
@@ -473,6 +622,8 @@ async function createOutboundRequest(req, res) {
         task_id: result.data.id,
         order_number: result.data.outbound_number,
         status: result.data.status,
+        reference_type: result.data.reference_type,
+        external_reference: result.data.external_reference,
       },
     });
   } catch (error) {
@@ -1133,6 +1284,7 @@ module.exports = {
   listOrderRequests,
   createOutboundRequest,
   createTransferRequest,
+  previewOutboundReferenceCode,
   approveRequest,
   rejectRequest,
 };
