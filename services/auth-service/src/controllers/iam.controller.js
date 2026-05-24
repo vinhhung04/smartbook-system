@@ -10,20 +10,51 @@ function normalizeEmail(value) {
   return email ? email.toLowerCase() : null;
 }
 
+const VALID_USER_STATUSES = new Set(['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function uniqueStringArray(values) {
   return [...new Set((Array.isArray(values) ? values : []).map((v) => String(v).trim()).filter(Boolean))];
 }
 
+function isValidUuid(value) {
+  return UUID_RE.test(String(value || '').trim());
+}
+
+function validateEmail(email) {
+  return Boolean(email && email.includes('@') && email.indexOf('@') > 0 && email.split('@')[1]?.includes('.'));
+}
+
+function validateStatus(status) {
+  return VALID_USER_STATUSES.has(status);
+}
+
 async function resolveRoleIds(tx, roleIds, roleCodes) {
+  if (roleIds !== undefined && !Array.isArray(roleIds)) {
+    throw new Error('INVALID_ROLE_IDS');
+  }
+
+  if (roleCodes !== undefined && !Array.isArray(roleCodes)) {
+    throw new Error('INVALID_ROLE_CODES');
+  }
+
   const directIds = uniqueStringArray(roleIds);
   const codes = uniqueStringArray(roleCodes).map((code) => code.toUpperCase());
 
+  if (directIds.some((id) => !isValidUuid(id))) {
+    throw new Error('INVALID_ROLE_IDS');
+  }
+
   const fromCodes = codes.length
     ? await tx.$queryRawUnsafe(
-        `SELECT id FROM roles WHERE code = ANY($1::text[])`,
+        `SELECT id, code FROM roles WHERE code = ANY($1::text[])`,
         codes
       )
     : [];
+
+  if (fromCodes.length !== codes.length) {
+    throw new Error('INVALID_ROLE_CODES');
+  }
 
   const mergedIds = uniqueStringArray([
     ...directIds,
@@ -37,7 +68,59 @@ async function resolveRoleIds(tx, roleIds, roleCodes) {
     mergedIds
   );
 
+  const existingIds = new Set(existing.map((r) => r.id));
+  if (directIds.some((id) => !existingIds.has(id)) || existing.length !== mergedIds.length) {
+    throw new Error('INVALID_ROLE_IDS');
+  }
+
   return existing.map((r) => r.id);
+}
+
+async function getUserWithRoles(tx, userId) {
+  const rows = await tx.$queryRawUnsafe(
+    `
+      SELECT
+        u.id,
+        u.username,
+        u.email,
+        u.full_name,
+        u.phone,
+        u.status,
+        u.is_superuser,
+        u.primary_warehouse_id,
+        u.created_at,
+        u.updated_at,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object('id', r.id, 'code', r.code, 'name', r.name))
+          FILTER (WHERE r.id IS NOT NULL),
+          '[]'::json
+        ) AS roles
+      FROM users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+      LEFT JOIN roles r ON r.id = ur.role_id
+      WHERE u.id = $1::uuid
+      GROUP BY u.id
+      LIMIT 1
+    `,
+    userId
+  );
+
+  return rows[0] || null;
+}
+
+async function writeAuditLog(tx, req, actionName, entityId, detail = {}) {
+  await tx.$executeRawUnsafe(
+    `
+      INSERT INTO auth_audit_logs (actor_user_id, action_name, entity_type, entity_id, detail, ip_address, user_agent)
+      VALUES ($1::uuid, $2, 'USER', $3::uuid, $4::jsonb, $5, $6)
+    `,
+    req.auth?.sub || null,
+    actionName,
+    entityId,
+    JSON.stringify(detail),
+    req.ip || null,
+    req.headers['user-agent'] || null
+  );
 }
 
 async function listUsers(req, res) {
@@ -103,12 +186,32 @@ async function createUser(req, res) {
     const isSuperuser = Boolean(req.body?.is_superuser);
     const primaryWarehouseId = normalizeText(req.body?.primary_warehouse_id) || null;
 
-    if (!username || !fullName || !password) {
-      return res.status(400).json({ message: 'username, full_name, password are required' });
+    if (!username) {
+      return res.status(400).json({ message: 'username is required' });
+    }
+
+    if (!fullName) {
+      return res.status(400).json({ message: 'full_name is required' });
+    }
+
+    if (!email) {
+      return res.status(400).json({ message: 'email is required' });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: 'password is required' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    if (!validateStatus(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
     }
 
     const user = await prisma.$transaction(async (tx) => {
@@ -128,14 +231,15 @@ async function createUser(req, res) {
         throw new Error('CONFLICT_USER');
       }
 
+      const roleIds = await resolveRoleIds(tx, req.body?.role_ids, req.body?.role_codes);
       const passwordHash = await bcrypt.hash(password, 10);
 
       const inserted = await tx.$queryRawUnsafe(
         `
         INSERT INTO users (
-          username, email, password_hash, full_name, phone, status, is_superuser, primary_warehouse_id
+          username, email, password_hash, full_name, phone, status, is_superuser, primary_warehouse_id, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
         RETURNING id, username, email, full_name, phone, status, is_superuser, primary_warehouse_id, created_at, updated_at
       `,
         username,
@@ -148,7 +252,6 @@ async function createUser(req, res) {
         primaryWarehouseId
       );
 
-      const roleIds = await resolveRoleIds(tx, req.body?.role_ids, req.body?.role_codes);
       for (const roleId of roleIds) {
         await tx.$executeRawUnsafe(
           `
@@ -161,13 +264,29 @@ async function createUser(req, res) {
         );
       }
 
-      return inserted[0];
+      await writeAuditLog(tx, req, 'USER_CREATED', inserted[0].id, {
+        username,
+        email,
+        role_ids: roleIds,
+      });
+
+      if (roleIds.length) {
+        await writeAuditLog(tx, req, 'USER_ROLES_ASSIGNED', inserted[0].id, { role_ids: roleIds });
+      }
+
+      return getUserWithRoles(tx, inserted[0].id);
     });
 
     return res.status(201).json({ message: 'User created', data: user });
   } catch (error) {
     if (error.message === 'CONFLICT_USER') {
       return res.status(409).json({ message: 'Email or username already exists' });
+    }
+    if (error.message === 'INVALID_ROLE_IDS') {
+      return res.status(400).json({ message: 'One or more role_ids are invalid' });
+    }
+    if (error.message === 'INVALID_ROLE_CODES') {
+      return res.status(400).json({ message: 'One or more role_codes are invalid' });
     }
     console.error('createUser error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -185,9 +304,15 @@ async function updateUser(req, res) {
     const payload = req.body || {};
     const updates = [];
     const params = [];
+    let nextEmail = null;
+    let nextStatus = null;
 
     if (payload.full_name !== undefined) {
-      params.push(normalizeText(payload.full_name));
+      const fullName = normalizeText(payload.full_name);
+      if (!fullName) {
+        return res.status(400).json({ message: 'full_name is required' });
+      }
+      params.push(fullName);
       updates.push(`full_name = $${params.length}`);
     }
 
@@ -197,12 +322,23 @@ async function updateUser(req, res) {
     }
 
     if (payload.status !== undefined) {
-      params.push(normalizeText(payload.status).toUpperCase());
+      nextStatus = normalizeText(payload.status).toUpperCase();
+      if (!validateStatus(nextStatus)) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+      params.push(nextStatus);
       updates.push(`status = $${params.length}`);
     }
 
     if (payload.email !== undefined) {
-      params.push(normalizeEmail(payload.email));
+      nextEmail = normalizeEmail(payload.email);
+      if (!nextEmail) {
+        return res.status(400).json({ message: 'email is required' });
+      }
+      if (!validateEmail(nextEmail)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      params.push(nextEmail);
       updates.push(`email = $${params.length}`);
     }
 
@@ -218,9 +354,31 @@ async function updateUser(req, res) {
     }
 
     const updatedUser = await prisma.$transaction(async (tx) => {
+      if (payload.email !== undefined) {
+        const existingEmail = await tx.$queryRawUnsafe(
+          `
+            SELECT id
+            FROM users
+            WHERE lower(email::text) = lower($1)
+              AND id <> $2::uuid
+              AND deleted_at IS NULL
+            LIMIT 1
+          `,
+          nextEmail,
+          userId
+        );
+
+        if (existingEmail.length) {
+          throw new Error('CONFLICT_USER');
+        }
+      }
+
+      const roleIds = roleIdsInput ? await resolveRoleIds(tx, payload.role_ids, payload.role_codes) : null;
+
       let user = null;
 
       if (updates.length) {
+        updates.push('updated_at = NOW()');
         params.push(userId);
         const query = `
           UPDATE users
@@ -244,7 +402,6 @@ async function updateUser(req, res) {
       }
 
       if (roleIdsInput) {
-        const roleIds = await resolveRoleIds(tx, payload.role_ids, payload.role_codes);
         await tx.$executeRawUnsafe(`DELETE FROM user_roles WHERE user_id = $1::uuid`, userId);
 
         for (const roleId of roleIds) {
@@ -254,15 +411,31 @@ async function updateUser(req, res) {
             roleId
           );
         }
+
+        await writeAuditLog(tx, req, 'USER_ROLES_ASSIGNED', userId, { role_ids: roleIds });
       }
 
-      return user;
+      await writeAuditLog(tx, req, 'USER_UPDATED', userId, {
+        fields: updates.map((update) => update.split(' = ')[0]).filter((field) => field !== 'updated_at'),
+        role_ids_updated: roleIdsInput,
+      });
+
+      return getUserWithRoles(tx, userId);
     });
 
     return res.json({ message: 'User updated', data: updatedUser });
   } catch (error) {
     if (error.message === 'USER_NOT_FOUND') {
       return res.status(404).json({ message: 'User not found' });
+    }
+    if (error.message === 'CONFLICT_USER') {
+      return res.status(409).json({ message: 'Email or username already exists' });
+    }
+    if (error.message === 'INVALID_ROLE_IDS') {
+      return res.status(400).json({ message: 'One or more role_ids are invalid' });
+    }
+    if (error.message === 'INVALID_ROLE_CODES') {
+      return res.status(400).json({ message: 'One or more role_codes are invalid' });
     }
     console.error('updateUser error:', error);
     return res.status(500).json({ message: 'Internal server error' });

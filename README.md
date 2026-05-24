@@ -458,6 +458,24 @@ Expected summary:
 PASS=22 TOTAL=22
 ```
 
+### Admin User Management integration
+
+Admin user management is tested through the API Gateway. The flow covers
+creating a user with role IDs, logging in with the newly created password,
+checking roles/permissions from `/auth/me`, updating roles, locking the user,
+and validation failures for missing email, short password, invalid roles, and
+duplicate username/email.
+
+```powershell
+node scripts\admin-user-management-integration.mjs
+```
+
+Expected summary:
+
+```text
+PASS=14 TOTAL=14
+```
+
 ### Analytics dashboard integration
 
 Script này đăng nhập bằng tài khoản staff demo, gọi đủ 7 endpoint `/analytics` qua API Gateway, kiểm tra response có field `data`, kiểm tra kiểu dữ liệu cơ bản và xác nhận customer token bị chặn 403:
