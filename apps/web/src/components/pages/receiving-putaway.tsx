@@ -311,8 +311,22 @@ export function ReceivingPutawayPage() {
     }
 
     try {
+      console.debug("[receiving-putaway] scan target location", {
+        raw_input: barcode,
+        normalized_input: barcode.toUpperCase(),
+        api: "/api/receiving-putaway/lookup/location-by-barcode",
+      });
+
       const location = await receivingPutawayService.lookupLocationByBarcode(selectedWarehouseId, barcode);
-      if (!candidateMap.has(location.id)) {
+      const matchedCandidate = candidateMap.get(location.id);
+      if (!matchedCandidate) {
+        console.debug("[receiving-putaway] scan target location result", {
+          raw_input: barcode,
+          normalized_barcode: location.normalized_barcode,
+          matched_location_id: location.id,
+          matched_compartment: location.location_code,
+          result: "NOT_IN_CANDIDATES",
+        });
         toast.error("Vi tri scan duoc khong nam trong danh sach compartment con cho trong");
         return;
       }
@@ -320,7 +334,15 @@ export function ReceivingPutawayPage() {
       const firstLineId = draftLines[0].id;
       updateLine(firstLineId, {
         target_location_id: location.id,
-        scanned_location_barcode: barcode,
+        scanned_location_barcode: location.normalized_barcode,
+      });
+      console.debug("[receiving-putaway] scan target location result", {
+        raw_input: barcode,
+        normalized_barcode: location.normalized_barcode,
+        matched_location_id: location.id,
+        matched_compartment: location.location_code,
+        remaining_capacity: matchedCandidate.remaining_capacity,
+        result: "SUCCESS",
       });
       toast.success(`Da ap dung vi tri ${location.location_code} cho dong dau tien`);
     } catch (error) {
