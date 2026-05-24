@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { NavLink, useNavigate, useSearchParams } from "react-router";
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, Plus, ScanBarcode, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, ClipboardCheck, Loader2, Plus, ScanBarcode, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { warehouseService } from "@/services/warehouse";
@@ -43,8 +43,10 @@ export function GoodsReceiptPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const supplierDeliveryInvoiceId = searchParams.get("supplier_delivery_invoice_id");
+  const [receivingMode, setReceivingMode] = useState<"supplier" | "manual">("supplier");
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [supplierDeliveries, setSupplierDeliveries] = useState<SupplierDeliveryDetail[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [isbn13Input, setIsbn13Input] = useState("");
   const [items, setItems] = useState<ReceiptItemForm[]>([]);
@@ -68,24 +70,28 @@ export function GoodsReceiptPage() {
 
   useEffect(() => {
     if (supplierDeliveryInvoiceId) return;
-    const loadWarehouses = async () => {
+    const loadReceivingContext = async () => {
       try {
         setIsLoading(true);
-        const data = await warehouseService.getAll();
-        const rows = (Array.isArray(data) ? data : []).map((warehouse: any) => ({
+        const [warehouseRows, deliveryRows] = await Promise.all([
+          warehouseService.getAll(),
+          supplierDeliveryService.getAll(),
+        ]);
+        const rows = (Array.isArray(warehouseRows) ? warehouseRows : []).map((warehouse: any) => ({
           id: warehouse.id,
           code: warehouse.code,
           name: warehouse.name,
         }));
         setWarehouses(rows);
+        setSupplierDeliveries(Array.isArray(deliveryRows.data) ? deliveryRows.data : []);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach kho"));
+        toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu nhap kho"));
       } finally {
         setIsLoading(false);
       }
     };
 
-    void loadWarehouses();
+    void loadReceivingContext();
   }, [supplierDeliveryInvoiceId]);
 
   useEffect(() => {
@@ -493,6 +499,113 @@ export function GoodsReceiptPage() {
     );
   }
 
+  const receivableDeliveries = supplierDeliveries.filter((delivery) =>
+    ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(delivery.status),
+  );
+
+  if (receivingMode === "supplier") {
+    return (
+      <PageWrapper className="space-y-5">
+        <FadeItem>
+          <NavLink
+            to="/orders"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
+          </NavLink>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="tracking-[-0.02em]">Receive Supplier Delivery</h1>
+              <p className="mt-1 text-[13px] text-slate-500">Doi chieu PO, phieu giao hang/invoice va so luong nhan thuc te.</p>
+            </div>
+            <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
+              <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
+                <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+              </button>
+              <button
+                onClick={() => setReceivingMode("manual")}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+              </button>
+            </div>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Ready documents</p>
+              <p className="mt-1 text-[20px] font-bold">{receivableDeliveries.length}</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Workflow</p>
+              <p className="mt-1 text-[13px] font-semibold">Draft first, post later</p>
+            </div>
+            <div className="rounded-[12px] border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Validation</p>
+              <p className="mt-1 text-[13px] font-semibold">Over-receive blocked</p>
+            </div>
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="overflow-hidden rounded-[12px] border border-slate-200 bg-white">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
+              <ClipboardCheck className="h-4 w-4 text-slate-500" />
+              <h2 className="text-[14px] font-semibold">Supplier invoices / delivery notes</h2>
+            </div>
+            {isLoading ? (
+              <div className="p-6 text-[13px] text-slate-500">Dang tai danh sach phieu giao hang...</div>
+            ) : receivableDeliveries.length === 0 ? (
+              <div className="p-6 text-[13px] text-slate-500">
+                Chua co supplier invoice/delivery note nao san sang nhap. Hay gui PO cho supplier va de supplier confirm tao invoice truoc.
+              </div>
+            ) : (
+              <table className="w-full min-w-[920px]">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    {["Invoice", "PO", "Supplier", "Warehouse", "Expected", "Lines", "Status", "Action"].map((heading) => (
+                      <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {receivableDeliveries.map((delivery) => (
+                    <tr key={delivery.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-5 py-3.5 text-[13px] font-semibold">{delivery.invoice_number}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.po_number || "-"}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.supplier_name || "-"}</td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.warehouse_code || delivery.warehouse_name || "-"}</td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-500">
+                        {delivery.expected_delivery_date ? new Date(delivery.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px]">{delivery.items.length}</td>
+                      <td className="px-5 py-3.5">
+                        <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">{delivery.status}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => navigate(`/orders/new?supplier_delivery_invoice_id=${delivery.id}`)}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
+                        >
+                          <ClipboardCheck className="h-3.5 w-3.5" /> Doi chieu & nhap hang
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </FadeItem>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
@@ -505,7 +618,23 @@ export function GoodsReceiptPage() {
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Dung cho phieu nhap thu cong khong gan Purchase Order.</p>
+          </div>
+          <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setReceivingMode("supplier")}
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+            </button>
+            <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
+              <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+            </button>
+          </div>
+        </div>
       </FadeItem>
 
       {step === "warehouse" ? (
