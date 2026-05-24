@@ -103,6 +103,53 @@ export function UsersPage() {
     });
   }, [search, users]);
 
+  const closeUserModal = () => {
+    setShowCreateModal(false);
+    setEditingUser(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const validateUserForm = (isEdit: boolean) => {
+    const email = form.email.trim().toLowerCase();
+
+    if (!isEdit && !form.username.trim()) {
+      toast.error("Username la bat buoc");
+      return false;
+    }
+
+    if (!form.full_name.trim()) {
+      toast.error("Ho ten la bat buoc");
+      return false;
+    }
+
+    if (!email) {
+      toast.error("Email la bat buoc");
+      return false;
+    }
+
+    if (!email.includes("@") || !email.split("@")[1]?.includes(".")) {
+      toast.error("Email khong hop le");
+      return false;
+    }
+
+    if (!isEdit && !form.password.trim()) {
+      toast.error("Mat khau la bat buoc");
+      return false;
+    }
+
+    if (!isEdit && form.password.length < 6) {
+      toast.error("Mat khau phai co it nhat 6 ky tu");
+      return false;
+    }
+
+    if (form.role_ids.length === 0) {
+      toast.error("Chon it nhat mot vai tro cho user");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleToggleRole = (roleId: string) => {
     setForm((prev) => {
       const exists = prev.role_ids.includes(roleId);
@@ -114,8 +161,7 @@ export function UsersPage() {
   };
 
   const handleCreateUser = async () => {
-    if (!form.username.trim() || !form.full_name.trim() || !form.password.trim()) {
-      toast.error("Username, ho ten va mat khau la bat buoc");
+    if (!validateUserForm(false)) {
       return;
     }
 
@@ -124,16 +170,15 @@ export function UsersPage() {
       await userService.create({
         username: form.username.trim(),
         full_name: form.full_name.trim(),
-        email: form.email.trim() || "",
-        phone: form.phone.trim() || "",
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim() || undefined,
         password: form.password,
         status: form.status,
         role_ids: form.role_ids,
       });
 
       toast.success("Da tao user moi");
-      setForm(EMPTY_FORM);
-      setShowCreateModal(false);
+      closeUserModal();
       await loadData();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tao user that bai"));
@@ -158,20 +203,19 @@ export function UsersPage() {
 
   const handleEditUser = async () => {
     if (!editingUser) return;
-    if (!form.full_name.trim()) { toast.error("Ho ten la bat buoc"); return; }
+    if (!validateUserForm(true)) return;
+
     try {
       setCreating(true);
       await userService.update(editingUser.id, {
         full_name: form.full_name.trim(),
-        email: form.email.trim() || undefined,
+        email: form.email.trim().toLowerCase(),
         phone: form.phone.trim() || undefined,
         status: form.status,
         role_ids: form.role_ids,
       });
       toast.success("Da cap nhat user");
-      setForm(EMPTY_FORM);
-      setShowCreateModal(false);
-      setEditingUser(null);
+      closeUserModal();
       await loadData();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Cap nhat user that bai"));
@@ -324,7 +368,7 @@ export function UsersPage() {
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{editingUser ? "Sua user" : "Tao user moi"}</h3>
-              <button onClick={() => { setShowCreateModal(false); setEditingUser(null); }} className="text-muted-foreground hover:text-foreground">
+              <button onClick={closeUserModal} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -336,7 +380,7 @@ export function UsersPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
                 <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="So dien thoai" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
               </div>
 
@@ -351,20 +395,30 @@ export function UsersPage() {
               </div>
 
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gan vai tro</p>
+                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gan vai tro *</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {roles.map((role) => (
-                    <label key={role.id} className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-[12px]">
-                      <input type="checkbox" checked={form.role_ids.includes(role.id)} onChange={() => handleToggleRole(role.id)} />
-                      {role.name} ({role.code})
-                    </label>
-                  ))}
+                  {loading ? (
+                    <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
+                      Dang tai vai tro...
+                    </div>
+                  ) : roles.length === 0 ? (
+                    <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
+                      No roles available
+                    </div>
+                  ) : (
+                    roles.map((role) => (
+                      <label key={role.id} className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-[12px]">
+                        <input type="checkbox" checked={form.role_ids.includes(role.id)} onChange={() => handleToggleRole(role.id)} />
+                        {role.name} ({role.code})
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
 
             <div className="mt-5 flex items-center gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowCreateModal(false); setEditingUser(null); }}>
+              <Button variant="outline" className="flex-1" onClick={closeUserModal}>
                 Huy
               </Button>
               <Button className="flex-1" onClick={() => void (editingUser ? handleEditUser() : handleCreateUser())} disabled={creating}>

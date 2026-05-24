@@ -54,6 +54,8 @@ import { CustomerWishlistPage } from "@/components/pages/customer/wishlist";
 import { AuditTrailPage } from "@/components/pages/audit-trail";
 import { MembershipPlansPage } from "@/components/pages/membership-plans";
 import { SuppliersPage } from "@/components/pages/suppliers";
+import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
+import { SupplierAccountPage } from "@/components/pages/supplier/supplier-account";
 import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
 import { NotFoundPage } from "@/components/pages/not-found";
 import { authService } from "@/services/auth";
@@ -66,11 +68,20 @@ async function requireAuthLoader() {
   if (Array.isArray(user.roles) && user.roles.includes("CUSTOMER")) {
     throw redirect("/customer");
   }
+  if (Array.isArray(user.roles) && user.roles.includes("SUPPLIER")) {
+    throw redirect("/supplier");
+  }
   return null;
 }
 
 function publicOnlyLoader() {
   if (authService.isAuthenticated()) {
+    if (authService.isCustomer()) {
+      throw redirect("/customer");
+    }
+    if (authService.isSupplier()) {
+      throw redirect("/supplier");
+    }
     throw redirect("/");
   }
   return null;
@@ -95,6 +106,17 @@ function customerPublicOnlyLoader() {
     throw redirect('/customer');
   }
   throw redirect('/');
+}
+
+async function requireSupplierAuthLoader() {
+  const user = await authService.hydrateCurrentUser();
+  if (!user) {
+    throw redirect('/login');
+  }
+  if (!Array.isArray(user.roles) || !user.roles.includes('SUPPLIER')) {
+    throw redirect('/');
+  }
+  return null;
 }
 
 export const router = createBrowserRouter([
@@ -142,6 +164,11 @@ export const router = createBrowserRouter([
     Component: SupplierPortalPage,
   },
   {
+    path: "/supplier",
+    loader: requireSupplierAuthLoader,
+    Component: SupplierAccountPage,
+  },
+  {
     path: "/",
     loader: requireAuthLoader,
     Component: AppLayout,
@@ -157,6 +184,8 @@ export const router = createBrowserRouter([
       { path: "purchase-orders/new", Component: PurchaseOrderFormPage },
       { path: "purchase-orders/:id", Component: PurchaseOrderDetailPage },
       { path: "purchase-orders/:id/edit", Component: PurchaseOrderFormPage },
+      { path: "supplier-deliveries", Component: SupplierDeliveriesPage },
+      { path: "supplier-deliveries/:id", Component: SupplierDeliveriesPage },
       { path: "putaway", Component: PutawayPage },
       { path: "putaway/:id", Component: PutawayDetailPage },
       { path: "putaway/:id/execute", Component: PutawayExecutePage },

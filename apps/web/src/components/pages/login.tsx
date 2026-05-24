@@ -35,6 +35,8 @@ export function LoginPage() {
       toast.success("Login successful");
       if (Array.isArray(loginData.user?.roles) && loginData.user.roles.includes('CUSTOMER')) {
         navigate('/customer');
+      } else if (Array.isArray(loginData.user?.roles) && loginData.user.roles.includes('SUPPLIER')) {
+        navigate('/supplier');
       } else {
         navigate('/');
       }
