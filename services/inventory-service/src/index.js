@@ -21,6 +21,8 @@ const supplierRoutes = require('./routes/supplier.routes');
 const receivingSmartRoutes = require('./routes/receiving-smart.routes');
 const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
 const purchaseOrderRoutes = require('./routes/purchase-order.routes');
+const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
+const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,6 +35,9 @@ app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 app.get('/health', (_req, res) => {
   res.json({ service: 'inventory-service', status: 'ok' });
 });
+
+// Demo supplier portal is token-scoped and intentionally does not use internal RBAC.
+app.use('/api/supplier-portal', supplierPortalRoutes);
 
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
@@ -53,6 +58,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/receiving-smart', receivingSmartRoutes);
 app.use('/api/storage-suggestions', storageSuggestionRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
+app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

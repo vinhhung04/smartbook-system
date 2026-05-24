@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, useNavigate, useParams } from "react-router";
-import { ArrowLeft, CheckCircle, ClipboardCheck, Edit, FileText, RefreshCw, XCircle } from "lucide-react";
+import { NavLink, useParams } from "react-router";
+import { ArrowLeft, CheckCircle, Edit, ExternalLink, FileText, RefreshCw, Send, Truck, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { purchaseOrderService, type PurchaseOrderDetail, type ReconciliationResponse } from "@/services/purchase-order";
+import { purchaseOrderService, type PurchaseOrderDetail, type ReconciliationResponse, type SupplierDocumentsResponse } from "@/services/purchase-order";
 import { getApiErrorMessage } from "@/services/api";
 import { StatusBadge } from "@/components/status-badge";
 import { SectionCard } from "@/components/ui/section-card";
@@ -11,9 +11,9 @@ import { Button } from "@/components/ui/button";
 
 function statusVariant(status: string) {
   if (status === "RECEIVED" || status === "MATCHED" || status === "FULLY_RECEIVED") return "success";
-  if (status === "APPROVED") return "primary";
-  if (status === "PENDING_APPROVAL" || status === "UNDER_RECEIVED" || status === "PARTIALLY_RECEIVED") return "warning";
-  if (status === "REJECTED" || status === "CANCELLED" || status === "OVER_RECEIVED") return "danger";
+  if (status === "APPROVED" || status === "SENT" || status === "ACKNOWLEDGED" || status === "SUPPLIER_CONFIRMED") return "primary";
+  if (status === "PENDING_APPROVAL" || status === "UNDER_RECEIVED" || status === "PARTIALLY_RECEIVED" || status === "SENT_TO_SUPPLIER" || status === "SHORTAGE_REPORTED" || status === "SUBMITTED" || status === "OPEN") return "warning";
+  if (status === "REJECTED" || status === "CANCELLED" || status === "OVER_RECEIVED" || status === "FAILED") return "danger";
   return "neutral";
 }
 
@@ -30,29 +30,24 @@ function formatDate(value?: string | null) {
 
 export function PurchaseOrderDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [po, setPo] = useState<PurchaseOrderDetail | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationResponse | null>(null);
+  const [supplierDocs, setSupplierDocs] = useState<SupplierDocumentsResponse["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [receiptQty, setReceiptQty] = useState<Record<string, number>>({});
 
   const load = async () => {
     if (!id) return;
     try {
       setLoading(true);
-      const [detail, rec] = await Promise.all([
+      const [detail, rec, docs] = await Promise.all([
         purchaseOrderService.getById(id),
         purchaseOrderService.getReconciliation(id),
+        purchaseOrderService.getSupplierDocuments(id),
       ]);
       setPo(detail);
       setReconciliation(rec);
-      const qty: Record<string, number> = {};
-      detail.items.forEach((item) => {
-        if (item.remaining_qty > 0) qty[item.id] = item.remaining_qty;
-      });
-      setReceiptQty(qty);
+      setSupplierDocs(docs.data);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Failed to load purchase order"));
     } finally {
@@ -90,6 +85,11 @@ export function PurchaseOrderDetailPage() {
     void runAction("Purchase order approved", () => purchaseOrderService.approve(id, "Approved from UI"));
   };
 
+  const sendToSupplier = () => {
+    if (!id || !window.confirm("Send this PO to supplier?")) return;
+    void runAction("Purchase order sent to supplier", () => purchaseOrderService.sendToSupplier(id));
+  };
+
   const reject = () => {
     if (!id) return;
     const reason = window.prompt("Reject reason", "Rejected from UI");
@@ -100,38 +100,6 @@ export function PurchaseOrderDetailPage() {
   const cancel = () => {
     if (!id || !window.confirm("Cancel this purchase order?")) return;
     void runAction("Purchase order cancelled", () => purchaseOrderService.cancel(id));
-  };
-
-  const createReceipt = async () => {
-    if (!id || !po) return;
-    const items = po.items
-      .filter((item) => Number(receiptQty[item.id] || 0) > 0)
-      .map((item) => ({
-        purchase_order_item_id: item.id,
-        variant_id: item.variant_id,
-        quantity: Number(receiptQty[item.id] || 0),
-        unit_cost: item.unit_cost,
-        location_id: null,
-      }));
-    if (items.length === 0) {
-      toast.error("Enter at least one receive quantity");
-      return;
-    }
-    try {
-      setWorking(true);
-      const response = await purchaseOrderService.createGoodsReceiptFromPo(id, {
-        note: "Created from Purchase Order UI",
-        items,
-      });
-      toast.success(`Goods receipt ${response.data.receipt_number} created as DRAFT`);
-      setReceiptModalOpen(false);
-      await load();
-      navigate(`/orders/${response.data.id}`);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to create goods receipt"));
-    } finally {
-      setWorking(false);
-    }
   };
 
   if (loading) {
@@ -145,8 +113,9 @@ export function PurchaseOrderDetailPage() {
   const canEdit = ["DRAFT", "REJECTED"].includes(po.status);
   const canSubmit = ["DRAFT", "REJECTED"].includes(po.status);
   const canApprove = po.status === "PENDING_APPROVAL";
-  const canReceive = ["APPROVED", "PARTIALLY_RECEIVED"].includes(po.status) && totalRemaining > 0;
+  const canSendToSupplier = po.status === "APPROVED";
   const canCancel = ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
+  const latestOpenInvoice = supplierDocs?.invoices.find((invoice) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status));
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -169,7 +138,14 @@ export function PurchaseOrderDetailPage() {
           {canSubmit && <Button size="sm" onClick={submit} disabled={working}><FileText className="h-3.5 w-3.5" />Submit</Button>}
           {canApprove && <Button size="sm" onClick={approve} disabled={working}><CheckCircle className="h-3.5 w-3.5" />Approve</Button>}
           {canApprove && <Button variant="outline" size="sm" onClick={reject} disabled={working}><XCircle className="h-3.5 w-3.5" />Reject</Button>}
-          {canReceive && <Button size="sm" onClick={() => setReceiptModalOpen(true)} disabled={working}><ClipboardCheck className="h-3.5 w-3.5" />Create GR</Button>}
+          {canSendToSupplier && <Button size="sm" onClick={sendToSupplier} disabled={working}><Send className="h-3.5 w-3.5" />Send to Supplier</Button>}
+          {po.status === "SUPPLIER_CONFIRMED" && latestOpenInvoice ? (
+            <Button asChild size="sm" disabled={working}>
+              <NavLink to={`/orders/new?supplier_delivery_invoice_id=${latestOpenInvoice.id}`}>
+                <Truck className="h-3.5 w-3.5" />Create GR from Invoice
+              </NavLink>
+            </Button>
+          ) : null}
           {canCancel && <Button variant="outline" size="sm" onClick={cancel} disabled={working}>Cancel</Button>}
         </div>
       </div>
@@ -201,6 +177,94 @@ export function PurchaseOrderDetailPage() {
           <div><div className="text-[11px] text-muted-foreground">Status</div><StatusBadge label={reconciliation?.summary.reconciliation_status || po.reconciliation_status} variant={statusVariant(reconciliation?.summary.reconciliation_status || po.reconciliation_status)} /></div>
         </div>
       </SectionCard>
+
+      {po.status === "SENT_TO_SUPPLIER" ? (
+        <SectionCard title="Supplier Fulfillment" icon={Truck}>
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-800">
+            Waiting for supplier confirmation. Goods receipt can only be created after the supplier confirms the order and submits an invoice or delivery note.
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {supplierDocs?.dispatches.length ? (
+        <SectionCard title="Supplier Dispatches" noPadding>
+          <table className="w-full">
+            <tbody>
+              {supplierDocs.dispatches.map((dispatch) => (
+                <tr key={dispatch.id} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3.5 text-[13px] font-semibold">{dispatch.dispatch_number}</td>
+                  <td className="px-5 py-3.5"><StatusBadge label={dispatch.status} variant={statusVariant(dispatch.status)} /></td>
+                  <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{dispatch.channel}{dispatch.sent_to_email ? ` - ${dispatch.sent_to_email}` : " - demo/manual channel"}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    {dispatch.portal_token ? (
+                      <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
+                        Supplier portal <ExternalLink className="h-3.5 w-3.5" />
+                      </NavLink>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+      ) : null}
+
+      {supplierDocs?.invoices.length ? (
+        <SectionCard title="Supplier Invoices / Delivery Notes" noPadding>
+          <table className="w-full min-w-[760px]">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                {["Invoice", "Expected", "Status", "Lines", "Action"].map((heading) => (
+                  <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {supplierDocs.invoices.map((invoice) => (
+                <tr key={invoice.id} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3.5 text-[13px] font-semibold">{invoice.invoice_number}</td>
+                  <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(invoice.expected_delivery_date)}</td>
+                  <td className="px-5 py-3.5"><StatusBadge label={invoice.status} variant={statusVariant(invoice.status)} /></td>
+                  <td className="px-5 py-3.5 text-[13px]">{invoice.items.length}</td>
+                  <td className="px-5 py-3.5">
+                    {po.status !== "RECEIVED" && totalRemaining > 0 ? (
+                      <NavLink to={`/orders/new?supplier_delivery_invoice_id=${invoice.id}`} className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium">
+                        <Truck className="h-3.5 w-3.5" /> Receive
+                      </NavLink>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">Closed</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+      ) : null}
+
+      {supplierDocs?.shortage_reports.length ? (
+        <SectionCard title="Shortage Reports" noPadding>
+          <table className="w-full min-w-[760px]">
+            <tbody>
+              {supplierDocs.shortage_reports.map((report) => {
+                const shortageQty = report.items.reduce((sum, item) => sum + item.shortage_qty, 0);
+                return (
+                  <tr key={report.id} className="border-b border-border last:border-0">
+                    <td className="px-5 py-3.5"><StatusBadge label={report.status} variant={statusVariant(report.status)} /></td>
+                    <td className="px-5 py-3.5 text-[13px]">{shortageQty} units short</td>
+                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{report.reason || "-"}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      {report.status === "OPEN" ? (
+                        <Button variant="outline" size="sm" onClick={() => id && runAction("Shortage report sent", () => purchaseOrderService.sendShortageReport(id, report.id))} disabled={working}>Send to Supplier</Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title={`Items (${po.items.length})`} noPadding>
         <div className="overflow-x-auto">
@@ -249,34 +313,6 @@ export function PurchaseOrderDetailPage() {
         )}
       </SectionCard>
 
-      {receiptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl rounded-xl bg-background p-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Create Goods Receipt Draft</h2>
-                <p className="text-[12px] text-muted-foreground">Stock updates only after posting the receipt.</p>
-              </div>
-              <button onClick={() => setReceiptModalOpen(false)} className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-muted">Close</button>
-            </div>
-            <div className="max-h-[55vh] space-y-2 overflow-y-auto">
-              {po.items.filter((item) => item.remaining_qty > 0).map((item) => (
-                <div key={item.id} className="grid grid-cols-[1fr_120px] gap-3 rounded-lg border border-border p-3">
-                  <div>
-                    <div className="text-[13px] font-medium">{item.title}</div>
-                    <div className="text-[11px] text-muted-foreground">Remaining {item.remaining_qty} - {item.isbn13 || item.sku || item.variant_id}</div>
-                  </div>
-                  <input type="number" min={0} max={item.remaining_qty} value={receiptQty[item.id] ?? 0} onChange={(e) => setReceiptQty((current) => ({ ...current, [item.id]: Number(e.target.value) }))} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setReceiptModalOpen(false)}>Cancel</Button>
-              <Button onClick={() => void createReceipt()} disabled={working}>Create Draft</Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

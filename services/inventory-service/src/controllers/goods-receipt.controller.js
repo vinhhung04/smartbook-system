@@ -20,9 +20,10 @@ function createReceiptNumber(baseTimestamp) {
   return `GR-${baseTimestamp}-${suffix}`;
 }
 
-function calculatePoStatus(totalOrderedQty, totalReceivedQty) {
+function calculatePoStatus(totalOrderedQty, totalReceivedQty, hasOpenShortage = false) {
   if (totalReceivedQty <= 0) return "APPROVED";
   if (totalReceivedQty >= totalOrderedQty) return "RECEIVED";
+  if (hasOpenShortage) return "SHORTAGE_REPORTED";
   return "PARTIALLY_RECEIVED";
 }
 
@@ -52,9 +53,16 @@ async function getPoTotals(tx, purchaseOrderId) {
 
 async function updatePurchaseOrderStatusFromTotals(tx, purchaseOrderId) {
   const totals = await getPoTotals(tx, purchaseOrderId);
+  const openShortageCount = await tx.supplier_shortage_reports.count({
+    where: {
+      purchase_order_id: purchaseOrderId,
+      status: { in: ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"] },
+    },
+  });
   const nextStatus = calculatePoStatus(
     totals.total_ordered_qty,
     totals.total_received_qty,
+    openShortageCount > 0,
   );
   await tx.purchase_orders.update({
     where: { id: purchaseOrderId },
@@ -101,6 +109,16 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
     tx,
     goodsReceipt.purchase_order_id,
   );
+
+  if (goodsReceipt.supplier_delivery_invoice_id) {
+    await tx.supplier_delivery_invoices.update({
+      where: { id: goodsReceipt.supplier_delivery_invoice_id },
+      data: {
+        status: totals.status === "RECEIVED" ? "RECEIVED" : "PARTIALLY_RECEIVED",
+        updated_at: new Date(),
+      },
+    });
+  }
 
   await tx.inventory_audit_logs.create({
     data: {
@@ -346,7 +364,7 @@ async function getGoodsReceiptById(req, res) {
 }
 
 async function createGoodsReceipt(req, res) {
-  const { warehouse_id, note, items, purchase_order_id } = req.body;
+  const { warehouse_id, note, items, purchase_order_id, supplier_delivery_invoice_id, invoice_number } = req.body;
   const userId = req.user?.id;
 
   if (!userId) {
@@ -388,8 +406,12 @@ async function createGoodsReceipt(req, res) {
 
     const result = await prisma.$transaction(async (tx) => {
       let linkedPo = null;
+      let supplierInvoice = null;
       let effectiveWarehouseId = warehouse_id;
       if (purchase_order_id) {
+        if (!supplier_delivery_invoice_id && !invoice_number) {
+          throw new Error("PURCHASE_ORDER_REQUIRES_SUPPLIER_INVOICE");
+        }
         linkedPo = await tx.purchase_orders.findUnique({
           where: { id: purchase_order_id },
           include: {
@@ -406,13 +428,26 @@ async function createGoodsReceipt(req, res) {
         if (!linkedPo) {
           throw new Error("PURCHASE_ORDER_NOT_FOUND");
         }
-        if (!["APPROVED", "PARTIALLY_RECEIVED"].includes(linkedPo.status)) {
+        if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(linkedPo.status)) {
           throw new Error("PURCHASE_ORDER_NOT_RECEIVABLE");
         }
         if (warehouse_id && warehouse_id !== linkedPo.warehouse_id) {
           throw new Error("PURCHASE_ORDER_WAREHOUSE_MISMATCH");
         }
         effectiveWarehouseId = linkedPo.warehouse_id;
+
+        if (supplier_delivery_invoice_id) {
+          supplierInvoice = await tx.supplier_delivery_invoices.findFirst({
+            where: { id: supplier_delivery_invoice_id, purchase_order_id: linkedPo.id },
+          });
+        } else if (invoice_number) {
+          supplierInvoice = await tx.supplier_delivery_invoices.findFirst({
+            where: { purchase_order_id: linkedPo.id, invoice_number: String(invoice_number).trim() },
+          });
+        }
+        if (!supplierInvoice) {
+          throw new Error("SUPPLIER_INVOICE_NOT_FOUND");
+        }
       }
 
       const warehouse = await tx.warehouses.findUnique({
@@ -500,8 +535,9 @@ async function createGoodsReceipt(req, res) {
           receipt_number: createReceiptNumber(baseTimestamp),
           warehouse_id: effectiveWarehouseId,
           purchase_order_id: linkedPo?.id || null,
-          source_type: linkedPo ? "PURCHASE_ORDER" : "MANUAL",
-          source_reference_id: linkedPo?.id || null,
+          supplier_delivery_invoice_id: supplierInvoice?.id || null,
+          source_type: linkedPo ? "SUPPLIER_INVOICE" : "MANUAL",
+          source_reference_id: supplierInvoice?.id || null,
           status: "DRAFT",
           received_by_user_id: userId,
           note: note || null,
@@ -558,7 +594,15 @@ async function createGoodsReceipt(req, res) {
     if (error.message === "PURCHASE_ORDER_NOT_RECEIVABLE") {
       return res
         .status(400)
-        .json({ message: "Purchase order must be APPROVED or PARTIALLY_RECEIVED" });
+        .json({ message: "Purchase order must be sent to supplier or supplier-confirmed before receiving" });
+    }
+    if (error.message === "PURCHASE_ORDER_REQUIRES_SUPPLIER_INVOICE") {
+      return res
+        .status(400)
+        .json({ message: "Create goods receipt from supplier invoice/delivery note instead of directly from purchase order" });
+    }
+    if (error.message === "SUPPLIER_INVOICE_NOT_FOUND") {
+      return res.status(404).json({ message: "Supplier invoice/delivery note not found for purchase order" });
     }
     if (error.message === "PURCHASE_ORDER_WAREHOUSE_MISMATCH") {
       return res
@@ -996,6 +1040,21 @@ async function updateGoodsReceipt(req, res) {
           await applyPurchaseOrderReceipt(tx, updated, userId);
           await postDraftGoodsReceipt(tx, updated, userId);
         }
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: userId,
+            action_name: "GOODS_RECEIPT_POSTED",
+            entity_type: "GOODS_RECEIPT",
+            entity_id: updated.id,
+            after_data: {
+              receipt_number: updated.receipt_number,
+              purchase_order_id: updated.purchase_order_id,
+              supplier_delivery_invoice_id: updated.supplier_delivery_invoice_id,
+              source_type: updated.source_type,
+            },
+          },
+        });
       }
 
       if (targetStatus === "CANCELLED" && existing.status === "POSTED") {

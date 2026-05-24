@@ -359,6 +359,41 @@ Một số tài khoản thường dùng:
 
 ## Kiểm Thử
 
+### Purchase Order -> Supplier Fulfillment -> Goods Receipt
+
+Flow nhap hang moi:
+
+```text
+PO DRAFT
+-> submit
+-> manager approve
+-> send to supplier
+-> supplier confirm + invoice/delivery note
+-> warehouse staff creates Goods Receipt draft from invoice
+-> staff posts Goods Receipt
+-> stock increases
+```
+
+Quy tac nghiep vu:
+
+- Approving a Purchase Order does not create stock or goods receipt.
+- Stock increases only when Goods Receipt is POSTED.
+- Goods Receipt for a PO must come from a supplier invoice/delivery note.
+- Over-receiving is blocked by backend validation.
+- Shortage is recorded as a supplier shortage report.
+
+Docker integration test:
+
+```powershell
+node scripts\purchase-supplier-receiving-integration.mjs
+```
+
+Expected summary:
+
+```text
+PASS=13 TOTAL=13
+```
+
 ### Analytics dashboard integration
 
 Script này đăng nhập bằng tài khoản staff demo, gọi đủ 7 endpoint `/analytics` qua API Gateway, kiểm tra response có field `data`, kiểm tra kiểu dữ liệu cơ bản và xác nhận customer token bị chặn 403:

@@ -13,12 +13,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 
-const statuses = ["ALL", "DRAFT", "PENDING_APPROVAL", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"];
+const statuses = ["ALL", "DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED", "CANCELLED"];
 
 function statusVariant(status: string) {
   if (status === "RECEIVED") return "success";
-  if (status === "APPROVED") return "primary";
-  if (status === "PENDING_APPROVAL") return "warning";
+  if (status === "APPROVED" || status === "SUPPLIER_CONFIRMED") return "primary";
+  if (status === "PENDING_APPROVAL" || status === "SENT_TO_SUPPLIER" || status === "SHORTAGE_REPORTED") return "warning";
   if (status === "PARTIALLY_RECEIVED") return "cyan";
   if (status === "REJECTED" || status === "CANCELLED") return "danger";
   return "neutral";

@@ -4,8 +4,11 @@ export type PurchaseOrderStatus =
   | 'DRAFT'
   | 'PENDING_APPROVAL'
   | 'APPROVED'
+  | 'SENT_TO_SUPPLIER'
+  | 'SUPPLIER_CONFIRMED'
   | 'REJECTED'
   | 'PARTIALLY_RECEIVED'
+  | 'SHORTAGE_REPORTED'
   | 'RECEIVED'
   | 'CANCELLED';
 
@@ -65,7 +68,7 @@ export interface PurchaseOrderItem {
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderSummary {
-  supplier?: { id: string; code?: string | null; name: string } | null;
+  supplier?: { id: string; code?: string | null; name: string; email?: string | null } | null;
   warehouse?: { id: string; code: string; name: string } | null;
   items: PurchaseOrderItem[];
   goods_receipts: Array<{
@@ -77,6 +80,80 @@ export interface PurchaseOrderDetail extends PurchaseOrderSummary {
     total_quantity: number;
   }>;
   timeline: Array<{ label: string; completed: boolean; time?: string | null }>;
+}
+
+export interface SupplierDispatch {
+  id: string;
+  dispatch_number: string;
+  channel: string;
+  status: string;
+  sent_to_email?: string | null;
+  sent_at?: string | null;
+  acknowledged_at?: string | null;
+  portal_token?: string | null;
+  portal_url?: string | null;
+  created_at: string;
+}
+
+export interface SupplierInvoiceItem {
+  id: string;
+  purchase_order_item_id?: string | null;
+  variant_id: string;
+  title?: string | null;
+  sku?: string | null;
+  isbn13?: string | null;
+  invoiced_qty: number;
+  delivered_qty?: number | null;
+  accepted_qty: number;
+  unit_cost: number;
+  note?: string | null;
+}
+
+export interface SupplierInvoice {
+  id: string;
+  purchase_order_id: string;
+  supplier_id: string;
+  invoice_number: string;
+  delivery_number?: string | null;
+  invoice_date?: string | null;
+  expected_delivery_date?: string | null;
+  status: string;
+  supplier_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  items: SupplierInvoiceItem[];
+}
+
+export interface ShortageReport {
+  id: string;
+  purchase_order_id: string;
+  supplier_id: string;
+  goods_receipt_id?: string | null;
+  invoice_id?: string | null;
+  status: string;
+  reason?: string | null;
+  sent_at?: string | null;
+  resolved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  items: Array<{
+    id: string;
+    purchase_order_item_id: string;
+    variant_id: string;
+    title?: string | null;
+    ordered_qty: number;
+    received_qty: number;
+    shortage_qty: number;
+    note?: string | null;
+  }>;
+}
+
+export interface SupplierDocumentsResponse {
+  data: {
+    dispatches: SupplierDispatch[];
+    invoices: SupplierInvoice[];
+    shortage_reports: ShortageReport[];
+  };
 }
 
 export interface PurchaseOrderListResponse {
@@ -168,6 +245,60 @@ export const purchaseOrderService = {
 
   cancel: async (id: string) => {
     const response = await inventoryAPI.post(`/api/purchase-orders/${id}/cancel`);
+    return response.data;
+  },
+
+  sendToSupplier: async (id: string) => {
+    const response = await inventoryAPI.post(`/api/purchase-orders/${id}/send-to-supplier`);
+    return response.data as {
+      message: string;
+      data: {
+        purchase_order_id: string;
+        po_number: string;
+        status: PurchaseOrderStatus;
+        dispatch_id: string;
+        dispatch_number: string;
+        portal_token?: string | null;
+        portal_url?: string | null;
+        channel: string;
+        sent_to_email?: string | null;
+      };
+    };
+  },
+
+  supplierConfirm: async (id: string, payload: {
+    invoice_number?: string;
+    invoice_date?: string;
+    expected_delivery_date?: string;
+    items?: Array<{
+      purchase_order_item_id?: string;
+      variant_id?: string;
+      invoiced_qty: number;
+      unit_cost: number;
+      note?: string;
+    }>;
+  }) => {
+    const response = await inventoryAPI.post(`/api/purchase-orders/${id}/supplier-confirm`, payload);
+    return response.data as { message: string; data: { purchase_order_id: string; status: PurchaseOrderStatus; invoice_id?: string | null } };
+  },
+
+  getSupplierDocuments: async (id: string): Promise<SupplierDocumentsResponse> => {
+    const response = await inventoryAPI.get(`/api/purchase-orders/${id}/supplier-documents`);
+    return response.data as SupplierDocumentsResponse;
+  },
+
+  getShortageReports: async (id: string): Promise<{ data: ShortageReport[] }> => {
+    const response = await inventoryAPI.get(`/api/purchase-orders/${id}/shortage-reports`);
+    return response.data as { data: ShortageReport[] };
+  },
+
+  sendShortageReport: async (poId: string, reportId: string) => {
+    const response = await inventoryAPI.post(`/api/purchase-orders/${poId}/shortage-reports/${reportId}/send`);
+    return response.data;
+  },
+
+  resolveShortageReport: async (poId: string, reportId: string) => {
+    const response = await inventoryAPI.post(`/api/purchase-orders/${poId}/shortage-reports/${reportId}/resolve`);
     return response.data;
   },
 

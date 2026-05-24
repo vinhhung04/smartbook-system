@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const crypto = require("node:crypto");
 
 const prisma = new PrismaClient();
 
@@ -8,9 +9,12 @@ const PO_STATUSES = {
   DRAFT: "DRAFT",
   PENDING_APPROVAL: "PENDING_APPROVAL",
   APPROVED: "APPROVED",
+  SENT_TO_SUPPLIER: "SENT_TO_SUPPLIER",
+  SUPPLIER_CONFIRMED: "SUPPLIER_CONFIRMED",
   REJECTED: "REJECTED",
   PARTIALLY_RECEIVED: "PARTIALLY_RECEIVED",
   RECEIVED: "RECEIVED",
+  SHORTAGE_REPORTED: "SHORTAGE_REPORTED",
   CANCELLED: "CANCELLED",
 };
 
@@ -27,6 +31,22 @@ function createPoNumber() {
 function createReceiptNumber() {
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
   return `GR-${Date.now()}-${suffix}`;
+}
+
+function createDispatchNumber() {
+  const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `POD-${Date.now()}-${suffix}`;
+}
+
+function makePortalToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function parseDateOrNull(value) {
+  const text = normalizeText(value);
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function calculateReconciliationStatus(totalOrderedQty, totalReceivedQty) {
@@ -138,10 +158,34 @@ function buildTimeline(po, totals) {
       label: "Approved",
       completed: [
         PO_STATUSES.APPROVED,
+        PO_STATUSES.SENT_TO_SUPPLIER,
+        PO_STATUSES.SUPPLIER_CONFIRMED,
         PO_STATUSES.PARTIALLY_RECEIVED,
+        PO_STATUSES.SHORTAGE_REPORTED,
         PO_STATUSES.RECEIVED,
       ].includes(po.status),
       time: po.approved_by_user_id ? po.updated_at : null,
+    },
+    {
+      label: "Sent to Supplier",
+      completed: [
+        PO_STATUSES.SENT_TO_SUPPLIER,
+        PO_STATUSES.SUPPLIER_CONFIRMED,
+        PO_STATUSES.PARTIALLY_RECEIVED,
+        PO_STATUSES.SHORTAGE_REPORTED,
+        PO_STATUSES.RECEIVED,
+      ].includes(po.status),
+      time: po.status !== PO_STATUSES.APPROVED ? po.updated_at : null,
+    },
+    {
+      label: "Supplier Confirmed",
+      completed: [
+        PO_STATUSES.SUPPLIER_CONFIRMED,
+        PO_STATUSES.PARTIALLY_RECEIVED,
+        PO_STATUSES.SHORTAGE_REPORTED,
+        PO_STATUSES.RECEIVED,
+      ].includes(po.status),
+      time: po.status !== PO_STATUSES.SENT_TO_SUPPLIER ? po.updated_at : null,
     },
     {
       label: "Received",
@@ -293,7 +337,7 @@ async function normalizePurchaseOrderPayload(tx, body) {
 function getPurchaseOrderInclude() {
   return {
     suppliers: {
-      select: { id: true, code: true, name: true, status: true },
+      select: { id: true, code: true, name: true, status: true, email: true },
     },
     warehouses: {
       select: { id: true, code: true, name: true, is_active: true },
@@ -318,6 +362,170 @@ function getPurchaseOrderInclude() {
       orderBy: { created_at: "desc" },
     },
   };
+}
+
+function mapDispatch(dispatch) {
+  const payload = dispatch.payload && typeof dispatch.payload === "object" ? dispatch.payload : {};
+  return {
+    id: dispatch.id,
+    dispatch_number: dispatch.dispatch_number,
+    channel: dispatch.channel,
+    status: dispatch.status,
+    sent_to_email: dispatch.sent_to_email,
+    sent_at: dispatch.sent_at,
+    acknowledged_at: dispatch.acknowledged_at,
+    portal_token: payload.portal_token || null,
+    portal_url: payload.portal_token ? `/supplier/portal/${payload.portal_token}` : null,
+    created_at: dispatch.created_at,
+  };
+}
+
+function mapSupplierInvoice(invoice) {
+  return {
+    id: invoice.id,
+    purchase_order_id: invoice.purchase_order_id,
+    supplier_id: invoice.supplier_id,
+    invoice_number: invoice.invoice_number,
+    delivery_number: invoice.delivery_number,
+    invoice_date: invoice.invoice_date,
+    expected_delivery_date: invoice.expected_delivery_date,
+    status: invoice.status,
+    supplier_note: invoice.supplier_note,
+    created_at: invoice.created_at,
+    updated_at: invoice.updated_at,
+    items: (invoice.supplier_delivery_invoice_items || []).map((item) => ({
+      id: item.id,
+      purchase_order_item_id: item.purchase_order_item_id,
+      variant_id: item.variant_id,
+      title: item.book_variants?.books?.title || null,
+      sku: item.book_variants?.sku || null,
+      isbn13: item.book_variants?.isbn13 || null,
+      invoiced_qty: Number(item.invoiced_qty || 0),
+      delivered_qty: item.delivered_qty == null ? null : Number(item.delivered_qty),
+      accepted_qty: Number(item.accepted_qty || 0),
+      unit_cost: numberValue(item.unit_cost),
+      note: item.note,
+    })),
+  };
+}
+
+function mapShortageReport(report) {
+  return {
+    id: report.id,
+    purchase_order_id: report.purchase_order_id,
+    supplier_id: report.supplier_id,
+    goods_receipt_id: report.goods_receipt_id,
+    invoice_id: report.invoice_id,
+    status: report.status,
+    reason: report.reason,
+    sent_at: report.sent_at,
+    resolved_at: report.resolved_at,
+    created_at: report.created_at,
+    updated_at: report.updated_at,
+    items: (report.supplier_shortage_report_items || []).map((item) => ({
+      id: item.id,
+      purchase_order_item_id: item.purchase_order_item_id,
+      variant_id: item.variant_id,
+      title: item.book_variants?.books?.title || null,
+      ordered_qty: Number(item.ordered_qty || 0),
+      received_qty: Number(item.received_qty || 0),
+      shortage_qty: Number(item.shortage_qty || 0),
+      note: item.note,
+    })),
+  };
+}
+
+async function createSupplierInvoice(tx, po, payload, userId) {
+  const invoiceNumber = normalizeText(payload?.invoice_number);
+  const lines = Array.isArray(payload?.items) ? payload.items : [];
+  if (!invoiceNumber) return { invalid: true, message: "invoice_number is required" };
+  if (lines.length === 0) return { invalid: true, message: "items is required" };
+
+  const poItemsById = new Map();
+  const poItemsByVariant = new Map();
+  po.purchase_order_items.forEach((item) => {
+    poItemsById.set(String(item.id), item);
+    poItemsByVariant.set(String(item.variant_id), item);
+  });
+
+  const invoiceItems = [];
+  const seen = new Set();
+  for (const rawLine of lines) {
+    const poItemId = parseId(rawLine?.purchase_order_item_id);
+    const variantId = parseId(rawLine?.variant_id);
+    const poItem = poItemId ? poItemsById.get(poItemId) : poItemsByVariant.get(String(variantId));
+    const invoicedQty = toInt(rawLine?.invoiced_qty);
+    const unitCost = Number(rawLine?.unit_cost);
+
+    if (!poItem) return { invalid: true, message: "Invoice item variant does not belong to purchase order" };
+    if (variantId && variantId !== poItem.variant_id) {
+      return { invalid: true, message: "purchase_order_item_id and variant_id do not match" };
+    }
+    if (!invoicedQty || invoicedQty <= 0) {
+      return { invalid: true, message: "Each invoice item must include invoiced_qty > 0" };
+    }
+    if (!Number.isFinite(unitCost) || unitCost < 0) {
+      return { invalid: true, message: "Each invoice item must include unit_cost >= 0" };
+    }
+    if (seen.has(poItem.variant_id)) return { invalid: true, message: "Duplicate variant in invoice items" };
+    seen.add(poItem.variant_id);
+
+    const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
+    if (invoicedQty > remainingQty) {
+      return { invalid: true, message: "Invoice quantity cannot exceed remaining purchase order quantity" };
+    }
+
+    invoiceItems.push({
+      purchase_order_item_id: poItem.id,
+      variant_id: poItem.variant_id,
+      invoiced_qty: invoicedQty,
+      unit_cost: unitCost,
+      note: normalizeText(rawLine?.note),
+    });
+  }
+
+  const invoiceDate = parseDateOrNull(payload?.invoice_date);
+  const expectedDeliveryDate = parseDateOrNull(payload?.expected_delivery_date);
+  if (normalizeText(payload?.invoice_date) && !invoiceDate) return { invalid: true, message: "invoice_date is invalid" };
+  if (normalizeText(payload?.expected_delivery_date) && !expectedDeliveryDate) {
+    return { invalid: true, message: "expected_delivery_date is invalid" };
+  }
+
+  const invoice = await tx.supplier_delivery_invoices.create({
+    data: {
+      purchase_order_id: po.id,
+      supplier_id: po.supplier_id,
+      invoice_number: invoiceNumber,
+      delivery_number: normalizeText(payload?.delivery_number),
+      invoice_date: invoiceDate,
+      expected_delivery_date: expectedDeliveryDate,
+      status: "SUBMITTED",
+      supplier_note: normalizeText(payload?.supplier_note),
+      raw_payload: payload || {},
+      created_by_user_id: userId || null,
+    },
+  });
+
+  await tx.supplier_delivery_invoice_items.createMany({
+    data: invoiceItems.map((item) => ({ ...item, invoice_id: invoice.id })),
+  });
+
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: userId || null,
+      action_name: "SUPPLIER_INVOICE_CREATED",
+      entity_type: "SUPPLIER_DELIVERY_INVOICE",
+      entity_id: invoice.id,
+      after_data: {
+        purchase_order_id: po.id,
+        po_number: po.po_number,
+        invoice_number: invoice.invoice_number,
+        line_count: invoiceItems.length,
+      },
+    },
+  });
+
+  return { data: invoice };
 }
 
 async function getPurchaseOrders(req, res) {
@@ -643,6 +851,296 @@ async function cancelPurchaseOrder(req, res) {
   }
 }
 
+async function sendToSupplier(req, res) {
+  const id = parseId(req.params.id);
+  const userId = parseId(req.user?.id);
+  const requestedChannel = normalizeText(req.body?.channel);
+  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchase_orders.findUnique({
+        where: { id },
+        include: {
+          suppliers: { select: { id: true, name: true, email: true } },
+          purchase_order_items: true,
+        },
+      });
+      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (po.status !== PO_STATUSES.APPROVED) {
+        return { invalid: true, message: "Only APPROVED purchase orders can be sent to supplier" };
+      }
+      if (po.purchase_order_items.length === 0) {
+        return { invalid: true, message: "Purchase order must have at least one item" };
+      }
+
+      const portalToken = makePortalToken();
+      const channel = requestedChannel || (po.suppliers?.email ? "EMAIL" : "MOCK");
+      const dispatch = await tx.supplier_order_dispatches.create({
+        data: {
+          purchase_order_id: po.id,
+          supplier_id: po.supplier_id,
+          dispatch_number: createDispatchNumber(),
+          channel,
+          status: "SENT",
+          sent_to_email: po.suppliers?.email || null,
+          sent_at: new Date(),
+          payload: {
+            portal_token: portalToken,
+            supplier_name: po.suppliers?.name || null,
+            has_supplier_email: Boolean(po.suppliers?.email),
+          },
+          created_by_user_id: userId,
+        },
+      });
+
+      const updated = await tx.purchase_orders.update({
+        where: { id },
+        data: { status: PO_STATUSES.SENT_TO_SUPPLIER, updated_at: new Date() },
+      });
+
+      await audit(tx, userId, "PURCHASE_ORDER_SENT_TO_SUPPLIER", id, {
+        po_number: po.po_number,
+        status_before: po.status,
+        status_after: updated.status,
+        dispatch_id: dispatch.id,
+        dispatch_number: dispatch.dispatch_number,
+        channel,
+        sent_to_email: dispatch.sent_to_email,
+      });
+
+      return { data: { po: updated, dispatch } };
+    });
+
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    const { po, dispatch } = result.data;
+    return res.status(201).json({
+      message: "Purchase order sent to supplier",
+      data: {
+        purchase_order_id: po.id,
+        po_number: po.po_number,
+        status: po.status,
+        dispatch_id: dispatch.id,
+        dispatch_number: dispatch.dispatch_number,
+        portal_token: dispatch.payload?.portal_token || null,
+        portal_url: dispatch.payload?.portal_token ? `/supplier/portal/${dispatch.payload.portal_token}` : null,
+        channel: dispatch.channel,
+        sent_to_email: dispatch.sent_to_email,
+      },
+    });
+  } catch (error) {
+    console.error("Error while sending purchase order to supplier:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function supplierConfirm(req, res) {
+  const id = parseId(req.params.id);
+  const userId = parseId(req.user?.id);
+  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchase_orders.findUnique({
+        where: { id },
+        include: { purchase_order_items: true },
+      });
+      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (po.status !== PO_STATUSES.SENT_TO_SUPPLIER) {
+        return { invalid: true, message: "Only SENT_TO_SUPPLIER purchase orders can be supplier-confirmed" };
+      }
+
+      await tx.supplier_order_dispatches.updateMany({
+        where: { purchase_order_id: po.id, status: "SENT" },
+        data: { status: "ACKNOWLEDGED", acknowledged_at: new Date(), updated_at: new Date() },
+      });
+
+      const updated = await tx.purchase_orders.update({
+        where: { id },
+        data: { status: PO_STATUSES.SUPPLIER_CONFIRMED, updated_at: new Date() },
+      });
+
+      await audit(tx, userId, "SUPPLIER_ORDER_ACKNOWLEDGED", id, {
+        po_number: po.po_number,
+        status_before: po.status,
+        status_after: updated.status,
+      });
+
+      let invoice = null;
+      if (normalizeText(req.body?.invoice_number) || Array.isArray(req.body?.items)) {
+        const created = await createSupplierInvoice(tx, po, req.body, userId);
+        if (created.invalid) return created;
+        invoice = created.data;
+      }
+
+      return { data: { po: updated, invoice } };
+    });
+
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.json({
+      message: "Supplier confirmation recorded",
+      data: {
+        purchase_order_id: result.data.po.id,
+        status: result.data.po.status,
+        invoice_id: result.data.invoice?.id || null,
+      },
+    });
+  } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(409).json({ message: "Supplier invoice number already exists for this supplier" });
+    }
+    console.error("Error while recording supplier confirmation:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function getSupplierDocuments(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+
+  try {
+    const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true } });
+    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+
+    const [dispatches, invoices, shortageReports] = await Promise.all([
+      prisma.supplier_order_dispatches.findMany({
+        where: { purchase_order_id: id },
+        orderBy: { created_at: "desc" },
+      }),
+      prisma.supplier_delivery_invoices.findMany({
+        where: { purchase_order_id: id },
+        include: {
+          supplier_delivery_invoice_items: {
+            include: {
+              book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+            },
+            orderBy: { id: "asc" },
+          },
+        },
+        orderBy: { created_at: "desc" },
+      }),
+      prisma.supplier_shortage_reports.findMany({
+        where: { purchase_order_id: id },
+        include: {
+          supplier_shortage_report_items: {
+            include: { book_variants: { select: { books: { select: { title: true } } } } },
+          },
+        },
+        orderBy: { created_at: "desc" },
+      }),
+    ]);
+
+    return res.json({
+      data: {
+        dispatches: dispatches.map(mapDispatch),
+        invoices: invoices.map(mapSupplierInvoice),
+        shortage_reports: shortageReports.map(mapShortageReport),
+      },
+    });
+  } catch (error) {
+    console.error("Error while fetching supplier documents:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function getShortageReports(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+
+  try {
+    const reports = await prisma.supplier_shortage_reports.findMany({
+      where: { purchase_order_id: id },
+      include: {
+        supplier_shortage_report_items: {
+          include: { book_variants: { select: { books: { select: { title: true } } } } },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+    return res.json({ data: reports.map(mapShortageReport) });
+  } catch (error) {
+    console.error("Error while listing shortage reports:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function updateShortageReportStatus(req, res, targetStatus) {
+  const id = parseId(req.params.id);
+  const reportId = parseId(req.params.reportId);
+  const userId = parseId(req.user?.id);
+  if (!id || !reportId) return res.status(400).json({ message: "Invalid purchase order or shortage report id" });
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const report = await tx.supplier_shortage_reports.findFirst({
+        where: { id: reportId, purchase_order_id: id },
+      });
+      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (targetStatus === "SENT_TO_SUPPLIER" && report.status !== "OPEN") {
+        return { invalid: true, message: "Only OPEN shortage reports can be sent" };
+      }
+      if (targetStatus === "RESOLVED" && !["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
+        return { invalid: true, message: "Shortage report cannot be resolved from current status" };
+      }
+
+      const updated = await tx.supplier_shortage_reports.update({
+        where: { id: reportId },
+        data: {
+          status: targetStatus,
+          updated_at: new Date(),
+          ...(targetStatus === "SENT_TO_SUPPLIER" ? { sent_at: new Date() } : {}),
+          ...(targetStatus === "RESOLVED" ? { resolved_at: new Date() } : {}),
+        },
+      });
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: userId,
+          action_name: targetStatus === "RESOLVED" ? "SUPPLIER_SHORTAGE_RESOLVED" : "SUPPLIER_SHORTAGE_REPORTED",
+          entity_type: "SUPPLIER_SHORTAGE_REPORT",
+          entity_id: reportId,
+          before_data: { status: report.status },
+          after_data: { status: updated.status, purchase_order_id: id },
+        },
+      });
+
+      if (targetStatus === "RESOLVED") {
+        const totals = await tx.purchase_order_items.findMany({
+          where: { purchase_order_id: id },
+          select: { ordered_qty: true, received_qty: true },
+        });
+        const totalOrdered = totals.reduce((sum, item) => sum + Number(item.ordered_qty || 0), 0);
+        const totalReceived = totals.reduce((sum, item) => sum + Number(item.received_qty || 0), 0);
+        if (totalReceived > 0 && totalReceived < totalOrdered) {
+          await tx.purchase_orders.update({
+            where: { id },
+            data: { status: PO_STATUSES.PARTIALLY_RECEIVED, updated_at: new Date() },
+          });
+        }
+      }
+
+      return { data: updated };
+    });
+
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.json({ message: "Shortage report updated", data: result.data });
+  } catch (error) {
+    console.error("Error while updating shortage report:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function sendShortageReport(req, res) {
+  return updateShortageReportStatus(req, res, "SENT_TO_SUPPLIER");
+}
+
+async function resolveShortageReport(req, res) {
+  return updateShortageReportStatus(req, res, "RESOLVED");
+}
+
 async function getPurchaseOrderReconciliation(req, res) {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
@@ -695,147 +1193,9 @@ async function getPurchaseOrderReconciliation(req, res) {
 }
 
 async function createGoodsReceiptFromPurchaseOrder(req, res) {
-  const id = parseId(req.params.id);
-  const userId = parseId(req.user?.id);
-  const note = normalizeText(req.body?.note);
-  const warehouseId = parseId(req.body?.warehouse_id);
-  const allowOverReceive = req.body?.allow_over_receive === true;
-  const lines = Array.isArray(req.body?.items) ? req.body.items : [];
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-  if (lines.length === 0) return res.status(400).json({ message: "items is required" });
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const po = await tx.purchase_orders.findUnique({
-        where: { id },
-        include: {
-          purchase_order_items: {
-            include: {
-              book_variants: { select: { id: true, isbn13: true, sku: true } },
-            },
-          },
-        },
-      });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
-      if (![PO_STATUSES.APPROVED, PO_STATUSES.PARTIALLY_RECEIVED].includes(po.status)) {
-        return { invalid: true, message: "Only APPROVED or PARTIALLY_RECEIVED purchase orders can be received" };
-      }
-      if (warehouseId && warehouseId !== po.warehouse_id) {
-        return { invalid: true, message: "warehouse_id must match purchase order warehouse" };
-      }
-
-      const poItemsById = new Map();
-      const poItemsByVariant = new Map();
-      po.purchase_order_items.forEach((item) => {
-        poItemsById.set(String(item.id), item);
-        poItemsByVariant.set(String(item.variant_id), item);
-      });
-
-      const receiptItems = [];
-      const seen = new Set();
-      for (const rawLine of lines) {
-        const itemId = parseId(rawLine?.purchase_order_item_id);
-        const variantId = parseId(rawLine?.variant_id);
-        const quantity = toInt(rawLine?.quantity);
-        const unitCost = Number(rawLine?.unit_cost);
-        if (!quantity || quantity <= 0) {
-          return { invalid: true, message: "Each receipt item must include quantity > 0" };
-        }
-        if (!Number.isFinite(unitCost) || unitCost < 0) {
-          return { invalid: true, message: "Each receipt item must include unit_cost >= 0" };
-        }
-
-        const poItem = itemId ? poItemsById.get(itemId) : poItemsByVariant.get(String(variantId));
-        if (!poItem) {
-          return { invalid: true, message: "Receipt item variant does not belong to purchase order" };
-        }
-        if (variantId && variantId !== poItem.variant_id) {
-          return { invalid: true, message: "purchase_order_item_id and variant_id do not match" };
-        }
-        if (seen.has(poItem.variant_id)) {
-          return { invalid: true, message: "Duplicate variant in goods receipt items" };
-        }
-        seen.add(poItem.variant_id);
-
-        const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-        if (!allowOverReceive && quantity > remainingQty) {
-          return { invalid: true, message: `Cannot receive more than remaining quantity for ${poItem.book_variants?.isbn13 || poItem.book_variants?.sku || poItem.variant_id}` };
-        }
-
-        receiptItems.push({
-          goods_receipt_id: null,
-          variant_id: poItem.variant_id,
-          location_id: parseId(rawLine?.location_id),
-          quantity,
-          unit_cost: unitCost,
-          note: normalizeText(rawLine?.note),
-        });
-      }
-
-      const locationIds = [...new Set(receiptItems.map((item) => item.location_id).filter(Boolean))];
-      if (locationIds.length > 0) {
-        const locationCount = await tx.locations.count({
-          where: {
-            id: { in: locationIds },
-            warehouse_id: po.warehouse_id,
-            is_active: true,
-          },
-        });
-        if (locationCount !== locationIds.length) {
-          return { invalid: true, message: "One or more location_id values are invalid for this warehouse" };
-        }
-      }
-
-      const receipt = await tx.goods_receipts.create({
-        data: {
-          receipt_number: createReceiptNumber(),
-          purchase_order_id: po.id,
-          warehouse_id: po.warehouse_id,
-          source_type: "PURCHASE_ORDER",
-          source_reference_id: po.id,
-          status: "DRAFT",
-          received_by_user_id: userId,
-          note,
-        },
-      });
-
-      await tx.goods_receipt_items.createMany({
-        data: receiptItems.map((item) => ({
-          goods_receipt_id: receipt.id,
-          variant_id: item.variant_id,
-          location_id: item.location_id,
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-          note: item.note,
-        })),
-      });
-
-      await audit(tx, userId, "PURCHASE_ORDER_GOODS_RECEIPT_CREATED", po.id, {
-        po_number: po.po_number,
-        goods_receipt_id: receipt.id,
-        receipt_number: receipt.receipt_number,
-        status: po.status,
-        total_quantity: receiptItems.reduce((sum, item) => sum + item.quantity, 0),
-      });
-
-      return { data: receipt };
-    });
-
-    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
-    return res.status(201).json({
-      message: "Goods receipt draft created from purchase order",
-      data: {
-        id: result.data.id,
-        receipt_number: result.data.receipt_number,
-        status: result.data.status,
-        purchase_order_id: result.data.purchase_order_id,
-      },
-    });
-  } catch (error) {
-    console.error("Error while creating goods receipt from purchase order:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
+  return res.status(400).json({
+    message: "Create goods receipt from supplier invoice/delivery note instead of directly from purchase order",
+  });
 }
 
 module.exports = {
@@ -847,6 +1207,12 @@ module.exports = {
   approvePurchaseOrder,
   rejectPurchaseOrder,
   cancelPurchaseOrder,
+  sendToSupplier,
+  supplierConfirm,
+  getSupplierDocuments,
+  getShortageReports,
+  sendShortageReport,
+  resolveShortageReport,
   getPurchaseOrderReconciliation,
   createGoodsReceiptFromPurchaseOrder,
 };
