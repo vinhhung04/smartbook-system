@@ -8,6 +8,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { authService } from "@/services/auth";
+import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 
 function statusVariant(status: string) {
   if (status === "RECEIVED" || status === "MATCHED" || status === "FULLY_RECEIVED") return "success";
@@ -29,6 +31,10 @@ function formatDate(value?: string | null) {
 }
 
 export function PurchaseOrderDetailPage() {
+  const currentUser = authService.getCurrentUser();
+  const canManagePurchaseOrder = canAccess(currentUser, ROUTE_ACCESS.purchaseWrite);
+  const canApprovePurchaseOrder = canAccess(currentUser, ROUTE_ACCESS.purchaseApprove);
+  const canReceiveStock = canAccess(currentUser, ROUTE_ACCESS.stockWrite);
   const { id } = useParams();
   const [po, setPo] = useState<PurchaseOrderDetail | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationResponse | null>(null);
@@ -115,11 +121,11 @@ export function PurchaseOrderDetailPage() {
     return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><EmptyState variant="no-data" title="Purchase order not found" description="This PO may have been deleted or does not exist" /></div>;
   }
 
-  const canEdit = ["DRAFT", "REJECTED"].includes(po.status);
-  const canSubmit = ["DRAFT", "REJECTED"].includes(po.status);
-  const canApprove = po.status === "PENDING_APPROVAL";
-  const canSendToSupplier = po.status === "APPROVED";
-  const canCancel = ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
+  const canEdit = canManagePurchaseOrder && ["DRAFT", "REJECTED"].includes(po.status);
+  const canSubmit = canManagePurchaseOrder && ["DRAFT", "REJECTED"].includes(po.status);
+  const canApprove = canApprovePurchaseOrder && po.status === "PENDING_APPROVAL";
+  const canSendToSupplier = canManagePurchaseOrder && po.status === "APPROVED";
+  const canCancel = canManagePurchaseOrder && ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
   const latestOpenInvoice = supplierDocs?.invoices.find((invoice) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status));
 
   return (
@@ -144,7 +150,7 @@ export function PurchaseOrderDetailPage() {
           {canApprove && <Button size="sm" onClick={approve} disabled={working}><CheckCircle className="h-3.5 w-3.5" />Approve</Button>}
           {canApprove && <Button variant="outline" size="sm" onClick={reject} disabled={working}><XCircle className="h-3.5 w-3.5" />Reject</Button>}
           {canSendToSupplier && <Button size="sm" onClick={sendToSupplier} disabled={working}><Send className="h-3.5 w-3.5" />Send to Supplier</Button>}
-          {po.status === "SUPPLIER_CONFIRMED" && latestOpenInvoice ? (
+          {canReceiveStock && po.status === "SUPPLIER_CONFIRMED" && latestOpenInvoice ? (
             <Button asChild size="sm" disabled={working}>
               <NavLink to={`/supplier-deliveries/${latestOpenInvoice.id}`}>
                 <Truck className="h-3.5 w-3.5" />Create GR from Invoice
@@ -241,7 +247,7 @@ export function PurchaseOrderDetailPage() {
                   <td className="px-5 py-3.5"><StatusBadge label={invoice.status} variant={statusVariant(invoice.status)} /></td>
                   <td className="px-5 py-3.5 text-[13px]">{invoice.items.length}</td>
                   <td className="px-5 py-3.5">
-                    {po.status !== "RECEIVED" && totalRemaining > 0 ? (
+                    {canReceiveStock && po.status !== "RECEIVED" && totalRemaining > 0 ? (
                       <NavLink to={`/supplier-deliveries/${invoice.id}`} className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium">
                         <Truck className="h-3.5 w-3.5" /> Receive
                       </NavLink>
@@ -268,10 +274,10 @@ export function PurchaseOrderDetailPage() {
                     <td className="px-5 py-3.5 text-[13px]">{shortageQty} units short</td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{report.reason || "-"}</td>
                     <td className="px-5 py-3.5 text-right">
-                      {report.status === "OPEN" ? (
+                      {canManagePurchaseOrder && report.status === "OPEN" ? (
                         <Button variant="outline" size="sm" onClick={() => id && runAction("Shortage report sent", () => purchaseOrderService.sendShortageReport(id, report.id))} disabled={working}>Send to Supplier</Button>
                       ) : null}
-                      {["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status) ? (
+                      {canManagePurchaseOrder && ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status) ? (
                         <Button variant="outline" size="sm" onClick={() => id && window.confirm("Resolve this shortage report?") && runAction("Shortage report resolved", () => purchaseOrderService.resolveShortageReport(id, report.id))} disabled={working}>Resolve</Button>
                       ) : null}
                     </td>

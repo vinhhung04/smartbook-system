@@ -1,9 +1,10 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma');
+const { authorizeBorrowAdminRead, authorizeBorrowAdminWrite } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', authorizeBorrowAdminRead, async (req, res) => {
   try {
     const plans = await prisma.membership_plans.findMany({
       orderBy: { created_at: 'asc' },
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
   try {
     const { code, name, description, max_active_loans, max_loan_days, max_renewal_count, reservation_hold_hours, fine_per_day, lost_item_fee_multiplier } = req.body;
     if (!code || !name) return res.status(400).json({ message: 'code and name are required' });
@@ -42,7 +43,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['name', 'description', 'max_active_loans', 'max_loan_days', 'max_renewal_count', 'reservation_hold_hours', 'fine_per_day', 'lost_item_fee_multiplier', 'is_active'];

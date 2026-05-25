@@ -15,6 +15,7 @@ const canRead = authorizeAnyPermission([
   "inventory.purchase.write",
   "inventory.stock.read",
   "inventory.stock.write",
+  "inventory.supplier.read",
 ]);
 const canWrite = authorizeAnyPermission([
   "inventory.purchase.write",

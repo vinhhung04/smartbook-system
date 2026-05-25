@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-const username = process.env.ANALYTICS_TEST_USERNAME || 'staff01';
+const username = process.env.ANALYTICS_TEST_USERNAME || 'manager01';
 const password = process.env.ANALYTICS_TEST_PASSWORD || '123456';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
 

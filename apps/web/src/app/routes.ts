@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, type LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { AppLayout } from "@/components/layout";
 import { DashboardPage } from "@/components/pages/dashboard";
@@ -58,7 +58,9 @@ import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
 import { SupplierAccountPage } from "@/components/pages/supplier/supplier-account";
 import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
 import { NotFoundPage } from "@/components/pages/not-found";
+import { ForbiddenPage } from "@/components/pages/forbidden";
 import { authService } from "@/services/auth";
+import { canAccess, getHomePathForUser, ROUTE_ACCESS, type RouteAccessMeta } from "@/lib/rbac";
 
 async function requireAuthLoader() {
   const user = await authService.hydrateCurrentUser();
@@ -71,7 +73,29 @@ async function requireAuthLoader() {
   if (Array.isArray(user.roles) && user.roles.includes("SUPPLIER")) {
     throw redirect("/supplier");
   }
+  if (!canAccess(user, ROUTE_ACCESS.internal)) {
+    throw redirect(`/forbidden?from=${encodeURIComponent("/")}`);
+  }
   return null;
+}
+
+function requireRoleOrPermissionLoader(meta: RouteAccessMeta) {
+  return async ({ request }: LoaderFunctionArgs) => {
+    const user = await authService.hydrateCurrentUser();
+    if (!user) {
+      throw redirect("/login");
+    }
+    if (Array.isArray(user.roles) && user.roles.includes("CUSTOMER")) {
+      throw redirect("/customer");
+    }
+    if (Array.isArray(user.roles) && user.roles.includes("SUPPLIER")) {
+      throw redirect("/supplier");
+    }
+    if (!canAccess(user, meta)) {
+      throw redirect(`/forbidden?from=${encodeURIComponent(new URL(request.url).pathname)}`);
+    }
+    return null;
+  };
 }
 
 function publicOnlyLoader() {
@@ -82,7 +106,7 @@ function publicOnlyLoader() {
     if (authService.isSupplier()) {
       throw redirect("/supplier");
     }
-    throw redirect("/");
+    throw redirect(getHomePathForUser(authService.getCurrentUser()));
   }
   return null;
 }
@@ -93,7 +117,7 @@ async function requireCustomerAuthLoader() {
     throw redirect('/customer/login');
   }
   if (!Array.isArray(user.roles) || !user.roles.includes('CUSTOMER')) {
-    throw redirect('/');
+    throw redirect(getHomePathForUser(user));
   }
   return null;
 }
@@ -105,7 +129,7 @@ function customerPublicOnlyLoader() {
   if (authService.isCustomer()) {
     throw redirect('/customer');
   }
-  throw redirect('/');
+  throw redirect(getHomePathForUser(authService.getCurrentUser()));
 }
 
 async function requireSupplierAuthLoader() {
@@ -114,7 +138,7 @@ async function requireSupplierAuthLoader() {
     throw redirect('/login');
   }
   if (!Array.isArray(user.roles) || !user.roles.includes('SUPPLIER')) {
-    throw redirect('/');
+    throw redirect(getHomePathForUser(user));
   }
   return null;
 }
@@ -174,44 +198,45 @@ export const router = createBrowserRouter([
     Component: AppLayout,
     children: [
       { index: true, Component: DashboardPage },
-      { path: "catalog", Component: CatalogPage },
-      { path: "book/:id", Component: BookDetailPage },
-      { path: "inventory", Component: InventoryPage },
-      { path: "orders", Component: OrdersPage },
-      { path: "orders/new", Component: GoodsReceiptPage },
-      { path: "orders/:id", Component: OrderDetailPage },
-      { path: "purchase-orders", Component: PurchaseOrdersPage },
-      { path: "purchase-orders/new", Component: PurchaseOrderFormPage },
-      { path: "purchase-orders/:id", Component: PurchaseOrderDetailPage },
-      { path: "purchase-orders/:id/edit", Component: PurchaseOrderFormPage },
-      { path: "supplier-deliveries", Component: SupplierDeliveriesPage },
-      { path: "supplier-deliveries/:id", Component: SupplierDeliveriesPage },
-      { path: "putaway", Component: PutawayPage },
-      { path: "putaway/:id", Component: PutawayDetailPage },
-      { path: "putaway/:id/execute", Component: PutawayExecutePage },
-      { path: "receiving-putaway", Component: ReceivingPutawayPage },
-      { path: "receiving-smart", Component: SmartReceivingPage },
-      { path: "picking", Component: PickingPage },
-      { path: "order-requests", Component: OrderRequestsPage },
-      { path: "movements", Component: MovementsPage },
-      { path: "outbound", Component: OutboundPage },
-      { path: "warehouses", Component: WarehousesPage },
-      { path: "shelves", Component: ShelvesPage },
-      { path: "ai-import", Component: AIImportPage },
-      { path: "recommendations", Component: RecommendationsPage },
-      { path: "reorder-suggestions", Component: ReorderSuggestionsPage },
-      { path: "borrow", Component: BorrowPage },
-      { path: "borrow/customers", Component: BorrowCustomersPage },
-      { path: "borrow/reservations", Component: BorrowReservationsPage },
-      { path: "borrow/loans", Component: BorrowLoansPage },
-      { path: "borrow/loans/:id", Component: BorrowLoanDetailPage },
-      { path: "borrow/fines", Component: BorrowFinesPage },
-      { path: "reports", Component: ReportsPage },
-      { path: "audit-trail", Component: AuditTrailPage },
-      { path: "membership-plans", Component: MembershipPlansPage },
-      { path: "suppliers", Component: SuppliersPage },
-      { path: "users", Component: UsersPage },
-      { path: "roles", Component: RolesPage },
+      { path: "forbidden", Component: ForbiddenPage },
+      { path: "catalog", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: CatalogPage },
+      { path: "book/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: BookDetailPage },
+      { path: "inventory", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: InventoryPage },
+      { path: "orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: OrdersPage },
+      { path: "orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: GoodsReceiptPage },
+      { path: "orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: OrderDetailPage },
+      { path: "purchase-orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), Component: PurchaseOrdersPage },
+      { path: "purchase-orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), Component: PurchaseOrderFormPage },
+      { path: "purchase-orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), Component: PurchaseOrderDetailPage },
+      { path: "purchase-orders/:id/edit", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), Component: PurchaseOrderFormPage },
+      { path: "supplier-deliveries", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
+      { path: "supplier-deliveries/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
+      { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: PutawayPage },
+      { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: PutawayDetailPage },
+      { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: PutawayExecutePage },
+      { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: ReceivingPutawayPage },
+      { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: SmartReceivingPage },
+      { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: PickingPage },
+      { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },
+      { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: MovementsPage },
+      { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: OutboundPage },
+      { path: "warehouses", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: WarehousesPage },
+      { path: "shelves", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventory), Component: ShelvesPage },
+      { path: "ai-import", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.stockWrite), Component: AIImportPage },
+      { path: "recommendations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: RecommendationsPage },
+      { path: "reorder-suggestions", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReorderSuggestionsPage },
+      { path: "borrow", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowPage },
+      { path: "borrow/customers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowCustomersPage },
+      { path: "borrow/reservations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowReservationsPage },
+      { path: "borrow/loans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowLoansPage },
+      { path: "borrow/loans/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowLoanDetailPage },
+      { path: "borrow/fines", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowFinesPage },
+      { path: "reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReportsPage },
+      { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AuditTrailPage },
+      { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: MembershipPlansPage },
+      { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), Component: SuppliersPage },
+      { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: UsersPage },
+      { path: "roles", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: RolesPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

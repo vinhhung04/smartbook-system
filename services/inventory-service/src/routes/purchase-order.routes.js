@@ -18,7 +18,7 @@ const {
   getPurchaseOrderReconciliation,
   createGoodsReceiptFromPurchaseOrder,
 } = require("../controllers/purchase-order.controller");
-const { authorizeAnyPermission } = require("../middlewares/auth.middleware");
+const { authorizeAnyPermission, authorizePurchaseManager } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
@@ -27,8 +27,9 @@ const canRead = authorizeAnyPermission([
   "inventory.purchase.write",
   "inventory.purchase.approve",
 ]);
-const canWrite = authorizeAnyPermission(["inventory.purchase.write"]);
-const canApprove = authorizeAnyPermission(["inventory.purchase.approve"]);
+const canWrite = authorizePurchaseManager(["inventory.purchase.write"]);
+const canApprove = authorizePurchaseManager(["inventory.purchase.approve"]);
+const canReceiveFromPurchase = authorizeAnyPermission(["inventory.stock.write"]);
 
 router.get("/", canRead, getPurchaseOrders);
 router.post("/", canWrite, createPurchaseOrder);
@@ -43,7 +44,7 @@ router.post("/:id/send-to-supplier", canWrite, sendToSupplier);
 router.post("/:id/supplier-confirm", canWrite, supplierConfirm);
 router.post("/:id/shortage-reports/:reportId/send", canWrite, sendShortageReport);
 router.post("/:id/shortage-reports/:reportId/resolve", canWrite, resolveShortageReport);
-router.post("/:id/goods-receipts", canWrite, createGoodsReceiptFromPurchaseOrder);
+router.post("/:id/goods-receipts", canReceiveFromPurchase, createGoodsReceiptFromPurchaseOrder);
 router.get("/:id", canRead, getPurchaseOrderById);
 router.patch("/:id", canWrite, updatePurchaseOrder);
 

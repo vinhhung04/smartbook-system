@@ -56,14 +56,22 @@ async function getSetup(token) {
     suppliers.find((item) => item.status === 'ACTIVE' && demoSupplierEmails.has(String(item.email || '').toLowerCase())) ||
     suppliers.find((item) => item.status === 'ACTIVE') ||
     suppliers[0];
-  const warehouse = warehouses.find((item) => item.is_active !== false) || warehouses[0];
   expect(supplier?.id, 'No supplier available');
-  expect(warehouse?.id, 'No warehouse available');
 
-  const warehouseLocations = await okRequest('GET', `/api/warehouses/${warehouse.id}/locations`, token);
-  const receivingLocation =
-    warehouseLocations.locations?.find((item) => item.location_type === 'RECEIVING') ||
-    warehouseLocations.locations?.find((item) => item.is_active);
+  let warehouse = null;
+  let receivingLocation = null;
+  for (const candidate of warehouses.filter((item) => item.is_active !== false)) {
+    const warehouseLocations = await okRequest('GET', `/api/warehouses/${candidate.id}/locations`, token);
+    const locations = warehouseLocations.locations || warehouseLocations.data || warehouseLocations;
+    receivingLocation =
+      (Array.isArray(locations) ? locations : []).find((item) => item.location_type === 'RECEIVING') ||
+      (Array.isArray(locations) ? locations : []).find((item) => item.is_active);
+    if (receivingLocation) {
+      warehouse = candidate;
+      break;
+    }
+  }
+  expect(warehouse?.id, 'No warehouse with receiving location available');
   expect(receivingLocation?.id, 'No receiving location available');
 
   const variants = books

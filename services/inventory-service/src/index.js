@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('./middlewares/auth.middleware');
+const { authenticateToken, authorizeAnyPermission } = require('./middlewares/auth.middleware');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -64,7 +64,7 @@ app.use('/api/supplier-account', supplierAccountRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
-app.get('/api/inventory', async (req, res) => {
+app.get('/api/inventory', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), async (req, res) => {
   try {
     const books = await prisma.books.findMany({
       include: {
@@ -94,7 +94,7 @@ app.get('/api/inventory', async (req, res) => {
 
 // ─── POST /api/inventory/inbound ─────────────────────────────────────────────
 // Nhập kho: cộng số lượng vào Inventory và ghi log StockMovement (type: IN)
-app.post('/api/inventory/inbound', async (req, res) => {
+app.post('/api/inventory/inbound', authorizeAnyPermission(['inventory.stock.write']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity, unitCost } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {
@@ -146,7 +146,7 @@ app.post('/api/inventory/inbound', async (req, res) => {
 
 // ─── POST /api/inventory/outbound ────────────────────────────────────────────
 // Xuất kho: trừ số lượng tồn và ghi log StockMovement (type: OUT)
-app.post('/api/inventory/outbound', async (req, res) => {
+app.post('/api/inventory/outbound', authorizeAnyPermission(['inventory.stock.write']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {

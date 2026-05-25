@@ -48,7 +48,49 @@ function authorizeAnyPermission(permissions = []) {
   };
 }
 
+function getUserRoles(user = {}) {
+  return Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+}
+
+function authorizeAnyRole(roles = []) {
+  const allowedRoles = roles.map((role) => String(role).toUpperCase());
+  return (req, res, next) => {
+    const user = req.user || {};
+
+    if (user.is_superuser) {
+      return next();
+    }
+
+    const userRoles = getUserRoles(user);
+    const allowed = allowedRoles.some((role) => userRoles.includes(role));
+
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    return next();
+  };
+}
+
+function authorizePurchaseManager(permissions = ['inventory.purchase.write']) {
+  const requirePermission = authorizeAnyPermission(permissions);
+  const requireRole = authorizeAnyRole(['MANAGER', 'ADMIN']);
+
+  return (req, res, next) => {
+    if (req.user?.is_superuser) {
+      return next();
+    }
+
+    return requireRole(req, res, (roleError) => {
+      if (roleError) return next(roleError);
+      return requirePermission(req, res, next);
+    });
+  };
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
+  authorizeAnyRole,
+  authorizePurchaseManager,
 };

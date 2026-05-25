@@ -22,6 +22,6 @@ router.get('/roles', authorizeAnyPermission(['auth.roles.read', 'auth.roles.writ
 router.post('/roles', authorizeAnyPermission(['auth.roles.write']), createRole);
 router.put('/roles/:id/permissions', authorizeAnyPermission(['auth.roles.write']), updateRolePermissions);
 
-router.get('/permissions', authorizeAnyPermission(['auth.roles.read', 'auth.roles.write']), listPermissions);
+router.get('/permissions', authorizeAnyPermission(['auth.permissions.read', 'auth.permissions.write', 'auth.roles.read', 'auth.roles.write']), listPermissions);
 
 module.exports = router;
