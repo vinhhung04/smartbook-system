@@ -2,7 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken, authorizeAnyPermission } = require('./middlewares/auth.middleware');
+const {
+  authenticateToken,
+  authorizeAnyPermission,
+  authorizeManagerDecision,
+} = require('./middlewares/auth.middleware');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -43,6 +47,108 @@ app.use('/api/supplier-portal', supplierPortalRoutes);
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
 
+app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read']), async (req, res) => {
+  const userId = req.user?.id || req.user?.sub;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid current user context' });
+  }
+
+  try {
+    const [goodsReceipts, outboundOrders, transferOrders] = await Promise.all([
+      prisma.goods_receipts.findMany({
+        where: { received_by_user_id: userId },
+        select: {
+          id: true,
+          receipt_number: true,
+          status: true,
+          warehouse_id: true,
+          received_at: true,
+          created_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+      prisma.outbound_orders.findMany({
+        where: { processed_by_user_id: userId },
+        select: {
+          id: true,
+          outbound_number: true,
+          status: true,
+          warehouse_id: true,
+          requested_at: true,
+          completed_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { requested_at: 'desc' },
+        take: 20,
+      }),
+      prisma.transfer_orders.findMany({
+        where: { shipped_by_user_id: userId },
+        select: {
+          id: true,
+          transfer_number: true,
+          status: true,
+          from_warehouse_id: true,
+          to_warehouse_id: true,
+          requested_at: true,
+          shipped_at: true,
+          received_at: true,
+          warehouses_transfer_orders_from_warehouse_idTowarehouses: { select: { code: true, name: true } },
+          warehouses_transfer_orders_to_warehouse_idTowarehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { requested_at: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    const tasks = [
+      ...goodsReceipts.map((task) => ({
+        id: task.id,
+        type: 'RECEIVING',
+        title: task.receipt_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.received_at,
+      })),
+      ...outboundOrders.map((task) => ({
+        id: task.id,
+        type: 'OUTBOUND',
+        title: task.outbound_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.requested_at,
+        completed_at: task.completed_at,
+      })),
+      ...transferOrders.map((task) => ({
+        id: task.id,
+        type: 'PICKING',
+        title: task.transfer_number,
+        status: task.status,
+        warehouse: [
+          task.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code,
+          task.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code,
+        ].filter(Boolean).join(' -> ') || null,
+        created_at: task.requested_at,
+        completed_at: task.received_at || task.shipped_at,
+      })),
+    ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    const summary = tasks.reduce((acc, task) => {
+      const type = String(task.type || 'OTHER').toLowerCase();
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+
+    return res.json({ data: tasks, summary });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.use('/api/books', bookRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/locations', locationRoutes);
@@ -64,7 +170,7 @@ app.use('/api/supplier-account', supplierAccountRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
-app.get('/api/inventory', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), async (req, res) => {
+app.get('/api/inventory', authorizeAnyPermission(['inventory.stock.read']), async (req, res) => {
   try {
     const books = await prisma.books.findMany({
       include: {
@@ -94,7 +200,7 @@ app.get('/api/inventory', authorizeAnyPermission(['inventory.stock.read', 'inven
 
 // ─── POST /api/inventory/inbound ─────────────────────────────────────────────
 // Nhập kho: cộng số lượng vào Inventory và ghi log StockMovement (type: IN)
-app.post('/api/inventory/inbound', authorizeAnyPermission(['inventory.stock.write']), async (req, res) => {
+app.post('/api/inventory/inbound', authorizeManagerDecision(['inventory.stock.adjust']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity, unitCost } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {
@@ -146,7 +252,7 @@ app.post('/api/inventory/inbound', authorizeAnyPermission(['inventory.stock.writ
 
 // ─── POST /api/inventory/outbound ────────────────────────────────────────────
 // Xuất kho: trừ số lượng tồn và ghi log StockMovement (type: OUT)
-app.post('/api/inventory/outbound', authorizeAnyPermission(['inventory.stock.write']), async (req, res) => {
+app.post('/api/inventory/outbound', authorizeManagerDecision(['inventory.stock.adjust']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {

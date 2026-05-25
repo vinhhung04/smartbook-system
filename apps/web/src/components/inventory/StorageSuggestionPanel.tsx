@@ -73,7 +73,7 @@ export function StorageSuggestionPanel({
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
   const canRead = hasPermission("inventory.stock.read");
-  const canWrite = hasPermission("inventory.stock.write");
+  const canWrite = hasPermission("inventory.operation.decide");
 
   const handleGetSuggestions = useCallback(async () => {
     if (!warehouseId) {
@@ -331,7 +331,7 @@ export function StorageSuggestionPanel({
                 <p className="text-xs text-slate-600">
                   Bạn không có quyền thao tác vị trí. Vui lòng liên hệ quản lý để được phân quyền{" "}
                   <code className="rounded bg-slate-200 px-1 text-[10px]">
-                    inventory.stock.write
+                    inventory.operation.decide
                   </code>
                 </p>
               </div>

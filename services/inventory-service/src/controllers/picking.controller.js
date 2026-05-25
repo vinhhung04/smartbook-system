@@ -86,7 +86,7 @@ function canAccessTask(user, assignedPickerUserId) {
   if (!scope.currentUserId) return false;
 
   const assigned = parseId(assignedPickerUserId);
-  if (!assigned) return true;
+  if (!assigned) return false;
 
   return assigned === scope.currentUserId;
 }
@@ -1054,7 +1054,6 @@ async function listPickingTasks(req, res) {
         if (scope.canManageAssignment) return true;
         if (!scope.currentUserId) return false;
         return (
-          !task.assigned_picker_user_id ||
           task.assigned_picker_user_id === scope.currentUserId
         );
       })
@@ -1132,6 +1131,13 @@ async function claimPickingTask(req, res) {
             message: "Task is already assigned to another picker",
           };
         }
+        if (!scope.canManageAssignment && !order.processed_by_user_id) {
+          return {
+            invalid: true,
+            statusCode: 403,
+            message: "Task must be assigned before warehouse staff can update it",
+          };
+        }
 
         const updated = await tx.outbound_orders.update({
           where: { id: taskId },
@@ -1195,6 +1201,13 @@ async function claimPickingTask(req, res) {
           invalid: true,
           statusCode: 409,
           message: "Task is already assigned to another picker",
+        };
+      }
+      if (!scope.canManageAssignment && !order.shipped_by_user_id) {
+        return {
+          invalid: true,
+          statusCode: 403,
+          message: "Task must be assigned before warehouse staff can update it",
         };
       }
 
@@ -2191,6 +2204,13 @@ async function confirmPickingLine(req, res) {
               message: "Task is assigned to another picker",
             };
           }
+          if (!scope.canManageAssignment && !order.processed_by_user_id) {
+            return {
+              invalid: true,
+              statusCode: 403,
+              message: "Task must be assigned before warehouse staff can update it",
+            };
+          }
 
           if (!order.processed_by_user_id) {
             await tx.outbound_orders.update({
@@ -2663,6 +2683,13 @@ async function confirmPickingLine(req, res) {
             invalid: true,
             statusCode: 403,
             message: "Task is assigned to another picker",
+          };
+        }
+        if (!scope.canManageAssignment && !order.shipped_by_user_id) {
+          return {
+            invalid: true,
+            statusCode: 403,
+            message: "Task must be assigned before warehouse staff can update it",
           };
         }
 

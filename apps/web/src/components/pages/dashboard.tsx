@@ -239,12 +239,14 @@ export function DashboardPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <NavLink
-              to="/reports"
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
-            >
-              Reports <ArrowRight className="h-4 w-4" />
-            </NavLink>
+            {canViewAnalytics ? (
+              <NavLink
+                to="/reports"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
+              >
+                Reports <ArrowRight className="h-4 w-4" />
+              </NavLink>
+            ) : null}
           </div>
         </div>
       </motion.div>

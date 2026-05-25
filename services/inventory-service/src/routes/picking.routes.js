@@ -11,43 +11,49 @@ const {
   cancelOutboundReturn,
   ensureRepicksEndpoint,
 } = require("../controllers/picking.controller");
-const { authorizeAnyPermission } = require("../middlewares/auth.middleware");
+const {
+  authorizeAnyPermission,
+  authorizeManagerDecision,
+  authorizeStaffTaskUpdate,
+} = require("../middlewares/auth.middleware");
 
 const router = express.Router();
-const canOperateStock = authorizeAnyPermission(["inventory.stock.write"]);
+const canReadTask = authorizeAnyPermission(["inventory.task.read", "inventory.picking.read", "inventory.stock.read"]);
+const canUpdateAssignedTask = authorizeStaffTaskUpdate(["inventory.task.update"]);
+const canDecideOperation = authorizeManagerDecision(["inventory.operation.decide"]);
 
-router.get("/tasks", canOperateStock, listPickingTasks);
+router.get("/tasks", canReadTask, listPickingTasks);
 router.post(
   "/tasks/:taskType/:taskId/claim",
-  canOperateStock,
+  canUpdateAssignedTask,
   claimPickingTask,
 );
-router.get("/tasks/:taskType/:taskId", canOperateStock, getPickingTaskDetail);
+router.get("/tasks/:taskType/:taskId", canReadTask, getPickingTaskDetail);
 router.post(
   "/tasks/:taskType/:taskId/presence",
-  canOperateStock,
+  canUpdateAssignedTask,
   confirmPickerPresence,
 );
 router.get(
   "/lookup/variant-by-barcode",
-  canOperateStock,
+  canUpdateAssignedTask,
   lookupVariantByBarcode,
 );
 router.post(
   "/tasks/:taskType/:taskId/lines/:lineId/confirm",
-  canOperateStock,
+  canUpdateAssignedTask,
   confirmPickingLine,
 );
 router.post(
   "/tasks/transfer/:taskId/cancel-return",
-  canOperateStock,
+  canDecideOperation,
   cancelTransferReturn,
 );
 router.post(
   "/tasks/outbound/:taskId/cancel-return",
-  canOperateStock,
+  canDecideOperation,
   cancelOutboundReturn,
 );
-router.post("/repicks/ensure", canOperateStock, ensureRepicksEndpoint);
+router.post("/repicks/ensure", canDecideOperation, ensureRepicksEndpoint);
 
 module.exports = router;

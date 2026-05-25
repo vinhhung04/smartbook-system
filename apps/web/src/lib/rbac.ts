@@ -6,25 +6,33 @@ export interface RouteAccessMeta {
 }
 
 const INTERNAL_ROLES = ["ADMIN", "MANAGER", "STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "LIBRARIAN", "CUSTOMER_SERVICE"];
-const WAREHOUSE_ROLES = ["ADMIN", "MANAGER", "STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR"];
+const MANAGER_OPERATION_ROLES = ["ADMIN", "MANAGER"];
+const STAFF_TRACKING_ROLES = ["STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR"];
+const INVENTORY_READ_ROLES = [...MANAGER_OPERATION_ROLES, ...STAFF_TRACKING_ROLES];
 const LIBRARY_ROLES = ["ADMIN", "MANAGER", "LIBRARIAN", "CUSTOMER_SERVICE"];
-const MANAGER_ROLES = ["ADMIN", "MANAGER"];
 const ADMIN_ROLES = ["ADMIN"];
 
 export const ROUTE_ACCESS = {
   internal: { roles: INTERNAL_ROLES },
-  catalog: { roles: [...WAREHOUSE_ROLES, ...LIBRARY_ROLES], permissions: ["inventory.catalog.read"] },
-  inventory: { roles: WAREHOUSE_ROLES, permissions: ["inventory.stock.read", "inventory.stock.write"] },
-  stockWrite: { roles: WAREHOUSE_ROLES, permissions: ["inventory.stock.write"] },
-  purchaseRead: { roles: MANAGER_ROLES, permissions: ["inventory.purchase.read", "inventory.purchase.write", "inventory.purchase.approve"] },
-  purchaseWrite: { roles: MANAGER_ROLES, permissions: ["inventory.purchase.write"] },
-  purchaseApprove: { roles: MANAGER_ROLES, permissions: ["inventory.purchase.approve"] },
-  suppliers: { roles: MANAGER_ROLES, permissions: ["inventory.supplier.read", "inventory.purchase.read"] },
-  supplierDeliveries: { roles: WAREHOUSE_ROLES, permissions: ["inventory.supplier.read", "inventory.stock.read", "inventory.stock.write", "inventory.purchase.read"] },
-  orderRequests: { roles: WAREHOUSE_ROLES, permissions: ["inventory.stock.read", "inventory.stock.write", "inventory.purchase.approve"] },
+  catalog: { roles: [...INVENTORY_READ_ROLES, ...LIBRARY_ROLES], permissions: ["inventory.catalog.read"] },
+  inventoryRead: { roles: INVENTORY_READ_ROLES, permissions: ["inventory.stock.read"] },
+  inventory: { roles: INVENTORY_READ_ROLES, permissions: ["inventory.stock.read"] },
+  staffTasks: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.read"] },
+  staffTaskUpdate: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.update"] },
+  managerStockDecision: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
+  stockWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
+  stockAdjust: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.adjust"] },
+  warehouseWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.warehouse.write"] },
+  purchaseRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.purchase.read", "inventory.purchase.write", "inventory.purchase.approve"] },
+  purchaseWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.purchase.write"] },
+  purchaseApprove: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.purchase.approve"] },
+  suppliers: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.supplier.read", "inventory.purchase.read"] },
+  supplierWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.supplier.write"] },
+  supplierDeliveries: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.supplier.read", "inventory.purchase.read"] },
+  orderRequests: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide", "inventory.purchase.approve"] },
   borrowRead: { roles: LIBRARY_ROLES, permissions: ["borrow.read", "borrow.customers.read", "borrow.loans.read"] },
   borrowWrite: { roles: ["ADMIN", "LIBRARIAN", "CUSTOMER_SERVICE"], permissions: ["borrow.write", "borrow.loans.write", "borrow.customers.write"] },
-  reports: { roles: MANAGER_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
+  reports: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
   admin: { roles: ADMIN_ROLES, permissions: ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"] },
   customer: { roles: ["CUSTOMER"], permissions: ["customer.self.read", "inventory.catalog.read"] },
   supplier: { roles: ["SUPPLIER"], permissions: ["supplier.portal.read", "supplier.portal.write"] },
@@ -63,6 +71,6 @@ export function getHomePathForUser(user: AuthUser | null | undefined) {
   if (role === "ADMIN") return "/users";
   if (role === "MANAGER") return "/reports";
   if (role === "LIBRARIAN" || role === "CUSTOMER_SERVICE") return "/borrow";
-  if (role === "STAFF" || role === "WAREHOUSE_STAFF" || role === "WAREHOUSE_OPERATOR") return "/inventory";
+  if (role === "STAFF" || role === "WAREHOUSE_STAFF" || role === "WAREHOUSE_OPERATOR") return "/my-warehouse-tasks";
   return "/";
 }

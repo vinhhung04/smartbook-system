@@ -5,6 +5,6 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getStockMovements);
+router.get('/', authorizeAnyPermission(['inventory.stock.read']), getStockMovements);
 
 module.exports = router;

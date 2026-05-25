@@ -43,6 +43,10 @@ async function main() {
     // Stock module (Inventory)
     { code: 'inventory.stock.read', module_name: 'inventory', action_name: 'read', description: 'View stock balances, movements, and inventory' },
     { code: 'inventory.stock.write', module_name: 'inventory', action_name: 'write', description: 'Post inventory movements and adjustments' },
+    { code: 'inventory.stock.adjust', module_name: 'inventory', action_name: 'write', description: 'Adjust stock balances and post manager-approved stock changes' },
+    { code: 'inventory.operation.decide', module_name: 'inventory', action_name: 'write', description: 'Create or approve warehouse operational decisions such as inbound, outbound, transfer, and receiving flows' },
+    { code: 'inventory.task.read', module_name: 'inventory', action_name: 'read', description: 'View assigned warehouse tasks' },
+    { code: 'inventory.task.update', module_name: 'inventory', action_name: 'write', description: 'Update progress for warehouse tasks assigned to the current user' },
     { code: 'inventory.stock.audit', module_name: 'inventory', action_name: 'write', description: 'Perform stock audits and cycle counts' },
 
     // Warehouse module
@@ -52,7 +56,10 @@ async function main() {
     // Receiving & Putaway
     { code: 'inventory.receiving.read', module_name: 'inventory', action_name: 'read', description: 'View goods receipts and receiving locations' },
     { code: 'inventory.receiving.write', module_name: 'inventory', action_name: 'write', description: 'Create goods receipts and process putaway' },
+    { code: 'inventory.putaway.read', module_name: 'inventory', action_name: 'read', description: 'View putaway tasks assigned to warehouse staff' },
     { code: 'inventory.putaway.execute', module_name: 'inventory', action_name: 'write', description: 'Execute putaway operations' },
+    { code: 'inventory.picking.read', module_name: 'inventory', action_name: 'read', description: 'View picking tasks assigned to warehouse staff' },
+    { code: 'inventory.outbound.read', module_name: 'inventory', action_name: 'read', description: 'View outbound tasks assigned to warehouse staff' },
 
     // Purchase module
     { code: 'inventory.purchase.read', module_name: 'inventory', action_name: 'read', description: 'View purchase orders and suppliers' },
@@ -247,7 +254,20 @@ async function main() {
 
   const managerPermCodes = [
     'inventory.catalog.read',
+    'inventory.catalog.write',
     'inventory.stock.read',
+    'inventory.stock.adjust',
+    'inventory.operation.decide',
+    'inventory.warehouse.read',
+    'inventory.warehouse.write',
+    'inventory.task.read',
+    'inventory.task.update',
+    'inventory.receiving.read',
+    'inventory.receiving.write',
+    'inventory.putaway.read',
+    'inventory.putaway.execute',
+    'inventory.picking.read',
+    'inventory.outbound.read',
     'inventory.purchase.read',
     'inventory.purchase.write',
     'inventory.purchase.approve',
@@ -255,6 +275,8 @@ async function main() {
     'inventory.supplier.write',
     'inventory.audit.read',
     'inventory.audit.approve',
+    'inventory.transfer.read',
+    'inventory.transfer.write',
     'borrow.read',
     'borrow.customers.read',
     'borrow.loans.read',
@@ -272,16 +294,14 @@ async function main() {
 
   const warehousePermCodes = [
     'inventory.catalog.read',
-    'inventory.catalog.write',
     'inventory.stock.read',
-    'inventory.stock.write',
     'inventory.warehouse.read',
-    'inventory.warehouse.write',
+    'inventory.task.read',
+    'inventory.task.update',
     'inventory.receiving.read',
-    'inventory.receiving.write',
-    'inventory.putaway.execute',
-    'inventory.supplier.read',
-    'ai.ocr.process',
+    'inventory.putaway.read',
+    'inventory.picking.read',
+    'inventory.outbound.read',
   ];
   await setRolePermissions(staffRole, warehousePermCodes);
   await setRolePermissions(warehouseStaffRole, warehousePermCodes);
@@ -648,8 +668,8 @@ async function main() {
   console.log(`   • ${permissions.length} Permissions (organized by module)`);
   console.log(`   • System Roles:`);
   console.log(`     - ADMIN: Full access`);
-  console.log(`     - MANAGER: Monitor & approve`);
-  console.log(`     - STAFF / WAREHOUSE_STAFF: Warehouse workflows`);
+  console.log(`     - MANAGER: Operational decisions, approvals, and analytics`);
+  console.log(`     - STAFF / WAREHOUSE_STAFF: Assigned warehouse task tracking`);
   console.log(`     - LIBRARIAN / CUSTOMER_SERVICE: Circulation workflows`);
   console.log(`     - CUSTOMER: Customer portal self-service`);
   console.log(`     - SUPPLIER: Supplier portal`);

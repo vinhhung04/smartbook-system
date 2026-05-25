@@ -73,8 +73,34 @@ function authorizeAnyRole(roles = []) {
 }
 
 function authorizePurchaseManager(permissions = ['inventory.purchase.write']) {
+  return authorizeManagerDecision(permissions);
+}
+
+function authorizeManagerDecision(permissions = ['inventory.operation.decide']) {
   const requirePermission = authorizeAnyPermission(permissions);
   const requireRole = authorizeAnyRole(['MANAGER', 'ADMIN']);
+
+  return (req, res, next) => {
+    if (req.user?.is_superuser) {
+      return next();
+    }
+
+    return requireRole(req, res, (roleError) => {
+      if (roleError) return next(roleError);
+      return requirePermission(req, res, next);
+    });
+  };
+}
+
+function authorizeStaffTaskUpdate(permissions = ['inventory.task.update']) {
+  const requirePermission = authorizeAnyPermission(permissions);
+  const requireRole = authorizeAnyRole([
+    'STAFF',
+    'WAREHOUSE_STAFF',
+    'WAREHOUSE_OPERATOR',
+    'MANAGER',
+    'ADMIN',
+  ]);
 
   return (req, res, next) => {
     if (req.user?.is_superuser) {
@@ -92,5 +118,7 @@ module.exports = {
   authenticateToken,
   authorizeAnyPermission,
   authorizeAnyRole,
+  authorizeManagerDecision,
   authorizePurchaseManager,
+  authorizeStaffTaskUpdate,
 };

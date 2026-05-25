@@ -6,13 +6,15 @@ const {
 	createGoodsReceipt,
 	updateGoodsReceipt,
 } = require('../controllers/goods-receipt.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const canReadReceiving = authorizeAnyPermission(['inventory.stock.read', 'inventory.receiving.read', 'inventory.task.read']);
+const canDecideReceiving = authorizeManagerDecision(['inventory.operation.decide']);
 
-router.get('/', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getGoodsReceipts);
-router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getGoodsReceiptById);
-router.post('/', authorizeAnyPermission(['inventory.stock.write']), createGoodsReceipt);
-router.patch('/:id', authorizeAnyPermission(['inventory.stock.write']), updateGoodsReceipt);
+router.get('/', canReadReceiving, getGoodsReceipts);
+router.get('/:id', canReadReceiving, getGoodsReceiptById);
+router.post('/', canDecideReceiving, createGoodsReceipt);
+router.patch('/:id', canDecideReceiving, updateGoodsReceipt);
 
 module.exports = router;

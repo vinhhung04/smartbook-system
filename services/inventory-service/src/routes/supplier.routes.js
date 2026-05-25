@@ -1,10 +1,10 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['inventory.supplier.read', 'inventory.purchase.read', 'inventory.stock.write']), async (req, res) => {
+router.get('/', authorizeAnyPermission(['inventory.supplier.read', 'inventory.purchase.read']), async (req, res) => {
   try {
     const suppliers = await prisma.suppliers.findMany({
       orderBy: { created_at: 'desc' },
@@ -17,7 +17,7 @@ router.get('/', authorizeAnyPermission(['inventory.supplier.read', 'inventory.pu
   }
 });
 
-router.post('/', authorizeAnyPermission(['inventory.supplier.write']), async (req, res) => {
+router.post('/', authorizeManagerDecision(['inventory.supplier.write']), async (req, res) => {
   try {
     const { code, name, contact_name, phone, email, address, tax_code } = req.body;
     if (!name) return res.status(400).json({ message: 'name is required' });
@@ -41,7 +41,7 @@ router.post('/', authorizeAnyPermission(['inventory.supplier.write']), async (re
   }
 });
 
-router.patch('/:id', authorizeAnyPermission(['inventory.supplier.write']), async (req, res) => {
+router.patch('/:id', authorizeManagerDecision(['inventory.supplier.write']), async (req, res) => {
   try {
     const { id } = req.params;
     const allowed = ['name', 'contact_name', 'phone', 'email', 'address', 'tax_code', 'status'];
@@ -60,7 +60,7 @@ router.patch('/:id', authorizeAnyPermission(['inventory.supplier.write']), async
   }
 });
 
-router.delete('/:id', authorizeAnyPermission(['inventory.supplier.write']), async (req, res) => {
+router.delete('/:id', authorizeManagerDecision(['inventory.supplier.write']), async (req, res) => {
   try {
     await prisma.suppliers.delete({ where: { id: req.params.id } });
     return res.json({ message: 'Supplier deleted' });

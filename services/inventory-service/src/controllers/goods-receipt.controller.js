@@ -202,9 +202,20 @@ async function resolveVariantIdByIsbn13(tx, isbn13) {
   return variant?.id || null;
 }
 
+function canViewAllReceivingTasks(user = {}) {
+  if (user.is_superuser) return true;
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
+}
+
 async function getGoodsReceipts(req, res) {
   try {
     const receipts = await prisma.goods_receipts.findMany({
+      where: canViewAllReceivingTasks(req.user || {})
+        ? {}
+        : { received_by_user_id: req.user?.id },
       orderBy: { created_at: "desc" },
       include: {
         warehouses: {
@@ -315,6 +326,10 @@ async function getGoodsReceiptById(req, res) {
 
     if (!receipt) {
       return res.status(404).json({ message: "Goods receipt not found" });
+    }
+
+    if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     const items = receipt.goods_receipt_items.map((item) => ({

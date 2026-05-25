@@ -29,7 +29,7 @@ const canRead = authorizeAnyPermission([
 ]);
 const canWrite = authorizePurchaseManager(["inventory.purchase.write"]);
 const canApprove = authorizePurchaseManager(["inventory.purchase.approve"]);
-const canReceiveFromPurchase = authorizeAnyPermission(["inventory.stock.write"]);
+const canReceiveFromPurchase = authorizePurchaseManager(["inventory.purchase.write"]);
 
 router.get("/", canRead, getPurchaseOrders);
 router.post("/", canWrite, createPurchaseOrder);

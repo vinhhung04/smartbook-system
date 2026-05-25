@@ -8,6 +8,8 @@ import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
+import { authService } from '@/services/auth';
+import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
 
 interface SupplierFormState {
   code: string;
@@ -48,6 +50,7 @@ export function SuppliersPage() {
   const [form, setForm] = useState<SupplierFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const canManageSuppliers = canAccess(authService.getCurrentUser(), ROUTE_ACCESS.supplierWrite);
 
   const loadSuppliers = useCallback(async () => {
     try {
@@ -161,10 +164,10 @@ export function SuppliersPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
           </Button>
-          <Button type="button" size="sm" onClick={openCreate}>
+          {canManageSuppliers ? <Button type="button" size="sm" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" />
             Nhà cung cấp mới
-          </Button>
+          </Button> : null}
         </div>
       </div>
 
@@ -230,7 +233,7 @@ export function SuppliersPage() {
                       </td>
                       <td className="px-5 py-3.5 text-[13px] tabular-nums">{poCount}</td>
                       <td className="px-5 py-3.5">
-                        <div className="flex flex-wrap items-center gap-2">
+                        {canManageSuppliers ? <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => openEdit(row)}
@@ -248,7 +251,7 @@ export function SuppliersPage() {
                             <Trash2 className="h-3.5 w-3.5" />
                             {deletingId === row.id ? 'Đang xóa...' : 'Xóa'}
                           </button>
-                        </div>
+                        </div> : <span className="text-[12px] text-muted-foreground">Read only</span>}
                       </td>
                     </motion.tr>
                   );

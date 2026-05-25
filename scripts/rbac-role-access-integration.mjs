@@ -63,7 +63,11 @@ function hasAll(values, expected) {
   return expected.every((item) => values.includes(item));
 }
 
-async function assertMe(label, token, expectedRoles, expectedPermissions) {
+function hasNone(values, forbidden) {
+  return forbidden.every((item) => !values.includes(item));
+}
+
+async function assertMe(label, token, expectedRoles, expectedPermissions, forbiddenPermissions = []) {
   const result = await expectStatus(`${label} /auth/me`, 'GET', '/auth/me', token, undefined, (status) => status === 200);
   const me = result.data?.user;
   const roles = Array.isArray(me?.roles) ? me.roles : [];
@@ -76,6 +80,12 @@ async function assertMe(label, token, expectedRoles, expectedPermissions) {
     fail(`${label} permissions`, `expected ${expectedPermissions.join(',')} got ${permissions.join(',')}`);
   }
   pass(`${label} permissions`);
+  if (!hasNone(permissions, forbiddenPermissions)) {
+    fail(`${label} forbidden permissions`, `unexpected ${forbiddenPermissions.filter((item) => permissions.includes(item)).join(',')}`);
+  }
+  if (forbiddenPermissions.length > 0) {
+    pass(`${label} forbidden permissions absent`);
+  }
 }
 
 async function run() {
@@ -86,19 +96,36 @@ async function run() {
   const customerToken = await login(users.customer);
 
   await assertMe('ADMIN', adminToken, ['ADMIN'], ['auth.users.read']);
-  await assertMe('MANAGER', managerToken, ['MANAGER'], ['inventory.purchase.write', 'inventory.purchase.approve', 'reports.read']);
-  await assertMe('STAFF', staffToken, ['STAFF'], ['inventory.stock.write', 'inventory.catalog.write']);
+  await assertMe('MANAGER', managerToken, ['MANAGER'], ['inventory.operation.decide', 'inventory.stock.adjust', 'inventory.purchase.write', 'inventory.purchase.approve', 'reports.read']);
+  await assertMe('STAFF', staffToken, ['STAFF'], ['inventory.stock.read', 'inventory.task.read', 'inventory.task.update'], ['inventory.stock.write', 'inventory.catalog.write', 'inventory.warehouse.write', 'inventory.purchase.write', 'inventory.supplier.write', 'inventory.transfer.write']);
   await assertMe('LIBRARIAN', librarianToken, ['LIBRARIAN'], ['borrow.write', 'inventory.catalog.read']);
   await assertMe('CUSTOMER', customerToken, ['CUSTOMER'], ['customer.self.read', 'inventory.catalog.read']);
 
   await expectStatus('STAFF catalog read', 'GET', '/api/books', staffToken, undefined, (status) => status === 200);
-  await expectStatus('STAFF stock operation authorized', 'POST', '/api/inventory/inbound', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF stock read', 'GET', '/api/inventory', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF my warehouse tasks read', 'GET', '/api/my-warehouse-tasks', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF inbound forbidden', 'POST', '/api/inventory/inbound', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF outbound forbidden', 'POST', '/api/inventory/outbound', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF outbound request forbidden', 'POST', '/api/order-requests/outbound', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF transfer request forbidden', 'POST', '/api/order-requests/transfer', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF create warehouse forbidden', 'POST', '/api/warehouses', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF update warehouse forbidden', 'PUT', '/api/warehouses/00000000-0000-4000-8000-000000000000', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF create location forbidden', 'POST', '/api/locations', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF update location forbidden', 'PUT', '/api/locations/00000000-0000-4000-8000-000000000000', staffToken, {}, (status) => status === 403);
   await expectStatus('STAFF create PO forbidden', 'POST', '/api/purchase-orders', staffToken, {}, (status) => status === 403);
   await expectStatus('STAFF approve PO forbidden', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF create supplier forbidden', 'POST', '/api/suppliers', staffToken, {}, (status) => status === 403);
   await expectStatus('STAFF IAM forbidden', 'GET', '/iam/users', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF borrow admin forbidden', 'GET', '/borrow/loans', staffToken, undefined, (status) => status === 403);
 
   await expectStatus('MANAGER analytics ok', 'GET', '/analytics/dashboard/kpis', managerToken, undefined, (status) => status === 200);
+  await expectStatus('MANAGER inbound authorized', 'POST', '/api/inventory/inbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER outbound authorized', 'POST', '/api/inventory/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER outbound request authorized', 'POST', '/api/order-requests/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER transfer request authorized', 'POST', '/api/order-requests/transfer', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create warehouse authorized', 'POST', '/api/warehouses', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create location authorized', 'POST', '/api/locations', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create supplier authorized', 'POST', '/api/suppliers', managerToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('MANAGER create PO authorized', 'POST', '/api/purchase-orders', managerToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('MANAGER approve PO authorized', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('MANAGER IAM forbidden', 'GET', '/iam/users', managerToken, undefined, (status) => status === 403);
@@ -106,12 +133,15 @@ async function run() {
   await expectStatus('LIBRARIAN borrow read ok', 'GET', '/borrow/loans', librarianToken, undefined, (status) => status === 200);
   await expectStatus('LIBRARIAN create PO forbidden', 'POST', '/api/purchase-orders', librarianToken, {}, (status) => status === 403);
   await expectStatus('LIBRARIAN stock write forbidden', 'POST', '/api/inventory/inbound', librarianToken, {}, (status) => status === 403);
+  await expectStatus('LIBRARIAN order request forbidden', 'POST', '/api/order-requests/outbound', librarianToken, {}, (status) => status === 403);
+  await expectStatus('LIBRARIAN warehouse write forbidden', 'POST', '/api/warehouses', librarianToken, {}, (status) => status === 403);
   await expectStatus('LIBRARIAN IAM forbidden', 'GET', '/iam/users', librarianToken, undefined, (status) => status === 403);
 
   await expectStatus('CUSTOMER self profile ok', 'GET', '/my/profile', customerToken, undefined, (status) => status === 200);
   await expectStatus('CUSTOMER borrow customers forbidden', 'GET', '/borrow/customers', customerToken, undefined, (status) => status === 403);
   await expectStatus('CUSTOMER borrow loans forbidden', 'GET', '/borrow/loans', customerToken, undefined, (status) => status === 403);
   await expectStatus('CUSTOMER create PO forbidden', 'POST', '/api/purchase-orders', customerToken, {}, (status) => status === 403);
+  await expectStatus('CUSTOMER inbound forbidden', 'POST', '/api/inventory/inbound', customerToken, {}, (status) => status === 403);
   await expectStatus('CUSTOMER IAM forbidden', 'GET', '/iam/users', customerToken, undefined, (status) => status === 403);
 
   await expectStatus('ADMIN users ok', 'GET', '/iam/users', adminToken, undefined, (status) => status === 200);
