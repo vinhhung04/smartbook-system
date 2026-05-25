@@ -6,15 +6,14 @@ const {
   getPutawayLocations,
   confirmPutaway,
 } = require('../controllers/putaway.controller');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const { authorizeTaskProgress } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canReadTask = authorizeAnyPermission(['inventory.stock.read', 'inventory.task.read', 'inventory.putaway.read']);
-const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
+const canUpdateAssignedTask = authorizeTaskProgress(['inventory.task.progress']);
 
-router.get('/receipts', canReadTask, getReadyReceipts);
-router.get('/receipts/:id', canReadTask, getReadyReceiptDetail);
-router.get('/receipts/:id/locations', canReadTask, getPutawayLocations);
-router.post('/receipts/:id/confirm', canDecideOperation, confirmPutaway);
+router.get('/receipts', canUpdateAssignedTask, getReadyReceipts);
+router.get('/receipts/:id', canUpdateAssignedTask, getReadyReceiptDetail);
+router.get('/receipts/:id/locations', canUpdateAssignedTask, getPutawayLocations);
+router.post('/receipts/:id/confirm', canUpdateAssignedTask, confirmPutaway);
 
 module.exports = router;

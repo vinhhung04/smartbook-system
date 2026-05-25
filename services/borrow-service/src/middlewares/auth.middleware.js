@@ -122,8 +122,6 @@ function authorizeCustomerSelf(req, res, next) {
   const hasSelfPermission = permissions.some((permission) => [
     'customer.self.read',
     'customer.self.write',
-    'borrow.read',
-    'borrow.write',
   ].includes(permission));
 
   if (!isCustomer || !hasSelfPermission) {

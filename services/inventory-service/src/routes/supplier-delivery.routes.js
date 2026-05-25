@@ -6,11 +6,11 @@ const {
   createSupplierDelivery,
   createGoodsReceiptFromInvoice,
 } = require("../controllers/supplier-delivery.controller");
-const { authorizeAnyPermission, authorizeManagerDecision } = require("../middlewares/auth.middleware");
+const { authorizeManagerDecision, authorizeManagerRead } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-const canRead = authorizeAnyPermission([
+const canRead = authorizeManagerRead([
   "inventory.purchase.read",
   "inventory.purchase.write",
   "inventory.stock.read",

@@ -11,10 +11,10 @@ const {
   transferReceivingToShelf,
   reverseShelfToReceiving,
 } = require('../controllers/receiving-putaway.controller');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canReadTask = authorizeAnyPermission(['inventory.stock.read', 'inventory.task.read', 'inventory.putaway.read']);
+const canReadTask = authorizeManagerRead(['inventory.stock.read']);
 const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
 
 router.get('/warehouses/:warehouseId/receivings', canReadTask, getWarehouseReceivings);

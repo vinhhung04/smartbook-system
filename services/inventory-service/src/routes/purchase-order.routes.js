@@ -18,11 +18,11 @@ const {
   getPurchaseOrderReconciliation,
   createGoodsReceiptFromPurchaseOrder,
 } = require("../controllers/purchase-order.controller");
-const { authorizeAnyPermission, authorizePurchaseManager } = require("../middlewares/auth.middleware");
+const { authorizeManagerRead, authorizePurchaseManager } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
-const canRead = authorizeAnyPermission([
+const canRead = authorizeManagerRead([
   "inventory.purchase.read",
   "inventory.purchase.write",
   "inventory.purchase.approve",

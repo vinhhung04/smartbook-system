@@ -46,7 +46,7 @@ async function main() {
     { code: 'inventory.stock.adjust', module_name: 'inventory', action_name: 'write', description: 'Adjust stock balances and post manager-approved stock changes' },
     { code: 'inventory.operation.decide', module_name: 'inventory', action_name: 'write', description: 'Create or approve warehouse operational decisions such as inbound, outbound, transfer, and receiving flows' },
     { code: 'inventory.task.read', module_name: 'inventory', action_name: 'read', description: 'View assigned warehouse tasks' },
-    { code: 'inventory.task.update', module_name: 'inventory', action_name: 'write', description: 'Update progress for warehouse tasks assigned to the current user' },
+    { code: 'inventory.task.progress', module_name: 'inventory', action_name: 'write', description: 'Update safe notes or progress for warehouse tasks assigned to the current user' },
     { code: 'inventory.stock.audit', module_name: 'inventory', action_name: 'write', description: 'Perform stock audits and cycle counts' },
 
     // Warehouse module
@@ -261,7 +261,7 @@ async function main() {
     'inventory.warehouse.read',
     'inventory.warehouse.write',
     'inventory.task.read',
-    'inventory.task.update',
+    'inventory.task.progress',
     'inventory.receiving.read',
     'inventory.receiving.write',
     'inventory.putaway.read',
@@ -294,14 +294,8 @@ async function main() {
 
   const warehousePermCodes = [
     'inventory.catalog.read',
-    'inventory.stock.read',
-    'inventory.warehouse.read',
     'inventory.task.read',
-    'inventory.task.update',
-    'inventory.receiving.read',
-    'inventory.putaway.read',
-    'inventory.picking.read',
-    'inventory.outbound.read',
+    'inventory.task.progress',
   ];
   await setRolePermissions(staffRole, warehousePermCodes);
   await setRolePermissions(warehouseStaffRole, warehousePermCodes);
@@ -329,8 +323,6 @@ async function main() {
     'inventory.catalog.read',
     'customer.self.read',
     'customer.self.write',
-    'borrow.read',
-    'borrow.write',
   ];
   await setRolePermissions(customerRole, customerPermCodes);
   console.log(`✅ Assigned ${customerPermCodes.length} permissions to CUSTOMER`);

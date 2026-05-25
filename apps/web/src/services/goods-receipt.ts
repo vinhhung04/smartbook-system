@@ -54,4 +54,11 @@ export const goodsReceiptService = {
     const response = await inventoryAPI.patch(`/api/goods-receipts/${id}`, { status });
     return response.data;
   },
+
+  assign: async (id: string, receivedByUserId: string) => {
+    const response = await inventoryAPI.patch(`/api/goods-receipts/${id}/assign`, {
+      received_by_user_id: receivedByUserId,
+    });
+    return response.data;
+  },
 };

@@ -10,6 +10,7 @@ import { goodsReceiptService } from "@/services/goods-receipt";
 import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
+import { authService } from "@/services/auth";
 
 interface WarehouseOption {
   id: string;
@@ -43,7 +44,10 @@ export function GoodsReceiptPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const supplierDeliveryInvoiceId = searchParams.get("supplier_delivery_invoice_id");
-  const [receivingMode, setReceivingMode] = useState<"supplier" | "manual">("supplier");
+  const currentUser = authService.getCurrentUser();
+  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const canManageReceiving = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
+  const [receivingMode, setReceivingMode] = useState<"supplier" | "manual">(canManageReceiving ? "supplier" : "manual");
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [supplierDeliveries, setSupplierDeliveries] = useState<SupplierDeliveryDetail[]>([]);
@@ -73,10 +77,18 @@ export function GoodsReceiptPage() {
     const loadReceivingContext = async () => {
       try {
         setIsLoading(true);
-        const [warehouseRows, deliveryRows] = await Promise.all([
-          warehouseService.getAll(),
-          supplierDeliveryService.getAll(),
-        ]);
+        if (!canManageReceiving) {
+          setReceivingMode("manual");
+        }
+        const [warehouseRows, deliveryRows] = canManageReceiving
+          ? await Promise.all([
+              warehouseService.getAll(),
+              supplierDeliveryService.getAll(),
+            ])
+          : await Promise.all([
+              warehouseService.getReceivingWarehouses(),
+              Promise.resolve({ data: [] }),
+            ]);
         const rows = (Array.isArray(warehouseRows) ? warehouseRows : []).map((warehouse: any) => ({
           id: warehouse.id,
           code: warehouse.code,
@@ -92,7 +104,7 @@ export function GoodsReceiptPage() {
     };
 
     void loadReceivingContext();
-  }, [supplierDeliveryInvoiceId]);
+  }, [canManageReceiving, supplierDeliveryInvoiceId]);
 
   useEffect(() => {
     if (!supplierDeliveryInvoiceId) return;
@@ -353,10 +365,10 @@ export function GoodsReceiptPage() {
           </div>
           <div className="flex items-center gap-3">
             <NavLink
-              to="/orders"
+              to={canManageReceiving ? "/orders" : "/my-warehouse-tasks"}
               className="rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-[13px] font-semibold text-white"
             >
-              Ve danh sach phieu
+              {canManageReceiving ? "Ve danh sach phieu" : "Ve task cua toi"}
             </NavLink>
             <button
               onClick={() => window.location.reload()}
@@ -505,7 +517,7 @@ export function GoodsReceiptPage() {
     ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(delivery.status),
   );
 
-  if (receivingMode === "supplier") {
+  if (canManageReceiving && receivingMode === "supplier") {
     return (
       <PageWrapper className="space-y-5">
         <FadeItem>
@@ -611,12 +623,21 @@ export function GoodsReceiptPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <NavLink
-          to="/orders"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
-        </NavLink>
+        {canManageReceiving ? (
+          <NavLink
+            to="/orders"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
+          </NavLink>
+        ) : (
+          <NavLink
+            to="/my-warehouse-tasks"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai task cua toi
+          </NavLink>
+        )}
       </FadeItem>
 
       <FadeItem>
@@ -625,17 +646,19 @@ export function GoodsReceiptPage() {
             <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
             <p className="mt-1 text-[13px] text-slate-500">Dung cho phieu nhap thu cong khong gan Purchase Order.</p>
           </div>
-          <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
-            <button
-              onClick={() => setReceivingMode("supplier")}
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <Truck className="h-3.5 w-3.5" /> Supplier Delivery
-            </button>
-            <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
-              <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
-            </button>
-          </div>
+          {canManageReceiving ? (
+            <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
+              <button
+                onClick={() => setReceivingMode("supplier")}
+                className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+              </button>
+              <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
+                <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+              </button>
+            </div>
+          ) : null}
         </div>
       </FadeItem>
 

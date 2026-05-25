@@ -6,6 +6,8 @@ const {
   authenticateToken,
   authorizeAnyPermission,
   authorizeManagerDecision,
+  authorizeManagerRead,
+  authorizeTaskRead,
 } = require('./middlewares/auth.middleware');
 
 const prisma = new PrismaClient();
@@ -47,7 +49,7 @@ app.use('/api/supplier-portal', supplierPortalRoutes);
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
 
-app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read']), async (req, res) => {
+app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), async (req, res) => {
   const userId = req.user?.id || req.user?.sub;
 
   if (!userId) {
@@ -112,6 +114,7 @@ app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read'
         warehouse: task.warehouses?.code || task.warehouses?.name || null,
         created_at: task.created_at,
         completed_at: task.received_at,
+        action_path: `/orders/${task.id}`,
       })),
       ...outboundOrders.map((task) => ({
         id: task.id,
@@ -121,10 +124,11 @@ app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read'
         warehouse: task.warehouses?.code || task.warehouses?.name || null,
         created_at: task.requested_at,
         completed_at: task.completed_at,
+        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
       })),
       ...transferOrders.map((task) => ({
         id: task.id,
-        type: 'PICKING',
+        type: ['READY_FOR_OUTBOUND', 'OUTBOUND_COMPLETED'].includes(task.status) ? 'OUTBOUND' : 'PICKING',
         title: task.transfer_number,
         status: task.status,
         warehouse: [
@@ -133,6 +137,7 @@ app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read'
         ].filter(Boolean).join(' -> ') || null,
         created_at: task.requested_at,
         completed_at: task.received_at || task.shipped_at,
+        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
       })),
     ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
@@ -146,6 +151,25 @@ app.get('/api/my-warehouse-tasks', authorizeAnyPermission(['inventory.task.read'
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.read']), async (_req, res) => {
+  try {
+    const warehouses = await prisma.warehouses.findMany({
+      where: { is_active: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    return res.json({ data: warehouses });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
@@ -170,7 +194,7 @@ app.use('/api/supplier-account', supplierAccountRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
-app.get('/api/inventory', authorizeAnyPermission(['inventory.stock.read']), async (req, res) => {
+app.get('/api/inventory', authorizeManagerRead(['inventory.stock.read']), async (req, res) => {
   try {
     const books = await prisma.books.findMany({
       include: {

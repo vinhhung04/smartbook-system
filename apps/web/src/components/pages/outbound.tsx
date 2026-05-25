@@ -5,6 +5,7 @@ import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import { getApiErrorMessage } from '@/services/api.ts';
+import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
 
@@ -28,6 +29,9 @@ export function OutboundPage() {
   const [detail, setDetail] = useState<OutboundOrderDetail | null>(null);
   const [scanCode, setScanCode] = useState('');
   const [showScanModal, setShowScanModal] = useState(false);
+  const currentUser = authService.getCurrentUser();
+  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const canManageQueue = Boolean(currentUser?.is_superuser) || currentUserRoles.includes('ADMIN') || currentUserRoles.includes('MANAGER');
 
   const filteredQueue = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -63,13 +67,13 @@ export function OutboundPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const rows = await warehouseService.getAll();
+        const rows = canManageQueue ? await warehouseService.getAll() : [];
         const list = Array.isArray(rows) ? rows : [];
 
         setWarehouses(list);
         const preferredWarehouseId = list[0]?.id || '';
         setSelectedWarehouseId(preferredWarehouseId);
-        await loadQueue(preferredWarehouseId || undefined);
+        await loadQueue(canManageQueue ? (preferredWarehouseId || undefined) : undefined);
       } catch (error) {
         toast.error(getApiErrorMessage(error, 'Khong tai duoc outbound queue'));
       } finally {
@@ -81,6 +85,10 @@ export function OutboundPage() {
   }, []);
 
   useEffect(() => {
+    if (!canManageQueue) {
+      return;
+    }
+
     if (!selectedWarehouseId) {
       setQueue([]);
       return;
@@ -89,7 +97,7 @@ export function OutboundPage() {
     void loadQueue(selectedWarehouseId).catch((error) => {
       toast.error(getApiErrorMessage(error, 'Khong tai duoc queue theo warehouse'));
     });
-  }, [selectedWarehouseId]);
+  }, [canManageQueue, selectedWarehouseId]);
 
   const handleOpen = async (task: OutboundQueueItem) => {
     try {
@@ -117,7 +125,7 @@ export function OutboundPage() {
         toast.success('Da confirm outbound thanh cong');
       }
 
-      await loadQueue(selectedWarehouseId || undefined);
+      await loadQueue(canManageQueue ? (selectedWarehouseId || undefined) : undefined);
       setDetail(null);
       setSelectedTaskId('');
       setSelectedTaskType(null);
@@ -150,7 +158,9 @@ export function OutboundPage() {
 
       <FadeItem>
         <h1 className="tracking-[-0.02em]">Outbound</h1>
-        <p className="text-[12px] text-slate-500 mt-1">Xac nhan xuat kho cho don da pick xong (READY_FOR_OUTBOUND)</p>
+        <p className="text-[12px] text-slate-500 mt-1">
+          {canManageQueue ? 'Xac nhan xuat kho cho don da pick xong (READY_FOR_OUTBOUND)' : 'Xac nhan outbound cho task da duoc giao'}
+        </p>
       </FadeItem>
 
       {!detail ? (
@@ -158,6 +168,7 @@ export function OutboundPage() {
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {canManageQueue ? (
                 <div>
                   <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
                   <select
@@ -171,8 +182,9 @@ export function OutboundPage() {
                     ))}
                   </select>
                 </div>
+                ) : null}
 
-                <div className="md:col-span-2">
+                <div className={canManageQueue ? 'md:col-span-2' : 'md:col-span-3'}>
                   <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tim don outbound</p>
                   <input
                     value={query}

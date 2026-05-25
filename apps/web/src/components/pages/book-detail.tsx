@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { aiService } from '@/services/ai';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api.ts';
+import { authService } from '@/services/auth';
 
 interface BookLocation {
   warehouse_name: string;
@@ -91,6 +92,12 @@ export function BookDetailPage() {
     isbn_or_barcode: "", language: "vi", publish_year: "", list_price: "0", unit_cost: "0",
     description: "", summary_vi: "", cover_image_url: "",
   });
+  const currentUser = authService.getCurrentUser();
+  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
+  const canCompleteIncompleteBook = currentUserRoles.includes("LIBRARIAN") || currentUserRoles.includes("CUSTOMER_SERVICE");
+  const canCreateReceivingDraft = currentUserRoles.some((role) => ["STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "MANAGER", "ADMIN"].includes(role));
+  const canEditBook = Boolean(book && (canManageCatalog || (canCompleteIncompleteBook && book.is_incomplete)));
 
   const loadBook = async () => {
     if (!id) return;
@@ -283,14 +290,18 @@ export function BookDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {canEditBook ? (
             <button onClick={() => setShowEditModal(true)}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm">
               <Edit className="w-3.5 h-3.5" /> Edit
             </button>
+            ) : null}
+            {canCreateReceivingDraft ? (
             <NavLink to="/orders/new"
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all">
               <ScanBarcode className="w-3.5 h-3.5" /> Create Receipt
             </NavLink>
+            ) : null}
           </div>
         </div>
       </FadeItem>

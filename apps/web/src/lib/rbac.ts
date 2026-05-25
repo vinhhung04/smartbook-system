@@ -8,17 +8,17 @@ export interface RouteAccessMeta {
 const INTERNAL_ROLES = ["ADMIN", "MANAGER", "STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "LIBRARIAN", "CUSTOMER_SERVICE"];
 const MANAGER_OPERATION_ROLES = ["ADMIN", "MANAGER"];
 const STAFF_TRACKING_ROLES = ["STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR"];
-const INVENTORY_READ_ROLES = [...MANAGER_OPERATION_ROLES, ...STAFF_TRACKING_ROLES];
 const LIBRARY_ROLES = ["ADMIN", "MANAGER", "LIBRARIAN", "CUSTOMER_SERVICE"];
 const ADMIN_ROLES = ["ADMIN"];
 
 export const ROUTE_ACCESS = {
   internal: { roles: INTERNAL_ROLES },
-  catalog: { roles: [...INVENTORY_READ_ROLES, ...LIBRARY_ROLES], permissions: ["inventory.catalog.read"] },
-  inventoryRead: { roles: INVENTORY_READ_ROLES, permissions: ["inventory.stock.read"] },
-  inventory: { roles: INVENTORY_READ_ROLES, permissions: ["inventory.stock.read"] },
+  catalog: { roles: [...MANAGER_OPERATION_ROLES, ...STAFF_TRACKING_ROLES, ...LIBRARY_ROLES, "CUSTOMER"], permissions: ["inventory.catalog.read"] },
+  managerInventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
+  inventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
+  inventory: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   staffTasks: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.read"] },
-  staffTaskUpdate: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.update"] },
+  staffTaskProgress: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.progress"] },
   managerStockDecision: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockAdjust: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.adjust"] },

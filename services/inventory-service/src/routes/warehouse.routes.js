@@ -8,10 +8,10 @@ const {
   deleteWarehouse,
 } = require('../controllers/warehouse.controller');
 const { getZonesAndBinsByWarehouse } = require('../controllers/location.controller');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canReadWarehouse = authorizeAnyPermission(['inventory.stock.read', 'inventory.warehouse.read']);
+const canReadWarehouse = authorizeManagerRead(['inventory.warehouse.read']);
 const canWriteWarehouse = authorizeManagerDecision(['inventory.warehouse.write']);
 
 router.get('/', canReadWarehouse, getAllWarehouses);

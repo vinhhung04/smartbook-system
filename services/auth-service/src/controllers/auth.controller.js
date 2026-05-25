@@ -61,8 +61,8 @@ async function getUserRolesAndPermissions(userId) {
 
   if (roles.includes('CUSTOMER')) {
     permissions.add('inventory.catalog.read');
-    permissions.add('borrow.read');
-    permissions.add('borrow.write');
+    permissions.add('customer.self.read');
+    permissions.add('customer.self.write');
   }
 
   return {
@@ -140,8 +140,8 @@ async function register(req, res) {
         INSERT INTO permissions (code, module_name, action_name, description)
         VALUES
           ('inventory.catalog.read', 'inventory', 'read', 'View catalog and variants'),
-          ('borrow.read', 'borrow', 'read', 'View customers, reservations and loans'),
-          ('borrow.write', 'borrow', 'write', 'Create reservations, loans and returns')
+          ('customer.self.read', 'customer', 'read', 'View own customer portal resources'),
+          ('customer.self.write', 'customer', 'write', 'Update own customer profile and self-service requests')
         ON CONFLICT (code) DO NOTHING
         `
       );
@@ -152,7 +152,7 @@ async function register(req, res) {
         SELECT r.id, p.id
         FROM roles r
         JOIN permissions p
-          ON p.code IN ('inventory.catalog.read', 'borrow.read', 'borrow.write')
+          ON p.code IN ('inventory.catalog.read', 'customer.self.read', 'customer.self.write')
         WHERE r.code = 'CUSTOMER'
         ON CONFLICT DO NOTHING
         `
@@ -220,6 +220,41 @@ async function me(req, res) {
     });
   } catch (error) {
     console.error('me error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listWarehouseStaff(req, res) {
+  try {
+    const roles = Array.isArray(req.auth?.roles) ? req.auth.roles.map((role) => String(role).toUpperCase()) : [];
+    const canManageAssignments = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN') || roles.includes('MANAGER');
+
+    if (!canManageAssignments) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const users = await prisma.$queryRawUnsafe(
+      `
+      SELECT DISTINCT
+        u.id,
+        u.username,
+        u.full_name,
+        u.email,
+        u.status
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE u.deleted_at IS NULL
+        AND u.status = 'ACTIVE'
+        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+        AND r.code IN ('STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR')
+      ORDER BY u.full_name ASC, u.username ASC
+      `
+    );
+
+    return res.json({ data: users });
+  } catch (error) {
+    console.error('listWarehouseStaff error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -379,6 +414,7 @@ module.exports = {
   register,
   login,
   me,
+  listWarehouseStaff,
   updateMe,
   logout,
   changePassword,

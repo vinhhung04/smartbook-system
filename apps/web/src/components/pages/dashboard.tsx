@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { NavLink } from 'react-router';
+import { Navigate, NavLink } from 'react-router';
 import { motion } from 'motion/react';
 import {
   AlertTriangle,
@@ -47,6 +47,7 @@ import {
 } from '@/services/analytics';
 import { getApiErrorMessage, hasAnyPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
+import { authService } from '@/services/auth';
 
 const CHART_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
@@ -136,6 +137,13 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
+  const currentUser = authService.getCurrentUser();
+  const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const isWarehouseStaff = roles.some((role) => ['STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR'].includes(role));
+
+  if (isWarehouseStaff) {
+    return <Navigate to="/my-warehouse-tasks" replace />;
+  }
 
   const loadDashboard = useCallback(async () => {
     if (!canViewAnalytics) {
@@ -257,7 +265,7 @@ export function DashboardPage() {
             variant="no-permission"
             icon={ShieldOff}
             title="No analytics permission"
-            description="Your account cannot view analytics dashboards. Please use a staff, manager, or admin account."
+            description="Your account cannot view analytics dashboards."
           />
         </SectionCard>
       ) : loading ? (

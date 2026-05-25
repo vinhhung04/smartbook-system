@@ -8,6 +8,7 @@ export interface MyWarehouseTask {
   warehouse: string | null;
   created_at: string | null;
   completed_at: string | null;
+  action_path?: string | null;
 }
 
 export interface MyWarehouseTaskResponse {

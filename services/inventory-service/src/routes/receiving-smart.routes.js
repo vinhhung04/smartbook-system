@@ -1,5 +1,5 @@
 const express = require("express");
-const { authorizeAnyPermission, authorizeManagerDecision } = require("../middlewares/auth.middleware");
+const { authorizeManagerDecision, authorizeManagerRead } = require("../middlewares/auth.middleware");
 const router = express.Router();
 
 const {
@@ -12,7 +12,7 @@ const {
   cancelDraft,
 } = require("../controllers/receiving-smart.controller");
 
-const canReadReceiving = authorizeAnyPermission(["inventory.stock.read", "inventory.receiving.read", "inventory.task.read"]);
+const canReadReceiving = authorizeManagerRead(["inventory.receiving.read", "inventory.stock.read"]);
 const canDecideReceiving = authorizeManagerDecision(["inventory.operation.decide"]);
 
 /**

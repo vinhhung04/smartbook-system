@@ -9,18 +9,25 @@ const {
   updateBookDetails,
   deleteBook,
 } = require('../controllers/book.controller');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const {
+  authorizeAnyPermission,
+  authorizeAnyRole,
+  authorizeManagerDecision,
+  authorizeTaskProgress,
+} = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 const canReadCatalog = authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']);
 const canWriteCatalog = authorizeManagerDecision(['inventory.catalog.write']);
+const canCreateIncompleteFromReceiving = authorizeTaskProgress(['inventory.task.progress']);
+const canUpdateCatalogDetails = authorizeAnyRole(['ADMIN', 'MANAGER', 'LIBRARIAN', 'CUSTOMER_SERVICE']);
 
 router.get('/', canReadCatalog, getAllBooks);
 router.get('/barcode/:barcode', canReadCatalog, findBookByBarcode);
 router.get('/isbn13/:isbn13', canReadCatalog, findBookByIsbn13);
-router.post('/incomplete', canWriteCatalog, createIncompleteBook);
+router.post('/incomplete', canCreateIncompleteFromReceiving, createIncompleteBook);
 router.get('/:id', canReadCatalog, getBookById);
-router.patch('/:id', canWriteCatalog, updateBookDetails);
+router.patch('/:id', canUpdateCatalogDetails, updateBookDetails);
 router.delete('/:id', canWriteCatalog, deleteBook);
 
 module.exports = router;

@@ -1461,15 +1461,6 @@ async function getPickingTaskDetail(req, res) {
         : null;
 
       const preparedCurrentLine = remainingLines[0] || null;
-      if (preparedCurrentLine?.candidate_source_location_id) {
-        await prisma.outbound_order_items.update({
-          where: { id: preparedCurrentLine.line_id },
-          data: {
-            source_location_id:
-              preparedCurrentLine.candidate_source_location_id,
-          },
-        });
-      }
 
       return res.json({
         task_type: "outbound",
@@ -1722,14 +1713,6 @@ async function getPickingTaskDetail(req, res) {
       : null;
 
     const preparedCurrentLine = remainingLines[0] || null;
-    if (preparedCurrentLine?.candidate_source_location_id) {
-      await prisma.transfer_order_items.update({
-        where: { id: preparedCurrentLine.line_id },
-        data: {
-          from_location_id: preparedCurrentLine.candidate_source_location_id,
-        },
-      });
-    }
 
     return res.json({
       task_type: "transfer",

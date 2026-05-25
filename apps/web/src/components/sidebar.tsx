@@ -15,10 +15,10 @@ const navGroups = [
     color: "text-indigo-400",
     dotColor: "bg-indigo-400",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard", access: ROUTE_ACCESS.internal, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/", icon: LayoutDashboard, label: "Dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/my-warehouse-tasks", icon: ClipboardList, label: "My Warehouse Tasks", access: ROUTE_ACCESS.staffTasks, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
       { to: "/catalog", icon: BookOpen, label: "Catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/inventory", icon: Package, label: "Inventory", access: ROUTE_ACCESS.inventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/inventory", icon: Package, label: "Inventory", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", access: ROUTE_ACCESS.purchaseRead, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", access: ROUTE_ACCESS.supplierDeliveries, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
@@ -28,8 +28,8 @@ const navGroups = [
       { to: "/picking", icon: Hand, label: "Picking", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
       { to: "/outbound", icon: Truck, label: "Outbound", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/warehouses", icon: Warehouse, label: "Warehouses", access: ROUTE_ACCESS.warehouseWrite, activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/shelves", icon: Layers3, label: "Shelves", access: ROUTE_ACCESS.inventoryRead, activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/movements", icon: Activity, label: "Stock Movements", access: ROUTE_ACCESS.inventoryRead, activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/shelves", icon: Layers3, label: "Shelves", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
+      { to: "/movements", icon: Activity, label: "Stock Movements", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/suppliers", icon: Truck, label: "Suppliers", access: ROUTE_ACCESS.suppliers, activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
     ],
   },
@@ -77,7 +77,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       items: group.items.filter((item) => canAccess(user, item.access)),
     }))
     .filter((group) => group.items.length > 0);
-  const canReceiveStock = canAccess(user, ROUTE_ACCESS.stockWrite);
+  const canReceiveStock = canAccess(user, ROUTE_ACCESS.staffTaskProgress);
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)

@@ -1,10 +1,10 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['inventory.supplier.read', 'inventory.purchase.read']), async (req, res) => {
+router.get('/', authorizeManagerRead(['inventory.supplier.read', 'inventory.purchase.read']), async (req, res) => {
   try {
     const suppliers = await prisma.suppliers.findMany({
       orderBy: { created_at: 'desc' },

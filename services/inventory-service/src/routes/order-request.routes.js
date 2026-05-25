@@ -9,12 +9,12 @@ const {
   approveRequest,
   rejectRequest,
 } = require('../controllers/order-request.controller');
-const { authorizeAnyPermission, authorizeManagerDecision } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
 const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
-const canReadRequests = authorizeAnyPermission(['inventory.task.read', 'inventory.stock.read', 'inventory.operation.decide', 'inventory.purchase.approve']);
+const canReadRequests = authorizeManagerRead(['inventory.operation.decide', 'inventory.purchase.approve']);
 const canApprove = authorizeManagerDecision(['inventory.operation.decide', 'inventory.purchase.approve']);
 
 router.get('/variants/search', canDecideOperation, searchVariants);

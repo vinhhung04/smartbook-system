@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, Truck } from "lucide-react";
+import { NavLink } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
@@ -38,6 +39,15 @@ function formatDate(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getTaskActionPath(task: MyWarehouseTask) {
+  if (task.action_path) return task.action_path;
+  if (task.type === "RECEIVING") return `/orders/${task.id}`;
+  if (task.type === "PUTAWAY") return `/putaway/${task.id}`;
+  if (task.type === "PICKING") return "/picking";
+  if (task.type === "OUTBOUND") return "/outbound";
+  return null;
 }
 
 export function MyWarehouseTasksPage() {
@@ -123,7 +133,7 @@ export function MyWarehouseTasksPage() {
           <table className="w-full min-w-[760px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Loai", "Ma task", "Kho", "Trang thai", "Tao luc", "Hoan tat"].map((header) => (
+                {["Loai", "Ma task", "Kho", "Trang thai", "Tao luc", "Hoan tat", "Thao tac"].map((header) => (
                   <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {header}
                   </th>
@@ -133,11 +143,11 @@ export function MyWarehouseTasksPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai cong viec...</td>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai cong viec...</td>
                 </tr>
               ) : tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10">
+                  <td colSpan={7} className="px-5 py-10">
                     <EmptyState
                       icon={ClipboardList}
                       title="Chua co task duoc giao"
@@ -145,16 +155,31 @@ export function MyWarehouseTasksPage() {
                     />
                   </td>
                 </tr>
-              ) : tasks.map((task) => (
-                <tr key={`${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-5 py-3 text-[13px] font-medium">{taskTypeLabel(task.type)}</td>
-                  <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
-                  <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
-                  <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
-                  <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
-                  <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
-                </tr>
-              ))}
+              ) : tasks.map((task) => {
+                const actionPath = getTaskActionPath(task);
+                return (
+                  <tr key={`${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-5 py-3 text-[13px] font-medium">{taskTypeLabel(task.type)}</td>
+                    <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
+                    <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
+                    <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
+                    <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
+                    <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
+                    <td className="px-5 py-3 text-[12px]">
+                      {actionPath ? (
+                        <NavLink
+                          to={actionPath}
+                          className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 hover:bg-emerald-100"
+                        >
+                          Thuc hien
+                        </NavLink>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

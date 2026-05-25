@@ -12,36 +12,36 @@ const {
   ensureRepicksEndpoint,
 } = require("../controllers/picking.controller");
 const {
-  authorizeAnyPermission,
   authorizeManagerDecision,
-  authorizeStaffTaskUpdate,
+  authorizeTaskRead,
+  authorizeTaskProgress,
 } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
-const canReadTask = authorizeAnyPermission(["inventory.task.read", "inventory.picking.read", "inventory.stock.read"]);
-const canUpdateAssignedTask = authorizeStaffTaskUpdate(["inventory.task.update"]);
+const canReadTask = authorizeTaskRead(["inventory.task.read"]);
+const canUpdateTaskProgress = authorizeTaskProgress(["inventory.task.progress"]);
 const canDecideOperation = authorizeManagerDecision(["inventory.operation.decide"]);
 
 router.get("/tasks", canReadTask, listPickingTasks);
 router.post(
   "/tasks/:taskType/:taskId/claim",
-  canUpdateAssignedTask,
+  canDecideOperation,
   claimPickingTask,
 );
 router.get("/tasks/:taskType/:taskId", canReadTask, getPickingTaskDetail);
 router.post(
   "/tasks/:taskType/:taskId/presence",
-  canUpdateAssignedTask,
+  canUpdateTaskProgress,
   confirmPickerPresence,
 );
 router.get(
   "/lookup/variant-by-barcode",
-  canUpdateAssignedTask,
+  canUpdateTaskProgress,
   lookupVariantByBarcode,
 );
 router.post(
   "/tasks/:taskType/:taskId/lines/:lineId/confirm",
-  canUpdateAssignedTask,
+  canUpdateTaskProgress,
   confirmPickingLine,
 );
 router.post(

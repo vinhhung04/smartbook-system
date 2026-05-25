@@ -76,6 +76,10 @@ function authorizePurchaseManager(permissions = ['inventory.purchase.write']) {
   return authorizeManagerDecision(permissions);
 }
 
+function authorizeManagerRead(permissions = []) {
+  return authorizeManagerDecision(permissions);
+}
+
 function authorizeManagerDecision(permissions = ['inventory.operation.decide']) {
   const requirePermission = authorizeAnyPermission(permissions);
   const requireRole = authorizeAnyRole(['MANAGER', 'ADMIN']);
@@ -92,7 +96,7 @@ function authorizeManagerDecision(permissions = ['inventory.operation.decide']) 
   };
 }
 
-function authorizeStaffTaskUpdate(permissions = ['inventory.task.update']) {
+function authorizeTaskRead(permissions = ['inventory.task.read']) {
   const requirePermission = authorizeAnyPermission(permissions);
   const requireRole = authorizeAnyRole([
     'STAFF',
@@ -114,11 +118,17 @@ function authorizeStaffTaskUpdate(permissions = ['inventory.task.update']) {
   };
 }
 
+function authorizeTaskProgress(permissions = ['inventory.task.progress']) {
+  return authorizeTaskRead(permissions);
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
   authorizeAnyRole,
   authorizeManagerDecision,
+  authorizeManagerRead,
   authorizePurchaseManager,
-  authorizeStaffTaskUpdate,
+  authorizeTaskRead,
+  authorizeTaskProgress,
 };
