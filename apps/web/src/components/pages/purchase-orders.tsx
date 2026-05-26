@@ -94,48 +94,48 @@ export function PurchaseOrdersPage() {
             <ClipboardList className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Purchase Orders</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Lap don dat hang, phe duyet va doi soat nhap hang</p>
+            <h1 className="text-xl font-semibold tracking-tight">Đơn đặt hàng</h1>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Lập đơn đặt hàng, phê duyệt và đối soát nhập hàng</p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+            Làm mới
           </Button>
           {canCreatePurchaseOrder ? <NavLink to="/purchase-orders/new" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground shadow-sm">
             <Plus className="h-3.5 w-3.5" />
-            New PO
+            Tạo PO mới
           </NavLink> : null}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Draft" value={counts.draft} variant="default" />
-        <StatCard label="Pending Approval" value={counts.pending} variant="warning" />
-        <StatCard label="Approved" value={counts.approved} variant="primary" />
-        <StatCard label="Partial" value={counts.partial} variant="info" />
-        <StatCard label="Received" value={counts.received} variant="success" />
+        <StatCard label="Nháp" value={counts.draft} variant="default" />
+        <StatCard label="Chờ duyệt" value={counts.pending} variant="warning" />
+        <StatCard label="Đã duyệt" value={counts.approved} variant="primary" />
+        <StatCard label="Nhận một phần" value={counts.partial} variant="info" />
+        <StatCard label="Đã nhận" value={counts.received} variant="success" />
       </div>
 
       <SectionCard>
         <div className="grid gap-3 md:grid-cols-5">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void load()} placeholder="Search PO, supplier, warehouse..." className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void load()} placeholder="Tìm PO, nhà cung cấp, kho..." className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
             {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
-            <option value="">All suppliers</option>
+            <option value="">Tất cả nhà cung cấp</option>
             {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
           </select>
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
-            <option value="">All warehouses</option>
+            <option value="">Tất cả kho</option>
             {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>)}
           </select>
           <select value={view} onChange={(e) => setView(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
-            <option value="all">All</option>
-            <option value="my">My</option>
-            <option value="approval">Approval</option>
+            <option value="all">Tất cả</option>
+            <option value="my">Của tôi</option>
+            <option value="approval">Chờ duyệt</option>
           </select>
         </div>
       </SectionCard>
@@ -145,16 +145,16 @@ export function PurchaseOrdersPage() {
           <table className="w-full min-w-[1100px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["PO Number", "Supplier", "Warehouse", "Status", "Order Date", "Expected", "Items", "Ordered", "Received", "Total", "Reconciliation"].map((heading) => (
+                {["Số PO", "Nhà cung cấp", "Kho", "Trạng thái", "Ngày đặt", "Dự kiến", "Dòng", "SL đặt", "SL nhận", "Tổng tiền", "Đối soát"].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Loading purchase orders...</td></tr>
+                <tr><td colSpan={11} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải đơn đặt hàng...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={11}><EmptyState variant="no-data" title="No purchase orders" description="Create a PO to start approval and reconciliation" className="py-12" /></td></tr>
+                <tr><td colSpan={11}><EmptyState variant="no-data" title="Chưa có đơn đặt hàng" description="Tạo PO để bắt đầu quy trình phê duyệt và đối soát nhập hàng" className="py-12" /></td></tr>
               ) : rows.map((row, index) => (
                 <motion.tr key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.02 }} className="border-b border-border last:border-0 hover:bg-muted/30">
                   <td className="px-5 py-3.5"><NavLink to={`/purchase-orders/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800">{row.po_number}</NavLink></td>

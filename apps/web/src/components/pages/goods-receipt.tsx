@@ -11,6 +11,7 @@ import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services
 import { getApiErrorMessage } from "@/services/api.ts";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { authService } from "@/services/auth";
+import { canManageReceiving as rbacCanManageReceiving, canViewUnitCost } from "@/lib/rbac";
 
 interface WarehouseOption {
   id: string;
@@ -45,8 +46,8 @@ export function GoodsReceiptPage() {
   const navigate = useNavigate();
   const supplierDeliveryInvoiceId = searchParams.get("supplier_delivery_invoice_id");
   const currentUser = authService.getCurrentUser();
-  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageReceiving = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
+  const canManageReceiving = rbacCanManageReceiving(currentUser);
+  const showUnitCost = canViewUnitCost(currentUser);
   const [receivingMode, setReceivingMode] = useState<"supplier" | "manual">(canManageReceiving ? "supplier" : "manual");
   const [step, setStep] = useState<"warehouse" | "scan" | "review">("warehouse");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
@@ -97,7 +98,7 @@ export function GoodsReceiptPage() {
         setWarehouses(rows);
         setSupplierDeliveries(Array.isArray(deliveryRows.data) ? deliveryRows.data : []);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu nhap kho"));
+        toast.error(getApiErrorMessage(error, "Không tải được dữ liệu nhập kho"));
       } finally {
         setIsLoading(false);
       }
@@ -119,7 +120,7 @@ export function GoodsReceiptPage() {
         });
         setCountedQty(nextQty);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc supplier invoice"));
+        toast.error(getApiErrorMessage(error, "Không tải được hóa đơn nhà cung cấp"));
       } finally {
         setInvoiceLoading(false);
       }
@@ -167,12 +168,12 @@ export function GoodsReceiptPage() {
     const title = pendingTitle.trim();
 
     if (!/^\d{13}$/.test(isbn13)) {
-      toast.error("ISBN13 khong hop le");
+      toast.error("ISBN13 không hợp lệ");
       return;
     }
 
     if (!title) {
-      toast.error("Vui long nhap ten sach");
+      toast.error("Vui lòng nhập tên sách");
       return;
     }
 
@@ -187,7 +188,7 @@ export function GoodsReceiptPage() {
 
       const payload = created?.data;
       if (!payload?.variant_id) {
-        toast.error("Khong tao duoc sach tam");
+        toast.error("Không tạo được sách tạm");
         return;
       }
 
@@ -204,9 +205,9 @@ export function GoodsReceiptPage() {
       setShowNewBookModal(false);
       setIsbn13Input("");
       scanInputRef.current?.focus();
-      toast.success("Da tao sach tam va them vao phieu nhap");
+      toast.success("Đã tạo sách tạm và thêm vào phiếu nhập");
     } catch (createError) {
-      toast.error(getApiErrorMessage(createError, "Khong tao duoc sach tam"));
+      toast.error(getApiErrorMessage(createError, "Không tạo được sách tạm"));
     } finally {
       setIsCreatingNewBook(false);
     }
@@ -215,17 +216,17 @@ export function GoodsReceiptPage() {
   const handleAddBarcode = async (input?: string) => {
     const isbn13 = normalizeIsbn13(input ?? isbn13Input);
     if (!isbn13) {
-      toast.error("Vui long quet hoac nhap ISBN13");
+      toast.error("Vui lòng quét hoặc nhập ISBN13");
       return;
     }
 
     if (!/^\d{13}$/.test(isbn13)) {
-      toast.error("ISBN13 phai gom dung 13 chu so");
+      toast.error("ISBN13 phải gồm đúng 13 chữ số");
       return;
     }
 
     if (!selectedWarehouse) {
-      toast.error("Vui long chon kho truoc khi nhap sach");
+      toast.error("Vui lòng chọn kho trước khi nhập sách");
       return;
     }
 
@@ -237,12 +238,12 @@ export function GoodsReceiptPage() {
         title: found.title,
         unit_cost: Number(found.unit_cost || 0),
       });
-      toast.success(`Da them: ${found.title}`);
+      toast.success(`Đã thêm: ${found.title}`);
       setIsbn13Input("");
       scanInputRef.current?.focus();
       return;
     } catch (error) {
-      const message = getApiErrorMessage(error, "Barcode lookup that bai");
+      const message = getApiErrorMessage(error, "Tra cứu barcode thất bại");
 
       if (!/not found/i.test(message)) {
         toast.error(message);
@@ -250,7 +251,7 @@ export function GoodsReceiptPage() {
       }
 
       setPendingIsbn13(isbn13);
-      setPendingTitle(`Sach ${isbn13}`);
+      setPendingTitle(`Sách ${isbn13}`);
       setShowNewBookModal(true);
     }
   };
@@ -288,7 +289,7 @@ export function GoodsReceiptPage() {
         note: Number(countedQty[item.id] || 0) < item.remaining_qty ? "Supplier delivered short" : null,
       }));
     if (payloadItems.length === 0) {
-      toast.error("Nhap it nhat mot dong hang thuc nhan");
+      toast.error("Nhập ít nhất một dòng hàng thực nhận");
       return;
     }
     try {
@@ -298,10 +299,10 @@ export function GoodsReceiptPage() {
         note: `Receive supplier invoice ${invoice.invoice_number}`,
         items: payloadItems,
       });
-      toast.success(`Da tao GR ${response.data.receipt_number} o trang thai DRAFT`);
+      toast.success(`Đã tạo phiếu nhập ${response.data.receipt_number} ở trạng thái nháp`);
       navigate(`/orders/${response.data.id}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Tao goods receipt tu invoice that bai"));
+      toast.error(getApiErrorMessage(error, "Tạo phiếu nhập từ hóa đơn thất bại"));
     } finally {
       setInvoiceSaving(false);
     }
@@ -312,11 +313,11 @@ export function GoodsReceiptPage() {
       return;
     }
     if (!items.length) {
-      toast.error("Phieu nhap chua co sach");
+      toast.error("Phiếu nhập chưa có sách");
       return;
     }
     if (items.some((item) => !Number.isFinite(item.qty) || item.qty <= 0)) {
-      toast.error("So luong phai lon hon 0");
+      toast.error("Số lượng phải lớn hơn 0");
       return;
     }
 
@@ -338,9 +339,9 @@ export function GoodsReceiptPage() {
       setSuccessReceiptNumber(created?.data?.receipt_number || "");
       setShowSuccess(true);
       setShowConfirmModal(false);
-      toast.success("Da tao phieu nhap o trang thai DRAFT");
+      toast.success("Đã tạo phiếu nhập ở trạng thái nháp");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Tao phieu nhap that bai"));
+      toast.error(getApiErrorMessage(error, "Tạo phiếu nhập thất bại"));
     } finally {
       setIsSaving(false);
     }
@@ -358,9 +359,9 @@ export function GoodsReceiptPage() {
             <CheckCircle2 className="h-10 w-10" />
           </div>
           <div className="text-center">
-            <h2 className="mb-1 text-[28px] font-bold tracking-[-0.02em]">Da tao phieu nhap thanh cong</h2>
+            <h2 className="mb-1 text-[28px] font-bold tracking-[-0.02em]">Đã tạo phiếu nhập thành công</h2>
             <p className="text-[14px] text-slate-500">
-              Phieu {successReceiptNumber || "(chua co ma)"} dang o trang thai DRAFT va cho duyet.
+              Phiếu {successReceiptNumber || "(chưa có mã)"} đang ở trạng thái nháp và chờ duyệt.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -368,13 +369,13 @@ export function GoodsReceiptPage() {
               to={canManageReceiving ? "/orders" : "/my-warehouse-tasks"}
               className="rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-[13px] font-semibold text-white"
             >
-              {canManageReceiving ? "Ve danh sach phieu" : "Ve task cua toi"}
+              {canManageReceiving ? "Về danh sách phiếu" : "Về task của tôi"}
             </NavLink>
             <button
               onClick={() => window.location.reload()}
               className="rounded-[10px] border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-semibold text-slate-700"
             >
-              Tao phieu moi
+              Tạo phiếu mới
             </button>
           </div>
         </motion.div>
@@ -384,16 +385,16 @@ export function GoodsReceiptPage() {
 
   if (supplierDeliveryInvoiceId) {
     if (invoiceLoading) {
-      return <PageWrapper><div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Dang tai supplier invoice...</div></PageWrapper>;
+      return <PageWrapper><div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Đang tải hóa đơn nhà cung cấp...</div></PageWrapper>;
     }
 
     if (!invoice) {
       return (
         <PageWrapper>
           <NavLink to="/purchase-orders" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-blue-600">
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại
           </NavLink>
-          <div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Khong tim thay supplier invoice.</div>
+          <div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">Không tìm thấy hóa đơn nhà cung cấp.</div>
         </PageWrapper>
       );
     }
@@ -402,15 +403,15 @@ export function GoodsReceiptPage() {
       <PageWrapper className="space-y-5">
         <FadeItem>
           <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-blue-600">
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai Purchase Order
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại đơn đặt hàng
           </NavLink>
         </FadeItem>
 
         <FadeItem>
           <div className="flex flex-col gap-1">
-            <h1 className="tracking-[-0.02em]">Receive Supplier Delivery</h1>
+            <h1 className="tracking-[-0.02em]">Nhận hàng từ nhà cung cấp</h1>
             <p className="text-[13px] text-slate-500">
-              {invoice.po_number || "-"} - {invoice.supplier_name || "-"} - Invoice {invoice.invoice_number}
+              {invoice.po_number || "-"} - {invoice.supplier_name || "-"} - Hóa đơn {invoice.invoice_number}
             </p>
           </div>
         </FadeItem>
@@ -418,19 +419,19 @@ export function GoodsReceiptPage() {
         <FadeItem>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Warehouse</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Kho nhận</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.warehouse_code || "-"} - {invoice.warehouse_name || ""}</p>
             </div>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Invoice status</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Trạng thái hóa đơn</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.status}</p>
             </div>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Counted qty</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Số lượng thực nhận</p>
               <p className="mt-1 text-[18px] font-bold">{invoiceTotalQty}</p>
             </div>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Expected delivery</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Ngày giao dự kiến</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.expected_delivery_date ? new Date(invoice.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}</p>
             </div>
           </div>
@@ -441,7 +442,7 @@ export function GoodsReceiptPage() {
             <table className="w-full min-w-[1000px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  {["Title", "ISBN/SKU", "Ordered", "Previously received", "Remaining", "Invoiced", "Staff counted", "Shortage", "Status"].map((heading) => (
+                  {["Tên sách", "ISBN/SKU", "Đặt", "Đã nhận trước", "Còn lại", "Trên hóa đơn", "Thực đếm", "Thiếu", "Trạng thái"].map((heading) => (
                     <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-500">{heading}</th>
                   ))}
                 </tr>
@@ -493,7 +494,7 @@ export function GoodsReceiptPage() {
           <FadeItem>
             <div className="flex items-start gap-3 rounded-[12px] border border-amber-200 bg-amber-50 p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />
-              <p className="text-[13px] text-amber-800">Shortage will be reported to supplier for lines counted below remaining quantity.</p>
+              <p className="text-[13px] text-amber-800">Phần thiếu sẽ được báo về nhà cung cấp cho các dòng đếm dưới số lượng còn lại.</p>
             </div>
           </FadeItem>
         ) : null}
@@ -505,7 +506,7 @@ export function GoodsReceiptPage() {
               disabled={invoiceSaving || invoiceTotalQty <= 0}
               className="rounded-[10px] bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
             >
-              {invoiceSaving ? "Dang tao..." : "Create Goods Receipt Draft"}
+              {invoiceSaving ? "Đang tạo..." : "Tạo phiếu nhập nháp"}
             </button>
           </div>
         </FadeItem>
@@ -525,25 +526,25 @@ export function GoodsReceiptPage() {
             to="/orders"
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách phiếu
           </NavLink>
         </FadeItem>
 
         <FadeItem>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="tracking-[-0.02em]">Receive Supplier Delivery</h1>
-              <p className="mt-1 text-[13px] text-slate-500">Doi chieu PO, phieu giao hang/invoice va so luong nhan thuc te.</p>
+              <h1 className="tracking-[-0.02em]">Nhận hàng từ nhà cung cấp</h1>
+              <p className="mt-1 text-[13px] text-slate-500">Đối chiếu PO, hóa đơn/phiếu giao hàng và số lượng nhận thực tế.</p>
             </div>
             <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
               <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
-                <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+                <Truck className="h-3.5 w-3.5" /> Theo phiếu NCC
               </button>
               <button
                 onClick={() => setReceivingMode("manual")}
                 className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
               >
-                <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+                <ScanBarcode className="h-3.5 w-3.5" /> ISBN thủ công
               </button>
             </div>
           </div>
@@ -552,16 +553,16 @@ export function GoodsReceiptPage() {
         <FadeItem>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Ready documents</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Phiếu sẵn sàng</p>
               <p className="mt-1 text-[20px] font-bold">{receivableDeliveries.length}</p>
             </div>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Workflow</p>
-              <p className="mt-1 text-[13px] font-semibold">Draft first, post later</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Quy trình</p>
+              <p className="mt-1 text-[13px] font-semibold">Tạo nháp trước, duyệt sau</p>
             </div>
             <div className="rounded-[12px] border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Validation</p>
-              <p className="mt-1 text-[13px] font-semibold">Over-receive blocked</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Kiểm tra</p>
+              <p className="mt-1 text-[13px] font-semibold">Chặn nhận vượt số lượng</p>
             </div>
           </div>
         </FadeItem>
@@ -570,19 +571,19 @@ export function GoodsReceiptPage() {
           <div className="overflow-hidden rounded-[12px] border border-slate-200 bg-white">
             <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
               <ClipboardCheck className="h-4 w-4 text-slate-500" />
-              <h2 className="text-[14px] font-semibold">Supplier invoices / delivery notes</h2>
+              <h2 className="text-[14px] font-semibold">Hóa đơn / phiếu giao hàng từ NCC</h2>
             </div>
             {isLoading ? (
-              <div className="p-6 text-[13px] text-slate-500">Dang tai danh sach phieu giao hang...</div>
+              <div className="p-6 text-[13px] text-slate-500">Đang tải danh sách phiếu giao hàng...</div>
             ) : receivableDeliveries.length === 0 ? (
               <div className="p-6 text-[13px] text-slate-500">
-                Chua co supplier invoice/delivery note nao san sang nhap. Hay gui PO cho supplier va de supplier confirm tao invoice truoc.
+                Chưa có hóa đơn/phiếu giao hàng nào sẵn sàng nhập. Hãy gửi PO cho nhà cung cấp và để nhà cung cấp xác nhận, tạo hóa đơn trước.
               </div>
             ) : (
               <table className="w-full min-w-[920px]">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
-                    {["Invoice", "PO", "Supplier", "Warehouse", "Expected", "Lines", "Status", "Action"].map((heading) => (
+                    {["Hóa đơn", "PO", "NCC", "Kho", "Dự kiến", "Số dòng", "Trạng thái", "Thao tác"].map((heading) => (
                       <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{heading}</th>
                     ))}
                   </tr>
@@ -606,7 +607,7 @@ export function GoodsReceiptPage() {
                           onClick={() => navigate(`/supplier-deliveries/${delivery.id}`)}
                           className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
                         >
-                          <ClipboardCheck className="h-3.5 w-3.5" /> Doi chieu & nhap hang
+                          <ClipboardCheck className="h-3.5 w-3.5" /> Đối chiếu & nhập hàng
                         </button>
                       </td>
                     </tr>
@@ -628,14 +629,14 @@ export function GoodsReceiptPage() {
             to="/orders"
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai danh sach phieu
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách phiếu
           </NavLink>
         ) : (
           <NavLink
             to="/my-warehouse-tasks"
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lai task cua toi
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại task của tôi
           </NavLink>
         )}
       </FadeItem>
@@ -643,8 +644,8 @@ export function GoodsReceiptPage() {
       <FadeItem>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="tracking-[-0.02em]">Nhap kho theo ISBN13</h1>
-            <p className="mt-1 text-[13px] text-slate-500">Dung cho phieu nhap thu cong khong gan Purchase Order.</p>
+            <h1 className="tracking-[-0.02em]">Nhập kho theo ISBN13</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Dùng cho phiếu nhập thủ công không gắn với đơn đặt hàng.</p>
           </div>
           {canManageReceiving ? (
             <div className="inline-flex rounded-[10px] border border-slate-200 bg-white p-1">
@@ -652,10 +653,10 @@ export function GoodsReceiptPage() {
                 onClick={() => setReceivingMode("supplier")}
                 className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
               >
-                <Truck className="h-3.5 w-3.5" /> Supplier Delivery
+                <Truck className="h-3.5 w-3.5" /> Theo phiếu NCC
               </button>
               <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-slate-900 px-3 py-2 text-[12px] font-semibold text-white">
-                <ScanBarcode className="h-3.5 w-3.5" /> Manual ISBN
+                <ScanBarcode className="h-3.5 w-3.5" /> ISBN thủ công
               </button>
             </div>
           ) : null}
@@ -666,7 +667,7 @@ export function GoodsReceiptPage() {
         <FadeItem>
           {isLoading ? (
             <div className="rounded-[12px] border border-slate-200 bg-white p-5 text-[13px] text-slate-500">
-              Dang tai danh sach kho...
+              Đang tải danh sách kho...
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -689,7 +690,7 @@ export function GoodsReceiptPage() {
         <div className="space-y-5">
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <h3 className="mb-4 text-[14px] font-semibold">Quet ISBN13 hoac nhap thu cong</h3>
+              <h3 className="mb-4 text-[14px] font-semibold">Quét ISBN13 hoặc nhập thủ công</h3>
               <div className="mb-4 flex items-center gap-2">
                 <div className="relative flex-1">
                   <ScanBarcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
@@ -703,7 +704,7 @@ export function GoodsReceiptPage() {
                         void handleAddBarcode();
                       }
                     }}
-                    placeholder="Nhap ISBN13..."
+                    placeholder="Nhập ISBN13..."
                     className="w-full rounded-[12px] border-2 border-blue-300/30 bg-gradient-to-r from-blue-50/40 to-indigo-50/30 py-3 pl-10 pr-4 text-[13px] outline-none transition-all focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
                   />
                 </div>
@@ -711,27 +712,27 @@ export function GoodsReceiptPage() {
                   onClick={() => void handleAddBarcode()}
                   className="inline-flex items-center gap-2 rounded-[12px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-[13px] font-semibold text-white"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Them
+                  <Plus className="h-3.5 w-3.5" /> Thêm
                 </button>
                 <button
                   onClick={() => setShowScannerModal(true)}
                   className="rounded-[12px] border border-indigo-200 bg-indigo-50 px-4 py-3 text-[13px] font-semibold text-indigo-700"
                 >
-                  Quet camera
+                  Quét camera
                 </button>
               </div>
-              <p className="text-[11px] text-slate-500">Neu ISBN13 chua co, he thong se tao sach tam de bo sung sau.</p>
+              <p className="text-[11px] text-slate-500">Nếu ISBN13 chưa có, hệ thống sẽ tạo sách tạm để bổ sung metadata sau.</p>
             </div>
           </FadeItem>
 
           <FadeItem>
             <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="border-b border-slate-100 px-6 py-4">
-                <h3 className="text-[14px] font-semibold">Danh sach nhap ({items.length})</h3>
+                <h3 className="text-[14px] font-semibold">Danh sách nhập ({items.length})</h3>
               </div>
               <div className="max-h-96 overflow-y-auto">
                 {items.length === 0 ? (
-                  <p className="px-6 py-8 text-[13px] text-slate-400">Chua co dong sach nao.</p>
+                  <p className="px-6 py-8 text-[13px] text-slate-400">Chưa có dòng sách nào.</p>
                 ) : null}
 
                 {items.map((item) => (
@@ -741,7 +742,7 @@ export function GoodsReceiptPage() {
                         <p className="mb-0.5 font-mono text-[12px] text-slate-400">ISBN13: {item.isbn13}</p>
                         <p className="text-[13px] font-semibold">{item.title}</p>
                         {item.is_new_book ? (
-                          <p className="mt-1 text-[11px] text-amber-600">Sach tam (INCOMPLETE) - can bo sung metadata sau.</p>
+                          <p className="mt-1 text-[11px] text-amber-600">Sách tạm (chưa hoàn chỉnh) — cần bổ sung metadata sau.</p>
                         ) : null}
                       </div>
                       <button
@@ -754,7 +755,7 @@ export function GoodsReceiptPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-slate-500">So luong</label>
+                        <label className="mb-1 block text-[10px] font-semibold text-slate-500">Số lượng</label>
                         <input
                           value={item.qty}
                           onChange={(event) => updateItem(item.id, "qty", Number(event.target.value) || 0)}
@@ -764,16 +765,18 @@ export function GoodsReceiptPage() {
                         />
                       </div>
 
-                      <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-slate-500">Gia nhap</label>
-                        <input
-                          value={item.unit_cost}
-                          onChange={(event) => updateItem(item.id, "unit_cost", Number(event.target.value) || 0)}
-                          type="number"
-                          min={0}
-                          className="w-full rounded-[6px] border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"
-                        />
-                      </div>
+                      {showUnitCost ? (
+                        <div>
+                          <label className="mb-1 block text-[10px] font-semibold text-slate-500">Giá nhập</label>
+                          <input
+                            value={item.unit_cost}
+                            onChange={(event) => updateItem(item.id, "unit_cost", Number(event.target.value) || 0)}
+                            type="number"
+                            min={0}
+                            className="w-full rounded-[6px] border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -783,13 +786,13 @@ export function GoodsReceiptPage() {
 
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <label className="mb-1 block text-[12px] font-semibold text-slate-500">Ghi chu</label>
+              <label className="mb-1 block text-[12px] font-semibold text-slate-500">Ghi chú</label>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] outline-none transition-all focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
-                placeholder="Ghi chu them cho phieu nhap"
+                placeholder="Ghi chú thêm cho phiếu nhập"
               />
             </div>
           </FadeItem>
@@ -800,11 +803,11 @@ export function GoodsReceiptPage() {
                 onClick={() => setStep("warehouse")}
                 className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700"
               >
-                Quay lai
+                Quay lại
               </button>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-[11px] text-slate-400">Tong gia tri</p>
+                  <p className="text-[11px] text-slate-400">Tổng giá trị</p>
                   <p className="text-[16px] font-bold text-blue-700">{formatCurrency(totalValue)}</p>
                 </div>
                 <button
@@ -825,8 +828,8 @@ export function GoodsReceiptPage() {
             <div className="flex items-start gap-3 rounded-[12px] border border-amber-200/60 bg-amber-50 p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               <div>
-                <p className="text-[12px] font-semibold text-amber-800">Thong bao</p>
-                <p className="mt-0.5 text-[11px] text-amber-700">Vi tri kho se duoc phan bo tai buoc Putaway sau khi phieu duoc duyet.</p>
+                <p className="text-[12px] font-semibold text-amber-800">Thông báo</p>
+                <p className="mt-0.5 text-[11px] text-amber-700">Vị trí kho sẽ được phân bổ tại bước Cất hàng sau khi phiếu được duyệt.</p>
               </div>
             </div>
           </FadeItem>
@@ -836,11 +839,11 @@ export function GoodsReceiptPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-gradient-to-r from-blue-50/30 to-transparent">
-                    {["Ten sach", "Vi tri", "So luong", "Gia nhap", "Thanh tien"].map((header) => (
-                      <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">
-                        {header}
-                      </th>
-                    ))}
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Tên sách</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Vị trí</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Số lượng</th>
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Giá nhập</th> : null}
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Thành tiền</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -849,10 +852,10 @@ export function GoodsReceiptPage() {
                     return (
                       <tr key={item.id} className="border-b border-slate-50 last:border-0">
                         <td className="px-4 py-3 text-[12px] font-semibold">{item.title}</td>
-                        <td className="px-4 py-3 font-mono text-[12px] text-slate-500">Phan bo sau</td>
+                        <td className="px-4 py-3 font-mono text-[12px] text-slate-500">Phân bổ sau</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{item.qty}</td>
-                        <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{formatCurrency(item.unit_cost)}</td>
-                        <td className="px-4 py-3 font-mono text-[12px] font-semibold">{formatCurrency(subtotal)}</td>
+                        {showUnitCost ? <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{formatCurrency(item.unit_cost)}</td> : null}
+                        {showUnitCost ? <td className="px-4 py-3 font-mono text-[12px] font-semibold">{formatCurrency(subtotal)}</td> : null}
                       </tr>
                     );
                   })}
@@ -867,7 +870,7 @@ export function GoodsReceiptPage() {
                 onClick={() => setStep("scan")}
                 className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700"
               >
-                Quay lai
+                Quay lại
               </button>
               <button
                 onClick={() => setShowConfirmModal(true)}
@@ -878,7 +881,7 @@ export function GoodsReceiptPage() {
                     : "cursor-not-allowed bg-slate-300"
                 }`}
               >
-                {isSaving ? "Dang tao..." : "Tao phieu nhap DRAFT"}
+                {isSaving ? "Đang tạo..." : "Tạo phiếu nhập nháp"}
               </button>
             </div>
           </FadeItem>
@@ -886,7 +889,10 @@ export function GoodsReceiptPage() {
       ) : null}
 
       <FadeItem>
-        <div className="text-[12px] text-slate-500">Tong SL: {totalQty} - Tong gia tri: {formatCurrency(totalValue)}</div>
+        <div className="text-[12px] text-slate-500">
+          Tổng SL: {totalQty}
+          {showUnitCost ? <> — Tổng giá trị: {formatCurrency(totalValue)}</> : null}
+        </div>
       </FadeItem>
 
       {showConfirmModal ? (
@@ -897,10 +903,14 @@ export function GoodsReceiptPage() {
             exit={{ scale: 0.95, opacity: 0 }}
             className="w-full max-w-sm rounded-[16px] bg-white p-6 shadow-2xl"
           >
-            <h3 className="mb-2 text-[16px] font-semibold">Xac nhan tao phieu nhap</h3>
+            <h3 className="mb-2 text-[16px] font-semibold">Xác nhận tạo phiếu nhập</h3>
             <p className="mb-6 text-[13px] text-slate-600">
-              Tao phieu nhap DRAFT voi <span className="font-semibold">{items.length} dong</span> va tong gia tri{" "}
-              <span className="font-semibold">{formatCurrency(totalValue)}</span>?
+              Tạo phiếu nhập nháp với <span className="font-semibold">{items.length} dòng</span>
+              {showUnitCost ? (
+                <>
+                  {" "}và tổng giá trị <span className="font-semibold">{formatCurrency(totalValue)}</span>
+                </>
+              ) : null}?
             </p>
             <div className="flex items-center gap-3">
               <button
@@ -915,7 +925,7 @@ export function GoodsReceiptPage() {
                 className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isSaving ? "Dang tao" : "Xac nhan"}
+                {isSaving ? "Đang tạo" : "Xác nhận"}
               </button>
             </div>
           </motion.div>
@@ -930,7 +940,7 @@ export function GoodsReceiptPage() {
             exit={{ scale: 0.95, opacity: 0 }}
             className="w-full max-w-md rounded-[16px] bg-white p-6 shadow-2xl"
           >
-            <h3 className="mb-2 text-[16px] font-semibold">Tao sach tam cho ISBN13 moi</h3>
+            <h3 className="mb-2 text-[16px] font-semibold">Tạo sách tạm cho ISBN13 mới</h3>
             <p className="mb-4 text-[13px] text-slate-600">
               ISBN13 chua ton tai trong he thong. Vui long nhap ten sach de tao ban ghi INCOMPLETE.
             </p>
@@ -945,11 +955,11 @@ export function GoodsReceiptPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[12px] font-semibold text-slate-500">Ten sach</label>
+                <label className="mb-1 block text-[12px] font-semibold text-slate-500">Tên sách</label>
                 <input
                   value={pendingTitle}
                   onChange={(event) => setPendingTitle(event.target.value)}
-                  placeholder="Nhap ten sach"
+                  placeholder="Nhập tên sách"
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -978,7 +988,7 @@ export function GoodsReceiptPage() {
                 className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
               >
                 {isCreatingNewBook ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isCreatingNewBook ? "Dang tao" : "Tao sach tam"}
+                {isCreatingNewBook ? "Đang tạo" : "Tạo sách tạm"}
               </button>
             </div>
           </motion.div>
@@ -991,7 +1001,7 @@ export function GoodsReceiptPage() {
         onDetected={(code) => {
           void handleAddBarcode(code);
         }}
-        title="Quet ISBN13 de nhap kho"
+        title="Quét ISBN13 để nhập kho"
       />
     </PageWrapper>
   );

@@ -51,7 +51,7 @@ export function CustomerDashboardPage() {
         setRecentReservations(Array.isArray(reservationsResponse?.data) ? reservationsResponse.data.slice(0, 3) : []);
         setRecentNotifications(Array.isArray(notificationsResponse?.data) ? notificationsResponse.data.slice(0, 4) : []);
       } catch (err) {
-        setError(getApiErrorMessage(err, 'Failed to load customer dashboard'));
+        setError(getApiErrorMessage(err, 'Không tải được bảng điều khiển'));
       } finally {
         setIsLoading(false);
       }
@@ -80,11 +80,11 @@ export function CustomerDashboardPage() {
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
         <EmptyState
           variant="error"
-          title="Failed to load dashboard"
+          title="Không tải được bảng điều khiển"
           description={error}
           action={
             <NavLink to="/customer" className="text-primary font-medium hover:underline">
-              Try again
+              Thử lại
             </NavLink>
           }
         />
@@ -97,8 +97,8 @@ export function CustomerDashboardPage() {
       <div className="p-6 lg:p-8 max-w-7xl mx-auto">
         <EmptyState
           variant="no-data"
-          title="No membership data available"
-          description="Please contact support to set up your account."
+          title="Không có dữ liệu hội viên"
+          description="Vui lòng liên hệ hỗ trợ để thiết lập tài khoản."
         />
       </div>
     );
@@ -121,10 +121,10 @@ export function CustomerDashboardPage() {
         <div className="relative flex items-center justify-between gap-4">
           <div className="text-white">
             <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>
-              Welcome back, {membership.customer_name || 'Reader'}
+              Chào mừng trở lại, {membership.customer_name || 'Bạn đọc'}
             </h1>
             <p className="text-white/65 text-[13px] mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Here is your library overview
+              {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Tổng quan thư viện của bạn
             </p>
           </div>
           <div className="hidden sm:flex items-center gap-2.5">
@@ -133,7 +133,7 @@ export function CustomerDashboardPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-indigo-700 text-[13px] shadow-lg hover:shadow-xl transition-all"
               style={{ fontWeight: 600 }}
             >
-              Browse Books <ChevronRight className="w-4 h-4" />
+              Xem sách <ChevronRight className="w-4 h-4" />
             </NavLink>
           </div>
         </div>
@@ -143,8 +143,8 @@ export function CustomerDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.3 }}>
           <StatCard
-            label="Membership"
-            value={membership.plan_name || 'Standard'}
+            label="Hội viên"
+            value={membership.plan_name || 'Tiêu chuẩn'}
             hint={<span className="text-indigo-600">{membership.plan_code}</span>}
             icon={ShieldCheck}
             variant="primary"
@@ -152,27 +152,27 @@ export function CustomerDashboardPage() {
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }}>
           <StatCard
-            label="Active Loans"
+            label="Đang mượn"
             value={membership.active_loan_count}
-            hint={`${membership.remaining_loan_slots} slots remaining`}
+            hint={`${membership.remaining_loan_slots} suất còn lại`}
             icon={BookOpen}
             variant="info"
           />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3 }}>
           <StatCard
-            label="Outstanding Fines"
+            label="Tiền phạt"
             value={formatCurrencyVnd(fineBalance)}
-            hint={fineBalance > 500000 ? 'Please pay promptly' : 'Good standing'}
+            hint={fineBalance > 500000 ? 'Vui lòng thanh toán sớm' : 'Không có nợ phạt'}
             icon={ReceiptText}
             variant={fineBalance > 500000 ? 'danger' : fineBalance > 0 ? 'warning' : 'success'}
           />
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.3 }}>
           <StatCard
-            label="Wallet Balance"
+            label="Số dư ví"
             value={formatCurrencyVnd(walletBalance)}
-            hint={walletBalance < 100000 ? 'Low balance — top up soon' : 'Ready for borrows'}
+            hint={walletBalance < 100000 ? 'Số dư thấp — nạp tiền sớm' : 'Sẵn sàng mượn sách'}
             icon={Wallet}
             variant={walletBalance < 100000 ? 'warning' : 'success'}
           />
@@ -187,10 +187,10 @@ export function CustomerDashboardPage() {
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { to: '/customer/books', title: 'Browse Books', desc: 'Find titles to reserve', icon: BookOpen, color: 'from-indigo-500 to-blue-500' },
-            { to: '/customer/loans', title: 'My Loans', desc: 'Track due dates', icon: HandCoins, color: 'from-emerald-500 to-teal-500' },
-            { to: '/customer/reservations', title: 'Reservations', desc: 'Pickup ready items', icon: CalendarClock, color: 'from-amber-500 to-orange-500' },
-            { to: '/customer/notifications', title: 'Notifications', desc: 'View updates', icon: Bell, color: 'from-cyan-500 to-sky-500' },
+            { to: '/customer/books', title: 'Xem sách', desc: 'Tìm đầu sách để đặt trước', icon: BookOpen, color: 'from-indigo-500 to-blue-500' },
+            { to: '/customer/loans', title: 'Phiếu mượn', desc: 'Theo dõi hạn trả', icon: HandCoins, color: 'from-emerald-500 to-teal-500' },
+            { to: '/customer/reservations', title: 'Đặt trước', desc: 'Nhận sách sẵn sàng', icon: CalendarClock, color: 'from-amber-500 to-orange-500' },
+            { to: '/customer/notifications', title: 'Thông báo', desc: 'Xem cập nhật', icon: Bell, color: 'from-cyan-500 to-sky-500' },
           ].map((action) => (
             <motion.div key={action.to} whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
               <NavLink
@@ -216,22 +216,22 @@ export function CustomerDashboardPage() {
         {/* Recent Loans */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.3 }} className="xl:col-span-2">
           <SectionCard
-            title="Recent Loans"
-            subtitle="Your latest active or pending loan records"
+            title="Mượn gần đây"
+            subtitle="Phiếu mượn mới nhất"
             actions={
               <NavLink to="/customer/loans" className="text-[12px] text-primary font-medium hover:underline">
-                View all
+                Xem tất cả
               </NavLink>
             }
           >
             {recentLoans.length === 0 ? (
               <EmptyState
                 variant="inbox"
-                title="No loans yet"
-                description="Start by browsing our catalog and reserving your first book."
+                title="Chưa có phiếu mượn"
+                description="Khám phá danh mục và đặt trước cuốn sách đầu tiên."
                 action={
                   <NavLink to="/customer/books" className="text-primary font-medium hover:underline">
-                    Browse catalog
+                    Xem danh mục
                   </NavLink>
                 }
               />
@@ -247,13 +247,13 @@ export function CustomerDashboardPage() {
 
         {/* Membership Summary */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.3 }}>
-          <SectionCard title="Membership Policy" subtitle="Your current borrowing limits">
+          <SectionCard title="Chính sách hội viên" subtitle="Giới hạn mượn hiện tại">
             <div className="space-y-3">
               {[
-                { label: 'Max active loans', value: `${membership.limits.max_active_loans} items` },
-                { label: 'Max loan period', value: `${membership.limits.max_loan_days} days` },
-                { label: 'Fine per overdue day', value: `${membership.limits.fine_per_day}` },
-                { label: 'Max reservations', value: `${membership.limits.max_active_reservations || '—'} items` },
+                { label: 'Tối đa đang mượn', value: `${membership.limits.max_active_loans} cuốn` },
+                { label: 'Tối đa số ngày', value: `${membership.limits.max_loan_days} ngày` },
+                { label: 'Phạt/ngày quá hạn', value: `${membership.limits.fine_per_day}` },
+                { label: 'Tối đa đặt trước', value: `${membership.limits.max_active_reservations || '—'} cuốn` },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
                   <p className="text-[12px] text-muted-foreground">{item.label}</p>
@@ -270,19 +270,19 @@ export function CustomerDashboardPage() {
         {/* Recent Reservations */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.3 }}>
           <SectionCard
-            title="Recent Reservations"
-            subtitle="Pending and ready-to-pickup items"
+            title="Đặt trước gần đây"
+            subtitle="Chờ xác nhận và sẵn lấy sách"
             actions={
               <NavLink to="/customer/reservations" className="text-[12px] text-primary font-medium hover:underline">
-                View all
+                Xem tất cả
               </NavLink>
             }
           >
             {recentReservations.length === 0 ? (
               <EmptyState
                 variant="inbox"
-                title="No reservations yet"
-                description="Browse the catalog and reserve books that interest you."
+                title="Chưa có đặt trước"
+                description="Khám phá danh mục và đặt trước sách bạn yêu thích."
               />
             ) : (
               <div className="space-y-2.5">
@@ -297,16 +297,16 @@ export function CustomerDashboardPage() {
         {/* Activity */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.3 }}>
           <SectionCard
-            title="Recent Activity"
-            subtitle="Latest account updates and notifications"
+            title="Hoạt động gần đây"
+            subtitle="Cập nhật và thông báo mới nhất"
             actions={
               <NavLink to="/customer/notifications" className="text-[12px] text-primary font-medium hover:underline">
-                View all
+                Xem tất cả
               </NavLink>
             }
           >
             {recentNotifications.length === 0 ? (
-              <EmptyState variant="inbox" title="No recent activity" description="System updates will appear here." />
+              <EmptyState variant="inbox" title="Chưa có hoạt động" description="Cập nhật hệ thống sẽ hiển thị ở đây." />
             ) : (
               <div className="space-y-2.5">
                 {recentNotifications.map((row) => (
@@ -334,13 +334,13 @@ export function CustomerDashboardPage() {
         >
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
           <div>
-            <p className="text-[13px] font-semibold text-amber-800">Outstanding fine balance</p>
+            <p className="text-[13px] font-semibold text-amber-800">Còn tiền phạt chưa trả</p>
             <p className="text-[12px] text-amber-700 mt-0.5">
-              You have {formatCurrencyVnd(fineBalance)} in outstanding fines. Pay early to avoid borrow restrictions.
+              Bạn còn {formatCurrencyVnd(fineBalance)} tiền phạt. Trả sớm để tránh bị hạn chế mượn sách.
             </p>
           </div>
           <NavLink to="/customer/fines" className="ml-auto shrink-0 text-[12px] text-primary font-medium hover:underline">
-            Pay fines
+            Trả tiền phạt
           </NavLink>
         </motion.div>
       )}

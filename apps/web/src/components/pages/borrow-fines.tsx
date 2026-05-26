@@ -8,6 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { borrowService, type Fine } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
+const STATUS_LABELS: Record<string, string> = {
+  ALL: 'Tất cả',
+  UNPAID: 'Chưa trả',
+  PARTIALLY_PAID: 'Trả một phần',
+  PAID: 'Đã trả',
+  WAIVED: 'Đã miễn',
+};
+
 function getBadgeVariant(status: string) {
   if (status === 'PAID') return 'default';
   if (status === 'WAIVED') return 'outline';
@@ -27,7 +35,7 @@ export function BorrowFinesPage() {
       const response = await borrowService.getFines();
       setFines(response.data ?? []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load fines'));
+      toast.error(getApiErrorMessage(error, 'Không tải được danh sách tiền phạt'));
     } finally {
       setLoading(false);
     }
@@ -55,26 +63,26 @@ export function BorrowFinesPage() {
     try {
       const detail = await borrowService.getFineById(id);
       const remaining = Number(detail.data.summary?.remaining_balance || 0).toLocaleString('vi-VN');
-      toast.message(`Fine ${id}`, {
-        description: `Type: ${detail.data.fine_type} | Remaining: ${remaining} VND | Status: ${detail.data.status}`,
+      toast.message(`Phạt ${id}`, {
+        description: `Loại: ${detail.data.fine_type} | Còn lại: ${remaining} VND | Trạng thái: ${detail.data.status}`,
       });
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load fine detail'));
+      toast.error(getApiErrorMessage(error, 'Không tải được chi tiết tiền phạt'));
     }
   };
 
   const recordPayment = async (fine: Fine) => {
     const remaining = Number(fine.summary?.remaining_balance || 0);
     if (remaining <= 0) {
-      toast.error('No remaining balance to pay');
+      toast.error('Không còn số dư để thanh toán');
       return;
     }
 
-    const raw = window.prompt(`Enter payment amount (remaining ${remaining.toLocaleString('vi-VN')} VND):`, String(remaining));
+    const raw = window.prompt(`Nhập số tiền thanh toán (còn lại ${remaining.toLocaleString('vi-VN')} VND):`, String(remaining));
     if (!raw) return;
     const amount = Number(raw);
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Payment amount must be a positive number');
+      toast.error('Số tiền thanh toán phải là số dương');
       return;
     }
 
@@ -83,42 +91,41 @@ export function BorrowFinesPage() {
         amount,
         payment_method: 'CASH',
       });
-      toast.success('Fine payment recorded');
+      toast.success('Đã ghi nhận thanh toán tiền phạt');
       await loadFines();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to record fine payment'));
+      toast.error(getApiErrorMessage(error, 'Ghi nhận thanh toán thất bại'));
     }
   };
 
   const waiveFine = async (fine: Fine) => {
     const remaining = Number(fine.summary?.remaining_balance || 0);
     if (remaining <= 0) {
-      toast.error('No remaining balance to waive');
+      toast.error('Không còn số dư để miễn giảm');
       return;
     }
 
-    const raw = window.prompt(`Enter waive/reduce amount (remaining ${remaining.toLocaleString('vi-VN')} VND):`, String(remaining));
+    const raw = window.prompt(`Nhập số tiền miễn giảm (còn lại ${remaining.toLocaleString('vi-VN')} VND):`, String(remaining));
     if (!raw) return;
     const amount = Number(raw);
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Waive amount must be a positive number');
+      toast.error('Số tiền miễn giảm phải là số dương');
       return;
     }
 
-    const note = window.prompt('Waive reason (optional):', '') || undefined;
+    const note = window.prompt('Lý do miễn giảm (không bắt buộc):', '') || undefined;
 
     try {
       await borrowService.waiveFine(fine.id, { amount, note });
-      toast.success('Fine waived/reduced');
+      toast.success('Đã miễn giảm tiền phạt');
       await loadFines();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to waive fine'));
+      toast.error(getApiErrorMessage(error, 'Miễn giảm tiền phạt thất bại'));
     }
   };
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Hero Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -132,8 +139,8 @@ export function BorrowFinesPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Borrow Fines</h1>
-            <p className="text-sm text-muted-foreground">{fines.length} fines</p>
+            <h1 className="text-xl font-semibold tracking-tight">Tiền phạt mượn trả</h1>
+            <p className="text-sm text-muted-foreground">{fines.length} khoản phạt</p>
           </div>
         </div>
         <Button
@@ -143,11 +150,10 @@ export function BorrowFinesPage() {
           className="gap-2"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          Làm mới
         </Button>
       </motion.div>
 
-      {/* Filter Bar */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -156,7 +162,7 @@ export function BorrowFinesPage() {
         <FilterBar
           searchValue={query}
           onSearchChange={setQuery}
-          searchPlaceholder="Search fine..."
+          searchPlaceholder="Tìm tiền phạt..."
           filters={
             <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
               {(['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'WAIVED'] as const).map((status) => (
@@ -169,7 +175,7 @@ export function BorrowFinesPage() {
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >
-                  {status}
+                  {STATUS_LABELS[status] ?? status}
                 </button>
               ))}
             </div>
@@ -177,7 +183,6 @@ export function BorrowFinesPage() {
         />
       </motion.div>
 
-      {/* Fines Table */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -188,7 +193,7 @@ export function BorrowFinesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Fine', 'Customer', 'Type', 'Amount', 'Remaining', 'Status', 'Action'].map((header) => (
+                  {['Mã phạt', 'Khách hàng', 'Loại phạt', 'Số tiền', 'Còn lại', 'Trạng thái', 'Thao tác'].map((header) => (
                     <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
                     </th>
@@ -201,7 +206,7 @@ export function BorrowFinesPage() {
                     <td colSpan={7} className="text-center py-14">
                       <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Loading fines...</span>
+                        <span className="text-sm">Đang tải tiền phạt...</span>
                       </div>
                     </td>
                   </tr>
@@ -210,8 +215,8 @@ export function BorrowFinesPage() {
                     <td colSpan={7}>
                       <EmptyState
                         variant="no-results"
-                        title="No fines found"
-                        description="Try adjusting your search or filters."
+                        title="Không tìm thấy tiền phạt"
+                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
                         className="py-12"
                       />
                     </td>
@@ -240,7 +245,7 @@ export function BorrowFinesPage() {
                             variant="outline"
                             onClick={() => void viewDetail(fine.id)}
                           >
-                            Detail
+                            Chi tiết
                           </Button>
                           <Button
                             size="sm"
@@ -249,7 +254,7 @@ export function BorrowFinesPage() {
                             onClick={() => void recordPayment(fine)}
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >
-                            Pay
+                            Thanh toán
                           </Button>
                           <Button
                             size="sm"
@@ -258,7 +263,7 @@ export function BorrowFinesPage() {
                             onClick={() => void waiveFine(fine)}
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >
-                            Waive/Reduce
+                            Miễn giảm
                           </Button>
                         </div>
                       </td>

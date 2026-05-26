@@ -80,7 +80,7 @@ export function UsersPage() {
       setUsers((usersResponse?.data || []) as UserRow[]);
       setRoles((rolesResponse?.data || []) as RoleItem[]);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach user"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách người dùng"));
     } finally {
       setLoading(false);
     }
@@ -113,37 +113,37 @@ export function UsersPage() {
     const email = form.email.trim().toLowerCase();
 
     if (!isEdit && !form.username.trim()) {
-      toast.error("Username la bat buoc");
+      toast.error("Tên đăng nhập là bắt buộc");
       return false;
     }
 
     if (!form.full_name.trim()) {
-      toast.error("Ho ten la bat buoc");
+      toast.error("Họ tên là bắt buộc");
       return false;
     }
 
     if (!email) {
-      toast.error("Email la bat buoc");
+      toast.error("Email là bắt buộc");
       return false;
     }
 
     if (!email.includes("@") || !email.split("@")[1]?.includes(".")) {
-      toast.error("Email khong hop le");
+      toast.error("Email không hợp lệ");
       return false;
     }
 
     if (!isEdit && !form.password.trim()) {
-      toast.error("Mat khau la bat buoc");
+      toast.error("Mật khẩu là bắt buộc");
       return false;
     }
 
     if (!isEdit && form.password.length < 6) {
-      toast.error("Mat khau phai co it nhat 6 ky tu");
+      toast.error("Mật khẩu phải có ít nhất 6 ký tự");
       return false;
     }
 
     if (form.role_ids.length === 0) {
-      toast.error("Chon it nhat mot vai tro cho user");
+      toast.error("Chọn ít nhất một vai trò cho người dùng");
       return false;
     }
 
@@ -177,11 +177,11 @@ export function UsersPage() {
         role_ids: form.role_ids,
       });
 
-      toast.success("Da tao user moi");
+      toast.success("Đã tạo người dùng mới");
       closeUserModal();
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Tao user that bai"));
+      toast.error(getApiErrorMessage(error, "Tạo người dùng thất bại"));
     } finally {
       setCreating(false);
     }
@@ -214,11 +214,11 @@ export function UsersPage() {
         status: form.status,
         role_ids: form.role_ids,
       });
-      toast.success("Da cap nhat user");
+      toast.success("Đã cập nhật người dùng");
       closeUserModal();
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Cap nhat user that bai"));
+      toast.error(getApiErrorMessage(error, "Cập nhật người dùng thất bại"));
     } finally { setCreating(false); }
   };
 
@@ -226,24 +226,24 @@ export function UsersPage() {
     const nextStatus = user.status === "LOCKED" ? "ACTIVE" : "LOCKED";
     try {
       await userService.update(user.id, { status: nextStatus });
-      toast.success(nextStatus === "LOCKED" ? "Da khoa user" : "Da mo khoa user");
+      toast.success(nextStatus === "LOCKED" ? "Đã khóa người dùng" : "Đã mở khóa người dùng");
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Cap nhat trang thai that bai"));
+      toast.error(getApiErrorMessage(error, "Cập nhật trạng thái thất bại"));
     }
   };
 
   const handleDeleteUser = async (user: UserRow) => {
-    const accepted = window.confirm(`Xoa user ${user.username}?`);
+    const accepted = window.confirm(`Xóa người dùng ${user.username}?`);
     if (!accepted) return;
 
     try {
       setDeletingUserId(user.id);
       await userService.delete(user.id);
-      toast.success("Da xoa user");
+      toast.success("Đã xóa người dùng");
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xoa user that bai"));
+      toast.error(getApiErrorMessage(error, "Xóa người dùng thất bại"));
     } finally {
       setDeletingUserId(null);
     }
@@ -258,12 +258,12 @@ export function UsersPage() {
               <Users className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Users</h1>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">Quan ly tai khoan nguoi dung trong he thong</p>
+              <h1 className="text-xl font-semibold tracking-tight">Người dùng</h1>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">Quản lý tài khoản người dùng trong hệ thống</p>
             </div>
           </div>
           <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }}>
-            <Plus className="h-3.5 w-3.5" /> Tao user moi
+            <Plus className="h-3.5 w-3.5" /> Tạo người dùng mới
           </Button>
         </div>
       </FadeItem>
@@ -272,7 +272,7 @@ export function UsersPage() {
         <FilterBar
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Tim theo username, ho ten, email..."
+          searchPlaceholder="Tìm theo tên đăng nhập, họ tên, email..."
           showSearchClear
         />
       </FadeItem>
@@ -284,13 +284,13 @@ export function UsersPage() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {[
-                  "Username",
-                  "Ho ten",
+                  "Tên đăng nhập",
+                  "Họ tên",
                   "Email",
-                  "Vai tro",
-                  "Trang thai",
-                  "Ngay tao",
-                  "Hanh dong",
+                  "Vai trò",
+                  "Trạng thái",
+                  "Ngày tạo",
+                  "Hành động",
                 ].map((header) => (
                   <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {header}
@@ -301,11 +301,11 @@ export function UsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Dang tai du lieu...</td>
+                  <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải dữ liệu...</td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7}><EmptyState variant="no-data" title="Khong co user nao" description="Tao user moi de bat dau" className="py-12" /></td>
+                  <td colSpan={7}><EmptyState variant="no-data" title="Không có người dùng nào" description="Tạo người dùng mới để bắt đầu" className="py-12" /></td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
@@ -335,14 +335,14 @@ export function UsersPage() {
                           className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-indigo-700 hover:bg-indigo-100"
                         >
                           <Edit className="h-3.5 w-3.5" />
-                          Sua
+                          Sửa
                         </button>
                         <button
                           onClick={() => void handleToggleLock(user)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
                         >
                           {user.status === "LOCKED" ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                          {user.status === "LOCKED" ? "Mo khoa" : "Khoa"}
+                          {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
                         </button>
                         <button
                           onClick={() => void handleDeleteUser(user)}
@@ -350,7 +350,7 @@ export function UsersPage() {
                           className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 disabled:opacity-60"
                         >
                           <X className="h-3.5 w-3.5" />
-                          {deletingUserId === user.id ? "Dang xoa..." : "Xoa"}
+                          {deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
                         </button>
                       </div>
                     </td>
@@ -367,7 +367,7 @@ export function UsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[16px] font-semibold">{editingUser ? "Sua user" : "Tao user moi"}</h3>
+              <h3 className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
               <button onClick={closeUserModal} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -375,17 +375,17 @@ export function UsersPage() {
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Username *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Ho ten *" className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
+                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
-                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="So dien thoai" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mat khau *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
                 <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
@@ -395,15 +395,15 @@ export function UsersPage() {
               </div>
 
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gan vai tro *</p>
+                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gán vai trò *</p>
                 <div className="grid grid-cols-2 gap-2">
                   {loading ? (
                     <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
-                      Dang tai vai tro...
+                      Đang tải vai trò...
                     </div>
                   ) : roles.length === 0 ? (
                     <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
-                      No roles available
+                      Chưa có vai trò nào
                     </div>
                   ) : (
                     roles.map((role) => (
@@ -419,10 +419,10 @@ export function UsersPage() {
 
             <div className="mt-5 flex items-center gap-3">
               <Button variant="outline" className="flex-1" onClick={closeUserModal}>
-                Huy
+                Hủy
               </Button>
               <Button className="flex-1" onClick={() => void (editingUser ? handleEditUser() : handleCreateUser())} disabled={creating}>
-                {creating ? "Dang xu ly..." : editingUser ? "Cap nhat" : "Tao user"}
+                {creating ? "Đang xử lý..." : editingUser ? "Cập nhật" : "Tạo người dùng"}
               </Button>
             </div>
           </motion.div>

@@ -40,16 +40,16 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.subject || item.template_code || 'Notification'}</div>
+            <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.subject || item.template_code || 'Thông báo'}</div>
             <div className="flex items-center gap-1.5">
               {unread && (
                 <button onClick={() => void handleMarkRead()} disabled={marking}
                   className="inline-flex items-center gap-1 rounded-[8px] border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-50">
                   <Check className="h-3 w-3" />
-                  {marking ? '...' : 'Mark read'}
+                  {marking ? '...' : 'Đánh dấu đã đọc'}
                 </button>
               )}
-              {unread ? <span className="rounded-[8px] bg-indigo-100 px-2 py-0.5 text-[10px] uppercase text-indigo-700">Unread</span> : null}
+              {unread ? <span className="rounded-[8px] bg-indigo-100 px-2 py-0.5 text-[10px] uppercase text-indigo-700">Chưa đọc</span> : null}
             </div>
           </div>
           <div className="mt-1.5 text-[13px] text-slate-600">{item.body}</div>

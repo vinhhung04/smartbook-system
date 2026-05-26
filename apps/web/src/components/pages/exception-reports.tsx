@@ -55,7 +55,7 @@ export function ExceptionReportsPage() {
       const res = await exceptionReportService.getAll(status && status !== "ALL" ? { status } : {});
       setReports(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Khong tai duoc danh sach bao cao ngoai le"));
+      toast.error(getApiErrorMessage(err, "Không tải được danh sách báo cáo sự cố"));
     } finally {
       setLoading(false);
     }
@@ -68,7 +68,7 @@ export function ExceptionReportsPage() {
     setResolving(true);
     try {
       await exceptionReportService.resolve(resolveState.id, resolveState.notes || undefined);
-      toast.success("Da xu ly bao cao ngoai le");
+      toast.success("Đã xử lý báo cáo sự cố");
       setResolveState(null);
       void load(statusFilter);
     } catch (err) {

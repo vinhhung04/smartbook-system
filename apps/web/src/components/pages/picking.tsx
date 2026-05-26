@@ -15,6 +15,7 @@ import {
   type PickingVariantLookupMatch,
 } from "@/services/picking";
 import { userService, type WarehouseStaffOption } from "@/services/user";
+import { canManageReceiving } from "@/lib/rbac";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -78,8 +79,7 @@ export function PickingPage() {
   const [activeScanTarget, setActiveScanTarget] = useState<PickingScanTarget | null>(null);
 
   const currentUser = authService.getCurrentUser();
-  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageAssignment = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
+  const canManageAssignment = canManageReceiving(currentUser);
   const currentUserId = String((currentUser as { id?: string } | null)?.id || "");
   const currentUserLabel = String((currentUser as { full_name?: string; username?: string; email?: string } | null)?.full_name
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.username
@@ -128,10 +128,10 @@ export function PickingPage() {
   );
 
   const scannerTitle = useMemo(() => {
-    if (activeScanTarget === "presence") return "Quet vi tri hien tai";
-    if (activeScanTarget === "location") return "Quet location can den";
-    if (activeScanTarget === "product") return "Quet barcode san pham";
-    return "Quet Barcode";
+    if (activeScanTarget === "presence") return "Quét vị trí hiện tại";
+    if (activeScanTarget === "location") return "Quét vị trí cần đến";
+    if (activeScanTarget === "product") return "Quét mã vạch sản phẩm";
+    return "Quét mã vạch";
   }, [activeScanTarget]);
 
   const loadTasks = async (warehouseId?: string) => {
@@ -191,7 +191,7 @@ export function PickingPage() {
         setSelectedWarehouseId(preferredWarehouse);
         await loadTasks(canManageAssignment ? (preferredWarehouse || undefined) : undefined);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach don picking"));
+        toast.error(getApiErrorMessage(error, "Không tải được danh sách đơn lấy hàng"));
       } finally {
         setLoading(false);
       }
@@ -211,7 +211,7 @@ export function PickingPage() {
     }
 
     void loadTasks(selectedWarehouseId).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach don theo warehouse"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách đơn theo kho"));
     });
   }, [canManageAssignment, selectedWarehouseId]);
 
@@ -220,7 +220,7 @@ export function PickingPage() {
     const pickerUserId = assigningPickerIdByTask[key];
 
     if (!pickerUserId) {
-      toast.error("Chon nhan vien kho truoc khi giao task");
+      toast.error("Chọn nhân viên kho trước khi giao task");
       return;
     }
 
@@ -228,7 +228,7 @@ export function PickingPage() {
       setClaimingTaskKey(key);
       await pickingService.claimTask(task.task_type, task.task_id, pickerUserId);
       await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
-      toast.success(`Da giao task ${task.order_number}`);
+      toast.success(`Đã giao task ${task.order_number}`);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Giao task that bai"));
     } finally {
@@ -240,7 +240,7 @@ export function PickingPage() {
     try {
       await loadDetail(task.task_type, task.task_id);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong mo duoc chi tiet don pick"));
+      toast.error(getApiErrorMessage(error, "Không mở được chi tiết đơn lấy hàng"));
     }
   };
 
@@ -273,9 +273,9 @@ export function PickingPage() {
         currentLocationInput: confirmedLocation,
       });
 
-      toast.success(`Xac nhan hien dien tai ${res.data.location_code}`);
+      toast.success(`Đã xác nhận hiện diện tại ${res.data.location_code}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xac nhan hien dien that bai"));
+      toast.error(getApiErrorMessage(error, "Xác nhận hiện diện thất bại"));
     } finally {
       setConfirmingPresence(false);
     }
@@ -288,7 +288,7 @@ export function PickingPage() {
     }
 
     if (!currentLine) {
-      toast.error("Khong xac dinh duoc line hien tai");
+      toast.error("Không xác định được dòng hiện tại");
       return;
     }
 
@@ -327,10 +327,10 @@ export function PickingPage() {
 
         setSelectedScannedVariantId(res.selected.variant_id);
         setProductVerified(true);
-        toast.success(`Da nhan dien: ${res.selected.book_title}`);
+        toast.success(`Đã nhận diện: ${res.selected.book_title}`);
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong lookup duoc barcode san pham"));
+      toast.error(getApiErrorMessage(error, "Không tra cứu được mã vạch sản phẩm"));
     } finally {
       setLoadingLookup(false);
     }
@@ -338,7 +338,7 @@ export function PickingPage() {
 
   const handleConfirmLine = async () => {
     if (!selectedTaskType || !selectedTaskId || !currentLine) {
-      toast.error("Chua co line can pick");
+      toast.error("Chưa có dòng cần lấy");
       return;
     }
 
@@ -387,7 +387,7 @@ export function PickingPage() {
         loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
       ]);
 
-      toast.success("Da confirm line pick thanh cong");
+      toast.success("Đã xác nhận lấy dòng thành công");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Confirm pick line that bai"));
     } finally {
@@ -414,7 +414,7 @@ export function PickingPage() {
 
   const handleVerifyLocation = (inputOverride?: string) => {
     if (!currentLine) {
-      toast.error("Khong co line can pick");
+      toast.error("Không có dòng cần lấy");
       return;
     }
 
@@ -445,7 +445,7 @@ export function PickingPage() {
       setQuantityInput(Math.max(1, Math.trunc(Number(currentLine.remaining_qty || 1))));
       setSelectedScannedVariantId("");
       setAmbiguousMatches([]);
-      toast.success("Da xac nhan dung location pick");
+      toast.success("Đã xác nhận đúng vị trí lấy hàng");
       return;
     }
 
@@ -476,7 +476,7 @@ export function PickingPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-500">Dang tai danh sach picking tasks...</p>
+        <p className="text-[13px] text-slate-500">Đang tải danh sách công việc lấy hàng...</p>
       </PageWrapper>
     );
   }
@@ -488,7 +488,7 @@ export function PickingPage() {
           to="/orders"
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
         >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lai danh sach
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại danh sách
         </NavLink>
       </FadeItem>
 
@@ -512,7 +512,7 @@ export function PickingPage() {
                     onChange={(event) => setSelectedWarehouseId(event.target.value)}
                     className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                   >
-                    <option value="">Chon warehouse</option>
+                    <option value="">Chọn kho</option>
                     {warehouses.map((warehouse) => (
                       <option key={warehouse.id} value={warehouse.id}>
                         {warehouse.code} - {warehouse.name}
@@ -520,18 +520,18 @@ export function PickingPage() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    Don transfer se hien o kho nguon, khong hien o kho dich.
+                    Đơn chuyển kho sẽ hiện ở kho nguồn, không hiện ở kho đích.
                   </p>
                 </div>
                 ) : null}
 
                 <div className={canManageAssignment ? "md:col-span-2" : "md:col-span-3"}>
-                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tim don</p>
+                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tìm đơn</p>
                   <div className="flex items-center gap-2">
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Ma don / kho / loai don"
+                      placeholder="Mã đơn / kho / loại đơn"
                       className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     />
                     <div className="inline-flex items-center gap-1 rounded-[10px] border border-slate-200 p-1 bg-white">
@@ -561,17 +561,17 @@ export function PickingPage() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-gradient-to-r from-emerald-50/30 to-transparent">
                     {[
-                      "Ma don",
-                      "Loai",
-                      "Nhom",
-                      "Kho nguon",
-                      "Dich",
-                      "Trang thai",
-                      "Lines",
-                      "Con lai",
-                      "Nguoi pick",
-                      "Ngay",
-                      "Action",
+                      "Mã đơn",
+                      "Loại",
+                      "Nhóm",
+                      "Kho nguồn",
+                      "Kho đích",
+                      "Trạng thái",
+                      "Số dòng",
+                      "Còn lại",
+                      "Người lấy",
+                      "Ngày",
+                      "Thao tác",
                     ].map((head) => (
                       <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">
                         {head}
@@ -583,7 +583,7 @@ export function PickingPage() {
                   {filteredTasks.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="py-10 text-center text-[13px] text-slate-400">
-                        Khong co don nao san sang pick
+                        Không có đơn nào sẵn sàng lấy
                       </td>
                     </tr>
                   ) : filteredTasks.map((task) => {
@@ -611,7 +611,7 @@ export function PickingPage() {
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.line_count}</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{task.remaining_quantity}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">
-                          {isAssigned ? assignedPickerName : "Chua giao"}
+                          {isAssigned ? assignedPickerName : "Chưa giao"}
                         </td>
                         <td className="px-4 py-3 text-[11px] text-slate-400">{formatDate(task.requested_at)}</td>
                         <td className="px-4 py-3">
@@ -622,9 +622,9 @@ export function PickingPage() {
                                   value={selectedPickerId}
                                   onChange={(event) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: event.target.value }))}
                                   className="h-8 min-w-[150px] rounded-[8px] border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
-                                  aria-label={`Chon nhan vien kho cho ${task.order_number}`}
+                                  aria-label={`Chọn nhân viên kho cho ${task.order_number}`}
                                 >
-                                  <option value="">Chon nhan vien</option>
+                                  <option value="">Chọn nhân viên</option>
                                   {warehouseStaff.map((staff) => (
                                     <option key={staff.id} value={staff.id}>
                                       {staff.full_name || staff.username}
@@ -637,7 +637,7 @@ export function PickingPage() {
                                   className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60 transition-colors"
                                 >
                                   <UserCheck className="h-3.5 w-3.5" />
-                                  {claimingTaskKey === key ? "Dang giao..." : "Giao task"}
+                                  {claimingTaskKey === key ? "Đang giao..." : "Giao task"}
                                 </button>
                               </div>
                             ) : null}
@@ -666,7 +666,7 @@ export function PickingPage() {
             <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="text-[11px] text-slate-500 font-semibold">Don dang thao tac</p>
+                  <p className="text-[11px] text-slate-500 font-semibold">Đơn đang thao tác</p>
                   <div className="flex items-center gap-2 mt-1">
                     <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${taskClassLabel(detail.task_class) === "REPICK" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
@@ -684,7 +684,7 @@ export function PickingPage() {
                   onClick={handleBackToList}
                   className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  Quay lai danh sach
+                  Quay lại danh sách
                 </button>
               </div>
             </div>
@@ -693,7 +693,7 @@ export function PickingPage() {
           {loadingDetail ? (
             <FadeItem>
               <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-                <p className="text-center py-8 text-[13px] text-slate-500">Dang tai chi tiet don pick...</p>
+                <p className="text-center py-8 text-[13px] text-slate-500">Đang tải chi tiết đơn lấy hàng...</p>
               </div>
             </FadeItem>
           ) : null}
@@ -704,7 +704,7 @@ export function PickingPage() {
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                   <div>
-                    <p className="text-[13px] text-emerald-800 font-semibold">Da hoan tat picking, cho outbound</p>
+                    <p className="text-[13px] text-emerald-800 font-semibold">Đã hoàn tất lấy hàng, chờ xuất kho</p>
                     <p className="text-[12px] text-emerald-700 mt-0.5">Hang da duoc chuyen vao SHIPPING va dang cho xac nhan outbound.</p>
                     <p className="text-[12px] text-emerald-700 mt-1">
                       Don: {detail.order_number} | Line da pick: {completedLineCount}/{detail.lines.length} | Tong qty da pick: {totalPickedQty}
@@ -721,20 +721,20 @@ export function PickingPage() {
               {taskClassLabel(detail.task_class) === "REPICK" ? (
                 <FadeItem>
                   <div className="rounded-[16px] border border-amber-200/60 bg-amber-50/50 p-4">
-                    <p className="text-[12px] text-amber-900 font-semibold">Don REPICK bo sung phan thieu</p>
+                    <p className="text-[12px] text-amber-900 font-semibold">Đơn LẤY LẠI bổ sung phần thiếu</p>
                     <p className="text-[12px] text-amber-800 mt-1">
-                      Don goc: {detail.root_order_number || detail.root_task_id || "-"}
+                      Đơn gốc: {detail.root_order_number || detail.root_task_id || "-"}
                       {detail.parent_order_number || detail.parent_task_id ? ` | Sinh tu: ${detail.parent_order_number || detail.parent_task_id}` : ""}
                       {detail.repick_sequence ? ` | Lan REPICK: #${detail.repick_sequence}` : ""}
                     </p>
-                    <p className="text-[12px] text-amber-800 mt-1">Don nay chi chua phan con thieu can pick lai.</p>
+                    <p className="text-[12px] text-amber-800 mt-1">Đơn này chỉ chứa phần còn thiếu cần lấy lại.</p>
                   </div>
                 </FadeItem>
               ) : null}
 
               <FadeItem>
                 <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-                  <h3 className="text-[14px] font-semibold mb-3">1) Xac nhan hien dien picker</h3>
+                  <h3 className="text-[14px] font-semibold mb-3">1) Xác nhận hiện diện nhân viên</h3>
                   <p className="text-[11px] text-slate-500 mb-3">Scan/nhap vi tri hien tai trong kho nguon truoc khi pick.</p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -766,7 +766,7 @@ export function PickingPage() {
                           : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90"
                       }`}
                     >
-                      {presenceConfirmed ? "Da xac nhan" : confirmingPresence ? "Dang xac nhan..." : "Xac nhan"}
+                      {presenceConfirmed ? "Đã xác nhận" : confirmingPresence ? "Đang xác nhận..." : "Xác nhận"}
                     </button>
                   </div>
                 </div>
@@ -819,7 +819,7 @@ export function PickingPage() {
                               : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90"
                           }`}
                         >
-                          {locationVerified ? "Da dung location" : "Xac nhan location"}
+                          {locationVerified ? "Đúng vị trí" : "Xác nhận vị trí"}
                         </button>
                       </div>
 
@@ -871,7 +871,7 @@ export function PickingPage() {
                               disabled={loadingLookup}
                               className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                             >
-                              {loadingLookup ? "Dang quet..." : "Xac nhan ma"}
+                              {loadingLookup ? "Đang quét..." : "Xác nhận mã"}
                             </button>
                           </div>
 
@@ -886,7 +886,7 @@ export function PickingPage() {
 
                                   if (selected && selected === currentLine.variant_id) {
                                     setProductVerified(true);
-                                    toast.success("Da chon dung san pham cho line hien tai");
+                                    toast.success("Đã chọn đúng sản phẩm cho dòng hiện tại");
                                   } else {
                                     setProductVerified(false);
                                     if (selected) {
@@ -896,7 +896,7 @@ export function PickingPage() {
                                 }}
                                 className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2.5 text-[12px]"
                               >
-                                <option value="">Chon variant dung</option>
+                                <option value="">Chọn biến thể đúng</option>
                                 {ambiguousMatches.map((match) => (
                                   <option key={match.variant_id} value={match.variant_id}>
                                     {match.sku || match.internal_barcode || match.isbn13 || match.isbn10} | {match.book_title} | {match.matched_by}
@@ -927,7 +927,7 @@ export function PickingPage() {
                                     disabled={!canConfirmLine || confirmingLine}
                                     className="rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                                   >
-                                    {confirmingLine ? "Dang confirm..." : "Confirm line pick"}
+                                    {confirmingLine ? "Đang xác nhận..." : "Xác nhận lấy dòng"}
                                   </button>
                                 </div>
                               </div>
@@ -941,7 +941,7 @@ export function PickingPage() {
                       )}
                     </div>
                   ) : (
-                    <p className="text-[12px] text-slate-500">Khong tim thay line can pick tiep theo.</p>
+                    <p className="text-[12px] text-slate-500">Không tìm thấy dòng cần lấy tiếp theo.</p>
                   )}
                 </div>
               </FadeItem>

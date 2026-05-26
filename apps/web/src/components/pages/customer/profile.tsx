@@ -30,7 +30,7 @@ export function CustomerProfilePage() {
           address: data.address || '',
         });
       } catch (err) {
-        setError(getApiErrorMessage(err, 'Failed to load profile'));
+        setError(getApiErrorMessage(err, 'Không tải được hồ sơ'));
       } finally {
         setIsLoading(false);
       }
@@ -40,7 +40,7 @@ export function CustomerProfilePage() {
 
   const handleSave = async () => {
     if (!form.full_name.trim()) {
-      toast.error('Full name is required');
+      toast.error('Họ tên là bắt buộc');
       return;
     }
     try {
@@ -52,17 +52,17 @@ export function CustomerProfilePage() {
         address: form.address || null,
       });
       setProfile(updated);
-      toast.success('Profile updated successfully');
+      toast.success('Đã cập nhật hồ sơ thành công');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to update profile'));
+      toast.error(getApiErrorMessage(err, 'Cập nhật hồ sơ thất bại'));
     } finally {
       setIsSaving(false);
     }
   };
 
   if (isLoading) return <LoadingOverlay />;
-  if (error) return <EmptyState variant="error" title="Failed to load profile" description={error} action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Try again</button>} />;
-  if (!profile) return <EmptyState variant="no-data" title="Profile not found" description="Unable to load your profile. Please contact support." />;
+  if (error) return <EmptyState variant="error" title="Không tải được hồ sơ" description={error} action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Thử lại</button>} />;
+  if (!profile) return <EmptyState variant="no-data" title="Không tìm thấy hồ sơ" description="Không thể tải hồ sơ. Vui lòng liên hệ hỗ trợ." />;
 
   return (
     <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
@@ -72,49 +72,49 @@ export function CustomerProfilePage() {
           <User className="w-5 h-5 text-indigo-600" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">My Profile</h1>
-          <p className="text-[13px] text-muted-foreground">Manage your personal information</p>
+          <h1 className="text-xl font-semibold tracking-tight">Hồ sơ của tôi</h1>
+          <p className="text-[13px] text-muted-foreground">Quản lý thông tin cá nhân</p>
         </div>
       </div>
 
       <SectionCard
-        title="Personal Information"
-        subtitle={`Customer code: ${profile.customer_code || '—'} | Keep your contact details up to date.`}
+        title="Thông tin cá nhân"
+        subtitle={`Mã KH: ${profile.customer_code || '—'} | Cập nhật thông tin liên lạc của bạn.`}
       >
         {/* Email notice */}
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-[12px] text-amber-700">
-            <strong>Note:</strong> Your email is managed by your account login and cannot be edited here. Contact support to change your email.
+            <strong>Lưu ý:</strong> Email được quản lý bởi tài khoản đăng nhập và không thể chỉnh sửa ở đây. Liên hệ hỗ trợ để đổi email.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="md:col-span-2">
-            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Email (read-only)</label>
+            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Email (chỉ đọc)</label>
             <input value={profile.email || ''} disabled className="w-full h-10 rounded-xl border border-input bg-muted/30 px-4 text-[13px] text-muted-foreground cursor-not-allowed" />
           </div>
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Full Name *</label>
+            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Họ tên *</label>
             <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
           </div>
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Phone</label>
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" placeholder="Not set" />
+            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Số điện thoại</label>
+            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" placeholder="Chưa có" />
           </div>
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Birth Date</label>
+            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ngày sinh</label>
             <input type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Address</label>
-            <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={3} className="w-full rounded-xl border border-input bg-background px-4 py-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all resize-none" placeholder="Your address..." />
+            <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Địa chỉ</label>
+            <textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={3} className="w-full rounded-xl border border-input bg-background px-4 py-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all resize-none" placeholder="Địa chỉ của bạn..." />
           </div>
         </div>
 
         <div className="mt-5 flex justify-end">
           <button onClick={() => void handleSave()} disabled={isSaving} className="inline-flex items-center gap-2 h-10 rounded-xl bg-primary text-primary-foreground px-6 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
             <Save className="w-4 h-4" />
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>
       </SectionCard>
@@ -149,14 +149,14 @@ function NotificationPreferencesSection() {
     try {
       setSaving(true);
       await customerBorrowService.updateMyPreferences(prefs);
-      toast.success('Preferences updated');
+      toast.success('Đã cập nhật tuỳ chọn');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed'));
+      toast.error(getApiErrorMessage(err, 'Thất bại'));
     } finally { setSaving(false); }
   };
 
   if (!loaded) return (
-    <SectionCard title="Notification Settings" subtitle="Loading preferences...">
+    <SectionCard title="Cài đặt thông báo" subtitle="Đang tải tuỳ chọn...">
       <div className="space-y-4 animate-pulse">
         {[1, 2, 3].map(i => (
           <div key={i} className="flex items-center justify-between">
@@ -176,22 +176,22 @@ function NotificationPreferencesSection() {
   );
 
   return (
-    <SectionCard title="Notification Settings" subtitle="Control how you receive notifications">
+    <SectionCard title="Cài đặt thông báo" subtitle="Kiểm soát cách bạn nhận thông báo">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-500" /><span className="text-[13px]">In-App Notifications</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-500" /><span className="text-[13px]">Thông báo trong ứng dụng</span></div>
           <Toggle checked={prefs.notify_in_app} onChange={(v) => setPrefs({ ...prefs, notify_in_app: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-blue-500" /><span className="text-[13px]">Email Notifications</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-blue-500" /><span className="text-[13px]">Thông báo Email</span></div>
           <Toggle checked={prefs.notify_email} onChange={(v) => setPrefs({ ...prefs, notify_email: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-500" /><span className="text-[13px]">SMS Notifications</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-500" /><span className="text-[13px]">Thông báo SMS</span></div>
           <Toggle checked={prefs.notify_sms} onChange={(v) => setPrefs({ ...prefs, notify_sms: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-amber-500" /><span className="text-[13px]">Language</span></div>
+          <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-amber-500" /><span className="text-[13px]">Ngôn ngữ</span></div>
           <select value={prefs.preferred_language} onChange={(e) => setPrefs({ ...prefs, preferred_language: e.target.value })}
             className="h-9 rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10">
             <option value="vi">Tiếng Việt</option>
@@ -203,7 +203,7 @@ function NotificationPreferencesSection() {
         <button onClick={() => void handleSave()} disabled={saving}
           className="inline-flex items-center gap-2 h-10 rounded-xl bg-primary text-primary-foreground px-6 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
           <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : 'Save Preferences'}
+          {saving ? 'Đang lưu...' : 'Lưu tuỳ chọn'}
         </button>
       </div>
     </SectionCard>
@@ -215,34 +215,34 @@ function ChangePasswordSection() {
   const [saving, setSaving] = useState(false);
 
   const handleChange = async () => {
-    if (!form.current || !form.newPwd) { toast.error('All fields are required'); return; }
-    if (form.newPwd.length < 6) { toast.error('New password must be at least 6 characters'); return; }
-    if (form.newPwd !== form.confirm) { toast.error('Passwords do not match'); return; }
+    if (!form.current || !form.newPwd) { toast.error('Vui lòng điền đầy đủ các trường'); return; }
+    if (form.newPwd.length < 6) { toast.error('Mật khẩu mới phải có ít nhất 6 ký tự'); return; }
+    if (form.newPwd !== form.confirm) { toast.error('Mật khẩu xác nhận không khớp'); return; }
     try {
       setSaving(true);
       await authService.changePassword(form.current, form.newPwd);
-      toast.success('Password changed successfully');
+      toast.success('Đã đổi mật khẩu thành công');
       setForm({ current: '', newPwd: '', confirm: '' });
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to change password'));
+      toast.error(getApiErrorMessage(err, 'Đổi mật khẩu thất bại'));
     } finally { setSaving(false); }
   };
 
   return (
-    <SectionCard title="Security" subtitle="Change your account password">
+    <SectionCard title="Bảo mật" subtitle="Đổi mật khẩu tài khoản">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Current Password</label>
+          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Mật khẩu hiện tại</label>
           <input type="password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
         <div>
-          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">New Password</label>
+          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Mật khẩu mới</label>
           <input type="password" value={form.newPwd} onChange={(e) => setForm({ ...form, newPwd: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
         <div>
-          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Confirm Password</label>
+          <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Xác nhận mật khẩu</label>
           <input type="password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
@@ -251,7 +251,7 @@ function ChangePasswordSection() {
         <button onClick={() => void handleChange()} disabled={saving}
           className="inline-flex items-center gap-2 h-10 rounded-xl bg-rose-600 text-white px-6 text-[13px] font-semibold hover:bg-rose-700 disabled:opacity-50 transition-colors">
           <Lock className="w-4 h-4" />
-          {saving ? 'Changing...' : 'Change Password'}
+          {saving ? 'Đang đổi...' : 'Đổi mật khẩu'}
         </button>
       </div>
     </SectionCard>

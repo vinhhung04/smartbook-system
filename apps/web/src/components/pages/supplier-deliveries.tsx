@@ -47,7 +47,7 @@ function SupplierDeliveryListView() {
       const response = await supplierDeliveryService.getAll(status === "ALL" ? undefined : { status });
       setRows(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to load supplier deliveries"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách giao hàng"));
     } finally {
       setLoading(false);
     }
@@ -76,12 +76,12 @@ function SupplierDeliveryListView() {
             <Truck className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Supplier Deliveries</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Invoice, delivery notes, redeliveries, and receiving drafts</p>
+            <h1 className="text-xl font-semibold tracking-tight">Giao hàng nhà cung cấp</h1>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới
         </Button>
       </div>
 
@@ -92,7 +92,7 @@ function SupplierDeliveryListView() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search invoice, PO, supplier, warehouse..."
+              placeholder="Tìm hóa đơn, PO, nhà cung cấp, kho..."
               className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-[13px]"
             />
           </div>
@@ -107,16 +107,16 @@ function SupplierDeliveryListView() {
           <table className="w-full min-w-[1080px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Invoice", "PO", "Supplier", "Warehouse", "Expected", "Qty", "Accepted", "Status", "Action"].map((heading) => (
+                {["Hóa đơn", "PO", "Nhà cung cấp", "Kho", "Dự kiến", "SL", "Đã nhận", "Trạng thái", "Thao tác"].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Loading supplier deliveries...</td></tr>
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải giao hàng...</td></tr>
               ) : filteredRows.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState variant="no-data" title="No supplier deliveries" description="Supplier invoices and delivery notes will appear here." className="py-12" /></td></tr>
+                <tr><td colSpan={9}><EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" /></td></tr>
               ) : filteredRows.map((row) => {
                 const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
                 const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
@@ -138,7 +138,7 @@ function SupplierDeliveryListView() {
                     <td className="px-5 py-3.5"><StatusBadge label={row.status} variant={statusVariant(row.status)} dot /></td>
                     <td className="px-5 py-3.5">
                       <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)}>
-                        <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Receive" : "Closed"}
+                        <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
                       </Button>
                     </td>
                   </tr>
@@ -168,7 +168,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       setCountedQty(Object.fromEntries(response.data.items.map((item) => [item.id, Math.min(item.remaining_qty, item.invoiced_qty)])));
       setNote(`Receive supplier invoice ${response.data.invoice_number}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to load supplier delivery"));
+      toast.error(getApiErrorMessage(error, "Không tải được chi tiết giao hàng"));
     } finally {
       setLoading(false);
     }
@@ -209,7 +209,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       }));
     if (items.length === 0) return toast.error("Enter at least one counted quantity");
     if (totals.invalid) return toast.error("Counted quantity cannot exceed invoice or PO remaining quantity");
-    if (!window.confirm("Create Goods Receipt draft from this supplier invoice?")) return;
+    if (!window.confirm("Tạo phiếu nhận hàng nháp từ hóa đơn nhà cung cấp này?")) return;
 
     try {
       setSaving(true);
@@ -221,14 +221,14 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       toast.success(`Goods Receipt ${response.data.receipt_number} created in DRAFT`);
       navigate(`/orders/${response.data.id}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to create goods receipt draft"));
+      toast.error(getApiErrorMessage(error, "Tạo phiếu nhận hàng nháp thất bại"));
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto text-[13px] text-muted-foreground">Loading supplier delivery...</div>;
+    return <div className="p-6 lg:p-8 max-w-7xl mx-auto text-[13px] text-muted-foreground">Đang tải giao hàng...</div>;
   }
 
   if (!invoice) {
@@ -268,7 +268,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
           <table className="w-full min-w-[1100px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Title", "ISBN/SKU", "Ordered", "Previously Received", "PO Remaining", "Invoiced", "Staff Counted", "Shortage", "Status"].map((heading) => (
+                {["Tên sách", "ISBN/SKU", "SL đặt", "Đã nhận trước", "PO còn lại", "Hóa đơn", "NV đếm", "Thiếu", "Trạng thái"].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
                 ))}
               </tr>
@@ -328,7 +328,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
 
       <div className="flex justify-end">
         <Button onClick={() => void createDraft()} disabled={saving || totals.counted <= 0 || totals.invalid}>
-          <ClipboardCheck className="h-3.5 w-3.5" /> {saving ? "Creating..." : "Create Goods Receipt Draft"}
+          <ClipboardCheck className="h-3.5 w-3.5" /> {saving ? "Đang tạo..." : "Tạo phiếu nhận hàng nháp"}
         </Button>
       </div>
     </div>

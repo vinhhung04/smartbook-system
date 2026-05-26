@@ -9,73 +9,75 @@ import {
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
+import { useI18n } from "@/lib/i18n";
 
 const navGroups = [
   {
-    label: "Core Operations",
+    labelKey: "sidebar.group.core",
     color: "text-indigo-400",
     dotColor: "bg-indigo-400",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/my-warehouse-tasks", icon: ClipboardList, label: "Công việc kho của tôi", access: ROUTE_ACCESS.staffTasks, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
-      { to: "/my-purchase-requests", icon: ShoppingCart, label: "Yêu cầu mua hàng của tôi", access: ROUTE_ACCESS.purchaseRequestSelf, activeColor: "from-orange-500/15 to-amber-500/10", textColor: "text-orange-700", iconBg: "bg-orange-500/10" },
-      { to: "/my-exception-reports", icon: AlertTriangle, label: "Báo cáo sự cố của tôi", access: ROUTE_ACCESS.exceptionReportSelf, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
-      { to: "/catalog", icon: BookOpen, label: "Catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/inventory", icon: Package, label: "Inventory", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/orders", icon: FileText, label: "Goods Receipts", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", access: ROUTE_ACCESS.purchaseRead, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/purchase-requests", icon: ShoppingCart, label: "Purchase Requests", access: ROUTE_ACCESS.purchaseRequestManage, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-700", iconBg: "bg-indigo-500/10" },
-      { to: "/exception-reports", icon: AlertTriangle, label: "Exception Reports", access: ROUTE_ACCESS.exceptionReportManage, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
-      { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", access: ROUTE_ACCESS.supplierDeliveries, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
-      { to: "/putaway", icon: MapPinned, label: "Putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-      { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
-      { to: "/order-requests", icon: ListOrdered, label: "Order Requests", access: ROUTE_ACCESS.orderRequests, activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/picking", icon: Hand, label: "Picking", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
-      { to: "/outbound", icon: Truck, label: "Outbound", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
-      { to: "/warehouses", icon: Warehouse, label: "Warehouses", access: ROUTE_ACCESS.warehouseWrite, activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/shelves", icon: Layers3, label: "Shelves", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
-      { to: "/movements", icon: Activity, label: "Stock Movements", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/suppliers", icon: Truck, label: "Suppliers", access: ROUTE_ACCESS.suppliers, activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
+      { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/my-warehouse-tasks", icon: ClipboardList, labelKey: "sidebar.my_tasks", access: ROUTE_ACCESS.staffTasks, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
+      { to: "/my-purchase-requests", icon: ShoppingCart, labelKey: "sidebar.my_purchase_requests", access: ROUTE_ACCESS.purchaseRequestSelf, activeColor: "from-orange-500/15 to-amber-500/10", textColor: "text-orange-700", iconBg: "bg-orange-500/10" },
+      { to: "/my-exception-reports", icon: AlertTriangle, labelKey: "sidebar.my_exception_reports", access: ROUTE_ACCESS.exceptionReportSelf, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
+      { to: "/catalog", icon: BookOpen, labelKey: "sidebar.catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/inventory", icon: Package, labelKey: "sidebar.inventory", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/orders", icon: FileText, labelKey: "sidebar.goods_receipts", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/purchase-orders", icon: ClipboardCheck, labelKey: "sidebar.purchase_orders", access: ROUTE_ACCESS.purchaseRead, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/purchase-requests", icon: ShoppingCart, labelKey: "sidebar.purchase_requests", access: ROUTE_ACCESS.purchaseRequestManage, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-700", iconBg: "bg-indigo-500/10" },
+      { to: "/exception-reports", icon: AlertTriangle, labelKey: "sidebar.exception_reports", access: ROUTE_ACCESS.exceptionReportManage, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
+      { to: "/supplier-deliveries", icon: Truck, labelKey: "sidebar.supplier_deliveries", access: ROUTE_ACCESS.supplierDeliveries, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
+      { to: "/putaway", icon: MapPinned, labelKey: "sidebar.putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+      { to: "/receiving-putaway", icon: Inbox, labelKey: "sidebar.receiving_putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
+      { to: "/order-requests", icon: ListOrdered, labelKey: "sidebar.order_requests", access: ROUTE_ACCESS.orderRequests, activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
+      { to: "/picking", icon: Hand, labelKey: "sidebar.picking", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
+      { to: "/outbound", icon: Truck, labelKey: "sidebar.outbound", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
+      { to: "/warehouses", icon: Warehouse, labelKey: "sidebar.warehouses", access: ROUTE_ACCESS.warehouseWrite, activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/shelves", icon: Layers3, labelKey: "sidebar.shelves", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
+      { to: "/movements", icon: Activity, labelKey: "sidebar.movements", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/suppliers", icon: Truck, labelKey: "sidebar.suppliers", access: ROUTE_ACCESS.suppliers, activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
     ],
   },
   {
-    label: "Intelligence",
+    labelKey: "sidebar.group.intelligence",
     color: "text-violet-400",
     dotColor: "bg-violet-400",
     items: [
-      { to: "/ai-import", icon: Sparkles, label: "AI Import", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
-      { to: "/recommendations", icon: ThumbsUp, label: "Recommendations", access: ROUTE_ACCESS.catalog, activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-      { to: "/reorder-suggestions", icon: Package, label: "AI Reorder", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/reports", icon: BarChart3, label: "Reports", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/ai-import", icon: Sparkles, labelKey: "sidebar.ai_import", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
+      { to: "/recommendations", icon: ThumbsUp, labelKey: "sidebar.recommendations", access: ROUTE_ACCESS.catalog, activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+      { to: "/reorder-suggestions", icon: Package, labelKey: "sidebar.ai_reorder", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/reports", icon: BarChart3, labelKey: "sidebar.reports", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
     ],
   },
   {
-    label: "Library",
+    labelKey: "sidebar.group.library",
     color: "text-amber-400",
     dotColor: "bg-amber-400",
     items: [
-      { to: "/borrow", icon: BookMarked, label: "Borrow", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-orange-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
-      { to: "/borrow/customers", icon: UserRound, label: "Borrow Customers", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
-      { to: "/borrow/reservations", icon: CalendarClock, label: "Reservations", access: ROUTE_ACCESS.borrowRead, activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10" },
-      { to: "/borrow/loans", icon: HandCoins, label: "Loans", access: ROUTE_ACCESS.borrowRead, activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/borrow/fines", icon: Receipt, label: "Fines", access: ROUTE_ACCESS.borrowRead, activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
-      { to: "/membership-plans", icon: Crown, label: "Membership Plans", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+      { to: "/borrow", icon: BookMarked, labelKey: "sidebar.borrow", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-orange-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+      { to: "/borrow/customers", icon: UserRound, labelKey: "sidebar.borrow_customers", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+      { to: "/borrow/reservations", icon: CalendarClock, labelKey: "sidebar.reservations", access: ROUTE_ACCESS.borrowRead, activeColor: "from-orange-500/15 to-amber-500/8", textColor: "text-orange-600", iconBg: "bg-orange-500/10" },
+      { to: "/borrow/loans", icon: HandCoins, labelKey: "sidebar.loans", access: ROUTE_ACCESS.borrowRead, activeColor: "from-emerald-500/15 to-teal-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/borrow/fines", icon: Receipt, labelKey: "sidebar.fines", access: ROUTE_ACCESS.borrowRead, activeColor: "from-rose-500/15 to-amber-500/8", textColor: "text-rose-600", iconBg: "bg-rose-500/10" },
+      { to: "/membership-plans", icon: Crown, labelKey: "sidebar.membership_plans", access: ROUTE_ACCESS.borrowRead, activeColor: "from-amber-500/15 to-yellow-500/8", textColor: "text-amber-600", iconBg: "bg-amber-500/10" },
     ],
   },
   {
-    label: "Administration",
+    labelKey: "sidebar.group.admin",
     color: "text-slate-400",
     dotColor: "bg-slate-400",
     items: [
-      { to: "/users", icon: Users, label: "Users", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
-      { to: "/roles", icon: Shield, label: "Roles", access: ROUTE_ACCESS.admin, activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
-      { to: "/audit-trail", icon: ScrollText, label: "Audit Trail", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
+      { to: "/users", icon: Users, labelKey: "sidebar.users", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
+      { to: "/roles", icon: Shield, labelKey: "sidebar.roles", access: ROUTE_ACCESS.admin, activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/audit-trail", icon: ScrollText, labelKey: "sidebar.audit_trail", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
     ],
   },
 ];
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const user = authService.getCurrentUser();
+  const { t } = useI18n();
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
@@ -131,7 +133,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                Ghi nhận hàng nhận
+                {t('sidebar.scan_receive_cta')}
               </motion.span>
             )}
           </AnimatePresence>
@@ -141,13 +143,13 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
         {visibleGroups.map((group) => (
-          <div key={group.label} className="pt-4 first:pt-1">
+          <div key={group.labelKey} className="pt-4 first:pt-1">
             <AnimatePresence>
               {!collapsed && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="flex items-center gap-1.5 px-3 pb-2">
                   <div className={`w-1 h-1 rounded-full ${group.dotColor}`} />
-                  <span className={`text-[10px] uppercase tracking-[0.08em] ${group.color}`} style={{ fontWeight: 600 }}>{group.label}</span>
+                  <span className={`text-[10px] uppercase tracking-[0.08em] ${group.color}`} style={{ fontWeight: 600 }}>{t(group.labelKey)}</span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -180,7 +182,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       {!collapsed && (
                         <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
                           className="relative z-10" style={{ fontWeight: isActive ? 550 : 400 }}>
-                          {item.label}
+                          {t(item.labelKey)}
                         </motion.span>
                       )}
                     </AnimatePresence>

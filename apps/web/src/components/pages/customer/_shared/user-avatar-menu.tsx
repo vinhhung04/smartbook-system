@@ -26,7 +26,7 @@ export function UserAvatarMenu() {
 
   const handleLogout = async () => {
     await authService.logout();
-    toast.success('Logged out');
+    toast.success('Đã đăng xuất');
     navigate('/customer/login');
   };
 
@@ -51,16 +51,16 @@ export function UserAvatarMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate('/customer/profile')} className="rounded-[9px] text-[12px]">
           <User className="h-4 w-4" />
-          My Profile
+          Hồ sơ của tôi
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate('/customer/membership')} className="rounded-[9px] text-[12px]">
           <ShieldCheck className="h-4 w-4" />
-          My Membership
+          Hội viên
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void handleLogout()} className="rounded-[9px] text-[12px]" variant="destructive">
           <LogOut className="h-4 w-4" />
-          Logout
+          Đăng xuất
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

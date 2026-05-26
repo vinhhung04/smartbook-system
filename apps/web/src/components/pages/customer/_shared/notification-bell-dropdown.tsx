@@ -116,9 +116,9 @@ export function NotificationBellDropdown() {
         <DropdownMenuSeparator />
 
         {isLoading ? (
-          <div className="px-2 py-4 text-[12px] text-slate-500">Loading notifications...</div>
+          <div className="px-2 py-4 text-[12px] text-slate-500">Đang tải thông báo...</div>
         ) : recentRows.length === 0 ? (
-          <div className="px-2 py-4 text-[12px] text-slate-500">No notifications yet.</div>
+          <div className="px-2 py-4 text-[12px] text-slate-500">Chưa có thông báo nào.</div>
         ) : (
           <div className="max-h-[360px] overflow-y-auto">
             {recentRows.map((row) => (
@@ -139,7 +139,7 @@ export function NotificationBellDropdown() {
 
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate('/customer/notifications')} className="justify-center rounded-[9px] text-[12px] text-indigo-700" style={{ fontWeight: 600 }}>
-          View all notifications
+          Xem tất cả thông báo
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

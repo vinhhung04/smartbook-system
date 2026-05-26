@@ -35,7 +35,7 @@ export function CustomerFinesPage() {
       setAccountSnapshot(accountResponse?.data || null);
       setLedgerRows(Array.isArray(ledgerResponse?.data) ? ledgerResponse.data : []);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load fines'));
+      setError(getApiErrorMessage(err, 'Không tải được tiền phạt'));
     } finally {
       setLoading(false);
     }
@@ -54,17 +54,17 @@ export function CustomerFinesPage() {
   const payFine = async (fine: any, mode: 'FULL' | 'PARTIAL') => {
     const remaining = getRemainingBalance(fine);
     if (remaining <= 0) {
-      toast.info('This fine is already settled');
+      toast.info('Khoản phạt này đã được thanh toán');
       return;
     }
     const amount = mode === 'FULL' ? remaining : Number((remaining / 2).toFixed(2));
     try {
       setPayingFineId(String(fine.id));
       await customerBorrowService.payFine({ fine_id: fine.id, amount, payment_method: 'EWALLET' });
-      toast.success(mode === 'FULL' ? 'Fine paid successfully' : 'Partial payment recorded');
+      toast.success(mode === 'FULL' ? 'Đã thanh toán tiền phạt' : 'Đã ghi nhận thanh toán một phần');
       await loadFines();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to pay fine'));
+      toast.error(getApiErrorMessage(err, 'Thanh toán tiền phạt thất bại'));
     } finally {
       setPayingFineId(null);
     }
@@ -73,16 +73,16 @@ export function CustomerFinesPage() {
   const handleTopup = async () => {
     const amount = Number(topupAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Topup amount must be greater than 0');
+      toast.error('Số tiền nạp phải lớn hơn 0');
       return;
     }
     try {
       setIsTopupLoading(true);
       await customerBorrowService.topupMyAccount({ amount, note: 'Topup from customer portal' });
-      toast.success('Wallet topup successful');
+      toast.success('Nạp ví thành công');
       await loadFines();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to topup wallet'));
+      toast.error(getApiErrorMessage(err, 'Nạp ví thất bại'));
     } finally {
       setIsTopupLoading(false);
     }
@@ -99,8 +99,8 @@ export function CustomerFinesPage() {
             <ReceiptText className="w-5 h-5 text-rose-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">My Fines & Wallet</h1>
-            <p className="text-[13px] text-muted-foreground">Manage outstanding balances and wallet topups</p>
+            <h1 className="text-xl font-semibold tracking-tight">Tiền phạt & Ví của tôi</h1>
+            <p className="text-[13px] text-muted-foreground">Quản lý số dư phạt và nạp tiền ví</p>
           </div>
         </div>
         <button
@@ -109,21 +109,21 @@ export function CustomerFinesPage() {
           className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          Làm mới
         </button>
       </div>
 
       {loading ? (
         <LoadingOverlay />
       ) : error ? (
-        <EmptyState variant="error" title="Failed to load fines" description={error} action={<button onClick={() => void loadFines()} className="text-primary font-medium hover:underline">Try again</button>} />
+        <EmptyState variant="error" title="Không tải được tiền phạt" description={error} action={<button onClick={() => void loadFines()} className="text-primary font-medium hover:underline">Thử lại</button>} />
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Outstanding Fines" value={formatCurrencyVnd(totalFine)} icon={ReceiptText} variant={totalFine > 0 ? 'danger' : 'success'} />
-            <StatCard label="Wallet Balance" value={formatCurrencyVnd(walletBalance)} icon={Wallet} variant={walletBalance < 100000 ? 'warning' : 'success'} />
-            <StatCard label="Fine Records" value={(data?.fines || []).length} icon={ReceiptText} variant="default" />
-            <StatCard label="Payments Made" value={(data?.fine_payments || []).length} icon={ReceiptText} variant="info" />
+            <StatCard label="Tiền phạt còn lại" value={formatCurrencyVnd(totalFine)} icon={ReceiptText} variant={totalFine > 0 ? 'danger' : 'success'} />
+            <StatCard label="Số dư ví" value={formatCurrencyVnd(walletBalance)} icon={Wallet} variant={walletBalance < 100000 ? 'warning' : 'success'} />
+            <StatCard label="Số phiếu phạt" value={(data?.fines || []).length} icon={ReceiptText} variant="default" />
+            <StatCard label="Lần thanh toán" value={(data?.fine_payments || []).length} icon={ReceiptText} variant="info" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -133,13 +133,13 @@ export function CustomerFinesPage() {
                   <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
                     <Wallet className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
-                  <h3 className="text-[14px] font-semibold">Top Up Wallet</h3>
+                  <h3 className="text-[14px] font-semibold">Nạp tiền ví</h3>
                 </div>
-                <p className="text-[12px] text-muted-foreground mb-3">Balance: <strong className="text-foreground">{formatCurrencyVnd(walletBalance)}</strong></p>
+                <p className="text-[12px] text-muted-foreground mb-3">Số dư: <strong className="text-foreground">{formatCurrencyVnd(walletBalance)}</strong></p>
                 <div className="flex items-center gap-2">
                   <input value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} className="flex-1 h-10 rounded-xl border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40" inputMode="numeric" />
                   <button onClick={() => void handleTopup()} disabled={isTopupLoading} className="h-10 rounded-xl bg-primary text-primary-foreground px-4 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap">
-                    {isTopupLoading ? 'Processing...' : 'Top Up'}
+                    {isTopupLoading ? 'Đang xử lý...' : 'Nạp tiền'}
                   </button>
                 </div>
                 <div className="mt-2 flex gap-2">
@@ -153,9 +153,9 @@ export function CustomerFinesPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <SectionCard title="Fine Records" subtitle={`${(data?.fines || []).length} record(s)`}>
+              <SectionCard title="Phiếu phạt" subtitle={`${(data?.fines || []).length} phiếu`}>
                 {(data?.fines || []).length === 0 ? (
-                  <EmptyState variant="no-data" title="No fines" description="You have no outstanding fines. Keep reading!" />
+                  <EmptyState variant="no-data" title="Chưa có phiếu phạt" description="Bạn không có tiền phạt. Tiếp tục đọc sách nhé!" />
                 ) : (
                   <div className="space-y-3">
                     {(data?.fines || []).map((fine: any) => (
@@ -167,9 +167,9 @@ export function CustomerFinesPage() {
             </div>
           </div>
 
-          <SectionCard title="Recent Wallet Activity" subtitle="Latest transactions">
+          <SectionCard title="Giao dịch ví gần đây" subtitle="Giao dịch mới nhất">
             {ledgerRows.length === 0 ? (
-              <EmptyState variant="inbox" title="No transactions yet" description="Your wallet transactions will appear here." />
+              <EmptyState variant="inbox" title="Chưa có giao dịch" description="Lịch sử giao dịch ví sẽ hiển thị ở đây." />
             ) : (
               <div className="space-y-2">
                 {ledgerRows.map((entry) => (

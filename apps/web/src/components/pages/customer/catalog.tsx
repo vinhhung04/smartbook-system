@@ -57,7 +57,7 @@ export function CustomerCatalogPage() {
         } catch { /* ratings are optional */ }
       }
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load catalog'));
+      setError(getApiErrorMessage(err, 'Không tải được danh mục sách'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +75,7 @@ export function CustomerCatalogPage() {
 
   const handleReserve = async (book: CustomerCatalogBook) => {
     if (!book.variant_id || !book.default_warehouse_id) {
-      toast.error('Book is not reservable right now');
+      toast.error('Sách hiện không thể đặt trước');
       return;
     }
 
@@ -87,9 +87,9 @@ export function CustomerCatalogPage() {
         pickup_location_id: book.default_location_id || null,
         quantity: 1,
       });
-      toast.success('Reservation created successfully');
+      toast.success('Đặt trước thành công');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to reserve this book'));
+      toast.error(getApiErrorMessage(err, 'Đặt trước sách thất bại'));
     } finally {
       setReservingBookId(null);
     }
@@ -107,17 +107,17 @@ export function CustomerCatalogPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="relative">
-          <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>Browse the Catalog</h1>
-          <p className="text-white/65 text-[13px] mt-1">Discover titles, preview details, and reserve in one click.</p>
+          <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>Khám phá danh mục sách</h1>
+          <p className="text-white/65 text-[13px] mt-1">Tìm kiếm đầu sách, xem chi tiết và đặt trước chỉ một click.</p>
         </div>
       </motion.div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Total Titles', value: stats.total, variant: 'default' as const },
-          { label: 'Available', value: stats.available, variant: 'success' as const },
-          { label: 'Out of Stock', value: stats.unavailable, variant: 'danger' as const },
+          { label: 'Tổng đầu sách', value: stats.total, variant: 'default' as const },
+          { label: 'Còn sách', value: stats.available, variant: 'success' as const },
+          { label: 'Hết sách', value: stats.unavailable, variant: 'danger' as const },
         ].map((stat) => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
             stat.variant === 'success' ? 'bg-emerald-50 border-emerald-100' :
@@ -138,7 +138,7 @@ export function CustomerCatalogPage() {
       <FilterBar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by title, author, ISBN..."
+        searchPlaceholder="Tìm theo tên sách, tác giả, ISBN..."
         filters={
           <>
             <select
@@ -146,16 +146,16 @@ export function CustomerCatalogPage() {
               onChange={(e) => setAvailability(e.target.value as 'available' | 'unavailable' | '')}
               className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10"
             >
-              <option value="">All availability</option>
-              <option value="available">Available</option>
-              <option value="unavailable">Out of stock</option>
+              <option value="">Tất cả</option>
+              <option value="available">Còn sách</option>
+              <option value="unavailable">Hết sách</option>
             </select>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10"
             >
-              <option value="">All categories</option>
+              <option value="">Tất cả thể loại</option>
               {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
@@ -163,7 +163,7 @@ export function CustomerCatalogPage() {
               onChange={(e) => setAuthorFilter(e.target.value)}
               className="h-9 rounded-xl border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/10 max-w-[180px]"
             >
-              <option value="">All authors</option>
+              <option value="">Tất cả tác giả</option>
               {allAuthors.slice(0, 30).map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </>
@@ -176,7 +176,7 @@ export function CustomerCatalogPage() {
             style={{ fontWeight: 500 }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Làm mới
           </button>
         }
       />
@@ -185,7 +185,7 @@ export function CustomerCatalogPage() {
       <SectionCard noPadding className="!rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/20">
           <p className="text-[12px] text-muted-foreground font-medium">
-            Showing {stats.total} title{stats.total !== 1 ? 's' : ''} — {stats.available} available
+            Hiển thị {stats.total} đầu sách — {stats.available} còn sách
           </p>
         </div>
 
@@ -204,25 +204,25 @@ export function CustomerCatalogPage() {
         ) : error ? (
           <EmptyState
             variant="error"
-            title="Failed to load catalog"
+            title="Không tải được danh mục sách"
             description={error}
             action={
               <button onClick={() => void loadBooks()} className="text-primary font-medium hover:underline">
-                Try again
+                Thử lại
               </button>
             }
           />
         ) : books.length === 0 ? (
           <EmptyState
             variant="no-results"
-            title="No books found"
-            description="Try adjusting your search or filters to find what you're looking for."
+            title="Không tìm thấy sách"
+            description="Thử điều chỉnh từ khóa hoặc bộ lọc để tìm sách phù hợp."
             action={
               <button
                 onClick={() => { setSearch(''); setAvailability(''); }}
                 className="text-primary font-medium hover:underline"
               >
-                Clear all filters
+                Xóa tất cả bộ lọc
               </button>
             }
           />
@@ -256,24 +256,24 @@ export function CustomerCatalogPage() {
       {/* Detail Drawer */}
       <DetailDrawer
         open={Boolean(previewBook)}
-        title={previewBook?.title || 'Book preview'}
+        title={previewBook?.title || 'Xem sách'}
         onClose={() => setPreviewBook(null)}
       >
         {previewBook ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[13px] text-muted-foreground">{previewBook.author || 'Unknown author'}</p>
+              <p className="text-[13px] text-muted-foreground">{previewBook.author || 'Không rõ tác giả'}</p>
               <StatusBadge
-                label={Number(previewBook.quantity || 0) > 0 ? 'Available' : 'Out of Stock'}
+                label={Number(previewBook.quantity || 0) > 0 ? 'Còn sách' : 'Hết sách'}
                 variant={Number(previewBook.quantity || 0) > 0 ? 'success' : 'destructive'}
               />
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2">
-              <p className="text-[12px]"><span className="text-muted-foreground">Category:</span> {previewBook.category || '-'}</p>
+              <p className="text-[12px]"><span className="text-muted-foreground">Thể loại:</span> {previewBook.category || '-'}</p>
               <p className="text-[12px]"><span className="text-muted-foreground">ISBN:</span> {previewBook.isbn || '-'}</p>
-              <p className="text-[12px]"><span className="text-muted-foreground">Stock:</span> {previewBook.quantity || 0} available</p>
+              <p className="text-[12px]"><span className="text-muted-foreground">Tồn kho:</span> {previewBook.quantity || 0} cuốn</p>
             </div>
-            <p className="text-[12px] text-muted-foreground">{previewBook.description || 'No description available.'}</p>
+            <p className="text-[12px] text-muted-foreground">{previewBook.description || 'Chưa có mô tả.'}</p>
 
             {/* Rating in drawer */}
             {ratingsMap[previewBook.id] && ratingsMap[previewBook.id].totalReviews > 0 && (
@@ -298,13 +298,13 @@ export function CustomerCatalogPage() {
                 disabled={reservingBookId === previewBook.id || Number(previewBook.quantity || 0) <= 0}
                 className="flex-1 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {reservingBookId === previewBook.id ? 'Reserving...' : Number(previewBook.quantity || 0) <= 0 ? 'Out of Stock' : 'Reserve Now'}
+                {reservingBookId === previewBook.id ? 'Đang đặt trước...' : Number(previewBook.quantity || 0) <= 0 ? 'Hết sách' : 'Đặt trước ngay'}
               </button>
               <button
                 onClick={() => navigate(`/customer/books/${previewBook.id}`)}
                 className="rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] text-foreground hover:bg-muted transition-colors"
               >
-                Details
+                Chi tiết
               </button>
             </div>
           </div>

@@ -10,12 +10,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 
 const movementTypes = {
-  inbound: { label: "Inbound", color: "emerald", icon: ArrowDown, gradient: "from-emerald-500 to-teal-500" },
-  outbound: { label: "Outbound", color: "rose", icon: ArrowUp, gradient: "from-rose-500 to-red-500" },
-  transfer: { label: "Transfer", color: "blue", icon: ArrowRightLeft, gradient: "from-blue-500 to-indigo-500" },
-  adjustment: { label: "Adjustment", color: "amber", icon: Minus, gradient: "from-amber-500 to-orange-500" },
-  borrow: { label: "Borrow", color: "violet", icon: BookOpen, gradient: "from-violet-500 to-purple-500" },
-  return: { label: "Return", color: "sky", icon: RotateCcw, gradient: "from-sky-500 to-blue-500" },
+  inbound: { label: "Nhập kho", color: "emerald", icon: ArrowDown, gradient: "from-emerald-500 to-teal-500" },
+  outbound: { label: "Xuất kho", color: "rose", icon: ArrowUp, gradient: "from-rose-500 to-red-500" },
+  transfer: { label: "Chuyển kho", color: "blue", icon: ArrowRightLeft, gradient: "from-blue-500 to-indigo-500" },
+  adjustment: { label: "Điều chỉnh", color: "amber", icon: Minus, gradient: "from-amber-500 to-orange-500" },
+  borrow: { label: "Mượn", color: "violet", icon: BookOpen, gradient: "from-violet-500 to-purple-500" },
+  return: { label: "Trả", color: "sky", icon: RotateCcw, gradient: "from-sky-500 to-blue-500" },
 };
 
 function formatDate(value: string) {
@@ -37,7 +37,7 @@ export function MovementsPage() {
       const response = await stockMovementService.getAll();
       setMovements(response);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc lich su stock movements"));
+      toast.error(getApiErrorMessage(error, "Không tải được lịch sử biến động tồn kho"));
     } finally {
       setLoading(false);
     }
@@ -78,8 +78,8 @@ export function MovementsPage() {
           <ArrowRightLeft className="w-5 h-5 text-cyan-600" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Stock Movements</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{movements.length} movements · View audit trail</p>
+          <h1 className="text-xl font-semibold tracking-tight">Biến động tồn kho</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5">{movements.length} biến động</p>
         </div>
       </motion.div>
 
@@ -93,13 +93,13 @@ export function MovementsPage() {
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search movements..."
+            placeholder="Tìm biến động..."
             className="w-full pl-9 pr-4 py-2.5 bg-card border border-input rounded-xl text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
           />
           <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </div>
         <div className="flex items-center gap-1 bg-card border border-input rounded-lg p-[3px] shadow-sm overflow-x-auto">
-          {[{ id: "all", label: "All" }, ...Object.entries(movementTypes).map(([k, v]) => ({ id: k, label: v.label }))].map(f => (
+          {[{ id: "all", label: "Tất cả" }, ...Object.entries(movementTypes).map(([k, v]) => ({ id: k, label: v.label }))].map(f => (
             <button key={f.id} onClick={() => setTypeFilter(f.id)} className={`relative px-3.5 py-1.5 rounded-lg text-[12px] whitespace-nowrap transition-all duration-160 font-medium ${typeFilter === f.id ? "text-white" : "text-muted-foreground hover:text-foreground"}`}>
               {typeFilter === f.id && <motion.div layoutId="move-filter" className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 shadow-sm" transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} />}
               <span className="relative z-10">{f.label}</span>
@@ -114,9 +114,9 @@ export function MovementsPage() {
         transition={{ duration: 0.3, delay: 0.1 }}
       >
         {loading ? (
-          <SectionCard><p className="text-center py-12 text-[13px] text-muted-foreground">Dang tai stock movements...</p></SectionCard>
+          <SectionCard><p className="text-center py-12 text-[13px] text-muted-foreground">Đang tải lịch sử tồn kho...</p></SectionCard>
         ) : filtered.length === 0 ? (
-          <SectionCard><EmptyState variant="no-results" title="No movements found" description="Try adjusting your search or filters" className="py-12" /></SectionCard>
+          <SectionCard><EmptyState variant="no-results" title="Không tìm thấy biến động" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></SectionCard>
         ) : (
           <div className="space-y-3">
             <AnimatePresence>
@@ -194,9 +194,9 @@ export function MovementsPage() {
         transition={{ duration: 0.3, delay: 0.15 }}
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        <StatCard label="Total Inbound" value={summary.inbound} variant="success" />
-        <StatCard label="Total Outbound" value={summary.outbound} variant="danger" />
-        <StatCard label="Transfers" value={summary.transfer} variant="info" />
+        <StatCard label="Tổng nhập" value={summary.inbound} variant="success" />
+        <StatCard label="Tổng xuất" value={summary.outbound} variant="danger" />
+        <StatCard label="Chuyển kho" value={summary.transfer} variant="info" />
         <StatCard label="Records" value={movements.length} variant="default" />
       </motion.div>
     </div>

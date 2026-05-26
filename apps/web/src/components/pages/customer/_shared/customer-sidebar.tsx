@@ -15,24 +15,24 @@ interface CustomerSidebarProps {
 }
 
 const primaryItems: CustomerSidebarItem[] = [
-  { to: '/customer', label: 'Dashboard', icon: House, end: true },
-  { to: '/customer/books', label: 'Browse Books', icon: BookOpen },
-  { to: '/customer/loans', label: 'My Loans', icon: HandCoins },
-  { to: '/customer/reservations', label: 'My Reservations', icon: CalendarClock },
-  { to: '/customer/wishlist', label: 'Wishlist', icon: Heart },
-  { to: '/customer/reading-analytics', label: 'Reading Analytics', icon: BarChart3 },
+  { to: '/customer', label: 'Tổng quan', icon: House, end: true },
+  { to: '/customer/books', label: 'Danh mục sách', icon: BookOpen },
+  { to: '/customer/loans', label: 'Phiếu mượn', icon: HandCoins },
+  { to: '/customer/reservations', label: 'Đặt trước', icon: CalendarClock },
+  { to: '/customer/wishlist', label: 'Yêu thích', icon: Heart },
+  { to: '/customer/reading-analytics', label: 'Thống kê đọc sách', icon: BarChart3 },
 ];
 
 const accountItems: CustomerSidebarItem[] = [
-  { to: '/customer/membership', label: 'My Membership', icon: ShieldCheck },
-  { to: '/customer/fines', label: 'My Fines', icon: ReceiptText },
-  { to: '/customer/notifications', label: 'My Notifications', icon: Bell },
-  { to: '/customer/profile', label: 'My Profile', icon: User },
+  { to: '/customer/membership', label: 'Hội viên', icon: ShieldCheck },
+  { to: '/customer/fines', label: 'Tiền phạt', icon: ReceiptText },
+  { to: '/customer/notifications', label: 'Thông báo', icon: Bell },
+  { to: '/customer/profile', label: 'Hồ sơ', icon: User },
 ];
 
 const sidebarGroups = [
-  { title: 'Main', items: primaryItems },
-  { title: 'Account', items: accountItems },
+  { title: 'Chính', items: primaryItems },
+  { title: 'Tài khoản', items: accountItems },
 ];
 
 function NavItem({
@@ -120,7 +120,7 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
               >
                 <div>
                   <p className="text-[14px] tracking-[-0.3px] text-indigo-700" style={{ fontWeight: 700 }}>SmartBook</p>
-                  <p className="text-[10px] text-slate-400">Customer Portal</p>
+                  <p className="text-[10px] text-slate-400">Cổng khách hàng</p>
                 </div>
               </motion.div>
             )}

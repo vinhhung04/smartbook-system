@@ -70,7 +70,7 @@ export function CatalogPage() {
       })) as CatalogBook[];
       setBooks(rows);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach sach"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách sách"));
     } finally {
       setLoading(false);
     }
@@ -116,12 +116,12 @@ export function CatalogPage() {
     const title = newBook.title.trim();
 
     if (!isbn13 || !title) {
-      toast.error("ISBN13 va title la bat buoc");
+      toast.error("ISBN13 và tên sách là bắt buộc");
       return;
     }
 
     if (!/^\d{13}$/.test(isbn13)) {
-      toast.error("ISBN13 phai gom dung 13 chu so");
+      toast.error("ISBN13 phải gồm đúng 13 chữ số");
       return;
     }
 
@@ -134,12 +134,12 @@ export function CatalogPage() {
         language: "vi",
       });
 
-      toast.success(`Da them sach moi: ${title}`);
+      toast.success(`Đã thêm sách mới: ${title}`);
       setShowDrawer(false);
       setNewBook({ barcode: "", title: "", author: "", category: "", isbn: "" });
       await loadBooks();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Them sach that bai"));
+      toast.error(getApiErrorMessage(error, "Thêm sách thất bại"));
     } finally {
       setSaving(false);
     }
@@ -150,11 +150,11 @@ export function CatalogPage() {
     try {
       setDeleting(deleteBook.id);
       await bookService.delete(deleteBook.id);
-      toast.success(`Da xoa sach: ${deleteBook.title}`);
+      toast.success(`Đã xóa sách: ${deleteBook.title}`);
       setDeleteBook(null);
       await loadBooks();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xoa sach that bai"));
+      toast.error(getApiErrorMessage(error, "Xóa sách thất bại"));
     } finally {
       setDeleting(null);
     }
@@ -597,14 +597,14 @@ export function CatalogPage() {
                   className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all disabled:opacity-60"
                   style={{ fontWeight: 600 }}
                 >
-                  {saving ? "Dang luu..." : "Add to Catalog"}
+                  {saving ? "Đang lưu..." : "Thêm vào danh mục"}
                 </motion.button>
                 <button
                   onClick={() => setShowDrawer(false)}
                   className="w-full py-2.5 rounded-xl border border-input bg-background text-[13px] hover:bg-muted transition-colors"
                   style={{ fontWeight: 500 }}
                 >
-                  Cancel
+                  Hủy
                 </button>
               </div>
             </motion.div>
@@ -622,9 +622,9 @@ export function CatalogPage() {
             isbn: prev.isbn || barcode,
           }));
           setShowBarcodeModal(false);
-          toast.success(`Da quet ma: ${barcode}`);
+          toast.success(`Đã quét mã: ${barcode}`);
         }}
-        title="Quet barcode sach"
+        title="Quét mã vạch sách"
       />
 
       {/* Delete Confirmation Modal */}
@@ -651,18 +651,18 @@ export function CatalogPage() {
                     <AlertOctagon className="w-5 h-5 text-red-500" />
                   </div>
                   <div>
-                    <h3 className="text-[15px] font-semibold">Delete Book</h3>
-                    <p className="text-[11px] text-muted-foreground">This action cannot be undone</p>
+                    <h3 className="text-[15px] font-semibold">Xóa sách</h3>
+                    <p className="text-[11px] text-muted-foreground">Hành động này không thể hoàn tác</p>
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-muted/40 border border-border mb-5">
                   <p className="text-[13px] font-medium mb-1">{deleteBook.title}</p>
                   <p className="text-[12px] text-muted-foreground">
-                    ISBN: {deleteBook.barcode || "N/A"} | Stock: {deleteBook.quantity}
+                    ISBN: {deleteBook.barcode || "N/A"} | Tồn kho: {deleteBook.quantity}
                   </p>
                 </div>
                 <p className="text-[13px] text-muted-foreground mb-5">
-                  Are you sure you want to delete this book? This will permanently remove it from the catalog.
+                  Bạn có chắc muốn xóa sách này? Sách sẽ bị xóa vĩnh viễn khỏi danh mục.
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -670,13 +670,13 @@ export function CatalogPage() {
                     disabled={deleting === deleteBook.id}
                     className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[13px] font-medium hover:bg-red-600 transition-colors disabled:opacity-60"
                   >
-                    {deleting === deleteBook.id ? "Dang xoa..." : "Delete"}
+                    {deleting === deleteBook.id ? "Đang xóa..." : "Xóa"}
                   </button>
                   <button
                     onClick={() => setDeleteBook(null)}
                     className="flex-1 py-2.5 rounded-xl border border-border bg-background text-[13px] font-medium hover:bg-muted transition-colors"
                   >
-                    Cancel
+                    Hủy
                   </button>
                 </div>
               </div>

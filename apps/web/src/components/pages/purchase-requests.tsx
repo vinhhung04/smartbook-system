@@ -11,11 +11,11 @@ import { purchaseRequestService, type PurchaseRequest } from "@/services/purchas
 import { supplierService, type Supplier } from "@/services/supplier";
 
 const REASONS: Record<string, string> = {
-  LOW_STOCK: "Ton kho thap",
-  CUSTOMER_REQUEST: "Yeu cau khach hang",
-  DAMAGED: "Sach hu hong",
-  LOST: "Mat sach",
-  OTHER: "Ly do khac",
+  LOW_STOCK: "Tồn kho thấp",
+  CUSTOMER_REQUEST: "Yêu cầu khách hàng",
+  DAMAGED: "Sách hư hỏng",
+  LOST: "Mất sách",
+  OTHER: "Lý do khác",
 };
 
 const STATUS_FILTERS = ["ALL", "PENDING", "APPROVED", "REJECTED", "CONVERTED"];
@@ -59,7 +59,7 @@ export function PurchaseRequestsPage() {
       setRequests(Array.isArray(res.data) ? res.data : []);
       setSuppliers(Array.isArray(sRes) ? sRes : []);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Khong tai duoc danh sach yeu cau"));
+      toast.error(getApiErrorMessage(err, "Không tải được danh sách yêu cầu"));
     } finally {
       setLoading(false);
     }
@@ -68,14 +68,14 @@ export function PurchaseRequestsPage() {
   useEffect(() => { void load(statusFilter); }, [statusFilter]);
 
   const handleApprove = async (id: string) => {
-    if (!window.confirm("Xac nhan duyet yeu cau mua hang nay?")) return;
+    if (!window.confirm("Xác nhận duyệt yêu cầu mua hàng này?")) return;
     setActing(true);
     try {
       await purchaseRequestService.approve(id);
-      toast.success("Da duyet yeu cau");
+      toast.success("Đã duyệt yêu cầu");
       void load(statusFilter);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Duyet yeu cau that bai"));
+      toast.error(getApiErrorMessage(err, "Duyệt yêu cầu thất bại"));
     } finally {
       setActing(false);
     }
@@ -86,11 +86,11 @@ export function PurchaseRequestsPage() {
     setActing(true);
     try {
       await purchaseRequestService.reject(rowAction.id, rowAction.value || undefined);
-      toast.success("Da tu choi yeu cau");
+      toast.success("Đã từ chối yêu cầu");
       setRowAction(null);
       void load(statusFilter);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Tu choi that bai"));
+      toast.error(getApiErrorMessage(err, "Từ chối thất bại"));
     } finally {
       setActing(false);
     }
@@ -98,15 +98,15 @@ export function PurchaseRequestsPage() {
 
   const handleConvert = async () => {
     if (!rowAction || rowAction.type !== "convert") return;
-    if (!rowAction.value) { toast.error("Vui long chon nha cung cap"); return; }
+    if (!rowAction.value) { toast.error("Vui lòng chọn nhà cung cấp"); return; }
     setActing(true);
     try {
       const result = await purchaseRequestService.convertToPO(rowAction.id, { supplier_id: rowAction.value });
-      toast.success(`Da chuyen thanh PO: ${result.data.po_number}`);
+      toast.success(`Đã chuyển thành PO: ${result.data.po_number}`);
       setRowAction(null);
       void load(statusFilter);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Chuyen thanh PO that bai"));
+      toast.error(getApiErrorMessage(err, "Chuyển thành PO thất bại"));
     } finally {
       setActing(false);
     }
@@ -125,9 +125,9 @@ export function PurchaseRequestsPage() {
             <ClipboardCheck className="h-5 w-5 text-indigo-700" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Purchase Requests</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Yêu cầu mua hàng</h1>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Xem xet va xu ly yeu cau mua hang tu nhan vien kho
+              Xem xét và xử lý yêu cầu mua hàng từ nhân viên kho
             </p>
           </div>
         </div>
@@ -138,36 +138,36 @@ export function PurchaseRequestsPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === "ALL" ? "Tat ca trang thai" : s}</option>
+              <option key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</option>
             ))}
           </select>
           <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Lam moi
+            Làm mới
           </Button>
         </div>
       </motion.div>
 
       <SectionCard noPadding>
         <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sach yeu cau</h2>
+          <h2 className="text-[15px] font-semibold">Danh sách yêu cầu</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Ma yeu cau", "Kho", "Sach / Goi y", "So luong", "Ly do", "Nguoi tao", "Trang thai", "Tao luc", "Thao tac"].map((h) => (
+                {["Mã yêu cầu", "Kho", "Sách / Gợi ý", "Số lượng", "Lý do", "Người tạo", "Trạng thái", "Tạo lúc", "Thao tác"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai...</td></tr>
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
               ) : requests.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-5 py-10">
-                    <EmptyState icon={ClipboardCheck} title="Chua co yeu cau nao" description="Cac yeu cau mua hang tu nhan vien kho se hien thi tai day." />
+                    <EmptyState icon={ClipboardCheck} title="Chưa có yêu cầu nào" description="Các yêu cầu mua hàng từ nhân viên kho sẽ hiển thị tại đây." />
                   </td>
                 </tr>
               ) : requests.map((req) => (
@@ -176,7 +176,7 @@ export function PurchaseRequestsPage() {
                     <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{req.request_number}</td>
                     <td className="px-4 py-3 text-[13px]">{req.warehouses?.code || "-"}</td>
                     <td className="px-4 py-3 text-[13px]">
-                      {req.book_variants?.books?.title || req.book_title_hint || <span className="text-muted-foreground italic">Chua xac dinh</span>}
+                      {req.book_variants?.books?.title || req.book_title_hint || <span className="text-muted-foreground italic">Chưa xác định</span>}
                       {req.book_variants?.sku && <span className="block text-[11px] text-muted-foreground">{req.book_variants.sku}</span>}
                     </td>
                     <td className="px-4 py-3 text-[13px] font-medium">{req.quantity_requested}</td>
@@ -191,12 +191,12 @@ export function PurchaseRequestsPage() {
                         <div className="flex gap-1.5">
                           <Button type="button" size="sm" disabled={acting} onClick={() => void handleApprove(req.id)}
                             className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
-                            <Check className="h-3 w-3" /> Duyet
+                            <Check className="h-3 w-3" /> Duyệt
                           </Button>
                           <Button type="button" size="sm" variant="outline" disabled={acting}
                             onClick={() => setRowAction(rowAction?.id === req.id && rowAction.type === "reject" ? null : { type: "reject", id: req.id, value: "" })}
                             className="h-7 px-2 text-[11px] border-red-200 text-red-700 hover:bg-red-50">
-                            <X className="h-3 w-3" /> Tu choi
+                            <X className="h-3 w-3" /> Từ chối
                           </Button>
                         </div>
                       )}
@@ -204,7 +204,7 @@ export function PurchaseRequestsPage() {
                         <Button type="button" size="sm" disabled={acting}
                           onClick={() => setRowAction(rowAction?.id === req.id && rowAction.type === "convert" ? null : { type: "convert", id: req.id, value: "" })}
                           className="h-7 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700">
-                          <ArrowRight className="h-3 w-3" /> Convert to PO
+                          <ArrowRight className="h-3 w-3" /> Chuyển thành PO
                         </Button>
                       )}
                       {req.status === "CONVERTED" && req.purchase_order_id && (
@@ -219,13 +219,13 @@ export function PurchaseRequestsPage() {
                           <input
                             type="text"
                             className="flex-1 rounded-md border border-red-200 bg-white px-3 py-1.5 text-[13px]"
-                            placeholder="Ly do tu choi (tuy chon)..."
+                            placeholder="Lý do từ chối (tùy chọn)..."
                             value={rowAction.value}
                             onChange={(e) => setRowAction({ ...rowAction, value: e.target.value })}
                           />
                           <Button type="button" size="sm" disabled={acting} onClick={() => void handleReject()}
                             className="bg-red-600 hover:bg-red-700 h-7 px-3 text-[11px]">
-                            Xac nhan tu choi
+                            Xác nhận từ chối
                           </Button>
                           <Button type="button" size="sm" variant="outline" onClick={() => setRowAction(null)} className="h-7 px-2">
                             <X className="h-3 w-3" />
@@ -243,21 +243,21 @@ export function PurchaseRequestsPage() {
                             value={rowAction.value}
                             onChange={(e) => setRowAction({ ...rowAction, value: e.target.value })}
                           >
-                            <option value="">-- Chon nha cung cap --</option>
+                            <option value="">-- Chọn nhà cung cấp --</option>
                             {suppliers.map((s) => (
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                           </select>
                           <Button type="button" size="sm" disabled={acting || !rowAction.value} onClick={() => void handleConvert()}
                             className="bg-indigo-600 hover:bg-indigo-700 h-7 px-3 text-[11px]">
-                            Tao Purchase Order
+                            Tạo đơn đặt hàng
                           </Button>
                           <Button type="button" size="sm" variant="outline" onClick={() => setRowAction(null)} className="h-7 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
                         <p className="mt-1.5 text-[11px] text-muted-foreground">
-                          PO se duoc tao o trang thai DRAFT voi variant tu yeu cau. Yeu cau can co bien the sach cu the de convert.
+                          PO sẽ được tạo ở trạng thái DRAFT với biến thể từ yêu cầu. Yêu cầu cần có biến thể sách cụ thể để chuyển.
                         </p>
                       </td>
                     </tr>

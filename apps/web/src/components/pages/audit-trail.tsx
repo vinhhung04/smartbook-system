@@ -53,7 +53,7 @@ export function AuditTrailPage() {
       setLogs(resp.data?.data || []);
       setTotalPages(resp.data?.meta?.totalPages || 1);
     } catch (_err) {
-      toast.error('Failed to load audit logs');
+      toast.error('Không tải được nhật ký kiểm tra');
     } finally {
       setLoading(false);
     }
@@ -102,7 +102,7 @@ export function AuditTrailPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-slate-50/50">
-                {['Thời gian', 'Action', 'Entity', 'Entity ID', 'Actor', ''].map(h => (
+                {['Thời gian', 'Hành động', 'Đối tượng', 'ID đối tượng', 'Người dùng', ''].map(h => (
                   <th key={h} className="text-left text-[11px] text-slate-500 uppercase tracking-wider px-4 py-3" style={{ fontWeight: 550 }}>{h}</th>
                 ))}
               </tr>
@@ -121,7 +121,7 @@ export function AuditTrailPage() {
                   </td>
                   <td className="px-4 py-3 text-[12px] text-slate-600 font-mono">{log.entity_type}</td>
                   <td className="px-4 py-3 text-[11px] text-slate-400 font-mono">{log.entity_id?.slice(0, 8) || '—'}</td>
-                  <td className="px-4 py-3 text-[11px] text-slate-400 font-mono">{log.actor_user_id?.slice(0, 8) || 'System'}</td>
+                  <td className="px-4 py-3 text-[11px] text-slate-400 font-mono">{log.actor_user_id?.slice(0, 8) || 'Hệ thống'}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => setSelectedLog(log)} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all">
                       <Eye className="w-3.5 h-3.5" />
@@ -168,11 +168,11 @@ export function AuditTrailPage() {
                 <div><span className="text-slate-400">ID:</span> <span className="font-mono">{selectedLog.id}</span></div>
                 <div><span className="text-slate-400">Thời gian:</span> {new Date(selectedLog.created_at).toLocaleString('vi-VN')}</div>
                 <div><span className="text-slate-400">Entity ID:</span> <span className="font-mono">{selectedLog.entity_id || '—'}</span></div>
-                <div><span className="text-slate-400">Actor:</span> <span className="font-mono">{selectedLog.actor_user_id || 'System'}</span></div>
+                <div><span className="text-slate-400">Người dùng:</span> <span className="font-mono">{selectedLog.actor_user_id || 'Hệ thống'}</span></div>
               </div>
               {selectedLog.before_data && (
                 <div>
-                  <p className="text-[11px] text-slate-400 mb-1" style={{ fontWeight: 600 }}>Before</p>
+                  <p className="text-[11px] text-slate-400 mb-1" style={{ fontWeight: 600 }}>Trước</p>
                   <pre className="bg-rose-50 rounded-lg p-3 text-[11px] font-mono overflow-x-auto border border-rose-100">
                     {JSON.stringify(selectedLog.before_data, null, 2)}
                   </pre>
@@ -180,7 +180,7 @@ export function AuditTrailPage() {
               )}
               {selectedLog.after_data && (
                 <div>
-                  <p className="text-[11px] text-slate-400 mb-1" style={{ fontWeight: 600 }}>After</p>
+                  <p className="text-[11px] text-slate-400 mb-1" style={{ fontWeight: 600 }}>Sau</p>
                   <pre className="bg-emerald-50 rounded-lg p-3 text-[11px] font-mono overflow-x-auto border border-emerald-100">
                     {JSON.stringify(selectedLog.after_data, null, 2)}
                   </pre>

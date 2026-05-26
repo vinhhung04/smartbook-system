@@ -13,6 +13,11 @@ const exceptionReportsServicePath = path.join(root, 'apps/web/src/services/excep
 const myPurchaseRequestsPath = path.join(root, 'apps/web/src/components/pages/my-purchase-requests.tsx');
 const myExceptionReportsPath = path.join(root, 'apps/web/src/components/pages/my-exception-reports.tsx');
 const exceptionReportsPagePath = path.join(root, 'apps/web/src/components/pages/exception-reports.tsx');
+const indexHtmlPath = path.join(root, 'apps/web/index.html');
+const i18nPath = path.join(root, 'apps/web/src/lib/i18n.tsx');
+const orderDetailPath = path.join(root, 'apps/web/src/components/pages/order-detail.tsx');
+const goodsReceiptPath = path.join(root, 'apps/web/src/components/pages/goods-receipt.tsx');
+const outboundPath = path.join(root, 'apps/web/src/components/pages/outbound.tsx');
 
 let passed = 0;
 let total = 0;
@@ -31,7 +36,7 @@ async function read(file) {
 }
 
 async function runStaticSmoke() {
-  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports, exceptionReportsPage] = await Promise.all([
+  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports, exceptionReportsPage, indexHtml, i18nFile, orderDetail, goodsReceipt, outbound] = await Promise.all([
     read(sidebarPath),
     read(routesPath),
     read(loginPath),
@@ -43,6 +48,11 @@ async function runStaticSmoke() {
     read(myPurchaseRequestsPath),
     read(myExceptionReportsPath),
     read(exceptionReportsPagePath),
+    read(indexHtmlPath),
+    read(i18nPath),
+    read(orderDetailPath),
+    read(goodsReceiptPath),
+    read(outboundPath),
   ]);
 
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
@@ -66,18 +76,18 @@ async function runStaticSmoke() {
 
   expect('sidebar filters items through canAccess', sidebar.includes('items.filter((item) => canAccess(user, item.access))'));
   expect('scan receive CTA requires assigned task progress', sidebar.includes('canReceiveStock') && sidebar.includes('ROUTE_ACCESS.staffTaskProgress'));
-  expect('staff sidebar has my warehouse tasks', sidebar.includes('"Công việc kho của tôi"') && sidebar.includes('access: ROUTE_ACCESS.staffTasks'));
-  expect('dashboard sidebar item is report guarded', sidebar.includes('label: "Dashboard"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
-  expect('inventory sidebar item is manager guarded', sidebar.includes('label: "Inventory"') && sidebar.includes('access: ROUTE_ACCESS.managerInventoryRead'));
-  expect('Purchase Orders sidebar item is purchase guarded', sidebar.includes('label: "Purchase Orders"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRead'));
-  expect('Order Requests sidebar item is manager guarded', sidebar.includes('label: "Order Requests"') && sidebar.includes('access: ROUTE_ACCESS.orderRequests'));
-  expect('Outbound sidebar item is manager guarded', sidebar.includes('label: "Outbound"') && sidebar.includes('access: ROUTE_ACCESS.managerStockDecision'));
-  expect('Warehouses sidebar item is warehouse write guarded', sidebar.includes('label: "Warehouses"') && sidebar.includes('access: ROUTE_ACCESS.warehouseWrite'));
-  expect('Suppliers sidebar item is manager guarded', sidebar.includes('label: "Suppliers"') && sidebar.includes('access: ROUTE_ACCESS.suppliers'));
-  expect('Users sidebar item is admin guarded', sidebar.includes('label: "Users"') && sidebar.includes('access: ROUTE_ACCESS.admin'));
-  expect('Roles sidebar item is admin guarded', sidebar.includes('label: "Roles"') && sidebar.includes('access: ROUTE_ACCESS.admin'));
-  expect('Borrow sidebar items are borrow guarded', sidebar.includes('label: "Borrow"') && sidebar.includes('access: ROUTE_ACCESS.borrowRead'));
-  expect('Reports sidebar item is report guarded', sidebar.includes('label: "Reports"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
+  expect('staff sidebar has my warehouse tasks', sidebar.includes('labelKey: "sidebar.my_tasks"') && sidebar.includes('access: ROUTE_ACCESS.staffTasks'));
+  expect('dashboard sidebar item is report guarded', sidebar.includes('labelKey: "sidebar.dashboard"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
+  expect('inventory sidebar item is manager guarded', sidebar.includes('labelKey: "sidebar.inventory"') && sidebar.includes('access: ROUTE_ACCESS.managerInventoryRead'));
+  expect('Purchase Orders sidebar item is purchase guarded', sidebar.includes('labelKey: "sidebar.purchase_orders"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRead'));
+  expect('Order Requests sidebar item is manager guarded', sidebar.includes('labelKey: "sidebar.order_requests"') && sidebar.includes('access: ROUTE_ACCESS.orderRequests'));
+  expect('Outbound sidebar item is manager guarded', sidebar.includes('labelKey: "sidebar.outbound"') && sidebar.includes('access: ROUTE_ACCESS.managerStockDecision'));
+  expect('Warehouses sidebar item is warehouse write guarded', sidebar.includes('labelKey: "sidebar.warehouses"') && sidebar.includes('access: ROUTE_ACCESS.warehouseWrite'));
+  expect('Suppliers sidebar item is manager guarded', sidebar.includes('labelKey: "sidebar.suppliers"') && sidebar.includes('access: ROUTE_ACCESS.suppliers'));
+  expect('Users sidebar item is admin guarded', sidebar.includes('labelKey: "sidebar.users"') && sidebar.includes('access: ROUTE_ACCESS.admin'));
+  expect('Roles sidebar item is admin guarded', sidebar.includes('labelKey: "sidebar.roles"') && sidebar.includes('access: ROUTE_ACCESS.admin'));
+  expect('Borrow sidebar items are borrow guarded', sidebar.includes('labelKey: "sidebar.borrow"') && sidebar.includes('access: ROUTE_ACCESS.borrowRead'));
+  expect('Reports sidebar item is report guarded', sidebar.includes('labelKey: "sidebar.reports"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
   expect('My Warehouse Tasks page has assigned-task empty state', myTasks.includes('Chưa có task được giao') && myTasks.includes('myWarehouseTaskService.getMyTasks'));
   expect('My Warehouse Tasks page has no mutation API calls', !/\.(post|patch|put|delete)\(/i.test(myTasks) && !/confirm[A-Z]|transfer[A-Z]|pick[A-Z]/.test(myTasks));
   expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('taskActionLabel'));
@@ -91,8 +101,8 @@ async function runStaticSmoke() {
   expect('exceptionReport access in ROUTE_ACCESS', rbac.includes('exceptionReport:') && rbac.includes('inventory.exception.report'));
   expect('my-purchase-requests route uses purchaseRequestSelf', routes.includes('path: "my-purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequestSelf'));
   expect('my-exception-reports route uses exceptionReportSelf', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReportSelf'));
-  expect('My Purchase Requests sidebar item is STAFF-only guarded', sidebar.includes('"Yêu cầu mua hàng của tôi"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestSelf'));
-  expect('My Exception Reports sidebar item is STAFF-only guarded', sidebar.includes('"Báo cáo sự cố của tôi"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportSelf'));
+  expect('My Purchase Requests sidebar item is STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_purchase_requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestSelf'));
+  expect('My Exception Reports sidebar item is STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_exception_reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportSelf'));
 
   expect('MyPurchaseRequestsPage uses getReceivingWarehouses', myPurchaseRequests.includes('getReceivingWarehouses'));
   expect('MyExceptionReportsPage uses getReceivingWarehouses', myExceptionReports.includes('getReceivingWarehouses'));
@@ -100,14 +110,41 @@ async function runStaticSmoke() {
   expect('exceptionReportManage in ROUTE_ACCESS', rbac.includes('exceptionReportManage:') && rbac.includes('MANAGER_OPERATION_ROLES'));
   expect('purchase-requests manager route exists', routes.includes('path: "purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequestManage'));
   expect('exception-reports manager route exists', routes.includes('path: "exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReportManage'));
-  expect('Purchase Requests manager sidebar item guarded', sidebar.includes('label: "Purchase Requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestManage'));
-  expect('Exception Reports manager sidebar item guarded', sidebar.includes('label: "Exception Reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportManage'));
+  expect('Purchase Requests manager sidebar item guarded', sidebar.includes('labelKey: "sidebar.purchase_requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestManage'));
+  expect('Exception Reports manager sidebar item guarded', sidebar.includes('labelKey: "sidebar.exception_reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportManage'));
   expect('purchaseRequestService has convertToPO', purchaseRequestsService.includes('convertToPO'));
   expect('exceptionReportService has resolve method', exceptionReportsService.includes('resolve'));
   expect('CTA changed from Scan Receive', !sidebar.includes('Scan &amp; Receive'));
-  expect('CTA is Ghi nhan hang nhan (Vietnamese)', sidebar.includes('Ghi nhận hàng nhận'));
+  expect('CTA uses i18n key sidebar.scan_receive_cta', sidebar.includes("t('sidebar.scan_receive_cta')"));
+  expect('i18n has Vietnamese scan receive translation with diacritics', i18nFile.includes("'sidebar.scan_receive_cta': 'Ghi nhận hàng nhận'"));
+
+  // Phase 1 — i18n & encoding foundation
+  expect('index.html declares lang="vi"', indexHtml.includes('lang="vi"'));
+  expect('index.html declares UTF-8 charset', indexHtml.includes('charset="UTF-8"'));
+  expect('index.html title is Vietnamese', indexHtml.includes('Hệ thống quản lý thư viện'));
+  expect('i18n provider syncs document.documentElement.lang', i18nFile.includes('document.documentElement.lang = locale'));
+  expect('i18n covers staff self-service sidebar labels (vi)', i18nFile.includes("'sidebar.my_tasks': 'Công việc kho của tôi'") && i18nFile.includes("'sidebar.my_purchase_requests': 'Yêu cầu mua hàng của tôi'") && i18nFile.includes("'sidebar.my_exception_reports': 'Báo cáo sự cố của tôi'"));
+  expect('sidebar uses useI18n for label rendering', sidebar.includes('useI18n') && sidebar.includes('t(item.labelKey)') && sidebar.includes('t(group.labelKey)'));
   expect('purchaseRequestSelf in ROUTE_ACCESS STAFF only', rbac.includes('purchaseRequestSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
   expect('exceptionReportSelf in ROUTE_ACCESS STAFF only', rbac.includes('exceptionReportSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
+
+  // Phase 2 — siết role + helpers field-level visibility
+  expect('staffTasks restricted to STAFF_TRACKING_ROLES only', rbac.includes('staffTasks: { roles: STAFF_TRACKING_ROLES'));
+  expect('rbac exports canViewUnitCost helper', rbac.includes('export function canViewUnitCost'));
+  expect('rbac exports canManageReceiving helper', rbac.includes('export function canManageReceiving'));
+  expect('rbac exports canViewLocationCode helper', rbac.includes('export function canViewLocationCode'));
+
+  // Phase 3a — STAFF field-level RBAC (UI gating)
+  expect('order-detail imports field-level helpers', orderDetail.includes('canManageReceiving') && orderDetail.includes('canViewUnitCost') && orderDetail.includes('canViewLocationCode'));
+  expect('order-detail no longer hardcodes role string for receiving', !/roles\.includes\("ADMIN"\)\s*\|\|\s*roles\.includes\("MANAGER"\)/.test(orderDetail));
+  expect('order-detail gates location column with showLocation', orderDetail.includes('showLocation ?') && orderDetail.includes('Vị trí'));
+  expect('order-detail gates unit_cost column with showUnitCost', orderDetail.includes('showUnitCost ?') && orderDetail.includes('Đơn giá'));
+  expect('order-detail summary hides total value behind showUnitCost', orderDetail.includes('Tổng giá trị') && orderDetail.includes('{showUnitCost ?'));
+  expect('goods-receipt imports field-level helpers', goodsReceipt.includes('rbacCanManageReceiving') && goodsReceipt.includes('canViewUnitCost'));
+  expect('goods-receipt no longer hardcodes role string', !/currentUserRoles\.includes\("ADMIN"\)/.test(goodsReceipt));
+  expect('goods-receipt gates unit_cost input with showUnitCost', goodsReceipt.includes('{showUnitCost ?') && goodsReceipt.includes('Giá nhập'));
+  expect('outbound page uses canManageReceiving helper', outbound.includes('canManageReceiving(currentUser)') && !/currentUserRoles\.includes\('ADMIN'\)/.test(outbound));
+  expect('picking page uses canManageReceiving helper', picking.includes('canManageReceiving(currentUser)') && !/currentUserRoles\.includes\("ADMIN"\)/.test(picking));
   expect('exception-reports manager page uses React.Fragment key', exceptionReportsPage.includes('React.Fragment'));
   expect('my-exception-reports task dropdown not UUID text input', !myExceptionReports.includes('"UUID hoặc mã task"') && !myExceptionReports.includes('"UUID hoac ma task"'));
   expect('my-warehouse-tasks has Bao cao exception button', myTasks.includes('handleReportException') && myTasks.includes('OPERATIONAL_TYPES'));

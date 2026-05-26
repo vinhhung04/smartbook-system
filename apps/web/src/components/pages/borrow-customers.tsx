@@ -54,7 +54,7 @@ export function BorrowCustomersPage() {
       const response = await borrowService.getCustomers();
       setCustomers(response.data ?? []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load customers'));
+      toast.error(getApiErrorMessage(error, 'Không tải được danh sách khách hàng'));
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ export function BorrowCustomersPage() {
 
   const onSave = async () => {
     if (formState.full_name.trim().length < 2) {
-      toast.error('Full name must be at least 2 characters');
+      toast.error('Tên đầy đủ phải ít nhất 2 ký tự');
       return;
     }
 
@@ -115,15 +115,15 @@ export function BorrowCustomersPage() {
       setSaving(true);
       if (formState.id) {
         await borrowService.updateCustomer(formState.id, payload);
-        toast.success('Customer updated successfully');
+        toast.success('Đã cập nhật khách hàng thành công');
       } else {
         await borrowService.createCustomer(payload);
-        toast.success('Customer created successfully');
+        toast.success('Đã tạo khách hàng thành công');
       }
       resetForm();
       await loadCustomers();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to save customer'));
+      toast.error(getApiErrorMessage(error, 'Lưu khách hàng thất bại'));
     } finally {
       setSaving(false);
     }
@@ -145,13 +145,13 @@ export function BorrowCustomersPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Borrow Customers</h1>
-            <p className="text-sm text-muted-foreground">{customers.length} customers</p>
+            <h1 className="text-xl font-semibold tracking-tight">Khách hàng thư viện</h1>
+            <p className="text-sm text-muted-foreground">{customers.length} khách hàng</p>
           </div>
         </div>
         <Button size="sm" onClick={() => { setFormState(initialFormState); setFormOpen(true); }} className="gap-2">
           <UserPlus className="w-4 h-4" />
-          New Customer
+          Khách hàng mới
         </Button>
       </motion.div>
 
@@ -164,7 +164,7 @@ export function BorrowCustomersPage() {
         <FilterBar
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search customer..."
+          searchPlaceholder="Tìm khách hàng..."
           filters={
             <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
               {(['ALL', ...customerStatuses] as const).map((status) => (
@@ -201,7 +201,7 @@ export function BorrowCustomersPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Code', 'Name', 'Email', 'Phone', 'Status', 'Fine Balance', 'Action'].map((header) => (
+                  {['Mã KH', 'Tên', 'Email', 'Điện thoại', 'Trạng thái', 'Dư nợ phạt', 'Thao tác'].map((header) => (
                     <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
                     </th>
@@ -214,7 +214,7 @@ export function BorrowCustomersPage() {
                     <td colSpan={7} className="text-center py-14">
                       <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Loading customers...</span>
+                        <span className="text-sm">Đang tải khách hàng...</span>
                       </div>
                     </td>
                   </tr>
@@ -223,8 +223,8 @@ export function BorrowCustomersPage() {
                     <td colSpan={7}>
                       <EmptyState
                         variant="no-results"
-                        title="No customers found"
-                        description="Try adjusting your search or filters."
+                        title="Không tìm thấy khách hàng"
+                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
                         className="py-12"
                       />
                     </td>
@@ -251,10 +251,10 @@ export function BorrowCustomersPage() {
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
                           <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => openEdit(customer)}>
-                            Edit
+                            Sửa
                           </Button>
                           <Button size="sm" variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => { setNotifyTarget(customer); setNotifyForm({ subject: '', body: '' }); }}>
-                            <Send className="w-3 h-3 mr-1" /> Notify
+                            <Send className="w-3 h-3 mr-1" /> Thông báo
                           </Button>
                         </div>
                       </td>
@@ -283,10 +283,10 @@ export function BorrowCustomersPage() {
               transition={{ duration: 0.2 }}
               className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
-              <h3 className="text-base font-semibold mb-4">{formState.id ? 'Edit Customer' : 'New Customer'}</h3>
+              <h3 className="text-base font-semibold mb-4">{formState.id ? 'Sửa khách hàng' : 'Khách hàng mới'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Full name*
+                  Tên đầy đủ *
                   <input
                     value={formState.full_name}
                     onChange={(event) => setFormState((prev) => ({ ...prev, full_name: event.target.value }))}
@@ -294,7 +294,7 @@ export function BorrowCustomersPage() {
                   />
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Status
+                  Trạng thái
                   <select
                     value={formState.status}
                     onChange={(event) => setFormState((prev) => ({ ...prev, status: event.target.value as CustomerStatus }))}
@@ -315,7 +315,7 @@ export function BorrowCustomersPage() {
                   />
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Phone
+                  Số điện thoại
                   <input
                     value={formState.phone}
                     onChange={(event) => setFormState((prev) => ({ ...prev, phone: event.target.value }))}
@@ -323,7 +323,7 @@ export function BorrowCustomersPage() {
                   />
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Birth date
+                  Ngày sinh
                   <input
                     type="date"
                     value={formState.birth_date}
@@ -332,7 +332,7 @@ export function BorrowCustomersPage() {
                   />
                 </label>
                 <label className="text-xs font-medium text-muted-foreground md:col-span-2">
-                  Address
+                  Địa chỉ
                   <textarea
                     value={formState.address}
                     onChange={(event) => setFormState((prev) => ({ ...prev, address: event.target.value }))}
@@ -343,10 +343,10 @@ export function BorrowCustomersPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Button variant="outline" className="flex-1" onClick={resetForm}>
-                  Cancel
+                  Hủy
                 </Button>
                 <Button className="flex-1" onClick={() => void onSave()} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? 'Đang lưu...' : 'Lưu'}
                 </Button>
               </div>
             </motion.div>
@@ -359,35 +359,35 @@ export function BorrowCustomersPage() {
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[16px] font-semibold">Send Notification</h3>
+              <h3 className="text-[16px] font-semibold">Gửi thông báo</h3>
               <button onClick={() => setNotifyTarget(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
-            <p className="text-[12px] text-muted-foreground mb-3">To: <strong>{notifyTarget.full_name}</strong> ({notifyTarget.customer_code})</p>
+            <p className="text-[12px] text-muted-foreground mb-3">Gửi đến: <strong>{notifyTarget.full_name}</strong> ({notifyTarget.customer_code})</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1">Subject</label>
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1">Tiêu đề</label>
                 <input value={notifyForm.subject} onChange={(e) => setNotifyForm({ ...notifyForm, subject: e.target.value })}
                   className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                  placeholder="Notification subject..." />
+                  placeholder="Tiêu đề thông báo..." />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1">Message</label>
+                <label className="block text-[12px] font-medium text-muted-foreground mb-1">Nội dung</label>
                 <textarea value={notifyForm.body} onChange={(e) => setNotifyForm({ ...notifyForm, body: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
-                  rows={4} placeholder="Write your message..." />
+                  rows={4} placeholder="Nhập nội dung thông báo..." />
               </div>
             </div>
             <div className="mt-4 flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setNotifyTarget(null)}>Cancel</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setNotifyTarget(null)}>Hủy</Button>
               <Button className="flex-1" disabled={notifySending || !notifyForm.body.trim()} onClick={async () => {
                 try {
                   setNotifySending(true);
                   await borrowService.sendNotificationToCustomer({ customer_id: notifyTarget.id, subject: notifyForm.subject || 'Thông báo từ thư viện', body: notifyForm.body });
-                  toast.success('Notification sent');
+                  toast.success('Đã gửi thông báo');
                   setNotifyTarget(null);
-                } catch (error) { toast.error(getApiErrorMessage(error, 'Failed to send')); } finally { setNotifySending(false); }
+                } catch (error) { toast.error(getApiErrorMessage(error, 'Gửi thông báo thất bại')); } finally { setNotifySending(false); }
               }}>
-                <Send className="w-3.5 h-3.5 mr-1" /> {notifySending ? 'Sending...' : 'Send'}
+                <Send className="w-3.5 h-3.5 mr-1" /> {notifySending ? 'Đang gửi...' : 'Gửi'}
               </Button>
             </div>
           </motion.div>

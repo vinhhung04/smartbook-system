@@ -15,7 +15,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
   const stock = Number(book.quantity || 0);
   const isAvailable = stock > 0;
   const canReserve = Boolean(book.reservable && isAvailable);
-  const stockLabel = isAvailable ? `${stock} in stock` : 'Out of stock';
+  const stockLabel = isAvailable ? `${stock} cuốn còn trong kho` : 'Hết sách';
 
   return (
     <article className="rounded-[14px] border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
@@ -23,7 +23,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="max-w-[70%] truncate rounded-[8px] border border-slate-200 bg-slate-50/90 px-2 py-1 text-[10px] uppercase tracking-[0.05em] text-slate-500">
-          {book.category || 'Uncategorized'}
+          {book.category || 'Chưa phân loại'}
         </span>
         <StatusBadge status={isAvailable ? 'ACTIVE' : 'OUT_OF_STOCK'} />
       </div>
@@ -31,7 +31,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
       <h3 className="mt-2 line-clamp-2 text-[14px] text-slate-900" style={{ fontWeight: 700 }}>
         {book.title}
       </h3>
-      <p className="mt-1 text-[12px] text-slate-500">{book.author || 'Unknown author'}</p>
+      <p className="mt-1 text-[12px] text-slate-500">{book.author || 'Không rõ tác giả'}</p>
 
       {/* Rating */}
       <div className="mt-2 flex items-center gap-1.5">
@@ -50,7 +50,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
             <span className="text-[11px] text-slate-400">({ratingInfo.totalReviews})</span>
           </>
         ) : (
-          <span className="text-[11px] text-slate-400">No reviews</span>
+          <span className="text-[11px] text-slate-400">Chưa có đánh giá</span>
         )}
       </div>
 
@@ -62,7 +62,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
           className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50"
           style={{ fontWeight: 600 }}
         >
-          View details
+          Xem chi tiết
         </button>
 
         <button
@@ -71,7 +71,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
           className="flex-1 rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
           style={{ fontWeight: 600 }}
         >
-          {reserving ? 'Reserving...' : 'Reserve'}
+          {reserving ? 'Đang đặt trước...' : 'Đặt trước'}
         </button>
       </div>
     </article>

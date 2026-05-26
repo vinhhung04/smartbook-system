@@ -21,7 +21,7 @@ export function CustomerReservationsPage() {
       const response = await customerBorrowService.getMyReservations();
       setRows(Array.isArray(response?.data) ? response.data : []);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load reservations'));
+      setError(getApiErrorMessage(err, 'Không tải được đặt trước'));
     } finally {
       setLoading(false);
     }
@@ -32,10 +32,10 @@ export function CustomerReservationsPage() {
   const handleCancel = async (id: string) => {
     try {
       await customerBorrowService.cancelReservation(id);
-      toast.success('Reservation cancelled');
+      toast.success('Đã hủy đặt trước');
       await load();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to cancel reservation'));
+      toast.error(getApiErrorMessage(err, 'Hủy đặt trước thất bại'));
     }
   };
 
@@ -52,8 +52,8 @@ export function CustomerReservationsPage() {
             <CalendarClock className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">My Reservations</h1>
-            <p className="text-[13px] text-muted-foreground">Track your pending and ready-to-pickup items</p>
+            <h1 className="text-xl font-semibold tracking-tight">Đặt trước của tôi</h1>
+            <p className="text-[13px] text-muted-foreground">Theo dõi đặt trước đang chờ và sẵn sàng nhận sách</p>
           </div>
         </div>
         <button
@@ -62,16 +62,16 @@ export function CustomerReservationsPage() {
           className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          Làm mới
         </button>
       </div>
 
       {/* Stats */}
       {!loading && (
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Pending" value={pendingCount} icon={CalendarClock} variant="warning" />
-          <StatCard label="Ready for Pickup" value={readyCount} icon={CalendarClock} variant="info" />
-          <StatCard label="Completed / Cancelled" value={completedCount} icon={CalendarClock} variant="default" />
+          <StatCard label="Chờ xác nhận" value={pendingCount} icon={CalendarClock} variant="warning" />
+          <StatCard label="Sẵn lấy sách" value={readyCount} icon={CalendarClock} variant="info" />
+          <StatCard label="Hoàn thành / Hủy" value={completedCount} icon={CalendarClock} variant="default" />
         </div>
       )}
 
@@ -81,19 +81,19 @@ export function CustomerReservationsPage() {
       ) : error ? (
         <EmptyState
           variant="error"
-          title="Failed to load reservations"
+          title="Không tải được đặt trước"
           description={error}
-          action={<button onClick={() => void load()} className="text-primary font-medium hover:underline">Try again</button>}
+          action={<button onClick={() => void load()} className="text-primary font-medium hover:underline">Thử lại</button>}
         />
       ) : rows.length === 0 ? (
         <SectionCard>
           <EmptyState
             variant="no-data"
-            title="No reservations yet"
-            description="Browse our catalog and reserve books you would like to borrow."
+            title="Chưa có đặt trước"
+            description="Khám phá danh mục và đặt trước sách bạn muốn mượn."
             action={
               <button onClick={() => void load()} className="text-primary font-medium hover:underline">
-                Refresh
+                Làm mới
               </button>
             }
           />
