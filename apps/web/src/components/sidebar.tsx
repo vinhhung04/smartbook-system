@@ -5,6 +5,7 @@ import {
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
+  ShoppingCart, AlertTriangle,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
@@ -17,6 +18,8 @@ const navGroups = [
     items: [
       { to: "/", icon: LayoutDashboard, label: "Dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/my-warehouse-tasks", icon: ClipboardList, label: "My Warehouse Tasks", access: ROUTE_ACCESS.staffTasks, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
+      { to: "/my-purchase-requests", icon: ShoppingCart, label: "My Purchase Requests", access: ROUTE_ACCESS.purchaseRequest, activeColor: "from-orange-500/15 to-amber-500/10", textColor: "text-orange-700", iconBg: "bg-orange-500/10" },
+      { to: "/my-exception-reports", icon: AlertTriangle, label: "My Exception Reports", access: ROUTE_ACCESS.exceptionReport, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
       { to: "/catalog", icon: BookOpen, label: "Catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/inventory", icon: Package, label: "Inventory", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },

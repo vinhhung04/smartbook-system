@@ -1,0 +1,30 @@
+const express = require('express');
+
+const {
+  createPurchaseRequest,
+  getMyPurchaseRequests,
+  getAllPurchaseRequests,
+  getPurchaseRequestById,
+  approvePurchaseRequest,
+  rejectPurchaseRequest,
+} = require('../controllers/purchase-request.controller');
+const {
+  authorizeAnyPermission,
+  authorizeManagerDecision,
+} = require('../middlewares/auth.middleware');
+
+const router = express.Router();
+
+// STAFF can create and view their own requests
+const canStaffRequest = authorizeAnyPermission(['inventory.purchase.request']);
+// Only MANAGER/ADMIN can see all requests or make decisions
+const canManagerDecide = authorizeManagerDecision(['inventory.purchase.request']);
+
+router.post('/', canStaffRequest, createPurchaseRequest);
+router.get('/my', canStaffRequest, getMyPurchaseRequests);
+router.get('/', canManagerDecide, getAllPurchaseRequests);
+router.get('/:id', canStaffRequest, getPurchaseRequestById);
+router.post('/:id/approve', canManagerDecide, approvePurchaseRequest);
+router.post('/:id/reject', canManagerDecide, rejectPurchaseRequest);
+
+module.exports = router;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
 import { NavLink } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,7 +16,20 @@ function taskTypeLabel(type: string) {
   if (upper === "PUTAWAY") return "Putaway";
   if (upper === "PICKING") return "Picking";
   if (upper === "OUTBOUND") return "Outbound";
+  if (upper === "PURCHASE_REQUEST") return "Yeu cau mua hang";
+  if (upper === "EXCEPTION_REPORT") return "Bao cao ngoai le";
   return upper || "Task";
+}
+
+function taskActionLabel(type: string) {
+  const upper = String(type || "").toUpperCase();
+  if (upper === "RECEIVING") return "Ghi nhan";
+  if (upper === "PUTAWAY") return "Ghi nhan";
+  if (upper === "PICKING") return "Thuc hien";
+  if (upper === "OUTBOUND") return "Xac nhan";
+  if (upper === "PURCHASE_REQUEST") return "Xem yeu cau";
+  if (upper === "EXCEPTION_REPORT") return "Xem bao cao";
+  return "Thuc hien";
 }
 
 function taskStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
@@ -60,6 +73,8 @@ export function MyWarehouseTasksPage() {
       putaway: tasks.filter((task) => task.type === "PUTAWAY").length,
       picking: tasks.filter((task) => task.type === "PICKING").length,
       outbound: tasks.filter((task) => task.type === "OUTBOUND").length,
+      purchaseRequest: tasks.filter((task) => task.type === "PURCHASE_REQUEST").length,
+      exceptionReport: tasks.filter((task) => task.type === "EXCEPTION_REPORT").length,
     };
   }, [tasks]);
 
@@ -84,6 +99,8 @@ export function MyWarehouseTasksPage() {
     { label: "Putaway tasks", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100" },
     { label: "Picking tasks", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100" },
     { label: "Outbound tasks", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100" },
+    { label: "Yeu cau mua hang", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100" },
+    { label: "Bao cao ngoai le", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100" },
   ];
 
   return (
@@ -109,7 +126,11 @@ export function MyWarehouseTasksPage() {
         </Button>
       </motion.div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800">
+        Chi hien thi task duoc giao va cac yeu cau/bao cao do ban tao. Tao don hang, dieu chinh ton kho va cac quyen quan tri la cua quan ly.
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {cards.map((card) => (
           <SectionCard key={card.label}>
             <div className="flex items-center gap-3">
@@ -171,7 +192,7 @@ export function MyWarehouseTasksPage() {
                           to={actionPath}
                           className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 hover:bg-emerald-100"
                         >
-                          Thuc hien
+                          {taskActionLabel(task.type)}
                         </NavLink>
                       ) : (
                         <span className="text-muted-foreground">-</span>

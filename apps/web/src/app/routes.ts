@@ -35,6 +35,8 @@ import { PickingPage } from "@/components/pages/picking";
 import { OrderRequestsPage } from "@/components/pages/order-requests";
 import { OutboundPage } from "@/components/pages/outbound";
 import { MyWarehouseTasksPage } from "@/components/pages/my-warehouse-tasks";
+import { MyPurchaseRequestsPage } from "@/components/pages/my-purchase-requests";
+import { MyExceptionReportsPage } from "@/components/pages/my-exception-reports";
 import { LoginPage } from "@/components/pages/login";
 import { RegisterPage } from "@/components/pages/register";
 import { CustomerLayout } from "@/components/pages/customer/layout";
@@ -201,6 +203,8 @@ export const router = createBrowserRouter([
       { index: true, Component: DashboardPage },
       { path: "forbidden", Component: ForbiddenPage },
       { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), Component: MyWarehouseTasksPage },
+      { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequest), Component: MyPurchaseRequestsPage },
+      { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReport), Component: MyExceptionReportsPage },
       { path: "catalog", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: CatalogPage },
       { path: "book/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: BookDetailPage },
       { path: "inventory", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: InventoryPage },

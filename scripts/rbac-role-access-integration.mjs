@@ -113,8 +113,8 @@ async function run() {
   const customerToken = await login(users.customer);
 
   await assertMe('ADMIN', adminToken, ['ADMIN'], ['auth.users.read']);
-  await assertMe('MANAGER', managerToken, ['MANAGER'], ['inventory.operation.decide', 'inventory.stock.adjust', 'inventory.purchase.write', 'inventory.purchase.approve', 'reports.read']);
-  await assertMe('STAFF', staffToken, ['STAFF'], ['inventory.task.read', 'inventory.task.progress'], ['inventory.stock.read', 'inventory.stock.write', 'inventory.stock.adjust', 'inventory.operation.decide', 'inventory.catalog.write', 'inventory.warehouse.read', 'inventory.warehouse.write', 'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute', 'inventory.purchase.read', 'inventory.purchase.write', 'inventory.purchase.approve', 'inventory.supplier.read', 'inventory.supplier.write', 'inventory.transfer.write', 'reports.read']);
+  await assertMe('MANAGER', managerToken, ['MANAGER'], ['inventory.operation.decide', 'inventory.stock.adjust', 'inventory.purchase.write', 'inventory.purchase.approve', 'reports.read', 'inventory.purchase.request', 'inventory.exception.report']);
+  await assertMe('STAFF', staffToken, ['STAFF'], ['inventory.task.read', 'inventory.task.progress', 'inventory.purchase.request', 'inventory.exception.report'], ['inventory.stock.read', 'inventory.stock.write', 'inventory.stock.adjust', 'inventory.operation.decide', 'inventory.catalog.write', 'inventory.warehouse.read', 'inventory.warehouse.write', 'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute', 'inventory.purchase.read', 'inventory.purchase.write', 'inventory.purchase.approve', 'inventory.supplier.read', 'inventory.supplier.write', 'inventory.transfer.write', 'reports.read']);
   await assertMe('LIBRARIAN', librarianToken, ['LIBRARIAN'], ['borrow.write', 'inventory.catalog.read']);
   await assertMe('CUSTOMER', customerToken, ['CUSTOMER'], ['customer.self.read', 'inventory.catalog.read'], ['borrow.read', 'borrow.write']);
 
@@ -145,6 +145,19 @@ async function run() {
   await expectStatus('STAFF IAM forbidden', 'GET', '/iam/users', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF borrow admin forbidden', 'GET', '/borrow/loans', staffToken, undefined, (status) => status === 403);
 
+  // Purchase Request: STAFF can create + read own, cannot list all or approve
+  await expectStatus('STAFF create purchase request reaches validation', 'POST', '/api/purchase-requests', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF my purchase requests allowed', 'GET', '/api/purchase-requests/my', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF all purchase requests forbidden', 'GET', '/api/purchase-requests', staffToken, undefined, (status) => status === 403);
+  await expectStatus('STAFF approve purchase request forbidden', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/approve', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF reject purchase request forbidden', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/reject', staffToken, {}, (status) => status === 403);
+
+  // Exception Report: STAFF can create + read own, cannot list all or resolve
+  await expectStatus('STAFF create exception report reaches validation', 'POST', '/api/exception-reports', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF my exception reports allowed', 'GET', '/api/exception-reports/my', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF all exception reports forbidden', 'GET', '/api/exception-reports', staffToken, undefined, (status) => status === 403);
+  await expectStatus('STAFF resolve exception report forbidden', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', staffToken, {}, (status) => status === 403);
+
   await expectStatus('MANAGER inventory read ok', 'GET', '/api/inventory', managerToken, undefined, (status) => status === 200);
   await expectStatus('MANAGER stock movements ok', 'GET', '/api/stock-movements', managerToken, undefined, (status) => status === 200);
   await expectStatus('MANAGER analytics ok', 'GET', '/analytics/dashboard/kpis', managerToken, undefined, (status) => status === 200);
@@ -158,6 +171,12 @@ async function run() {
   await expectStatus('MANAGER create PO authorized', 'POST', '/api/purchase-orders', managerToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('MANAGER approve PO authorized', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('MANAGER IAM forbidden', 'GET', '/iam/users', managerToken, undefined, (status) => status === 403);
+
+  // Purchase Request + Exception Report: MANAGER can list all and approve/resolve
+  await expectStatus('MANAGER all purchase requests allowed', 'GET', '/api/purchase-requests', managerToken, undefined, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER approve purchase request reaches validation', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER all exception reports allowed', 'GET', '/api/exception-reports', managerToken, undefined, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER resolve exception report reaches validation', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', managerToken, {}, (status) => status !== 401 && status !== 403);
 
   await expectStatus('LIBRARIAN borrow read ok', 'GET', '/borrow/loans', librarianToken, undefined, (status) => status === 200);
   await expectStatus('LIBRARIAN incomplete catalog update reaches controller', 'PATCH', '/api/books/00000000-0000-4000-8000-000000000000', librarianToken, {}, (status) => status !== 401 && status !== 403);

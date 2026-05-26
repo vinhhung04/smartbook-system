@@ -30,6 +30,8 @@ const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const supplierAccountRoutes = require('./routes/supplier-account.routes');
+const purchaseRequestRoutes = require('./routes/purchase-request.routes');
+const exceptionReportRoutes = require('./routes/exception-report.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,7 +59,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   }
 
   try {
-    const [goodsReceipts, outboundOrders, transferOrders] = await Promise.all([
+    const [goodsReceipts, outboundOrders, transferOrders, purchaseRequests, exceptionReports] = await Promise.all([
       prisma.goods_receipts.findMany({
         where: { received_by_user_id: userId },
         select: {
@@ -103,6 +105,39 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         orderBy: { requested_at: 'desc' },
         take: 20,
       }),
+      prisma.purchase_requests.findMany({
+        where: { created_by_user_id: userId },
+        select: {
+          id: true,
+          request_number: true,
+          status: true,
+          reason: true,
+          quantity_requested: true,
+          warehouse_id: true,
+          created_at: true,
+          approved_at: true,
+          rejected_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+      prisma.warehouse_exception_reports.findMany({
+        where: { created_by_user_id: userId },
+        select: {
+          id: true,
+          report_number: true,
+          status: true,
+          exception_type: true,
+          task_type: true,
+          warehouse_id: true,
+          created_at: true,
+          resolved_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
     ]);
 
     const tasks = [
@@ -138,6 +173,26 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.requested_at,
         completed_at: task.received_at || task.shipped_at,
         action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+      })),
+      ...purchaseRequests.map((task) => ({
+        id: task.id,
+        type: 'PURCHASE_REQUEST',
+        title: task.request_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.approved_at || task.rejected_at,
+        action_path: `/my-purchase-requests`,
+      })),
+      ...exceptionReports.map((task) => ({
+        id: task.id,
+        type: 'EXCEPTION_REPORT',
+        title: task.report_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.resolved_at,
+        action_path: `/my-exception-reports`,
       })),
     ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
@@ -191,6 +246,8 @@ app.use('/api/storage-suggestions', storageSuggestionRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 app.use('/api/supplier-account', supplierAccountRoutes);
+app.use('/api/purchase-requests', purchaseRequestRoutes);
+app.use('/api/exception-reports', exceptionReportRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

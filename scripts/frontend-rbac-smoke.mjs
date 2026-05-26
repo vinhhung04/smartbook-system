@@ -70,11 +70,19 @@ async function runStaticSmoke() {
   expect('Reports sidebar item is report guarded', sidebar.includes('label: "Reports"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
   expect('My Warehouse Tasks page has assigned-task empty state', myTasks.includes('Chua co task duoc giao') && myTasks.includes('myWarehouseTaskService.getMyTasks'));
   expect('My Warehouse Tasks page has no mutation API calls', !/\.(post|patch|put|delete)\(/i.test(myTasks) && !/confirm[A-Z]|transfer[A-Z]|pick[A-Z]/.test(myTasks));
-  expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('Thuc hien'));
+  expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('taskActionLabel'));
+  expect('My Warehouse Tasks handles purchase request type', myTasks.includes('PURCHASE_REQUEST'));
+  expect('My Warehouse Tasks handles exception report type', myTasks.includes('EXCEPTION_REPORT'));
   expect('Picking page has manager task assignment UI', picking.includes('Giao task') && picking.includes('userService.getWarehouseStaff') && picking.includes('pickerUserId'));
   expect('stockWrite no longer includes staff roles', rbac.includes('stockWrite: { roles: MANAGER_OPERATION_ROLES'));
   expect('staff cannot satisfy manager inventory read roles', rbac.includes('managerInventoryRead: { roles: MANAGER_OPERATION_ROLES'));
   expect('manager operation roles separated from staff tracking roles', rbac.includes('MANAGER_OPERATION_ROLES') && rbac.includes('STAFF_TRACKING_ROLES'));
+  expect('purchaseRequest access in ROUTE_ACCESS', rbac.includes('purchaseRequest:') && rbac.includes('inventory.purchase.request'));
+  expect('exceptionReport access in ROUTE_ACCESS', rbac.includes('exceptionReport:') && rbac.includes('inventory.exception.report'));
+  expect('my-purchase-requests route exists', routes.includes('path: "my-purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequest'));
+  expect('my-exception-reports route exists', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReport'));
+  expect('My Purchase Requests sidebar item is purchase request guarded', sidebar.includes('label: "My Purchase Requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequest'));
+  expect('My Exception Reports sidebar item is exception report guarded', sidebar.includes('label: "My Exception Reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReport'));
 }
 
 async function run() {

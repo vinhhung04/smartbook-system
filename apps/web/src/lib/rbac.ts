@@ -36,6 +36,8 @@ export const ROUTE_ACCESS = {
   admin: { roles: ADMIN_ROLES, permissions: ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"] },
   customer: { roles: ["CUSTOMER"], permissions: ["customer.self.read", "inventory.catalog.read"] },
   supplier: { roles: ["SUPPLIER"], permissions: ["supplier.portal.read", "supplier.portal.write"] },
+  purchaseRequest: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.purchase.request"] },
+  exceptionReport: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.exception.report"] },
 } satisfies Record<string, RouteAccessMeta>;
 
 export function hasAnyRole(user: AuthUser | null | undefined, roles: string[] = []) {

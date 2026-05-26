@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path . -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\hungx\\\\Desktop\\\\Work\\\\Work\\\\KLTN\\\\smartbook-system\\\\services\\\\inventory-service\\\\src\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\hungx\\\\Desktop\\\\Work\\\\Work\\\\KLTN\\\\smartbook-system\\\\apps\\\\web\\\\src\\\\\" -Directory)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\hungx\\\\Desktop\\\\Work\\\\Work\\\\KLTN\\\\smartbook-system\\\\services\\\\inventory-service\\\\src\" -Recurse -File | ForEach-Object { $_.FullName })",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\hungx\\\\Desktop\\\\Work\\\\Work\\\\KLTN\\\\smartbook-system\\\\apps\\\\web\\\\src\\\\components\\\\pages\\\\\" -File -Filter \"*purchase*\" | Select-Object Name)",
+      "Bash(npx prisma *)",
+      "Bash(PowerShell -Command \"New-Item -ItemType Directory -Force 'c:\\\\Users\\\\hungx\\\\Desktop\\\\Work\\\\Work\\\\KLTN\\\\smartbook-system\\\\services\\\\inventory-service\\\\prisma\\\\migrations\\\\20260526000300_add_purchase_requests_exception_reports'\")",
+      "Bash(npm --prefix apps/web run build)"
+    ]
+  }
+}

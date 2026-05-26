@@ -110,6 +110,10 @@ async function main() {
     { code: 'platform.settings.read', module_name: 'platform', action_name: 'read', description: 'View platform settings' },
     { code: 'platform.settings.write', module_name: 'platform', action_name: 'write', description: 'Update platform settings' },
     { code: 'observability.logs.read', module_name: 'platform', action_name: 'read', description: 'View system logs and audit trails' },
+
+    // Warehouse staff self-service module
+    { code: 'inventory.purchase.request', module_name: 'inventory', action_name: 'write', description: 'Submit purchase/replenishment requests for manager review' },
+    { code: 'inventory.exception.report', module_name: 'inventory', action_name: 'write', description: 'Create shortage, overage, or damage reports for warehouse tasks' },
   ];
 
   for (const perm of permissions) {
@@ -288,6 +292,8 @@ async function main() {
     'audit.read',
     'ai.recommendation.view',
     'platform.settings.read',
+    'inventory.purchase.request',
+    'inventory.exception.report',
   ];
   await setRolePermissions(managerRole, managerPermCodes);
   console.log(`✅ Assigned ${managerPermCodes.length} permissions to MANAGER`);
@@ -296,6 +302,8 @@ async function main() {
     'inventory.catalog.read',
     'inventory.task.read',
     'inventory.task.progress',
+    'inventory.purchase.request',
+    'inventory.exception.report',
   ];
   await setRolePermissions(staffRole, warehousePermCodes);
   await setRolePermissions(warehouseStaffRole, warehousePermCodes);
