@@ -24,6 +24,8 @@ const navGroups = [
       { to: "/inventory", icon: Package, label: "Inventory", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-emerald-500/15 to-teal-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/orders", icon: FileText, label: "Goods Receipts", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-indigo-500/15 to-amber-500/5", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
       { to: "/purchase-orders", icon: ClipboardCheck, label: "Purchase Orders", access: ROUTE_ACCESS.purchaseRead, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/purchase-requests", icon: ShoppingCart, label: "Purchase Requests", access: ROUTE_ACCESS.purchaseRequestManage, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-700", iconBg: "bg-indigo-500/10" },
+      { to: "/exception-reports", icon: AlertTriangle, label: "Exception Reports", access: ROUTE_ACCESS.exceptionReportManage, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
       { to: "/supplier-deliveries", icon: Truck, label: "Supplier Deliveries", access: ROUTE_ACCESS.supplierDeliveries, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/putaway", icon: MapPinned, label: "Putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
       { to: "/receiving-putaway", icon: Inbox, label: "Receiving Putaway", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-amber-500/15 to-orange-500/10", textColor: "text-amber-700", iconBg: "bg-amber-500/10" },
@@ -121,7 +123,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           to="/orders/new"
           className={`group flex items-center gap-2.5 rounded-[10px] bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 text-white text-[13px] shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:shadow-indigo-500/30 active:scale-[0.98] transition-all duration-140 ${collapsed ? "justify-center px-0 py-2.5" : "px-3.5 py-2.5"}`}
           style={{ fontWeight: 500 }}
-          aria-label="Scan and receive new goods"
+          aria-label="Create receiving draft"
         >
           <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}>
             <ScanBarcode className="w-4 h-4" />
@@ -129,7 +131,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                Scan &amp; Receive
+                Receiving Draft
               </motion.span>
             )}
           </AnimatePresence>

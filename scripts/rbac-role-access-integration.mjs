@@ -145,15 +145,22 @@ async function run() {
   await expectStatus('STAFF IAM forbidden', 'GET', '/iam/users', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF borrow admin forbidden', 'GET', '/borrow/loans', staffToken, undefined, (status) => status === 403);
 
-  // Purchase Request: STAFF can create + read own, cannot list all or approve
+  // Warehouse endpoints
+  await expectStatus('STAFF receiving context warehouses allowed', 'GET', '/api/receiving-context/warehouses', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF full warehouses list forbidden', 'GET', '/api/warehouses', staffToken, undefined, (status) => status === 403);
+
+  // Purchase Request: STAFF can create + read own, cannot list all or approve/reject/convert
   await expectStatus('STAFF create purchase request reaches validation', 'POST', '/api/purchase-requests', staffToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('STAFF my purchase requests allowed', 'GET', '/api/purchase-requests/my', staffToken, undefined, (status) => status === 200);
   await expectStatus('STAFF all purchase requests forbidden', 'GET', '/api/purchase-requests', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF approve purchase request forbidden', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/approve', staffToken, {}, (status) => status === 403);
   await expectStatus('STAFF reject purchase request forbidden', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/reject', staffToken, {}, (status) => status === 403);
+  await expectStatus('STAFF convert purchase request forbidden', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/convert-to-po', staffToken, {}, (status) => status === 403);
 
   // Exception Report: STAFF can create + read own, cannot list all or resolve
+  // With random task_id the create must fail validation (404/400), not succeed (201) and not be an auth error (401/403)
   await expectStatus('STAFF create exception report reaches validation', 'POST', '/api/exception-reports', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF exception report random task_id rejected', 'POST', '/api/exception-reports', staffToken, { warehouse_id: '00000000-0000-4000-8000-000000000000', task_type: 'RECEIVING', task_id: '00000000-0000-4000-8000-000000000000', exception_type: 'SHORT', note: 'test' }, (status) => status !== 201 && status !== 401 && status !== 403);
   await expectStatus('STAFF my exception reports allowed', 'GET', '/api/exception-reports/my', staffToken, undefined, (status) => status === 200);
   await expectStatus('STAFF all exception reports forbidden', 'GET', '/api/exception-reports', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF resolve exception report forbidden', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', staffToken, {}, (status) => status === 403);

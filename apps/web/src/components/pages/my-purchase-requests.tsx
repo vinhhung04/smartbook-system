@@ -57,7 +57,7 @@ export function MyPurchaseRequestsPage() {
     try {
       const [res, wRes] = await Promise.all([
         purchaseRequestService.getMyRequests(),
-        warehouseService.getAll(),
+        warehouseService.getReceivingWarehouses(),
       ]);
       setRequests(Array.isArray(res.data) ? res.data : []);
       setWarehouses(Array.isArray(wRes) ? wRes : []);

@@ -38,6 +38,8 @@ export const ROUTE_ACCESS = {
   supplier: { roles: ["SUPPLIER"], permissions: ["supplier.portal.read", "supplier.portal.write"] },
   purchaseRequest: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.purchase.request"] },
   exceptionReport: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.exception.report"] },
+  purchaseRequestManage: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.purchase.request"] },
+  exceptionReportManage: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.exception.report"] },
 } satisfies Record<string, RouteAccessMeta>;
 
 export function hasAnyRole(user: AuthUser | null | undefined, roles: string[] = []) {

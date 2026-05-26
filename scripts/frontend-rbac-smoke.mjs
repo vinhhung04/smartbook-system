@@ -8,6 +8,10 @@ const loginPath = path.join(root, 'apps/web/src/components/pages/login.tsx');
 const rbacPath = path.join(root, 'apps/web/src/lib/rbac.ts');
 const myTasksPath = path.join(root, 'apps/web/src/components/pages/my-warehouse-tasks.tsx');
 const pickingPath = path.join(root, 'apps/web/src/components/pages/picking.tsx');
+const purchaseRequestsServicePath = path.join(root, 'apps/web/src/services/purchase-requests.ts');
+const exceptionReportsServicePath = path.join(root, 'apps/web/src/services/exception-reports.ts');
+const myPurchaseRequestsPath = path.join(root, 'apps/web/src/components/pages/my-purchase-requests.tsx');
+const myExceptionReportsPath = path.join(root, 'apps/web/src/components/pages/my-exception-reports.tsx');
 
 let passed = 0;
 let total = 0;
@@ -26,13 +30,17 @@ async function read(file) {
 }
 
 async function runStaticSmoke() {
-  const [sidebar, routes, login, rbac, myTasks, picking] = await Promise.all([
+  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports] = await Promise.all([
     read(sidebarPath),
     read(routesPath),
     read(loginPath),
     read(rbacPath),
     read(myTasksPath),
     read(pickingPath),
+    read(purchaseRequestsServicePath),
+    read(exceptionReportsServicePath),
+    read(myPurchaseRequestsPath),
+    read(myExceptionReportsPath),
   ]);
 
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
@@ -83,6 +91,19 @@ async function runStaticSmoke() {
   expect('my-exception-reports route exists', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReport'));
   expect('My Purchase Requests sidebar item is purchase request guarded', sidebar.includes('label: "My Purchase Requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequest'));
   expect('My Exception Reports sidebar item is exception report guarded', sidebar.includes('label: "My Exception Reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReport'));
+
+  expect('MyPurchaseRequestsPage uses getReceivingWarehouses', myPurchaseRequests.includes('getReceivingWarehouses'));
+  expect('MyExceptionReportsPage uses getReceivingWarehouses', myExceptionReports.includes('getReceivingWarehouses'));
+  expect('purchaseRequestManage in ROUTE_ACCESS', rbac.includes('purchaseRequestManage:') && rbac.includes('MANAGER_OPERATION_ROLES'));
+  expect('exceptionReportManage in ROUTE_ACCESS', rbac.includes('exceptionReportManage:') && rbac.includes('MANAGER_OPERATION_ROLES'));
+  expect('purchase-requests manager route exists', routes.includes('path: "purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequestManage'));
+  expect('exception-reports manager route exists', routes.includes('path: "exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReportManage'));
+  expect('Purchase Requests manager sidebar item guarded', sidebar.includes('label: "Purchase Requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestManage'));
+  expect('Exception Reports manager sidebar item guarded', sidebar.includes('label: "Exception Reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportManage'));
+  expect('purchaseRequestService has convertToPO', purchaseRequestsService.includes('convertToPO'));
+  expect('exceptionReportService has resolve method', exceptionReportsService.includes('resolve'));
+  expect('CTA changed from Scan Receive', !sidebar.includes('Scan &amp; Receive'));
+  expect('CTA is Receiving Draft', sidebar.includes('Receiving Draft'));
 }
 
 async function run() {

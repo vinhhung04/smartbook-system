@@ -46,8 +46,28 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  async getAll(params?: { status?: string; warehouse_id?: string; page?: number }): Promise<{ data: PurchaseRequest[]; total?: number }> {
+    const response = await inventoryAPI.get<{ data: PurchaseRequest[]; total?: number }>("/api/purchase-requests", { params });
+    return response.data;
+  },
+
   async getRequestById(id: string): Promise<{ data: PurchaseRequest }> {
     const response = await inventoryAPI.get<{ data: PurchaseRequest }>(`/api/purchase-requests/${id}`);
+    return response.data;
+  },
+
+  async approve(id: string): Promise<{ data: PurchaseRequest }> {
+    const response = await inventoryAPI.post<{ data: PurchaseRequest }>(`/api/purchase-requests/${id}/approve`);
+    return response.data;
+  },
+
+  async reject(id: string, rejection_reason?: string): Promise<{ data: PurchaseRequest }> {
+    const response = await inventoryAPI.post<{ data: PurchaseRequest }>(`/api/purchase-requests/${id}/reject`, { rejection_reason });
+    return response.data;
+  },
+
+  async convertToPO(id: string, payload: { supplier_id: string }): Promise<{ data: { purchase_order_id: string; po_number: string } }> {
+    const response = await inventoryAPI.post<{ data: { purchase_order_id: string; po_number: string } }>(`/api/purchase-requests/${id}/convert-to-po`, payload);
     return response.data;
   },
 };

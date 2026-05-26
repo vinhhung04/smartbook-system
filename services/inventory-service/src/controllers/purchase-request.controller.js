@@ -29,6 +29,8 @@ async function createPurchaseRequest(req, res) {
   const resolvedReason = reason && validReasons.includes(reason) ? reason : 'OTHER';
 
   try {
+    // MVP: staff selects from warehouses returned by /api/receiving-context/warehouses.
+    // TODO: add warehouse-scope enforcement when staff assignment model is available.
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
     if (!warehouse) {
       return res.status(404).json({ message: 'Warehouse not found' });
@@ -218,6 +220,108 @@ async function rejectPurchaseRequest(req, res) {
   }
 }
 
+async function convertPurchaseRequestToPO(req, res) {
+  const userId = req.user?.id || req.user?.sub;
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid current user context' });
+  }
+
+  try {
+    const request = await prisma.purchase_requests.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!request) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    if (request.status !== 'APPROVED') {
+      return res.status(400).json({ message: `Request must be APPROVED before converting (current: ${request.status})` });
+    }
+    if (request.purchase_order_id || request.status === 'CONVERTED') {
+      return res.status(400).json({ message: 'Request has already been converted to a Purchase Order' });
+    }
+    if (!request.book_variant_id) {
+      return res.status(400).json({ message: 'Request must have a specific book variant before converting to PO' });
+    }
+
+    const { supplier_id } = req.body;
+    if (!supplier_id) {
+      return res.status(400).json({ message: 'supplier_id is required' });
+    }
+
+    const supplier = await prisma.suppliers.findUnique({ where: { id: supplier_id } });
+    if (!supplier) {
+      return res.status(404).json({ message: 'Supplier not found' });
+    }
+    if (supplier.status && supplier.status !== 'ACTIVE') {
+      return res.status(400).json({ message: 'Supplier is not active' });
+    }
+
+    const variant = await prisma.book_variants.findUnique({ where: { id: request.book_variant_id } });
+    if (!variant) {
+      return res.status(400).json({ message: 'Book variant no longer exists' });
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const poNumber = `PO-${dateStr}-${suffix}`;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchase_orders.create({
+        data: {
+          po_number: poNumber,
+          supplier_id,
+          warehouse_id: request.warehouse_id,
+          status: 'DRAFT',
+          ordered_by_user_id: userId,
+          note: request.note || null,
+        },
+      });
+
+      await tx.purchase_order_items.create({
+        data: {
+          purchase_order_id: po.id,
+          variant_id: request.book_variant_id,
+          ordered_qty: request.quantity_requested,
+          unit_cost: 0,
+        },
+      });
+
+      const updated = await tx.purchase_requests.update({
+        where: { id: request.id },
+        data: {
+          status: 'CONVERTED',
+          purchase_order_id: po.id,
+          updated_at: new Date(),
+        },
+      });
+
+      return { po, updated };
+    });
+
+    try {
+      await prisma.inventory_audit_logs.create({
+        data: {
+          action_name: 'PURCHASE_REQUEST_CONVERTED_TO_PO',
+          actor_user_id: userId,
+          entity_type: 'PURCHASE_REQUEST',
+          entity_id: request.id,
+          after_data: { purchase_order_id: result.po.id, po_number: result.po.po_number },
+        },
+      });
+    } catch (_) { /* audit log is non-critical */ }
+
+    return res.status(201).json({
+      data: {
+        purchase_order_id: result.po.id,
+        po_number: result.po.po_number,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 module.exports = {
   createPurchaseRequest,
   getMyPurchaseRequests,
@@ -225,4 +329,5 @@ module.exports = {
   getPurchaseRequestById,
   approvePurchaseRequest,
   rejectPurchaseRequest,
+  convertPurchaseRequestToPO,
 };

@@ -68,7 +68,7 @@ export function MyExceptionReportsPage() {
     try {
       const [res, wRes] = await Promise.all([
         exceptionReportService.getMyReports(),
-        warehouseService.getAll(),
+        warehouseService.getReceivingWarehouses(),
       ]);
       setReports(Array.isArray(res.data) ? res.data : []);
       setWarehouses(Array.isArray(wRes) ? wRes : []);

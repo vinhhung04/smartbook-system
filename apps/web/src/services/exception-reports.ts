@@ -51,8 +51,18 @@ export const exceptionReportService = {
     return response.data;
   },
 
+  async getAll(params?: { status?: string; warehouse_id?: string; task_type?: string; exception_type?: string }): Promise<{ data: ExceptionReport[] }> {
+    const response = await inventoryAPI.get<{ data: ExceptionReport[] }>("/api/exception-reports", { params });
+    return response.data;
+  },
+
   async getReportById(id: string): Promise<{ data: ExceptionReport }> {
     const response = await inventoryAPI.get<{ data: ExceptionReport }>(`/api/exception-reports/${id}`);
+    return response.data;
+  },
+
+  async resolve(id: string, resolution_notes?: string): Promise<{ data: ExceptionReport }> {
+    const response = await inventoryAPI.post<{ data: ExceptionReport }>(`/api/exception-reports/${id}/resolve`, { resolution_notes });
     return response.data;
   },
 };

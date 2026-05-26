@@ -42,9 +42,46 @@ async function createExceptionReport(req, res) {
   }
   if (!note || !note.trim()) return res.status(400).json({ message: 'note is required' });
 
+  const userRoles = (req.user?.roles || []).map((r) => String(r).toUpperCase());
+  const isManager = req.user?.is_superuser || userRoles.some((r) => ['MANAGER', 'ADMIN'].includes(r));
+
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
     if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
+
+    // Validate that task_id belongs to a real task assigned to this user
+    if (task_type === 'RECEIVING' || task_type === 'PUTAWAY') {
+      const gr = await prisma.goods_receipts.findUnique({
+        where: { id: task_id },
+        select: { id: true, warehouse_id: true, received_by_user_id: true },
+      });
+      if (!gr) return res.status(404).json({ message: 'Task not found: goods receipt does not exist' });
+      if (gr.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+      if (!isManager && gr.received_by_user_id !== userId) {
+        return res.status(403).json({ message: 'Task not assigned to you' });
+      }
+    } else if (task_type === 'PICKING' || task_type === 'OUTBOUND') {
+      const oo = await prisma.outbound_orders.findUnique({
+        where: { id: task_id },
+        select: { id: true, warehouse_id: true, processed_by_user_id: true },
+      });
+      if (oo) {
+        if (oo.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+        if (!isManager && oo.processed_by_user_id !== userId) {
+          return res.status(403).json({ message: 'Task not assigned to you' });
+        }
+      } else {
+        const to = await prisma.transfer_orders.findUnique({
+          where: { id: task_id },
+          select: { id: true, from_warehouse_id: true, shipped_by_user_id: true },
+        });
+        if (!to) return res.status(404).json({ message: 'Task not found: no outbound or transfer order with this ID' });
+        if (to.from_warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+        if (!isManager && to.shipped_by_user_id !== userId) {
+          return res.status(403).json({ message: 'Task not assigned to you' });
+        }
+      }
+    }
 
     if (book_variant_id) {
       const variant = await prisma.book_variants.findUnique({ where: { id: book_variant_id } });
@@ -73,6 +110,18 @@ async function createExceptionReport(req, res) {
         status: 'OPEN',
       },
     });
+
+    try {
+      await prisma.inventory_audit_logs.create({
+        data: {
+          action_name: 'WAREHOUSE_EXCEPTION_REPORTED',
+          actor_user_id: userId,
+          entity_type: 'WAREHOUSE_EXCEPTION_REPORT',
+          entity_id: report.id,
+          after_data: { report_number: report.report_number, task_type, exception_type, warehouse_id },
+        },
+      });
+    } catch (_) { /* audit log is non-critical */ }
 
     return res.status(201).json({ data: report });
   } catch (error) {

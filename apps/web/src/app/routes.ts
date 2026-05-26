@@ -37,6 +37,8 @@ import { OutboundPage } from "@/components/pages/outbound";
 import { MyWarehouseTasksPage } from "@/components/pages/my-warehouse-tasks";
 import { MyPurchaseRequestsPage } from "@/components/pages/my-purchase-requests";
 import { MyExceptionReportsPage } from "@/components/pages/my-exception-reports";
+import { PurchaseRequestsPage } from "@/components/pages/purchase-requests";
+import { ExceptionReportsPage } from "@/components/pages/exception-reports";
 import { LoginPage } from "@/components/pages/login";
 import { RegisterPage } from "@/components/pages/register";
 import { CustomerLayout } from "@/components/pages/customer/layout";
@@ -205,6 +207,8 @@ export const router = createBrowserRouter([
       { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), Component: MyWarehouseTasksPage },
       { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequest), Component: MyPurchaseRequestsPage },
       { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReport), Component: MyExceptionReportsPage },
+      { path: "purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestManage), Component: PurchaseRequestsPage },
+      { path: "exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportManage), Component: ExceptionReportsPage },
       { path: "catalog", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: CatalogPage },
       { path: "book/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: BookDetailPage },
       { path: "inventory", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: InventoryPage },
