@@ -14,6 +14,7 @@ import {
   type PickingTaskType,
   type PickingVariantLookupMatch,
 } from "@/services/picking";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -47,10 +48,12 @@ export function PickingPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [claimingTaskKey, setClaimingTaskKey] = useState("");
+  const [assigningPickerIdByTask, setAssigningPickerIdByTask] = useState<Record<string, string>>({});
   const [confirmingPresence, setConfirmingPresence] = useState(false);
   const [confirmingLine, setConfirmingLine] = useState(false);
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
 
   const [tasks, setTasks] = useState<PickingTaskSummary[]>([]);
@@ -75,11 +78,19 @@ export function PickingPage() {
   const [activeScanTarget, setActiveScanTarget] = useState<PickingScanTarget | null>(null);
 
   const currentUser = authService.getCurrentUser();
+  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const canManageAssignment = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
   const currentUserId = String((currentUser as { id?: string } | null)?.id || "");
   const currentUserLabel = String((currentUser as { full_name?: string; username?: string; email?: string } | null)?.full_name
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.username
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.email
     || "Toi");
+  const staffNameById = useMemo(() => {
+    return new Map(warehouseStaff.map((user) => [
+      user.id,
+      user.full_name || user.username || user.email,
+    ]));
+  }, [warehouseStaff]);
 
   const filteredTasks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -165,18 +176,20 @@ export function PickingPage() {
       try {
         setLoading(true);
 
-        const [warehouseRows] = await Promise.all([
-          warehouseService.getAll(),
+        const [warehouseRows, staffRows] = await Promise.all([
+          canManageAssignment ? warehouseService.getAll() : Promise.resolve([]),
+          canManageAssignment ? userService.getWarehouseStaff() : Promise.resolve({ data: [] }),
         ]);
 
         const rows = Array.isArray(warehouseRows) ? warehouseRows : [];
+        setWarehouseStaff(Array.isArray(staffRows?.data) ? staffRows.data : []);
         setWarehouses(rows);
 
         const preferredWarehouseFromUser = String((currentUser as { primary_warehouse_id?: string } | null)?.primary_warehouse_id || "");
         const preferredWarehouse = rows.find((item) => item.id === preferredWarehouseFromUser)?.id || rows[0]?.id || "";
 
         setSelectedWarehouseId(preferredWarehouse);
-        await loadTasks(preferredWarehouse || undefined);
+        await loadTasks(canManageAssignment ? (preferredWarehouse || undefined) : undefined);
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach don picking"));
       } finally {
@@ -188,6 +201,10 @@ export function PickingPage() {
   }, []);
 
   useEffect(() => {
+    if (!canManageAssignment) {
+      return;
+    }
+
     if (!selectedWarehouseId) {
       setTasks([]);
       return;
@@ -196,19 +213,24 @@ export function PickingPage() {
     void loadTasks(selectedWarehouseId).catch((error) => {
       toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach don theo warehouse"));
     });
-  }, [selectedWarehouseId]);
+  }, [canManageAssignment, selectedWarehouseId]);
 
-  const handleClaimTask = async (task: PickingTaskSummary) => {
+  const handleAssignTask = async (task: PickingTaskSummary) => {
     const key = `${task.task_type}:${task.task_id}`;
+    const pickerUserId = assigningPickerIdByTask[key];
+
+    if (!pickerUserId) {
+      toast.error("Chon nhan vien kho truoc khi giao task");
+      return;
+    }
 
     try {
       setClaimingTaskKey(key);
-      await pickingService.claimTask(task.task_type, task.task_id);
-      await loadTasks(selectedWarehouseId || undefined);
-      await loadDetail(task.task_type, task.task_id);
-      toast.success(`Da nhan don ${task.order_number}`);
+      await pickingService.claimTask(task.task_type, task.task_id, pickerUserId);
+      await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
+      toast.success(`Da giao task ${task.order_number}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Nhan don that bai"));
+      toast.error(getApiErrorMessage(error, "Giao task that bai"));
     } finally {
       setClaimingTaskKey("");
     }
@@ -362,7 +384,7 @@ export function PickingPage() {
           preservePresence: true,
           currentLocationInput: nextLocationContext,
         }),
-        loadTasks(selectedWarehouseId || undefined),
+        loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
       ]);
 
       toast.success("Da confirm line pick thanh cong");
@@ -472,7 +494,9 @@ export function PickingPage() {
 
       <FadeItem>
         <h1 className="tracking-[-0.02em]">Picking</h1>
-        <p className="text-[12px] text-slate-500 mt-1">Nhan don da duyet va pick theo dung vi tri trong kho</p>
+        <p className="text-[12px] text-slate-500 mt-1">
+          {canManageAssignment ? "Quan ly giao picking task cho nhan vien kho va theo doi tien do pick" : "Thuc hien picking task da duoc giao"}
+        </p>
       </FadeItem>
 
       {!detail ? (
@@ -480,6 +504,7 @@ export function PickingPage() {
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {canManageAssignment ? (
                 <div>
                   <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
                   <select
@@ -498,8 +523,9 @@ export function PickingPage() {
                     Don transfer se hien o kho nguon, khong hien o kho dich.
                   </p>
                 </div>
+                ) : null}
 
-                <div className="md:col-span-2">
+                <div className={canManageAssignment ? "md:col-span-2" : "md:col-span-3"}>
                   <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tim don</p>
                   <div className="flex items-center gap-2">
                     <input
@@ -564,6 +590,10 @@ export function PickingPage() {
                     const key = `${task.task_type}:${task.task_id}`;
                     const assignedToMe = task.assigned_picker_user_id && task.assigned_picker_user_id === currentUserId;
                     const isAssigned = Boolean(task.assigned_picker_user_id);
+                    const selectedPickerId = assigningPickerIdByTask[key] || "";
+                    const assignedPickerName = task.assigned_picker_user_id
+                      ? staffNameById.get(task.assigned_picker_user_id) || (assignedToMe ? currentUserLabel : `User ${task.assigned_picker_user_id.slice(0, 8)}`)
+                      : "";
 
                     return (
                       <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
@@ -581,27 +611,43 @@ export function PickingPage() {
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.line_count}</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{task.remaining_quantity}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">
-                          {task.assigned_picker_user_id ? (assignedToMe ? currentUserLabel : `User ${task.assigned_picker_user_id.slice(0, 8)}`) : "Chua giao"}
+                          {isAssigned ? assignedPickerName : "Chua giao"}
                         </td>
                         <td className="px-4 py-3 text-[11px] text-slate-400">{formatDate(task.requested_at)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            {!isAssigned ? (
-                              <button
-                                onClick={() => void handleClaimTask(task)}
-                                disabled={claimingTaskKey === key}
-                                className="rounded-[8px] border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-700 hover:bg-emerald-100 disabled:opacity-60 transition-colors"
-                              >
-                                {claimingTaskKey === key ? "Dang nhan..." : "Nhan don"}
-                              </button>
+                            {!isAssigned && canManageAssignment ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={selectedPickerId}
+                                  onChange={(event) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: event.target.value }))}
+                                  className="h-8 min-w-[150px] rounded-[8px] border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
+                                  aria-label={`Chon nhan vien kho cho ${task.order_number}`}
+                                >
+                                  <option value="">Chon nhan vien</option>
+                                  {warehouseStaff.map((staff) => (
+                                    <option key={staff.id} value={staff.id}>
+                                      {staff.full_name || staff.username}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => void handleAssignTask(task)}
+                                  disabled={claimingTaskKey === key || !selectedPickerId}
+                                  className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60 transition-colors"
+                                >
+                                  <UserCheck className="h-3.5 w-3.5" />
+                                  {claimingTaskKey === key ? "Dang giao..." : "Giao task"}
+                                </button>
+                              </div>
                             ) : null}
 
-                            {(assignedToMe || !isAssigned) ? (
+                            {(canManageAssignment || assignedToMe) ? (
                               <button
                                 onClick={() => void handleOpenTask(task)}
                                 className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
                               >
-                                Vao pick <ArrowRight className="w-3 h-3" />
+                                Xem chi tiet <ArrowRight className="w-3 h-3" />
                               </button>
                             ) : null}
                           </div>

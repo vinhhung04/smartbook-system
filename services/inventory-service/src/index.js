@@ -2,7 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const { authenticateToken } = require('./middlewares/auth.middleware');
+const {
+  authenticateToken,
+  authorizeAnyPermission,
+  authorizeManagerDecision,
+  authorizeManagerRead,
+  authorizeTaskRead,
+} = require('./middlewares/auth.middleware');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -24,6 +30,8 @@ const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const supplierAccountRoutes = require('./routes/supplier-account.routes');
+const purchaseRequestRoutes = require('./routes/purchase-request.routes');
+const exceptionReportRoutes = require('./routes/exception-report.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +51,183 @@ app.use('/api/supplier-portal', supplierPortalRoutes);
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
 
+app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), async (req, res) => {
+  const userId = req.user?.id || req.user?.sub;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid current user context' });
+  }
+
+  try {
+    const [goodsReceipts, outboundOrders, transferOrders, purchaseRequests, exceptionReports] = await Promise.all([
+      prisma.goods_receipts.findMany({
+        where: { received_by_user_id: userId },
+        select: {
+          id: true,
+          receipt_number: true,
+          status: true,
+          warehouse_id: true,
+          received_at: true,
+          created_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+      prisma.outbound_orders.findMany({
+        where: { processed_by_user_id: userId },
+        select: {
+          id: true,
+          outbound_number: true,
+          status: true,
+          warehouse_id: true,
+          requested_at: true,
+          completed_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { requested_at: 'desc' },
+        take: 20,
+      }),
+      prisma.transfer_orders.findMany({
+        where: { shipped_by_user_id: userId },
+        select: {
+          id: true,
+          transfer_number: true,
+          status: true,
+          from_warehouse_id: true,
+          to_warehouse_id: true,
+          requested_at: true,
+          shipped_at: true,
+          received_at: true,
+          warehouses_transfer_orders_from_warehouse_idTowarehouses: { select: { code: true, name: true } },
+          warehouses_transfer_orders_to_warehouse_idTowarehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { requested_at: 'desc' },
+        take: 20,
+      }),
+      prisma.purchase_requests.findMany({
+        where: { created_by_user_id: userId },
+        select: {
+          id: true,
+          request_number: true,
+          status: true,
+          reason: true,
+          quantity_requested: true,
+          warehouse_id: true,
+          created_at: true,
+          approved_at: true,
+          rejected_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+      prisma.warehouse_exception_reports.findMany({
+        where: { created_by_user_id: userId },
+        select: {
+          id: true,
+          report_number: true,
+          status: true,
+          exception_type: true,
+          task_type: true,
+          warehouse_id: true,
+          created_at: true,
+          resolved_at: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    const tasks = [
+      ...goodsReceipts.map((task) => ({
+        id: task.id,
+        type: 'RECEIVING',
+        title: task.receipt_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.received_at,
+        action_path: `/orders/${task.id}`,
+      })),
+      ...outboundOrders.map((task) => ({
+        id: task.id,
+        type: 'OUTBOUND',
+        title: task.outbound_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.requested_at,
+        completed_at: task.completed_at,
+        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+      })),
+      ...transferOrders.map((task) => ({
+        id: task.id,
+        type: ['READY_FOR_OUTBOUND', 'OUTBOUND_COMPLETED'].includes(task.status) ? 'OUTBOUND' : 'PICKING',
+        title: task.transfer_number,
+        status: task.status,
+        warehouse: [
+          task.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code,
+          task.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code,
+        ].filter(Boolean).join(' -> ') || null,
+        created_at: task.requested_at,
+        completed_at: task.received_at || task.shipped_at,
+        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+      })),
+      ...purchaseRequests.map((task) => ({
+        id: task.id,
+        type: 'PURCHASE_REQUEST',
+        title: task.request_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.approved_at || task.rejected_at,
+        action_path: `/my-purchase-requests`,
+      })),
+      ...exceptionReports.map((task) => ({
+        id: task.id,
+        type: 'EXCEPTION_REPORT',
+        title: task.report_number,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.resolved_at,
+        action_path: `/my-exception-reports`,
+      })),
+    ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    const summary = tasks.reduce((acc, task) => {
+      const type = String(task.type || 'OTHER').toLowerCase();
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+
+    return res.json({ data: tasks, summary });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.read']), async (_req, res) => {
+  try {
+    const warehouses = await prisma.warehouses.findMany({
+      where: { is_active: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+      },
+      orderBy: { code: 'asc' },
+    });
+
+    return res.json({ data: warehouses });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 app.use('/api/books', bookRoutes);
 app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/locations', locationRoutes);
@@ -61,10 +246,12 @@ app.use('/api/storage-suggestions', storageSuggestionRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 app.use('/api/supplier-account', supplierAccountRoutes);
+app.use('/api/purchase-requests', purchaseRequestRoutes);
+app.use('/api/exception-reports', exceptionReportRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
-app.get('/api/inventory', async (req, res) => {
+app.get('/api/inventory', authorizeManagerRead(['inventory.stock.read']), async (req, res) => {
   try {
     const books = await prisma.books.findMany({
       include: {
@@ -94,7 +281,7 @@ app.get('/api/inventory', async (req, res) => {
 
 // ─── POST /api/inventory/inbound ─────────────────────────────────────────────
 // Nhập kho: cộng số lượng vào Inventory và ghi log StockMovement (type: IN)
-app.post('/api/inventory/inbound', async (req, res) => {
+app.post('/api/inventory/inbound', authorizeManagerDecision(['inventory.stock.adjust']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity, unitCost } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {
@@ -146,7 +333,7 @@ app.post('/api/inventory/inbound', async (req, res) => {
 
 // ─── POST /api/inventory/outbound ────────────────────────────────────────────
 // Xuất kho: trừ số lượng tồn và ghi log StockMovement (type: OUT)
-app.post('/api/inventory/outbound', async (req, res) => {
+app.post('/api/inventory/outbound', authorizeManagerDecision(['inventory.stock.adjust']), async (req, res) => {
   const { variantId, locationId, warehouseId, quantity } = req.body;
 
   if (!variantId || !locationId || !warehouseId || !quantity || quantity <= 0) {

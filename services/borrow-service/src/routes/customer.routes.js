@@ -9,7 +9,7 @@ const {
   updateMyProfile,
   getMyMembership,
 } = require('../controllers/customer.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeBorrowAdminRead, authorizeBorrowAdminWrite } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
@@ -17,10 +17,10 @@ router.get('/me/profile', getMyProfile);
 router.patch('/me/profile', updateMyProfile);
 router.get('/me/membership', getMyMembership);
 
-router.get('/', authorizeAnyPermission(['borrow.read', 'borrow.write']), listCustomers);
-router.post('/', authorizeAnyPermission(['borrow.write']), createCustomer);
-router.get('/:id', authorizeAnyPermission(['borrow.read', 'borrow.write']), getCustomerById);
-router.patch('/:id', authorizeAnyPermission(['borrow.write']), updateCustomer);
-router.get('/:id/membership/active', authorizeAnyPermission(['borrow.read', 'borrow.write']), getActiveMembership);
+router.get('/', authorizeBorrowAdminRead, listCustomers);
+router.post('/', authorizeBorrowAdminWrite, createCustomer);
+router.get('/:id', authorizeBorrowAdminRead, getCustomerById);
+router.patch('/:id', authorizeBorrowAdminWrite, updateCustomer);
+router.get('/:id/membership/active', authorizeBorrowAdminRead, getActiveMembership);
 
 module.exports = router;

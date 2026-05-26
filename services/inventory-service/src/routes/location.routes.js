@@ -7,14 +7,16 @@ const {
   updateLocation,
   deleteLocation,
 } = require('../controllers/location.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const canReadWarehouse = authorizeManagerRead(['inventory.warehouse.read']);
+const canWriteWarehouse = authorizeManagerDecision(['inventory.warehouse.write']);
 
-router.get('/tree/:warehouseId', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationTreeByWarehouse);
-router.get('/:id', authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']), getLocationById);
-router.post('/', authorizeAnyPermission(['inventory.stock.write']), createLocation);
-router.put('/:id', authorizeAnyPermission(['inventory.stock.write']), updateLocation);
-router.delete('/:id', authorizeAnyPermission(['inventory.stock.write']), deleteLocation);
+router.get('/tree/:warehouseId', canReadWarehouse, getLocationTreeByWarehouse);
+router.get('/:id', canReadWarehouse, getLocationById);
+router.post('/', canWriteWarehouse, createLocation);
+router.put('/:id', canWriteWarehouse, updateLocation);
+router.delete('/:id', canWriteWarehouse, deleteLocation);
 
 module.exports = router;

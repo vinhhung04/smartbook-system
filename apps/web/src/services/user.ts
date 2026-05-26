@@ -11,6 +11,14 @@ export interface User {
   created_at: string;
 }
 
+export interface WarehouseStaffOption {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  status: 'ACTIVE';
+}
+
 export interface UserCreateRequest {
   username: string;
   full_name: string;
@@ -57,5 +65,10 @@ export const userService = {
   changeRole: async (id: string, roleIds: string[]) => {
     const response = await authAPI.patch(`/iam/users/${id}`, { role_ids: roleIds });
     return response.data;
+  },
+
+  getWarehouseStaff: async () => {
+    const response = await authAPI.get('/auth/warehouse-staff');
+    return response.data as { data: WarehouseStaffOption[] };
   },
 };

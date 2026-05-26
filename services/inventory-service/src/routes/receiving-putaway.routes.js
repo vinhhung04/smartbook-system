@@ -11,19 +11,20 @@ const {
   transferReceivingToShelf,
   reverseShelfToReceiving,
 } = require('../controllers/receiving-putaway.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canOperateStock = authorizeAnyPermission(['inventory.stock.write']);
+const canReadTask = authorizeManagerRead(['inventory.stock.read']);
+const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
 
-router.get('/warehouses/:warehouseId/receivings', canOperateStock, getWarehouseReceivings);
-router.get('/receivings/:receivingId/items', canOperateStock, getReceivingItems);
-router.get('/receivings/:receivingId/candidates', canOperateStock, getCompartmentCandidates);
-router.get('/lookup/location-by-barcode', canOperateStock, lookupCompartmentByBarcode);
-router.get('/lookup/variant-by-barcode', canOperateStock, lookupVariantByBarcode);
-router.get('/warehouses/:warehouseId/compartments/occupied', canOperateStock, getOccupiedCompartments);
-router.get('/compartments/:compartmentId/items', canOperateStock, getCompartmentItems);
-router.post('/transfer', canOperateStock, transferReceivingToShelf);
-router.post('/reverse', canOperateStock, reverseShelfToReceiving);
+router.get('/warehouses/:warehouseId/receivings', canReadTask, getWarehouseReceivings);
+router.get('/receivings/:receivingId/items', canReadTask, getReceivingItems);
+router.get('/receivings/:receivingId/candidates', canReadTask, getCompartmentCandidates);
+router.get('/lookup/location-by-barcode', canReadTask, lookupCompartmentByBarcode);
+router.get('/lookup/variant-by-barcode', canReadTask, lookupVariantByBarcode);
+router.get('/warehouses/:warehouseId/compartments/occupied', canReadTask, getOccupiedCompartments);
+router.get('/compartments/:compartmentId/items', canReadTask, getCompartmentItems);
+router.post('/transfer', canDecideOperation, transferReceivingToShelf);
+router.post('/reverse', canDecideOperation, reverseShelfToReceiving);
 
 module.exports = router;

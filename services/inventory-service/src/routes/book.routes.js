@@ -9,16 +9,25 @@ const {
   updateBookDetails,
   deleteBook,
 } = require('../controllers/book.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const {
+  authorizeAnyPermission,
+  authorizeAnyRole,
+  authorizeManagerDecision,
+  authorizeTaskProgress,
+} = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const canReadCatalog = authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']);
+const canWriteCatalog = authorizeManagerDecision(['inventory.catalog.write']);
+const canCreateIncompleteFromReceiving = authorizeTaskProgress(['inventory.task.progress']);
+const canUpdateCatalogDetails = authorizeAnyRole(['ADMIN', 'MANAGER', 'LIBRARIAN', 'CUSTOMER_SERVICE']);
 
-router.get('/', authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']), getAllBooks);
-router.get('/barcode/:barcode', authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']), findBookByBarcode);
-router.get('/isbn13/:isbn13', authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']), findBookByIsbn13);
-router.post('/incomplete', authorizeAnyPermission(['inventory.catalog.write']), createIncompleteBook);
-router.get('/:id', authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']), getBookById);
-router.patch('/:id', authorizeAnyPermission(['inventory.catalog.write']), updateBookDetails);
-router.delete('/:id', authorizeAnyPermission(['inventory.catalog.write']), deleteBook);
+router.get('/', canReadCatalog, getAllBooks);
+router.get('/barcode/:barcode', canReadCatalog, findBookByBarcode);
+router.get('/isbn13/:isbn13', canReadCatalog, findBookByIsbn13);
+router.post('/incomplete', canCreateIncompleteFromReceiving, createIncompleteBook);
+router.get('/:id', canReadCatalog, getBookById);
+router.patch('/:id', canUpdateCatalogDetails, updateBookDetails);
+router.delete('/:id', canWriteCatalog, deleteBook);
 
 module.exports = router;

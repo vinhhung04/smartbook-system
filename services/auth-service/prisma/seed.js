@@ -28,8 +28,11 @@ async function main() {
     { code: 'auth.users.write', module_name: 'auth', action_name: 'write', description: 'Create, update, or deactivate user accounts' },
     { code: 'auth.roles.read', module_name: 'auth', action_name: 'read', description: 'View roles and their permissions' },
     { code: 'auth.roles.write', module_name: 'auth', action_name: 'write', description: 'Create, update, or delete roles and permissions' },
+    { code: 'auth.permissions.read', module_name: 'auth', action_name: 'read', description: 'View permissions' },
+    { code: 'auth.permissions.write', module_name: 'auth', action_name: 'write', description: 'Create or update permissions' },
     { code: 'auth.sessions.manage', module_name: 'auth', action_name: 'write', description: 'Manage user sessions and tokens' },
     { code: 'auth.audit.read', module_name: 'auth', action_name: 'read', description: 'View authentication audit logs' },
+    { code: 'audit.read', module_name: 'audit', action_name: 'read', description: 'View system audit trail' },
 
     // Catalog module (Inventory)
     { code: 'inventory.catalog.read', module_name: 'inventory', action_name: 'read', description: 'View catalog, books, and variants' },
@@ -40,6 +43,10 @@ async function main() {
     // Stock module (Inventory)
     { code: 'inventory.stock.read', module_name: 'inventory', action_name: 'read', description: 'View stock balances, movements, and inventory' },
     { code: 'inventory.stock.write', module_name: 'inventory', action_name: 'write', description: 'Post inventory movements and adjustments' },
+    { code: 'inventory.stock.adjust', module_name: 'inventory', action_name: 'write', description: 'Adjust stock balances and post manager-approved stock changes' },
+    { code: 'inventory.operation.decide', module_name: 'inventory', action_name: 'write', description: 'Create or approve warehouse operational decisions such as inbound, outbound, transfer, and receiving flows' },
+    { code: 'inventory.task.read', module_name: 'inventory', action_name: 'read', description: 'View assigned warehouse tasks' },
+    { code: 'inventory.task.progress', module_name: 'inventory', action_name: 'write', description: 'Update safe notes or progress for warehouse tasks assigned to the current user' },
     { code: 'inventory.stock.audit', module_name: 'inventory', action_name: 'write', description: 'Perform stock audits and cycle counts' },
 
     // Warehouse module
@@ -49,12 +56,19 @@ async function main() {
     // Receiving & Putaway
     { code: 'inventory.receiving.read', module_name: 'inventory', action_name: 'read', description: 'View goods receipts and receiving locations' },
     { code: 'inventory.receiving.write', module_name: 'inventory', action_name: 'write', description: 'Create goods receipts and process putaway' },
+    { code: 'inventory.putaway.read', module_name: 'inventory', action_name: 'read', description: 'View putaway tasks assigned to warehouse staff' },
     { code: 'inventory.putaway.execute', module_name: 'inventory', action_name: 'write', description: 'Execute putaway operations' },
+    { code: 'inventory.picking.read', module_name: 'inventory', action_name: 'read', description: 'View picking tasks assigned to warehouse staff' },
+    { code: 'inventory.outbound.read', module_name: 'inventory', action_name: 'read', description: 'View outbound tasks assigned to warehouse staff' },
 
     // Purchase module
     { code: 'inventory.purchase.read', module_name: 'inventory', action_name: 'read', description: 'View purchase orders and suppliers' },
     { code: 'inventory.purchase.write', module_name: 'inventory', action_name: 'write', description: 'Create and manage purchase orders' },
     { code: 'inventory.purchase.approve', module_name: 'inventory', action_name: 'write', description: 'Approve purchase orders' },
+    { code: 'inventory.supplier.read', module_name: 'inventory', action_name: 'read', description: 'View suppliers and supplier delivery documents' },
+    { code: 'inventory.supplier.write', module_name: 'inventory', action_name: 'write', description: 'Create or update suppliers' },
+    { code: 'inventory.audit.read', module_name: 'inventory', action_name: 'read', description: 'View stock audit plans and variances' },
+    { code: 'inventory.audit.approve', module_name: 'inventory', action_name: 'write', description: 'Approve stock audit variances' },
 
     // Supplier account module
     { code: 'supplier.portal.read', module_name: 'supplier', action_name: 'read', description: 'View supplier account purchase orders and delivery documents' },
@@ -71,6 +85,12 @@ async function main() {
     { code: 'borrow.loans.write', module_name: 'borrow', action_name: 'write', description: 'Create reservations, loans, and process returns' },
     { code: 'borrow.fines.manage', module_name: 'borrow', action_name: 'write', description: 'Issue, adjust, or waive fines' },
     { code: 'borrow.payments.process', module_name: 'borrow', action_name: 'write', description: 'Process customer payments' },
+    { code: 'borrow.read', module_name: 'borrow', action_name: 'read', description: 'Compatibility permission for circulation read endpoints' },
+    { code: 'borrow.write', module_name: 'borrow', action_name: 'write', description: 'Compatibility permission for circulation write endpoints' },
+    { code: 'borrow.fine.write', module_name: 'borrow', action_name: 'write', description: 'Manage fines and fine payments' },
+    { code: 'borrow.membership.write', module_name: 'borrow', action_name: 'write', description: 'Manage customer memberships and plans' },
+    { code: 'customer.self.read', module_name: 'customer', action_name: 'read', description: 'View own customer portal resources' },
+    { code: 'customer.self.write', module_name: 'customer', action_name: 'write', description: 'Update own customer profile and self-service requests' },
 
     // AI module
     { code: 'ai.scan.receipt', module_name: 'ai', action_name: 'write', description: 'Scan and extract data from receipts' },
@@ -81,6 +101,7 @@ async function main() {
     { code: 'analytics.reports.view', module_name: 'analytics', action_name: 'read', description: 'View analytics reports and dashboards' },
     { code: 'analytics.reports.export', module_name: 'analytics', action_name: 'read', description: 'Export analytics reports' },
     { code: 'analytics.forecast.view', module_name: 'analytics', action_name: 'read', description: 'View demand forecasts' },
+    { code: 'reports.read', module_name: 'analytics', action_name: 'read', description: 'View management reports' },
 
     // Chatbot module
     { code: 'chatbot.use', module_name: 'chatbot', action_name: 'execute', description: 'Use chatbot and save reports' },
@@ -89,6 +110,10 @@ async function main() {
     { code: 'platform.settings.read', module_name: 'platform', action_name: 'read', description: 'View platform settings' },
     { code: 'platform.settings.write', module_name: 'platform', action_name: 'write', description: 'Update platform settings' },
     { code: 'observability.logs.read', module_name: 'platform', action_name: 'read', description: 'View system logs and audit trails' },
+
+    // Warehouse staff self-service module
+    { code: 'inventory.purchase.request', module_name: 'inventory', action_name: 'write', description: 'Submit purchase/replenishment requests for manager review' },
+    { code: 'inventory.exception.report', module_name: 'inventory', action_name: 'write', description: 'Create shortage, overage, or damage reports for warehouse tasks' },
   ];
 
   for (const perm of permissions) {
@@ -132,7 +157,18 @@ async function main() {
     create: {
       code: 'STAFF',
       name: 'Staff',
-      description: 'Can operate warehouse workflows, process borrow operations',
+      description: 'Warehouse staff who operate catalog, receiving, putaway, picking and stock workflows',
+      is_system: true,
+    },
+  });
+
+  const warehouseStaffRole = await prisma.role.upsert({
+    where: { code: 'WAREHOUSE_STAFF' },
+    update: {},
+    create: {
+      code: 'WAREHOUSE_STAFF',
+      name: 'Warehouse Staff',
+      description: 'Focused warehouse role for receiving, putaway, picking, outbound and stock movement workflows',
       is_system: true,
     },
   });
@@ -159,7 +195,29 @@ async function main() {
     },
   });
 
-  console.log('✅ Created 5 roles');
+  const librarianRole = await prisma.role.upsert({
+    where: { code: 'LIBRARIAN' },
+    update: {},
+    create: {
+      code: 'LIBRARIAN',
+      name: 'Librarian',
+      description: 'Circulation desk role for customers, reservations, loans, returns, renewals and fines',
+      is_system: true,
+    },
+  });
+
+  const customerRole = await prisma.role.upsert({
+    where: { code: 'CUSTOMER' },
+    update: {},
+    create: {
+      code: 'CUSTOMER',
+      name: 'Customer',
+      description: 'Customer portal self-service role',
+      is_system: true,
+    },
+  });
+
+  console.log('✅ Created system roles');
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // STEP 3: ASSIGN PERMISSIONS TO ROLES
@@ -182,90 +240,100 @@ async function main() {
     permMap[p.code] = p;
   }
 
-  // ADMIN: All permissions
-  for (const perm of allPerms) {
-    await prisma.rolePermission.upsert({
-      where: { role_id_permission_id: { role_id: adminRole.id, permission_id: perm.id } },
-      update: {},
-      create: { role_id: adminRole.id, permission_id: perm.id },
-    });
+  async function setRolePermissions(role, codes) {
+    await prisma.rolePermission.deleteMany({ where: { role_id: role.id } });
+    for (const code of codes) {
+      if (permMap[code]) {
+        await prisma.rolePermission.upsert({
+          where: { role_id_permission_id: { role_id: role.id, permission_id: permMap[code].id } },
+          update: {},
+          create: { role_id: role.id, permission_id: permMap[code].id },
+        });
+      }
+    }
   }
+
+  await setRolePermissions(adminRole, allPerms.map((perm) => perm.code));
   console.log('✅ Assigned all permissions to ADMIN');
 
-  // MANAGER: Read all + approve + analytics + some write
   const managerPermCodes = [
-    'inventory.catalog.read', 'inventory.stock.read', 'inventory.warehouse.read',
-    'inventory.receiving.read', 'inventory.purchase.read', 'inventory.purchase.approve',
+    'inventory.catalog.read',
+    'inventory.catalog.write',
+    'inventory.stock.read',
+    'inventory.stock.adjust',
+    'inventory.operation.decide',
+    'inventory.warehouse.read',
+    'inventory.warehouse.write',
+    'inventory.task.read',
+    'inventory.task.progress',
+    'inventory.receiving.read',
+    'inventory.receiving.write',
+    'inventory.putaway.read',
+    'inventory.putaway.execute',
+    'inventory.picking.read',
+    'inventory.outbound.read',
+    'inventory.purchase.read',
+    'inventory.purchase.write',
+    'inventory.purchase.approve',
+    'inventory.supplier.read',
+    'inventory.supplier.write',
+    'inventory.audit.read',
+    'inventory.audit.approve',
     'inventory.transfer.read',
-    'borrow.customers.read', 'borrow.loans.read', 'borrow.fines.manage',
-    'analytics.reports.view', 'analytics.reports.export', 'analytics.forecast.view',
+    'inventory.transfer.write',
+    'borrow.read',
+    'borrow.customers.read',
+    'borrow.loans.read',
+    'analytics.reports.view',
+    'analytics.reports.export',
+    'analytics.forecast.view',
+    'reports.read',
     'observability.logs.read',
+    'audit.read',
     'ai.recommendation.view',
     'platform.settings.read',
+    'inventory.purchase.request',
+    'inventory.exception.report',
   ];
-  for (const code of managerPermCodes) {
-    if (permMap[code]) {
-      await prisma.rolePermission.upsert({
-        where: { role_id_permission_id: { role_id: managerRole.id, permission_id: permMap[code].id } },
-        update: {},
-        create: { role_id: managerRole.id, permission_id: permMap[code].id },
-      });
-    }
-  }
+  await setRolePermissions(managerRole, managerPermCodes);
   console.log(`✅ Assigned ${managerPermCodes.length} permissions to MANAGER`);
 
-  // STAFF: Basic operations
-  const staffPermCodes = [
-    'inventory.catalog.read', 'inventory.stock.read', 'inventory.stock.write',
-    'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute',
-    'borrow.customers.read', 'borrow.loans.read', 'borrow.loans.write',
-    'analytics.reports.view',
-  ];
-  for (const code of staffPermCodes) {
-    if (permMap[code]) {
-      await prisma.rolePermission.upsert({
-        where: { role_id_permission_id: { role_id: staffRole.id, permission_id: permMap[code].id } },
-        update: {},
-        create: { role_id: staffRole.id, permission_id: permMap[code].id },
-      });
-    }
-  }
-  console.log(`✅ Assigned ${staffPermCodes.length} permissions to STAFF`);
-
-  // WAREHOUSE_OPERATOR: Warehouse operations only
   const warehousePermCodes = [
-    'inventory.stock.read', 'inventory.stock.write',
-    'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute',
-    'inventory.warehouse.read',
-  ];
-  for (const code of warehousePermCodes) {
-    if (permMap[code]) {
-      await prisma.rolePermission.upsert({
-        where: { role_id_permission_id: { role_id: warehouseRole.id, permission_id: permMap[code].id } },
-        update: {},
-        create: { role_id: warehouseRole.id, permission_id: permMap[code].id },
-      });
-    }
-  }
-  console.log(`✅ Assigned ${warehousePermCodes.length} permissions to WAREHOUSE_OPERATOR`);
-
-  // CUSTOMER_SERVICE: Customer-facing operations
-  const customerServicePermCodes = [
-    'borrow.customers.read', 'borrow.customers.write',
-    'borrow.loans.read', 'borrow.loans.write',
-    'borrow.fines.manage', 'borrow.payments.process',
     'inventory.catalog.read',
+    'inventory.task.read',
+    'inventory.task.progress',
+    'inventory.purchase.request',
+    'inventory.exception.report',
   ];
-  for (const code of customerServicePermCodes) {
-    if (permMap[code]) {
-      await prisma.rolePermission.upsert({
-        where: { role_id_permission_id: { role_id: customerServiceRole.id, permission_id: permMap[code].id } },
-        update: {},
-        create: { role_id: customerServiceRole.id, permission_id: permMap[code].id },
-      });
-    }
-  }
-  console.log(`✅ Assigned ${customerServicePermCodes.length} permissions to CUSTOMER_SERVICE`);
+  await setRolePermissions(staffRole, warehousePermCodes);
+  await setRolePermissions(warehouseStaffRole, warehousePermCodes);
+  await setRolePermissions(warehouseRole, warehousePermCodes);
+  console.log(`✅ Assigned ${warehousePermCodes.length} permissions to warehouse staff roles`);
+
+  const librarianPermCodes = [
+    'inventory.catalog.read',
+    'borrow.read',
+    'borrow.write',
+    'borrow.customers.read',
+    'borrow.customers.write',
+    'borrow.loans.read',
+    'borrow.loans.write',
+    'borrow.fines.manage',
+    'borrow.fine.write',
+    'borrow.membership.write',
+    'borrow.payments.process',
+  ];
+  await setRolePermissions(librarianRole, librarianPermCodes);
+  await setRolePermissions(customerServiceRole, librarianPermCodes);
+  console.log(`✅ Assigned ${librarianPermCodes.length} permissions to LIBRARIAN/CUSTOMER_SERVICE`);
+
+  const customerPermCodes = [
+    'inventory.catalog.read',
+    'customer.self.read',
+    'customer.self.write',
+  ];
+  await setRolePermissions(customerRole, customerPermCodes);
+  console.log(`✅ Assigned ${customerPermCodes.length} permissions to CUSTOMER`);
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // STEP 4: USERS
@@ -276,6 +344,7 @@ async function main() {
     'supplier.portal.read',
     'supplier.portal.write',
   ];
+  await prisma.rolePermission.deleteMany({ where: { role_id: supplierRole.id } });
   for (const code of supplierPermCodes) {
     if (permMap[code]) {
       await prisma.rolePermission.upsert({
@@ -386,6 +455,32 @@ async function main() {
         is_superuser: false,
       },
     }),
+    prisma.user.upsert({
+      where: { username: 'librarian01' },
+      update: {},
+      create: {
+        username: 'librarian01',
+        email: 'librarian01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Nguyen Thi Thu Thu',
+        phone: '+84901234578',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
+    prisma.user.upsert({
+      where: { username: 'customer01' },
+      update: {},
+      create: {
+        username: 'customer01',
+        email: 'customer01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Demo Customer',
+        phone: '+84901234579',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
     // Inactive user
     prisma.user.upsert({
       where: { username: 'inactive01' },
@@ -448,47 +543,30 @@ async function main() {
   // STEP 5: ASSIGN ROLES TO USERS
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[0].id, role_id: adminRole.id } },
-    update: {},
-    create: { user_id: users[0].id, role_id: adminRole.id },
-  });
+  const userByUsername = Object.fromEntries(users.map((user) => [user.username, user]));
 
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[1].id, role_id: managerRole.id } },
-    update: {},
-    create: { user_id: users[1].id, role_id: managerRole.id },
-  });
+  async function assignUserRoles(username, roles) {
+    const user = userByUsername[username];
+    if (!user) return;
+    await prisma.userRole.deleteMany({ where: { user_id: user.id } });
+    for (const role of roles) {
+      await prisma.userRole.upsert({
+        where: { user_id_role_id: { user_id: user.id, role_id: role.id } },
+        update: {},
+        create: { user_id: user.id, role_id: role.id },
+      });
+    }
+  }
 
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[2].id, role_id: staffRole.id } },
-    update: {},
-    create: { user_id: users[2].id, role_id: staffRole.id },
-  });
-
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[3].id, role_id: staffRole.id } },
-    update: {},
-    create: { user_id: users[3].id, role_id: staffRole.id },
-  });
-
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[4].id, role_id: warehouseRole.id } },
-    update: {},
-    create: { user_id: users[4].id, role_id: warehouseRole.id },
-  });
-
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[5].id, role_id: warehouseRole.id } },
-    update: {},
-    create: { user_id: users[5].id, role_id: warehouseRole.id },
-  });
-
-  await prisma.userRole.upsert({
-    where: { user_id_role_id: { user_id: users[6].id, role_id: customerServiceRole.id } },
-    update: {},
-    create: { user_id: users[6].id, role_id: customerServiceRole.id },
-  });
+  await assignUserRoles('hung', [adminRole]);
+  await assignUserRoles('manager01', [managerRole]);
+  await assignUserRoles('staff01', [staffRole]);
+  await assignUserRoles('staff02', [staffRole]);
+  await assignUserRoles('staff03', [warehouseStaffRole]);
+  await assignUserRoles('warehouse01', [warehouseStaffRole]);
+  await assignUserRoles('cs01', [librarianRole]);
+  await assignUserRoles('librarian01', [librarianRole]);
+  await assignUserRoles('customer01', [customerRole]);
 
   console.log('✅ Assigned roles to all users');
 
@@ -496,13 +574,9 @@ async function main() {
   // STEP 6: USER WAREHOUSE SCOPES
   // ═══════════════════════════════════════════════════════════════════════════════
 
-  for (const supplierUser of users.slice(8, 11)) {
-    await prisma.userRole.upsert({
-      where: { user_id_role_id: { user_id: supplierUser.id, role_id: supplierRole.id } },
-      update: {},
-      create: { user_id: supplierUser.id, role_id: supplierRole.id },
-    });
-  }
+  await assignUserRoles('supplier-sv', [supplierRole]);
+  await assignUserRoles('supplier-phuongnam', [supplierRole]);
+  await assignUserRoles('supplier-ibd', [supplierRole]);
 
   // Placeholder warehouse IDs - these should match actual warehouse IDs from inventory service
   const warehouseIds = {
@@ -512,17 +586,17 @@ async function main() {
   };
 
   const warehouseScopes = [
-    { user_id: users[0].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'FULL' },
-    { user_id: users[0].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'FULL' },
-    { user_id: users[0].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'FULL' },
-    { user_id: users[1].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
-    { user_id: users[1].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'READ' },
-    { user_id: users[1].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'READ' },
-    { user_id: users[2].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
-    { user_id: users[3].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
-    { user_id: users[4].id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
-    { user_id: users[5].id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
-    { user_id: users[6].id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'FULL' },
+    { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'FULL' },
+    { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'FULL' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'READ' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'READ' },
+    { user_id: userByUsername.staff01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.staff02.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.staff03.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.warehouse01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.cs01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
   ];
 
   for (const scope of warehouseScopes) {
@@ -592,18 +666,20 @@ async function main() {
   console.log('🔐 SMARTBOOK AUTH SEED COMPLETED SUCCESSFULLY!');
   console.log('═══════════════════════════════════════════════════════════════════════');
   console.log(`   • ${permissions.length} Permissions (organized by module)`);
-  console.log(`   • 5 Roles:`);
+  console.log(`   • System Roles:`);
   console.log(`     - ADMIN: Full access`);
-  console.log(`     - MANAGER: Monitor & approve`);
-  console.log(`     - STAFF: Basic operations`);
-  console.log(`     - WAREHOUSE_OPERATOR: Warehouse workflows`);
-  console.log(`     - CUSTOMER_SERVICE: Customer-facing`);
+  console.log(`     - MANAGER: Operational decisions, approvals, and analytics`);
+  console.log(`     - STAFF / WAREHOUSE_STAFF: Assigned warehouse task tracking`);
+  console.log(`     - LIBRARIAN / CUSTOMER_SERVICE: Circulation workflows`);
+  console.log(`     - CUSTOMER: Customer portal self-service`);
+  console.log(`     - SUPPLIER: Supplier portal`);
   console.log(`   • ${users.length} Users`);
   console.log(`     - hung (Admin)`);
   console.log(`     - manager01 (Manager)`);
-  console.log(`     - staff01, staff02, staff03 (Staff)`);
-  console.log(`     - warehouse01 (Warehouse Operator)`);
-  console.log(`     - cs01 (Customer Service)`);
+  console.log(`     - staff01, staff02 (Staff)`);
+  console.log(`     - staff03, warehouse01 (Warehouse Staff)`);
+  console.log(`     - librarian01, cs01 (Librarian)`);
+  console.log(`     - customer01 (Customer)`);
   console.log(`     - inactive01 (Inactive)`);
   console.log(`   • ${warehouseScopes.length} User Warehouse Scopes`);
   console.log(`   • Sample audit logs`);

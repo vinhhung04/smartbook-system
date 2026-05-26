@@ -24,6 +24,27 @@ function normalizeTaskType(value) {
   return null;
 }
 
+function getTaskPermissionScope(user = {}) {
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+
+  return {
+    currentUserId: parseId(user.id || user.sub),
+    canManageAssignment:
+      Boolean(user.is_superuser) ||
+      roles.includes("ADMIN") ||
+      roles.includes("MANAGER"),
+  };
+}
+
+function canAccessAssignedTask(user, assignedUserId) {
+  const scope = getTaskPermissionScope(user);
+  if (scope.canManageAssignment) return true;
+  const assigned = parseId(assignedUserId);
+  return Boolean(scope.currentUserId && assigned && assigned === scope.currentUserId);
+}
+
 function createReceiptNumber(baseTimestamp) {
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
   return `GR-TR-${baseTimestamp}-${suffix}`;
@@ -140,6 +161,13 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
 
 async function listOutboundQueue(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
+  const scope = getTaskPermissionScope(req.user || {});
+  const outboundAssignment = scope.canManageAssignment
+    ? {}
+    : { processed_by_user_id: scope.currentUserId };
+  const transferAssignment = scope.canManageAssignment
+    ? {}
+    : { shipped_by_user_id: scope.currentUserId };
 
   try {
     const [outboundOrders, transferOrders] = await Promise.all([
@@ -147,6 +175,7 @@ async function listOutboundQueue(req, res) {
         where: {
           status: "READY_FOR_OUTBOUND",
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...outboundAssignment,
         },
         include: {
           warehouses: { select: { id: true, code: true, name: true } },
@@ -160,6 +189,7 @@ async function listOutboundQueue(req, res) {
         where: {
           status: "READY_FOR_OUTBOUND",
           ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
+          ...transferAssignment,
         },
         include: {
           warehouses_transfer_orders_from_warehouse_idTowarehouses: {
@@ -267,6 +297,9 @@ async function getOutboundOrderDetail(req, res) {
 
       if (!order)
         return res.status(404).json({ message: "Outbound order not found" });
+      if (!canAccessAssignedTask(req.user || {}, order.processed_by_user_id)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
 
       return res.json({
         task_type: "outbound",
@@ -323,6 +356,9 @@ async function getOutboundOrderDetail(req, res) {
 
     if (!order)
       return res.status(404).json({ message: "Transfer order not found" });
+    if (!canAccessAssignedTask(req.user || {}, order.shipped_by_user_id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
 
     return res.json({
       task_type: "transfer",
@@ -401,6 +437,7 @@ async function confirmOutbound(req, res) {
               outbound_number: true,
               status: true,
               warehouse_id: true,
+              processed_by_user_id: true,
             },
           });
 
@@ -415,6 +452,18 @@ async function confirmOutbound(req, res) {
               invalid: true,
               statusCode: 400,
               message: "Outbound order must be READY_FOR_OUTBOUND",
+            };
+          }
+
+          const scope = getTaskPermissionScope(req.user || {});
+          if (
+            !scope.canManageAssignment &&
+            order.processed_by_user_id !== scope.currentUserId
+          ) {
+            return {
+              invalid: true,
+              statusCode: 403,
+              message: "Task must be assigned to current warehouse staff",
             };
           }
 
@@ -571,6 +620,7 @@ async function confirmOutbound(req, res) {
             status: true,
             from_warehouse_id: true,
             to_warehouse_id: true,
+            shipped_by_user_id: true,
           },
         });
 
@@ -585,6 +635,18 @@ async function confirmOutbound(req, res) {
             invalid: true,
             statusCode: 400,
             message: "Transfer order must be READY_FOR_OUTBOUND",
+          };
+        }
+
+        const scope = getTaskPermissionScope(req.user || {});
+        if (
+          !scope.canManageAssignment &&
+          order.shipped_by_user_id !== scope.currentUserId
+        ) {
+          return {
+            invalid: true,
+            statusCode: 403,
+            message: "Task must be assigned to current warehouse staff",
           };
         }
 

@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
-const variantId = process.env.TEST_VARIANT_ID || '00000000-0000-0000-0000-000000000902';
-const warehouseId = process.env.TEST_WAREHOUSE_ID || '00000000-0000-0000-0000-000000000562';
+let variantId = process.env.TEST_VARIANT_ID || '';
+let warehouseId = process.env.TEST_WAREHOUSE_ID || '';
 
 function b64url(input) {
   return Buffer.from(input)
@@ -59,6 +59,31 @@ async function request(method, path, body, extraHeaders = {}, tokenOverride = to
   return { ok: response.ok, status: response.status, data };
 }
 
+async function resolveStockTarget() {
+  if (variantId && warehouseId) return;
+
+  const response = await fetch(`${baseUrl}/api/books`, {
+    headers: makeHeaders({}, token),
+  });
+  const books = await response.json().catch(() => []);
+  const candidate = (Array.isArray(books) ? books : []).find((book) =>
+    book?.variant_id &&
+    book?.default_warehouse_id &&
+    Number(book?.quantity || 0) >= 4
+  ) || (Array.isArray(books) ? books : []).find((book) =>
+    book?.variant_id &&
+    book?.default_warehouse_id &&
+    Number(book?.quantity || 0) > 0
+  );
+
+  if (!candidate) {
+    throw new Error('No borrowable variant with available stock found via /api/books');
+  }
+
+  variantId = candidate.variant_id;
+  warehouseId = candidate.default_warehouse_id;
+}
+
 const results = [];
 function add(name, ok, detail) {
   results.push({ name, ok, detail });
@@ -71,6 +96,8 @@ let firstFine = null;
 let secondFine = null;
 
 async function run() {
+  await resolveStockTarget();
+
   const profile = await request('GET', '/borrow/my/profile');
   if (profile.ok && profile.data?.data?.id) {
     customerId = profile.data.data.id;

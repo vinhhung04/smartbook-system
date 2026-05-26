@@ -92,6 +92,8 @@ model book_variants {
   transfer_order_items transfer_order_items[]
   smart_receiving_matched_variants smart_receiving_items[] @relation("smart_receiving_matched_variants")
   smart_receiving_corrected_variants smart_receiving_items[] @relation("smart_receiving_corrected_variants")
+  purchase_requests          purchase_requests[]
+  warehouse_exception_reports warehouse_exception_reports[]
 
   @@index([book_id], map: "idx_book_variants_book_id")
   @@index([isbn13], map: "idx_book_variants_isbn13")
@@ -177,6 +179,7 @@ model goods_receipts {
   warehouses          warehouses            @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
   smart_receiving_drafts smart_receiving_drafts[]
   supplier_shortage_reports supplier_shortage_reports[]
+  warehouse_exception_reports warehouse_exception_reports[]
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
 }
@@ -397,6 +400,7 @@ model purchase_orders {
   supplier_order_dispatches supplier_order_dispatches[]
   supplier_delivery_invoices supplier_delivery_invoices[]
   supplier_shortage_reports supplier_shortage_reports[]
+  purchase_requests    purchase_requests[]
   suppliers            suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
   warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
@@ -766,7 +770,9 @@ model warehouses {
   transfer_orders_transfer_orders_from_warehouse_idTowarehouses transfer_orders[]    @relation("transfer_orders_from_warehouse_idTowarehouses")
   transfer_orders_transfer_orders_to_warehouse_idTowarehouses   transfer_orders[]    @relation("transfer_orders_to_warehouse_idTowarehouses")
   warehouse_settings                                            warehouse_settings?
-  smart_receiving_drafts                                       smart_receiving_drafts[]
+  smart_receiving_drafts                                        smart_receiving_drafts[]
+  purchase_requests                                             purchase_requests[]
+  warehouse_exception_reports                                   warehouse_exception_reports[]
 }
 
 /// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.
@@ -827,4 +833,63 @@ model smart_receiving_items {
 
   @@index([smart_receiving_draft_id], map: "idx_smart_receiving_items_draft_id")
   @@index([match_status], map: "idx_smart_receiving_items_status")
+}
+
+/// Purchase requests submitted by warehouse staff for manager review.
+/// Staff cannot create POs directly; they submit a request and manager converts to PO.
+model purchase_requests {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_number        String          @unique @db.VarChar(40)
+  created_by_user_id    String          @db.Uuid
+  warehouse_id          String          @db.Uuid
+  book_variant_id       String?         @db.Uuid
+  book_title_hint       String?         @db.VarChar(255)
+  quantity_requested    Int
+  reason                String          @default("OTHER") @db.VarChar(30)
+  note                  String?
+  status                String          @default("PENDING") @db.VarChar(20)
+  approved_by_user_id   String?         @db.Uuid
+  rejected_by_user_id   String?         @db.Uuid
+  approved_at           DateTime?       @db.Timestamptz(6)
+  rejected_at           DateTime?       @db.Timestamptz(6)
+  rejection_reason      String?
+  purchase_order_id     String?         @db.Uuid
+  created_at            DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime        @default(now()) @db.Timestamptz(6)
+  warehouses            warehouses      @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  book_variants         book_variants?  @relation(fields: [book_variant_id], references: [id], onUpdate: NoAction)
+  purchase_orders       purchase_orders? @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
+
+  @@index([created_by_user_id], map: "idx_purchase_requests_user")
+  @@index([status, created_at], map: "idx_purchase_requests_status")
+}
+
+/// Warehouse exception reports created by staff for shortage, overage, or damage.
+/// Manager reviews and resolves; stock is NOT adjusted automatically.
+model warehouse_exception_reports {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  report_number        String          @unique @db.VarChar(40)
+  created_by_user_id   String          @db.Uuid
+  warehouse_id         String          @db.Uuid
+  task_type            String          @db.VarChar(20)
+  task_id              String          @db.Uuid
+  goods_receipt_id     String?         @db.Uuid
+  exception_type       String          @db.VarChar(30)
+  book_variant_id      String?         @db.Uuid
+  expected_qty         Int?
+  actual_qty           Int?
+  note                 String
+  evidence_notes       String?
+  status               String          @default("OPEN") @db.VarChar(20)
+  resolved_by_user_id  String?         @db.Uuid
+  resolved_at          DateTime?       @db.Timestamptz(6)
+  resolution_notes     String?
+  created_at           DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime        @default(now()) @db.Timestamptz(6)
+  warehouses           warehouses      @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  goods_receipts       goods_receipts? @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  book_variants        book_variants?  @relation(fields: [book_variant_id], references: [id], onUpdate: NoAction)
+
+  @@index([created_by_user_id], map: "idx_warehouse_exception_reports_user")
+  @@index([status, created_at], map: "idx_warehouse_exception_reports_status")
 }

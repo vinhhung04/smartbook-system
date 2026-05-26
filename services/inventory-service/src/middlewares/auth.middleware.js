@@ -48,7 +48,87 @@ function authorizeAnyPermission(permissions = []) {
   };
 }
 
+function getUserRoles(user = {}) {
+  return Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+}
+
+function authorizeAnyRole(roles = []) {
+  const allowedRoles = roles.map((role) => String(role).toUpperCase());
+  return (req, res, next) => {
+    const user = req.user || {};
+
+    if (user.is_superuser) {
+      return next();
+    }
+
+    const userRoles = getUserRoles(user);
+    const allowed = allowedRoles.some((role) => userRoles.includes(role));
+
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    return next();
+  };
+}
+
+function authorizePurchaseManager(permissions = ['inventory.purchase.write']) {
+  return authorizeManagerDecision(permissions);
+}
+
+function authorizeManagerRead(permissions = []) {
+  return authorizeManagerDecision(permissions);
+}
+
+function authorizeManagerDecision(permissions = ['inventory.operation.decide']) {
+  const requirePermission = authorizeAnyPermission(permissions);
+  const requireRole = authorizeAnyRole(['MANAGER', 'ADMIN']);
+
+  return (req, res, next) => {
+    if (req.user?.is_superuser) {
+      return next();
+    }
+
+    return requireRole(req, res, (roleError) => {
+      if (roleError) return next(roleError);
+      return requirePermission(req, res, next);
+    });
+  };
+}
+
+function authorizeTaskRead(permissions = ['inventory.task.read']) {
+  const requirePermission = authorizeAnyPermission(permissions);
+  const requireRole = authorizeAnyRole([
+    'STAFF',
+    'WAREHOUSE_STAFF',
+    'WAREHOUSE_OPERATOR',
+    'MANAGER',
+    'ADMIN',
+  ]);
+
+  return (req, res, next) => {
+    if (req.user?.is_superuser) {
+      return next();
+    }
+
+    return requireRole(req, res, (roleError) => {
+      if (roleError) return next(roleError);
+      return requirePermission(req, res, next);
+    });
+  };
+}
+
+function authorizeTaskProgress(permissions = ['inventory.task.progress']) {
+  return authorizeTaskRead(permissions);
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
+  authorizeAnyRole,
+  authorizeManagerDecision,
+  authorizeManagerRead,
+  authorizePurchaseManager,
+  authorizeTaskRead,
+  authorizeTaskProgress,
 };

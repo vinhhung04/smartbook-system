@@ -3,11 +3,7 @@ const jwt = require('jsonwebtoken');
 const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL || 'http://inventory-service:3001';
 const SERVICE_ACTOR_ID = '00000000-0000-0000-0000-000000000001';
 
-function getInventoryAuthHeader(authHeader) {
-  if (authHeader) {
-    return authHeader;
-  }
-
+function createServiceAuthHeader() {
   const token = jwt.sign(
     {
       id: SERVICE_ACTOR_ID,
@@ -22,6 +18,24 @@ function getInventoryAuthHeader(authHeader) {
   );
 
   return `Bearer ${token}`;
+}
+
+function getInventoryAuthHeader(authHeader) {
+  if (!authHeader) {
+    return createServiceAuthHeader();
+  }
+
+  const [, token] = String(authHeader).split(' ');
+  const payload = token ? jwt.decode(token) : null;
+  const permissions = Array.isArray(payload?.permissions) ? payload.permissions : [];
+  const canUseUserToken = Boolean(payload?.is_superuser) || permissions.some((permission) => [
+    'borrow.read',
+    'borrow.write',
+    'inventory.stock.read',
+    'inventory.stock.write',
+  ].includes(permission));
+
+  return canUseUserToken ? authHeader : createServiceAuthHeader();
 }
 
 async function requestInventory(path, options = {}) {

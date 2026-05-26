@@ -5,14 +5,13 @@ const {
   getOutboundOrderDetail,
   confirmOutbound,
 } = require('../controllers/outbound.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeTaskProgress } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canOperateStock = authorizeAnyPermission(['inventory.stock.write']);
-const canReadStock = authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write']);
+const canUpdateAssignedTask = authorizeTaskProgress(['inventory.task.progress']);
 
-router.get('/orders', canReadStock, listOutboundQueue);
-router.get('/orders/:taskType/:taskId', canReadStock, getOutboundOrderDetail);
-router.post('/orders/:taskType/:taskId/confirm', canOperateStock, confirmOutbound);
+router.get('/orders', canUpdateAssignedTask, listOutboundQueue);
+router.get('/orders/:taskType/:taskId', canUpdateAssignedTask, getOutboundOrderDetail);
+router.post('/orders/:taskType/:taskId/confirm', canUpdateAssignedTask, confirmOutbound);
 
 module.exports = router;

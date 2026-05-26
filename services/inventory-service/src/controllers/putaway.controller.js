@@ -67,6 +67,31 @@ function aggregateBalanceEntries(entries) {
   return Array.from(map.values());
 }
 
+function getTaskPermissionScope(user = {}) {
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+
+  return {
+    currentUserId: parseId(user.id || user.sub),
+    canManageAssignment:
+      Boolean(user.is_superuser) ||
+      roles.includes('ADMIN') ||
+      roles.includes('MANAGER'),
+  };
+}
+
+function assignedReceiptWhere(req) {
+  const scope = getTaskPermissionScope(req.user || {});
+  return scope.canManageAssignment ? {} : { received_by_user_id: scope.currentUserId };
+}
+
+function canAccessReceipt(req, receipt) {
+  const scope = getTaskPermissionScope(req.user || {});
+  if (scope.canManageAssignment) return true;
+  return Boolean(scope.currentUserId && receipt?.received_by_user_id === scope.currentUserId);
+}
+
 async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
   const found = await tx.locations.findFirst({
     where: {
@@ -98,7 +123,7 @@ async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
 async function getReadyReceipts(req, res) {
   try {
     const receipts = await prisma.goods_receipts.findMany({
-      where: { status: READY_PUTAWAY_STATUS },
+      where: { status: READY_PUTAWAY_STATUS, ...assignedReceiptWhere(req) },
       orderBy: { created_at: 'desc' },
       include: {
         warehouses: {
@@ -289,6 +314,9 @@ async function getReadyReceiptDetail(req, res) {
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
     }
+    if (!canAccessReceipt(req, receipt)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     const postedMovements = await prisma.stock_movements.findMany({
       where: {
@@ -413,6 +441,7 @@ async function getPutawayLocations(req, res) {
         id: true,
         status: true,
         warehouse_id: true,
+        received_by_user_id: true,
       },
     });
 
@@ -422,6 +451,9 @@ async function getPutawayLocations(req, res) {
 
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
+    }
+    if (!canAccessReceipt(req, receipt)) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     const locations = await prisma.locations.findMany({
@@ -561,6 +593,7 @@ async function confirmPutaway(req, res) {
           id: true,
           status: true,
           warehouse_id: true,
+          received_by_user_id: true,
         },
       });
 
@@ -569,6 +602,9 @@ async function confirmPutaway(req, res) {
       }
       if (receipt.status !== READY_PUTAWAY_STATUS) {
         return { invalid: true, message: 'Only POSTED goods receipts can be put away' };
+      }
+      if (!canAccessReceipt(req, receipt)) {
+        return { forbidden: true };
       }
 
       const receiptItems = await tx.goods_receipt_items.findMany({
@@ -961,6 +997,9 @@ async function confirmPutaway(req, res) {
 
     if (result.notFound) {
       return res.status(404).json({ message: 'Goods receipt not found' });
+    }
+    if (result.forbidden) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     if (result.invalid) {

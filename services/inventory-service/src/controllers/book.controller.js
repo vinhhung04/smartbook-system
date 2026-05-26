@@ -571,6 +571,25 @@ async function createIncompleteBook(req, res) {
   }
 }
 
+function canManageFullCatalog(user = {}) {
+  if (user.is_superuser) return true;
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  return (
+    (roles.includes('ADMIN') || roles.includes('MANAGER')) &&
+    permissions.includes('inventory.catalog.write')
+  );
+}
+
+function canLibrarianCompleteIncompleteBook(user = {}) {
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+  return roles.includes('LIBRARIAN') || roles.includes('CUSTOMER_SERVICE');
+}
+
 async function getOrCreatePublisher(tx, publisherName) {
   const normalized = String(publisherName || '').trim();
   if (!normalized) return null;
@@ -675,6 +694,13 @@ async function updateBookDetails(req, res) {
         return null;
       }
 
+      if (
+        !canManageFullCatalog(req.user || {}) &&
+        (!canLibrarianCompleteIncompleteBook(req.user || {}) || !existingBook.metadata?.is_incomplete)
+      ) {
+        return { forbidden: true };
+      }
+
       const [publisher, category, author] = await Promise.all([
         getOrCreatePublisher(tx, publisher_name),
         getOrCreateCategory(tx, category_name),
@@ -772,16 +798,20 @@ async function updateBookDetails(req, res) {
         },
       });
 
-      return mapBookSummary(fullBook);
+      return { data: mapBookSummary(fullBook) };
     });
 
     if (!updated) {
       return res.status(404).json({ message: 'Book not found' });
     }
 
+    if (updated.forbidden) {
+      return res.status(403).json({ message: 'Only incomplete books can be completed by library staff' });
+    }
+
     return res.json({
       message: 'Book details updated successfully',
-      data: updated,
+      data: updated.data,
     });
   } catch (error) {
     console.error('Error while updating book details:', error);

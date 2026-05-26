@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
+import { authService } from "@/services/auth";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 
 interface ReceiptDetailItem {
   id: string;
@@ -56,6 +58,12 @@ export function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
+  const [selectedReceiverId, setSelectedReceiverId] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
+  const currentUser = authService.getCurrentUser();
+  const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
+  const canManageReceiving = Boolean(currentUser?.is_superuser) || roles.includes("ADMIN") || roles.includes("MANAGER");
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -74,6 +82,13 @@ export function OrderDetailPage() {
     fetchDetail();
   }, [id]);
 
+  useEffect(() => {
+    if (!canManageReceiving) return;
+    void userService.getWarehouseStaff()
+      .then((response) => setWarehouseStaff(Array.isArray(response.data) ? response.data : []))
+      .catch((error) => toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach nhan vien kho")));
+  }, [canManageReceiving]);
+
   const handleUpdateStatus = async (nextStatus: "POSTED" | "CANCELLED") => {
     if (!id) return;
     try {
@@ -86,6 +101,25 @@ export function OrderDetailPage() {
       toast.error(getApiErrorMessage(error, "Cap nhat trang thai that bai"));
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleAssignReceiver = async () => {
+    if (!id || !selectedReceiverId) {
+      toast.error("Chon nhan vien kho truoc khi giao phieu");
+      return;
+    }
+
+    try {
+      setIsAssigning(true);
+      await goodsReceiptService.assign(id, selectedReceiverId);
+      const refreshed = await goodsReceiptService.getById(id);
+      setReceipt(refreshed as ReceiptDetail);
+      toast.success("Da giao phieu nhap cho nhan vien kho");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Giao phieu nhap that bai"));
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -120,6 +154,7 @@ export function OrderDetailPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {canManageReceiving ? (
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -129,6 +164,7 @@ export function OrderDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Receipts
         </NavLink>
       </motion.div>
+      ) : null}
 
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -271,6 +307,32 @@ export function OrderDetailPage() {
           >
             <SectionCard title="Actions" className="overflow-hidden">
               <div className="space-y-2">
+                {canManageReceiving ? (
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                    <p className="mb-2 text-[12px] font-semibold text-emerald-800">Giao phieu cho nhan vien kho</p>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedReceiverId}
+                        onChange={(event) => setSelectedReceiverId(event.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-2 text-[12px]"
+                      >
+                        <option value="">Chon nhan vien</option>
+                        {warehouseStaff.map((staff) => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.full_name || staff.username || staff.email}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => void handleAssignReceiver()}
+                        disabled={isAssigning || !selectedReceiverId}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                      >
+                        {isAssigning ? "Dang giao" : "Giao"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <button onClick={() => window.print()} className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15 font-medium">
                   <FileText className="w-3.5 h-3.5" /> Print
                 </button>
@@ -285,10 +347,10 @@ export function OrderDetailPage() {
                   <ClipboardCheck className="w-3.5 h-3.5" /> Nhap hang
                 </NavLink>
                 <button
-                  disabled={receipt.status !== "DRAFT" || isUpdatingStatus}
+                  disabled={!canManageReceiving || receipt.status !== "DRAFT" || isUpdatingStatus}
                   onClick={() => void handleUpdateStatus("POSTED")}
                   className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
-                    receipt.status === "DRAFT" && !isUpdatingStatus
+                    canManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
                       ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
                       : "cursor-not-allowed border border-input bg-muted text-muted-foreground"
                   }`}
@@ -296,10 +358,10 @@ export function OrderDetailPage() {
                   <CheckCircle className="w-3.5 h-3.5" /> {isUpdatingStatus ? "Dang xu ly..." : "Approve"}
                 </button>
                 <button
-                  disabled={receipt.status !== "DRAFT" || isUpdatingStatus}
+                  disabled={!canManageReceiving || receipt.status !== "DRAFT" || isUpdatingStatus}
                   onClick={() => void handleUpdateStatus("CANCELLED")}
                   className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
-                    receipt.status === "DRAFT" && !isUpdatingStatus
+                    canManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
                       ? "border border-red-200 bg-red-50 text-red-700"
                       : "cursor-not-allowed border border-input bg-muted text-muted-foreground"
                   }`}

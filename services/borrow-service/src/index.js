@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { authenticateToken } = require('./middlewares/auth.middleware');
+const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
 const customerInternalRoutes = require('./routes/customer-internal.routes');
 const myRoutes = require('./routes/my.routes');
@@ -56,7 +56,7 @@ app.use('/internal/customers', customerInternalRoutes);
 app.use('/borrow', authenticateToken);
 
 app.use('/borrow/customers', customerRoutes);
-app.use('/borrow/my', myRoutes);
+app.use('/borrow/my', authorizeCustomerSelf, myRoutes);
 app.use('/borrow/reservations', reservationRoutes);
 app.use('/borrow/loans', loanRoutes);
 app.use('/borrow/fines', fineRoutes);

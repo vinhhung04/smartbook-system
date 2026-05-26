@@ -12,6 +12,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
+import { authService } from "@/services/auth";
+import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 
 const statuses = ["ALL", "DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED", "CANCELLED"];
 
@@ -36,6 +38,8 @@ function formatDate(value?: string | null) {
 }
 
 export function PurchaseOrdersPage() {
+  const currentUser = authService.getCurrentUser();
+  const canCreatePurchaseOrder = canAccess(currentUser, ROUTE_ACCESS.purchaseWrite);
   const [rows, setRows] = useState<PurchaseOrderSummary[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -99,10 +103,10 @@ export function PurchaseOrdersPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <NavLink to="/purchase-orders/new" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground shadow-sm">
+          {canCreatePurchaseOrder ? <NavLink to="/purchase-orders/new" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground shadow-sm">
             <Plus className="h-3.5 w-3.5" />
             New PO
-          </NavLink>
+          </NavLink> : null}
         </div>
       </div>
 

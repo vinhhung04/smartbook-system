@@ -9,19 +9,19 @@ const {
   approveRequest,
   rejectRequest,
 } = require('../controllers/order-request.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-const canOperateStock = authorizeAnyPermission(['inventory.stock.write']);
-const canReadRequests = authorizeAnyPermission(['inventory.stock.read', 'inventory.stock.write', 'inventory.purchase.approve']);
-const canApprove = authorizeAnyPermission(['inventory.purchase.approve']);
+const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
+const canReadRequests = authorizeManagerRead(['inventory.operation.decide', 'inventory.purchase.approve']);
+const canApprove = authorizeManagerDecision(['inventory.operation.decide', 'inventory.purchase.approve']);
 
-router.get('/variants/search', canOperateStock, searchVariants);
-router.get('/outbound/reference-code/preview', canOperateStock, previewOutboundReferenceCode);
+router.get('/variants/search', canDecideOperation, searchVariants);
+router.get('/outbound/reference-code/preview', canDecideOperation, previewOutboundReferenceCode);
 router.get('/', canReadRequests, listOrderRequests);
-router.post('/outbound', canOperateStock, createOutboundRequest);
-router.post('/transfer', canOperateStock, createTransferRequest);
+router.post('/outbound', canDecideOperation, createOutboundRequest);
+router.post('/transfer', canDecideOperation, createTransferRequest);
 router.post('/:taskType/:taskId/approve', canApprove, approveRequest);
 router.post('/:taskType/:taskId/reject', canApprove, rejectRequest);
 

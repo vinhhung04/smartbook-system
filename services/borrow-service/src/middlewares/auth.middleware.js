@@ -48,7 +48,94 @@ function authorizeAnyPermission(permissions = []) {
   };
 }
 
+function getUserRoles(user = {}) {
+  return Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+}
+
+function authorizeAnyRole(roles = []) {
+  const allowedRoles = roles.map((role) => String(role).toUpperCase());
+  return (req, res, next) => {
+    const user = req.user || {};
+
+    if (user.is_superuser) {
+      return next();
+    }
+
+    const userRoles = getUserRoles(user);
+    const allowed = allowedRoles.some((role) => userRoles.includes(role));
+
+    if (!allowed) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    return next();
+  };
+}
+
+function authorizeBorrowAdminRead(req, res, next) {
+  if (req.user?.is_superuser) return next();
+
+  const roles = getUserRoles(req.user);
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'MANAGER', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role));
+  const permissionAllowed = permissions.some((permission) => [
+    'borrow.read',
+    'borrow.customers.read',
+    'borrow.loans.read',
+  ].includes(permission));
+
+  if (!roleAllowed || !permissionAllowed) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  return next();
+}
+
+function authorizeBorrowAdminWrite(req, res, next) {
+  if (req.user?.is_superuser) return next();
+
+  const roles = getUserRoles(req.user);
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role));
+  const permissionAllowed = permissions.some((permission) => [
+    'borrow.write',
+    'borrow.customers.write',
+    'borrow.loans.write',
+    'borrow.fines.manage',
+    'borrow.fine.write',
+    'borrow.membership.write',
+  ].includes(permission));
+
+  if (!roleAllowed || !permissionAllowed) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  return next();
+}
+
+function authorizeCustomerSelf(req, res, next) {
+  if (req.user?.is_superuser) return next();
+
+  const roles = getUserRoles(req.user);
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const isCustomer = roles.includes('CUSTOMER');
+  const hasSelfPermission = permissions.some((permission) => [
+    'customer.self.read',
+    'customer.self.write',
+  ].includes(permission));
+
+  if (!isCustomer || !hasSelfPermission) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  return next();
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
+  authorizeAnyRole,
+  authorizeBorrowAdminRead,
+  authorizeBorrowAdminWrite,
+  authorizeCustomerSelf,
 };

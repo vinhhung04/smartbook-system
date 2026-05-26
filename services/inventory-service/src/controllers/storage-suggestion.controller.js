@@ -157,12 +157,12 @@ async function applySuggestion(req, res) {
   }
 
   const hasWritePermission = user.is_superuser ||
-    (Array.isArray(user.permissions) && user.permissions.includes('inventory.stock.write'));
+    (Array.isArray(user.permissions) && user.permissions.includes('inventory.operation.decide'));
 
   if (!hasWritePermission) {
     return res.status(403).json({
       success: false,
-      error: 'Bạn không có quyền xác nhận vị trí. Cần permission: inventory.stock.write',
+      error: 'Forbidden. Required permission: inventory.operation.decide',
     });
   }
 

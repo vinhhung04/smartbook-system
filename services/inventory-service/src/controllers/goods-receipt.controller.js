@@ -202,9 +202,31 @@ async function resolveVariantIdByIsbn13(tx, isbn13) {
   return variant?.id || null;
 }
 
+function canViewAllReceivingTasks(user = {}) {
+  if (user.is_superuser) return true;
+  const roles = Array.isArray(user.roles)
+    ? user.roles.map((role) => String(role).toUpperCase())
+    : [];
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
+}
+
+function canManageReceiving(user = {}) {
+  return canViewAllReceivingTasks(user);
+}
+
+function canAccessAssignedReceiving(user = {}, receivedByUserId) {
+  if (canManageReceiving(user)) return true;
+  const currentUserId = parseId(user.id || user.sub);
+  const assignedUserId = parseId(receivedByUserId);
+  return Boolean(currentUserId && assignedUserId && currentUserId === assignedUserId);
+}
+
 async function getGoodsReceipts(req, res) {
   try {
     const receipts = await prisma.goods_receipts.findMany({
+      where: canViewAllReceivingTasks(req.user || {})
+        ? {}
+        : { received_by_user_id: req.user?.id },
       orderBy: { created_at: "desc" },
       include: {
         warehouses: {
@@ -317,6 +339,10 @@ async function getGoodsReceiptById(req, res) {
       return res.status(404).json({ message: "Goods receipt not found" });
     }
 
+    if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     const items = receipt.goods_receipt_items.map((item) => ({
       id: item.id,
       variant_id: item.variant_id,
@@ -366,9 +392,16 @@ async function getGoodsReceiptById(req, res) {
 async function createGoodsReceipt(req, res) {
   const { warehouse_id, note, items, purchase_order_id, supplier_delivery_invoice_id, invoice_number } = req.body;
   const userId = req.user?.id;
+  const managerScope = canManageReceiving(req.user || {});
 
   if (!userId) {
     return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (!managerScope && (purchase_order_id || supplier_delivery_invoice_id || invoice_number)) {
+    return res.status(403).json({
+      message: "Warehouse staff can only create manual receiving draft receipts",
+    });
   }
 
   if ((!warehouse_id && !purchase_order_id) || !Array.isArray(items) || items.length === 0) {
@@ -394,7 +427,13 @@ async function createGoodsReceipt(req, res) {
       });
     }
 
-    if (!isValidNumber(item?.unit_cost)) {
+    if (!managerScope && item?.unit_cost !== undefined && Number(item.unit_cost) < 0) {
+      return res.status(400).json({
+        message: "Each item must include unit_cost >= 0",
+      });
+    }
+
+    if (managerScope && !isValidNumber(item?.unit_cost)) {
       return res.status(400).json({
         message: "Each item must include unit_cost >= 0",
       });
@@ -472,6 +511,7 @@ async function createGoodsReceipt(req, res) {
           ...item,
           variant_id: resolvedVariantId,
           isbn13: isbn13 || null,
+          unit_cost: managerScope ? item.unit_cost : Number(item.unit_cost || 0),
         });
       }
 
@@ -540,7 +580,7 @@ async function createGoodsReceipt(req, res) {
           source_reference_id: supplierInvoice?.id || null,
           status: "DRAFT",
           received_by_user_id: userId,
-          note: note || null,
+          note: note || (managerScope ? null : "Created by warehouse staff receiving scan"),
         },
       });
 
@@ -559,6 +599,23 @@ async function createGoodsReceipt(req, res) {
       const hasNewBook = normalizedItems.some((item) =>
         Boolean(item.is_new_book),
       );
+
+      if (!managerScope) {
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: userId,
+            action_name: "WAREHOUSE_STAFF_RECEIVING_DRAFT_CREATED",
+            entity_type: "GOODS_RECEIPT",
+            entity_id: goodsReceipt.id,
+            after_data: {
+              receipt_number: goodsReceipt.receipt_number,
+              warehouse_id: effectiveWarehouseId,
+              item_count: normalizedItems.length,
+              requires_manager_approval: true,
+            },
+          },
+        });
+      }
 
       if (hasNewBook) {
         await tx.inventory_audit_logs.create({
@@ -1005,6 +1062,27 @@ async function updateGoodsReceipt(req, res) {
 
       const targetStatus = status || existing.status;
 
+      if (!canAccessAssignedReceiving(req.user || {}, existing.received_by_user_id)) {
+        return {
+          forbidden: true,
+          message: "Goods receipt must be assigned to current warehouse staff",
+        };
+      }
+
+      if (!canManageReceiving(req.user || {}) && targetStatus === "CANCELLED") {
+        return {
+          forbidden: true,
+          message: "Warehouse staff cannot cancel goods receipts",
+        };
+      }
+
+      if (!canManageReceiving(req.user || {}) && targetStatus === "POSTED") {
+        return {
+          forbidden: true,
+          message: "Warehouse staff can create receiving drafts, but manager approval is required before stock is posted",
+        };
+      }
+
       if (existing.status === "CANCELLED" && targetStatus !== "CANCELLED") {
         return {
           invalidTransition: true,
@@ -1069,6 +1147,10 @@ async function updateGoodsReceipt(req, res) {
       return res.status(404).json({ message: "Goods receipt not found" });
     }
 
+    if (result.forbidden) {
+      return res.status(403).json({ message: result.message || "Forbidden" });
+    }
+
     if (result.invalidTransition) {
       return res.status(400).json({ message: result.message });
     }
@@ -1100,9 +1182,55 @@ async function updateGoodsReceipt(req, res) {
   }
 }
 
+async function assignGoodsReceipt(req, res) {
+  const id = parseId(req.params.id);
+  const receivedByUserId = parseId(req.body?.received_by_user_id || req.body?.user_id);
+
+  if (!id || !receivedByUserId) {
+    return res.status(400).json({
+      message: "goods receipt id and received_by_user_id are required",
+    });
+  }
+
+  try {
+    const updated = await prisma.goods_receipts.update({
+      where: { id },
+      data: {
+        received_by_user_id: receivedByUserId,
+        updated_at: new Date(),
+      },
+    });
+
+    await prisma.inventory_audit_logs.create({
+      data: {
+        actor_user_id: req.user?.id || req.user?.sub || null,
+        action_name: "GOODS_RECEIPT_ASSIGNED",
+        entity_type: "GOODS_RECEIPT",
+        entity_id: updated.id,
+        after_data: {
+          receipt_number: updated.receipt_number,
+          received_by_user_id: receivedByUserId,
+        },
+      },
+    });
+
+    return res.json({
+      message: "Goods receipt assigned successfully",
+      data: updated,
+    });
+  } catch (error) {
+    if (error?.code === "P2025") {
+      return res.status(404).json({ message: "Goods receipt not found" });
+    }
+    console.error("Error while assigning goods receipt:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   getGoodsReceipts,
   getGoodsReceiptById,
   createGoodsReceipt,
   updateGoodsReceipt,
+  assignGoodsReceipt,
 };

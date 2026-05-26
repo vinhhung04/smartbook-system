@@ -72,6 +72,11 @@ export const warehouseService = {
     return (response.data || []) as Warehouse[];
   },
 
+  getReceivingWarehouses: async () => {
+    const response = await inventoryAPI.get('/api/receiving-context/warehouses');
+    return (response.data?.data || []) as Pick<Warehouse, 'id' | 'code' | 'name'>[];
+  },
+
   getById: async (id: string) => {
     const response = await inventoryAPI.get(`/api/warehouses/${id}`);
     return response.data as Warehouse;

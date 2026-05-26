@@ -5,13 +5,13 @@ const {
   recordFinePayment,
   waiveFine,
 } = require('../controllers/fine.controller');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { authorizeBorrowAdminRead, authorizeBorrowAdminWrite } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 
-router.get('/', authorizeAnyPermission(['borrow.read', 'borrow.write']), listFines);
-router.get('/:id', authorizeAnyPermission(['borrow.read', 'borrow.write']), getFineById);
-router.post('/:id/payments', authorizeAnyPermission(['borrow.write']), recordFinePayment);
-router.patch('/:id/waive', authorizeAnyPermission(['borrow.write']), waiveFine);
+router.get('/', authorizeBorrowAdminRead, listFines);
+router.get('/:id', authorizeBorrowAdminRead, getFineById);
+router.post('/:id/payments', authorizeBorrowAdminWrite, recordFinePayment);
+router.patch('/:id/waive', authorizeBorrowAdminWrite, waiveFine);
 
 module.exports = router;
