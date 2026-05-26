@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { AlertTriangle, RefreshCw, CheckCircle, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,19 +10,19 @@ import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
-  RECEIVING: "Tiep nhan",
-  PUTAWAY: "Chuyen vao kho",
-  PICKING: "Lay hang",
-  OUTBOUND: "Xuat kho",
+  RECEIVING: "Tiếp nhận",
+  PUTAWAY: "Cất vào kho",
+  PICKING: "Lấy hàng",
+  OUTBOUND: "Xuất kho",
 };
 
 const EXCEPTION_TYPE_LABELS: Record<string, string> = {
-  SHORT: "Thieu hang",
-  OVERAGE: "Du hang",
-  DAMAGED: "Hu hong",
-  WRONG_ITEM: "Sai san pham",
-  WRONG_QTY: "Sai so luong",
-  OTHER: "Khac",
+  SHORT: "Thiếu hàng",
+  OVERAGE: "Dư hàng",
+  DAMAGED: "Hư hỏng",
+  WRONG_ITEM: "Sai sản phẩm",
+  WRONG_QTY: "Sai số lượng",
+  OTHER: "Khác",
 };
 
 const STATUS_FILTERS = ["ALL", "OPEN", "ACKNOWLEDGED", "RESOLVED"];
@@ -72,7 +72,7 @@ export function ExceptionReportsPage() {
       setResolveState(null);
       void load(statusFilter);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Xu ly that bai"));
+      toast.error(getApiErrorMessage(err, "Xử lý thất bại"));
     } finally {
       setResolving(false);
     }
@@ -91,9 +91,9 @@ export function ExceptionReportsPage() {
             <AlertTriangle className="h-5 w-5 text-red-700" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Exception Reports</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Báo cáo sự cố</h1>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Xem xet va xu ly bao cao thieu/du/hu hong tu nhan vien kho
+              Xem xét và xử lý báo cáo thiếu/dư/hư hỏng từ nhân viên kho
             </p>
           </div>
         </div>
@@ -104,45 +104,45 @@ export function ExceptionReportsPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === "ALL" ? "Tat ca trang thai" : s}</option>
+              <option key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</option>
             ))}
           </select>
           <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Lam moi
+            Làm mới
           </Button>
         </div>
       </motion.div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
-        Giai quyet bao cao ngoai le KHONG tu dong dieu chinh ton kho. Neu can chinh ton kho, su dung chuc nang Stock Adjustment rieng.
+        Giải quyết báo cáo sự cố KHÔNG tự động điều chỉnh tồn kho. Nếu cần chỉnh tồn kho, sử dụng chức năng Stock Adjustment riêng.
       </div>
 
       <SectionCard noPadding>
         <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sach bao cao ngoai le</h2>
+          <h2 className="text-[15px] font-semibold">Danh sách báo cáo sự cố</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Ma bao cao", "Kho", "Loai task", "Loai su co", "SL du kien", "SL thuc te", "Mo ta", "Trang thai", "Tao luc", "Thao tac"].map((h) => (
+                {["Mã báo cáo", "Kho", "Loại task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Mô tả", "Trạng thái", "Tạo lúc", "Thao tác"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai...</td></tr>
+                <tr><td colSpan={10} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
               ) : reports.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-5 py-10">
-                    <EmptyState icon={AlertTriangle} title="Chua co bao cao ngoai le" description="Cac bao cao tu nhan vien kho se hien thi tai day." />
+                    <EmptyState icon={AlertTriangle} title="Chưa có báo cáo sự cố" description="Các báo cáo từ nhân viên kho sẽ hiển thị tại đây." />
                   </td>
                 </tr>
               ) : reports.map((r) => (
-                <>
-                  <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <React.Fragment key={r.id}>
+                  <tr className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{r.report_number}</td>
                     <td className="px-4 py-3 text-[13px]">{r.warehouses?.code || "-"}</td>
                     <td className="px-4 py-3 text-[12px]">{TASK_TYPE_LABELS[r.task_type] || r.task_type}</td>
@@ -161,7 +161,7 @@ export function ExceptionReportsPage() {
                         <Button type="button" size="sm" disabled={resolving}
                           onClick={() => setResolveState(resolveState?.id === r.id ? null : { id: r.id, notes: "" })}
                           className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
-                          <CheckCircle className="h-3 w-3" /> Xu ly
+                          <CheckCircle className="h-3 w-3" /> Xử lý
                         </Button>
                       )}
                       {r.status === "RESOLVED" && r.resolution_notes && (
@@ -178,13 +178,13 @@ export function ExceptionReportsPage() {
                           <input
                             type="text"
                             className="flex-1 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-[13px]"
-                            placeholder="Ghi chu xu ly (tuy chon — khong tu dong dieu chinh stock)..."
+                            placeholder="Ghi chú xử lý (tùy chọn — không tự động điều chỉnh stock)..."
                             value={resolveState.notes}
                             onChange={(e) => setResolveState({ ...resolveState, notes: e.target.value })}
                           />
                           <Button type="button" size="sm" disabled={resolving} onClick={() => void handleResolve()}
                             className="bg-emerald-600 hover:bg-emerald-700 h-7 px-3 text-[11px]">
-                            Xac nhan xu ly
+                            Xác nhận xử lý
                           </Button>
                           <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} className="h-7 px-2">
                             <X className="h-3 w-3" />
@@ -193,7 +193,7 @@ export function ExceptionReportsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>

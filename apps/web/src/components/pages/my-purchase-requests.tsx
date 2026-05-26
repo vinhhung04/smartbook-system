@@ -11,11 +11,11 @@ import { purchaseRequestService, type PurchaseRequest, type PurchaseRequestCreat
 import { warehouseService } from "@/services/warehouse";
 
 const REASONS = [
-  { value: "LOW_STOCK", label: "Ton kho thap" },
-  { value: "CUSTOMER_REQUEST", label: "Yeu cau khach hang" },
-  { value: "DAMAGED", label: "Sach hu hong" },
-  { value: "LOST", label: "Mat sach" },
-  { value: "OTHER", label: "Ly do khac" },
+  { value: "LOW_STOCK", label: "Tồn kho thấp" },
+  { value: "CUSTOMER_REQUEST", label: "Yêu cầu khách hàng" },
+  { value: "DAMAGED", label: "Sách hư hỏng" },
+  { value: "LOST", label: "Mất sách" },
+  { value: "OTHER", label: "Lý do khác" },
 ];
 
 function statusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
@@ -31,6 +31,34 @@ function formatDate(value: string | null | undefined) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function ResponseCell({ req }: { req: PurchaseRequest }) {
+  const s = req.status.toUpperCase();
+  if (s === "REJECTED" && req.rejection_reason) {
+    return (
+      <span className="text-[11px] text-red-700 italic block max-w-[160px] truncate" title={req.rejection_reason}>
+        {req.rejection_reason}
+      </span>
+    );
+  }
+  if (s === "REJECTED") {
+    return <span className="text-[11px] text-red-500 italic">Đã từ chối</span>;
+  }
+  if (s === "CONVERTED" && req.purchase_order_id) {
+    return (
+      <span className="text-[11px] font-mono text-emerald-700" title={req.purchase_order_id}>
+        PO #{req.purchase_order_id.slice(-8).toUpperCase()}
+      </span>
+    );
+  }
+  if (s === "CONVERTED") {
+    return <span className="text-[11px] text-emerald-600">Đã chuyển PO</span>;
+  }
+  if (s === "APPROVED") {
+    return <span className="text-[11px] text-sky-600">Đã duyệt, chờ tạo PO</span>;
+  }
+  return null;
 }
 
 interface Warehouse { id: string; code: string; name: string }
@@ -62,7 +90,7 @@ export function MyPurchaseRequestsPage() {
       setRequests(Array.isArray(res.data) ? res.data : []);
       setWarehouses(Array.isArray(wRes) ? wRes : []);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Khong tai duoc yeu cau mua hang"));
+      toast.error(getApiErrorMessage(err, "Không tải được yêu cầu mua hàng"));
     } finally {
       setLoading(false);
     }
@@ -72,8 +100,8 @@ export function MyPurchaseRequestsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.warehouse_id) { toast.error("Vui long chon kho"); return; }
-    if (!form.quantity_requested || form.quantity_requested < 1) { toast.error("So luong phai lon hon 0"); return; }
+    if (!form.warehouse_id) { toast.error("Vui lòng chọn kho"); return; }
+    if (!form.quantity_requested || form.quantity_requested < 1) { toast.error("Số lượng phải lớn hơn 0"); return; }
 
     setSubmitting(true);
     try {
@@ -86,12 +114,12 @@ export function MyPurchaseRequestsPage() {
         book_variant_id: form.book_variant_id || undefined,
       };
       await purchaseRequestService.createRequest(payload);
-      toast.success("Da gui yeu cau mua hang");
+      toast.success("Đã gửi yêu cầu mua hàng");
       setShowForm(false);
       setForm(emptyForm);
       await load();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Gui yeu cau that bai"));
+      toast.error(getApiErrorMessage(err, "Gửi yêu cầu thất bại"));
     } finally {
       setSubmitting(false);
     }
@@ -110,35 +138,34 @@ export function MyPurchaseRequestsPage() {
             <ShoppingCart className="h-5 w-5 text-orange-700" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Yeu cau mua hang cua toi</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Yêu cầu mua hàng của tôi</h1>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Gui yeu cau bo sung hang cho quan ly xem xet va dieu phoi
+              Gửi yêu cầu bổ sung hàng cho quản lý xem xét và điều phối
             </p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Lam moi
+            Làm mới
           </Button>
           <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
             <Plus className="h-3.5 w-3.5" />
-            Tao yeu cau
+            Tạo yêu cầu
           </Button>
         </div>
       </motion.div>
 
-      {/* Disclaimer */}
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
-        Yeu cau mua hang la de bao cao nhu cau bo sung kho cho quan ly. Quan ly se xem xet va tao don dat hang chinh thuc (PO) neu phe duyet.
+        Yêu cầu mua hàng là để báo cáo nhu cầu bổ sung kho cho quản lý. Quản lý sẽ xem xét và tạo đơn đặt hàng chính thức (PO) nếu phê duyệt.
       </div>
 
       {/* Create Form */}
       {showForm && (
         <SectionCard>
           <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-            <h2 className="text-[14px] font-semibold">Tao yeu cau mua hang moi</h2>
-            <button onClick={() => { setShowForm(false); setForm(emptyForm); }} className="text-muted-foreground hover:text-foreground">
+            <h2 className="text-[14px] font-semibold">Tạo yêu cầu mua hàng mới</h2>
+            <button type="button" onClick={() => { setShowForm(false); setForm(emptyForm); }} className="text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -152,14 +179,14 @@ export function MyPurchaseRequestsPage() {
                   onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value }))}
                   required
                 >
-                  <option value="">-- Chon kho --</option>
+                  <option value="">-- Chọn kho --</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1">Ly do *</label>
+                <label className="block text-[12px] font-medium mb-1">Lý do *</label>
                 <select
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
                   value={form.reason}
@@ -169,17 +196,17 @@ export function MyPurchaseRequestsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1">Ten sach / goi y</label>
+                <label className="block text-[12px] font-medium mb-1">Tên sách / gợi ý</label>
                 <input
                   type="text"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  placeholder="Nhap ten sach hoac ISBNNếu có"
+                  placeholder="Nhập tên sách hoặc ISBN nếu có"
                   value={form.book_title_hint || ""}
                   onChange={(e) => setForm((f) => ({ ...f, book_title_hint: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1">So luong can dat *</label>
+                <label className="block text-[12px] font-medium mb-1">Số lượng cần đặt *</label>
                 <input
                   type="number"
                   min="1"
@@ -191,21 +218,21 @@ export function MyPurchaseRequestsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-[12px] font-medium mb-1">Ghi chu</label>
+              <label className="block text-[12px] font-medium mb-1">Ghi chú</label>
               <textarea
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
                 rows={3}
-                placeholder="Mo ta them ve nhu cau hoac boi canh..."
+                placeholder="Mô tả thêm về nhu cầu hoặc bối cảnh..."
                 value={form.note || ""}
                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
               />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setForm(emptyForm); }}>
-                Huy
+                Hủy
               </Button>
               <Button type="submit" size="sm" disabled={submitting}>
-                {submitting ? "Dang gui..." : "Gui yeu cau"}
+                {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
               </Button>
             </div>
           </form>
@@ -215,41 +242,44 @@ export function MyPurchaseRequestsPage() {
       {/* List */}
       <SectionCard noPadding>
         <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sach yeu cau</h2>
+          <h2 className="text-[15px] font-semibold">Danh sách yêu cầu</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[780px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Ma yeu cau", "Kho", "Sach / Goi y", "So luong", "Ly do", "Trang thai", "Tao luc"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                {["Mã yêu cầu", "Kho", "Sách / Gợi ý", "Số lượng", "Lý do", "Trạng thái", "Phản hồi", "Tạo lúc"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai...</td></tr>
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
               ) : requests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10">
-                    <EmptyState icon={ShoppingCart} title="Chua co yeu cau nao" description="Tao yeu cau mua hang de bao cao nhu cau bo sung kho cho quan ly." />
+                  <td colSpan={8} className="px-5 py-10">
+                    <EmptyState icon={ShoppingCart} title="Chưa có yêu cầu nào" description="Tạo yêu cầu mua hàng để báo cáo nhu cầu bổ sung kho cho quản lý." />
                   </td>
                 </tr>
               ) : requests.map((req) => (
                 <tr key={req.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{req.request_number}</td>
-                  <td className="px-5 py-3 text-[13px]">{req.warehouses?.code || "-"}</td>
-                  <td className="px-5 py-3 text-[13px]">
+                  <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{req.request_number}</td>
+                  <td className="px-4 py-3 text-[13px]">{req.warehouses?.code || "-"}</td>
+                  <td className="px-4 py-3 text-[13px]">
                     {req.book_variants?.books?.title || req.book_title_hint || <span className="text-muted-foreground">-</span>}
                   </td>
-                  <td className="px-5 py-3 text-[13px]">{req.quantity_requested}</td>
-                  <td className="px-5 py-3 text-[12px] text-muted-foreground">
+                  <td className="px-4 py-3 text-[13px]">{req.quantity_requested}</td>
+                  <td className="px-4 py-3 text-[12px] text-muted-foreground">
                     {REASONS.find((r) => r.value === req.reason)?.label || req.reason}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-4 py-3">
                     <StatusBadge label={req.status} variant={statusVariant(req.status)} dot />
                   </td>
-                  <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(req.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <ResponseCell req={req} />
+                  </td>
+                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(req.created_at)}</td>
                 </tr>
               ))}
             </tbody>

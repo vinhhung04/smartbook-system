@@ -12,6 +12,7 @@ const purchaseRequestsServicePath = path.join(root, 'apps/web/src/services/purch
 const exceptionReportsServicePath = path.join(root, 'apps/web/src/services/exception-reports.ts');
 const myPurchaseRequestsPath = path.join(root, 'apps/web/src/components/pages/my-purchase-requests.tsx');
 const myExceptionReportsPath = path.join(root, 'apps/web/src/components/pages/my-exception-reports.tsx');
+const exceptionReportsPagePath = path.join(root, 'apps/web/src/components/pages/exception-reports.tsx');
 
 let passed = 0;
 let total = 0;
@@ -30,7 +31,7 @@ async function read(file) {
 }
 
 async function runStaticSmoke() {
-  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports] = await Promise.all([
+  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports, exceptionReportsPage] = await Promise.all([
     read(sidebarPath),
     read(routesPath),
     read(loginPath),
@@ -41,6 +42,7 @@ async function runStaticSmoke() {
     read(exceptionReportsServicePath),
     read(myPurchaseRequestsPath),
     read(myExceptionReportsPath),
+    read(exceptionReportsPagePath),
   ]);
 
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
@@ -64,7 +66,7 @@ async function runStaticSmoke() {
 
   expect('sidebar filters items through canAccess', sidebar.includes('items.filter((item) => canAccess(user, item.access))'));
   expect('scan receive CTA requires assigned task progress', sidebar.includes('canReceiveStock') && sidebar.includes('ROUTE_ACCESS.staffTaskProgress'));
-  expect('staff sidebar has my warehouse tasks', sidebar.includes('label: "My Warehouse Tasks"') && sidebar.includes('access: ROUTE_ACCESS.staffTasks'));
+  expect('staff sidebar has my warehouse tasks', sidebar.includes('"Công việc kho của tôi"') && sidebar.includes('access: ROUTE_ACCESS.staffTasks'));
   expect('dashboard sidebar item is report guarded', sidebar.includes('label: "Dashboard"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
   expect('inventory sidebar item is manager guarded', sidebar.includes('label: "Inventory"') && sidebar.includes('access: ROUTE_ACCESS.managerInventoryRead'));
   expect('Purchase Orders sidebar item is purchase guarded', sidebar.includes('label: "Purchase Orders"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRead'));
@@ -76,7 +78,7 @@ async function runStaticSmoke() {
   expect('Roles sidebar item is admin guarded', sidebar.includes('label: "Roles"') && sidebar.includes('access: ROUTE_ACCESS.admin'));
   expect('Borrow sidebar items are borrow guarded', sidebar.includes('label: "Borrow"') && sidebar.includes('access: ROUTE_ACCESS.borrowRead'));
   expect('Reports sidebar item is report guarded', sidebar.includes('label: "Reports"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
-  expect('My Warehouse Tasks page has assigned-task empty state', myTasks.includes('Chua co task duoc giao') && myTasks.includes('myWarehouseTaskService.getMyTasks'));
+  expect('My Warehouse Tasks page has assigned-task empty state', myTasks.includes('Chưa có task được giao') && myTasks.includes('myWarehouseTaskService.getMyTasks'));
   expect('My Warehouse Tasks page has no mutation API calls', !/\.(post|patch|put|delete)\(/i.test(myTasks) && !/confirm[A-Z]|transfer[A-Z]|pick[A-Z]/.test(myTasks));
   expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('taskActionLabel'));
   expect('My Warehouse Tasks handles purchase request type', myTasks.includes('PURCHASE_REQUEST'));
@@ -87,10 +89,10 @@ async function runStaticSmoke() {
   expect('manager operation roles separated from staff tracking roles', rbac.includes('MANAGER_OPERATION_ROLES') && rbac.includes('STAFF_TRACKING_ROLES'));
   expect('purchaseRequest access in ROUTE_ACCESS', rbac.includes('purchaseRequest:') && rbac.includes('inventory.purchase.request'));
   expect('exceptionReport access in ROUTE_ACCESS', rbac.includes('exceptionReport:') && rbac.includes('inventory.exception.report'));
-  expect('my-purchase-requests route exists', routes.includes('path: "my-purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequest'));
-  expect('my-exception-reports route exists', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReport'));
-  expect('My Purchase Requests sidebar item is purchase request guarded', sidebar.includes('label: "My Purchase Requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequest'));
-  expect('My Exception Reports sidebar item is exception report guarded', sidebar.includes('label: "My Exception Reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReport'));
+  expect('my-purchase-requests route uses purchaseRequestSelf', routes.includes('path: "my-purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequestSelf'));
+  expect('my-exception-reports route uses exceptionReportSelf', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReportSelf'));
+  expect('My Purchase Requests sidebar item is STAFF-only guarded', sidebar.includes('"Yêu cầu mua hàng của tôi"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestSelf'));
+  expect('My Exception Reports sidebar item is STAFF-only guarded', sidebar.includes('"Báo cáo sự cố của tôi"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportSelf'));
 
   expect('MyPurchaseRequestsPage uses getReceivingWarehouses', myPurchaseRequests.includes('getReceivingWarehouses'));
   expect('MyExceptionReportsPage uses getReceivingWarehouses', myExceptionReports.includes('getReceivingWarehouses'));
@@ -103,7 +105,12 @@ async function runStaticSmoke() {
   expect('purchaseRequestService has convertToPO', purchaseRequestsService.includes('convertToPO'));
   expect('exceptionReportService has resolve method', exceptionReportsService.includes('resolve'));
   expect('CTA changed from Scan Receive', !sidebar.includes('Scan &amp; Receive'));
-  expect('CTA is Receiving Draft', sidebar.includes('Receiving Draft'));
+  expect('CTA is Ghi nhan hang nhan (Vietnamese)', sidebar.includes('Ghi nhận hàng nhận'));
+  expect('purchaseRequestSelf in ROUTE_ACCESS STAFF only', rbac.includes('purchaseRequestSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
+  expect('exceptionReportSelf in ROUTE_ACCESS STAFF only', rbac.includes('exceptionReportSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
+  expect('exception-reports manager page uses React.Fragment key', exceptionReportsPage.includes('React.Fragment'));
+  expect('my-exception-reports task dropdown not UUID text input', !myExceptionReports.includes('"UUID hoặc mã task"') && !myExceptionReports.includes('"UUID hoac ma task"'));
+  expect('my-warehouse-tasks has Bao cao exception button', myTasks.includes('handleReportException') && myTasks.includes('OPERATIONAL_TYPES'));
 }
 
 async function run() {

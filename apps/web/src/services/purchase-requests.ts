@@ -46,7 +46,7 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  async getAll(params?: { status?: string; warehouse_id?: string; page?: number }): Promise<{ data: PurchaseRequest[]; total?: number }> {
+  async getAll(params?: { status?: string; warehouse_id?: string; page?: number; limit?: number }): Promise<{ data: PurchaseRequest[]; total?: number }> {
     const response = await inventoryAPI.get<{ data: PurchaseRequest[]; total?: number }>("/api/purchase-requests", { params });
     return response.data;
   },

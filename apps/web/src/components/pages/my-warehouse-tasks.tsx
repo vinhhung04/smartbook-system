@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { AlertTriangle, ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
@@ -10,26 +10,36 @@ import { StatusBadge } from "@/components/status-badge";
 import { getApiErrorMessage } from "@/services/api";
 import { myWarehouseTaskService, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
 
-function taskTypeLabel(type: string) {
-  const upper = String(type || "").toUpperCase();
-  if (upper === "RECEIVING") return "Receiving";
-  if (upper === "PUTAWAY") return "Putaway";
-  if (upper === "PICKING") return "Picking";
-  if (upper === "OUTBOUND") return "Outbound";
-  if (upper === "PURCHASE_REQUEST") return "Yeu cau mua hang";
-  if (upper === "EXCEPTION_REPORT") return "Bao cao ngoai le";
-  return upper || "Task";
-}
+const TASK_TYPE_LABELS: Record<string, string> = {
+  RECEIVING: "Tiếp nhận hàng",
+  PUTAWAY: "Cất hàng vào kho",
+  PICKING: "Lấy hàng",
+  OUTBOUND: "Xuất kho",
+  PURCHASE_REQUEST: "Yêu cầu mua hàng",
+  EXCEPTION_REPORT: "Báo cáo sự cố",
+};
+
+const TABS = [
+  { key: "ALL", label: "Tất cả" },
+  { key: "RECEIVING", label: "Tiếp nhận" },
+  { key: "PUTAWAY", label: "Cất hàng" },
+  { key: "PICKING", label: "Lấy hàng" },
+  { key: "OUTBOUND", label: "Xuất kho" },
+  { key: "PURCHASE_REQUEST", label: "Yêu cầu mua" },
+  { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
+];
+
+const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND"];
 
 function taskActionLabel(type: string) {
   const upper = String(type || "").toUpperCase();
-  if (upper === "RECEIVING") return "Ghi nhan";
-  if (upper === "PUTAWAY") return "Ghi nhan";
-  if (upper === "PICKING") return "Thuc hien";
-  if (upper === "OUTBOUND") return "Xac nhan";
-  if (upper === "PURCHASE_REQUEST") return "Xem yeu cau";
-  if (upper === "EXCEPTION_REPORT") return "Xem bao cao";
-  return "Thuc hien";
+  if (upper === "RECEIVING") return "Ghi nhận";
+  if (upper === "PUTAWAY") return "Thực hiện";
+  if (upper === "PICKING") return "Thực hiện";
+  if (upper === "OUTBOUND") return "Xác nhận";
+  if (upper === "PURCHASE_REQUEST") return "Xem yêu cầu";
+  if (upper === "EXCEPTION_REPORT") return "Xem báo cáo";
+  return "Thực hiện";
 }
 
 function taskStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
@@ -64,19 +74,24 @@ function getTaskActionPath(task: MyWarehouseTask) {
 }
 
 export function MyWarehouseTasksPage() {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<MyWarehouseTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("ALL");
 
-  const counts = useMemo(() => {
-    return {
-      receiving: tasks.filter((task) => task.type === "RECEIVING").length,
-      putaway: tasks.filter((task) => task.type === "PUTAWAY").length,
-      picking: tasks.filter((task) => task.type === "PICKING").length,
-      outbound: tasks.filter((task) => task.type === "OUTBOUND").length,
-      purchaseRequest: tasks.filter((task) => task.type === "PURCHASE_REQUEST").length,
-      exceptionReport: tasks.filter((task) => task.type === "EXCEPTION_REPORT").length,
-    };
-  }, [tasks]);
+  const counts = useMemo(() => ({
+    receiving: tasks.filter((t) => t.type === "RECEIVING").length,
+    putaway: tasks.filter((t) => t.type === "PUTAWAY").length,
+    picking: tasks.filter((t) => t.type === "PICKING").length,
+    outbound: tasks.filter((t) => t.type === "OUTBOUND").length,
+    purchaseRequest: tasks.filter((t) => t.type === "PURCHASE_REQUEST").length,
+    exceptionReport: tasks.filter((t) => t.type === "EXCEPTION_REPORT").length,
+  }), [tasks]);
+
+  const filteredTasks = useMemo(() =>
+    activeTab === "ALL" ? tasks : tasks.filter((t) => t.type === activeTab),
+    [tasks, activeTab]
+  );
 
   const loadTasks = async () => {
     try {
@@ -84,23 +99,27 @@ export function MyWarehouseTasksPage() {
       const response = await myWarehouseTaskService.getMyTasks();
       setTasks(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc cong viec kho"));
+      toast.error(getApiErrorMessage(error, "Không tải được công việc kho"));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void loadTasks();
-  }, []);
+  useEffect(() => { void loadTasks(); }, []);
 
-  const cards = [
-    { label: "Receiving tasks", value: counts.receiving, icon: Inbox, tone: "text-sky-700 bg-sky-50 border-sky-100" },
-    { label: "Putaway tasks", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100" },
-    { label: "Picking tasks", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-    { label: "Outbound tasks", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100" },
-    { label: "Yeu cau mua hang", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100" },
-    { label: "Bao cao ngoai le", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100" },
+  const handleReportException = (task: MyWarehouseTask) => {
+    const params = new URLSearchParams({ task_id: task.id, task_type: task.type, task_warehouse: task.warehouse ?? "" });
+    if (task.warehouse_id) params.set("warehouse_id", task.warehouse_id);
+    void navigate(`/my-exception-reports?${params.toString()}`);
+  };
+
+  const summaryCards = [
+    { label: "Tiếp nhận", value: counts.receiving, icon: Inbox, tone: "text-sky-700 bg-sky-50 border-sky-100", tab: "RECEIVING" },
+    { label: "Cất hàng", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "PUTAWAY" },
+    { label: "Lấy hàng", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100", tab: "PICKING" },
+    { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100", tab: "OUTBOUND" },
+    { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100", tab: "PURCHASE_REQUEST" },
+    { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100", tab: "EXCEPTION_REPORT" },
   ];
 
   return (
@@ -116,45 +135,74 @@ export function MyWarehouseTasksPage() {
             <ClipboardList className="h-5 w-5 text-emerald-700" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Cong viec kho cua toi</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Theo doi receiving, putaway, picking va outbound task da duoc giao</p>
+            <h1 className="text-xl font-semibold tracking-tight">Công việc kho của tôi</h1>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Theo dõi các task nhận hàng, cất hàng, lấy hàng và xuất kho được giao</p>
           </div>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading}>
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Lam moi
+          Làm mới
         </Button>
       </motion.div>
 
       <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800">
-        Chi hien thi task duoc giao va cac yeu cau/bao cao do ban tao. Tao don hang, dieu chinh ton kho va cac quyen quan tri la cua quan ly.
+        Chỉ hiển thị task được giao và các yêu cầu/báo cáo do bạn tạo. Tạo đơn hàng, điều chỉnh tồn kho và các quyền quản trị thuộc về quản lý.
       </div>
 
+      {/* Summary cards — clickable to filter */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {cards.map((card) => (
+        {summaryCards.map((card) => (
           <SectionCard key={card.label}>
-            <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${card.tone}`}>
-                <card.icon className="h-4 w-4" />
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() => setActiveTab(activeTab === card.tab ? "ALL" : card.tab)}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${card.tone} ${activeTab === card.tab ? "ring-2 ring-offset-1 ring-indigo-400" : ""}`}>
+                  <card.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[12px] text-muted-foreground">{card.label}</p>
+                  <p className="mt-1 text-2xl font-semibold">{card.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[12px] text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-2xl font-semibold">{card.value}</p>
-              </div>
-            </div>
+            </button>
           </SectionCard>
         ))}
       </div>
 
       <SectionCard noPadding>
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Task duoc giao</h2>
+        {/* Tab bar */}
+        <div className="border-b border-border">
+          <div className="flex items-center gap-1 overflow-x-auto px-4 pt-3 pb-0">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`shrink-0 px-3 py-2 text-[12px] font-medium rounded-t-lg border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? "border-indigo-500 text-indigo-700 bg-indigo-50/60"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                }`}
+              >
+                {tab.label}
+                {tab.key !== "ALL" && (
+                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"}`}>
+                    {tasks.filter((t) => t.type === tab.key).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Loai", "Ma task", "Kho", "Trang thai", "Tao luc", "Hoan tat", "Thao tac"].map((header) => (
+                {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Hoàn tất", "Thao tác"].map((header) => (
                   <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {header}
                   </th>
@@ -164,39 +212,53 @@ export function MyWarehouseTasksPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">Dang tai cong viec...</td>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải công việc...</td>
                 </tr>
-              ) : tasks.length === 0 ? (
+              ) : filteredTasks.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-10">
                     <EmptyState
                       icon={ClipboardList}
-                      title="Chua co task duoc giao"
-                      description="Nhan vien kho chi thao tac tren task da duoc quan ly giao. Cac nghiep vu tao don, dieu chuyen va dieu chinh ton kho khong hien thi tai day."
+                      title="Chưa có task được giao"
+                      description="Nhân viên kho chỉ thao tác trên task đã được quản lý giao. Các nghiệp vụ tạo đơn, điều chuyển và điều chỉnh tồn kho không hiển thị tại đây."
                     />
                   </td>
                 </tr>
-              ) : tasks.map((task) => {
+              ) : filteredTasks.map((task) => {
                 const actionPath = getTaskActionPath(task);
+                const canReport = OPERATIONAL_TYPES.includes(task.type);
                 return (
                   <tr key={`${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-5 py-3 text-[13px] font-medium">{taskTypeLabel(task.type)}</td>
+                    <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
                     <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
                     <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
                     <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
                     <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
                     <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
                     <td className="px-5 py-3 text-[12px]">
-                      {actionPath ? (
-                        <NavLink
-                          to={actionPath}
-                          className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 hover:bg-emerald-100"
-                        >
-                          {taskActionLabel(task.type)}
-                        </NavLink>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {actionPath ? (
+                          <NavLink
+                            to={actionPath}
+                            className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                          >
+                            {taskActionLabel(task.type)}
+                          </NavLink>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                        {canReport && (
+                          <button
+                            type="button"
+                            onClick={() => handleReportException(task)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
+                            title="Báo cáo sự cố cho task này"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Báo cáo
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

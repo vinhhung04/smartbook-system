@@ -14,6 +14,7 @@ import {
   Receipt,
   RefreshCw,
   ShieldOff,
+  ShoppingCart,
   TicketCheck,
   TrendingUp,
   Warehouse,
@@ -48,6 +49,8 @@ import {
 import { getApiErrorMessage, hasAnyPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
+import { purchaseRequestService } from '@/services/purchase-requests';
+import { exceptionReportService } from '@/services/exception-reports';
 
 const CHART_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
@@ -136,6 +139,8 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
+  const [pendingPR, setPendingPR] = useState(0);
+  const [openER, setOpenER] = useState(0);
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
@@ -174,6 +179,13 @@ export function DashboardPage() {
         stockRisk: Array.isArray(stockRisk) ? stockRisk : [],
         funnel: funnel || emptyFunnel,
       });
+
+      const [prRes, erRes] = await Promise.allSettled([
+        purchaseRequestService.getAll({ status: 'PENDING', limit: 1 }),
+        exceptionReportService.getAll({ status: 'OPEN', limit: 1 }),
+      ]);
+      setPendingPR(prRes.status === 'fulfilled' ? (prRes.value.total ?? prRes.value.data?.length ?? 0) : 0);
+      setOpenER(erRes.status === 'fulfilled' ? (erRes.value.total ?? erRes.value.data?.length ?? 0) : 0);
     } catch (err) {
       const message = getApiErrorMessage(err, 'Failed to load analytics dashboard.');
       setError(message);
@@ -299,6 +311,40 @@ export function DashboardPage() {
                 description="Once books, stock, reservations, loans and fines exist, this dashboard will populate automatically."
               />
             </SectionCard>
+          )}
+
+          {(pendingPR > 0 || openER > 0) && (
+            <div>
+              <h2 className="mb-3 text-[14px] font-semibold text-foreground">Cần xử lý ngay</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {pendingPR > 0 && (
+                  <NavLink to="/purchase-requests?status=PENDING">
+                    <div className="flex items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100 transition-colors">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white">
+                        <ShoppingCart className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-orange-700">{pendingPR}</div>
+                        <div className="text-[12px] text-orange-600">Yêu cầu mua hàng chờ duyệt</div>
+                      </div>
+                    </div>
+                  </NavLink>
+                )}
+                {openER > 0 && (
+                  <NavLink to="/exception-reports?status=OPEN">
+                    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 hover:bg-red-100 transition-colors">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-red-700">{openER}</div>
+                        <div className="text-[12px] text-red-600">Báo cáo sự cố chưa xử lý</div>
+                      </div>
+                    </div>
+                  </NavLink>
+                )}
+              </div>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">

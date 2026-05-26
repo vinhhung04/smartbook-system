@@ -51,8 +51,8 @@ export const exceptionReportService = {
     return response.data;
   },
 
-  async getAll(params?: { status?: string; warehouse_id?: string; task_type?: string; exception_type?: string }): Promise<{ data: ExceptionReport[] }> {
-    const response = await inventoryAPI.get<{ data: ExceptionReport[] }>("/api/exception-reports", { params });
+  async getAll(params?: { status?: string; warehouse_id?: string; task_type?: string; exception_type?: string; limit?: number }): Promise<{ data: ExceptionReport[]; total?: number }> {
+    const response = await inventoryAPI.get<{ data: ExceptionReport[]; total?: number }>("/api/exception-reports", { params });
     return response.data;
   },
 

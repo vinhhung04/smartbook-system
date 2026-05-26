@@ -6,6 +6,7 @@ export interface MyWarehouseTask {
   title: string;
   status: string;
   warehouse: string | null;
+  warehouse_id?: string | null;
   created_at: string | null;
   completed_at: string | null;
   action_path?: string | null;
