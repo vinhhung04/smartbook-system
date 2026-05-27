@@ -426,6 +426,7 @@ async function createOutboundRequest(req, res) {
   const note = normalizeText(req.body?.note);
   const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
   const currentUserId = parseId(req.user?.id);
+  const assignedPickerUserId = parseId(req.body?.assigned_picker_user_id) || null;
 
   if (!currentUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -571,6 +572,7 @@ async function createOutboundRequest(req, res) {
           outbound_type: outboundType,
           status: "PENDING_APPROVAL",
           requested_by_user_id: currentUserId,
+          processed_by_user_id: assignedPickerUserId,
           reference_type: referenceValidation.reference_type,
           external_reference: externalReference,
           note,
@@ -638,6 +640,7 @@ async function createTransferRequest(req, res) {
   const note = normalizeText(req.body?.note);
   const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
   const currentUserId = parseId(req.user?.id);
+  const assignedPickerUserId = parseId(req.body?.assigned_picker_user_id) || null;
 
   if (!currentUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -886,6 +889,7 @@ async function createTransferRequest(req, res) {
           to_warehouse_id: toWarehouseId,
           status: "REQUESTED",
           requested_by_user_id: currentUserId,
+          shipped_by_user_id: assignedPickerUserId,
           note,
         },
       });

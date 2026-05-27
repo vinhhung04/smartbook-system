@@ -105,6 +105,7 @@ export const orderRequestService = {
     external_reference?: string | null;
     note?: string | null;
     lines: OutboundRequestLineInput[];
+    assigned_picker_user_id?: string | null;
   }) => {
     const response = await inventoryAPI.post('/api/order-requests/outbound', payload);
     return response.data as {
@@ -123,6 +124,7 @@ export const orderRequestService = {
     to_warehouse_id: string;
     note?: string | null;
     lines: TransferRequestLineInput[];
+    assigned_picker_user_id?: string | null;
   }) => {
     const response = await inventoryAPI.post('/api/order-requests/transfer', payload);
     return response.data as {

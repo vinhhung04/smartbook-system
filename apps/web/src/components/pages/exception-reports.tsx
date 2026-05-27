@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, RefreshCw, CheckCircle, X } from "lucide-react";
+import { AlertTriangle, RefreshCw, CheckCircle, X, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận",
@@ -48,6 +49,9 @@ export function ExceptionReportsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [resolveState, setResolveState] = useState<{ id: string; notes: string } | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
+  const [assignState, setAssignState] = useState<Record<string, string>>({});
+  const [assigningId, setAssigningId] = useState("");
 
   const load = async (status?: string) => {
     setLoading(true);
@@ -62,6 +66,30 @@ export function ExceptionReportsPage() {
   };
 
   useEffect(() => { void load(statusFilter); }, [statusFilter]);
+
+  useEffect(() => {
+    void userService.getWarehouseStaff().then((res) => {
+      setWarehouseStaff(Array.isArray(res.data) ? res.data : []);
+    }).catch(() => {});
+  }, []);
+
+  const handleAssign = async (reportId: string) => {
+    const staffId = assignState[reportId];
+    if (!staffId) {
+      toast.error("Chọn nhân viên trước khi giao");
+      return;
+    }
+    setAssigningId(reportId);
+    try {
+      await exceptionReportService.assign(reportId, staffId);
+      toast.success("Đã giao task xử lý cho nhân viên");
+      void load(statusFilter);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Giao task thất bại"));
+    } finally {
+      setAssigningId("");
+    }
+  };
 
   const handleResolve = async () => {
     if (!resolveState) return;
@@ -126,17 +154,17 @@ export function ExceptionReportsPage() {
           <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Mã báo cáo", "Kho", "Loại task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Mô tả", "Trạng thái", "Tạo lúc", "Thao tác"].map((h) => (
+                {["Mã báo cáo", "Kho", "Loại task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Mô tả", "Trạng thái", "Tạo lúc", "Giao xử lý", "Thao tác"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <tr><td colSpan={11} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-5 py-10">
+                  <td colSpan={11} className="px-5 py-10">
                     <EmptyState icon={AlertTriangle} title="Chưa có báo cáo sự cố" description="Các báo cáo từ nhân viên kho sẽ hiển thị tại đây." />
                   </td>
                 </tr>
@@ -157,6 +185,33 @@ export function ExceptionReportsPage() {
                     </td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
                     <td className="px-4 py-3 text-[12px]">
+                      {warehouseStaff.length > 0 && r.status !== "RESOLVED" && (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={assignState[r.id] || r.assigned_to_user_id || ""}
+                            onChange={(e) => setAssignState((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            className="h-7 rounded border border-slate-200 bg-white px-1.5 text-[11px]"
+                          >
+                            <option value="">Chọn nhân viên</option>
+                            {warehouseStaff.map((s) => (
+                              <option key={s.id} value={s.id}>{s.full_name}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={assigningId === r.id}
+                            onClick={() => void handleAssign(r.id)}
+                            className="h-7 rounded bg-amber-500 px-2 text-[10px] font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                          >
+                            <UserCheck className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                      {r.assigned_to_user_id && warehouseStaff.length === 0 && (
+                        <span className="text-[11px] text-muted-foreground">Đã giao</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-[12px]">
                       {r.status !== "RESOLVED" && (
                         <Button type="button" size="sm" disabled={resolving}
                           onClick={() => setResolveState(resolveState?.id === r.id ? null : { id: r.id, notes: "" })}
@@ -173,7 +228,7 @@ export function ExceptionReportsPage() {
                   </tr>
                   {resolveState?.id === r.id && (
                     <tr key={`${r.id}-resolve`} className="bg-emerald-50/50 border-b border-border">
-                      <td colSpan={10} className="px-4 py-3">
+                      <td colSpan={11} className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"

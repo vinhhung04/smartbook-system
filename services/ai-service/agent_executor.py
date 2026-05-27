@@ -245,14 +245,45 @@ async def _exec_stock_alert(payload: dict) -> dict:
 
 # ── Staff Task Draft Executor ──────────────────────────────────────────────────
 
-async def _exec_staff_task(payload: dict) -> dict:
-    # Production TODO: create ai_agent_tasks table or integrate with real task module
+async def _exec_staff_task(payload: dict, auth_header: str) -> dict:
+    assignee_user_id = payload.get("assignee_user_id")
+    if not assignee_user_id:
+        return {
+            "success": True,
+            "mode": "draft_only",
+            "message": "Task draft created. Provide assignee_user_id to persist the real task.",
+            "task": payload,
+        }
+
+    body = {
+        "title": payload.get("task_title") or payload.get("title") or "Task từ AI",
+        "assignee_user_id": assignee_user_id,
+        "task_type": payload.get("task_type", "GENERAL"),
+        "priority": payload.get("priority", "MEDIUM"),
+    }
+    if payload.get("description"):
+        body["description"] = payload["description"]
+    if payload.get("warehouse_id"):
+        body["warehouse_id"] = payload["warehouse_id"]
+    if payload.get("due_date"):
+        body["due_date"] = payload["due_date"]
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+        resp = await client.post(
+            f"{GATEWAY_URL}/api/staff-tasks",
+            json=body,
+            headers={"Authorization": auth_header},
+        )
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=resp.status_code, detail=f"Gateway error creating staff task: {resp.text[:200]}")
+
+    data = resp.json()
     return {
         "success": True,
-        "mode": "agent_task_draft",
-        "task_id": f"TASK-DEMO-{_short_id()}",
-        "message": "Staff task draft created in AI Agent store. No business data was changed.",
-        "task": payload,
+        "mode": "real",
+        "message": "Staff task created successfully.",
+        "task": data.get("data", data),
     }
 
 
@@ -285,6 +316,6 @@ async def execute_agent_action(
     if action_type == CREATE_STOCK_ALERT:
         return await _exec_stock_alert(pending_action.payload)
     if action_type == CREATE_STAFF_TASK_DRAFT:
-        return await _exec_staff_task(pending_action.payload)
+        return await _exec_staff_task(pending_action.payload, auth_header)
 
     raise HTTPException(status_code=400, detail=f"Unknown action type: '{action_type}'.")

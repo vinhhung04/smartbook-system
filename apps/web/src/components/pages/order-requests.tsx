@@ -12,6 +12,7 @@ import {
   type OrderRequestVariant,
   type RequestTaskType,
 } from "@/services/order-requests";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -135,6 +136,8 @@ export function OrderRequestsPage() {
   const [variantResults, setVariantResults] = useState<OrderRequestVariant[]>([]);
 
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
+  const [assignedPickerUserId, setAssignedPickerUserId] = useState("");
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
 
   const [listView, setListView] = useState<"my" | "approval">("my");
   const [requests, setRequests] = useState<OrderRequestSummary[]>([]);
@@ -165,6 +168,11 @@ export function OrderRequestsPage() {
 
         setSelectedWarehouseId(preferredWarehouse);
         setTargetWarehouseId(rows.find((row) => row.id !== preferredWarehouse)?.id || "");
+
+        if (canApprove) {
+          const staffRes = await userService.getWarehouseStaff();
+          setWarehouseStaff(Array.isArray(staffRes.data) ? staffRes.data : []);
+        }
 
         await loadRequests("my", preferredWarehouse || undefined);
       } catch (error) {
@@ -284,6 +292,7 @@ export function OrderRequestsPage() {
     setVariantQuery("");
     setVariantResults([]);
     setDraftLines([]);
+    setAssignedPickerUserId("");
   };
 
   const handleSubmitRequest = async () => {
@@ -310,6 +319,7 @@ export function OrderRequestsPage() {
             isbn13: line.isbn13,
             quantity: Math.max(1, Math.trunc(line.quantity || 0)),
           })),
+          assigned_picker_user_id: assignedPickerUserId || null,
         });
       } else {
         if (!targetWarehouseId) {
@@ -325,6 +335,7 @@ export function OrderRequestsPage() {
             isbn13: line.isbn13,
             quantity: Math.max(1, Math.trunc(line.quantity || 0)),
           })),
+          assigned_picker_user_id: assignedPickerUserId || null,
         });
       }
 
@@ -464,6 +475,24 @@ export function OrderRequestsPage() {
                     className="h-9 w-full rounded-lg border border-input bg-muted/50 px-3 text-[12px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                 </div>
+              </div>
+            )}
+
+            {canApprove && warehouseStaff.length > 0 && (
+              <div className="md:col-span-3">
+                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Giao nhân viên phụ trách (tùy chọn)</p>
+                <select
+                  value={assignedPickerUserId}
+                  onChange={(e) => setAssignedPickerUserId(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <option value="">Chưa giao (giao sau ở Picking)</option>
+                  {warehouseStaff.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.full_name} ({staff.username})
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
