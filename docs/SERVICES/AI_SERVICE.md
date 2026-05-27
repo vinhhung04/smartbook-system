@@ -30,6 +30,8 @@ Ghi chú quan trọng:
 
 - Có endpoint alias /api/ai/generate-book-summary để tương thích khi đi qua gateway.
 - /lookup-book-by-isbn hỗ trợ normalize ISBN-10/ISBN-13 và trả payload ổn định cho frontend.
+- Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
+- Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
 
 ## Biến môi trường đặc thù
 
@@ -43,6 +45,10 @@ Ghi chú quan trọng:
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
 | GROQ_API_KEY | rỗng | Fallback cloud LLM tùy chọn |
 | ENABLE_WORLDCAT_LOOKUP | false | Bật/tắt tra cứu WorldCat |
+| ENABLE_MARKETPLACE_LOOKUP | false | Bật tra cứu Fahasa/Tiki/Vinabook |
+| BOOK_MARKETPLACE_TIMEOUT_SECONDS | 6 | Timeout (giây) cho marketplace lookup |
+| BOOK_LOOKUP_MAX_WEB_RESULTS | 5 | Số kết quả DuckDuckGo tối đa mỗi query |
+| BOOK_LOOKUP_USER_AGENT | SmartBookBot/1.0 | User-Agent khi fetch trang nhà sách |
 
 ## Chạy nhanh
 

@@ -305,8 +305,19 @@ export function AIImportPage() {
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-right text-[11px] text-slate-500">
                 <div>Độ tin cậy: <span className="font-semibold text-slate-700">{confidenceText}</span></div>
                 <div>
-                  Nguồn: {lookupData.source.googleBooks ? "Google " : ""}{lookupData.source.openLibrary ? "OpenLibrary " : ""}
-                  {!lookupData.source.googleBooks && !lookupData.source.openLibrary ? "Thủ công" : ""}
+                  Nguồn:{" "}
+                  {(() => {
+                    const labels = [
+                      lookupData.source.googleBooks && "Google",
+                      lookupData.source.openLibrary && "OpenLibrary",
+                      lookupData.source.worldCat && "WorldCat",
+                      lookupData.source.fahasa && "Fahasa",
+                      lookupData.source.tiki && "Tiki",
+                      lookupData.source.vinabook && "Vinabook",
+                      lookupData.source.webSearch && "Web",
+                    ].filter(Boolean) as string[];
+                    return labels.length > 0 ? labels.join(", ") : "Thủ công";
+                  })()}
                 </div>
               </div>
             </div>
@@ -314,6 +325,12 @@ export function AIImportPage() {
             {manualMode ? (
               <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
                 Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
+              </div>
+            ) : null}
+
+            {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
+              <div className="mb-4 rounded-[10px] border border-yellow-200 bg-yellow-50 px-3 py-2 text-[12px] text-yellow-700">
+                Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
               </div>
             ) : null}
 

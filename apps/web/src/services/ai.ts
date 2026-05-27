@@ -72,6 +72,10 @@ export interface LookupBookByIsbnResponse {
     googleBooks: boolean;
     openLibrary: boolean;
     worldCat?: boolean;
+    fahasa?: boolean;
+    tiki?: boolean;
+    vinabook?: boolean;
+    webSearch?: boolean;
     aiSummary: string;
   };
   confidence: {
@@ -79,6 +83,10 @@ export interface LookupBookByIsbnResponse {
     googleBooks: number;
     openLibrary: number;
     worldCat?: number;
+    fahasa?: number;
+    tiki?: number;
+    vinabook?: number;
+    webSearch?: number;
   };
   summaryVi: string | null;
   keywords: string[];

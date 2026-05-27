@@ -10,6 +10,9 @@ import logging
 import asyncio
 import xml.etree.ElementTree as ET
 import hashlib
+import html as _html_module
+import time
+from html.parser import HTMLParser
 from cache import response_cache, rate_limiter, summary_cache
 from intent import detect_intent, normalize_text
 from rag import (
@@ -80,6 +83,13 @@ WORLDCAT_CLASSIFY_API_BASE_URL = os.getenv(
 GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY", "").strip()
 BOOK_LOOKUP_TIMEOUT_SECONDS = float(os.getenv("BOOK_LOOKUP_TIMEOUT_SECONDS", "8"))
 ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() == "true"
+
+# ── Marketplace lookup (Fahasa / Tiki / Vinabook) ─────────────────────────────
+ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lower() == "true"
+BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "6"))
+BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
+BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
+MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 
 # Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
@@ -464,13 +474,21 @@ def _manual_entry_response(raw_isbn: str, normalized_isbn: str | None, reason: s
             "googleBooks": False,
             "openLibrary": False,
             "worldCat": False,
-            "ollamaSummary": False,
+            "fahasa": False,
+            "tiki": False,
+            "vinabook": False,
+            "webSearch": False,
+            "aiSummary": "none",
         },
         "confidence": {
             "overall": 0.0,
             "googleBooks": 0.0,
             "openLibrary": 0.0,
             "worldCat": 0.0,
+            "fahasa": 0.0,
+            "tiki": 0.0,
+            "vinabook": 0.0,
+            "webSearch": 0.0,
         },
         "summaryVi": None,
         "keywords": [],
@@ -544,6 +562,418 @@ def _normalize_and_validate_isbn(raw_isbn: str) -> tuple[str | None, str | None,
         return normalized, _isbn13_to_isbn10(normalized), None
 
     return None, None, "isbn must be ISBN-10 or ISBN-13"
+
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Marketplace lookup helpers (Fahasa / Tiki / Vinabook)
+# ────────────────────────────────────────────────────────────────────────────────
+
+
+# ── 1. JSON-LD parser ──────────────────────────────────────────────────────────
+
+_JSON_LD_SCRIPT_RE = re.compile(
+    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _parse_json_ld_product(html_text: str) -> dict | None:
+    """Parse all JSON-LD blocks, return first Product/Book schema found."""
+    for match in _JSON_LD_SCRIPT_RE.finditer(html_text):
+        raw = match.group(1).strip()
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.debug("JSON-LD parse error (skipping block): %s", exc)
+            continue
+
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("@type", "")
+            if isinstance(item_type, list):
+                item_type = " ".join(item_type)
+            if not any(t in item_type for t in ("Product", "Book")):
+                continue
+
+            name = (item.get("name") or "").strip() or None
+            description = (item.get("description") or "").strip() or None
+            if not name and not description:
+                continue
+
+            # image
+            img = item.get("image")
+            thumbnail = None
+            if isinstance(img, str):
+                thumbnail = img or None
+            elif isinstance(img, dict):
+                thumbnail = img.get("url") or img.get("contentUrl")
+            elif isinstance(img, list) and img:
+                thumbnail = img[0] if isinstance(img[0], str) else None
+
+            # author
+            author_raw = item.get("author") or item.get("creator")
+            authors: list[str] = []
+            if isinstance(author_raw, str):
+                authors = [author_raw] if author_raw else []
+            elif isinstance(author_raw, dict):
+                n = (author_raw.get("name") or "").strip()
+                if n:
+                    authors = [n]
+            elif isinstance(author_raw, list):
+                for a in author_raw:
+                    n = (a.get("name") if isinstance(a, dict) else a) or ""
+                    n = str(n).strip()
+                    if n:
+                        authors.append(n)
+
+            # publisher
+            pub = item.get("publisher")
+            publisher = None
+            if isinstance(pub, str):
+                publisher = pub.strip() or None
+            elif isinstance(pub, dict):
+                publisher = (pub.get("name") or "").strip() or None
+
+            # isbn — may appear as isbn, gtin13, gtin14
+            isbn_from_ld = None
+            for isbn_key in ("isbn", "gtin13", "gtin14"):
+                v = (item.get(isbn_key) or "").strip()
+                if v:
+                    isbn_from_ld = v
+                    break
+
+            num_pages = item.get("numberOfPages")
+            page_count = num_pages if isinstance(num_pages, int) else None
+
+            return {
+                "title": name,
+                "subtitle": None,
+                "authors": authors,
+                "publisher": publisher,
+                "publishedDate": (item.get("datePublished") or "").strip() or None,
+                "description": description,
+                "categories": [],
+                "language": (item.get("inLanguage") or "").strip() or None,
+                "pageCount": page_count,
+                "thumbnail": thumbnail,
+                "_isbn_from_ld": isbn_from_ld,
+            }
+    return None
+
+
+# ── 2. OpenGraph / meta parser ─────────────────────────────────────────────────
+
+class _MetaTagParser(HTMLParser):
+    """Lightweight parser for og:title, og:description, og:image, description meta."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.og_title: str | None = None
+        self.og_description: str | None = None
+        self.og_image: str | None = None
+        self.meta_description: str | None = None
+        self._done = False
+
+    def handle_starttag(self, tag, attrs):
+        if self._done or tag != "meta":
+            return
+        attr_dict = dict(attrs)
+        prop = (attr_dict.get("property") or attr_dict.get("name") or "").strip()
+        content = _html_module.unescape(attr_dict.get("content") or "").strip()
+        if prop == "og:title" and not self.og_title:
+            self.og_title = content or None
+        elif prop == "og:description" and not self.og_description:
+            self.og_description = content or None
+        elif prop == "og:image" and not self.og_image:
+            self.og_image = content or None
+        elif prop == "description" and not self.meta_description:
+            self.meta_description = content or None
+        # Stop iterating after all 4 fields are found
+        if all([self.og_title, self.og_description, self.og_image, self.meta_description]):
+            self._done = True
+
+
+def _parse_meta_product(html_text: str) -> dict | None:
+    """Parse OpenGraph and standard meta tags from an HTML page."""
+    parser = _MetaTagParser()
+    try:
+        parser.feed(html_text)
+    except Exception:
+        pass  # HTMLParser can raise on malformed HTML; partial results are fine
+
+    title = parser.og_title
+    description = parser.og_description or parser.meta_description
+    image = parser.og_image
+
+    if not title and not description:
+        return None
+
+    return {
+        "title": title,
+        "subtitle": None,
+        "authors": [],
+        "publisher": None,
+        "publishedDate": None,
+        "description": description,
+        "categories": [],
+        "language": None,
+        "pageCount": None,
+        "thumbnail": image,
+    }
+
+
+# ── 3. Fetch + parse a single product URL ─────────────────────────────────────
+
+async def _fetch_and_parse_product_page(
+    client: httpx.AsyncClient,
+    url: str,
+    source_name: str,
+    search_code: str | None = None,
+) -> tuple[dict | None, float]:
+    """
+    Fetch a product page and extract metadata via JSON-LD then OpenGraph fallback.
+    If search_code is provided, the page must contain that code to be accepted —
+    this prevents using metadata from an unrelated book that DuckDuckGo matched by URL.
+    """
+    try:
+        response = await client.get(
+            url,
+            headers={
+                "User-Agent": BOOK_LOOKUP_USER_AGENT,
+                "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+            },
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        html_text = response.text
+    except Exception as exc:
+        logger.warning("Marketplace fetch failed [%s] %s: %s", source_name, url, exc)
+        return None, 0.0
+
+    # Verify the searched code actually appears in the page HTML before trusting metadata
+    if search_code and search_code not in html_text:
+        logger.debug("Marketplace [%s] page does not contain code %s, skipping %s", source_name, search_code, url)
+        return None, 0.0
+
+    metadata = _parse_json_ld_product(html_text) or _parse_meta_product(html_text)
+    if not metadata:
+        logger.debug("Marketplace [%s] no parseable metadata from %s", source_name, url)
+        return None, 0.0
+
+    # _metadata_completeness_score is defined later in this file but used here —
+    # safe because this function is only called at runtime, not at import time.
+    score = _metadata_completeness_score(metadata)
+    logger.info("Marketplace [%s] found metadata score=%.3f from %s", source_name, score, url)
+    return metadata, score
+
+
+async def _fetch_first_valid(
+    client: httpx.AsyncClient,
+    urls: list[str],
+    source_name: str,
+    search_code: str | None = None,
+) -> tuple[dict | None, float]:
+    """Try each URL in order, return first successful parse."""
+    for url in urls[:2]:
+        metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
+        if metadata:
+            return metadata, score
+    return None, 0.0
+
+
+# ── 4. DuckDuckGo search (sync — each domain runs in its own thread) ─────────
+
+def _ddgs_search_one_domain(code: str, domain: str, max_results: int) -> list[str]:
+    """Search DuckDuckGo for a single domain. Sync — runs via asyncio.to_thread."""
+    urls: list[str] = []
+    try:
+        from ddgs import DDGS
+        query = f"{code} site:{domain}"
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+            for r in results:
+                url = r.get("href", "")
+                if domain in url and url not in urls:
+                    urls.append(url)
+    except Exception as exc:
+        logger.warning("DDGS query '%s site:%s' failed: %s", code, domain, exc)
+    return urls
+
+
+# ── 5. Tiki direct API ────────────────────────────────────────────────────────
+
+async def _fetch_tiki_by_isbn_api(
+    client: httpx.AsyncClient,
+    isbn: str,
+) -> tuple[dict | None, float]:
+    """
+    Query Tiki's public product search API.
+    Tiki stores ISBN as the product SKU, so we match on sku == isbn.
+    We also fetch the full product detail to get description.
+    """
+    logger.info("Calling tiki-api for ISBN %s", isbn)
+    try:
+        resp = await client.get(
+            "https://tiki.vn/api/v2/products",
+            params={"q": isbn, "limit": 5, "category": 8322},
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        resp.raise_for_status()
+        data = resp.json() or {}
+        items = data.get("data") or []
+        for item in items:
+            sku = (item.get("sku") or item.get("master_product_sku") or "").strip()
+            name = (item.get("name") or "").strip()
+            # Accept only if SKU exactly matches our ISBN (most reliable check)
+            if sku != isbn:
+                continue
+            thumbnail = item.get("thumbnail_url") or None
+            product_id = item.get("id")
+            # Fetch full product detail for description
+            description = None
+            if product_id:
+                try:
+                    detail_resp = await client.get(
+                        f"https://tiki.vn/api/v2/products/{product_id}",
+                        headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+                    )
+                    detail_resp.raise_for_status()
+                    detail = detail_resp.json() or {}
+                    description = _safe_text(detail.get("description") or detail.get("short_description"))
+                    # Authors and publisher from specifications
+                    specs = detail.get("specifications") or []
+                    authors_text, publisher_text = None, None
+                    for spec_group in specs:
+                        for attr in (spec_group.get("attributes") or []):
+                            code = attr.get("code", "")
+                            val = _safe_text(attr.get("value"))
+                            if code in ("author", "tac_gia") and val:
+                                authors_text = val
+                            elif code in ("publisher", "nha_xuat_ban") and val:
+                                publisher_text = val
+                except Exception:
+                    pass
+
+            metadata = {
+                "title": name or None,
+                "subtitle": None,
+                "authors": [authors_text] if authors_text else [],
+                "publisher": publisher_text,
+                "publishedDate": None,
+                "description": description,
+                "categories": [],
+                "language": "vi",
+                "pageCount": None,
+                "thumbnail": thumbnail,
+            }
+            score = _metadata_completeness_score(metadata)
+            logger.info("tiki-api returned data, score=%.3f for ISBN %s", score, isbn)
+            return metadata, score
+    except Exception as exc:
+        logger.warning("Tiki API lookup failed for %s: %s", isbn, exc)
+    return None, 0.0
+
+
+# ── 6. Orchestrate all marketplace providers ──────────────────────────────────
+
+async def _fetch_all_marketplace(
+    isbn13: str,
+    isbn10: str | None,
+) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool]:
+    """
+    Run Fahasa (DDGS+scrape), Tiki (API), Vinabook (DDGS+scrape) in parallel.
+    Returns: (fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched)
+    """
+    # Step 1: DuckDuckGo search for Fahasa + Vinabook URLs (Tiki handled via API)
+    # Run both DDGS queries in parallel threads — each in its own thread so total
+    # time = max(fahasa_query, vinabook_query) instead of sum.
+    fahasa_urls: list[str] = []
+    vinabook_urls: list[str] = []
+    try:
+        ddgs_results = await asyncio.wait_for(
+            asyncio.gather(
+                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
+                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "vinabook.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
+                return_exceptions=True,
+            ),
+            timeout=9.0,
+        )
+        if not isinstance(ddgs_results[0], Exception):
+            fahasa_urls = ddgs_results[0]
+        if not isinstance(ddgs_results[1], Exception):
+            vinabook_urls = ddgs_results[1]
+    except asyncio.TimeoutError:
+        logger.warning("DuckDuckGo marketplace search timed out for ISBN %s", isbn13)
+    except Exception as exc:
+        logger.warning("DuckDuckGo marketplace search error for ISBN %s: %s", isbn13, exc)
+
+    web_searched = bool(fahasa_urls or vinabook_urls)
+
+    # Step 2: Fetch pages + Tiki API in parallel
+    mp_timeout = httpx.Timeout(BOOK_MARKETPLACE_TIMEOUT_SECONDS)
+    async with httpx.AsyncClient(timeout=mp_timeout) as client:
+        logger.info("Calling marketplace providers for ISBN %s", isbn13)
+        results = await asyncio.gather(
+            _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
+            _fetch_tiki_by_isbn_api(client, isbn13),
+            _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+            return_exceptions=True,
+        )
+
+    def _safe_unpack(r):
+        return r if not isinstance(r, Exception) else (None, 0.0)
+
+    fahasa_data, fahasa_score = _safe_unpack(results[0])
+    tiki_data, tiki_score = _safe_unpack(results[1])
+    vinabook_data, vinabook_score = _safe_unpack(results[2])
+
+    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched
+
+
+# ── 7. Merge marketplace data into base metadata ─────────────────────────────
+
+def _merge_with_marketplace(
+    base: dict,
+    fahasa: dict | None,
+    tiki: dict | None,
+    vinabook: dict | None,
+) -> dict:
+    """
+    Fill missing fields in base from marketplace sources.
+    Marketplace is lower priority — only fills gaps, never overwrites existing values.
+    """
+    result = dict(base)
+    for src in [fahasa, tiki, vinabook]:
+        if not src:
+            continue
+        for field in ("title", "publisher"):
+            if not result.get(field) and src.get(field):
+                result[field] = src[field]
+        if not result.get("authors") and src.get("authors"):
+            result["authors"] = src["authors"]
+        if not result.get("description") and src.get("description"):
+            result["description"] = src["description"]
+        if not result.get("thumbnail") and src.get("thumbnail"):
+            result["thumbnail"] = src["thumbnail"]
+    return result
+
+
+# ── 8. Standard lookups extracted as helper ───────────────────────────────────
+
+async def _run_standard_lookups(isbn13: str, isbn10: str | None) -> list:
+    """Run Google Books, Open Library (and optionally WorldCat) in parallel."""
+    timeout = httpx.Timeout(BOOK_LOOKUP_TIMEOUT_SECONDS)
+    headers = {"User-Agent": BOOK_LOOKUP_USER_AGENT}
+    async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
+        tasks: list = [
+            _fetch_google_books_by_isbn(client, isbn13),
+            _fetch_open_library_by_isbn(client, isbn13, isbn10),
+        ]
+        if ENABLE_WORLDCAT_LOOKUP:
+            tasks.append(_fetch_worldcat_by_isbn(client, isbn13, isbn10))
+        return await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def _safe_text(value) -> str | None:
@@ -1130,61 +1560,157 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
 
+    # Check if the input looks like a numeric barcode (10 or 13 digits) even if not a valid ISBN
+    raw_barcode = re.sub(r"[^0-9]", "", raw_isbn)
+    is_barcode_candidate = len(raw_barcode) in (10, 13)
+
+    # ── Barcode mode: non-ISBN but numeric code → try marketplace first ───────
+    if validation_error and is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP:
+        logger.info("ISBN validation failed (%s), trying marketplace barcode lookup for %s", validation_error, raw_barcode)
+        mp_results = await _fetch_all_marketplace(raw_barcode, None)
+        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b = mp_results
+        mp_merged = _merge_with_marketplace({}, fahasa_b, tiki_b, vinabook_b)
+        mp_found = bool(mp_merged.get("title") or mp_merged.get("description"))
+
+        if mp_found:
+            # Try to extract a canonical ISBN from JSON-LD if marketplace returned one
+            canonical_isbn13 = None
+            canonical_isbn10 = None
+            for src in [fahasa_b, tiki_b, vinabook_b]:
+                if not src:
+                    continue
+                ld_isbn = (src.get("_isbn_from_ld") or "").strip()
+                if ld_isbn:
+                    c13, c10, err = _normalize_and_validate_isbn(ld_isbn)
+                    if not err:
+                        canonical_isbn13, canonical_isbn10 = c13, c10
+                        break
+
+            mp_score = max(fahasa_bs, tiki_bs, vinabook_bs)
+            return {
+                "success": True,
+                "found": True,
+                "isbn": canonical_isbn13 or raw_barcode,
+                "isbn13": canonical_isbn13,
+                "isbn10": canonical_isbn10,
+                "title": mp_merged.get("title"),
+                "subtitle": mp_merged.get("subtitle"),
+                "authors": mp_merged.get("authors") or [],
+                "publisher": mp_merged.get("publisher"),
+                "publishedDate": mp_merged.get("publishedDate"),
+                "description": mp_merged.get("description"),
+                "categories": mp_merged.get("categories") or [],
+                "language": mp_merged.get("language"),
+                "pageCount": mp_merged.get("pageCount"),
+                "thumbnail": mp_merged.get("thumbnail"),
+                "source": {
+                    "googleBooks": False,
+                    "openLibrary": False,
+                    "worldCat": False,
+                    "fahasa": bool(fahasa_b),
+                    "tiki": bool(tiki_b),
+                    "vinabook": bool(vinabook_b),
+                    "webSearch": web_b,
+                    "aiSummary": "none",
+                },
+                "confidence": {
+                    "overall": round(mp_score, 3),
+                    "googleBooks": 0.0,
+                    "openLibrary": 0.0,
+                    "worldCat": 0.0,
+                    "fahasa": round(fahasa_bs, 3),
+                    "tiki": round(tiki_bs, 3),
+                    "vinabook": round(vinabook_bs, 3),
+                    "webSearch": 0.0,
+                },
+                "summaryVi": None,
+                "keywords": [],
+                "manualEntryRequired": False,
+                "reason": "barcode is not a valid ISBN but marketplace lookup attempted",
+            }
+
+        logger.info("Barcode %s not found in any marketplace source", raw_barcode)
+        return _manual_entry_response(raw_isbn, raw_barcode, "barcode not found in any source")
+
     if validation_error:
         return _manual_entry_response(raw_isbn, None, validation_error)
 
-    # ── Bước 1: Song song hóa 3 nguồn lookup ────────────────────────────────
-    timeout = httpx.Timeout(BOOK_LOOKUP_TIMEOUT_SECONDS)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        tasks = [
-            _fetch_google_books_by_isbn(client, isbn13),
-            _fetch_open_library_by_isbn(client, isbn13, isbn10),
-        ]
-        if ENABLE_WORLDCAT_LOOKUP:
-            tasks.append(_fetch_worldcat_by_isbn(client, isbn13, isbn10))
+    # ── Standard ISBN lookup: run standard providers + marketplace in parallel ─
+    if ENABLE_MARKETPLACE_LOOKUP:
+        std_gather, mp_gather = await asyncio.gather(
+            _run_standard_lookups(isbn13, isbn10),
+            _fetch_all_marketplace(isbn13, isbn10),
+            return_exceptions=True,
+        )
+        std_results: list = std_gather if not isinstance(std_gather, Exception) else []
+        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False)
+    else:
+        std_results = await _run_standard_lookups(isbn13, isbn10)
+        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False)
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    google_data, google_score = results[0] if not isinstance(results[0], Exception) else (None, 0.0)
-    open_data, open_score = results[1] if not isinstance(results[1], Exception) else (None, 0.0)
-
+    # Unpack standard results
+    google_data, google_score = std_results[0] if len(std_results) > 0 and not isinstance(std_results[0], Exception) else (None, 0.0)
+    open_data, open_score = std_results[1] if len(std_results) > 1 and not isinstance(std_results[1], Exception) else (None, 0.0)
     worldcat_data, worldcat_score = None, 0.0
-    if ENABLE_WORLDCAT_LOOKUP and len(results) > 2:
-        wc_result = results[2]
-        worldcat_data, worldcat_score = wc_result if not isinstance(wc_result, Exception) else (None, 0.0)
+    if ENABLE_WORLDCAT_LOOKUP and len(std_results) > 2 and not isinstance(std_results[2], Exception):
+        worldcat_data, worldcat_score = std_results[2]
 
+    # Unpack marketplace results
+    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched = mp_tuple
+
+    # ── Merge all sources ─────────────────────────────────────────────────────
     merged = _merge_lookup_metadata_with_fallbacks(google_data, open_data, worldcat_data)
+    if ENABLE_MARKETPLACE_LOOKUP:
+        merged = _merge_with_marketplace(merged, fahasa_data, tiki_data, vinabook_data)
+
     found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
 
-    # ── Bước 2: Không tìm thấy → trả response rỗng ────────────────────────
+    # ── Not found → return empty response with source flags ───────────────────
     if not found:
         result = _manual_entry_response(raw_isbn, isbn13, "metadata not found from providers")
         result["isbn"] = isbn13
-        result["source"]["googleBooks"] = bool(google_data)
-        result["source"]["openLibrary"] = bool(open_data)
-        result["source"]["worldCat"] = bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False
-        result["confidence"]["googleBooks"] = google_score
-        result["confidence"]["openLibrary"] = open_score
-        result["confidence"]["worldCat"] = worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0
-        result["confidence"]["overall"] = max(google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0)
+        result["source"].update({
+            "googleBooks": bool(google_data),
+            "openLibrary": bool(open_data),
+            "worldCat": bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False,
+            "fahasa": bool(fahasa_data),
+            "tiki": bool(tiki_data),
+            "vinabook": bool(vinabook_data),
+            "webSearch": web_searched,
+        })
+        result["confidence"].update({
+            "googleBooks": google_score,
+            "openLibrary": open_score,
+            "worldCat": worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
+            "fahasa": fahasa_score,
+            "tiki": tiki_score,
+            "vinabook": vinabook_score,
+            "overall": max(google_score, open_score,
+                           worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
+                           fahasa_score, tiki_score, vinabook_score),
+        })
         return result
 
-    # ── Bước 3: Sinh summary tiếng Việt ───────────────────────────────────
+    # ── Generate Vietnamese summary ───────────────────────────────────────────
     summary_vi = None
     keywords = []
     ai_provider = "none"
     if req.generateVietnameseSummary and _should_generate_summary(merged):
-        # Ưu tiên Groq (nhanh, free) trước; fallback Ollama
         summary_vi, keywords, groq_ok = await _call_groq(merged)
         if groq_ok:
             ai_provider = "groq"
         else:
-            # Fallback Ollama local
             summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(merged)
             ai_provider = "ollama" if ollama_ok else "none"
 
-    overall_confidence = round(max(google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0), 3)
-    active_scores = [s for s in [google_score, open_score, worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0] if s > 0]
+    # ── Calculate overall confidence ──────────────────────────────────────────
+    all_scores = [
+        google_score, open_score,
+        worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
+        fahasa_score, tiki_score, vinabook_score,
+    ]
+    overall_confidence = round(max(all_scores), 3)
+    active_scores = [s for s in all_scores if s > 0]
     if len(active_scores) >= 2:
         avg_score = sum(active_scores) / len(active_scores)
         overall_confidence = round(max(overall_confidence, min(1.0, avg_score + 0.1)), 3)
@@ -1209,6 +1735,10 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
             "googleBooks": bool(google_data),
             "openLibrary": bool(open_data),
             "worldCat": bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False,
+            "fahasa": bool(fahasa_data),
+            "tiki": bool(tiki_data),
+            "vinabook": bool(vinabook_data),
+            "webSearch": web_searched,
             "aiSummary": ai_provider,
         },
         "confidence": {
@@ -1216,6 +1746,10 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
             "googleBooks": google_score,
             "openLibrary": open_score,
             "worldCat": worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
+            "fahasa": fahasa_score,
+            "tiki": tiki_score,
+            "vinabook": vinabook_score,
+            "webSearch": 0.0,
         },
         "summaryVi": summary_vi,
         "keywords": keywords,
