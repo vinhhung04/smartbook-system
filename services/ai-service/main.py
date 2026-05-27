@@ -11,7 +11,7 @@ import asyncio
 import xml.etree.ElementTree as ET
 import hashlib
 from cache import response_cache, rate_limiter, summary_cache
-from intent import detect_intent
+from intent import detect_intent, normalize_text
 from rag import (
     RAG_SYSTEM_RULES,
     build_fallback_reply,
@@ -20,6 +20,28 @@ from rag import (
     ensure_source_line,
 )
 from retrieval import retrieve_context
+from agent_planner import plan_agent_action
+from agent_store import (
+    create_pending_action,
+    get_pending_action,
+    cancel_pending_action,
+    mark_action_executed,
+    mark_action_failed,
+    cleanup_expired_actions,
+    is_expired,
+    PENDING_ACTIONS,
+    ACTION_RESULTS,
+)
+from agent_permissions import get_user_context, can_confirm_action, require_can_confirm_action
+from agent_executor import execute_agent_action
+from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
+from agent_actions import (
+    PENDING_CONFIRMATION,
+    EXECUTED,
+    CANCELLED,
+    EXPIRED as ACTION_EXPIRED,
+    get_action_config,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -1614,6 +1636,38 @@ async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
         return None, False
 
 
+_AGENT_ACTION_KEYWORDS = [
+    "tao", "lap", "sinh", "xuat", "canh bao", "nhac", "task",
+    "create", "generate", "reserve", "assign", "bao cao", "report",
+    "de xuat", "dat sach", "giu sach", "giao viec",
+]
+
+
+def _wants_agent_action(message: str) -> bool:
+    normalized = normalize_text(message)
+    return any(kw in normalized for kw in _AGENT_ACTION_KEYWORDS)
+
+
+def _make_temp_action_for_check(planned: dict):
+    """Build a minimal object for can_confirm_action without hitting agent_store."""
+    from agent_schemas import PendingAction
+    config = get_action_config(planned["type"]) or {}
+    return PendingAction(
+        id="temp",
+        type=planned["type"],
+        status=PENDING_CONFIRMATION,
+        summary=planned.get("summary", ""),
+        payload=planned.get("payload", {}),
+        risk=planned.get("risk", "MEDIUM"),
+        requires_confirmation=True,
+        allowed_roles=config.get("allowed_roles", []),
+        allowed_permissions=config.get("allowed_permissions", []),
+        created_from_message="",
+        created_at="",
+        expires_at="",
+    )
+
+
 @app.post("/chat")
 async def chat(request: Request, req: ChatRequest):
     if not req.message.strip():
@@ -1673,7 +1727,9 @@ async def chat(request: Request, req: ChatRequest):
     auth_hash = hashlib.md5((auth_header or "anonymous").encode()).hexdigest()[:8]
     history_hash = f"{history_hash}:{auth_hash}:{intent_info.get('intent') or 'unknown'}"
 
-    cached_reply = response_cache.get(req.message, history_hash)
+    # Bypass cache for action requests — each planned action needs a unique ID.
+    is_action_request = _wants_agent_action(req.message)
+    cached_reply = None if is_action_request else response_cache.get(req.message, history_hash)
     if cached_reply:
         return {"reply": cached_reply, "ai_provider": "cached", **metadata}
 
@@ -1685,30 +1741,161 @@ async def chat(request: Request, req: ChatRequest):
 
     messages.append({"role": "user", "content": req.message.strip()})
 
+    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
+        """Try to plan an agent action and append a confirmation hint to the reply."""
+        pending_action_data = None
+        user_ctx = None
+        try:
+            if auth_header:
+                user_ctx = await get_user_context(auth_header)
+        except Exception:
+            pass  # never fail the chat response on permission errors
+
+        if is_action_request and user_ctx is None:
+            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
+            return reply_text, None
+
+        if user_ctx is not None:
+            try:
+                planned = plan_agent_action(req.message, intent_info, retrieval, user_ctx)
+                if planned is not None:
+                    temp_action = _make_temp_action_for_check(planned)
+                    if not can_confirm_action(user_ctx, temp_action):
+                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
+                    else:
+                        action = create_pending_action(
+                            action_type=planned["type"],
+                            summary=planned["summary"],
+                            payload=planned["payload"],
+                            risk=planned["risk"],
+                            sources=planned.get("sources", []),
+                            intent=planned.get("intent"),
+                            created_from_message=req.message,
+                            warnings=planned.get("warnings", []),
+                            requires_review=planned.get("requires_review", False),
+                            user_context=user_ctx,
+                        )
+                        pending_action_data = action.model_dump()
+                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+            except Exception as exc:
+                logger.warning("Agent planning failed (non-fatal): %s", exc)
+
+        return reply_text, pending_action_data
+
     reply, groq_ok = await _chat_with_groq(messages)
     if groq_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        response_cache.set(req.message, reply_with_sources, history_hash)
-        return {
-            "reply": reply_with_sources,
-            "ai_provider": "groq",
-            **metadata,
-        }
+        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
+        if not pending_action_data:
+            response_cache.set(req.message, reply_with_sources, history_hash)
+        result = {"reply": reply_with_sources, "ai_provider": "groq", **metadata}
+        if pending_action_data:
+            result["pending_action"] = pending_action_data
+        return result
 
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        response_cache.set(req.message, reply_with_sources, history_hash)
-        return {
-            "reply": reply_with_sources,
-            "ai_provider": "ollama",
-            **metadata,
-        }
+        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
+        if not pending_action_data:
+            response_cache.set(req.message, reply_with_sources, history_hash)
+        result = {"reply": reply_with_sources, "ai_provider": "ollama", **metadata}
+        if pending_action_data:
+            result["pending_action"] = pending_action_data
+        return result
 
+    fallback_reply = build_fallback_reply(intent_info, retrieval, used_legacy_context)
+    fallback_reply, pending_action_data = await _apply_agent_layer(fallback_reply)
+    result = {"reply": fallback_reply, "ai_provider": "fallback", **metadata}
+    if pending_action_data:
+        result["pending_action"] = pending_action_data
+    return result
+
+
+# ── Agent Action Endpoints ────────────────────────────────────────────────────
+
+@app.post("/actions/confirm", response_model=ConfirmActionResponse)
+async def confirm_action(request: Request, req: ConfirmActionRequest):
+    cleanup_expired_actions()
+
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required to confirm actions.")
+
+    action = get_pending_action(req.action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found.")
+
+    if action.status == CANCELLED:
+        raise HTTPException(status_code=400, detail="This action was already cancelled.")
+
+    if action.status == EXECUTED:
+        stored_result = ACTION_RESULTS.get(req.action_id)
+        return ConfirmActionResponse(
+            success=True,
+            action_id=req.action_id,
+            status=EXECUTED,
+            message="Action was already executed (idempotent).",
+            result=stored_result,
+        )
+
+    if is_expired(action) or action.status == ACTION_EXPIRED:
+        raise HTTPException(status_code=410, detail="Action has expired. Please ask AI to create a new one.")
+
+    if not req.confirm:
+        cancel_pending_action(req.action_id)
+        return ConfirmActionResponse(
+            success=True,
+            action_id=req.action_id,
+            status=CANCELLED,
+            message="Action cancelled by user.",
+        )
+
+    user_ctx = await get_user_context(auth_header)
+    require_can_confirm_action(user_ctx, action)
+
+    # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload
+    if req.override_payload:
+        merged_payload = {**action.payload, **req.override_payload}
+        action = action.model_copy(update={"payload": merged_payload})
+
+    try:
+        result = await execute_agent_action(action, auth_header, user_ctx)
+        mark_action_executed(req.action_id, result)
+        return ConfirmActionResponse(
+            success=True,
+            action_id=req.action_id,
+            status=EXECUTED,
+            message="Action executed successfully.",
+            result=result,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        mark_action_failed(req.action_id, str(exc))
+        raise HTTPException(status_code=500, detail=f"Action execution failed: {exc}")
+
+
+@app.post("/actions/cancel")
+async def cancel_action(req: CancelActionRequest):
+    cancel_pending_action(req.action_id)
+    return {"success": True, "action_id": req.action_id, "status": CANCELLED}
+
+
+@app.get("/actions/pending/{action_id}")
+async def get_action(action_id: str):
+    action = get_pending_action(action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found.")
+    return action.model_dump()
+
+
+@app.get("/actions/stats")
+async def actions_stats():
     return {
-        "reply": build_fallback_reply(intent_info, retrieval, used_legacy_context),
-        "ai_provider": "fallback",
-        **metadata,
+        "pending": sum(1 for a in PENDING_ACTIONS.values() if a.status == PENDING_CONFIRMATION),
+        "executed": len(ACTION_RESULTS),
+        "total": len(PENDING_ACTIONS),
     }
 
 @app.post("/cache/clear")
