@@ -37,6 +37,7 @@ export interface RecognizeBookResponse {
 export interface SummaryViRequest {
   title: string;
   author?: string;
+  publisher?: string;
   description?: string;
   categories?: string[];
 }

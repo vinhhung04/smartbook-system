@@ -1031,36 +1031,50 @@ async def _call_groq(metadata: dict) -> tuple[str | None, list[str], bool]:
     if not GROQ_API_KEY:
         return None, [], False
 
-    description_hint = (_safe_text(metadata.get("description")) or "")[:400]
     title = _safe_text(metadata.get("title")) or "Không rõ"
     authors = _safe_list(metadata.get("authors"))
     author_text = authors[0] if authors else "Không rõ"
+    publisher_text = _safe_text(metadata.get("publisher")) or ""
     categories = _safe_list(metadata.get("categories"))
-    category_text = ", ".join(categories[:3]) if categories else ""
+    category_text = ", ".join(categories[:3]) if categories else "không rõ"
+    description_hint = (_safe_text(metadata.get("description")) or "")[:1200]
 
-    # Prompt chuẩn theo mẫu user cung cấp
-    user_prompt = f"""Tên sách: {title}
-Tác giả: {author_text}
-Thể loại: {category_text or 'không rõ'}
-Mô tả gốc: {description_hint or 'không có'}
+    system_prompt = (
+        "Bạn là biên tập viên nội dung sách cho một nhà sách online Việt Nam. "
+        "Nhiệm vụ của bạn là viết mô tả sách hấp dẫn, tự nhiên, đáng tin cậy, "
+        "dùng để hiển thị trên trang chi tiết sản phẩm. "
+        "Văn phong giống mô tả sách trên Fahasa/Tiki/Nhã Nam: giàu cảm xúc vừa đủ, "
+        "có tính giới thiệu, làm nổi bật giá trị của sách, "
+        "nhưng tuyệt đối không bịa thông tin."
+    )
 
-VIẾT THEO FORMAT CHÍNH XÁC:
+    user_prompt = f"""Dữ liệu sách:
+- Tên sách: {title}
+- Tác giả: {author_text}
+- Nhà xuất bản: {publisher_text or 'không rõ'}
+- Thể loại: {category_text}
+- Mô tả gốc/metadata: {description_hint or 'không có'}
 
-📚 [Tên sách tiếng Việt]
+Hãy viết mô tả tiếng Việt theo yêu cầu:
+1. Độ dài khoảng 180–280 từ.
+2. Viết thành 3–5 đoạn ngắn, dễ đọc trên giao diện web.
+3. Đoạn mở đầu phải cuốn hút, giới thiệu tinh thần chính của cuốn sách.
+4. Các đoạn sau làm rõ nội dung/chủ đề/giá trị mà người đọc có thể nhận được.
+5. Có một đoạn hoặc cụm câu gợi ý nhóm độc giả phù hợp.
+6. Có thể dùng tiêu đề ngắn như "Vì sao nên đọc cuốn sách này?" nếu phù hợp.
+7. Không dùng markdown code block.
+8. Không bịa nhân vật, tình tiết, giải thưởng, số liệu, tên chương hoặc nội dung cụ thể nếu dữ liệu không cung cấp.
+9. Nếu metadata ít, hãy viết an toàn dựa trên tên sách, tác giả và thể loại; không phóng đại.
+10. Tránh các câu sáo rỗng như "cuốn sách đáng chú ý", "mở ra góc nhìn sâu sắc", "phù hợp nhiều đối tượng" nếu không giải thích cụ thể.
 
-"Một đoạn văn 2-3 câu mô tả nội dung, không bullet, không danh sách, kết thúc bằng emoji 🧠✨"
-
-Tags: chủ đề 1, chủ đề 2, chủ đề 3, chủ đề 4, chủ đề 5
-
-QUAN TRỌNG:
-- Đoạn văn phải trong dấu ngoặc kép ""
-- KHÔNG có tiêu đề con (Tổng quan, Nội dung...)
-- KHÔNG có bullet points
-- KHÔNG có dấu • hay -
-- Tags: 5 từ khóa về CHỦ ĐỀ, phân cách bằng dấu phẩy"""
+Trả về DUY NHẤT JSON hợp lệ:
+{{
+  "summaryVi": "...",
+  "keywords": ["...", "...", "...", "...", "..."]
+}}"""
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as http_client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
             resp = await http_client.post(
                 f"{GROQ_BASE_URL}/chat/completions",
                 headers={
@@ -1070,40 +1084,25 @@ QUAN TRỌNG:
                 json={
                     "model": GROQ_SUMMARY_MODEL,
                     "messages": [
-                        {"role": "system", "content": "Bạn là thủ thư chuyên nghiệp. Viết mô tả sách theo format chuẩn. Đoạn văn trong ngoặc kép. Không bullet. Tags 5 chủ đề."},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "temperature": 0.3,
-                    "max_tokens": 300,
+                    "temperature": 0.55,
+                    "max_tokens": 900,
                 },
             )
             resp.raise_for_status()
-            data = resp.json()
-            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
 
-            # Parse output - trích xuất title, description và tags
-            lines = raw.strip().split('\n')
-            title_vi = ""
-            description = ""
-            tags = []
+            parsed = _extract_json(raw)
+            summary_vi = _safe_text(parsed.get("summaryVi"))
+            keywords = _safe_list(parsed.get("keywords"))
 
-            for line in lines:
-                line = line.strip()
-                if line.startswith('📚'):
-                    title_vi = line.replace('📚', '').strip()
-                elif line.startswith('Tags:') or line.startswith('tags:'):
-                    tags_str = line.replace('Tags:', '').replace('tags:', '').strip()
-                    tags = [t.strip() for t in tags_str.split(',') if t.strip()]
-                elif line.startswith('"'):
-                    description = line.strip('"').strip()
+            # Fallback: model không trả JSON, lấy raw text
+            if not summary_vi and raw.strip() and not raw.strip().startswith("{"):
+                summary_vi = raw.strip()
 
-            # Nếu không parse được, thử extract JSON
-            if not description:
-                parsed = _extract_json(raw)
-                description = _safe_text(parsed.get("mo_ta")) or _safe_text(parsed.get("description")) or _safe_text(parsed.get("summaryVi")) or raw.strip()
-                tags = _safe_list(parsed.get("tags")) or _safe_list(parsed.get("keywords")) or []
-
-            return description, tags, bool(description)
+            return summary_vi, keywords, bool(summary_vi)
     except Exception as exc:
         logger.warning("Groq call failed: %s", exc)
         return None, [], False
@@ -1435,25 +1434,29 @@ def _build_legacy_book_description_prompt(title: str, author: str, context_block
 
 
 def _build_summary_prompt(metadata: dict) -> str:
-    title = metadata.get("title") or "Không rõ"
-    author_for_prompt = (metadata.get("authors") or ["Không rõ"])[0]
-    description_hint = _safe_text(metadata.get("description")) or ""
-    if len(description_hint) > 500:
-        description_hint = description_hint[:500].rsplit(" ", 1)[0] + "..."
+    title = _safe_text(metadata.get("title")) or "Không rõ"
+    authors = _safe_list(metadata.get("authors"))
+    author_text = authors[0] if authors else "Không rõ"
+    publisher_text = _safe_text(metadata.get("publisher")) or "không rõ"
+    categories = _safe_list(metadata.get("categories"))
+    category_text = ", ".join(categories[:3]) if categories else "không rõ"
+    description_hint = (_safe_text(metadata.get("description")) or "")[:1200]
+    if len(description_hint) > 1200:
+        description_hint = description_hint[:1200].rsplit(" ", 1)[0] + "..."
 
-    context_block = ""
-    if description_hint:
-        context_block = f"\n\nThông tin tham khảo từ metadata:\n{description_hint}"
-
-    base_prompt = _build_legacy_book_description_prompt(title, author_for_prompt, context_block)
     return (
-        f"{base_prompt}\n\n"
-        "Yêu cầu đầu ra cho API: "
-        "Thay vì trả về văn bản thuần túy, hãy trả về DUY NHẤT một JSON hợp lệ theo định dạng "
-        "{\"summaryVi\": \"...\", \"keywords\": [\"...\", \"...\"]}. "
-        "summaryVi phải là nội dung mô tả theo đúng phong cách ở trên. "
-        "keywords gồm 3-7 từ khóa ngắn tiếng Việt, ưu tiên bám theo tên sách, tác giả và chủ đề tổng quát. "
-        "Không markdown, không code block, không giải thích thêm."
+        f"Dữ liệu sách:\n"
+        f"- Tên sách: {title}\n"
+        f"- Tác giả: {author_text}\n"
+        f"- Nhà xuất bản: {publisher_text}\n"
+        f"- Thể loại: {category_text}\n"
+        f"- Mô tả gốc: {description_hint or 'không có'}\n\n"
+        "Bạn là biên tập viên nội dung cho nhà sách online Việt Nam. "
+        "Hãy viết mô tả sách tiếng Việt 180–280 từ, 3–5 đoạn, "
+        "phong cách giới thiệu như Fahasa/Tiki, không bịa thông tin, "
+        "làm rõ giá trị và độc giả phù hợp.\n\n"
+        "Trả về DUY NHẤT JSON hợp lệ:\n"
+        "{\"summaryVi\": \"...\", \"keywords\": [\"...\", \"...\", \"...\", \"...\", \"...\"]}"
     )
 
 
@@ -1475,44 +1478,30 @@ def _is_weak_summary(summary_text: str | None) -> bool:
 
 
 def _build_metadata_fallback_summary(metadata: dict) -> str:
-    title = _safe_text(metadata.get("title")) or "Tác phẩm"
+    title = _safe_text(metadata.get("title")) or "cuốn sách này"
     authors = _safe_list(metadata.get("authors"))
-    author_text = ", ".join(authors[:2]) if authors else "tác giả chưa được cập nhật"
-    publisher = _safe_text(metadata.get("publisher")) or "đơn vị xuất bản chưa được cập nhật"
+    author_text = authors[0] if authors else None
+    publisher_text = _safe_text(metadata.get("publisher"))
     categories = _safe_list(metadata.get("categories"))
-    category_text = ", ".join(categories[:3]) if categories else "chủ đề tổng hợp"
+    category_text = ", ".join(categories[:2]) if categories else None
 
-    raw_description = _safe_text(metadata.get("description")) or ""
-    cleaned_description = re.sub(r"\s+", " ", raw_description).strip()
-    if len(cleaned_description) > 280:
-        cleaned_description = cleaned_description[:280].rsplit(" ", 1)[0] + "..."
+    parts = []
+    if author_text:
+        parts.append(f"của tác giả {author_text}")
+    if publisher_text:
+        parts.append(f"do {publisher_text} xuất bản")
+    if category_text:
+        parts.append(f"thuộc lĩnh vực {category_text}")
 
-    if cleaned_description:
-        body_text = (
-            f"Từ dữ liệu hiện có, cuốn sách tập trung vào nhóm chủ đề {category_text}, "
-            f"đồng thời mở ra các góc nhìn có giá trị tham khảo cho bạn đọc. {cleaned_description}"
-        )
-    else:
-        body_text = (
-            f"Từ dữ liệu hiện có, cuốn sách tập trung vào nhóm chủ đề {category_text}, "
-            "đồng thời mở ra các góc nhìn có giá trị tham khảo cho bạn đọc trong học tập và đời sống."
-        )
+    context_str = ", ".join(parts)
+    intro = f'"{title}"'
+    if context_str:
+        intro += f" {context_str}"
+    intro += " là một tựa sách đáng khám phá dành cho những ai muốn mở rộng kiến thức và tư duy."
 
-    summary = (
-        f"📘 Tổng quan\n"
-        f"'{title}' của {author_text} là đầu sách đáng chú ý, được phát hành bởi {publisher}, "
-        f"phù hợp để bổ sung vào danh mục đọc có định hướng rõ ràng.\n\n"
-        f"🧠 Nội dung và chủ đề\n"
-        f"{body_text}\n\n"
-        f"✨ Điểm nổi bật\n"
-        f"• Thông tin sách có cấu trúc rõ ràng, thuận tiện cho tra cứu và lựa chọn.\n"
-        f"• Chủ đề {category_text} phù hợp nhiều nhu cầu đọc từ cơ bản đến mở rộng.\n"
-        f"• Giá trị nội dung phù hợp để tham khảo, mượn đọc và khai thác theo mục tiêu cá nhân.\n\n"
-        f"🎯 Gợi ý bạn đọc\n"
-        f"Phù hợp với bạn đọc đang tìm tài liệu theo nhóm chủ đề {category_text}. "
-        "Đặc biệt hữu ích cho người muốn tiếp cận nội dung theo hướng thực tế và dễ ứng dụng."
-    )
-    return summary
+    second = "Cuốn sách mang đến những nội dung được chắt lọc kỹ lưỡng, phù hợp với độc giả có nhu cầu tìm hiểu sâu hơn về chủ đề này."
+
+    return f"{intro}\n\n{second}"
 
 
 async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None, list[str], bool]:
@@ -1525,7 +1514,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
             _ollama_generate_with_summary_fallback,
             client,
             _build_summary_prompt(metadata),
-            {"temperature": 0.4, "num_predict": 420},
+            {"temperature": 0.55, "num_predict": 700},
         )
         raw_text = response.get("response", "")
         parsed = _extract_json(raw_text)
@@ -1539,7 +1528,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
         if _is_weak_summary(summary_vi):
             summary_vi = _build_metadata_fallback_summary(metadata)
 
-        summary_vi = _format_summary_description(summary_vi or "", metadata) or None
+        summary_vi = _normalize_bookstore_description(summary_vi or "") or None
         if _is_weak_summary(summary_vi):
             summary_vi = _build_metadata_fallback_summary(metadata)
 
@@ -1782,75 +1771,16 @@ def _search_book_context(title: str, author: str) -> str:
         return ""
 
 
-def _build_dynamic_highlights_and_audience(context: dict | None = None) -> tuple[list[str], str]:
-    ctx = context or {}
-    title = _safe_text(ctx.get("title")) or "cuốn sách"
-    categories = _safe_list(ctx.get("categories"))
-    category_text = ", ".join(categories[:2]) if categories else "chủ đề chính của tác phẩm"
-
-    authors = ctx.get("authors")
-    author_name = ""
-    if isinstance(authors, list) and authors:
-        author_name = _safe_text(authors[0]) or ""
-    if not author_name:
-        author_name = _safe_text(ctx.get("author")) or ""
-
-    highlights = [
-        f"Mạch triển khai của '{title}' rõ ràng, giúp người đọc nắm nhanh trọng tâm nội dung.",
-        f"Tác phẩm mở rộng góc nhìn về {category_text}, tạo chiều sâu khi tiếp cận và suy ngẫm.",
-        (
-            f"Dấu ấn kể chuyện của {author_name} tạo bản sắc riêng, tăng sức hút cho trải nghiệm đọc."
-            if author_name
-            else "Nội dung giàu tính gợi mở, phù hợp để đọc sâu và liên hệ với bối cảnh thực tế."
-        ),
-    ]
-    audience = (
-        f"Phù hợp với bạn đọc quan tâm đến {category_text} và muốn tìm một đầu sách có định hướng rõ ràng. "
-        f"Nếu bạn muốn khám phá tinh thần của '{title}' theo cách mạch lạc và dễ tiếp cận, đây là lựa chọn đáng cân nhắc."
-    )
-    return highlights, audience
-
-
-def _format_summary_description(text: str, context: dict | None = None) -> str:
-    """Đảm bảo mô tả luôn theo đúng form 4 phần mong muốn."""
-    cleaned = re.sub(r"\s+", " ", (text or "")).strip()
-    if not cleaned:
+def _normalize_bookstore_description(text: str) -> str:
+    """Normalize whitespace only — không ép format 4 section."""
+    if not text:
         return ""
-
-    # Nếu đã đúng 4 section thì giữ nguyên để tôn trọng output model.
-    required_markers = ["📘 Tổng quan", "🧠 Nội dung và chủ đề", "✨ Điểm nổi bật", "🎯 Gợi ý bạn đọc"]
-    if all(marker in text for marker in required_markers):
-        return text.strip()
-
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
-    if not sentences:
-        sentences = [cleaned]
-
-    overview = sentences[0]
-    body = " ".join(sentences[1:4]).strip()
-    highlights = sentences[4:7]
-    audience = " ".join(sentences[7:]).strip()
-    dynamic_highlights, dynamic_audience = _build_dynamic_highlights_and_audience(context)
-
-    if not body:
-        body = "Tác phẩm gợi mở nhiều lớp ý nghĩa và cho thấy giá trị đọc bền vững đối với người đọc hiện đại."
-
-    if not highlights:
-        highlights = dynamic_highlights
-    elif len(highlights) < 3:
-        while len(highlights) < 3:
-            highlights.append(dynamic_highlights[len(highlights)])
-
-    if not audience:
-        audience = dynamic_audience
-
-    highlight_lines = "\n".join(f"• {item}" for item in highlights[:3])
-    return (
-        f"📘 Tổng quan\n{overview}\n\n"
-        f"🧠 Nội dung và chủ đề\n{body}\n\n"
-        f"✨ Điểm nổi bật\n{highlight_lines}\n\n"
-        f"🎯 Gợi ý bạn đọc\n{audience}"
-    )
+    cleaned = re.sub(r"[^\S\n]+", " ", text)      # collapse horizontal whitespace
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)   # max 2 newlines liên tiếp
+    cleaned = cleaned.strip()
+    if len(cleaned) > 2500:
+        cleaned = cleaned[:2500].rsplit("\n", 1)[0].strip()
+    return cleaned
 
 
 def _generate_fallback_description(title: str, author: str, web_context: str = "") -> str:
@@ -1892,6 +1822,7 @@ async def generate_book_summary(req: BookSummaryRequest):
 class SummaryViRequest(BaseModel):
     title: str
     author: str = ""
+    publisher: str | None = None
     description: str = ""
     categories: list[str] = []
 
@@ -1906,8 +1837,14 @@ async def generate_summary_vi(req: SummaryViRequest):
     if not req.title.strip():
         raise HTTPException(status_code=400, detail="Thiếu tên sách (title).")
 
-    # Cache key từ title + author
-    cache_key = f"summary:{req.title.strip().lower()}:{req.author.strip().lower()}"
+    # Cache key tính cả description + categories để tránh trả kết quả cũ khi metadata thay đổi
+    _cache_raw = "|".join([
+        req.title.strip().lower(),
+        (req.author or "").strip().lower(),
+        (req.description or "").strip()[:500],
+        ",".join(sorted(req.categories or [])),
+    ])
+    cache_key = f"summary:{hashlib.sha256(_cache_raw.encode()).hexdigest()[:16]}"
     cached = summary_cache.get(cache_key)
     if cached:
         return {**cached, "ai_provider": "cached"}
@@ -1915,6 +1852,7 @@ async def generate_summary_vi(req: SummaryViRequest):
     metadata = {
         "title": req.title.strip(),
         "authors": [req.author] if req.author else [],
+        "publisher": req.publisher,
         "description": req.description,
         "categories": req.categories,
     }
@@ -1922,7 +1860,7 @@ async def generate_summary_vi(req: SummaryViRequest):
     # Ưu tiên Groq
     summary_vi, keywords, groq_ok = await _call_groq(metadata)
     if groq_ok:
-        description = _format_summary_description(summary_vi or "", metadata)
+        description = _normalize_bookstore_description(summary_vi or "")
         result = {"summaryVi": description, "keywords": keywords, "ai_provider": "groq"}
         summary_cache.set(cache_key, result)
         return result
@@ -1930,7 +1868,7 @@ async def generate_summary_vi(req: SummaryViRequest):
     # Fallback Ollama
     summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
     if ollama_ok:
-        description = _format_summary_description(summary_vi or "", metadata)
+        description = _normalize_bookstore_description(summary_vi or "")
         result = {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
         summary_cache.set(cache_key, result)
         return result

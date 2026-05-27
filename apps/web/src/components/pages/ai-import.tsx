@@ -145,6 +145,7 @@ export function AIImportPage() {
       const result = await aiService.generateSummaryVi({
         title: form.title.trim(),
         author: form.authorsText.split(",")[0].trim(),
+        publisher: form.publisher || undefined,
         description: form.description,
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
       });
@@ -402,7 +403,7 @@ export function AIImportPage() {
                     {summaryLoading ? "Đang tạo..." : "Tạo tóm tắt AI"}
                   </button>
                 </div>
-                <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={6} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-500">Từ khóa (cách nhau dấu phẩy)</label>
