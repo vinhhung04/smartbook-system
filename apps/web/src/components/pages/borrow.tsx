@@ -26,7 +26,7 @@ export function BorrowPage() {
       setReservations(reservationResp.data || []);
       setLoans(loanResp.data || []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load borrow dashboard'));
+      toast.error(getApiErrorMessage(error, 'Không tải được tổng quan mượn trả'));
     } finally {
       setLoading(false);
     }
@@ -65,8 +65,8 @@ export function BorrowPage() {
             <BookMarked className="w-6 h-6 text-rose-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Borrow Management</h1>
-            <p className="text-sm text-muted-foreground">Realtime customer and reservation flow</p>
+            <h1 className="text-xl font-semibold tracking-tight">Quản lý mượn trả</h1>
+            <p className="text-sm text-muted-foreground">Luồng khách hàng và đặt trước thời gian thực</p>
           </div>
         </div>
         <Button
@@ -76,7 +76,7 @@ export function BorrowPage() {
           className="gap-2"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          Làm mới
         </Button>
       </motion.div>
 
@@ -88,31 +88,31 @@ export function BorrowPage() {
         className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
       >
         <StatCard
-          label="Active Customers"
+          label="Khách hàng đang hoạt động"
           value={loading ? '-' : summary.activeCustomers}
           icon={Users}
           variant="success"
         />
         <StatCard
-          label="Pending Reservations"
+          label="Đặt trước chờ xác nhận"
           value={loading ? '-' : summary.pendingReservations}
           icon={CalendarClock}
           variant="warning"
         />
         <StatCard
-          label="Ready For Pickup"
+          label="Sẵn sàng lấy sách"
           value={loading ? '-' : summary.readyReservations}
           icon={BookMarked}
           variant="info"
         />
         <StatCard
-          label="Active Loans"
+          label="Đang mượn"
           value={loading ? '-' : summary.activeLoans}
           icon={BookMarked}
           variant="default"
         />
         <StatCard
-          label="Fine Balance"
+          label="Dư nợ phạt"
           value={loading ? '-' : `${summary.totalFineBalance.toLocaleString('vi-VN')} VND`}
           icon={CircleAlert}
           variant="danger"
@@ -132,8 +132,8 @@ export function BorrowPage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Manage Customers</p>
-              <p className="text-xs text-muted-foreground mt-1">Create, update and review customer eligibility.</p>
+              <p className="text-sm font-semibold text-foreground">Quản lý khách hàng</p>
+              <p className="text-xs text-muted-foreground mt-1">Tạo, cập nhật và kiểm tra điều kiện khách hàng.</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
           </div>
@@ -145,8 +145,8 @@ export function BorrowPage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Manage Reservations</p>
-              <p className="text-xs text-muted-foreground mt-1">Create, list and cancel reservations with real stock reserve.</p>
+              <p className="text-sm font-semibold text-foreground">Quản lý đặt trước</p>
+              <p className="text-xs text-muted-foreground mt-1">Tạo, liệt kê và hủy đặt trước với tồn kho thực.</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
           </div>
@@ -158,8 +158,8 @@ export function BorrowPage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Manage Loans</p>
-              <p className="text-xs text-muted-foreground mt-1">Convert reservation to loan and process return flow.</p>
+              <p className="text-sm font-semibold text-foreground">Quản lý phiếu mượn</p>
+              <p className="text-xs text-muted-foreground mt-1">Chuyển đặt trước thành phiếu mượn và xử lý trả sách.</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
           </div>
@@ -171,8 +171,8 @@ export function BorrowPage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Manage Fines</p>
-              <p className="text-xs text-muted-foreground mt-1">View details, record payment, and waive/reduce fines.</p>
+              <p className="text-sm font-semibold text-foreground">Quản lý tiền phạt</p>
+              <p className="text-xs text-muted-foreground mt-1">Xem chi tiết, ghi nhận thanh toán, miễn giảm tiền phạt.</p>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-rose-600 transition-colors" />
           </div>

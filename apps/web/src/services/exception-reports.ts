@@ -18,6 +18,9 @@ export interface ExceptionReport {
   resolved_by_user_id: string | null;
   resolved_at: string | null;
   resolution_notes: string | null;
+  assigned_to_user_id: string | null;
+  assigned_at: string | null;
+  assigned_by_user_id: string | null;
   created_at: string;
   updated_at: string;
   warehouses?: { id: string; code: string; name: string } | null;
@@ -63,6 +66,14 @@ export const exceptionReportService = {
 
   async resolve(id: string, resolution_notes?: string): Promise<{ data: ExceptionReport }> {
     const response = await inventoryAPI.post<{ data: ExceptionReport }>(`/api/exception-reports/${id}/resolve`, { resolution_notes });
+    return response.data;
+  },
+
+  async assign(id: string, assigneeUserId: string): Promise<{ message: string; data: ExceptionReport }> {
+    const response = await inventoryAPI.patch<{ message: string; data: ExceptionReport }>(
+      `/api/exception-reports/${id}/assign`,
+      { assignee_user_id: assigneeUserId }
+    );
     return response.data;
   },
 };

@@ -146,6 +146,11 @@ services:
       # Nếu không set, sẽ fallback về Ollama local
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_SUMMARY_MODEL=${GROQ_SUMMARY_MODEL:-llama-3.3-70b-versatile}
+      # Marketplace lookup (Fahasa / Tiki / Vinabook)
+      - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
+      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-6}
+      - BOOK_LOOKUP_MAX_WEB_RESULTS=${BOOK_LOOKUP_MAX_WEB_RESULTS:-5}
+      - BOOK_LOOKUP_USER_AGENT=${BOOK_LOOKUP_USER_AGENT:-SmartBookBot/1.0}
 
   api-gateway:
     build: ./apps/api-gateway

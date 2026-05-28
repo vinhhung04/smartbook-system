@@ -17,11 +17,11 @@ export function LoanItem({ item, onView }: LoanItemProps) {
     <div className={`rounded-[12px] border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${isOverdue ? 'border-rose-200 bg-rose-50/60' : isDueSoon ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.loan_number || 'Loan'}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400">Loan timeline</div>
-          <div className="mt-1 text-[12px] text-slate-500">Borrow date: {formatDateTime(item.borrow_date)}</div>
+          <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.loan_number || 'Phiếu mượn'}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400">Thời gian mượn</div>
+          <div className="mt-1 text-[12px] text-slate-500">Ngày mượn: {formatDateTime(item.borrow_date)}</div>
           <div className={`text-[12px] ${isOverdue ? 'text-rose-700' : isDueSoon ? 'text-amber-700' : 'text-slate-500'}`} style={{ fontWeight: isOverdue || isDueSoon ? 600 : 500 }}>
-            Due date: {formatDateTime(item.due_date)}
+            Hạn trả: {formatDateTime(item.due_date)}
           </div>
         </div>
 
@@ -32,7 +32,7 @@ export function LoanItem({ item, onView }: LoanItemProps) {
             className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 hover:bg-slate-50"
             style={{ fontWeight: 600 }}
           >
-            View detail
+            Xem chi tiết
           </button>
         </div>
       </div>

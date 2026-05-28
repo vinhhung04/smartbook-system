@@ -185,7 +185,7 @@ export function WarehousesPage() {
       const exists = keep ? nextRows.some((row) => row.id === keep) : false;
       setSelectedWarehouseId(exists && keep ? keep : "");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Khong tai duoc danh sach kho");
+      const message = getApiErrorMessage(error, "Không tải được danh sách kho");
       setPageError(message);
       toast.error(message);
     } finally {
@@ -216,7 +216,7 @@ export function WarehousesPage() {
         setSelectedLocationId("");
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc cau truc vi tri"));
+      toast.error(getApiErrorMessage(error, "Không tải được cấu trúc vị trí"));
       setLocationTree([]);
       setSelectedLocationId("");
     } finally {
@@ -344,17 +344,17 @@ export function WarehousesPage() {
 
       if (warehouseMode === "create") {
         await warehouseService.create(payload);
-        toast.success("Da tao kho moi");
+        toast.success("Đã tạo kho mới");
         await loadWarehouses();
         setSelectedWarehouseId("");
       } else if (selectedWarehouseId) {
         await warehouseService.update(selectedWarehouseId, payload);
-        toast.success("Da cap nhat kho");
+        toast.success("Đã cập nhật kho");
         await loadWarehouses(selectedWarehouseId);
       }
       setShowWarehouseForm(false);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Luu kho that bai"));
+      toast.error(getApiErrorMessage(error, "Lưu kho thất bại"));
     } finally {
       setSavingWarehouse(false);
     }
@@ -362,17 +362,17 @@ export function WarehousesPage() {
 
   const handleDeleteWarehouse = async () => {
     if (!selectedWarehouseId) return;
-    const accepted = window.confirm("Xoa kho nay? Thao tac nay khong the hoan tac.");
+    const accepted = window.confirm("Xóa kho này? Thao tác này không thể hoàn tác.");
     if (!accepted) return;
 
     try {
       setDeletingWarehouse(true);
       await warehouseService.delete(selectedWarehouseId);
-      toast.success("Da xoa kho");
+      toast.success("Đã xóa kho");
       setSelectedWarehouseId("");
       await loadWarehouses();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xoa kho that bai"));
+      toast.error(getApiErrorMessage(error, "Xóa kho thất bại"));
     } finally {
       setDeletingWarehouse(false);
     }
@@ -387,12 +387,12 @@ export function WarehousesPage() {
 
   const startCreateChildLocation = () => {
     if (!selectedLocation) {
-      toast.error("Vui long chon mot vi tri cha");
+      toast.error("Vui lòng chọn một vị trí cha");
       return;
     }
     const childType = CHILD_TYPE_BY_PARENT[normalizeType(selectedLocation.location_type)];
     if (!childType) {
-      toast.error("Vi tri nay khong ho tro them node con");
+      toast.error("Vị trí này không hỗ trợ thêm node con");
       return;
     }
 
@@ -407,7 +407,7 @@ export function WarehousesPage() {
 
   const startEditLocation = () => {
     if (!selectedLocation) {
-      toast.error("Vui long chon vi tri can sua");
+      toast.error("Vui lòng chọn vị trí cần sửa");
       return;
     }
     setLocationMode("edit");
@@ -423,23 +423,23 @@ export function WarehousesPage() {
 
   const handleSaveLocation = async () => {
     if (!selectedWarehouseId) {
-      toast.error("Vui long chon kho");
+      toast.error("Vui lòng chọn kho");
       return;
     }
 
     const code = locationForm.code.trim();
     const name = locationForm.name.trim();
     if (!code) {
-      toast.error("Code vi tri khong duoc de trong");
+      toast.error("Mã vị trí không được để trống");
       return;
     }
     if (!name) {
-      toast.error("Ten vi tri khong duoc de trong");
+      toast.error("Tên vị trí không được để trống");
       return;
     }
 
     if (allowedLocationTypes.length > 0 && !allowedLocationTypes.includes(locationForm.location_type)) {
-      toast.error("Loai vi tri khong hop le voi cap cha hien tai");
+      toast.error("Loại vị trí không hợp lệ với cấp cha hiện tại");
       return;
     }
 
@@ -456,16 +456,16 @@ export function WarehousesPage() {
 
       if (locationMode === "edit" && selectedLocationId) {
         await warehouseService.updateLocation(selectedLocationId, payload);
-        toast.success("Da cap nhat vi tri");
+        toast.success("Đã cập nhật vị trí");
         await loadLocationTree(selectedWarehouseId, selectedLocationId);
       } else {
         const created = await warehouseService.createLocation(payload);
-        toast.success("Da tao vi tri");
+        toast.success("Đã tạo vị trí");
         await loadLocationTree(selectedWarehouseId, created.id);
       }
       setShowLocationForm(false);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Luu vi tri that bai"));
+      toast.error(getApiErrorMessage(error, "Lưu vị trí thất bại"));
     } finally {
       setSavingLocation(false);
     }
@@ -473,21 +473,21 @@ export function WarehousesPage() {
 
   const handleDeleteLocation = async () => {
     if (!selectedLocationId || !selectedWarehouseId) {
-      toast.error("Vui long chon vi tri can xoa");
+      toast.error("Vui lòng chọn vị trí cần xóa");
       return;
     }
 
-    const accepted = window.confirm("Xoa vi tri nay? Thao tac nay khong the hoan tac.");
+    const accepted = window.confirm("Xóa vị trí này? Thao tác này không thể hoàn tác.");
     if (!accepted) return;
 
     try {
       setDeletingLocation(true);
       await warehouseService.deleteLocation(selectedLocationId);
-      toast.success("Da xoa vi tri");
+      toast.success("Đã xóa vị trí");
       setSelectedLocationId("");
       await loadLocationTree(selectedWarehouseId);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xoa vi tri that bai"));
+      toast.error(getApiErrorMessage(error, "Xóa vị trí thất bại"));
     } finally {
       setDeletingLocation(false);
     }
@@ -505,8 +505,8 @@ export function WarehousesPage() {
           <Package className="w-5 h-5 text-violet-600" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Warehouses</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{warehouses.length} kho · Quan ly cau truc vi tri phan cap</p>
+          <h1 className="text-xl font-semibold tracking-tight">Quản lý kho</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5">{warehouses.length} kho · Quản lý cấu trúc vị trí phân cấp</p>
         </div>
       </motion.div>
 
@@ -531,15 +531,15 @@ export function WarehousesPage() {
           >
             <Button onClick={startCreateWarehouse} size="sm">
               <Plus className="w-3.5 h-3.5" />
-              Them kho
+              Thêm kho
             </Button>
           </motion.div>
 
           {loadingWarehouses ? (
-            <SectionCard><p className="text-center py-8 text-[12px] text-muted-foreground">Dang tai danh sach kho...</p></SectionCard>
+            <SectionCard><p className="text-center py-8 text-[12px] text-muted-foreground">Đang tải danh sách kho...</p></SectionCard>
           ) : warehouses.length === 0 ? (
             <SectionCard>
-              <EmptyState variant="no-data" title="Chua co kho nao" description="Hay tao kho moi de bat dau" />
+              <EmptyState variant="no-data" title="Chưa có kho nào" description="Hãy tạo kho mới để bắt đầu" />
             </SectionCard>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -574,7 +574,7 @@ export function WarehousesPage() {
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={() => setSelectedWarehouseId("")}>
                 <ArrowLeft className="w-3.5 h-3.5" />
-                Quay lai danh sach
+                Quay lại danh sách
               </Button>
               <div>
                 <p className="text-[13px] font-semibold">{selectedWarehouse?.name}</p>
@@ -583,10 +583,10 @@ export function WarehousesPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={startEditWarehouse}>
-                <Pencil className="w-3.5 h-3.5" /> Sua kho
+                <Pencil className="w-3.5 h-3.5" /> Sửa kho
               </Button>
               <Button variant="destructive" size="sm" onClick={handleDeleteWarehouse} disabled={deletingWarehouse}>
-                <Trash2 className="w-3.5 h-3.5" /> {deletingWarehouse ? "Dang xoa..." : "Xoa kho"}
+                <Trash2 className="w-3.5 h-3.5" /> {deletingWarehouse ? "Đang xóa..." : "Xóa kho"}
               </Button>
             </div>
           </motion.div>
@@ -597,28 +597,28 @@ export function WarehousesPage() {
             transition={{ duration: 0.3, delay: 0.05 }}
           >
             <SectionCard
-              title="Cau truc vi tri trong kho"
+              title="Cấu trúc vị trí trong kho"
               actions={
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={startCreateRootLocation}>
-                    <Plus className="w-3.5 h-3.5" /> Them vi tri
+                    <Plus className="w-3.5 h-3.5" /> Thêm vị trí
                   </Button>
                   <Button variant="outline" size="sm" onClick={startCreateChildLocation} disabled={!selectedLocationId}>
-                    <Plus className="w-3.5 h-3.5" /> Them node con
+                    <Plus className="w-3.5 h-3.5" /> Thêm node con
                   </Button>
                   <Button variant="outline" size="sm" onClick={startEditLocation} disabled={!selectedLocationId}>
-                    <Pencil className="w-3.5 h-3.5" /> Sua
+                    <Pencil className="w-3.5 h-3.5" /> Sửa
                   </Button>
                   <Button variant="destructive" size="sm" onClick={handleDeleteLocation} disabled={!selectedLocationId || deletingLocation}>
-                    <Trash2 className="w-3.5 h-3.5" /> {deletingLocation ? "Dang xoa..." : "Xoa"}
+                    <Trash2 className="w-3.5 h-3.5" /> {deletingLocation ? "Đang xóa..." : "Xóa"}
                   </Button>
                 </div>
               }
             >
               {loadingLocations ? (
-                <p className="text-center py-8 text-[12px] text-muted-foreground">Dang tai cau truc vi tri...</p>
+                <p className="text-center py-8 text-[12px] text-muted-foreground">Đang tải cấu trúc vị trí...</p>
               ) : locationTree.length === 0 ? (
-                <EmptyState variant="no-data" title="Chua co vi tri nao" description="Them vi tri dau tien de bat dau" />
+                <EmptyState variant="no-data" title="Chưa có vị trí nào" description="Thêm vị trí đầu tiên để bắt đầu" />
               ) : (
                 <div className="space-y-0 max-h-[560px] overflow-auto pr-1">
                   {locationTree.map((node) => (
@@ -642,7 +642,7 @@ export function WarehousesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[16px] font-semibold">{warehouseMode === "create" ? "Them kho" : "Sua kho"}</h3>
+              <h3 className="text-[16px] font-semibold">{warehouseMode === "create" ? "Thêm kho" : "Sửa kho"}</h3>
               <button onClick={() => setShowWarehouseForm(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -650,25 +650,25 @@ export function WarehousesPage() {
 
             <div className="space-y-3">
               <input value={warehouseForm.code} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
-              <input value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten kho *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <input value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Tên kho *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
               <select value={warehouseForm.warehouse_type} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, warehouse_type: event.target.value }))} className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10">
                 <option value="WAREHOUSE">WAREHOUSE</option>
                 <option value="STORE">STORE</option>
                 <option value="BRANCH">BRANCH</option>
                 <option value="LIBRARY">LIBRARY</option>
               </select>
-              <input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Dia chi" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Địa chỉ" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
 
               <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
                 <input type="checkbox" checked={warehouseForm.is_active} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
-                Active
+                Hoạt động
               </label>
             </div>
 
             <div className="mt-5 flex items-center gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowWarehouseForm(false)}>Huy</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowWarehouseForm(false)}>Hủy</Button>
               <Button className="flex-1" onClick={handleSaveWarehouse} disabled={savingWarehouse}>
-                <Save className="w-3.5 h-3.5" /> {savingWarehouse ? "Dang luu..." : "Luu"}
+                <Save className="w-3.5 h-3.5" /> {savingWarehouse ? "Đang lưu..." : "Lưu"}
               </Button>
             </div>
           </motion.div>
@@ -679,7 +679,7 @@ export function WarehousesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[16px] font-semibold">{locationMode === "edit" ? "Sua vi tri" : "Them vi tri"}</h3>
+              <h3 className="text-[16px] font-semibold">{locationMode === "edit" ? "Sửa vị trí" : "Thêm vị trí"}</h3>
               <button onClick={() => setShowLocationForm(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -687,7 +687,7 @@ export function WarehousesPage() {
 
             <div className="space-y-3">
               <input value={locationForm.code} onChange={(event) => setLocationForm((prev) => ({ ...prev, code: event.target.value }))} placeholder="Code *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
-              <input value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ten vi tri *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <input value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Tên vị trí *" className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10" />
               <select
                 value={locationForm.parent_location_id}
                 onChange={(event) => {
@@ -705,13 +705,13 @@ export function WarehousesPage() {
                 }}
                 className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10"
               >
-                <option value="">Root (thuoc kho)</option>
+                <option value="">Root (thuộc kho)</option>
                 {parentLocationOptions.map((item) => (
                   <option key={item.id} value={item.id}>{TYPE_LABEL[item.location_type] || item.location_type} · {item.code}</option>
                 ))}
               </select>
               <select value={locationForm.location_type} onChange={(event) => setLocationForm((prev) => ({ ...prev, location_type: event.target.value }))} className="w-full rounded-lg border border-input px-3 py-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/10">
-                <option value="">Chon loai vi tri</option>
+                <option value="">Chọn loại vị trí</option>
                 {(allowedLocationTypes.length > 0 ? allowedLocationTypes : LOCATION_TYPES).map((item) => (
                   <option key={item} value={item}>{TYPE_LABEL[item] || item}</option>
                 ))}
@@ -719,14 +719,14 @@ export function WarehousesPage() {
 
               <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
                 <input type="checkbox" checked={locationForm.is_active} onChange={(event) => setLocationForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
-                Active
+                Hoạt động
               </label>
             </div>
 
             <div className="mt-5 flex items-center gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowLocationForm(false)}>Huy</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowLocationForm(false)}>Hủy</Button>
               <Button className="flex-1" onClick={handleSaveLocation} disabled={savingLocation || !selectedWarehouseId}>
-                <Save className="w-3.5 h-3.5" /> {savingLocation ? "Dang luu..." : "Luu"}
+                <Save className="w-3.5 h-3.5" /> {savingLocation ? "Đang lưu..." : "Lưu"}
               </Button>
             </div>
           </motion.div>

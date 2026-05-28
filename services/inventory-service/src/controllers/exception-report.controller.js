@@ -255,10 +255,64 @@ async function resolveExceptionReport(req, res) {
   }
 }
 
+async function assignExceptionReport(req, res) {
+  const userId = req.user?.id || req.user?.sub;
+  const { id } = req.params;
+  const { assignee_user_id } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid current user context' });
+  }
+
+  if (!id) {
+    return res.status(400).json({ message: 'id is required' });
+  }
+
+  if (!assignee_user_id || typeof assignee_user_id !== 'string' || !assignee_user_id.trim()) {
+    return res.status(400).json({ message: 'assignee_user_id is required' });
+  }
+
+  try {
+    const report = await prisma.warehouse_exception_reports.findUnique({ where: { id } });
+    if (!report) {
+      return res.status(404).json({ message: 'Exception report not found' });
+    }
+
+    const updated = await prisma.warehouse_exception_reports.update({
+      where: { id },
+      data: {
+        assigned_to_user_id: assignee_user_id.trim(),
+        assigned_at: new Date(),
+        assigned_by_user_id: userId,
+        updated_at: new Date(),
+      },
+    });
+
+    try {
+      await prisma.inventory_audit_logs.create({
+        data: {
+          action_name: 'EXCEPTION_REPORT_ASSIGNED',
+          actor_user_id: userId,
+          entity_type: 'WAREHOUSE_EXCEPTION_REPORT',
+          entity_id: id,
+          before_data: { assigned_to_user_id: report.assigned_to_user_id },
+          after_data: { assigned_to_user_id: assignee_user_id.trim() },
+        },
+      });
+    } catch (_) { /* audit log is non-critical */ }
+
+    return res.json({ message: 'Exception report assigned successfully', data: updated });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 module.exports = {
   createExceptionReport,
   getMyExceptionReports,
   getAllExceptionReports,
   getExceptionReportById,
   resolveExceptionReport,
+  assignExceptionReport,
 };

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,6 +17,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   OUTBOUND: "Xuất kho",
   PURCHASE_REQUEST: "Yêu cầu mua hàng",
   EXCEPTION_REPORT: "Báo cáo sự cố",
+  STAFF_TASK: "Task được giao",
 };
 
 const TABS = [
@@ -27,6 +28,7 @@ const TABS = [
   { key: "OUTBOUND", label: "Xuất kho" },
   { key: "PURCHASE_REQUEST", label: "Yêu cầu mua" },
   { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
+  { key: "STAFF_TASK", label: "Task được giao" },
 ];
 
 const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND"];
@@ -39,6 +41,7 @@ function taskActionLabel(type: string) {
   if (upper === "OUTBOUND") return "Xác nhận";
   if (upper === "PURCHASE_REQUEST") return "Xem yêu cầu";
   if (upper === "EXCEPTION_REPORT") return "Xem báo cáo";
+  if (upper === "STAFF_TASK") return "Xem task";
   return "Thực hiện";
 }
 
@@ -70,6 +73,7 @@ function getTaskActionPath(task: MyWarehouseTask) {
   if (task.type === "PUTAWAY") return `/putaway/${task.id}`;
   if (task.type === "PICKING") return "/picking";
   if (task.type === "OUTBOUND") return "/outbound";
+  if (task.type === "STAFF_TASK") return "/staff-tasks";
   return null;
 }
 
@@ -86,6 +90,7 @@ export function MyWarehouseTasksPage() {
     outbound: tasks.filter((t) => t.type === "OUTBOUND").length,
     purchaseRequest: tasks.filter((t) => t.type === "PURCHASE_REQUEST").length,
     exceptionReport: tasks.filter((t) => t.type === "EXCEPTION_REPORT").length,
+    staffTask: tasks.filter((t) => t.type === "STAFF_TASK").length,
   }), [tasks]);
 
   const filteredTasks = useMemo(() =>
@@ -120,6 +125,7 @@ export function MyWarehouseTasksPage() {
     { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100", tab: "OUTBOUND" },
     { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100", tab: "PURCHASE_REQUEST" },
     { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100", tab: "EXCEPTION_REPORT" },
+    { label: "Task được giao", value: counts.staffTask, icon: ClipboardCheck, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "STAFF_TASK" },
   ];
 
   return (
@@ -150,7 +156,7 @@ export function MyWarehouseTasksPage() {
       </div>
 
       {/* Summary cards — clickable to filter */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {summaryCards.map((card) => (
           <SectionCard key={card.label}>
             <button

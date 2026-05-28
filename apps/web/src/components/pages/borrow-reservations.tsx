@@ -19,6 +19,16 @@ import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
 
 const statuses: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'];
 
+const STATUS_LABELS: Record<string, string> = {
+  ALL: 'Tất cả',
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  READY_FOR_PICKUP: 'Sẵn lấy',
+  CANCELLED: 'Đã hủy',
+  EXPIRED: 'Hết hạn',
+  CONVERTED_TO_LOAN: 'Đã mượn',
+};
+
 interface ReservationFormState {
   customer_id: string;
   variant_id: string;
@@ -90,7 +100,7 @@ export function BorrowReservationsPage() {
       const response = await borrowService.getReservations();
       setReservations(response.data ?? []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load reservations'));
+      toast.error(getApiErrorMessage(error, 'Không tải được danh sách đặt trước'));
     } finally {
       setLoading(false);
     }
@@ -245,7 +255,7 @@ export function BorrowReservationsPage() {
   }, [formState.warehouse_id, formOpen]);
 
   const customerLabel = (customer: CustomerLookupItem) => {
-    const contact = customer.phone || customer.email || 'No contact';
+    const contact = customer.phone || customer.email || 'Không có liên lạc';
     return `${customer.full_name} (${contact})`;
   };
 
@@ -295,13 +305,13 @@ export function BorrowReservationsPage() {
 
   const submitReservation = async () => {
     if (!formState.customer_id || !formState.variant_id || !formState.warehouse_id) {
-      toast.error('Customer, variant_id and warehouse_id are required');
+      toast.error('Vui lòng chọn khách hàng, biến thể sách và kho');
       return;
     }
 
     const qty = Number.parseInt(formState.quantity, 10);
     if (!Number.isInteger(qty) || qty <= 0) {
-      toast.error('Quantity must be a positive integer');
+      toast.error('Số lượng phải là số nguyên dương');
       return;
     }
 
@@ -319,10 +329,10 @@ export function BorrowReservationsPage() {
 
       if (formMode === 'DIRECT_LOAN') {
         await borrowService.createDirectLoan(payload);
-        toast.success('Direct loan created successfully');
+        toast.success('Đã tạo phiếu mượn trực tiếp');
       } else {
         await borrowService.createReservation(payload);
-        toast.success('Reservation created successfully');
+        toast.success('Đã tạo đặt trước thành công');
       }
 
       setFormOpen(false);
@@ -330,39 +340,39 @@ export function BorrowReservationsPage() {
       setFormState(initialFormState);
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, formMode === 'DIRECT_LOAN' ? 'Failed to create direct loan' : 'Failed to create reservation'));
+      toast.error(getApiErrorMessage(error, formMode === 'DIRECT_LOAN' ? 'Tạo phiếu mượn trực tiếp thất bại' : 'Tạo đặt trước thất bại'));
     } finally {
       setSaving(false);
     }
   };
 
   const cancelReservation = async (id: string) => {
-    if (!window.confirm('Cancel this reservation?')) return;
+    if (!window.confirm('Hủy đặt trước này?')) return;
 
     try {
       await borrowService.cancelReservation(id);
-      toast.success('Reservation cancelled');
+      toast.success('Đã hủy đặt trước');
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to cancel reservation'));
+      toast.error(getApiErrorMessage(error, 'Hủy đặt trước thất bại'));
     }
   };
 
   const convertPickupCode = async (code = pickupCode) => {
     const value = String(code || '').trim();
     if (!value) {
-      toast.error('Pickup code is required');
+      toast.error('Vui lòng nhập mã nhận sách');
       return;
     }
 
     try {
       setPickupConverting(true);
       const response = await borrowService.convertPickupCodeToLoan(value);
-      toast.success(`Loan ${response.data.loan_number} created from pickup code`);
+      toast.success(`Đã tạo phiếu mượn ${response.data.loan_number} từ mã nhận sách`);
       setPickupCode('');
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to convert pickup code'));
+      toast.error(getApiErrorMessage(error, 'Chuyển đổi mã nhận sách thất bại'));
     } finally {
       setPickupConverting(false);
     }
@@ -371,20 +381,20 @@ export function BorrowReservationsPage() {
   const confirmReservation = async (id: string, status: 'CONFIRMED' | 'READY_FOR_PICKUP' = 'CONFIRMED') => {
     try {
       await borrowService.confirmReservation(id, { status });
-      toast.success(status === 'READY_FOR_PICKUP' ? 'Reservation marked ready for pickup' : 'Reservation confirmed');
+      toast.success(status === 'READY_FOR_PICKUP' ? 'Đặt trước sẵn sàng lấy sách' : 'Đã xác nhận đặt trước');
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to confirm reservation'));
+      toast.error(getApiErrorMessage(error, 'Xác nhận đặt trước thất bại'));
     }
   };
 
   const releaseExpiredReservations = async () => {
     try {
       const response = await borrowService.runExpiredReservationSweep();
-      toast.success(`Expired reservations released: ${response.data.expired}`);
+      toast.success(`Đã giải phóng ${response.data.expired} đặt trước hết hạn`);
       await loadReservations();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to release expired reservations'));
+      toast.error(getApiErrorMessage(error, 'Giải phóng đặt trước hết hạn thất bại'));
     }
   };
 
@@ -418,7 +428,6 @@ export function BorrowReservationsPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Hero Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -432,22 +441,22 @@ export function BorrowReservationsPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Borrow Reservations</h1>
-            <p className="text-sm text-muted-foreground">{reservations.length} reservations</p>
+            <h1 className="text-xl font-semibold tracking-tight">Đặt trước sách</h1>
+            <p className="text-sm text-muted-foreground">{reservations.length} đặt trước</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2">
             <RefreshCw className="w-4 h-4" />
-            Release Expired
+            Giải phóng hết hạn
           </Button>
           <Button size="sm" onClick={openReservationForm} className="gap-2">
             <Plus className="w-4 h-4" />
-            New Reservation
+            Đặt trước mới
           </Button>
           <Button size="sm" variant="outline" onClick={openDirectLoanForm} className="gap-2">
             <Plus className="w-4 h-4" />
-            New Direct Loan
+            Mượn trực tiếp
           </Button>
         </div>
       </motion.div>
@@ -457,10 +466,10 @@ export function BorrowReservationsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
       >
-        <SectionCard title="Pickup counter">
+        <SectionCard title="Quầy nhận sách">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <label className="flex-1 text-xs font-medium text-muted-foreground">
-              Pickup code / QR result
+              Mã nhận sách / Kết quả QR
               <div className="mt-1 flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-primary/20">
                 <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <input
@@ -472,7 +481,7 @@ export function BorrowReservationsPage() {
                       void convertPickupCode();
                     }
                   }}
-                  placeholder="PU-ABCD-1234 or SMARTBOOK:PICKUP:..."
+                  placeholder="PU-ABCD-1234 hoặc SMARTBOOK:PICKUP:..."
                   className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
@@ -485,7 +494,7 @@ export function BorrowReservationsPage() {
                 className="gap-2"
               >
                 <ScanLine className="h-4 w-4" />
-                Scan QR
+                Quét QR
               </Button>
               <Button
                 type="button"
@@ -494,14 +503,13 @@ export function BorrowReservationsPage() {
                 className="gap-2"
               >
                 {pickupConverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Convert to Loan
+                Chuyển thành phiếu mượn
               </Button>
             </div>
           </div>
         </SectionCard>
       </motion.div>
 
-      {/* Filter Bar */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -510,7 +518,7 @@ export function BorrowReservationsPage() {
         <FilterBar
           searchValue={query}
           onSearchChange={setQuery}
-          searchPlaceholder="Search reservation..."
+          searchPlaceholder="Tìm đặt trước..."
           filters={
             <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
               {(['ALL', ...statuses] as const).map((status) => (
@@ -528,7 +536,7 @@ export function BorrowReservationsPage() {
                       transition={{ duration: 0.15 }}
                     />
                   )}
-                  <span className="relative z-10">{status}</span>
+                  <span className="relative z-10">{STATUS_LABELS[status] ?? status}</span>
                 </button>
               ))}
             </div>
@@ -536,7 +544,6 @@ export function BorrowReservationsPage() {
         />
       </motion.div>
 
-      {/* Reservations Table */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -547,7 +554,7 @@ export function BorrowReservationsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['No.', 'Customer', 'Variant', 'Warehouse', 'Qty', 'Expires At', 'Status', 'Action'].map((header) => (
+                  {['Số đặt trước', 'Khách hàng', 'Biến thể', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
                     <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
                     </th>
@@ -560,7 +567,7 @@ export function BorrowReservationsPage() {
                     <td colSpan={8} className="text-center py-14">
                       <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Loading reservations...</span>
+                        <span className="text-sm">Đang tải đặt trước...</span>
                       </div>
                     </td>
                   </tr>
@@ -569,8 +576,8 @@ export function BorrowReservationsPage() {
                     <td colSpan={8}>
                       <EmptyState
                         variant="no-results"
-                        title="No reservations found"
-                        description="Try adjusting your search or filters."
+                        title="Không tìm thấy đặt trước"
+                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
                         className="py-12"
                       />
                     </td>
@@ -604,12 +611,12 @@ export function BorrowReservationsPage() {
                                 onClick={() => void confirmReservation(reservation.id)}
                               >
                                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                Confirm
+                                Xác nhận
                               </Button>
                             ) : null}
                             {reservation.status === 'READY_FOR_PICKUP' ? (
                               <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5">
-                                <p className="text-[10px] font-medium uppercase text-cyan-600">Pickup code</p>
+                                <p className="text-[10px] font-medium uppercase text-cyan-600">Mã nhận sách</p>
                                 <p className="font-mono text-xs font-semibold text-cyan-900">{reservation.pickup_code || '-'}</p>
                               </div>
                             ) : null}
@@ -620,7 +627,7 @@ export function BorrowReservationsPage() {
                                 className="border-cyan-200 text-cyan-700 hover:bg-cyan-50"
                                 onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
                               >
-                                Ready
+                                Sẵn sàng
                               </Button>
                             )}
                             <Button
@@ -629,7 +636,7 @@ export function BorrowReservationsPage() {
                               className="border-amber-200 text-amber-700 hover:bg-amber-50"
                               onClick={() => void cancelReservation(reservation.id)}
                             >
-                              Cancel
+                              Hủy
                             </Button>
                           </div>
                         ) : (
@@ -645,7 +652,6 @@ export function BorrowReservationsPage() {
         </SectionCard>
       </motion.div>
 
-      {/* Create Form Modal */}
       <AnimatePresence>
         {formOpen && (
           <motion.div
@@ -662,11 +668,11 @@ export function BorrowReservationsPage() {
               className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
               <h3 className="text-base font-semibold mb-4">
-                {formMode === 'DIRECT_LOAN' ? 'New Direct Loan (Counter)' : 'New Reservation'}
+                {formMode === 'DIRECT_LOAN' ? 'Mượn trực tiếp (Quầy)' : 'Đặt trước mới'}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <label className="text-xs font-medium text-muted-foreground md:col-span-2">
-                  Customer (phone, name, email)*
+                  Khách hàng (số điện thoại, tên, email) *
                   <div className="relative mt-1">
                     <input
                       value={customerQuery}
@@ -677,14 +683,14 @@ export function BorrowReservationsPage() {
                           setFormState((prev) => ({ ...prev, customer_id: '' }));
                         }
                       }}
-                      placeholder="Type phone/name/email to search customer"
+                      placeholder="Nhập số điện thoại/tên/email để tìm khách hàng"
                       className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(customerLoading || customerOptions.length > 0) && (
                       <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {customerLoading ? (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">Searching customers...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Đang tìm khách hàng...</p>
                         ) : (
                           customerOptions.map((customer) => (
                             <button
@@ -698,7 +704,7 @@ export function BorrowReservationsPage() {
                               className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
                             >
                               <p className="text-xs font-medium text-foreground">{customer.full_name}</p>
-                              <p className="text-[11px] text-muted-foreground">{customer.phone || customer.email || 'No contact'} • {customer.customer_code}</p>
+                              <p className="text-[11px] text-muted-foreground">{customer.phone || customer.email || 'Không có liên lạc'} • {customer.customer_code}</p>
                             </button>
                           ))
                         )}
@@ -706,11 +712,11 @@ export function BorrowReservationsPage() {
                     )}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {formState.customer_id ? `Selected customer ID: ${formState.customer_id}` : 'Please select a customer from suggestions'}
+                    {formState.customer_id ? `Đã chọn khách hàng: ${formState.customer_id}` : 'Vui lòng chọn khách hàng từ gợi ý'}
                   </p>
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Variant (title / ISBN / barcode)*
+                  Biến thể sách (tên/ISBN/barcode) *
                   <div className="relative mt-1">
                     <input
                       value={variantQuery}
@@ -728,14 +734,14 @@ export function BorrowReservationsPage() {
                           setFormState((prev) => ({ ...prev, variant_id: '' }));
                         }
                       }}
-                      placeholder="Type title / ISBN / barcode"
+                      placeholder="Nhập tên/ISBN/barcode"
                       className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(variantLoading || variantOptions.length > 0) && (
                       <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {variantLoading ? (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">Searching variants...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Đang tìm biến thể...</p>
                         ) : (
                           variantOptions.map((variant) => {
                             const identifier = variant.internal_barcode || variant.isbn || variant.sku;
@@ -760,11 +766,11 @@ export function BorrowReservationsPage() {
                     )}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {formState.variant_id ? `Selected variant ID: ${formState.variant_id}` : 'Please select a variant from suggestions'}
+                    {formState.variant_id ? `Đã chọn biến thể: ${formState.variant_id}` : 'Vui lòng chọn biến thể từ gợi ý'}
                   </p>
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Warehouse (name / code)*
+                  Kho (tên/mã) *
                   <div className="relative mt-1">
                     <input
                       value={warehouseQuery}
@@ -786,14 +792,14 @@ export function BorrowReservationsPage() {
                           setPickupQuery('');
                         }
                       }}
-                      placeholder="Type warehouse name/code"
+                      placeholder="Nhập tên/mã kho"
                       className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                     />
 
                     {(warehouseLoading || warehouseOptions.length > 0) && (
                       <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {warehouseLoading ? (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">Loading warehouses...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Đang tải kho...</p>
                         ) : (
                           warehouseOptions.map((warehouse) => (
                             <button
@@ -816,11 +822,11 @@ export function BorrowReservationsPage() {
                     )}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {formState.warehouse_id ? `Selected warehouse ID: ${formState.warehouse_id}` : 'Please select a warehouse from suggestions'}
+                    {formState.warehouse_id ? `Đã chọn kho: ${formState.warehouse_id}` : 'Vui lòng chọn kho từ gợi ý'}
                   </p>
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Pickup location (code / zone)
+                  Vị trí lấy sách (mã/khu vực)
                   <div className="relative mt-1">
                     <input
                       value={pickupQuery}
@@ -838,14 +844,14 @@ export function BorrowReservationsPage() {
                         }
                       }}
                       disabled={!formState.warehouse_id}
-                      placeholder={formState.warehouse_id ? 'Type location code/zone' : 'Select warehouse first'}
+                      placeholder={formState.warehouse_id ? 'Nhập mã vị trí/khu vực' : 'Chọn kho trước'}
                       className="w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 disabled:bg-muted disabled:text-muted-foreground"
                     />
 
                     {(pickupLoading || (formState.warehouse_id && filteredPickupLocations.length > 0)) && (
                       <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-background shadow-lg max-h-52 overflow-auto">
                         {pickupLoading ? (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">Loading pickup locations...</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">Đang tải vị trí lấy sách...</p>
                         ) : (
                           filteredPickupLocations.map((location) => (
                             <button
@@ -866,16 +872,16 @@ export function BorrowReservationsPage() {
                     )}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {formState.pickup_location_id ? `Selected pickup location ID: ${formState.pickup_location_id}` : 'Optional: choose pickup location from this warehouse'}
+                    {formState.pickup_location_id ? `Đã chọn vị trí: ${formState.pickup_location_id}` : 'Tùy chọn: chọn vị trí lấy sách trong kho này'}
                   </p>
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Quantity
+                  Số lượng
                   <input type="number" min={1} value={formState.quantity} onChange={(event) => setFormState((prev) => ({ ...prev, quantity: event.target.value }))}
                     className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40" />
                 </label>
                 <label className="text-xs font-medium text-muted-foreground">
-                  Source
+                  Nguồn
                   <select value={formState.source_channel} onChange={(event) => setFormState((prev) => ({ ...prev, source_channel: event.target.value as ReservationSource }))}
                     disabled={formMode === 'DIRECT_LOAN'}
                     className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 disabled:bg-muted disabled:text-muted-foreground">
@@ -885,7 +891,7 @@ export function BorrowReservationsPage() {
                   </select>
                 </label>
                 <label className="text-xs font-medium text-muted-foreground md:col-span-2">
-                  Notes
+                  Ghi chú
                   <textarea rows={2} value={formState.notes} onChange={(event) => setFormState((prev) => ({ ...prev, notes: event.target.value }))}
                     className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40" />
                 </label>
@@ -899,14 +905,14 @@ export function BorrowReservationsPage() {
                     setFormMode('RESERVATION');
                   }}
                 >
-                  Cancel
+                  Hủy
                 </Button>
                 <Button
                   className="flex-1"
                   onClick={() => void submitReservation()}
                   disabled={saving}
                 >
-                  {saving ? 'Saving...' : (formMode === 'DIRECT_LOAN' ? 'Create Direct Loan' : 'Create Reservation')}
+                  {saving ? 'Đang lưu...' : (formMode === 'DIRECT_LOAN' ? 'Tạo phiếu mượn trực tiếp' : 'Tạo đặt trước')}
                 </Button>
               </div>
             </motion.div>
@@ -917,7 +923,7 @@ export function BorrowReservationsPage() {
         isOpen={pickupScannerOpen}
         onClose={() => setPickupScannerOpen(false)}
         onDetected={(code) => void convertPickupCode(code)}
-        title="Scan pickup QR"
+        title="Quét QR nhận sách"
       />
     </div>
   );

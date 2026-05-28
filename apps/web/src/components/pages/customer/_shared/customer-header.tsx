@@ -6,16 +6,16 @@ import { LanguageToggle } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; subtitle: string }> = [
-  { test: (pathname) => pathname === '/customer', title: 'Dashboard', subtitle: 'Overview of your library activity' },
-  { test: (pathname) => pathname.startsWith('/customer/books'), title: 'Browse Books', subtitle: 'Discover and reserve available books' },
-  { test: (pathname) => pathname.startsWith('/customer/loans'), title: 'My Loans', subtitle: 'Track due dates and renew requests' },
-  { test: (pathname) => pathname.startsWith('/customer/reservations'), title: 'My Reservations', subtitle: 'Follow reservation statuses' },
-  { test: (pathname) => pathname.startsWith('/customer/membership'), title: 'My Membership', subtitle: 'Plan and policy details' },
-  { test: (pathname) => pathname.startsWith('/customer/fines'), title: 'My Fines', subtitle: 'Outstanding balances and wallet' },
-  { test: (pathname) => pathname.startsWith('/customer/notifications'), title: 'My Notifications', subtitle: 'Recent updates and reminders' },
-  { test: (pathname) => pathname.startsWith('/customer/profile'), title: 'My Profile', subtitle: 'Personal account information' },
-  { test: (pathname) => pathname.startsWith('/customer/wishlist'), title: 'Wishlist', subtitle: 'Your favorite books' },
-  { test: (pathname) => pathname.startsWith('/customer/reading-analytics'), title: 'Reading Analytics', subtitle: 'Your reading journey' },
+  { test: (pathname) => pathname === '/customer', title: 'Tổng quan', subtitle: 'Hoạt động thư viện của bạn' },
+  { test: (pathname) => pathname.startsWith('/customer/books'), title: 'Danh mục sách', subtitle: 'Khám phá và đặt trước sách có sẵn' },
+  { test: (pathname) => pathname.startsWith('/customer/loans'), title: 'Phiếu mượn', subtitle: 'Theo dõi hạn trả và gia hạn' },
+  { test: (pathname) => pathname.startsWith('/customer/reservations'), title: 'Đặt trước', subtitle: 'Theo dõi trạng thái đặt trước' },
+  { test: (pathname) => pathname.startsWith('/customer/membership'), title: 'Hội viên', subtitle: 'Thông tin gói và chính sách' },
+  { test: (pathname) => pathname.startsWith('/customer/fines'), title: 'Tiền phạt', subtitle: 'Số dư còn lại và ví của tôi' },
+  { test: (pathname) => pathname.startsWith('/customer/notifications'), title: 'Thông báo', subtitle: 'Cập nhật và nhắc nhở gần đây' },
+  { test: (pathname) => pathname.startsWith('/customer/profile'), title: 'Hồ sơ', subtitle: 'Thông tin tài khoản cá nhân' },
+  { test: (pathname) => pathname.startsWith('/customer/wishlist'), title: 'Yêu thích', subtitle: 'Sách bạn đã thêm vào danh sách' },
+  { test: (pathname) => pathname.startsWith('/customer/reading-analytics'), title: 'Thống kê đọc sách', subtitle: 'Hành trình đọc sách của bạn' },
 ];
 
 interface CustomerHeaderProps {
@@ -36,8 +36,8 @@ function CustomerThemeToggle() {
 export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, isDesktopCollapsed }: CustomerHeaderProps) {
   const location = useLocation();
   const current = pageTitleMap.find((item) => item.test(location.pathname)) || {
-    title: 'Customer Portal',
-    subtitle: 'Welcome back',
+    title: 'Cổng khách hàng',
+    subtitle: 'Chào mừng trở lại',
   };
 
   return (

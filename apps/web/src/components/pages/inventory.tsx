@@ -39,7 +39,7 @@ interface InventoryWarehouseRow extends InventoryBook {
   locationSummary: string;
 }
 
-const statusFilters = ["All", "In Stock", "Low Stock", "Out of Stock"];
+const statusFilters = ["Tất cả", "Còn hàng", "Sắp hết", "Hết hàng"];
 
 function getStockStatus(quantity: number) {
   if (quantity <= 0) return "out-of-stock";
@@ -105,7 +105,7 @@ export function InventoryPage() {
   const [data, setData] = useState<InventoryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [whFilterId, setWhFilterId] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
 
   const loadInventory = async () => {
@@ -114,7 +114,7 @@ export function InventoryPage() {
       const response = await bookService.getAll();
       setData((response || []) as InventoryBook[]);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu ton kho"));
+      toast.error(getApiErrorMessage(error, "Không tải được dữ liệu tồn kho"));
     } finally {
       setLoading(false);
     }
@@ -133,7 +133,7 @@ export function InventoryPage() {
       map.set(row.warehouseId, row.warehouseName);
     }
     const sorted = Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "vi"));
-    return [{ value: "all", label: "All Warehouses" }, ...sorted.map(([value, label]) => ({ value, label }))];
+    return [{ value: "all", label: "Tất cả kho" }, ...sorted.map(([value, label]) => ({ value, label }))];
   }, [expandedRows]);
 
   const whScopedRows = useMemo(() => {
@@ -144,9 +144,9 @@ export function InventoryPage() {
   const filtered = whScopedRows
     .filter((row) => {
       const status = getStockStatus(Number(row.warehouseQty || 0));
-      if (statusFilter === "In Stock" && status !== "in-stock") return false;
-      if (statusFilter === "Low Stock" && status !== "low-stock") return false;
-      if (statusFilter === "Out of Stock" && status !== "out-of-stock") return false;
+      if (statusFilter === "Còn hàng" && status !== "in-stock") return false;
+      if (statusFilter === "Sắp hết" && status !== "low-stock") return false;
+      if (statusFilter === "Hết hàng" && status !== "out-of-stock") return false;
       return true;
     })
     .filter((row) => {
@@ -161,19 +161,19 @@ export function InventoryPage() {
   const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseQty || 0)) === "out-of-stock").length;
 
   const healthData = [
-    { name: "Healthy", value: healthyCount, color: "#10b981" },
-    { name: "Low Stock", value: lowCount, color: "#f59e0b" },
-    { name: "Out of Stock", value: outCount, color: "#ef4444" },
+    { name: "Tốt", value: healthyCount, color: "#10b981" },
+    { name: "Sắp hết", value: lowCount, color: "#f59e0b" },
+    { name: "Hết hàng", value: outCount, color: "#ef4444" },
   ];
 
   const uniqueTitles = new Set(whScopedRows.map((r) => r.id)).size;
-  const selectedWhLabel = warehouseOptions.find((o) => o.value === whFilterId)?.label ?? "All Warehouses";
+  const selectedWhLabel = warehouseOptions.find((o) => o.value === whFilterId)?.label ?? "Tất cả kho";
   const whSubtitle =
     whFilterId === "all"
-      ? `${data.length} titles · ${expandedRows.length} warehouse lines · ${totalUnits} total units`
-      : `${uniqueTitles} titles · ${selectedWhLabel} · ${totalUnits} units in this warehouse`;
+      ? `${data.length} đầu sách · ${expandedRows.length} dòng kho · ${totalUnits} bản tổng cộng`
+      : `${uniqueTitles} đầu sách · ${selectedWhLabel} · ${totalUnits} bản trong kho này`;
 
-  const tableHeaders = ["Barcode", "Title", "Category", "Warehouse", "Location", "Qty", "Health", "Status", "Updated"];
+  const tableHeaders = ["Barcode", "Tên sách", "Thể loại", "Kho", "Vị trí", "SL", "Tình trạng", "Trạng thái", "Cập nhật"];
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -188,16 +188,16 @@ export function InventoryPage() {
             <Package className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Inventory</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Tồn kho</h1>
             <p className="text-[12px] text-muted-foreground mt-0.5">{whSubtitle}</p>
           </div>
         </div>
         <div className="flex items-center gap-2.5">
           <button onClick={() => toast.success("Export started", { description: `${filtered.length} rows` })} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 bg-white text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm font-medium">
-            <Download className="w-3.5 h-3.5" /> Export
+            <Download className="w-3.5 h-3.5" /> Xuất
           </button>
           <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium">
-            <ArrowRightLeft className="w-3.5 h-3.5" /> Movements
+            <ArrowRightLeft className="w-3.5 h-3.5" /> Biến động
           </NavLink>
         </div>
       </motion.div>
@@ -210,12 +210,12 @@ export function InventoryPage() {
         <FilterBar
           searchValue={searchQuery}
           onSearchChange={setSearchQuery}
-          searchPlaceholder="Search inventory by title/barcode..."
+          searchPlaceholder="Tìm theo tên sách / mã barcode..."
           showSearchClear
           filters={
             <>
               <label className="flex items-center gap-2 text-[12px] text-muted-foreground font-medium">
-                <span>Warehouse</span>
+                <span>Kho</span>
                 <select
                   value={whFilterId}
                   onChange={(e) => setWhFilterId(e.target.value)}
@@ -246,13 +246,13 @@ export function InventoryPage() {
         className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4"
       >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Units" value={totalUnits} icon={Package} variant="default" />
-          <StatCard label="Healthy" value={healthyCount} icon={Leaf} variant="success" />
-          <StatCard label="Low Stock" value={lowCount} icon={AlertTriangle} variant="warning" />
-          <StatCard label="Out of Stock" value={outCount} icon={Package} variant="danger" />
+          <StatCard label="Tổng bản sao" value={totalUnits} icon={Package} variant="default" />
+          <StatCard label="Tình trạng tốt" value={healthyCount} icon={Leaf} variant="success" />
+          <StatCard label="Sắp hết" value={lowCount} icon={AlertTriangle} variant="warning" />
+          <StatCard label="Hết hàng" value={outCount} icon={Package} variant="danger" />
         </div>
         <div className="bg-card rounded-xl border border-black/5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-3 flex flex-col items-center justify-center">
-          <div className="text-[11px] text-muted-foreground mb-1 font-medium">Health</div>
+          <div className="text-[11px] text-muted-foreground mb-1 font-medium">Sức khỏe kho</div>
           <ResponsiveContainer width="100%" height={100} key={`pie-${whFilterId}-${healthyCount}-${lowCount}-${outCount}`}>
             <PieChart>
               <Pie data={healthData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={3} dataKey="value" strokeWidth={0}>
@@ -281,15 +281,15 @@ export function InventoryPage() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {tableHeaders.map(h => (
-                  <th key={h} className={`${["Qty"].includes(h) ? "text-right" : "text-left"} text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium`}>{h}</th>
+                  <th key={h} className={`${["SL"].includes(h) ? "text-right" : "text-left"} text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-14 text-[13px] text-muted-foreground">Dang tai du lieu ton kho...</td></tr>
+                <tr><td colSpan={9} className="text-center py-14 text-[13px] text-muted-foreground">Đang tải dữ liệu tồn kho...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState variant="no-data" title="No inventory items found" description="Try adjusting your search or filters" className="py-12" /></td></tr>
+                <tr><td colSpan={9}><EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td></tr>
               ) : filtered.map((row, i) => {
                 const qty = Number(row.warehouseQty || 0);
                 const status = getStockStatus(qty);
@@ -312,7 +312,7 @@ export function InventoryPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <StatusBadge label={status === "in-stock" ? "Healthy" : status === "low-stock" ? "Low" : "Out"} variant={status === "in-stock" ? "success" : status === "low-stock" ? "warning" : "danger"} dot />
+                      <StatusBadge label={status === "in-stock" ? "Tốt" : status === "low-stock" ? "Sắp hết" : "Hết hàng"} variant={status === "in-stock" ? "success" : status === "low-stock" ? "warning" : "danger"} dot />
                     </td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatUpdatedTime(row.updated_at)}</td>
                   </motion.tr>

@@ -220,12 +220,12 @@ export function DashboardPage() {
   const funnelData = useMemo(() => {
     const funnel = dashboard?.funnel || emptyFunnel;
     return [
-      { name: 'Pending', value: funnel.pending },
-      { name: 'Confirmed', value: funnel.confirmed },
-      { name: 'Ready', value: funnel.ready_for_pickup },
-      { name: 'Converted', value: funnel.converted_to_loan },
-      { name: 'Cancelled', value: funnel.cancelled },
-      { name: 'Expired', value: funnel.expired },
+      { name: 'Chờ xác nhận', value: funnel.pending },
+      { name: 'Đã xác nhận', value: funnel.confirmed },
+      { name: 'Sẵn lấy', value: funnel.ready_for_pickup },
+      { name: 'Đã mượn', value: funnel.converted_to_loan },
+      { name: 'Đã hủy', value: funnel.cancelled },
+      { name: 'Hết hạn', value: funnel.expired },
     ];
   }, [dashboard?.funnel]);
 
@@ -244,9 +244,9 @@ export function DashboardPage() {
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Analytics Dashboard</h1>
+            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Bảng phân tích</h1>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              Real-time reporting from Inventory, Borrow, Reservation, Loan, Return and Fine data.
+              Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -257,14 +257,14 @@ export function DashboardPage() {
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              Làm mới
             </button>
             {canViewAnalytics ? (
               <NavLink
                 to="/reports"
                 className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
               >
-                Reports <ArrowRight className="h-4 w-4" />
+                Báo cáo <ArrowRight className="h-4 w-4" />
               </NavLink>
             ) : null}
           </div>
@@ -276,8 +276,8 @@ export function DashboardPage() {
           <EmptyState
             variant="no-permission"
             icon={ShieldOff}
-            title="No analytics permission"
-            description="Your account cannot view analytics dashboards."
+            title="Không có quyền xem phân tích"
+            description="Tài khoản của bạn không có quyền xem bảng phân tích."
           />
         </SectionCard>
       ) : loading ? (
@@ -288,7 +288,7 @@ export function DashboardPage() {
         <SectionCard>
           <EmptyState
             variant="error"
-            title="Unable to load analytics"
+            title="Không thể tải phân tích"
             description={error}
             action={
               <button
@@ -296,7 +296,7 @@ export function DashboardPage() {
                 onClick={() => void loadDashboard()}
                 className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground"
               >
-                <RefreshCw className="h-4 w-4" /> Retry
+                <RefreshCw className="h-4 w-4" /> Thử lại
               </button>
             }
           />
@@ -307,8 +307,8 @@ export function DashboardPage() {
             <SectionCard>
               <EmptyState
                 variant="no-data"
-                title="No analytics data yet"
-                description="Once books, stock, reservations, loans and fines exist, this dashboard will populate automatically."
+                title="Chưa có dữ liệu phân tích"
+                description="Khi sách, tồn kho, đặt trước, mượn trả và tiền phạt có dữ liệu, bảng phân tích sẽ tự động cập nhật."
               />
             </SectionCard>
           )}
@@ -348,23 +348,23 @@ export function DashboardPage() {
           )}
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-            <StatCard label="Titles" value={kpis.total_titles} icon={BookOpen} variant="default" />
-            <StatCard label="Copies" value={kpis.total_copies} icon={Package} variant="success" />
-            <StatCard label="Borrowed" value={kpis.active_loans} icon={BookMarked} variant="info" />
-            <StatCard label="Overdue" value={kpis.overdue_loans} icon={Clock} variant="danger" />
-            <StatCard label="Low stock" value={kpis.low_stock_variants} icon={AlertTriangle} variant="warning" />
-            <StatCard label="Unpaid fines" value={formatMoney(kpis.unpaid_fine_amount)} icon={Receipt} variant="warning" />
-            <StatCard label="Pending" value={kpis.pending_reservations} icon={FileText} variant="primary" />
-            <StatCard label="Confirmed" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" />
-            <StatCard label="Ready" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" />
-            <StatCard label="Pickup expiring" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" />
-            <StatCard label="Convert rate" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
-            <StatCard label="Overdue items" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" />
+            <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" />
+            <StatCard label="Bản sao" value={kpis.total_copies} icon={Package} variant="success" />
+            <StatCard label="Đang mượn" value={kpis.active_loans} icon={BookMarked} variant="info" />
+            <StatCard label="Quá hạn" value={kpis.overdue_loans} icon={Clock} variant="danger" />
+            <StatCard label="Tồn kho thấp" value={kpis.low_stock_variants} icon={AlertTriangle} variant="warning" />
+            <StatCard label="Tiền phạt chưa trả" value={formatMoney(kpis.unpaid_fine_amount)} icon={Receipt} variant="warning" />
+            <StatCard label="Đặt trước" value={kpis.pending_reservations} icon={FileText} variant="primary" />
+            <StatCard label="Đã xác nhận" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" />
+            <StatCard label="Sẵn lấy" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" />
+            <StatCard label="Sắp hết hạn lấy" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" />
+            <StatCard label="Tỷ lệ nhận sách" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
+            <StatCard label="Mục quá hạn" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" />
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             <section className="xl:col-span-2">
-              <SectionCard title="Borrow trends" subtitle="Loans, returns and reservations in the latest date range" icon={TrendingUp}>
+              <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
                 {trendData.length ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
@@ -379,18 +379,18 @@ export function DashboardPage() {
                       <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={32} />
                       <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Area type="monotone" dataKey="loans" stroke="#2563eb" fill="url(#loansGrad)" strokeWidth={2} name="Loans" />
-                      <Area type="monotone" dataKey="returns" stroke="#10b981" fill="#10b98122" strokeWidth={2} name="Returns" />
-                      <Area type="monotone" dataKey="reservations" stroke="#f59e0b" fill="#f59e0b22" strokeWidth={2} name="Reservations" />
+                      <Area type="monotone" dataKey="loans" stroke="#2563eb" fill="url(#loansGrad)" strokeWidth={2} name="Mượn" />
+                      <Area type="monotone" dataKey="returns" stroke="#10b981" fill="#10b98122" strokeWidth={2} name="Trả" />
+                      <Area type="monotone" dataKey="reservations" stroke="#f59e0b" fill="#f59e0b22" strokeWidth={2} name="Đặt trước" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <EmptyState variant="no-data" title="No trend data" description="No loan or reservation activity in the selected range." />
+                  <EmptyState variant="no-data" title="Chưa có dữ liệu xu hướng" description="Chưa có hoạt động mượn/đặt trong khoảng thời gian đã chọn." />
                 )}
               </SectionCard>
             </section>
 
-            <SectionCard title="Reservation funnel" subtitle={`Conversion ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
+            <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
               {funnelData.some((item) => item.value > 0) ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
@@ -398,7 +398,7 @@ export function DashboardPage() {
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={28} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Reservations">
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Đặt trước">
                       {funnelData.map((_, index) => (
                         <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
@@ -406,13 +406,13 @@ export function DashboardPage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState variant="no-data" title="No reservations" description="Reservation funnel will appear after customer reservations are created." />
+                <EmptyState variant="no-data" title="Chưa có đặt trước" description="Phễu đặt trước sẽ hiển thị sau khi khách hàng tạo đặt trước." />
               )}
             </SectionCard>
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <SectionCard title="Top borrowed books" subtitle="Ranked by loan item count" icon={Crown}>
+            <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
               {topBookData.length ? (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
@@ -420,7 +420,7 @@ export function DashboardPage() {
                     <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                     <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: '#334155' }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                    <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Borrow count">
+                    <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Số lượt mượn">
                       {topBookData.map((_, index) => (
                         <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
@@ -428,22 +428,22 @@ export function DashboardPage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState variant="no-data" title="No borrowed books" description="Books will be ranked after loan transactions exist." />
+                <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
               )}
             </SectionCard>
 
-            <SectionCard title="Fine summary" subtitle="Unpaid, paid and waived amounts" icon={Receipt}>
+            <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Unpaid</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">Chưa trả</p>
                   <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Paid</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">Đã trả</p>
                   <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_paid)}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Waived</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">Miễn giảm</p>
                   <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_waived)}</p>
                 </div>
               </div>
@@ -453,31 +453,31 @@ export function DashboardPage() {
                     <div key={item.fine_type} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
                       <div>
                         <p className="text-[13px] font-medium">{item.fine_type}</p>
-                        <p className="text-[12px] text-muted-foreground">{item.count} fines</p>
+                        <p className="text-[12px] text-muted-foreground">{item.count} khoản phạt</p>
                       </div>
                       <p className="text-[13px] font-semibold">{formatMoney(item.amount)}</p>
                     </div>
                   ))
                 ) : (
-                  <EmptyState variant="no-data" title="No fines" description="Fine breakdown will appear when fines are issued." className="py-8" />
+                  <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
                 )}
               </div>
             </SectionCard>
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <SectionCard title="Warehouse stock risk" subtitle="Low stock and out of stock variants by warehouse" icon={Warehouse}>
+            <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse}>
               {stockRisk.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[560px] text-left text-[13px]">
                     <thead className="text-[11px] uppercase text-muted-foreground">
                       <tr className="border-b border-border">
-                        <th className="py-2 pr-3 font-medium">Warehouse</th>
-                        <th className="py-2 pr-3 font-medium">Low</th>
-                        <th className="py-2 pr-3 font-medium">Out</th>
-                        <th className="py-2 pr-3 font-medium">Available</th>
-                        <th className="py-2 pr-3 font-medium">Reserved</th>
-                        <th className="py-2 pr-3 font-medium">Borrowed</th>
+                        <th className="py-2 pr-3 font-medium">Kho</th>
+                        <th className="py-2 pr-3 font-medium">Sắp hết</th>
+                        <th className="py-2 pr-3 font-medium">Hết hàng</th>
+                        <th className="py-2 pr-3 font-medium">Khả dụng</th>
+                        <th className="py-2 pr-3 font-medium">Đang đặt</th>
+                        <th className="py-2 pr-3 font-medium">Đang mượn</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -495,11 +495,11 @@ export function DashboardPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState variant="no-data" title="No warehouse stock" description="Stock risk will appear after inventory balances are available." />
+                <EmptyState variant="no-data" title="Chưa có dữ liệu tồn kho" description="Rủi ro tồn kho sẽ hiển thị sau khi có dữ liệu tồn kho." />
               )}
             </SectionCard>
 
-            <SectionCard title="Overdue loans" subtitle={`Average ${overdue.average_overdue_days} days overdue`} icon={Clock}>
+            <SectionCard title="Mượn quá hạn" subtitle={`Trung bình ${overdue.average_overdue_days} ngày quá hạn`} icon={Clock}>
               {overdue.items.length ? (
                 <div className="space-y-2">
                   {overdue.items.slice(0, 6).map((item) => (
@@ -509,14 +509,14 @@ export function DashboardPage() {
                         <p className="truncate text-[12px] text-muted-foreground">{item.customer_name}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[13px] font-semibold text-rose-700">{item.overdue_days} days</p>
-                        <p className="text-[12px] text-muted-foreground">{item.due_date ? item.due_date.slice(0, 10) : 'No due date'}</p>
+                        <p className="text-[13px] font-semibold text-rose-700">{item.overdue_days} ngày</p>
+                        <p className="text-[12px] text-muted-foreground">{item.due_date ? item.due_date.slice(0, 10) : 'Không có hạn'}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <EmptyState variant="no-data" title="No overdue loans" description="Great: there are no overdue loan items right now." />
+                <EmptyState variant="no-data" title="Không có mượn quá hạn" description="Tốt lắm — hiện tại không có mục mượn nào quá hạn." />
               )}
             </SectionCard>
           </div>

@@ -37,6 +37,7 @@ export interface RecognizeBookResponse {
 export interface SummaryViRequest {
   title: string;
   author?: string;
+  publisher?: string;
   description?: string;
   categories?: string[];
 }
@@ -72,6 +73,10 @@ export interface LookupBookByIsbnResponse {
     googleBooks: boolean;
     openLibrary: boolean;
     worldCat?: boolean;
+    fahasa?: boolean;
+    tiki?: boolean;
+    vinabook?: boolean;
+    webSearch?: boolean;
     aiSummary: string;
   };
   confidence: {
@@ -79,6 +84,10 @@ export interface LookupBookByIsbnResponse {
     googleBooks: number;
     openLibrary: number;
     worldCat?: number;
+    fahasa?: number;
+    tiki?: number;
+    vinabook?: number;
+    webSearch?: number;
   };
   summaryVi: string | null;
   keywords: string[];
@@ -91,12 +100,40 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface PendingAction {
+  id: string;
+  type: string;
+  status: string;
+  summary: string;
+  payload: any;
+  risk: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+  requires_confirmation: boolean;
+  allowed_roles: string[];
+  allowed_permissions?: string[];
+  sources?: Array<{ name: string; endpoint?: string; status?: string }>;
+  intent?: string;
+  warnings?: string[];
+  expires_at?: string;
+  requires_review?: boolean;
+  created_at?: string;
+  created_by_roles?: string[];
+}
+
+export interface ConfirmActionResponse {
+  success: boolean;
+  action_id: string;
+  status: string;
+  message: string;
+  result?: any;
+}
+
 export interface ChatResponse {
   reply: string;
   ai_provider: string;
   intent?: string;
   context_sources?: Array<{ name: string; endpoint?: string; status?: string }>;
   retrieval_warnings?: string[];
+  pending_action?: PendingAction | null;
 }
 
 export interface SystemContext {
@@ -249,6 +286,25 @@ export const aiService = {
     reviews: any[],
   ): Promise<ReadingStatsResponse> => {
     const response = await aiAPI.post('/reading-stats', { loans, reviews });
+    return response.data;
+  },
+
+  confirmAction: async (actionId: string, overridePayload?: Record<string, unknown>): Promise<ConfirmActionResponse> => {
+    const body: Record<string, unknown> = { action_id: actionId, confirm: true };
+    if (overridePayload && Object.keys(overridePayload).length > 0) {
+      body.override_payload = overridePayload;
+    }
+    const response = await aiAPI.post('/actions/confirm', body);
+    return response.data;
+  },
+
+  cancelAction: async (actionId: string): Promise<{ success: boolean; action_id: string; status: string }> => {
+    const response = await aiAPI.post('/actions/cancel', { action_id: actionId });
+    return response.data;
+  },
+
+  getPendingAction: async (actionId: string): Promise<PendingAction> => {
+    const response = await aiAPI.get(`/actions/pending/${actionId}`);
     return response.data;
   },
 

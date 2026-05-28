@@ -124,7 +124,7 @@ export function ShelvesPage() {
         const data = await warehouseService.getAll();
         setWarehouses(Array.isArray(data) ? data : []);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach kho"));
+        toast.error(getApiErrorMessage(error, "Không tải được danh sách kho"));
       }
     };
 
@@ -151,7 +151,7 @@ export function ShelvesPage() {
         const keep = rows.some((item) => item.id === selectedShelfId) ? selectedShelfId : rows[0].id;
         setSelectedShelfId(keep);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach ke"));
+        toast.error(getApiErrorMessage(error, "Không tải được danh sách kệ"));
         setShelves([]);
         setSelectedShelfId("");
         setDetail(null);
@@ -175,7 +175,7 @@ export function ShelvesPage() {
         const data = await shelfService.getById(selectedShelfId);
         setDetail(data);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc chi tiet ke"));
+        toast.error(getApiErrorMessage(error, "Không tải được chi tiết kệ"));
         setDetail(null);
       } finally {
         setLoadingDetail(false);
@@ -210,15 +210,15 @@ export function ShelvesPage() {
             <Layers3 className="w-5 h-5 text-cyan-700" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Shelf Management</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">{shelves.length} shelves · {totals.compartments} compartments · {formatQty(totals.occupied)} on hand</p>
+            <h1 className="text-xl font-semibold tracking-tight">Quản lý kệ sách</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{shelves.length} kệ · {totals.compartments} ngăn · {formatQty(totals.occupied)} đang chứa</p>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 min-w-[300px]">
-          <StatCard label="Occupied" value={formatQty(totals.occupied)} variant="warning" />
-          <StatCard label="Capacity" value={formatQty(totals.capacity)} variant="info" />
-          <StatCard label="Compartments" value={formatQty(totals.compartments)} variant="default" />
+          <StatCard label="Đang chứa" value={formatQty(totals.occupied)} variant="warning" />
+          <StatCard label="Sức chứa" value={formatQty(totals.capacity)} variant="info" />
+          <StatCard label="Ngăn kệ" value={formatQty(totals.compartments)} variant="default" />
         </div>
       </motion.div>
 
@@ -230,7 +230,7 @@ export function ShelvesPage() {
         <FilterBar
           searchValue={query}
           onSearchChange={setQuery}
-          searchPlaceholder="Search shelf by code, zone, warehouse"
+          searchPlaceholder="Tìm kệ theo mã, khu vực, kho"
           showSearchClear
           filters={
             <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2">
@@ -240,7 +240,7 @@ export function ShelvesPage() {
                 onChange={(event) => setWarehouseId(event.target.value)}
                 className="text-[13px] outline-none bg-transparent cursor-pointer"
               >
-                <option value="">All warehouses</option>
+                <option value="">Tất cả kho</option>
                 {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.code} - {warehouse.name}
@@ -261,7 +261,7 @@ export function ShelvesPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {["Shelf", "Warehouse", "Compartments", "Occupied", "Capacity", "Available", "Utilization"].map((header) => (
+                {["Kệ", "Kho", "Ngăn", "Đang chứa", "Sức chứa", "Khả dụng", "Tỷ lệ lấp đầy"].map((header) => (
                   <th key={header} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">{header}</th>
                 ))}
               </tr>
@@ -269,11 +269,11 @@ export function ShelvesPage() {
             <tbody>
               {loadingShelves ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-[13px] text-muted-foreground">Loading shelf list...</td>
+                  <td colSpan={7} className="text-center py-12 text-[13px] text-muted-foreground">Đang tải danh sách kệ...</td>
                 </tr>
               ) : shelves.length === 0 ? (
                 <tr>
-                  <td colSpan={7}><EmptyState variant="no-data" title="No shelves found" description="Try adjusting your search or filters" className="py-12" /></td>
+                  <td colSpan={7}><EmptyState variant="no-data" title="Không tìm thấy kệ nào" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td>
                 </tr>
               ) : (
                 shelves.map((shelf) => (
@@ -287,7 +287,7 @@ export function ShelvesPage() {
                         <BookOpen className="w-3.5 h-3.5 text-cyan-600" />
                         <div>
                           <p className="text-[13px] text-foreground font-semibold">{shelf.code}</p>
-                          <p className="text-[11px] text-muted-foreground">Zone: {shelf.zone || "-"}</p>
+                          <p className="text-[11px] text-muted-foreground">Khu vực: {shelf.zone || "-"}</p>
                         </div>
                       </div>
                     </td>
@@ -316,31 +316,31 @@ export function ShelvesPage() {
         transition={{ duration: 0.3, delay: 0.15 }}
       >
         <SectionCard
-          title={selectedShelf ? `Shelf Detail - ${selectedShelf.code}` : "Shelf Detail"}
-          subtitle="Compartment view with current on_hand and inbound dates per book variant."
+          title={selectedShelf ? `Chi tiết kệ - ${selectedShelf.code}` : "Chi tiết kệ"}
+          subtitle="Xem ngăn chứa, số lượng hiện tại và ngày nhập theo biến thể sách."
           actions={detail?.shelf ? (
             <div className="grid grid-cols-3 gap-2 min-w-[280px]">
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Occupied</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Đang chứa</p>
                 <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.occupiedQty)}</p>
               </div>
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Capacity</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Sức chứa</p>
                 <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.capacityQty)}</p>
               </div>
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Available</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Khả dụng</p>
                 <p className="text-[14px] text-emerald-700 font-bold">{formatQty(detail.shelf.availableQty)}</p>
               </div>
             </div>
           ) : undefined}
         >
           {loadingDetail ? (
-            <div className="rounded-xl border border-border bg-card p-8 text-center text-[13px] text-muted-foreground">Loading shelf detail...</div>
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-[13px] text-muted-foreground">Đang tải chi tiết kệ...</div>
           ) : !detail ? (
-            <EmptyState variant="no-data" title="Select a shelf to view" description="Click on a shelf row above to see compartments and books" />
+            <EmptyState variant="no-data" title="Chọn kệ để xem chi tiết" description="Nhấn vào một hàng kệ ở trên để xem ngăn và sách" />
           ) : detail.compartments.length === 0 ? (
-            <EmptyState variant="no-data" title="No compartments" description="This shelf has no compartments configured" />
+            <EmptyState variant="no-data" title="Chưa có ngăn kệ" description="Kệ này chưa được cấu hình ngăn" />
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {detail.compartments.map((compartment) => (

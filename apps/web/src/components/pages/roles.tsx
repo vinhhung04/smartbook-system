@@ -70,8 +70,8 @@ function RoleCreateModal(props: {
       <div className="w-full max-w-xl rounded-xl border border-white/70 bg-card shadow-[0_12px_38px_rgba(15,23,42,0.2)]">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-foreground">Tao role moi</h3>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Role se duoc luu truc tiep vao auth_db</p>
+            <h3 className="text-[16px] font-semibold text-foreground">Tạo vai trò mới</h3>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Vai trò sẽ được lưu trực tiếp vào auth_db</p>
           </div>
           <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <X className="h-4 w-4" />
@@ -90,22 +90,22 @@ function RoleCreateModal(props: {
           </label>
 
           <label className="block space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Ten role</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Tên vai trò</span>
             <input
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="VD: Thu kho"
+              placeholder="VD: Thủ kho"
               className="w-full rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10"
             />
           </label>
 
           <label className="block space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Mo ta</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Mô tả</span>
             <textarea
               rows={3}
               value={form.description}
               onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              placeholder="Mo ta ngan cho role"
+              placeholder="Mô tả ngắn cho vai trò"
               className="w-full resize-none rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10"
             />
           </label>
@@ -113,14 +113,14 @@ function RoleCreateModal(props: {
 
         <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
           <Button variant="outline" onClick={onClose}>
-            Huy
+            Hủy
           </Button>
           <Button
             disabled={creating || !form.code.trim() || !form.name.trim()}
             onClick={() => void onSubmit(form)}
           >
             {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            {creating ? "Dang tao..." : "Tao role"}
+            {creating ? "Đang tạo..." : "Tạo vai trò"}
           </Button>
         </div>
       </div>
@@ -188,8 +188,8 @@ function RolePermissionModal(props: {
       <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-white/70 bg-card shadow-[0_12px_42px_rgba(15,23,42,0.28)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-foreground">Phan quyen role: {role.name}</h3>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Code: {role.code} · Tick de cap/thu hoi quyen va luu vao DB</p>
+            <h3 className="text-[16px] font-semibold text-foreground">Phân quyền: {role.name}</h3>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Code: {role.code} · Tick để cấp/thu hồi quyền và lưu vào DB</p>
           </div>
           <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <X className="h-4 w-4" />
@@ -202,16 +202,16 @@ function RolePermissionModal(props: {
               <input
                 value={keyword}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Tim permission theo code/module/mo ta"
+                placeholder="Tìm quyền theo code/module/mô tả"
                 className="w-full rounded-lg border border-input bg-card py-2.5 pl-9 pr-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10"
               />
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
             <Button variant="outline" size="sm" onClick={onSelectAllFiltered}>
-              Chon tat ca ket qua
+              Chọn tất cả kết quả
             </Button>
             <Button variant="outline" size="sm" onClick={onClearFiltered}>
-              Bo chon ket qua
+              Bỏ chọn kết quả
             </Button>
           </div>
         </div>
@@ -219,10 +219,10 @@ function RolePermissionModal(props: {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loadingPermissions ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Dang tai danh sach permission...
+              <Loader2 className="h-4 w-4 animate-spin" /> Đang tải danh sách quyền...
             </div>
           ) : groupedPermissions.length === 0 ? (
-            <EmptyState variant="no-results" title="Khong co permission phu hop" description="Thu doi tu khoa tim kiem" className="py-8" />
+            <EmptyState variant="no-results" title="Không có quyền phù hợp" description="Thử đổi từ khóa tìm kiếm" className="py-8" />
           ) : (
             <div className="space-y-4">
               {groupedPermissions.map(([moduleName, modulePermissions]) => (
@@ -256,17 +256,17 @@ function RolePermissionModal(props: {
         </div>
 
         <div className="flex items-center justify-between border-t border-border px-5 py-4">
-          <p className="text-[12px] text-muted-foreground">Da chon {selected.size} permission</p>
+          <p className="text-[12px] text-muted-foreground">Đã chọn {selected.size} quyền</p>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose}>
-              Huy
+              Hủy
             </Button>
             <Button
               disabled={saving}
               onClick={() => void onSave()}
             >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {saving ? "Dang luu..." : "Luu thay doi"}
+              {saving ? "Đang lưu..." : "Lưu thay đổi"}
             </Button>
           </div>
         </div>
@@ -294,7 +294,7 @@ export function RolesPage() {
       const response = await roleService.getAll();
       setRoles((response?.data || []) as RoleRow[]);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach role"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách vai trò"));
     } finally {
       setLoading(false);
     }
@@ -311,7 +311,7 @@ export function RolesPage() {
       const response = await roleService.getPermissions();
       setPermissions((response?.data || []) as PermissionRow[]);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach permission"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách quyền"));
     } finally {
       setLoadingPermissions(false);
     }
@@ -414,11 +414,11 @@ export function RolesPage() {
       await roleService.update(editingRole.id, {
         permission_ids: [...selectedPermissionIds],
       });
-      toast.success(`Da cap nhat permission cho role ${editingRole.code}`);
+      toast.success(`Đã cập nhật quyền cho vai trò ${editingRole.code}`);
       await loadData();
       closePermissionModal();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong cap nhat duoc permission"));
+      toast.error(getApiErrorMessage(error, "Không cập nhật được quyền"));
     } finally {
       setSavingPermissions(false);
     }
@@ -432,11 +432,11 @@ export function RolesPage() {
         name: payload.name.trim(),
         description: payload.description.trim() || undefined,
       });
-      toast.success("Tao role thanh cong");
+      toast.success("Tạo vai trò thành công");
       setShowCreateModal(false);
       await loadData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tao duoc role"));
+      toast.error(getApiErrorMessage(error, "Không tạo được vai trò"));
     } finally {
       setCreatingRole(false);
     }
@@ -450,17 +450,17 @@ export function RolesPage() {
             <Shield className="w-5 h-5 text-violet-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Role Management</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">Hien thi role va permission tu du lieu DB</p>
+            <h1 className="text-xl font-semibold tracking-tight">Quản lý vai trò</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">Hiển thị vai trò và quyền từ dữ liệu DB</p>
           </div>
         </div>
       </FadeItem>
 
       <FadeItem>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <StatCard label="Total Roles" value={roles.length} variant="primary" />
-          <StatCard label="Users Assigned" value={totalUsers} variant="info" />
-          <StatCard label="Granted Permissions" value={totalGrantedPermissions} variant="success" />
+          <StatCard label="Tổng vai trò" value={roles.length} variant="primary" />
+          <StatCard label="Người dùng được gán" value={totalUsers} variant="info" />
+          <StatCard label="Quyền đã cấp" value={totalGrantedPermissions} variant="success" />
         </div>
       </FadeItem>
 
@@ -469,12 +469,12 @@ export function RolesPage() {
           <FilterBar
             searchValue={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Tim theo role code, ten, mo ta..."
+            searchPlaceholder="Tìm theo code, tên, mô tả vai trò..."
             showSearchClear
             actions={
               <Button onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4" />
-                Tao role
+                Tạo vai trò
               </Button>
             }
           />
@@ -487,14 +487,14 @@ export function RolesPage() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {[
-                  "Role",
+                  "Vai trò",
                   "Code",
-                  "Description",
-                  "Users",
-                  "Permissions",
-                  "System",
-                  "Created",
-                  "Actions",
+                  "Mô tả",
+                  "Người dùng",
+                  "Quyền",
+                  "Hệ thống",
+                  "Ngày tạo",
+                  "Hành động",
                 ].map((header) => (
                   <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {header}
@@ -505,11 +505,11 @@ export function RolesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Dang tai du lieu...</td>
+                  <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải dữ liệu...</td>
                 </tr>
               ) : filteredRoles.length === 0 ? (
                 <tr>
-                  <td colSpan={8}><EmptyState variant="no-data" title="Khong co role nao" description="Tao role moi de bat dau" className="py-12" /></td>
+                  <td colSpan={8}><EmptyState variant="no-data" title="Không có vai trò nào" description="Tạo vai trò mới để bắt đầu" className="py-12" /></td>
                 </tr>
               ) : (
                 filteredRoles.map((role) => (
@@ -541,7 +541,7 @@ export function RolesPage() {
                     <td className="px-5 py-3.5">
                       <Button variant="outline" size="sm" onClick={() => void openPermissionModal(role)}>
                         <Settings2 className="h-3.5 w-3.5" />
-                        Phan quyen
+                        Phân quyền
                       </Button>
                     </td>
                   </motion.tr>

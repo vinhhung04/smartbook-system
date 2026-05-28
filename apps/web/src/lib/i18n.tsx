@@ -1,9 +1,91 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 
 export type Locale = 'vi' | 'en';
 
 const translations: Record<Locale, Record<string, string>> = {
   vi: {
+    // Sidebar group labels
+    'sidebar.group.core': 'Vận hành',
+    'sidebar.group.intelligence': 'Phân tích & AI',
+    'sidebar.group.library': 'Thư viện',
+    'sidebar.group.admin': 'Quản trị',
+    // Sidebar items
+    'sidebar.dashboard': 'Tổng quan',
+    'sidebar.my_tasks': 'Công việc kho của tôi',
+    'sidebar.my_purchase_requests': 'Yêu cầu mua hàng của tôi',
+    'sidebar.my_exception_reports': 'Báo cáo sự cố của tôi',
+    'sidebar.staff_tasks': 'Giao việc nhân viên',
+    'sidebar.catalog': 'Danh mục sách',
+    'sidebar.inventory': 'Tồn kho',
+    'sidebar.goods_receipts': 'Phiếu nhập kho',
+    'sidebar.purchase_orders': 'Đơn đặt hàng',
+    'sidebar.purchase_requests': 'Yêu cầu mua hàng',
+    'sidebar.exception_reports': 'Báo cáo sự cố',
+    'sidebar.supplier_deliveries': 'Giao hàng từ NCC',
+    'sidebar.putaway': 'Cất hàng vào kệ',
+    'sidebar.receiving_putaway': 'Nhận & cất hàng',
+    'sidebar.order_requests': 'Yêu cầu xuất kho',
+    'sidebar.picking': 'Lấy hàng',
+    'sidebar.outbound': 'Xuất kho',
+    'sidebar.warehouses': 'Kho',
+    'sidebar.shelves': 'Kệ',
+    'sidebar.movements': 'Lịch sử kho',
+    'sidebar.suppliers': 'Nhà cung cấp',
+    'sidebar.ai_import': 'Nhập sách qua AI',
+    'sidebar.recommendations': 'Gợi ý sách',
+    'sidebar.ai_reorder': 'Đề xuất nhập hàng',
+    'sidebar.reports': 'Báo cáo',
+    'sidebar.borrow': 'Mượn trả',
+    'sidebar.borrow_customers': 'Bạn đọc mượn',
+    'sidebar.reservations': 'Đặt trước',
+    'sidebar.loans': 'Phiếu mượn',
+    'sidebar.fines': 'Tiền phạt',
+    'sidebar.membership_plans': 'Gói thành viên',
+    'sidebar.users': 'Người dùng',
+    'sidebar.roles': 'Vai trò',
+    'sidebar.audit_trail': 'Nhật ký hệ thống',
+    'sidebar.scan_receive_cta': 'Ghi nhận hàng nhận',
+    // Topbar
+    'topbar.search_placeholder': 'Tìm sách, đơn hàng, mã vạch...',
+    'topbar.notifications': 'Thông báo',
+    'topbar.mark_all_read': 'Đánh dấu tất cả đã đọc',
+    'topbar.no_events': 'Chưa có sự kiện trực tiếp nào.',
+    'topbar.events_will_appear': 'Các sự kiện sẽ xuất hiện ở đây khi phát sinh.',
+    'topbar.connected': 'Trực tuyến — đang nhận cập nhật',
+    'topbar.disconnected': 'Mất kết nối — đang kết nối lại...',
+    'topbar.logout': 'Đăng xuất',
+    'topbar.logged_out': 'Đã đăng xuất',
+    'topbar.quick_scan': 'Quét nhanh',
+    'topbar.toggle_dark_mode': 'Chuyển nền tối',
+    'topbar.user_fallback': 'Người dùng',
+    'topbar.event.loan_status_changed': 'Cập nhật mượn',
+    'topbar.event.reservation_status_changed': 'Cập nhật đặt trước',
+    'topbar.event.fine_created': 'Cập nhật phạt',
+    'topbar.event.notification_new': 'Thông báo',
+    // Breadcrumb labels
+    'breadcrumb.dashboard': 'Tổng quan',
+    'breadcrumb.catalog': 'Danh mục sách',
+    'breadcrumb.inventory': 'Tồn kho',
+    'breadcrumb.goods_receipts': 'Phiếu nhập kho',
+    'breadcrumb.new_receipt': 'Phiếu nhập mới',
+    'breadcrumb.putaway': 'Cất hàng',
+    'breadcrumb.receiving_putaway': 'Nhận & cất hàng',
+    'breadcrumb.order_requests': 'Yêu cầu xuất kho',
+    'breadcrumb.picking': 'Lấy hàng',
+    'breadcrumb.outbound': 'Xuất kho',
+    'breadcrumb.warehouses': 'Kho',
+    'breadcrumb.shelves': 'Kệ',
+    'breadcrumb.movements': 'Lịch sử kho',
+    'breadcrumb.ai_import': 'Nhập sách qua AI',
+    'breadcrumb.recommendations': 'Gợi ý sách',
+    'breadcrumb.ai_reorder': 'Đề xuất nhập hàng',
+    'breadcrumb.reports': 'Báo cáo',
+    'breadcrumb.borrow': 'Mượn trả',
+    'breadcrumb.users': 'Người dùng',
+    'breadcrumb.roles': 'Vai trò',
+    'breadcrumb.book_detail': 'Chi tiết sách',
+    'breadcrumb.order_detail': 'Chi tiết đơn',
+    // Customer nav (giữ tương thích keys cũ)
     'nav.dashboard': 'Trang chủ',
     'nav.books': 'Danh mục sách',
     'nav.loans': 'Phiếu mượn',
@@ -14,6 +96,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.fines': 'Phạt',
     'nav.notifications': 'Thông báo',
     'nav.profile': 'Hồ sơ',
+    // Common
     'common.loading': 'Đang tải...',
     'common.refresh': 'Làm mới',
     'common.search': 'Tìm kiếm...',
@@ -57,6 +140,83 @@ const translations: Record<Locale, Record<string, string>> = {
     'membership.qr_subtitle': 'Xuất trình khi đến thư viện',
   },
   en: {
+    'sidebar.group.core': 'Operations',
+    'sidebar.group.intelligence': 'Analytics & AI',
+    'sidebar.group.library': 'Library',
+    'sidebar.group.admin': 'Administration',
+    'sidebar.dashboard': 'Dashboard',
+    'sidebar.my_tasks': 'My Warehouse Tasks',
+    'sidebar.my_purchase_requests': 'My Purchase Requests',
+    'sidebar.my_exception_reports': 'My Exception Reports',
+    'sidebar.staff_tasks': 'Assign Staff Tasks',
+    'sidebar.catalog': 'Catalog',
+    'sidebar.inventory': 'Inventory',
+    'sidebar.goods_receipts': 'Goods Receipts',
+    'sidebar.purchase_orders': 'Purchase Orders',
+    'sidebar.purchase_requests': 'Purchase Requests',
+    'sidebar.exception_reports': 'Exception Reports',
+    'sidebar.supplier_deliveries': 'Supplier Deliveries',
+    'sidebar.putaway': 'Putaway',
+    'sidebar.receiving_putaway': 'Receiving Putaway',
+    'sidebar.order_requests': 'Order Requests',
+    'sidebar.picking': 'Picking',
+    'sidebar.outbound': 'Outbound',
+    'sidebar.warehouses': 'Warehouses',
+    'sidebar.shelves': 'Shelves',
+    'sidebar.movements': 'Stock Movements',
+    'sidebar.suppliers': 'Suppliers',
+    'sidebar.ai_import': 'AI Import',
+    'sidebar.recommendations': 'Recommendations',
+    'sidebar.ai_reorder': 'AI Reorder',
+    'sidebar.reports': 'Reports',
+    'sidebar.borrow': 'Borrow',
+    'sidebar.borrow_customers': 'Borrow Customers',
+    'sidebar.reservations': 'Reservations',
+    'sidebar.loans': 'Loans',
+    'sidebar.fines': 'Fines',
+    'sidebar.membership_plans': 'Membership Plans',
+    'sidebar.users': 'Users',
+    'sidebar.roles': 'Roles',
+    'sidebar.audit_trail': 'Audit Trail',
+    'sidebar.scan_receive_cta': 'Scan & Receive',
+    'topbar.search_placeholder': 'Search books, orders, barcodes...',
+    'topbar.notifications': 'Notifications',
+    'topbar.mark_all_read': 'Mark all read',
+    'topbar.no_events': 'No real-time events yet.',
+    'topbar.events_will_appear': 'Events will appear here as they happen.',
+    'topbar.connected': 'Live — receiving real-time updates',
+    'topbar.disconnected': 'Offline — reconnecting...',
+    'topbar.logout': 'Logout',
+    'topbar.logged_out': 'Logged out',
+    'topbar.quick_scan': 'Quick scan',
+    'topbar.toggle_dark_mode': 'Toggle dark mode',
+    'topbar.user_fallback': 'User',
+    'topbar.event.loan_status_changed': 'Loan update',
+    'topbar.event.reservation_status_changed': 'Reservation update',
+    'topbar.event.fine_created': 'Fine update',
+    'topbar.event.notification_new': 'Notification',
+    'breadcrumb.dashboard': 'Dashboard',
+    'breadcrumb.catalog': 'Catalog',
+    'breadcrumb.inventory': 'Inventory',
+    'breadcrumb.goods_receipts': 'Goods Receipts',
+    'breadcrumb.new_receipt': 'New Receipt',
+    'breadcrumb.putaway': 'Putaway',
+    'breadcrumb.receiving_putaway': 'Receiving Putaway',
+    'breadcrumb.order_requests': 'Order Requests',
+    'breadcrumb.picking': 'Picking',
+    'breadcrumb.outbound': 'Outbound',
+    'breadcrumb.warehouses': 'Warehouses',
+    'breadcrumb.shelves': 'Shelves',
+    'breadcrumb.movements': 'Stock Movements',
+    'breadcrumb.ai_import': 'AI Import',
+    'breadcrumb.recommendations': 'Recommendations',
+    'breadcrumb.ai_reorder': 'AI Reorder Suggestions',
+    'breadcrumb.reports': 'Reports',
+    'breadcrumb.borrow': 'Borrow',
+    'breadcrumb.users': 'Users',
+    'breadcrumb.roles': 'Roles',
+    'breadcrumb.book_detail': 'Book Detail',
+    'breadcrumb.order_detail': 'Order Detail',
     'nav.dashboard': 'Dashboard',
     'nav.books': 'Browse Books',
     'nav.loans': 'My Loans',
@@ -129,6 +289,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return saved || 'vi';
   });
 
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale;
+    }
+  }, [locale]);
+
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
     localStorage.setItem('smartbook-locale', l);
@@ -154,11 +320,12 @@ export function LanguageToggle({ className }: { className?: string }) {
   return (
     <button
       onClick={() => setLocale(locale === 'vi' ? 'en' : 'vi')}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] hover:bg-slate-50 transition-all ${className || ''}`}
+      className={`inline-flex items-center justify-center gap-1.5 px-2.5 h-8 rounded-[8px] text-[11px] text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 transition-all duration-140 ${className || ''}`}
       style={{ fontWeight: 600 }}
       title={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+      aria-label={locale === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
     >
-      {locale === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'}
+      {locale === 'vi' ? 'VI' : 'EN'}
     </button>
   );
 }

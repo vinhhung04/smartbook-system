@@ -6,6 +6,7 @@ const {
   getAllExceptionReports,
   getExceptionReportById,
   resolveExceptionReport,
+  assignExceptionReport,
 } = require('../controllers/exception-report.controller');
 const {
   authorizeAnyPermission,
@@ -24,5 +25,6 @@ router.get('/my', canStaffReport, getMyExceptionReports);
 router.get('/', canManagerResolve, getAllExceptionReports);
 router.get('/:id', canStaffReport, getExceptionReportById);
 router.post('/:id/resolve', canManagerResolve, resolveExceptionReport);
+router.patch('/:id/assign', canManagerResolve, assignExceptionReport);
 
 module.exports = router;

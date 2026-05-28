@@ -17,7 +17,7 @@ export const ROUTE_ACCESS = {
   managerInventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   inventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   inventory: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
-  staffTasks: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.read"] },
+  staffTasks: { roles: STAFF_TRACKING_ROLES, permissions: ["inventory.task.read"] },
   staffTaskProgress: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.progress"] },
   managerStockDecision: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
@@ -62,6 +62,23 @@ export function canAccess(user: AuthUser | null | undefined, meta?: RouteAccessM
   if (!meta) return true;
   if (user?.is_superuser) return true;
   return hasAnyRole(user, meta.roles) && hasAnyPermission(user, meta.permissions);
+}
+
+// Field-level visibility helpers. Backend remains the source of truth for security;
+// these helpers chỉ ẩn UI cho phù hợp role (STAFF không cần thấy giá nhập, vị trí kho nội bộ).
+export function canViewUnitCost(user: AuthUser | null | undefined) {
+  if (user?.is_superuser) return true;
+  return hasAnyRole(user, MANAGER_OPERATION_ROLES);
+}
+
+export function canManageReceiving(user: AuthUser | null | undefined) {
+  if (user?.is_superuser) return true;
+  return hasAnyRole(user, MANAGER_OPERATION_ROLES);
+}
+
+export function canViewLocationCode(user: AuthUser | null | undefined) {
+  if (user?.is_superuser) return true;
+  return hasAnyRole(user, MANAGER_OPERATION_ROLES);
 }
 
 export function getPrimaryRole(user: AuthUser | null | undefined) {

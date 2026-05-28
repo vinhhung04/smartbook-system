@@ -101,7 +101,7 @@ export function AIImportPage() {
   async function handleLookup(rawInput?: string) {
     const normalized = normalizeIsbnInput(rawInput ?? isbnInput);
     if (!normalized) {
-      toast.error("Vui long nhap ISBN");
+      toast.error("Vui lòng nhập ISBN");
       return;
     }
 
@@ -118,7 +118,7 @@ export function AIImportPage() {
 
       if (result.found) {
         setForm(mapLookupToForm(result));
-        toast.success("Da tim thay metadata sach");
+        toast.success("Đã tìm thấy metadata sách");
       } else {
         setForm({
           ...EMPTY_FORM,
@@ -126,10 +126,10 @@ export function AIImportPage() {
           isbn13: result.isbn13 || (normalized.length === 13 ? normalized : ""),
           isbn10: result.isbn10 || (normalized.length === 10 ? normalized : ""),
         });
-        toast.info("Khong tim thay metadata. Chuyen sang nhap tay.");
+        toast.info("Không tìm thấy metadata. Chuyển sang nhập tay.");
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Lookup ISBN that bai"));
+      toast.error(getApiErrorMessage(error, "Tra cứu ISBN thất bại"));
     } finally {
       setLookupLoading(false);
     }
@@ -137,7 +137,7 @@ export function AIImportPage() {
 
   async function handleGenerateSummary() {
     if (!form.title.trim()) {
-      toast.error("Can co title sach truoc khi tao summary AI");
+      toast.error("Cần có tên sách trước khi tạo tóm tắt AI");
       return;
     }
     setSummaryLoading(true);
@@ -145,6 +145,7 @@ export function AIImportPage() {
       const result = await aiService.generateSummaryVi({
         title: form.title.trim(),
         author: form.authorsText.split(",")[0].trim(),
+        publisher: form.publisher || undefined,
         description: form.description,
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
       });
@@ -153,9 +154,9 @@ export function AIImportPage() {
         summaryVi: result.summaryVi || prev.summaryVi,
         keywordsText: (result.keywords || []).join(", ") || prev.keywordsText,
       }));
-      toast.success(`Da tao summary AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
+      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
     } catch {
-      toast.error("Khong the tao summary. Vui long thu lai.");
+      toast.error("Không thể tạo tóm tắt. Vui lòng thử lại.");
     } finally {
       setSummaryLoading(false);
     }
@@ -165,11 +166,11 @@ export function AIImportPage() {
     const normalizedIsbn = normalizeIsbnInput(form.isbn || isbnInput);
     const title = form.title.trim();
     if (!normalizedIsbn) {
-      toast.error("ISBN la bat buoc");
+      toast.error("ISBN là bắt buộc");
       return;
     }
     if (!title) {
-      toast.error("Ten sach la bat buoc");
+      toast.error("Tên sách là bắt buộc");
       return;
     }
 
@@ -193,7 +194,7 @@ export function AIImportPage() {
 
       const payload = created?.data;
       if (!payload?.book_id) {
-        toast.error("Khong lay duoc book id de cap nhat metadata");
+        toast.error("Không lấy được book id để cập nhật metadata");
         return;
       }
 
@@ -220,13 +221,13 @@ export function AIImportPage() {
       if (form.thumbnail.trim()) updatePayload.cover_image_url = form.thumbnail.trim();
 
       await bookService.update(String(payload.book_id), updatePayload);
-      toast.success("Da luu sach voi metadata ISBN");
+      toast.success("Đã lưu sách với metadata ISBN");
 
       setLookupData(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Luu thong tin sach that bai"));
+      toast.error(getApiErrorMessage(error, "Lưu thông tin sách thất bại"));
     } finally {
       setSaving(false);
     }
@@ -240,15 +241,15 @@ export function AIImportPage() {
             <Sparkles className="h-5 w-5 text-cyan-600" />
           </div>
           <div>
-            <h1 className="tracking-[-0.02em]">ISBN Metadata Import</h1>
-            <p className="mt-0.5 text-[12px] text-slate-400">Quet barcode hoac nhap ISBN de tu dong dien metadata</p>
+            <h1 className="tracking-[-0.02em]">Nhập sách qua AI</h1>
+            <p className="mt-0.5 text-[12px] text-slate-400">Quét mã vạch hoặc nhập ISBN để tự động điền metadata</p>
           </div>
         </div>
       </FadeItem>
 
       <FadeItem>
         <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Step 1 - Lookup</div>
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Bước 1 — Tra cứu</div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[260px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500" />
@@ -261,7 +262,7 @@ export function AIImportPage() {
                     void handleLookup();
                   }
                 }}
-                placeholder="Nhap hoac quet ISBN-10 / ISBN-13"
+                placeholder="Nhập hoặc quét ISBN-10 / ISBN-13"
                 className="w-full rounded-[12px] border-2 border-cyan-300/40 bg-gradient-to-r from-cyan-50/30 to-blue-50/30 py-2.5 pl-10 pr-4 text-[13px] outline-none transition-all focus:border-cyan-400/60 focus:ring-[3px] focus:ring-cyan-500/10"
               />
             </div>
@@ -272,7 +273,7 @@ export function AIImportPage() {
               className="inline-flex items-center gap-2 rounded-[12px] bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
             >
               {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {lookupLoading ? "Dang lookup" : "Lookup"}
+              {lookupLoading ? "Đang tra cứu" : "Tra cứu"}
             </button>
 
             <button
@@ -281,10 +282,10 @@ export function AIImportPage() {
               className="inline-flex items-center gap-2 rounded-[12px] border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] font-semibold text-indigo-700"
             >
               <ScanBarcode className="h-4 w-4" />
-              Quet camera
+              Quét camera
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">Ho tro scanner input co khoang trang, dau gach ngang; he thong se tu dong normalize.</p>
+          <p className="mt-2 text-[11px] text-slate-500">Hỗ trợ scanner có khoảng trắng/dấu gạch ngang — hệ thống sẽ tự động chuẩn hóa.</p>
         </div>
       </FadeItem>
 
@@ -297,23 +298,40 @@ export function AIImportPage() {
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Step 2 - Review</div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Bước 2 — Xem & sửa</div>
                 <h3 className="text-[15px] font-semibold text-slate-800">
-                  {lookupData.found ? "Da tim thay metadata" : "Khong tim thay metadata"}
+                  {lookupData.found ? "Đã tìm thấy metadata" : "Không tìm thấy metadata"}
                 </h3>
               </div>
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-right text-[11px] text-slate-500">
-                <div>Confidence: <span className="font-semibold text-slate-700">{confidenceText}</span></div>
+                <div>Độ tin cậy: <span className="font-semibold text-slate-700">{confidenceText}</span></div>
                 <div>
-                  Source: {lookupData.source.googleBooks ? "Google " : ""}{lookupData.source.openLibrary ? "OpenLibrary " : ""}
-                  {!lookupData.source.googleBooks && !lookupData.source.openLibrary ? "Manual" : ""}
+                  Nguồn:{" "}
+                  {(() => {
+                    const labels = [
+                      lookupData.source.googleBooks && "Google",
+                      lookupData.source.openLibrary && "OpenLibrary",
+                      lookupData.source.worldCat && "WorldCat",
+                      lookupData.source.fahasa && "Fahasa",
+                      lookupData.source.tiki && "Tiki",
+                      lookupData.source.vinabook && "Vinabook",
+                      lookupData.source.webSearch && "Web",
+                    ].filter(Boolean) as string[];
+                    return labels.length > 0 ? labels.join(", ") : "Thủ công";
+                  })()}
                 </div>
               </div>
             </div>
 
             {manualMode ? (
               <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
-                Khong tim thay metadata tu provider. Vui long nhap tay thong tin sach, ISBN da duoc giu lai.
+                Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
+              </div>
+            ) : null}
+
+            {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
+              <div className="mb-4 rounded-[10px] border border-yellow-200 bg-yellow-50 px-3 py-2 text-[12px] text-yellow-700">
+                Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
               </div>
             ) : null}
 
@@ -323,31 +341,31 @@ export function AIImportPage() {
                 <input value={form.isbn} onChange={(e) => setForm((prev) => ({ ...prev, isbn: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ten sach</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tên sách</label>
                 <input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Subtitle</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tựa phụ</label>
                 <input value={form.subtitle} onChange={(e) => setForm((prev) => ({ ...prev, subtitle: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tac gia (comma-separated)</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tác giả (cách nhau dấu phẩy)</label>
                 <input value={form.authorsText} onChange={(e) => setForm((prev) => ({ ...prev, authorsText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Nha xuat ban</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Nhà xuất bản</label>
                 <input value={form.publisher} onChange={(e) => setForm((prev) => ({ ...prev, publisher: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngay xuat ban</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngày xuất bản</label>
                 <input value={form.publishedDate} onChange={(e) => setForm((prev) => ({ ...prev, publishedDate: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">The loai (comma-separated)</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Thể loại (cách nhau dấu phẩy)</label>
                 <input value={form.categoriesText} onChange={(e) => setForm((prev) => ({ ...prev, categoriesText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngon ngu</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngôn ngữ</label>
                 <input value={form.language} onChange={(e) => setForm((prev) => ({ ...prev, language: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
@@ -359,36 +377,36 @@ export function AIImportPage() {
                 <input value={form.isbn10} onChange={(e) => setForm((prev) => ({ ...prev, isbn10: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">So trang</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Số trang</label>
                 <input value={form.pageCount} onChange={(e) => setForm((prev) => ({ ...prev, pageCount: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Thumbnail URL</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">URL ảnh bìa</label>
                 <input value={form.thumbnail} onChange={(e) => setForm((prev) => ({ ...prev, thumbnail: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Description</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Mô tả</label>
                 <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-slate-500">Summary TIeng Viet (AI)</label>
+                  <label className="text-[11px] font-semibold text-slate-500">Tóm tắt tiếng Việt (AI)</label>
                   <button
                     onClick={() => void handleGenerateSummary()}
                     disabled={summaryLoading || !form.title.trim()}
                     className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-40"
                   >
                     {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    {summaryLoading ? "Dang tao..." : "Tao summary AI"}
+                    {summaryLoading ? "Đang tạo..." : "Tạo tóm tắt AI"}
                   </button>
                 </div>
-                <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={6} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Keywords (comma-separated)</label>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Từ khóa (cách nhau dấu phẩy)</label>
                 <input value={form.keywordsText} onChange={(e) => setForm((prev) => ({ ...prev, keywordsText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
             </div>
@@ -403,7 +421,7 @@ export function AIImportPage() {
                 disabled={saving}
                 className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700"
               >
-                Reset
+                Đặt lại
               </button>
               <button
                 onClick={() => void handleSave()}
@@ -411,7 +429,7 @@ export function AIImportPage() {
                 className="inline-flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookCheck className="h-4 w-4" />}
-                {saving ? "Dang luu" : "Luu sach"}
+                {saving ? "Đang lưu" : "Lưu sách"}
               </button>
             </div>
           </motion.div>
@@ -426,7 +444,7 @@ export function AIImportPage() {
           setIsbnInput(code);
           void handleLookup(code);
         }}
-        title="Quet ISBN"
+        title="Quét ISBN"
       />
     </PageWrapper>
   );

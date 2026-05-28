@@ -103,7 +103,7 @@ export function MembershipPlansPage() {
       const res = await borrowService.getMembershipPlans() as { data?: MembershipPlan[] };
       setPlans(Array.isArray(res?.data) ? res.data : []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load membership plans'));
+      toast.error(getApiErrorMessage(error, 'Không tải được danh sách gói hội viên'));
       setPlans([]);
     } finally {
       setLoading(false);
@@ -144,14 +144,14 @@ export function MembershipPlansPage() {
   const onSubmit = async () => {
     const name = form.name.trim();
     if (!name) {
-      toast.error('Name is required');
+      toast.error('Tên gói là bắt buộc');
       return;
     }
 
     if (!isEdit) {
       const code = form.code.trim();
       if (!code) {
-        toast.error('Code is required');
+        toast.error('Mã gói là bắt buộc');
         return;
       }
     }
@@ -174,7 +174,7 @@ export function MembershipPlansPage() {
           ...basePayload,
           is_active: form.is_active,
         });
-        toast.success('Plan updated');
+        toast.success('Đã cập nhật gói hội viên');
       } else {
         const createdRes = await borrowService.createMembershipPlan({
           ...basePayload,
@@ -184,13 +184,13 @@ export function MembershipPlansPage() {
         if (!form.is_active && newId) {
           await borrowService.updateMembershipPlan(newId, { is_active: false });
         }
-        toast.success('Plan created');
+        toast.success('Đã tạo gói hội viên mới');
       }
       setShowModal(false);
       setForm(initialFormState);
       await loadPlans();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, isEdit ? 'Failed to update plan' : 'Failed to create plan'));
+      toast.error(getApiErrorMessage(error, isEdit ? 'Cập nhật gói thất bại' : 'Tạo gói thất bại'));
     } finally {
       setSaving(false);
     }
@@ -212,9 +212,9 @@ export function MembershipPlansPage() {
           </div>
           <div>
             <h1 className="text-[20px] tracking-[-0.02em]" style={{ fontWeight: 700 }}>
-              Membership Plans
+              Gói hội viên
             </h1>
-            <p className="text-[12px] text-slate-400">Manage borrowing plans</p>
+            <p className="text-[12px] text-slate-400">Quản lý các gói hội viên</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -227,11 +227,11 @@ export function MembershipPlansPage() {
             onClick={() => void loadPlans()}
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Làm mới
           </Button>
           <Button type="button" size="sm" className="gap-2" onClick={openCreate}>
             <Plus className="w-4 h-4" />
-            New Plan
+            Gói mới
           </Button>
         </div>
       </motion.div>
@@ -243,19 +243,19 @@ export function MembershipPlansPage() {
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
         <StatCard
-          label="Total plans"
+          label="Tổng số gói"
           value={stats.total}
           icon={Crown}
           variant="warning"
         />
         <StatCard
-          label="Active plans"
+          label="Gói đang hoạt động"
           value={stats.activePlans}
           icon={Shield}
           variant="success"
         />
         <StatCard
-          label="Total members"
+          label="Tổng thành viên"
           value={stats.totalMembers}
           icon={ToggleRight}
           variant="primary"
@@ -271,18 +271,18 @@ export function MembershipPlansPage() {
           {loading ? (
             <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
               <Loader2 className="w-5 h-5 animate-spin" />
-              Loading plans…
+              Đang tải gói hội viên...
             </div>
           ) : plans.length === 0 ? (
             <EmptyState
               variant="no-data"
-              title="No membership plans"
-              description="Create a plan to define borrowing limits and fees."
+              title="Chưa có gói hội viên"
+              description="Tạo gói để định nghĩa giới hạn mượn và phí phạt."
               icon={Crown}
               action={
                 <Button size="sm" className="gap-2" onClick={openCreate}>
                   <Plus className="w-4 h-4" />
-                  New Plan
+                  Gói mới
                 </Button>
               }
             />
@@ -292,31 +292,31 @@ export function MembershipPlansPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Code
+                      Mã gói
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Name
+                      Tên gói
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Max Loans
+                      Tối đa mượn
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Max Days
+                      Tối đa ngày
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Fine/Day
+                      Phạt/ngày
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Renewals
+                      Gia hạn
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Active
+                      Trạng thái
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Members
+                      Thành viên
                     </th>
                     <th className="text-right text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Actions
+                      Thao tác
                     </th>
                   </tr>
                 </thead>
@@ -331,9 +331,9 @@ export function MembershipPlansPage() {
                       <td className="px-5 py-3.5 text-[13px]">{plan.max_renewal_count}</td>
                       <td className="px-5 py-3.5 text-[13px]">
                         {plan.is_active ? (
-                          <StatusBadge label="Active" variant="success" dot />
+                          <StatusBadge label="Hoạt động" variant="success" dot />
                         ) : (
-                          <StatusBadge label="Inactive" variant="neutral" dot />
+                          <StatusBadge label="Không hoạt động" variant="neutral" dot />
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-[13px]">
@@ -348,7 +348,7 @@ export function MembershipPlansPage() {
                           onClick={() => openEdit(plan)}
                         >
                           <Edit className="w-3.5 h-3.5" />
-                          Edit
+                          Sửa
                         </Button>
                       </td>
                     </tr>
@@ -375,17 +375,17 @@ export function MembershipPlansPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-[16px] font-semibold text-foreground mb-1">
-              {isEdit ? 'Edit plan' : 'New plan'}
+              {isEdit ? 'Sửa gói hội viên' : 'Gói hội viên mới'}
             </h2>
             <p className="text-[12px] text-muted-foreground mb-5">
-              {isEdit ? 'Update borrowing rules for this plan.' : 'Define a new membership tier.'}
+              {isEdit ? 'Cập nhật quy tắc mượn cho gói này.' : 'Định nghĩa cấp hội viên mới.'}
             </p>
 
             <div className="space-y-4">
               {!isEdit && (
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Code
+                    Mã gói
                   </label>
                   <input
                     className={inputClass}
@@ -398,31 +398,31 @@ export function MembershipPlansPage() {
               )}
               <div>
                 <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Name
+                  Tên gói
                 </label>
                 <input
                   className={inputClass}
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Plan display name"
+                  placeholder="Tên hiển thị gói"
                 />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Description
+                  Mô tả
                 </label>
                 <textarea
                   className={`${inputClass} min-h-[72px] py-2 resize-y`}
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="Optional notes"
+                  placeholder="Ghi chú (không bắt buộc)"
                   rows={3}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Max active loans
+                    Tối đa mượn đồng thời
                   </label>
                   <input
                     type="number"
@@ -434,7 +434,7 @@ export function MembershipPlansPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Max loan days
+                    Tối đa số ngày mượn
                   </label>
                   <input
                     type="number"
@@ -446,7 +446,7 @@ export function MembershipPlansPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Max renewals
+                    Tối đa lần gia hạn
                   </label>
                   <input
                     type="number"
@@ -458,7 +458,7 @@ export function MembershipPlansPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Reservation hold (hours)
+                    Giữ đặt trước (giờ)
                   </label>
                   <input
                     type="number"
@@ -470,7 +470,7 @@ export function MembershipPlansPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Fine per day
+                    Phạt/ngày
                   </label>
                   <input
                     type="number"
@@ -483,7 +483,7 @@ export function MembershipPlansPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Lost item fee multiplier
+                    Hệ số phí mất sách
                   </label>
                   <input
                     type="number"
@@ -498,8 +498,8 @@ export function MembershipPlansPage() {
 
               <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                 <div>
-                  <p className="text-[13px] font-medium text-foreground">Active</p>
-                  <p className="text-[11px] text-muted-foreground">Plan available for new memberships</p>
+                  <p className="text-[13px] font-medium text-foreground">Hoạt động</p>
+                  <p className="text-[11px] text-muted-foreground">Gói có thể được đăng ký mới</p>
                 </div>
                 <button
                   type="button"
@@ -518,18 +518,18 @@ export function MembershipPlansPage() {
 
             <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-border">
               <Button type="button" variant="outline" size="sm" disabled={saving} onClick={closeModal}>
-                Cancel
+                Hủy
               </Button>
               <Button type="button" size="sm" disabled={saving} onClick={() => void onSubmit()}>
                 {saving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    Saving…
+                    Đang lưu...
                   </>
                 ) : isEdit ? (
-                  'Save changes'
+                  'Lưu thay đổi'
                 ) : (
-                  'Create plan'
+                  'Tạo gói'
                 )}
               </Button>
             </div>

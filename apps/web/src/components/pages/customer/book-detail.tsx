@@ -98,14 +98,14 @@ function ReviewSection({ bookId }: { bookId: string }) {
   useEffect(() => { void loadReviews(); }, [loadReviews]);
 
   const handleSubmit = async () => {
-    if (rating < 1) { toast.error('Please select a rating'); return; }
+    if (rating < 1) { toast.error('Vui lòng chọn điểm đánh giá'); return; }
     try {
       setSubmitting(true);
       await customerBorrowService.submitReview({ book_id: bookId, rating, comment: comment.trim() || undefined });
-      toast.success(myReview ? 'Review updated!' : 'Review submitted!');
+      toast.success(myReview ? 'Đã cập nhật đánh giá!' : 'Đã gửi đánh giá!');
       await loadReviews(page);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to submit review'));
+      toast.error(getApiErrorMessage(err, 'Gửi đánh giá thất bại'));
     } finally {
       setSubmitting(false);
     }
@@ -115,13 +115,13 @@ function ReviewSection({ bookId }: { bookId: string }) {
     try {
       setDeleting(true);
       await customerBorrowService.deleteMyReview(bookId);
-      toast.success('Review deleted');
+      toast.success('Đã xóa đánh giá');
       setMyReview(null);
       setRating(0);
       setComment('');
       await loadReviews(1);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to delete review'));
+      toast.error(getApiErrorMessage(err, 'Xóa đánh giá thất bại'));
     } finally {
       setDeleting(false);
     }
@@ -143,7 +143,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
       <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-2 mb-4">
           <MessageSquare className="w-4.5 h-4.5 text-amber-600" />
-          <h3 className="text-[15px] font-semibold text-foreground">Reviews & Ratings</h3>
+          <h3 className="text-[15px] font-semibold text-foreground">Đánh giá & Nhận xét</h3>
         </div>
 
         {loading ? (
@@ -301,7 +301,7 @@ export function CustomerBookDetailPage() {
         const data = await customerCatalogService.getBookById(id);
         setBook(data);
       } catch (err) {
-        setError(getApiErrorMessage(err, 'Failed to load book detail'));
+        setError(getApiErrorMessage(err, 'Không tải được chi tiết sách'));
       } finally {
         setLoading(false);
       }
@@ -311,7 +311,7 @@ export function CustomerBookDetailPage() {
 
   const handleReserve = async () => {
     if (!book?.variant_id || !book?.default_warehouse_id) {
-      toast.error('Book is not reservable right now');
+      toast.error('Sách hiện không thể đặt trước');
       return;
     }
     try {
@@ -322,9 +322,9 @@ export function CustomerBookDetailPage() {
         pickup_location_id: book.default_location_id || null,
         quantity: 1,
       });
-      toast.success('Reservation created successfully!');
+      toast.success('Đặt trước thành công!');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to create reservation'));
+      toast.error(getApiErrorMessage(err, 'Đặt trước sách thất bại'));
     } finally {
       setIsReserving(false);
     }
@@ -333,14 +333,14 @@ export function CustomerBookDetailPage() {
   if (loading) return <LoadingOverlay />;
   if (error) return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <EmptyState variant="error" title="Failed to load book" description={error}
-        action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Try again</button>} />
+      <EmptyState variant="error" title="Không tải được sách" description={error}
+        action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Thử lại</button>} />
     </div>
   );
   if (!book) return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <EmptyState variant="no-data" title="Book not found" description="This book may no longer be available in the catalog."
-        action={<NavLink to="/customer/books" className="text-primary font-medium hover:underline">Back to catalog</NavLink>} />
+      <EmptyState variant="no-data" title="Không tìm thấy sách" description="Sách này có thể không còn trong danh mục."
+        action={<NavLink to="/customer/books" className="text-primary font-medium hover:underline">Quay lại danh mục</NavLink>} />
     </div>
   );
 
@@ -353,7 +353,7 @@ export function CustomerBookDetailPage() {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
         <NavLink to="/customer/books" className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">
           <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-          Back to Catalog
+          Quay lại danh mục
         </NavLink>
       </motion.div>
 
@@ -383,7 +383,7 @@ export function CustomerBookDetailPage() {
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-indigo-700 text-[13px] font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShoppingCart className="w-4 h-4" />
-              {isReserving ? 'Reserving...' : 'Reserve Now'}
+              {isReserving ? 'Đang đặt trước...' : 'Đặt trước ngay'}
             </button>
           </div>
         </div>
@@ -421,24 +421,24 @@ export function CustomerBookDetailPage() {
             <div className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-rose-500'}`} />
             <div>
               <p className={`text-[13px] font-semibold ${isAvailable ? 'text-emerald-700' : 'text-rose-700'}`}>
-                {isAvailable ? 'Available for Reservation' : 'Out of Stock'}
+                {isAvailable ? 'Có thể đặt trước' : 'Hết sách'}
               </p>
               <p className={`text-[11px] ${isAvailable ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {isAvailable ? `${book.quantity || 0} copies in stock` : 'Currently unavailable'}
+                {isAvailable ? `${book.quantity || 0} cuốn còn trong kho` : 'Hiện không có sẵn'}
               </p>
             </div>
           </div>
 
           {/* Metadata */}
           <div className="rounded-xl border border-black/5 bg-card p-5 space-y-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[13px] font-semibold text-foreground">Book Details</h3>
+            <h3 className="text-[13px] font-semibold text-foreground">Thông tin sách</h3>
             {[
-              { label: 'Author', value: book.author || '-' },
-              { label: 'Category', value: book.category || '-' },
-              { label: 'Publisher', value: book.publisher || '-' },
+              { label: 'Tác giả', value: book.author || '-' },
+              { label: 'Thể loại', value: book.category || '-' },
+              { label: 'NXB', value: book.publisher || '-' },
               { label: 'ISBN', value: book.isbn || '-', mono: true },
-              { label: 'Language', value: book.language || 'vi' },
-              { label: 'In Stock', value: `${book.quantity || 0} copies` },
+              { label: 'Ngôn ngữ', value: book.language || 'vi' },
+              { label: 'Tồn kho', value: `${book.quantity || 0} cuốn` },
             ].map((meta) => (
               <div key={meta.label} className="flex items-start justify-between gap-3 text-[12px]">
                 <span className="text-muted-foreground shrink-0">{meta.label}</span>
@@ -457,11 +457,11 @@ export function CustomerBookDetailPage() {
         >
           {/* Description */}
           <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[14px] font-semibold mb-3">About this book</h3>
+            <h3 className="text-[14px] font-semibold mb-3">Giới thiệu sách</h3>
             {book.description ? (
               <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-line">{book.description}</p>
             ) : (
-              <p className="text-[13px] text-muted-foreground italic">No description available for this book.</p>
+              <p className="text-[13px] text-muted-foreground italic">Chưa có mô tả cho sách này.</p>
             )}
           </div>
 
@@ -470,7 +470,7 @@ export function CustomerBookDetailPage() {
             <div className="rounded-xl border border-cyan-100 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
               <div className="flex items-center gap-2 mb-3">
                 <Star className="w-4 h-4 text-cyan-600" />
-                <h3 className="text-[14px] font-semibold text-cyan-800">AI Summary</h3>
+                <h3 className="text-[14px] font-semibold text-cyan-800">Tóm tắt AI</h3>
               </div>
               <p className="text-[13px] text-cyan-900 leading-relaxed whitespace-pre-line">{book.summary_vi}</p>
             </div>
@@ -483,11 +483,11 @@ export function CustomerBookDetailPage() {
                 <ShoppingCart className="w-5 h-5 text-indigo-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[14px] font-semibold text-foreground mb-1">Reserve this book</h3>
+                <h3 className="text-[14px] font-semibold text-foreground mb-1">Đặt trước sách này</h3>
                 <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">
                   {isAvailable
-                    ? 'This book is available. Click below to create a reservation for pickup at your nearest library location.'
-                    : 'This book is currently out of stock. Please check back later or browse other titles.'}
+                    ? 'Sách đang có sẵn. Nhấn bên dưới để tạo đặt trước và nhận sách tại thư viện gần nhất.'
+                    : 'Sách hiện đã hết. Vui lòng kiểm tra lại sau hoặc tìm sách khác.'}
                 </p>
                 <button
                   onClick={() => void handleReserve()}
@@ -495,7 +495,7 @@ export function CustomerBookDetailPage() {
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  {isReserving ? 'Creating reservation...' : 'Reserve Now'}
+                  {isReserving ? 'Đang đặt trước...' : 'Đặt trước ngay'}
                 </button>
               </div>
             </div>
@@ -504,7 +504,7 @@ export function CustomerBookDetailPage() {
           {/* Info Note */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-[12px] text-amber-700 leading-relaxed">
-              <strong>Note:</strong> Reservations are held for a limited time. Pick up your book at the designated library location within the hold period. Late pickup may result in reservation cancellation.
+              <strong>Lưu ý:</strong> Đặt trước chỉ được giữ trong thời gian giới hạn. Vui lòng nhận sách tại thư viện trong thời hạn quy định. Đến trễ có thể dẫn đến hủy đặt trước.
             </p>
           </div>
         </motion.div>

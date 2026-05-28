@@ -773,6 +773,7 @@ model warehouses {
   smart_receiving_drafts                                        smart_receiving_drafts[]
   purchase_requests                                             purchase_requests[]
   warehouse_exception_reports                                   warehouse_exception_reports[]
+  staff_tasks                                                   staff_tasks[]
 }
 
 /// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.
@@ -884,6 +885,9 @@ model warehouse_exception_reports {
   resolved_by_user_id  String?         @db.Uuid
   resolved_at          DateTime?       @db.Timestamptz(6)
   resolution_notes     String?
+  assigned_to_user_id  String?         @db.Uuid
+  assigned_at          DateTime?       @db.Timestamptz(6)
+  assigned_by_user_id  String?         @db.Uuid
   created_at           DateTime        @default(now()) @db.Timestamptz(6)
   updated_at           DateTime        @default(now()) @db.Timestamptz(6)
   warehouses           warehouses      @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
@@ -891,5 +895,29 @@ model warehouse_exception_reports {
   book_variants        book_variants?  @relation(fields: [book_variant_id], references: [id], onUpdate: NoAction)
 
   @@index([created_by_user_id], map: "idx_warehouse_exception_reports_user")
+  @@index([assigned_to_user_id], map: "idx_warehouse_exception_reports_assigned")
   @@index([status, created_at], map: "idx_warehouse_exception_reports_status")
+}
+
+/// Generic staff tasks created by manager for warehouse staff.
+model staff_tasks {
+  id                   String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                String      @db.VarChar(255)
+  description          String?
+  task_type            String      @default("GENERAL") @db.VarChar(30)
+  priority             String      @default("MEDIUM") @db.VarChar(20)
+  status               String      @default("OPEN") @db.VarChar(20)
+  assignee_user_id     String      @db.Uuid
+  assigned_by_user_id  String      @db.Uuid
+  warehouse_id         String?     @db.Uuid
+  related_entity_type  String?     @db.VarChar(50)
+  related_entity_id    String?     @db.Uuid
+  due_date             DateTime?   @db.Timestamptz(6)
+  completed_at         DateTime?   @db.Timestamptz(6)
+  created_at           DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime    @default(now()) @db.Timestamptz(6)
+  warehouses           warehouses? @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+
+  @@index([assignee_user_id], map: "idx_staff_tasks_assignee")
+  @@index([status, created_at], map: "idx_staff_tasks_status")
 }

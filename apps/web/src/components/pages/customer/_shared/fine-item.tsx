@@ -27,13 +27,13 @@ export function FineItem({ fine, paying, onPay }: FineItemProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{fine.fine_type}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400">Fine status</div>
-          <div className="mt-1 text-[12px] text-slate-500">Issued: {formatDateTime(fine.issued_at)}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400">Trạng thái phạt</div>
+          <div className="mt-1 text-[12px] text-slate-500">Ngày phát hành: {formatDateTime(fine.issued_at)}</div>
           <div className="mt-1"><StatusBadge status={fine.status} /></div>
         </div>
         <div className="text-right text-[12px] text-slate-600">
-          <div>Total: {formatCurrencyVnd(fine.amount)}</div>
-          <div className={isHighRemaining ? 'text-rose-700' : ''} style={{ fontWeight: 700 }}>Remaining: {formatCurrencyVnd(remaining)}</div>
+          <div>Tổng: {formatCurrencyVnd(fine.amount)}</div>
+          <div className={isHighRemaining ? 'text-rose-700' : ''} style={{ fontWeight: 700 }}>Còn lại: {formatCurrencyVnd(remaining)}</div>
         </div>
       </div>
 
@@ -44,7 +44,7 @@ export function FineItem({ fine, paying, onPay }: FineItemProps) {
           className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           style={{ fontWeight: 600 }}
         >
-          Pay 50%
+          Trả 50%
         </button>
         <button
           disabled={disabled}
@@ -52,7 +52,7 @@ export function FineItem({ fine, paying, onPay }: FineItemProps) {
           className="rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:opacity-60"
           style={{ fontWeight: 600 }}
         >
-          Pay full
+          Trả đầy đủ
         </button>
       </div>
     </div>

@@ -6,36 +6,39 @@ import { authService } from "@/services/auth";
 import { toast } from "sonner";
 import { useSocket, useSocketEvent } from "@/lib/socket";
 import { useTheme } from "@/lib/theme";
+import { LanguageToggle, useI18n } from "@/lib/i18n";
 
-const breadcrumbMap: Record<string, { crumbs: { label: string; to?: string }[]; color: string }> = {
-  "/": { crumbs: [{ label: "Dashboard" }], color: "text-indigo-600" },
-  "/catalog": { crumbs: [{ label: "Catalog" }], color: "text-blue-600" },
-  "/inventory": { crumbs: [{ label: "Inventory" }], color: "text-emerald-600" },
-  "/orders": { crumbs: [{ label: "Goods Receipts" }], color: "text-indigo-600" },
-  "/orders/new": { crumbs: [{ label: "Goods Receipts", to: "/orders" }, { label: "New Receipt" }], color: "text-indigo-600" },
-  "/putaway": { crumbs: [{ label: "Putaway" }], color: "text-violet-600" },
-  "/receiving-putaway": { crumbs: [{ label: "Receiving Putaway" }], color: "text-amber-700" },
-  "/order-requests": { crumbs: [{ label: "Order Requests" }], color: "text-cyan-700" },
-  "/picking": { crumbs: [{ label: "Picking" }], color: "text-emerald-700" },
-  "/outbound": { crumbs: [{ label: "Outbound" }], color: "text-sky-700" },
-  "/warehouses": { crumbs: [{ label: "Warehouses" }], color: "text-emerald-600" },
-  "/shelves": { crumbs: [{ label: "Shelves" }], color: "text-cyan-700" },
-  "/movements": { crumbs: [{ label: "Stock Movements" }], color: "text-blue-600" },
-  "/ai-import": { crumbs: [{ label: "AI Import" }], color: "text-cyan-600" },
-  "/recommendations": { crumbs: [{ label: "Recommendations" }], color: "text-violet-600" },
-  "/reorder-suggestions": { crumbs: [{ label: "AI Reorder Suggestions" }], color: "text-emerald-600" },
-  "/reports": { crumbs: [{ label: "Reports" }], color: "text-emerald-600" },
-  "/borrow": { crumbs: [{ label: "Borrow" }], color: "text-amber-600" },
-  "/users": { crumbs: [{ label: "Users" }], color: "text-slate-600" },
-  "/roles": { crumbs: [{ label: "Roles" }], color: "text-indigo-600" },
+type Crumb = { labelKey: string; to?: string };
+
+const breadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = {
+  "/": { crumbs: [{ labelKey: "breadcrumb.dashboard" }], color: "text-indigo-600" },
+  "/catalog": { crumbs: [{ labelKey: "breadcrumb.catalog" }], color: "text-blue-600" },
+  "/inventory": { crumbs: [{ labelKey: "breadcrumb.inventory" }], color: "text-emerald-600" },
+  "/orders": { crumbs: [{ labelKey: "breadcrumb.goods_receipts" }], color: "text-indigo-600" },
+  "/orders/new": { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.new_receipt" }], color: "text-indigo-600" },
+  "/putaway": { crumbs: [{ labelKey: "breadcrumb.putaway" }], color: "text-violet-600" },
+  "/receiving-putaway": { crumbs: [{ labelKey: "breadcrumb.receiving_putaway" }], color: "text-amber-700" },
+  "/order-requests": { crumbs: [{ labelKey: "breadcrumb.order_requests" }], color: "text-cyan-700" },
+  "/picking": { crumbs: [{ labelKey: "breadcrumb.picking" }], color: "text-emerald-700" },
+  "/outbound": { crumbs: [{ labelKey: "breadcrumb.outbound" }], color: "text-sky-700" },
+  "/warehouses": { crumbs: [{ labelKey: "breadcrumb.warehouses" }], color: "text-emerald-600" },
+  "/shelves": { crumbs: [{ labelKey: "breadcrumb.shelves" }], color: "text-cyan-700" },
+  "/movements": { crumbs: [{ labelKey: "breadcrumb.movements" }], color: "text-blue-600" },
+  "/ai-import": { crumbs: [{ labelKey: "breadcrumb.ai_import" }], color: "text-cyan-600" },
+  "/recommendations": { crumbs: [{ labelKey: "breadcrumb.recommendations" }], color: "text-violet-600" },
+  "/reorder-suggestions": { crumbs: [{ labelKey: "breadcrumb.ai_reorder" }], color: "text-emerald-600" },
+  "/reports": { crumbs: [{ labelKey: "breadcrumb.reports" }], color: "text-emerald-600" },
+  "/borrow": { crumbs: [{ labelKey: "breadcrumb.borrow" }], color: "text-amber-600" },
+  "/users": { crumbs: [{ labelKey: "breadcrumb.users" }], color: "text-slate-600" },
+  "/roles": { crumbs: [{ labelKey: "breadcrumb.roles" }], color: "text-indigo-600" },
 };
 
-function resolveBreadcrumb(pathname: string): { crumbs: { label: string; to?: string }[]; color: string } {
+function resolveBreadcrumb(pathname: string): { crumbs: Crumb[]; color: string } {
   if (breadcrumbMap[pathname]) return breadcrumbMap[pathname];
-  if (pathname.startsWith("/book/")) return { crumbs: [{ label: "Catalog", to: "/catalog" }, { label: "Book Detail" }], color: "text-blue-600" };
-  if (pathname.startsWith("/order/")) return { crumbs: [{ label: "Goods Receipts", to: "/orders" }, { label: "Order Detail" }], color: "text-indigo-600" };
+  if (pathname.startsWith("/book/")) return { crumbs: [{ labelKey: "breadcrumb.catalog", to: "/catalog" }, { labelKey: "breadcrumb.book_detail" }], color: "text-blue-600" };
+  if (pathname.startsWith("/order/")) return { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.order_detail" }], color: "text-indigo-600" };
   if (pathname.startsWith("/orders")) return breadcrumbMap["/orders"];
-  return { crumbs: [{ label: "Dashboard" }], color: "text-indigo-600" };
+  return { crumbs: [{ labelKey: "breadcrumb.dashboard" }], color: "text-indigo-600" };
 }
 
 interface AdminNotification {
@@ -46,17 +49,18 @@ interface AdminNotification {
   unread: boolean;
 }
 
-const EVENT_CONFIG: Record<string, { title: string; color: string }> = {
-  'loan:status_changed': { title: 'Loan update', color: 'bg-amber-500' },
-  'reservation:status_changed': { title: 'Reservation update', color: 'bg-indigo-500' },
-  'fine:created': { title: 'Fine update', color: 'bg-rose-500' },
-  'notification:new': { title: 'Notification', color: 'bg-cyan-500' },
+const EVENT_CONFIG: Record<string, { titleKey: string; color: string }> = {
+  'loan:status_changed': { titleKey: 'topbar.event.loan_status_changed', color: 'bg-amber-500' },
+  'reservation:status_changed': { titleKey: 'topbar.event.reservation_status_changed', color: 'bg-indigo-500' },
+  'fine:created': { titleKey: 'topbar.event.fine_created', color: 'bg-rose-500' },
+  'notification:new': { titleKey: 'topbar.event.notification_new', color: 'bg-cyan-500' },
 };
 
 function ThemeToggle() {
   const { resolvedTheme, toggleTheme } = useTheme();
+  const { t } = useI18n();
   return (
-    <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500" title="Toggle dark mode">
+    <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500" title={t('topbar.toggle_dark_mode')} aria-label={t('topbar.toggle_dark_mode')}>
       {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
     </button>
   );
@@ -65,6 +69,7 @@ function ThemeToggle() {
 export function Topbar() {
   const navigate = useNavigate();
   const { connected } = useSocket();
+  const { t } = useI18n();
   const [searchFocused, setSearchFocused] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -74,8 +79,8 @@ export function Topbar() {
   const user = authService.getCurrentUser();
 
   const handleAdminEvent = useCallback((eventName: string) => (data: any) => {
-    const cfg = EVENT_CONFIG[eventName] || { title: 'Event', color: 'bg-slate-500' };
-    const subject = data?.subject || cfg.title;
+    const cfg = EVENT_CONFIG[eventName] || { titleKey: 'topbar.event.notification_new', color: 'bg-slate-500' };
+    const subject = data?.subject || t(cfg.titleKey);
     const body = data?.body || '';
 
     toast(subject, { description: body, duration: 5000 });
@@ -87,7 +92,7 @@ export function Topbar() {
       color: cfg.color,
       unread: true,
     }, ...prev].slice(0, 10));
-  }, []);
+  }, [t]);
 
   useSocketEvent('loan:status_changed', handleAdminEvent('loan:status_changed'));
   useSocketEvent('reservation:status_changed', handleAdminEvent('reservation:status_changed'));
@@ -102,7 +107,7 @@ export function Topbar() {
 
   const handleLogout = async () => {
     await authService.logout();
-    toast.success("Logged out");
+    toast.success(t('topbar.logged_out'));
     navigate("/login");
   };
 
@@ -110,12 +115,12 @@ export function Topbar() {
     <header className="h-[52px] border-b border-border bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl flex items-center justify-between px-5 gap-4 shrink-0 sticky top-0 z-10">
       <nav className="flex items-center gap-1.5 text-[13px]">
         {crumbs.map((crumb, i) => (
-          <span key={`${crumb.label}-${i}`} className="flex items-center gap-1.5">
+          <span key={`${crumb.labelKey}-${i}`} className="flex items-center gap-1.5">
             {i > 0 && <span className="text-slate-300">/</span>}
             {crumb.to ? (
-              <NavLink to={crumb.to} className="text-muted-foreground hover:text-foreground transition-colors" style={{ fontWeight: 400 }}>{crumb.label}</NavLink>
+              <NavLink to={crumb.to} className="text-muted-foreground hover:text-foreground transition-colors" style={{ fontWeight: 400 }}>{t(crumb.labelKey)}</NavLink>
             ) : (
-              <span className={i === crumbs.length - 1 ? color : "text-muted-foreground"} style={{ fontWeight: i === crumbs.length - 1 ? 600 : 400 }}>{crumb.label}</span>
+              <span className={i === crumbs.length - 1 ? color : "text-muted-foreground"} style={{ fontWeight: i === crumbs.length - 1 ? 600 : 400 }}>{t(crumb.labelKey)}</span>
             )}
           </span>
         ))}
@@ -126,7 +131,7 @@ export function Topbar() {
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search books, orders, barcodes..."
+            placeholder={t('topbar.search_placeholder')}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
             className={`w-full pr-14 py-[7px] bg-slate-50 dark:bg-slate-800 rounded-[9px] text-[13px] text-foreground border outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-220 ${
@@ -140,14 +145,15 @@ export function Topbar() {
           </div>
         </motion.div>
 
-        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title="Quick scan">
+        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
           <ScanBarcode className="w-4 h-4" />
         </NavLink>
 
         <ThemeToggle />
+        <LanguageToggle />
 
         <div className="relative">
-          <button onClick={() => setNotifOpen(!notifOpen)} className="relative w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500 dark:text-slate-400">
+          <button onClick={() => setNotifOpen(!notifOpen)} className="relative w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500 dark:text-slate-400" aria-label={t('topbar.notifications')}>
             <Bell className="w-4 h-4" />
             {adminNotifs.some((n) => n.unread) && (
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-1 right-1 w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-rose-500 rounded-full ring-2 ring-white" />
@@ -161,7 +167,7 @@ export function Topbar() {
                 className="absolute right-0 top-full mt-2 w-80 bg-card rounded-[14px] border border-border shadow-xl shadow-black/8 overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[13px]" style={{ fontWeight: 650 }}>Notifications</span>
+                    <span className="text-[13px]" style={{ fontWeight: 650 }}>{t('topbar.notifications')}</span>
                     {connected ? (
                       <Wifi className="w-3 h-3 text-emerald-500" />
                     ) : (
@@ -170,13 +176,13 @@ export function Topbar() {
                   </div>
                   <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}
                     onClick={() => setAdminNotifs((prev) => prev.map((n) => ({ ...n, unread: false })))}
-                  >Mark all read</span>
+                  >{t('topbar.mark_all_read')}</span>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {adminNotifs.length === 0 ? (
                     <div className="px-4 py-6 text-center">
-                      <p className="text-[12px] text-slate-500">No real-time events yet.</p>
-                      <p className="text-[11px] text-slate-400 mt-1">Events will appear here as they happen.</p>
+                      <p className="text-[12px] text-slate-500">{t('topbar.no_events')}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{t('topbar.events_will_appear')}</p>
                     </div>
                   ) : (
                     adminNotifs.map((n, i) => (
@@ -195,7 +201,7 @@ export function Topbar() {
                 </div>
                 <div className="px-4 py-2.5 border-t border-border text-center">
                   <span className="text-[11px] text-slate-400" style={{ fontWeight: 500 }}>
-                    {connected ? 'Live — receiving real-time updates' : 'Offline — reconnecting...'}
+                    {connected ? t('topbar.connected') : t('topbar.disconnected')}
                   </span>
                 </div>
               </motion.div>
@@ -214,11 +220,11 @@ export function Topbar() {
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 className="absolute right-0 top-full mt-2 w-64 bg-card rounded-[14px] border border-border shadow-xl shadow-black/8 overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-border">
-                  <p className="text-[13px]" style={{ fontWeight: 650 }}>{user?.full_name || user?.username || "User"}</p>
+                  <p className="text-[13px]" style={{ fontWeight: 650 }}>{user?.full_name || user?.username || t('topbar.user_fallback')}</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">{user?.email || ""}</p>
                 </div>
                 <button onClick={() => void handleLogout()} className="w-full px-4 py-2.5 text-left text-[12px] text-rose-600 hover:bg-rose-50/60 transition-colors flex items-center gap-2" style={{ fontWeight: 550 }}>
-                  <LogOut className="w-3.5 h-3.5" /> Logout
+                  <LogOut className="w-3.5 h-3.5" /> {t('topbar.logout')}
                 </button>
               </motion.div>
             )}

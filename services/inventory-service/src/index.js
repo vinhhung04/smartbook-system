@@ -32,6 +32,7 @@ const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const supplierAccountRoutes = require('./routes/supplier-account.routes');
 const purchaseRequestRoutes = require('./routes/purchase-request.routes');
 const exceptionReportRoutes = require('./routes/exception-report.routes');
+const staffTaskRoutes = require('./routes/staff-task.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -59,7 +60,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   }
 
   try {
-    const [goodsReceipts, outboundOrders, transferOrders, purchaseRequests, exceptionReports] = await Promise.all([
+    const [goodsReceipts, outboundOrders, transferOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
       prisma.goods_receipts.findMany({
         where: { received_by_user_id: userId },
         select: {
@@ -123,7 +124,12 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         take: 20,
       }),
       prisma.warehouse_exception_reports.findMany({
-        where: { created_by_user_id: userId },
+        where: {
+          OR: [
+            { assigned_to_user_id: userId },
+            { created_by_user_id: userId },
+          ],
+        },
         select: {
           id: true,
           report_number: true,
@@ -133,6 +139,24 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           warehouse_id: true,
           created_at: true,
           resolved_at: true,
+          assigned_to_user_id: true,
+          warehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      }),
+      prisma.staff_tasks.findMany({
+        where: { assignee_user_id: userId },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          task_type: true,
+          priority: true,
+          warehouse_id: true,
+          due_date: true,
+          completed_at: true,
+          created_at: true,
           warehouses: { select: { code: true, name: true } },
         },
         orderBy: { created_at: 'desc' },
@@ -140,16 +164,24 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
       }),
     ]);
 
+    // Deduplicate exception reports (a user might be both creator and assignee)
+    const seenExceptionIds = new Set();
+    const dedupedExceptionReports = exceptionReports.filter((r) => {
+      if (seenExceptionIds.has(r.id)) return false;
+      seenExceptionIds.add(r.id);
+      return true;
+    });
+
     const tasks = [
       ...goodsReceipts.map((task) => ({
         id: task.id,
-        type: 'RECEIVING',
+        type: task.status === 'POSTED' ? 'PUTAWAY' : 'RECEIVING',
         title: task.receipt_number,
         status: task.status,
         warehouse: task.warehouses?.code || task.warehouses?.name || null,
         created_at: task.created_at,
         completed_at: task.received_at,
-        action_path: `/orders/${task.id}`,
+        action_path: task.status === 'POSTED' ? `/putaway` : `/orders/${task.id}`,
       })),
       ...outboundOrders.map((task) => ({
         id: task.id,
@@ -184,7 +216,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         completed_at: task.approved_at || task.rejected_at,
         action_path: `/my-purchase-requests`,
       })),
-      ...exceptionReports.map((task) => ({
+      ...dedupedExceptionReports.map((task) => ({
         id: task.id,
         type: 'EXCEPTION_REPORT',
         title: task.report_number,
@@ -193,6 +225,16 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.created_at,
         completed_at: task.resolved_at,
         action_path: `/my-exception-reports`,
+      })),
+      ...staffTasks.map((task) => ({
+        id: task.id,
+        type: 'STAFF_TASK',
+        title: task.title,
+        status: task.status,
+        warehouse: task.warehouses?.code || task.warehouses?.name || null,
+        created_at: task.created_at,
+        completed_at: task.completed_at,
+        action_path: `/staff-tasks`,
       })),
     ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
@@ -248,6 +290,7 @@ app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 app.use('/api/supplier-account', supplierAccountRoutes);
 app.use('/api/purchase-requests', purchaseRequestRoutes);
 app.use('/api/exception-reports', exceptionReportRoutes);
+app.use('/api/staff-tasks', staffTaskRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

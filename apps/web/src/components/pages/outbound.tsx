@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CheckCircle2, ScanLine, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
@@ -8,9 +8,10 @@ import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
+import { canManageReceiving } from '@/lib/rbac';
 
 function taskLabel(taskType: 'outbound' | 'transfer'): string {
-  return taskType === 'transfer' ? 'Warehouse Transfer' : 'Outbound';
+  return taskType === 'transfer' ? 'Chuyển kho' : 'Xuất kho';
 }
 
 export function OutboundPage() {
@@ -30,8 +31,7 @@ export function OutboundPage() {
   const [scanCode, setScanCode] = useState('');
   const [showScanModal, setShowScanModal] = useState(false);
   const currentUser = authService.getCurrentUser();
-  const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageQueue = Boolean(currentUser?.is_superuser) || currentUserRoles.includes('ADMIN') || currentUserRoles.includes('MANAGER');
+  const canManageQueue = canManageReceiving(currentUser);
 
   const filteredQueue = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -75,7 +75,7 @@ export function OutboundPage() {
         setSelectedWarehouseId(preferredWarehouseId);
         await loadQueue(canManageQueue ? (preferredWarehouseId || undefined) : undefined);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Khong tai duoc outbound queue'));
+        toast.error(getApiErrorMessage(error, 'Không tải được hàng đợi xuất kho'));
       } finally {
         setLoading(false);
       }
@@ -95,7 +95,7 @@ export function OutboundPage() {
     }
 
     void loadQueue(selectedWarehouseId).catch((error) => {
-      toast.error(getApiErrorMessage(error, 'Khong tai duoc queue theo warehouse'));
+      toast.error(getApiErrorMessage(error, 'Không tải được hàng đợi theo kho'));
     });
   }, [canManageQueue, selectedWarehouseId]);
 
@@ -103,13 +103,13 @@ export function OutboundPage() {
     try {
       await loadDetail(task.task_type, task.task_id);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Khong mo duoc chi tiet outbound order'));
+      toast.error(getApiErrorMessage(error, 'Không mở được chi tiết đơn xuất kho'));
     }
   };
 
   const handleConfirm = async () => {
     if (!selectedTaskType || !selectedTaskId || !detail) {
-      toast.error('Chua chon don can outbound');
+      toast.error('Chưa chọn đơn cần xuất kho');
       return;
     }
 
@@ -120,9 +120,9 @@ export function OutboundPage() {
       const destinationReceiptNumber = response.data.destination_receipt_number;
 
       if (destinationReceiptNumber) {
-        toast.success(`Da outbound. Receipt dich: ${destinationReceiptNumber}`);
+        toast.success(`Đã xuất kho. Phiếu nhập tại kho đích: ${destinationReceiptNumber}`);
       } else {
-        toast.success('Da confirm outbound thanh cong');
+        toast.success('Đã xác nhận xuất kho thành công');
       }
 
       await loadQueue(canManageQueue ? (selectedWarehouseId || undefined) : undefined);
@@ -131,7 +131,7 @@ export function OutboundPage() {
       setSelectedTaskType(null);
       setScanCode('');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Confirm outbound that bai'));
+      toast.error(getApiErrorMessage(error, 'Xác nhận xuất kho thất bại'));
     } finally {
       setConfirming(false);
     }
@@ -140,7 +140,7 @@ export function OutboundPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-500">Dang tai outbound queue...</p>
+        <p className="text-[13px] text-slate-500">Đang tải hàng đợi xuất kho...</p>
       </PageWrapper>
     );
   }
@@ -152,14 +152,14 @@ export function OutboundPage() {
           to="/orders"
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
         >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lai danh sach
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại danh sách
         </NavLink>
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Outbound</h1>
+        <h1 className="tracking-[-0.02em]">Xuất kho</h1>
         <p className="text-[12px] text-slate-500 mt-1">
-          {canManageQueue ? 'Xac nhan xuat kho cho don da pick xong (READY_FOR_OUTBOUND)' : 'Xac nhan outbound cho task da duoc giao'}
+          {canManageQueue ? 'Xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
         </p>
       </FadeItem>
 
@@ -170,13 +170,13 @@ export function OutboundPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {canManageQueue ? (
                 <div>
-                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
+                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Kho</p>
                   <select
                     value={selectedWarehouseId}
                     onChange={(event) => setSelectedWarehouseId(event.target.value)}
                     className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                   >
-                    <option value="">Chon warehouse</option>
+                    <option value="">Chọn kho</option>
                     {warehouses.map((warehouse) => (
                       <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
                     ))}
@@ -185,11 +185,11 @@ export function OutboundPage() {
                 ) : null}
 
                 <div className={canManageQueue ? 'md:col-span-2' : 'md:col-span-3'}>
-                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tim don outbound</p>
+                  <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Tìm đơn xuất kho</p>
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Ma don / kho / loai don"
+                    placeholder="Mã đơn / kho / loại đơn"
                     className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                   />
                 </div>
@@ -202,7 +202,7 @@ export function OutboundPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-gradient-to-r from-sky-50/30 to-transparent">
-                    {["Ma don", "Loai", "Kho nguon", "Kho dich", "Trang thai", "Tong qty", "San sang", "Action"].map((head) => (
+                    {["Mã đơn", "Loại", "Kho nguồn", "Kho đích", "Trạng thái", "Tổng SL", "Sẵn sàng", "Thao tác"].map((head) => (
                       <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">
                         {head}
                       </th>
@@ -213,7 +213,7 @@ export function OutboundPage() {
                   {filteredQueue.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-10 text-center text-[13px] text-slate-400">
-                        Khong co don nao cho outbound
+                        Không có đơn nào cần xuất kho
                       </td>
                     </tr>
                   ) : filteredQueue.map((task) => (
@@ -230,7 +230,7 @@ export function OutboundPage() {
                           onClick={() => void handleOpen(task)}
                           className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
                         >
-                          Xem & outbound <ArrowRight className="w-3 h-3" />
+                          Xem & xuất <ArrowRight className="w-3 h-3" />
                         </button>
                       </td>
                     </tr>
@@ -246,12 +246,12 @@ export function OutboundPage() {
             <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                  <p className="text-[11px] text-slate-500 font-semibold">Don dang thao tac outbound</p>
+                  <p className="text-[11px] text-slate-500 font-semibold">Đơn đang thao tác xuất kho</p>
                   <h2 className="text-[15px] font-semibold mt-1">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
                   <p className="text-[12px] text-slate-500 mt-1">
-                    Nguon: {detail.source_warehouse_code || '-'}
-                    {detail.target_warehouse_code ? ` | Dich: ${detail.target_warehouse_code}` : ''}
-                    {` | Lines: ${detail.lines.length}`}
+                    Nguồn: {detail.source_warehouse_code || '-'}
+                    {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
+                    {` | Số dòng: ${detail.lines.length}`}
                   </p>
                 </div>
                 <button
@@ -263,7 +263,7 @@ export function OutboundPage() {
                   }}
                   className="rounded-[10px] border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  Quay lai queue
+                  Quay lại hàng đợi
                 </button>
               </div>
             </div>
@@ -271,8 +271,8 @@ export function OutboundPage() {
 
           <FadeItem>
             <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <h3 className="text-[14px] font-semibold mb-3">Scan code va confirm outbound</h3>
-              <p className="text-[11px] text-slate-500 mb-3">Nhap tay hoac scan ma don de xac nhan outbound.</p>
+              <h3 className="text-[14px] font-semibold mb-3">Quét mã và xác nhận xuất kho</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Nhập tay hoặc quét mã đơn để xác nhận xuất kho.</p>
               <div className="flex gap-2 flex-wrap">
                 <input
                   value={scanCode}
@@ -283,7 +283,7 @@ export function OutboundPage() {
                       void handleConfirm();
                     }
                   }}
-                  placeholder="Ma don scan code"
+                  placeholder="Mã đơn / mã quét"
                   className="flex-1 min-w-[200px] rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 />
                 <button
@@ -298,11 +298,11 @@ export function OutboundPage() {
                   disabled={confirming}
                   className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                 >
-                  {confirming ? 'Dang outbound...' : 'Confirm outbound'}
+                  {confirming ? 'Đang xuất...' : 'Xác nhận xuất kho'}
                 </button>
               </div>
 
-              {loadingDetail ? <p className="text-[12px] text-slate-500 mt-3">Dang tai chi tiet...</p> : null}
+              {loadingDetail ? <p className="text-[12px] text-slate-500 mt-3">Đang tải chi tiết...</p> : null}
             </div>
           </FadeItem>
 
@@ -311,16 +311,16 @@ export function OutboundPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-gradient-to-r from-sky-50/30 to-transparent">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">San pham</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">SKU/Barcode</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Yeu cau</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Da pick</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">Sản phẩm</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">SKU/Mã vạch</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Yêu cầu</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400 w-[100px]">Đã lấy</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detail.lines.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-6 text-[12px] text-slate-400 text-center">Khong co line nao</td>
+                      <td colSpan={4} className="px-4 py-6 text-[12px] text-slate-400 text-center">Không có dòng nào</td>
                     </tr>
                   ) : detail.lines.map((line) => (
                     <tr key={line.line_id} className="border-b border-slate-50 last:border-0 text-[12px]">
@@ -341,7 +341,7 @@ export function OutboundPage() {
             <div className="rounded-[16px] border border-emerald-200/60 bg-emerald-50/50 p-4">
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <p className="text-[12px] text-emerald-800">Transfer sau khi confirm outbound se tu dong tao Goods Receipt DRAFT o kho dich.</p>
+                <p className="text-[12px] text-emerald-800">Sau khi xác nhận xuất kho, hệ thống tự động tạo Phiếu nhập kho NHÁP tại kho đích.</p>
               </div>
             </div>
           </FadeItem>
@@ -351,9 +351,9 @@ export function OutboundPage() {
             onClose={() => setShowScanModal(false)}
             onDetected={(code) => {
               setScanCode(code);
-              toast.success(`Da quet ma don: ${code}`);
+              toast.success(`Đã quét mã đơn: ${code}`);
             }}
-            title="Quet ma don outbound"
+            title="Quét mã đơn xuất kho"
           />
         </>
       )}

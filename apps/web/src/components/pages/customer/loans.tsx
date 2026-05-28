@@ -22,7 +22,7 @@ export function CustomerLoansPage() {
       const response = await customerBorrowService.getMyLoans();
       setRows(Array.isArray(response?.data) ? response.data : []);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load loans'));
+      setError(getApiErrorMessage(err, 'Không tải được phiếu mượn'));
     } finally {
       setLoading(false);
     }
@@ -43,8 +43,8 @@ export function CustomerLoansPage() {
             <HandCoins className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">My Loans</h1>
-            <p className="text-[13px] text-muted-foreground">Track due dates and manage your borrowed books</p>
+            <h1 className="text-xl font-semibold tracking-tight">Phiếu mượn của tôi</h1>
+            <p className="text-[13px] text-muted-foreground">Theo dõi hạn trả và quản lý sách đang mượn</p>
           </div>
         </div>
         <button
@@ -53,15 +53,15 @@ export function CustomerLoansPage() {
           className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          Làm mới
         </button>
       </div>
 
       {!loading && (
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Active Loans" value={activeLoans} icon={HandCoins} variant="info" />
-          <StatCard label="Overdue" value={overdueLoans} icon={HandCoins} variant="danger" />
-          <StatCard label="Returned" value={returnedLoans} icon={HandCoins} variant="success" />
+          <StatCard label="Đang mượn" value={activeLoans} icon={HandCoins} variant="info" />
+          <StatCard label="Quá hạn" value={overdueLoans} icon={HandCoins} variant="danger" />
+          <StatCard label="Đã trả" value={returnedLoans} icon={HandCoins} variant="success" />
         </div>
       )}
 
@@ -71,19 +71,19 @@ export function CustomerLoansPage() {
       ) : error ? (
         <EmptyState
           variant="error"
-          title="Failed to load loans"
+          title="Không tải được phiếu mượn"
           description={error}
-          action={<button onClick={() => void load()} className="text-primary font-medium hover:underline">Try again</button>}
+          action={<button onClick={() => void load()} className="text-primary font-medium hover:underline">Thử lại</button>}
         />
       ) : rows.length === 0 ? (
         <SectionCard>
           <EmptyState
             variant="no-data"
-            title="No loans yet"
-            description="Start by browsing our catalog and borrowing your first book."
+            title="Chưa có phiếu mượn"
+            description="Bắt đầu bằng cách khám phá danh mục và mượn cuốn sách đầu tiên."
             action={
               <button onClick={() => navigate('/customer/books')} className="text-primary font-medium hover:underline">
-                Browse catalog
+                Xem danh mục
               </button>
             }
           />

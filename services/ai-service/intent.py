@@ -105,6 +105,10 @@ def detect_intent(message: str) -> dict:
         "nen nhap them",
         "du bao nhu cau",
         "demand forecasting",
+        "de xuat nhap",
+        "tao de xuat",
+        "purchase request",
+        "don nhap",
     ]):
         return {
             "intent": REORDER_SUGGESTION_QUERY,
@@ -146,7 +150,7 @@ def detect_intent(message: str) -> dict:
             "granularity": granularity,
         }
 
-    if _contains_any(normalized, ["dat cho", "reservation", "giu sach", "dat sach"]):
+    if _contains_any(normalized, ["dat cho", "reservation", "giu sach", "dat sach", "muon sach", "dang ky muon"]):
         return {
             "intent": RESERVATION_QUERY,
             "confidence": 0.86,
@@ -154,7 +158,7 @@ def detect_intent(message: str) -> dict:
             "query": message.strip(),
         }
 
-    if _contains_any(normalized, ["sap het hang", "ton kho thap", "het hang", "rui ro ton kho", "low stock", "out of stock"]):
+    if _contains_any(normalized, ["sap het hang", "ton kho thap", "het hang", "rui ro ton kho", "low stock", "out of stock", "canh bao ton kho", "stock alert"]):
         return {
             "intent": LOW_STOCK_QUERY,
             "confidence": 0.9,
@@ -170,7 +174,7 @@ def detect_intent(message: str) -> dict:
             "query": message.strip(),
         }
 
-    if _contains_any(normalized, ["dashboard", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "system summary"]):
+    if _contains_any(normalized, ["dashboard", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "system summary", "bao cao", "tao bao cao", "lap bao cao"]):
         return {
             "intent": DASHBOARD_SUMMARY_QUERY,
             "confidence": 0.84,

@@ -5,6 +5,10 @@ import { ClipboardCheck, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
+import { goodsReceiptService } from "@/services/goods-receipt";
+import { userService, type WarehouseStaffOption } from "@/services/user";
+import { authService } from "@/services/auth";
+import { canManageReceiving } from "@/lib/rbac";
 import { FadeItem, PageWrapper } from "../motion-utils";
 
 function formatDate(value: string | null): string {
@@ -24,13 +28,23 @@ export function PutawayPage() {
   const [loading, setLoading] = useState(true);
   const [receipts, setReceipts] = useState<PutawayReceiptSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
+  const [assignState, setAssignState] = useState<Record<string, string>>({});
+  const [assigningId, setAssigningId] = useState("");
+
+  const currentUser = authService.getCurrentUser();
+  const showAssign = canManageReceiving(currentUser);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await putawayService.getReadyReceipts();
+        const [data, staffRes] = await Promise.all([
+          putawayService.getReadyReceipts(),
+          showAssign ? userService.getWarehouseStaff() : Promise.resolve({ data: [] }),
+        ]);
         setReceipts(Array.isArray(data) ? data : []);
+        setWarehouseStaff(Array.isArray(staffRes.data) ? staffRes.data : []);
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach phieu nhap da duyet"));
       } finally {
@@ -39,7 +53,7 @@ export function PutawayPage() {
     };
 
     void load();
-  }, []);
+  }, [showAssign]);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -53,6 +67,25 @@ export function PutawayPage() {
   }, [receipts, query]);
 
   const totalRemaining = receipts.reduce((sum, row) => sum + row.remaining_quantity, 0);
+
+  const handleAssign = async (receiptId: string) => {
+    const staffId = assignState[receiptId];
+    if (!staffId) {
+      toast.error("Chọn nhân viên trước khi giao task");
+      return;
+    }
+    setAssigningId(receiptId);
+    try {
+      await goodsReceiptService.assign(receiptId, staffId);
+      toast.success("Đã giao putaway task cho nhân viên");
+      const data = await putawayService.getReadyReceipts();
+      setReceipts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Giao task thất bại"));
+    } finally {
+      setAssigningId("");
+    }
+  };
 
   return (
     <PageWrapper className="space-y-5">
@@ -86,7 +119,7 @@ export function PutawayPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100 bg-gradient-to-r from-blue-50/30 to-transparent">
-                {["Ma phieu", "Kho", "Ngay", "Trang thai", "Nguoi duyet", "Tong dong", "Con lai", "Action"].map((header) => (
+                {["Ma phieu", "Kho", "Ngay", "Trang thai", "Nguoi duyet", "Tong dong", "Con lai", ...(showAssign ? ["Giao putaway"] : []), "Action"].map((header) => (
                   <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">{header}</th>
                 ))}
               </tr>
@@ -94,11 +127,11 @@ export function PutawayPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-14 text-[13px] text-slate-400">Dang tai danh sach phieu nhap...</td>
+                  <td colSpan={showAssign ? 9 : 8} className="text-center py-14 text-[13px] text-slate-400">Dang tai danh sach phieu nhap...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
+                  <td colSpan={showAssign ? 9 : 8} className="py-12 text-center">
                     <p className="text-[13px] text-slate-400">Khong co phieu nhap nao san sang putaway</p>
                     <p className="text-[11px] text-slate-400 mt-1">Cac phieu nhap da duyet se hien o day</p>
                   </td>
@@ -119,6 +152,30 @@ export function PutawayPage() {
                     <td className="px-4 py-3.5 text-[12px] text-slate-500">{receipt.approved_by_user_id ? receipt.approved_by_user_id.slice(0, 8) : "-"}</td>
                     <td className="px-4 py-3.5 text-[13px] text-slate-600">{receipt.line_count}</td>
                     <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.remaining_quantity}</td>
+                    {showAssign && (
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={assignState[receipt.id] || ""}
+                            onChange={(e) => setAssignState((prev) => ({ ...prev, [receipt.id]: e.target.value }))}
+                            className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[12px]"
+                          >
+                            <option value="">Chọn nhân viên</option>
+                            {warehouseStaff.map((s) => (
+                              <option key={s.id} value={s.id}>{s.full_name}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={assigningId === receipt.id}
+                            onClick={() => void handleAssign(receipt.id)}
+                            className="h-8 rounded-md bg-violet-600 px-2.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                          >
+                            {assigningId === receipt.id ? "..." : "Giao"}
+                          </button>
+                        </div>
+                      </td>
+                    )}
                     <td className="px-4 py-3.5">
                       <NavLink
                         to={`/putaway/${receipt.id}`}

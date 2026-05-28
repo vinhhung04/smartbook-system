@@ -21,7 +21,7 @@ export function CustomerMembershipPage() {
         const data = await customerService.getMyMembership();
         setMembership(data);
       } catch (err) {
-        setError(getApiErrorMessage(err, 'Failed to load membership'));
+        setError(getApiErrorMessage(err, 'Không tải được thông tin hội viên'));
       } finally {
         setIsLoading(false);
       }
@@ -30,8 +30,8 @@ export function CustomerMembershipPage() {
   }, []);
 
   if (isLoading) return <LoadingOverlay />;
-  if (error) return <EmptyState variant="error" title="Failed to load membership" description={error} action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Try again</button>} />;
-  if (!membership) return <EmptyState variant="no-data" title="Membership not found" description="Please contact support to set up your membership." />;
+  if (error) return <EmptyState variant="error" title="Không tải được hội viên" description={error} action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Thử lại</button>} />;
+  if (!membership) return <EmptyState variant="no-data" title="Không tìm thấy hội viên" description="Vui lòng liên hệ nhân viên thư viện để thiết lập hội viên." />;
 
   return (
     <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
@@ -48,7 +48,7 @@ export function CustomerMembershipPage() {
               {membership.plan_name || 'Standard Plan'}
             </h1>
             <p className="text-white/65 text-[13px] mt-0.5">
-              Member since {membership.plan_code || 'N/A'} — Enjoy your reading benefits
+              Mã gói: {membership.plan_code || 'N/A'} — Tận hưởng quyền lợi đọc sách
             </p>
           </div>
         </div>
@@ -56,22 +56,22 @@ export function CustomerMembershipPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Active Loans" value={membership.active_loan_count} icon={ShieldCheck} variant="info" />
-        <StatCard label="Remaining Slots" value={membership.remaining_loan_slots} icon={ShieldCheck} variant="success" />
-        <StatCard label="Max Loan Days" value={`${membership.limits.max_loan_days}d`} icon={ShieldCheck} variant="default" />
-        <StatCard label="Fine Per Day" value={membership.limits.fine_per_day} icon={ShieldCheck} variant="warning" />
+        <StatCard label="Đang mượn" value={membership.active_loan_count} icon={ShieldCheck} variant="info" />
+        <StatCard label="Suất còn lại" value={membership.remaining_loan_slots} icon={ShieldCheck} variant="success" />
+        <StatCard label="Tối đa ngày mượn" value={`${membership.limits.max_loan_days}ngày`} icon={ShieldCheck} variant="default" />
+        <StatCard label="Phạt/ngày" value={membership.limits.fine_per_day} icon={ShieldCheck} variant="warning" />
       </div>
 
       {/* Limits */}
-      <SectionCard title="Membership Benefits" subtitle="Your current plan features and borrowing policies">
+      <SectionCard title="Quyền lợi hội viên" subtitle="Tính năng và chính sách mượn của gói hiện tại">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
-            { label: 'Max active loans', value: `${membership.limits.max_active_loans} items`, icon: ShieldCheck },
-            { label: 'Max loan period', value: `${membership.limits.max_loan_days} days`, icon: ShieldCheck },
-            { label: 'Fine per overdue day', value: `${membership.limits.fine_per_day}`, icon: ShieldCheck },
-            { label: 'Renewal limit', value: `${membership.limits.max_renewal_count} times / loan`, icon: ShieldCheck },
-            { label: 'Reservation hold', value: `${membership.limits.reservation_hold_hours} hours`, icon: ShieldCheck },
-            { label: 'Lost item fee', value: `${membership.limits.lost_item_fee_multiplier}x base fee`, icon: ShieldCheck },
+            { label: 'Tối đa đang mượn', value: `${membership.limits.max_active_loans} cuốn`, icon: ShieldCheck },
+            { label: 'Tối đa số ngày', value: `${membership.limits.max_loan_days} ngày`, icon: ShieldCheck },
+            { label: 'Phạt/ngày quá hạn', value: `${membership.limits.fine_per_day}`, icon: ShieldCheck },
+            { label: 'Giới hạn gia hạn', value: `${membership.limits.max_renewal_count} lần / phiếu`, icon: ShieldCheck },
+            { label: 'Giữ đặt trước', value: `${membership.limits.reservation_hold_hours} giờ`, icon: ShieldCheck },
+            { label: 'Phí mất sách', value: `${membership.limits.lost_item_fee_multiplier}x phí cơ bản`, icon: ShieldCheck },
           ].map((item) => (
             <div key={item.label} className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -103,7 +103,7 @@ export function CustomerMembershipPage() {
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
         <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
         <p className="text-[12px] text-amber-700 leading-relaxed">
-          Borrowing limits and policies are determined by your current membership plan. Contact library staff to upgrade or discuss special arrangements.
+          Giới hạn mượn và chính sách được xác định bởi gói hội viên hiện tại. Liên hệ nhân viên thư viện để nâng cấp hoặc thỏa thuận đặc biệt.
         </p>
       </div>
     </div>
