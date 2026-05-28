@@ -5,6 +5,7 @@ export interface GoodsReceipt {
   receipt_number: string;
   purchase_order_id?: string | null;
   po_number?: string | null;
+  supplier_delivery_invoice_id?: string | null;
   source_type?: string | null;
   warehouse_id: string;
   warehouse_name?: string;
@@ -59,6 +60,11 @@ export const goodsReceiptService = {
     const response = await inventoryAPI.patch(`/api/goods-receipts/${id}/assign`, {
       received_by_user_id: receivedByUserId,
     });
+    return response.data;
+  },
+
+  updateItems: async (id: string, items: { id: string; quantity: number }[]) => {
+    const response = await inventoryAPI.patch(`/api/goods-receipts/${id}`, { items });
     return response.data;
   },
 };

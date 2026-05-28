@@ -5,6 +5,8 @@ import { bookService } from '@/services/book';
 import { borrowService } from '@/services/borrow';
 import { stockMovementService } from '@/services/stock-movement';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
+import { authService, type AuthUser } from '@/services/auth';
+import { getPrimaryRole } from '@/lib/rbac';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/http-clients';
 
@@ -19,14 +21,77 @@ interface UIMessage {
   retrieval_warnings?: string[];
 }
 
-const SUGGESTIONS = [
-  'Nên nhập thêm sách nào? Tạo đề xuất nhập thêm giúp tôi.',
-  'Tạo báo cáo tình hình thư viện tháng này.',
-  'Tôi muốn đặt sách Clean Code.',
-  'Cảnh báo các sách tồn kho thấp.',
-  'Tạo task cho staff kiểm tra các sách sắp hết hàng.',
-  'Sách nào đang quá hạn?',
-];
+function getRoleSuggestions(user: AuthUser | null): string[] {
+  if (!user) {
+    return [
+      'SmartBook có những tính năng gì?',
+      'Hướng dẫn mượn sách.',
+    ];
+  }
+  const role = getPrimaryRole(user);
+  switch (role) {
+    case 'CUSTOMER':
+      return [
+        'Tôi có sách nào sắp đến hạn trả?',
+        'Tôi có khoản phạt nào chưa thanh toán?',
+        'Gợi ý sách phù hợp với tôi.',
+        'Tình trạng đặt sách của tôi?',
+      ];
+    case 'STAFF':
+    case 'WAREHOUSE_STAFF':
+    case 'WAREHOUSE_OPERATOR':
+      return [
+        'Task hôm nay của tôi là gì?',
+        'Tôi có đơn picking nào cần làm?',
+        'Tôi có phiếu putaway nào được giao?',
+        'Báo cáo ngoại lệ của tôi.',
+      ];
+    case 'MANAGER':
+    case 'ADMIN':
+      return [
+        'Tổng quan vận hành hôm nay.',
+        'Có task nào chưa giao nhân viên?',
+        'Sách nào tồn kho thấp?',
+        'Tổng quan loan và phạt hôm nay.',
+      ];
+    case 'LIBRARIAN':
+    case 'CUSTOMER_SERVICE':
+      return [
+        'Có loan nào quá hạn?',
+        'Reservation nào đang chờ xử lý?',
+        'Khách nào có phạt chưa thanh toán?',
+        'Tình trạng mượn trả hôm nay.',
+      ];
+    default:
+      return [
+        'Nên nhập thêm sách nào? Tạo đề xuất nhập thêm giúp tôi.',
+        'Cảnh báo các sách tồn kho thấp.',
+        'Tạo task cho staff kiểm tra các sách sắp hết hàng.',
+        'Sách nào đang quá hạn?',
+      ];
+  }
+}
+
+function getWelcomeGreeting(user: AuthUser | null): string {
+  if (!user) return 'Xin chào! Tôi là SmartBook AI 👋';
+  const name = user.full_name || user.username;
+  const roleLabel: Record<string, string> = {
+    ADMIN: 'Admin',
+    MANAGER: 'Manager',
+    LIBRARIAN: 'Thủ thư',
+    CUSTOMER_SERVICE: 'CSKH',
+    WAREHOUSE_STAFF: 'Nhân viên kho',
+    WAREHOUSE_OPERATOR: 'Vận hành kho',
+    STAFF: 'Nhân viên',
+    CUSTOMER: '',
+    SUPPLIER: 'Nhà cung cấp',
+  };
+  const role = getPrimaryRole(user);
+  const label = roleLabel[role] ?? '';
+  return label
+    ? `Xin chào ${label} **${name}**! 👋`
+    : `Xin chào **${name}**! 👋`;
+}
 
 // ── Risk & status badge helpers ───────────────────────────────────────────────
 
@@ -394,7 +459,12 @@ function MessageText({ text }: { text: string }) {
 
 // ── System context gathering ──────────────────────────────────────────────────
 
-async function gatherSystemContext(): Promise<SystemContext> {
+async function gatherSystemContext(user: AuthUser | null): Promise<SystemContext | undefined> {
+  // Backend fetches personal context for these roles; no need to send system_context.
+  const role = user ? getPrimaryRole(user) : null;
+  const skipRoles = new Set(['CUSTOMER', 'STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR', 'SUPPLIER']);
+  if (role && skipRoles.has(role)) return undefined;
+
   const ctx: SystemContext = {};
 
   const [bookResp, loanResp, fineResp, movResp] = await Promise.allSettled([
@@ -502,20 +572,25 @@ export function AIChatbot() {
   const [loading, setLoading] = useState(false);
   const [contextReady, setContextReady] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const systemContextRef = useRef<SystemContext | undefined>(undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setCurrentUser(authService.getCurrentUser());
+  }, []);
+
   const refreshContext = useCallback(async () => {
     try {
       setContextReady(false);
-      systemContextRef.current = await gatherSystemContext();
+      systemContextRef.current = await gatherSystemContext(currentUser);
       setContextReady(true);
     } catch {
       systemContextRef.current = undefined;
       setContextReady(true);
     }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (open && !systemContextRef.current) {
@@ -679,7 +754,7 @@ export function AIChatbot() {
                 </div>
                 <div className="text-center">
                   <p className="text-[14px] font-semibold text-foreground">
-                    Xin chào! Tôi là SmartBook AI 👋
+                    <MessageText text={getWelcomeGreeting(currentUser)} />
                   </p>
                   <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed max-w-[300px]">
                     Tôi có thể truy xuất dữ liệu thời gian thực và tạo các hành động cần xác nhận của bạn.
@@ -691,7 +766,7 @@ export function AIChatbot() {
                       Gợi ý nhanh
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {SUGGESTIONS.map((s) => (
+                      {getRoleSuggestions(currentUser).map((s) => (
                         <button
                           key={s}
                           onClick={() => void sendMessage(s)}
