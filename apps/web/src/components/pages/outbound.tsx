@@ -15,6 +15,24 @@ function taskLabel(taskType: 'outbound' | 'transfer'): string {
   return taskType === 'transfer' ? 'Chuyển kho' : 'Xuất kho';
 }
 
+function outboundStatusBadge(status: string): { label: string; className: string } {
+  switch (status) {
+    case 'APPROVED':     return { label: 'Đã duyệt', className: 'bg-blue-50 text-blue-700' };
+    case 'PICKING':      return { label: 'Đang lấy', className: 'bg-sky-100 text-sky-700' };
+    case 'PARTIAL_PICKED': return { label: 'Lấy một phần', className: 'bg-yellow-100 text-yellow-700' };
+    case 'REPICKING':    return { label: 'Đang re-pick', className: 'bg-amber-100 text-amber-800' };
+    case 'READY_FOR_OUTBOUND':
+    case 'READY_TO_SHIP': return { label: 'Sẵn xuất kho', className: 'bg-emerald-100 text-emerald-700' };
+    case 'COMPLETED':    return { label: 'Hoàn tất', className: 'bg-slate-100 text-slate-600' };
+    case 'CANCELLED':    return { label: 'Đã hủy', className: 'bg-red-50 text-red-600' };
+    default:             return { label: status, className: 'bg-slate-100 text-slate-500' };
+  }
+}
+
+function canConfirmOutbound(status: string): boolean {
+  return status === 'READY_FOR_OUTBOUND' || status === 'READY_TO_SHIP';
+}
+
 export function OutboundPage() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -266,11 +284,22 @@ export function OutboundPage() {
 
                     return (
                       <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
+                        <td className="px-4 py-3 text-[12px] font-semibold">
+                          <div>{task.order_number}</div>
+                          {(task.repick_count ?? 0) > 0 && (
+                            <div className="mt-0.5 text-[10px] text-amber-600">
+                              {task.repick_count} repick{(task.active_repick_count ?? 0) > 0 ? ` · ${task.active_repick_count} chưa xong` : ''}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{taskLabel(task.task_type)}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.source_warehouse_code || '-'}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.target_warehouse_code || '-'}</td>
-                        <td className="px-4 py-3 text-[12px] text-sky-600 font-semibold">{task.status}</td>
+                        <td className="px-4 py-3 text-[12px]">
+                          {(() => { const b = outboundStatusBadge(task.status); return (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>{b.label}</span>
+                          ); })()}
+                        </td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.total_quantity}</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{task.ready_quantity}</td>
                         {canManageQueue ? (
@@ -335,12 +364,25 @@ export function OutboundPage() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-[11px] text-slate-500 font-semibold">Đơn đang thao tác xuất kho</p>
-                  <h2 className="text-[15px] font-semibold mt-1">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
+                    {(() => { const b = outboundStatusBadge(detail.status); return (
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${b.className}`}>{b.label}</span>
+                    ); })()}
+                  </div>
                   <p className="text-[12px] text-slate-500 mt-1">
                     Nguồn: {detail.source_warehouse_code || '-'}
                     {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
                     {` | Số dòng: ${detail.lines.length}`}
                   </p>
+                  {detail.aggregate_requested_qty !== undefined && (
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      Tổng: <span className="font-semibold">{detail.aggregate_picked_qty}</span>/{detail.aggregate_requested_qty} cuốn
+                      {(detail.aggregate_remaining_qty ?? 0) > 0 && (
+                        <span className="text-amber-600"> · Còn thiếu: {detail.aggregate_remaining_qty}</span>
+                      )}
+                    </p>
+                  )}
                   {detail.outbound_assigned_user_id ? (
                     <p className="text-[11px] text-emerald-700 mt-1 font-semibold">
                       Nhân viên xuất kho: {getAssignedStaffName(detail.outbound_assigned_user_id)}
@@ -388,7 +430,8 @@ export function OutboundPage() {
                 </button>
                 <button
                   onClick={() => void handleConfirm()}
-                  disabled={confirming}
+                  disabled={confirming || !canConfirmOutbound(detail.status)}
+                  title={!canConfirmOutbound(detail.status) ? `Đơn đang ở trạng thái ${detail.status} — chưa thể xuất kho` : undefined}
                   className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                 >
                   {confirming ? 'Đang xuất...' : 'Xác nhận xuất kho'}
@@ -429,6 +472,70 @@ export function OutboundPage() {
               </table>
             </div>
           </FadeItem>
+
+          {/* Execution chain: PICK task + REPICK children */}
+          {(detail.pick_task || (detail.repick_tasks && detail.repick_tasks.length > 0)) && (
+            <FadeItem>
+              <div className="rounded-[16px] border border-slate-200/80 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Execution Chain</p>
+                <div className="space-y-2">
+                  {/* PICK root task */}
+                  {detail.pick_task && (
+                    <div className="rounded-[10px] border border-sky-100 bg-sky-50/50 p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-bold">PICK</span>
+                          <span className="text-[12px] font-semibold text-sky-900">{detail.pick_task.task_number}</span>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          detail.pick_task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700'
+                          : detail.pick_task.status === 'PICKING' ? 'bg-blue-100 text-blue-700'
+                          : 'bg-slate-100 text-slate-500'}`}>
+                          {detail.pick_task.status}
+                        </span>
+                      </div>
+                      {detail.pick_task.items.length > 0 && (
+                        <div className="mt-2 text-[11px] text-slate-500">
+                          Yêu cầu: {detail.pick_task.items.reduce((s, i) => s + i.requested_qty, 0)} ·
+                          Đã lấy: {detail.pick_task.items.reduce((s, i) => s + i.picked_qty, 0)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* REPICK children */}
+                  {(detail.repick_tasks || []).map((rt, idx) => (
+                    <div key={rt.picking_task_id} className="ml-4 rounded-[10px] border border-amber-100 bg-amber-50/40 p-3">
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-slate-300 text-[11px]">{idx === (detail.repick_tasks!.length - 1) ? '└─' : '├─'}</span>
+                        <div className="flex items-center justify-between flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold">REPICK</span>
+                            <span className="text-[12px] font-semibold text-amber-900">{rt.task_number}</span>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            rt.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700'
+                            : rt.status === 'PICKING' ? 'bg-blue-100 text-blue-700'
+                            : 'bg-slate-100 text-slate-500'}`}>
+                            {rt.status}
+                          </span>
+                        </div>
+                      </div>
+                      {rt.items.length > 0 && (
+                        <div className="ml-5 text-[11px] text-slate-500">
+                          Yêu cầu: {rt.items.reduce((s, i) => s + i.requested_qty, 0)} ·
+                          Đã lấy: {rt.items.reduce((s, i) => s + i.picked_qty, 0)}
+                          {rt.items.reduce((s, i) => s + i.short_qty, 0) > 0 && (
+                            <span className="text-amber-600"> · Thiếu: {rt.items.reduce((s, i) => s + i.short_qty, 0)}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </FadeItem>
+          )}
 
           <FadeItem>
             <div className="rounded-[16px] border border-emerald-200/60 bg-emerald-50/50 p-4">

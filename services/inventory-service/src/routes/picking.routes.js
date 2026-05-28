@@ -10,6 +10,8 @@ const {
   cancelTransferReturn,
   cancelOutboundReturn,
   ensureRepicksEndpoint,
+  listPickingTasksHierarchy,
+  getPickingTaskChildren,
 } = require("../controllers/picking.controller");
 const {
   authorizeManagerDecision,
@@ -55,5 +57,9 @@ router.post(
   cancelOutboundReturn,
 );
 router.post("/repicks/ensure", canDecideOperation, ensureRepicksEndpoint);
+
+// New relational hierarchy endpoints for picking_tasks
+router.get("/picking-tasks", canReadTask, listPickingTasksHierarchy);
+router.get("/picking-tasks/:pickingTaskId/children", canReadTask, getPickingTaskChildren);
 
 module.exports = router;
