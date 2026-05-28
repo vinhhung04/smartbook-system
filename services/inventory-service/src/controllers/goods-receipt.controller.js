@@ -364,11 +364,58 @@ async function getGoodsReceiptById(req, res) {
 
     const totalAmount = items.reduce((sum, item) => sum + item.line_total, 0);
 
+    // Embed supplier invoice data so assigned staff can see it without a separate permission check.
+    let invoiceData = null;
+    if (receipt.supplier_delivery_invoice_id) {
+      const inv = await prisma.supplier_delivery_invoices.findUnique({
+        where: { id: receipt.supplier_delivery_invoice_id },
+        include: {
+          supplier_delivery_invoice_items: {
+            include: {
+              book_variants: {
+                select: {
+                  isbn13: true,
+                  sku: true,
+                  internal_barcode: true,
+                  books: { select: { title: true } },
+                },
+              },
+            },
+          },
+          purchase_orders: {
+            select: {
+              po_number: true,
+              suppliers: { select: { name: true } },
+            },
+          },
+        },
+      });
+      if (inv) {
+        invoiceData = {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          supplier_name: inv.purchase_orders?.suppliers?.name || null,
+          po_number: inv.purchase_orders?.po_number || null,
+          expected_delivery_date: inv.expected_delivery_date,
+          items: inv.supplier_delivery_invoice_items.map((invItem) => ({
+            id: invItem.id,
+            variant_id: invItem.variant_id,
+            title: invItem.book_variants?.books?.title || null,
+            isbn13: invItem.book_variants?.isbn13 || null,
+            sku: invItem.book_variants?.sku || null,
+            barcode: invItem.book_variants?.internal_barcode || invItem.book_variants?.isbn13 || null,
+            invoiced_qty: Number(invItem.invoiced_qty || 0),
+          })),
+        };
+      }
+    }
+
     return res.json({
       id: receipt.id,
       receipt_number: receipt.receipt_number,
       purchase_order_id: receipt.purchase_order_id,
       po_number: receipt.purchase_orders?.po_number || null,
+      supplier_delivery_invoice_id: receipt.supplier_delivery_invoice_id || null,
       source_type: receipt.source_type,
       warehouse_id: receipt.warehouse_id,
       warehouse_name: receipt.warehouses?.name || null,
@@ -382,6 +429,7 @@ async function getGoodsReceiptById(req, res) {
       item_count: items.length,
       total_amount: totalAmount,
       items,
+      invoice: invoiceData,
     });
   } catch (error) {
     console.error("Error while fetching goods receipt by id:", error);
@@ -1095,6 +1143,19 @@ async function updateGoodsReceipt(req, res) {
           invalidTransition: true,
           message: "Cannot rollback POSTED receipt to DRAFT",
         };
+      }
+
+      // Allow assigned staff to update item quantities on DRAFT receipts (e.g. scan-verify against NCC invoice).
+      const itemUpdates = req.body.items;
+      if (Array.isArray(itemUpdates) && existing.status === "DRAFT") {
+        for (const item of itemUpdates) {
+          if (item.id && typeof item.quantity === "number" && item.quantity >= 0) {
+            await tx.goods_receipt_items.updateMany({
+              where: { id: item.id, goods_receipt_id: id },
+              data: { quantity: item.quantity },
+            });
+          }
+        }
       }
 
       const updated = await tx.goods_receipts.update({

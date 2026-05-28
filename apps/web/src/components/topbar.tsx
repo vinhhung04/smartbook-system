@@ -1,4 +1,4 @@
-import { Search, Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun } from "lucide-react";
+import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -70,7 +70,6 @@ export function Topbar() {
   const navigate = useNavigate();
   const { connected } = useSocket();
   const { t } = useI18n();
-  const [searchFocused, setSearchFocused] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState<AdminNotification[]>([]);
@@ -127,25 +126,7 @@ export function Topbar() {
       </nav>
 
       <div className="flex items-center gap-2">
-        <motion.div animate={{ width: searchFocused ? 380 : 260 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder={t('topbar.search_placeholder')}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className={`w-full pr-14 py-[7px] bg-slate-50 dark:bg-slate-800 rounded-[9px] text-[13px] text-foreground border outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all duration-220 ${
-              searchFocused ? "border-indigo-300/60 ring-[3px] ring-indigo-500/8 bg-white dark:bg-slate-800 shadow-md shadow-indigo-500/5" : "border-transparent hover:border-slate-200 dark:hover:border-slate-600"
-            }`}
-            style={{ paddingLeft: "2.125rem" }}
-          />
-          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <kbd className="text-[10px] text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>⌘</kbd>
-            <kbd className="text-[10px] text-slate-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded-[4px] shadow-[0_1px_0_rgba(0,0,0,0.03)]" style={{ fontWeight: 500 }}>K</kbd>
-          </div>
-        </motion.div>
-
-        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
+<NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
           <ScanBarcode className="w-4 h-4" />
         </NavLink>
 

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { StatusBadge } from "../status-badge";
 import { NavLink, useParams } from "react-router";
-import { ArrowLeft, Download, FileText, CheckCircle, XCircle, AlertCircle, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, Download, FileText, CheckCircle, XCircle, AlertCircle, ClipboardCheck, ScanBarcode, Save, Truck } from "lucide-react";
 import { goodsReceiptService } from "@/services/goods-receipt";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
+import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { authService } from "@/services/auth";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { canManageReceiving, canViewUnitCost, canViewLocationCode } from "@/lib/rbac";
@@ -23,11 +24,31 @@ interface ReceiptDetailItem {
   line_total: number;
 }
 
+interface InvoiceItem {
+  id: string;
+  variant_id: string;
+  title: string | null;
+  isbn13: string | null;
+  sku: string | null;
+  barcode: string | null;
+  invoiced_qty: number;
+}
+
+interface EmbeddedInvoice {
+  id: string;
+  invoice_number: string;
+  supplier_name: string | null;
+  po_number: string | null;
+  expected_delivery_date: string | null;
+  items: InvoiceItem[];
+}
+
 interface ReceiptDetail {
   id: string;
   receipt_number: string;
   purchase_order_id?: string | null;
   po_number?: string | null;
+  supplier_delivery_invoice_id?: string | null;
   source_type?: string | null;
   warehouse_code?: string;
   warehouse_name?: string;
@@ -35,7 +56,9 @@ interface ReceiptDetail {
   created_at: string;
   note?: string;
   total_amount: number;
+  received_by_user_id?: string | null;
   items: ReceiptDetailItem[];
+  invoice?: EmbeddedInvoice | null;
 }
 
 function formatCurrency(value: number): string {
@@ -67,13 +90,28 @@ export function OrderDetailPage() {
   const showUnitCost = canViewUnitCost(currentUser);
   const showLocation = canViewLocationCode(currentUser);
 
+  // countedQty maps receipt item id → quantity staff physically counted
+  const [countedQty, setCountedQty] = useState<Record<string, number>>({});
+  const [isSavingItems, setIsSavingItems] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [scanInput, setScanInput] = useState("");
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const fetchDetail = async () => {
       if (!id) return;
       try {
         setLoading(true);
         const data = await goodsReceiptService.getById(id);
-        setReceipt(data as ReceiptDetail);
+        const detail = data as ReceiptDetail;
+        setReceipt(detail);
+        // Init counted qty from current receipt item quantities
+        const init: Record<string, number> = {};
+        for (const item of detail.items ?? []) {
+          init[item.id] = item.quantity;
+        }
+        setCountedQty(init);
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Không tải được chi tiết phiếu nhập"));
       } finally {
@@ -83,6 +121,44 @@ export function OrderDetailPage() {
 
     fetchDetail();
   }, [id]);
+
+
+  const handleScanBarcode = (barcode: string) => {
+    const cleaned = barcode.trim();
+    if (!cleaned || !receipt) return;
+    // Match barcode against receipt items
+    const matched = receipt.items.find(
+      (item) => item.barcode === cleaned || item.barcode?.replace(/[^0-9]/g, "") === cleaned.replace(/[^0-9]/g, "")
+    );
+    if (matched) {
+      setHighlightedItemId(matched.id);
+      setCountedQty((prev) => ({ ...prev, [matched.id]: (prev[matched.id] ?? 0) + 1 }));
+      setTimeout(() => setHighlightedItemId(null), 1500);
+    } else {
+      toast.warning(`Không tìm thấy sách có mã: ${cleaned}`);
+    }
+    setScanInput("");
+  };
+
+  const handleSaveItemQty = async () => {
+    if (!id || !receipt) return;
+    try {
+      setIsSavingItems(true);
+      const items = receipt.items.map((item) => ({
+        id: item.id,
+        quantity: countedQty[item.id] ?? item.quantity,
+      }));
+      await goodsReceiptService.updateItems(id, items);
+      // Refresh receipt
+      const refreshed = await goodsReceiptService.getById(id);
+      setReceipt(refreshed as ReceiptDetail);
+      toast.success("Đã lưu số lượng kiểm đếm");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Lưu số lượng thất bại"));
+    } finally {
+      setIsSavingItems(false);
+    }
+  };
 
   useEffect(() => {
     if (!showManageReceiving) return;
@@ -311,30 +387,66 @@ export function OrderDetailPage() {
           >
             <SectionCard title="Thao tác" className="overflow-hidden">
               <div className="space-y-2">
-                {showManageReceiving ? (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
-                    <p className="mb-2 text-[12px] font-semibold text-emerald-800">Giao phiếu cho nhân viên kho</p>
-                    <div className="flex gap-2">
-                      <select
-                        value={selectedReceiverId}
-                        onChange={(event) => setSelectedReceiverId(event.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-2 text-[12px]"
-                      >
-                        <option value="">Chọn nhân viên</option>
-                        {warehouseStaff.map((staff) => (
-                          <option key={staff.id} value={staff.id}>
-                            {staff.full_name || staff.username || staff.email}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => void handleAssignReceiver()}
-                        disabled={isAssigning || !selectedReceiverId}
-                        className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
-                      >
-                        {isAssigning ? "Đang giao" : "Giao"}
-                      </button>
-                    </div>
+                {showManageReceiving && receipt.status === "DRAFT" ? (
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 space-y-2">
+                    {receipt.received_by_user_id && !selectedReceiverId ? (
+                      // Already assigned — show who + option to reassign
+                      <>
+                        <p className="text-[12px] font-semibold text-emerald-800">Nhân viên kiểm đếm</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span className="text-[12px] font-medium text-emerald-900">
+                              {warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.full_name
+                                || warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.username
+                                || "Đã giao"}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setSelectedReceiverId(receipt.received_by_user_id ?? "")}
+                            className="text-[11px] text-emerald-700 underline hover:text-emerald-900"
+                          >
+                            Đổi
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      // Not assigned or reassigning
+                      <>
+                        <p className="text-[12px] font-semibold text-emerald-800">
+                          {receipt.received_by_user_id ? "Đổi nhân viên kiểm đếm" : "Giao phiếu cho nhân viên kho"}
+                        </p>
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedReceiverId}
+                            onChange={(event) => setSelectedReceiverId(event.target.value)}
+                            className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-2 text-[12px]"
+                          >
+                            <option value="">Chọn nhân viên</option>
+                            {warehouseStaff.map((staff) => (
+                              <option key={staff.id} value={staff.id}>
+                                {staff.full_name || staff.username || staff.email}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => void handleAssignReceiver()}
+                            disabled={isAssigning || !selectedReceiverId}
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                          >
+                            {isAssigning ? "Đang giao" : "Giao"}
+                          </button>
+                          {receipt.received_by_user_id && (
+                            <button
+                              onClick={() => setSelectedReceiverId("")}
+                              className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-500 hover:bg-slate-50"
+                            >
+                              Hủy
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : null}
                 <button onClick={() => window.print()} className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15 font-medium">
@@ -377,6 +489,121 @@ export function OrderDetailPage() {
           </motion.div>
         </div>
       </div>
+      {/* NCC invoice comparison — full width, below the main grid, visible to all roles */}
+      {receipt.invoice && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+          <SectionCard
+            title="Kiểm đếm theo phiếu xuất nhà cung cấp"
+            subtitle={`${receipt.invoice.po_number || ""} · ${receipt.invoice.supplier_name || ""} · Hóa đơn ${receipt.invoice.invoice_number}`}
+          >
+            {/* Invoice info banner */}
+            <div className="flex flex-wrap gap-4 mb-4 p-3 rounded-lg bg-sky-50 border border-sky-100">
+              <div className="flex items-center gap-2 text-[12px]">
+                <Truck className="h-3.5 w-3.5 text-sky-600" />
+                <span className="text-muted-foreground">NCC:</span>
+                <span className="font-semibold">{receipt.invoice.supplier_name || "-"}</span>
+              </div>
+              <div className="text-[12px]">
+                <span className="text-muted-foreground">PO:</span>{" "}
+                <span className="font-semibold">{receipt.invoice.po_number || "-"}</span>
+              </div>
+              <div className="text-[12px]">
+                <span className="text-muted-foreground">Hóa đơn NCC:</span>{" "}
+                <span className="font-semibold">{receipt.invoice.invoice_number}</span>
+              </div>
+              <div className="text-[12px]">
+                <span className="text-muted-foreground">Kho nhận:</span>{" "}
+                <span className="font-semibold">{receipt.warehouse_code || receipt.warehouse_name || "-"}</span>
+              </div>
+            </div>
+
+            {/* Scan bar — only on DRAFT */}
+            {receipt.status === "DRAFT" && (
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    ref={scanInputRef}
+                    type="text"
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
+                    placeholder="Scan hoặc nhập mã vạch để đếm..."
+                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <button type="button" onClick={() => setShowScannerModal(true)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
+                  <ScanBarcode className="h-4 w-4" /> Camera
+                </button>
+                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                  <Save className="h-4 w-4" />
+                  {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
+                </button>
+              </div>
+            )}
+
+            {/* Comparison table */}
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {["Tên sách", "ISBN/Mã vạch", "NCC xuất", "Thực đếm", "Lệch", "Trạng thái"].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {receipt.invoice.items.map((invItem) => {
+                    const receiptItem = receipt.items.find(
+                      (ri) => ri.barcode === invItem.barcode || ri.barcode === invItem.isbn13 || ri.barcode === invItem.sku || ri.book_title === invItem.title
+                    );
+                    const expected = Number(invItem.invoiced_qty || 0);
+                    const counted = receiptItem ? (countedQty[receiptItem.id] ?? receiptItem.quantity) : 0;
+                    const diff = counted - expected;
+                    const isHighlighted = receiptItem?.id === highlightedItemId;
+                    const statusLabel = diff === 0 ? "Đủ" : diff > 0 ? "Thừa" : "Thiếu";
+                    const statusColor = diff === 0 ? "bg-emerald-50 text-emerald-700" : diff > 0 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700";
+                    return (
+                      <tr key={invItem.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50" : "hover:bg-slate-50/60"}`}>
+                        <td className="px-4 py-3 text-[13px] font-medium">{invItem.title || "-"}</td>
+                        <td className="px-4 py-2.5 font-mono text-[12px] text-slate-500">{invItem.isbn13 || invItem.sku || "-"}</td>
+                        <td className="px-4 py-2.5 text-[13px] font-semibold text-indigo-700">{expected}</td>
+                        <td className="px-4 py-2.5">
+                          {receiptItem && receipt.status === "DRAFT" ? (
+                            <input type="number" min={0}
+                              value={countedQty[receiptItem.id] ?? receiptItem.quantity}
+                              onChange={(e) => setCountedQty((prev) => ({ ...prev, [receiptItem.id]: Math.max(0, Number(e.target.value) || 0) }))}
+                              className="w-20 rounded-[6px] border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
+                            />
+                          ) : (
+                            <span className="text-[13px]">{counted}</span>
+                          )}
+                        </td>
+                        <td className={`px-4 py-2.5 text-[13px] font-semibold ${diff > 0 ? "text-rose-600" : diff < 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                          {diff > 0 ? `+${diff}` : diff}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusColor}`}>{statusLabel}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+        </motion.div>
+      )}
+
+      {showScannerModal && (
+        <BarcodeScanModal
+          isOpen={true}
+          onDetected={(barcode) => { handleScanBarcode(barcode); setShowScannerModal(false); }}
+          onClose={() => setShowScannerModal(false)}
+        />
+      )}
     </div>
   );
 }

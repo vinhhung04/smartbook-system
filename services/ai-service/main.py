@@ -23,6 +23,7 @@ from rag import (
     ensure_source_line,
 )
 from retrieval import retrieve_context
+from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
 from agent_planner import plan_agent_action
 from agent_store import (
     create_pending_action,
@@ -36,6 +37,7 @@ from agent_store import (
     ACTION_RESULTS,
 )
 from agent_permissions import get_user_context, can_confirm_action, require_can_confirm_action
+from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
 from agent_executor import execute_agent_action
 from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
 from agent_actions import (
@@ -1971,6 +1973,18 @@ CHAT_SYSTEM_PROMPT = (
     "- Tư vấn quy trình nghiệp vụ thư viện (nhập kho, putaway, picking, xuất kho).\n"
 )
 
+ROLE_BASED_RULES = (
+    "\n## Quy tắc theo vai trò người dùng\n"
+    "- Luôn trả lời theo user hiện tại được xác định từ Authorization token. KHÔNG dùng thông tin user từ body request.\n"
+    "- CUSTOMER: Chỉ dùng dữ liệu cá nhân của customer đó. Không tiết lộ dữ liệu người khác hay analytics toàn hệ thống.\n"
+    "- STAFF/WAREHOUSE_STAFF: Ưu tiên task được giao cho họ, không hiện task của người khác.\n"
+    "- MANAGER/ADMIN: Có thể trả lời dữ liệu tổng quan hệ thống.\n"
+    "- LIBRARIAN/CUSTOMER_SERVICE: Tập trung nghiệp vụ mượn trả, reservation, loan, fine.\n"
+    "- SUPPLIER: Chỉ xem dữ liệu liên quan supplier của họ.\n"
+    "- Nếu người dùng hỏi ngoài phạm vi quyền của họ, giải thích ngắn gọn họ không có quyền xem dữ liệu đó.\n"
+    "- Không bịa dữ liệu. Nếu không có dữ liệu từ endpoint, nói rõ là chưa có thông tin.\n"
+)
+
 
 def _build_context_block(system_context: dict | None) -> str:
     """Chuyển dữ liệu hệ thống thành đoạn text để inject vào prompt."""
@@ -2120,6 +2134,44 @@ def _wants_agent_action(message: str) -> bool:
     return any(kw in normalized for kw in _AGENT_ACTION_KEYWORDS)
 
 
+_PERSONAL_QUERY_KEYWORDS = [
+    # General "of mine" / "I have"
+    "cua toi", "cua minh", "toi co", "toi dang", "toi can", "toi phai",
+    "cho toi biet", "voi toi",
+    # Loan / borrow variations
+    "sach muon", "dang muon", "muon sach", "sach chua tra", "sach tra",
+    "han tra", "qua han", "lich su muon", "muon bao nhieu", "sach cua toi",
+    "loan cua toi",
+    # Fine variations
+    "khoan phat", "phat chua", "tien phat", "no phat", "con no",
+    "phi phat", "chua thanh toan", "phat muon tra", "phat cua toi",
+    "con phat", "phat gi khong",
+    # Reservation variations
+    "dat sach", "dang dat", "cho dat", "trang thai dat", "lich dat",
+    "reservation cua toi", "don dat cua toi",
+    # Membership / card
+    "the thu vien", "membership", "the muon sach", "han the", "gia han the",
+    "thanh vien", "membership cua toi",
+    # Staff task variations
+    "task", "viec hom nay", "phan cong", "duoc giao", "giao viec",
+    "nhiem vu", "lam gi hom nay", "can lam", "viec gi hom nay",
+    "hom nay lam gi", "toi phai lam", "co viec gi", "viec cua toi",
+    # Picking / putaway specific
+    "picking", "putaway", "phieu cua toi", "don picking",
+    "phieu putaway", "don hang cua toi",
+    # Exception reports
+    "ngoai le cua toi", "bao cao cua toi", "exception cua toi",
+    # English personal terms
+    "my tasks", "my loans", "my fines", "my reservations", "my membership",
+    "my picking", "my putaway",
+]
+
+
+def _is_personal_query(message: str) -> bool:
+    normalized = normalize_text(message)
+    return any(kw in normalized for kw in _PERSONAL_QUERY_KEYWORDS)
+
+
 def _make_temp_action_for_check(planned: dict):
     """Build a minimal object for can_confirm_action without hitting agent_store."""
     from agent_schemas import PendingAction
@@ -2152,9 +2204,30 @@ async def chat(request: Request, req: ChatRequest):
         raise HTTPException(status_code=429, detail=reason)
 
     auth_header = request.headers.get("authorization")
+
+    # Resolve user identity early so persona and personal context can be built
+    # before retrieval. Never fail the chat on auth errors.
+    user_ctx = None
+    if auth_header:
+        try:
+            user_ctx = await get_user_context(auth_header)
+        except Exception:
+            pass
+
     intent_info = detect_intent(req.message.strip())
 
-    retrieval = await retrieve_context(intent_info, auth_header)
+    # Build personal context (role-aware data) in parallel with system analytics.
+    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
+
+    # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
+    # context (loans, fines, tasks) already comes from build_user_personal_context.
+    # Exception: allow BOOK_SEARCH_QUERY so customers can still look up catalog books.
+    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
+    _is_book_search = intent_info.get("intent") == _BOOK_SEARCH_INTENT
+    if _blocked and not _is_book_search:
+        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
+    else:
+        retrieval = await retrieve_context(intent_info, auth_header)
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
@@ -2199,13 +2272,20 @@ async def chat(request: Request, req: ChatRequest):
     auth_hash = hashlib.md5((auth_header or "anonymous").encode()).hexdigest()[:8]
     history_hash = f"{history_hash}:{auth_hash}:{intent_info.get('intent') or 'unknown'}"
 
-    # Bypass cache for action requests — each planned action needs a unique ID.
+    # Bypass cache for action requests and personal queries (data is user-specific).
     is_action_request = _wants_agent_action(req.message)
-    cached_reply = None if is_action_request else response_cache.get(req.message, history_hash)
+    is_personal_query = _is_personal_query(req.message)
+    skip_cache = is_action_request or is_personal_query
+    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
     if cached_reply:
         return {"reply": cached_reply, "ai_provider": "cached", **metadata}
 
-    system_content = CHAT_SYSTEM_PROMPT + RAG_SYSTEM_RULES + context_block
+    # Build persona block from personal context.
+    persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
+    if personal.get("summary"):
+        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
+
+    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
     messages = [{"role": "system", "content": system_content}]
 
     for msg in req.conversation_history[-10:]:
@@ -2216,12 +2296,6 @@ async def chat(request: Request, req: ChatRequest):
     async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
         """Try to plan an agent action and append a confirmation hint to the reply."""
         pending_action_data = None
-        user_ctx = None
-        try:
-            if auth_header:
-                user_ctx = await get_user_context(auth_header)
-        except Exception:
-            pass  # never fail the chat response on permission errors
 
         if is_action_request and user_ctx is None:
             reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
@@ -2258,7 +2332,7 @@ async def chat(request: Request, req: ChatRequest):
     if groq_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data:
+        if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
         result = {"reply": reply_with_sources, "ai_provider": "groq", **metadata}
         if pending_action_data:
@@ -2269,7 +2343,7 @@ async def chat(request: Request, req: ChatRequest):
     if ollama_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data:
+        if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
         result = {"reply": reply_with_sources, "ai_provider": "ollama", **metadata}
         if pending_action_data:

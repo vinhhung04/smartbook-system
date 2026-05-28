@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, ClipboardCheck, FileText, RefreshCw, Search, Truck } from "lucide-react";
+import { AlertCircle, ArrowLeft, ClipboardCheck, FileText, RefreshCw, Search, Truck, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
+import { goodsReceiptService } from "@/services/goods-receipt";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 import { getApiErrorMessage } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -157,16 +159,16 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   const [invoice, setInvoice] = useState<SupplierDeliveryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [countedQty, setCountedQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState("");
 
   const load = async () => {
     try {
       setLoading(true);
       const response = await supplierDeliveryService.getById(id);
       setInvoice(response.data);
-      setCountedQty(Object.fromEntries(response.data.items.map((item) => [item.id, Math.min(item.remaining_qty, item.invoiced_qty)])));
-      setNote(`Receive supplier invoice ${response.data.invoice_number}`);
+      setNote(`Nhận hàng theo hóa đơn NCC ${response.data.invoice_number}`);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không tải được chi tiết giao hàng"));
     } finally {
@@ -174,54 +176,71 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
     }
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  useEffect(() => { void load(); }, [id]);
 
+  useEffect(() => {
+    userService.getWarehouseStaff()
+      .then((res) => setWarehouseStaff(Array.isArray(res.data) ? res.data : []))
+      .catch(() => {});
+  }, []);
+
+  // Quantities are taken directly from invoice — staff will verify physically
   const totals = useMemo(() => {
-    if (!invoice) return { counted: 0, amount: 0, shortage: 0, invalid: false };
+    if (!invoice) return { planned: 0, amount: 0, shortage: 0 };
     return invoice.items.reduce(
       (acc, item) => {
-        const qty = Number(countedQty[item.id] || 0);
-        acc.counted += qty;
+        const qty = Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0));
+        acc.planned += qty;
         acc.amount += qty * Number(item.unit_cost || 0);
-        acc.shortage += Math.max(0, Number(item.invoiced_qty || 0) - qty, Number(item.remaining_qty || 0) - qty);
-        if (qty > item.remaining_qty || qty > item.invoiced_qty) acc.invalid = true;
+        acc.shortage += Math.max(0, Number(item.invoiced_qty || 0) - Number(item.remaining_qty || 0));
         return acc;
       },
-      { counted: 0, amount: 0, shortage: 0, invalid: false },
+      { planned: 0, amount: 0, shortage: 0 },
     );
-  }, [countedQty, invoice]);
+  }, [invoice]);
 
-  const createDraft = async () => {
+  const canReceive = invoice ? ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status) : false;
+
+  const createAndAssign = async () => {
     if (!invoice) return;
+    if (!selectedStaffId) return toast.error("Vui lòng chọn nhân viên kho để giao phiếu");
+
     const items = invoice.items
-      .filter((item) => Number(countedQty[item.id] || 0) > 0)
       .map((item) => ({
         invoice_item_id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
-        delivered_qty: Number(countedQty[item.id] || 0),
+        delivered_qty: Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0)),
         unit_cost: item.unit_cost,
         location_id: null,
-        note: Number(countedQty[item.id] || 0) < item.invoiced_qty ? "Supplier delivered short" : null,
-      }));
-    if (items.length === 0) return toast.error("Enter at least one counted quantity");
-    if (totals.invalid) return toast.error("Counted quantity cannot exceed invoice or PO remaining quantity");
-    if (!window.confirm("Tạo phiếu nhận hàng nháp từ hóa đơn nhà cung cấp này?")) return;
+        note: Number(item.invoiced_qty || 0) > Number(item.remaining_qty || 0) ? "Số lượng hóa đơn vượt PO còn lại" : null,
+      }))
+      .filter((item) => item.delivered_qty > 0);
+
+    if (items.length === 0) return toast.error("Không có mục hàng nào để tạo phiếu");
 
     try {
       setSaving(true);
+      // Step 1: Create draft goods receipt from invoice
       const response = await supplierDeliveryService.createGoodsReceiptFromInvoice(invoice.id, {
         warehouse_id: invoice.warehouse_id || "",
         note,
         items,
       });
-      toast.success(`Goods Receipt ${response.data.receipt_number} created in DRAFT`);
-      navigate(`/orders/${response.data.id}`);
+      const receiptId = response.data.id;
+      const receiptNumber = response.data.receipt_number;
+
+      // Step 2: Assign to selected warehouse staff
+      await goodsReceiptService.assign(receiptId, selectedStaffId);
+
+      const staffName = warehouseStaff.find((s) => s.id === selectedStaffId)?.full_name
+        || warehouseStaff.find((s) => s.id === selectedStaffId)?.username
+        || "nhân viên";
+
+      toast.success(`Đã tạo phiếu ${receiptNumber} và giao cho ${staffName}`);
+      navigate(`/orders/${receiptId}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Tạo phiếu nhận hàng nháp thất bại"));
+      toast.error(getApiErrorMessage(error, "Tạo và giao phiếu thất bại"));
     } finally {
       setSaving(false);
     }
@@ -232,77 +251,67 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   }
 
   if (!invoice) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><EmptyState variant="no-data" title="Supplier delivery not found" description="This invoice may have been deleted." /></div>;
+    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><EmptyState variant="no-data" title="Không tìm thấy phiếu giao hàng" description="Phiếu này có thể đã bị xóa." /></div>;
   }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <NavLink to="/supplier-deliveries" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to Supplier Deliveries
+        <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách
       </NavLink>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">Receive Supplier Delivery</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Phiếu xuất nhà cung cấp</h1>
             <StatusBadge label={invoice.status} variant={statusVariant(invoice.status)} dot />
           </div>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            {invoice.po_number || "-"} - {invoice.supplier_name || "-"} - Invoice {invoice.invoice_number}
+            {invoice.po_number || "-"} · {invoice.supplier_name || "-"} · Hóa đơn {invoice.invoice_number}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={saving}>
-          <RefreshCw className={`h-3.5 w-3.5 ${saving ? "animate-spin" : ""}`} /> Refresh
+          <RefreshCw className={`h-3.5 w-3.5 ${saving ? "animate-spin" : ""}`} /> Làm mới
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <SectionCard title="Warehouse"><p className="text-[13px] font-medium">{invoice.warehouse_code || "-"} - {invoice.warehouse_name || ""}</p></SectionCard>
-        <SectionCard title="Expected"><p className="text-[13px] font-medium">{formatDate(invoice.expected_delivery_date)}</p></SectionCard>
-        <SectionCard title="Counted"><p className="text-lg font-semibold">{totals.counted}</p></SectionCard>
-        <SectionCard title="Value"><p className="font-mono text-[13px] font-semibold">{formatCurrency(totals.amount)}</p></SectionCard>
+        <SectionCard title="Kho nhận"><p className="text-[13px] font-medium">{invoice.warehouse_code || "-"} · {invoice.warehouse_name || ""}</p></SectionCard>
+        <SectionCard title="Ngày giao dự kiến"><p className="text-[13px] font-medium">{formatDate(invoice.expected_delivery_date)}</p></SectionCard>
+        <SectionCard title="Số lượng sẽ nhận"><p className="text-lg font-semibold">{totals.planned}</p></SectionCard>
+        <SectionCard title="Giá trị ước tính"><p className="font-mono text-[13px] font-semibold">{formatCurrency(totals.amount)}</p></SectionCard>
       </div>
 
-      <SectionCard title="Receiving Comparison" noPadding>
+      {/* Items from invoice — quantities auto-filled, staff will verify physically */}
+      <SectionCard title="Danh sách hàng theo phiếu NCC" noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px]">
+          <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Tên sách", "ISBN/SKU", "SL đặt", "Đã nhận trước", "PO còn lại", "Hóa đơn", "NV đếm", "Thiếu", "Trạng thái"].map((heading) => (
+                {["Tên sách", "ISBN/SKU", "SL đặt (PO)", "Đã nhận trước", "PO còn lại", "NCC xuất", "Sẽ nhận", "Trạng thái"].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {invoice.items.map((item) => {
-                const qty = Number(countedQty[item.id] || 0);
-                const shortage = Math.max(0, Number(item.invoiced_qty || 0) - qty, Number(item.remaining_qty || 0) - qty);
-                const invalid = qty > item.remaining_qty || qty > item.invoiced_qty;
-                const status = invalid ? "OVER_BLOCKED" : shortage > 0 ? "SHORTAGE" : "MATCHED";
+                const willReceive = Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0));
+                const hasShortage = Number(item.invoiced_qty || 0) < Number(item.remaining_qty || 0);
+                const overPo = Number(item.invoiced_qty || 0) > Number(item.remaining_qty || 0);
+                const rowStatus = overPo ? "QUÁ PO" : hasShortage ? "THIẾU" : "ĐỦ";
+                const rowVariant = overPo ? "danger" : hasShortage ? "warning" : "success";
                 return (
-                  <tr key={item.id} className="border-b border-border last:border-0">
+                  <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="px-5 py-3.5 text-[13px] font-semibold">{item.title || "-"}</td>
                     <td className="px-5 py-3.5 font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || item.variant_id}</td>
                     <td className="px-5 py-3.5 text-[13px]">{item.ordered_qty}</td>
                     <td className="px-5 py-3.5 text-[13px]">{item.previously_received_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{item.remaining_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{item.invoiced_qty}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-medium">{item.remaining_qty}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-semibold text-indigo-700">{item.invoiced_qty}</td>
                     <td className="px-5 py-3.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={Math.min(item.remaining_qty, item.invoiced_qty)}
-                        value={qty}
-                        onChange={(event) => {
-                          const max = Math.min(Number(item.remaining_qty || 0), Number(item.invoiced_qty || 0));
-                          const next = Math.min(max, Math.max(0, Number(event.target.value) || 0));
-                          setCountedQty((current) => ({ ...current, [item.id]: next }));
-                        }}
-                        className="w-24 rounded-lg border border-input bg-background px-2 py-1.5 text-[12px]"
-                      />
+                      <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[12px] font-semibold text-emerald-700">{willReceive}</span>
                     </td>
-                    <td className="px-5 py-3.5 text-[13px]">{shortage}</td>
-                    <td className="px-5 py-3.5"><StatusBadge label={status} variant={status === "MATCHED" ? "success" : status === "SHORTAGE" ? "warning" : "danger"} /></td>
+                    <td className="px-5 py-3.5"><StatusBadge label={rowStatus} variant={rowVariant} /></td>
                   </tr>
                 );
               })}
@@ -311,26 +320,60 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
         </div>
       </SectionCard>
 
-      <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-900">
-        Stock increases only after this Goods Receipt is POSTED. No location selected: items will be placed in receiving hold.
-      </div>
-      {totals.shortage > 0 ? (
+      {totals.shortage > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800">
-          <AlertCircle className="mt-0.5 h-4 w-4" /> Shortage report will be created for counted quantities below invoice or PO remaining quantity.
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          Một số mục NCC xuất ít hơn PO còn lại. Hệ thống sẽ tự tạo báo cáo thiếu hàng.
         </div>
-      ) : null}
+      )}
 
-      <SectionCard title="Receipt Note" icon={FileText}>
-        <div className="p-5">
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
-        </div>
-      </SectionCard>
-
-      <div className="flex justify-end">
-        <Button onClick={() => void createDraft()} disabled={saving || totals.counted <= 0 || totals.invalid}>
-          <ClipboardCheck className="h-3.5 w-3.5" /> {saving ? "Đang tạo..." : "Tạo phiếu nhận hàng nháp"}
-        </Button>
+      <div className="rounded-lg border border-sky-100 bg-sky-50 p-4 text-[13px] text-sky-800">
+        Tồn kho chỉ tăng sau khi manager <strong>duyệt phiếu</strong>. Phiếu tạo ra sẽ ở trạng thái DRAFT để nhân viên kho kiểm đếm thực tế trước khi duyệt.
       </div>
+
+      {canReceive && (
+        <SectionCard title="Giao phiếu kiểm đếm cho nhân viên kho" icon={UserCheck}>
+          <div className="space-y-4 p-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Nhân viên kho thực hiện kiểm đếm</label>
+                <select
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px]"
+                >
+                  <option value="">-- Chọn nhân viên kho --</option>
+                  {warehouseStaff.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.full_name || staff.username || staff.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ghi chú phiếu nhập</label>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => void createAndAssign()}
+                disabled={saving || !selectedStaffId || totals.planned <= 0}
+                className="gap-2"
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                {saving ? "Đang tạo và giao..." : "Tạo phiếu và giao cho nhân viên"}
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
