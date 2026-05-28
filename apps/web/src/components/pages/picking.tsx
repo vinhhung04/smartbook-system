@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, ScanLine, UserCheck } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowRight, CheckCircle2, ChevronDown, ChevronRight, ScanLine, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { FadeItem, PageWrapper } from "../motion-utils";
@@ -10,6 +10,8 @@ import { warehouseService, type Warehouse } from "@/services/warehouse";
 import {
   pickingService,
   type PickingTaskDetail,
+  type PickingTaskItemRecord,
+  type PickingTaskRecord,
   type PickingTaskSummary,
   type PickingTaskType,
   type PickingVariantLookupMatch,
@@ -77,6 +79,11 @@ export function PickingPage() {
   const [selectedScannedVariantId, setSelectedScannedVariantId] = useState("");
   const [ambiguousMatches, setAmbiguousMatches] = useState<PickingVariantLookupMatch[]>([]);
   const [activeScanTarget, setActiveScanTarget] = useState<PickingScanTarget | null>(null);
+
+  // Repick hierarchy expand state
+  const [expandedRepickTaskId, setExpandedRepickTaskId] = useState<string | null>(null);
+  const [repickChildren, setRepickChildren] = useState<(PickingTaskRecord & { picking_task_items: PickingTaskItemRecord[] })[]>([]);
+  const [loadingRepickChildren, setLoadingRepickChildren] = useState(false);
 
   const currentUser = authService.getCurrentUser();
   const canManageAssignment = canManageReceiving(currentUser);
@@ -602,14 +609,44 @@ export function PickingPage() {
                       : "";
 
                     return (
-                      <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                      <React.Fragment key={key}>
+                      <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                         <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{taskTypeLabel(task.order_type)}</td>
                         <td className="px-4 py-3 text-[12px]">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${taskClassLabel(task.task_class) === "REPICK" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
-                            {taskClassLabel(task.task_class)}
-                            {taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${taskClassLabel(task.task_class) === "REPICK" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"}`}>
+                              {taskClassLabel(task.task_class)}
+                              {taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}
+                            </span>
+                            {taskClassLabel(task.task_class) === "PICK" && (task.repick_count ?? 0) > 0 && task.picking_task_id && (
+                              <button
+                                onClick={async () => {
+                                  const ptId = task.picking_task_id!;
+                                  if (expandedRepickTaskId === ptId) {
+                                    setExpandedRepickTaskId(null);
+                                    setRepickChildren([]);
+                                  } else {
+                                    setExpandedRepickTaskId(ptId);
+                                    setLoadingRepickChildren(true);
+                                    try {
+                                      const children = await pickingService.getPickingTaskChildren(ptId);
+                                      setRepickChildren(children);
+                                    } finally {
+                                      setLoadingRepickChildren(false);
+                                    }
+                                  }
+                                }}
+                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-amber-100 transition-colors"
+                                title="Xem REPICK tasks"
+                              >
+                                {task.repick_count} RPK
+                                {expandedRepickTaskId === task.picking_task_id
+                                  ? <ChevronDown className="w-3 h-3" />
+                                  : <ChevronRight className="w-3 h-3" />}
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.source_warehouse_code || task.source_warehouse_name || "-"}</td>
                         <td className="px-4 py-3 text-[12px] text-slate-600">{task.target_warehouse_code || task.target_warehouse_name || "-"}</td>
@@ -659,6 +696,33 @@ export function PickingPage() {
                           </div>
                         </td>
                       </tr>
+                      {/* Inline REPICK children rows when expanded */}
+                      {task.picking_task_id && expandedRepickTaskId === task.picking_task_id && (
+                        loadingRepickChildren ? (
+                          <tr key={`${key}-loading`}>
+                            <td colSpan={11} className="pl-10 py-2 text-[11px] text-slate-400">Đang tải...</td>
+                          </tr>
+                        ) : repickChildren.map((child) => (
+                          <tr key={child.picking_task_id} className="border-b border-amber-50 bg-amber-50/30">
+                            <td className="px-4 py-2 text-[11px] text-slate-500 pl-10">
+                              <span className="text-amber-700 font-semibold">↳ {child.task_number}</span>
+                            </td>
+                            <td className="px-4 py-2 text-[11px] text-slate-400" colSpan={2}>REPICK</td>
+                            <td className="px-4 py-2 text-[11px] text-slate-500" colSpan={2}>—</td>
+                            <td className="px-4 py-2 text-[11px]">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] ${child.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : child.status === "PICKING" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
+                                {child.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-[11px] text-slate-500">{child.picking_task_items?.length ?? 0}</td>
+                            <td className="px-4 py-2 text-[11px] text-slate-500">
+                              {child.picking_task_items?.reduce((s, i) => s + i.short_qty, 0) ?? 0}
+                            </td>
+                            <td colSpan={3} />
+                          </tr>
+                        ))
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

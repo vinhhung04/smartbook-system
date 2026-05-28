@@ -27,6 +27,8 @@ export interface PickingTaskSummary {
   assigned_picker_user_id: string | null;
   requested_at: string;
   approved_at: string;
+  picking_task_id?: string | null;
+  repick_count?: number;
 }
 
 export interface PickingTaskLine {
@@ -96,6 +98,36 @@ export interface PickingVariantLookupMatch {
   match_priority: number;
   book_id: string | null;
   book_title: string;
+}
+
+export interface PickingTaskRecord {
+  picking_task_id: string;
+  task_number: string;
+  picking_type: 'PICK' | 'REPICK';
+  root_order_id: string;
+  root_order_number: string | null;
+  warehouse_id: string;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  assigned_picker_id: string | null;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  repick_count: number;
+  total_requested_qty: number;
+  total_picked_qty: number;
+  children?: PickingTaskRecord[];
+}
+
+export interface PickingTaskItemRecord {
+  id: string;
+  variant_id: string;
+  requested_qty: number;
+  picked_qty: number;
+  short_qty: number;
+  status: string;
+  outbound_order_item_id: string | null;
 }
 
 export const pickingService = {
@@ -172,5 +204,17 @@ export const pickingService = {
         repick_created?: null;
       };
     };
+  },
+
+  getPickingTasksHierarchy: async (warehouseId?: string, status?: string) => {
+    const response = await inventoryAPI.get('/api/picking/picking-tasks', {
+      params: { warehouse_id: warehouseId || undefined, status: status || undefined },
+    });
+    return response.data as PickingTaskRecord[];
+  },
+
+  getPickingTaskChildren: async (pickingTaskId: string) => {
+    const response = await inventoryAPI.get(`/api/picking/picking-tasks/${pickingTaskId}/children`);
+    return response.data as (PickingTaskRecord & { picking_task_items: PickingTaskItemRecord[] })[];
   },
 };

@@ -94,6 +94,7 @@ model book_variants {
   smart_receiving_corrected_variants smart_receiving_items[] @relation("smart_receiving_corrected_variants")
   purchase_requests          purchase_requests[]
   warehouse_exception_reports warehouse_exception_reports[]
+  picking_task_items          picking_task_items[]
 
   @@index([book_id], map: "idx_book_variants_book_id")
   @@index([isbn13], map: "idx_book_variants_isbn13")
@@ -285,6 +286,7 @@ model locations {
   stock_reservations                                                    stock_reservations[]
   transfer_order_items_transfer_order_items_from_location_idTolocations transfer_order_items[] @relation("transfer_order_items_from_location_idTolocations")
   transfer_order_items_transfer_order_items_to_location_idTolocations   transfer_order_items[] @relation("transfer_order_items_to_location_idTolocations")
+  picking_task_items                                                    picking_task_items[]
 
   @@unique([warehouse_id, location_code])
   @@unique([warehouse_id, zone, aisle, shelf, bin])
@@ -300,9 +302,10 @@ model outbound_order_items {
   quantity           Int
   processed_qty      Int             @default(0)
   note               String?
-  outbound_orders    outbound_orders @relation(fields: [outbound_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  locations          locations?      @relation(fields: [source_location_id], references: [id], onUpdate: NoAction)
-  book_variants      book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  outbound_orders      outbound_orders      @relation(fields: [outbound_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  locations            locations?           @relation(fields: [source_location_id], references: [id], onUpdate: NoAction)
+  book_variants        book_variants        @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  picking_task_items   picking_task_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -327,6 +330,7 @@ model outbound_orders {
   updated_at                    DateTime               @default(now()) @db.Timestamptz(6)
   outbound_order_items          outbound_order_items[]
   warehouses                    warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  picking_tasks                 picking_tasks[]
 
   @@index([status, requested_at], map: "idx_outbound_orders_status")
 }
@@ -351,6 +355,63 @@ model outbound_reference_sequences {
   reference_type OutboundReferenceType @id
   last_number    Int                   @default(0)
   updated_at     DateTime              @default(now()) @db.Timestamptz(6)
+}
+
+model picking_task_sequences {
+  sequence_type String   @id @db.VarChar(20)
+  last_number   Int      @default(0)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model picking_tasks {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_number         String    @unique @db.VarChar(40)
+  root_order_id       String    @db.Uuid
+  parent_id           String?   @db.Uuid
+  picking_type        String    @default("PICK") @db.VarChar(10)
+  warehouse_id        String    @db.Uuid
+  assigned_picker_id  String?   @db.Uuid
+  assigned_at         DateTime? @db.Timestamptz(6)
+  assigned_by_user_id String?   @db.Uuid
+  status              String    @default("PENDING") @db.VarChar(20)
+  started_at          DateTime? @db.Timestamptz(6)
+  completed_at        DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  outbound_orders    outbound_orders      @relation(fields: [root_order_id], references: [id], onUpdate: NoAction)
+  warehouses         warehouses           @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  picking_tasks      picking_tasks?       @relation("pt_parent", fields: [parent_id], references: [id], onUpdate: NoAction)
+  child_tasks        picking_tasks[]      @relation("pt_parent")
+  picking_task_items picking_task_items[]
+
+  @@index([root_order_id], map: "idx_picking_tasks_root_order")
+  @@index([status, warehouse_id], map: "idx_picking_tasks_status_wh")
+  @@index([parent_id], map: "idx_picking_tasks_parent")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model picking_task_items {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  picking_task_id        String    @db.Uuid
+  outbound_order_item_id String?   @db.Uuid
+  variant_id             String    @db.Uuid
+  source_location_id     String?   @db.Uuid
+  requested_qty          Int
+  picked_qty             Int       @default(0)
+  short_qty              Int       @default(0)
+  status                 String    @default("PENDING") @db.VarChar(20)
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime  @default(now()) @db.Timestamptz(6)
+
+  picking_tasks        picking_tasks         @relation(fields: [picking_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  outbound_order_items outbound_order_items? @relation(fields: [outbound_order_item_id], references: [id], onUpdate: NoAction)
+  book_variants        book_variants         @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  locations            locations?            @relation(fields: [source_location_id], references: [id], onUpdate: NoAction)
+
+  @@index([picking_task_id], map: "idx_pti_task")
+  @@index([outbound_order_item_id], map: "idx_pti_ooi")
 }
 
 model publishers {
@@ -780,6 +841,7 @@ model warehouses {
   purchase_requests                                             purchase_requests[]
   warehouse_exception_reports                                   warehouse_exception_reports[]
   staff_tasks                                                   staff_tasks[]
+  picking_tasks                                                 picking_tasks[]
 }
 
 /// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.

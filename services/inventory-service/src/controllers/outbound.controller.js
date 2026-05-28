@@ -193,11 +193,21 @@ async function listOutboundQueue(req, res) {
         ],
       };
 
+  // Statuses visible in the outbound queue — includes orders still being picked/repicked
+  const OUTBOUND_VISIBLE_STATUSES = [
+    "APPROVED",
+    "PICKING",
+    "PARTIAL_PICKED",
+    "REPICKING",
+    "READY_FOR_OUTBOUND",
+    "READY_TO_SHIP",
+  ];
+
   try {
-    const [outboundOrders, transferOrders] = await Promise.all([
+    const [outboundOrders, transferOrders, pickingTasksMeta] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
-          status: "READY_FOR_OUTBOUND",
+          status: { in: OUTBOUND_VISIBLE_STATUSES },
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
           ...outboundAssignment,
         },
@@ -228,30 +238,94 @@ async function listOutboundQueue(req, res) {
         },
         orderBy: { updated_at: "asc" },
       }),
+      // Aggregate picking_tasks (PICK + REPICK) per root outbound order
+      // Only query PICK tasks as root; REPICK tasks are loaded via child_tasks.
+      prisma.picking_tasks.findMany({
+        where: {
+          picking_type: "PICK",
+          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+        },
+        select: {
+          id: true,
+          root_order_id: true,
+          status: true,
+          _count: { select: { child_tasks: true } },
+          // PICK task's own items
+          picking_task_items: {
+            select: { requested_qty: true, picked_qty: true, short_qty: true },
+          },
+          // REPICK child tasks + their items for aggregate
+          child_tasks: {
+            select: {
+              id: true,
+              status: true,
+              picking_type: true,
+              picking_task_items: {
+                select: { requested_qty: true, picked_qty: true, short_qty: true },
+              },
+            },
+          },
+        },
+      }),
     ]);
 
+    // Build lookup: outbound_order_id → picking meta
+    // Aggregate picked_qty across PICK task + ALL REPICK child tasks.
+    const pickingMetaByOrder = new Map();
+    for (const pt of pickingTasksMeta) {
+      const repickCount = pt._count.child_tasks;
+      const activeRepicks = (pt.child_tasks || []).filter(
+        (c) => !["COMPLETED", "CANCELLED"].includes(c.status),
+      ).length;
+
+      // Sum across PICK items
+      const pickRequested = pt.picking_task_items.reduce((s, i) => s + i.requested_qty, 0);
+      const pickPicked = pt.picking_task_items.reduce((s, i) => s + i.picked_qty, 0);
+
+      // Sum across all REPICK child items
+      const repickPicked = (pt.child_tasks || []).flatMap((c) => c.picking_task_items || [])
+        .reduce((s, i) => s + i.picked_qty, 0);
+
+      pickingMetaByOrder.set(pt.root_order_id, {
+        picking_task_id: pt.id,
+        pick_status: pt.status,
+        repick_count: repickCount,
+        active_repick_count: activeRepicks,
+        aggregate_requested_qty: pickRequested,
+        // Total fulfilled = PICK picked + REPICK picked (additive, not double-counted)
+        aggregate_picked_qty: pickPicked + repickPicked,
+      });
+    }
+
     const data = [
-      ...outboundOrders.map((order) => ({
-        task_type: "outbound",
-        task_id: order.id,
-        order_number: order.outbound_number,
-        status: order.status,
-        source_warehouse_id: order.warehouse_id,
-        source_warehouse_code: order.warehouses?.code || null,
-        source_warehouse_name: order.warehouses?.name || null,
-        target_warehouse_id: null,
-        target_warehouse_code: null,
-        target_warehouse_name: null,
-        outbound_assigned_user_id: order.outbound_assigned_user_id || null,
-        total_quantity: (order.outbound_order_items || []).reduce(
-          (sum, line) => sum + Number(line.quantity || 0),
-          0,
-        ),
-        ready_quantity: (order.outbound_order_items || []).reduce(
-          (sum, line) => sum + Number(line.processed_qty || 0),
-          0,
-        ),
-      })),
+      ...outboundOrders.map((order) => {
+        const ptMeta = pickingMetaByOrder.get(order.id);
+        return {
+          task_type: "outbound",
+          task_id: order.id,
+          order_number: order.outbound_number,
+          status: order.status,
+          source_warehouse_id: order.warehouse_id,
+          source_warehouse_code: order.warehouses?.code || null,
+          source_warehouse_name: order.warehouses?.name || null,
+          target_warehouse_id: null,
+          target_warehouse_code: null,
+          target_warehouse_name: null,
+          outbound_assigned_user_id: order.outbound_assigned_user_id || null,
+          total_quantity: (order.outbound_order_items || []).reduce(
+            (sum, line) => sum + Number(line.quantity || 0),
+            0,
+          ),
+          ready_quantity: ptMeta?.aggregate_picked_qty
+            ?? (order.outbound_order_items || []).reduce(
+              (sum, line) => sum + Number(line.processed_qty || 0),
+              0,
+            ),
+          picking_task_id: ptMeta?.picking_task_id || null,
+          repick_count: ptMeta?.repick_count || 0,
+          active_repick_count: ptMeta?.active_repick_count || 0,
+        };
+      }),
       ...transferOrders.map((order) => ({
         task_type: "transfer",
         task_id: order.id,
@@ -331,6 +405,56 @@ async function getOutboundOrderDetail(req, res) {
         return res.status(403).json({ message: "Forbidden" });
       }
 
+      // Fetch full execution chain: PICK task + all REPICK tasks
+      const allPickingTasks = await prisma.picking_tasks.findMany({
+        where: { root_order_id: taskId },
+        orderBy: { created_at: "asc" },
+        select: {
+          id: true,
+          task_number: true,
+          picking_type: true,
+          status: true,
+          parent_id: true,
+          assigned_picker_id: true,
+          started_at: true,
+          completed_at: true,
+          created_at: true,
+          picking_task_items: {
+            select: {
+              id: true,
+              variant_id: true,
+              requested_qty: true,
+              picked_qty: true,
+              short_qty: true,
+              status: true,
+              outbound_order_item_id: true,
+            },
+          },
+        },
+      });
+
+      const pickTask = allPickingTasks.find((t) => t.picking_type === "PICK") || null;
+      const repickTasks = allPickingTasks.filter((t) => t.picking_type === "REPICK");
+
+      // Aggregate quantities across ALL picking_task_items (PICK + all REPICKs)
+      let aggregateTotalRequested = 0;
+      let aggregateTotalPicked = 0;
+      for (const task of allPickingTasks) {
+        for (const item of task.picking_task_items) {
+          aggregateTotalRequested += item.requested_qty;
+          aggregateTotalPicked += item.picked_qty;
+        }
+      }
+      // Fallback to outbound_order_items if no picking_tasks exist yet
+      if (allPickingTasks.length === 0) {
+        aggregateTotalRequested = (order.outbound_order_items || []).reduce(
+          (s, l) => s + Number(l.quantity || 0), 0,
+        );
+        aggregateTotalPicked = (order.outbound_order_items || []).reduce(
+          (s, l) => s + Number(l.processed_qty || 0), 0,
+        );
+      }
+
       return res.json({
         task_type: "outbound",
         task_id: order.id,
@@ -340,6 +464,28 @@ async function getOutboundOrderDetail(req, res) {
         source_warehouse_code: order.warehouses?.code || null,
         source_warehouse_name: order.warehouses?.name || null,
         outbound_assigned_user_id: order.outbound_assigned_user_id || null,
+        // Aggregate across PICK + all REPICKs
+        aggregate_requested_qty: aggregateTotalRequested,
+        aggregate_picked_qty: aggregateTotalPicked,
+        aggregate_remaining_qty: Math.max(0, aggregateTotalRequested - aggregateTotalPicked),
+        // Execution chain
+        pick_task: pickTask ? {
+          picking_task_id: pickTask.id,
+          task_number: pickTask.task_number,
+          status: pickTask.status,
+          assigned_picker_id: pickTask.assigned_picker_id,
+          started_at: pickTask.started_at,
+          completed_at: pickTask.completed_at,
+          items: pickTask.picking_task_items,
+        } : null,
+        repick_tasks: repickTasks.map((rt) => ({
+          picking_task_id: rt.id,
+          task_number: rt.task_number,
+          status: rt.status,
+          parent_id: rt.parent_id,
+          created_at: rt.created_at,
+          items: rt.picking_task_items,
+        })),
         lines: (order.outbound_order_items || []).map((line) => ({
           line_id: line.id,
           variant_id: line.variant_id,
@@ -463,8 +609,9 @@ async function assignOutboundTask(req, res) {
         select: { id: true, outbound_number: true, status: true },
       });
       if (!order) return res.status(404).json({ message: "Outbound order not found" });
-      if (order.status !== "READY_FOR_OUTBOUND") {
-        return res.status(400).json({ message: "Order must be READY_FOR_OUTBOUND to assign" });
+      const ASSIGNABLE_STATUSES = ["APPROVED", "PICKING", "PARTIAL_PICKED", "REPICKING", "READY_FOR_OUTBOUND", "READY_TO_SHIP"];
+      if (!ASSIGNABLE_STATUSES.includes(order.status)) {
+        return res.status(400).json({ message: "Order must be in an active picking status to assign" });
       }
 
       await prisma.outbound_orders.update({
@@ -572,11 +719,26 @@ async function confirmOutbound(req, res) {
               statusCode: 404,
               message: "Outbound order not found",
             };
-          if (order.status !== "READY_FOR_OUTBOUND") {
+          if (!["READY_FOR_OUTBOUND", "READY_TO_SHIP"].includes(order.status)) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Outbound order must be READY_FOR_OUTBOUND",
+              message: "Outbound order must be READY_TO_SHIP (or READY_FOR_OUTBOUND) to confirm",
+            };
+          }
+
+          // Block completion if any picking_tasks for this order are not yet done
+          const pendingPickingTasks = await tx.picking_tasks.count({
+            where: {
+              root_order_id: taskId,
+              status: { notIn: ["COMPLETED", "CANCELLED"] },
+            },
+          });
+          if (pendingPickingTasks > 0) {
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: `Còn ${pendingPickingTasks} picking task chưa hoàn tất. Vui lòng hoàn thành tất cả PICK/REPICK trước khi xuất kho.`,
             };
           }
 

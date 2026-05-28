@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { createPickingTask, createRepickTask } = require("../services/picking-task.service");
 
 const prisma = new PrismaClient();
 
@@ -248,6 +249,87 @@ function calculateLineRemaining(quantity, pickedQty) {
 
 function getTaskClassFromNote(note) {
   return parseRepickMeta(note) ? "REPICK" : "PICK";
+}
+
+// Compute the correct outbound_orders.status from the full pick/repick chain.
+//
+// Source of truth for requested qty: root outbound_order_items.quantity (e.g. 10).
+// Source of truth for picked qty:    SUM(picking_task_items.picked_qty) across PICK + all REPICKs.
+//
+// When picking_task_items don't exist yet (legacy orders or tasks not yet created),
+// falls back to outbound_order_items.processed_qty on the root order.
+//
+// Returns new status string, or null when status should not change.
+async function computeOutboundPickingStatus(tx, rootOrderId) {
+  // requested_total: from root order's outbound_order_items (never changes)
+  const rootItems = await tx.outbound_order_items.findMany({
+    where: { outbound_order_id: rootOrderId },
+    select: { quantity: true, processed_qty: true },
+  });
+
+  if (rootItems.length === 0) return null;
+  const totalRequested = rootItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+  if (totalRequested === 0) return null;
+
+  // picked_total: prefer picking_task_items aggregate; fall back to processed_qty
+  const allTasks = await tx.picking_tasks.findMany({
+    where: { root_order_id: rootOrderId },
+    select: {
+      picking_type: true,
+      status: true,
+      picking_task_items: { select: { picked_qty: true } },
+    },
+  });
+
+  let totalPicked;
+  if (allTasks.length > 0) {
+    // picking_tasks exist → use their items for the aggregate
+    totalPicked = allTasks
+      .flatMap((t) => t.picking_task_items)
+      .reduce((s, i) => s + i.picked_qty, 0);
+  } else {
+    // No picking_tasks (order pre-dates task creation) → use root order processed_qty
+    totalPicked = rootItems.reduce((s, i) => s + Number(i.processed_qty || 0), 0);
+  }
+
+  // Primary gate: aggregate fulfilled >= requested → ready to ship
+  if (totalPicked >= totalRequested) return "READY_TO_SHIP";
+
+  // Still in repicking phase
+  const hasActiveRepick = allTasks.some(
+    (t) =>
+      t.picking_type === "REPICK" &&
+      !["COMPLETED", "CANCELLED"].includes(t.status),
+  );
+  if (hasActiveRepick) return "REPICKING";
+
+  return null;
+}
+
+// Aggregate total fulfilled quantity for a root outbound order, including all REPICK orders.
+// Uses outbound_order_items.processed_qty as the source of truth.
+// This is the fallback when picking_task_items are not available or are out of sync.
+async function aggregateFulfilledQty(tx, rootOrderId) {
+  const rootItems = await tx.outbound_order_items.findMany({
+    where: { outbound_order_id: rootOrderId },
+    select: { quantity: true, processed_qty: true },
+  });
+  const requested = rootItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+  const rootProcessed = rootItems.reduce((s, i) => s + Number(i.processed_qty || 0), 0);
+
+  // Find all REPICK outbound_orders for this root via [REPICK_META] note marker
+  const repickOrders = await tx.outbound_orders.findMany({
+    where: {
+      note: { contains: `root_task_id=${encodeMetaValue(rootOrderId)}` },
+      status: { not: "CANCELLED" },
+    },
+    select: { outbound_order_items: { select: { processed_qty: true } } },
+  });
+  const repickProcessed = repickOrders
+    .flatMap((o) => o.outbound_order_items)
+    .reduce((s, i) => s + Number(i.processed_qty || 0), 0);
+
+  return { requested, fulfilled: rootProcessed + repickProcessed };
 }
 
 function createRepickOutboundNumber() {
@@ -604,6 +686,16 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
   const rootTaskId = parentMeta?.root_task_id || order.id;
   const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
 
+  // Check existing REPICK via relational picking_tasks first (new), then fall back to note-based check
+  const existingRepickTask = await tx.picking_tasks.findFirst({
+    where: {
+      root_order_id: rootTaskId,
+      picking_type: "REPICK",
+      status: { not: "CANCELLED" },
+    },
+    select: { id: true },
+  });
+
   const existingChild = await tx.outbound_orders.findFirst({
     where: {
       note: { contains: `[${REPICK_META_MARKER}]` },
@@ -621,11 +713,11 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
     },
   });
 
-  if (existingChild) {
+  if (existingRepickTask || existingChild) {
     return {
       task_type: "outbound",
-      task_id: existingChild.id,
-      order_number: existingChild.outbound_number,
+      task_id: existingChild?.id || null,
+      order_number: existingChild?.outbound_number || null,
       repick_sequence: repickSequence,
       reused_existing: true,
     };
@@ -672,6 +764,30 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
       }),
     })),
   });
+
+  // Dual-write: create picking_tasks REPICK linked via parent_id (relational, no note-parsing)
+  const parentPickingTask = await tx.picking_tasks.findFirst({
+    where: { root_order_id: order.id, picking_type: "PICK" },
+    select: { id: true, root_order_id: true, warehouse_id: true },
+  });
+  if (parentPickingTask) {
+    await createRepickTask(tx, {
+      parentPickingTask,
+      shortages: shortages.map((line) => ({
+        outbound_order_item_id: line.original_line_id || null,
+        variant_id: line.variant_id,
+        source_location_id: line.source_location_id || null,
+        qty: line.quantity,
+      })),
+      actorUserId,
+    });
+
+    // Update root outbound order to REPICKING so it stays visible and reflects true state
+    await tx.outbound_orders.update({
+      where: { id: rootTaskId },
+      data: { status: "REPICKING", updated_at: new Date() },
+    });
+  }
 
   await tx.inventory_audit_logs.create({
     data: {
@@ -906,7 +1022,7 @@ async function listPickingTasks(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
 
   try {
-    const [outboundOrders, transferOrders] = await Promise.all([
+    const [outboundOrders, transferOrders, pickingTasksMeta] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
@@ -950,7 +1066,27 @@ async function listPickingTasks(req, res) {
         },
         orderBy: { requested_at: "asc" },
       }),
+      // Fetch picking_tasks metadata for repick_count and picking_task_id
+      prisma.picking_tasks.findMany({
+        where: {
+          picking_type: "PICK",
+          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+        },
+        select: {
+          id: true,
+          root_order_id: true,
+          _count: { select: { child_tasks: true } },
+        },
+      }),
     ]);
+
+    // Build lookup: outbound_order_id → { picking_task_id, repick_count }
+    const pickingTaskByOrderId = new Map(
+      pickingTasksMeta.map((pt) => [
+        pt.root_order_id,
+        { picking_task_id: pt.id, repick_count: pt._count.child_tasks },
+      ]),
+    );
 
     const tasks = [];
 
@@ -966,6 +1102,7 @@ async function listPickingTasks(req, res) {
       const repickMeta = parseRepickMeta(order.note);
       const taskClass = getTaskClassFromNote(order.note);
 
+      const ptMeta = pickingTaskByOrderId.get(order.id);
       tasks.push({
         task_type: "outbound",
         task_id: order.id,
@@ -993,6 +1130,8 @@ async function listPickingTasks(req, res) {
         assigned_picker_user_id: assignedPicker,
         requested_at: order.requested_at,
         approved_at: order.updated_at,
+        picking_task_id: ptMeta?.picking_task_id || null,
+        repick_count: ptMeta?.repick_count || 0,
       });
     });
 
@@ -1102,6 +1241,7 @@ async function claimPickingTask(req, res) {
           select: {
             id: true,
             status: true,
+            note: true,
             processed_by_user_id: true,
           },
         });
@@ -1144,6 +1284,27 @@ async function claimPickingTask(req, res) {
           data: {
             processed_by_user_id: pickerUserId,
             status: "PICKING",
+          },
+        });
+
+        // Dual-write: sync picking_tasks execution record.
+        // For REPICK orders, root_order_id points to the original order; use REPICK type filter.
+        const claimRepickMeta = parseRepickMeta(order.note);
+        const claimRootOrderId = claimRepickMeta?.root_task_id || taskId;
+        const claimPickingType = claimRepickMeta ? "REPICK" : "PICK";
+        await tx.picking_tasks.updateMany({
+          where: {
+            root_order_id: claimRootOrderId,
+            picking_type: claimPickingType,
+            status: { not: "CANCELLED" },
+          },
+          data: {
+            assigned_picker_id: pickerUserId,
+            assigned_at: new Date(),
+            assigned_by_user_id: currentUserId,
+            status: "PICKING",
+            started_at: new Date(),
+            updated_at: new Date(),
           },
         });
 
@@ -2486,6 +2647,55 @@ async function confirmPickingLine(req, res) {
             },
           });
 
+          // Determine root order: REPICK orders have [REPICK_META] in note pointing to root
+          const repickMeta = parseRepickMeta(order.note);
+          const rootOrderId = repickMeta?.root_task_id || order.id;
+          const isRepickOrder = Boolean(repickMeta);
+
+          // Dual-write: sync picking_task_items execution record.
+          // For PICK orders: outbound_order_item_id = line.id (direct match).
+          // For REPICK orders: picking_task_items.outbound_order_item_id stores the ORIGINAL
+          // pick line id (not the REPICK order's line id), so we fall back to variant matching.
+          let pti = await tx.picking_task_items.findFirst({
+            where: { outbound_order_item_id: line.id },
+            select: { id: true, picking_task_id: true, requested_qty: true, picked_qty: true },
+          });
+
+          if (!pti && isRepickOrder) {
+            // Find the active REPICK picking_task for the root order, then match by variant
+            const repickTask = await tx.picking_tasks.findFirst({
+              where: {
+                root_order_id: rootOrderId,
+                picking_type: "REPICK",
+                status: { notIn: ["COMPLETED", "CANCELLED"] },
+              },
+              select: { id: true },
+            });
+            if (repickTask) {
+              pti = await tx.picking_task_items.findFirst({
+                where: {
+                  picking_task_id: repickTask.id,
+                  variant_id: line.variant_id,
+                  status: { not: "PICKED" },
+                },
+                select: { id: true, picking_task_id: true, requested_qty: true, picked_qty: true },
+              });
+            }
+          }
+
+          if (pti) {
+            const newPickedQty = pti.picked_qty + quantity;
+            await tx.picking_task_items.update({
+              where: { id: pti.id },
+              data: {
+                picked_qty: newPickedQty,
+                short_qty: Math.max(0, pti.requested_qty - newPickedQty),
+                status: newPickedQty >= pti.requested_qty ? "PICKED" : "PENDING",
+                updated_at: new Date(),
+              },
+            });
+          }
+
           await tx.stock_movements.create({
             data: {
               movement_number: createMovementNumber(Date.now(), 0),
@@ -2525,22 +2735,59 @@ async function confirmPickingLine(req, res) {
             (item) => calculateLineRemaining(item.quantity, item.processed_qty) <= 0,
           );
 
-          if (allDone) {
-            await tx.outbound_orders.update({
-              where: { id: order.id },
+          // Dual-write: update picking_tasks status
+          if (pti) {
+            const newTaskStatus = allDone ? "COMPLETED" : "PICKING";
+            await tx.picking_tasks.update({
+              where: { id: pti.picking_task_id },
               data: {
-                status: "READY_FOR_OUTBOUND",
-                processed_by_user_id: scope.currentUserId,
+                status: newTaskStatus,
+                completed_at: newTaskStatus === "COMPLETED" ? new Date() : null,
+                updated_at: new Date(),
               },
             });
-          } else if (order.status !== "PICKING") {
-            await tx.outbound_orders.update({
-              where: { id: order.id },
-              data: {
-                status: "PICKING",
-                processed_by_user_id: scope.currentUserId,
-              },
-            });
+          }
+
+          // Update ROOT outbound_orders.status based on full picking chain state.
+          // rootOrderId is correct for both PICK (= order.id) and REPICK (= original root).
+          {
+            // Attempt 1: picking_task_items aggregate (accurate when tasks exist).
+            const computedStatus = await computeOutboundPickingStatus(tx, rootOrderId);
+
+            if (computedStatus) {
+              await tx.outbound_orders.update({
+                where: { id: rootOrderId },
+                data: {
+                  status: computedStatus,
+                  processed_by_user_id: scope.currentUserId,
+                  updated_at: new Date(),
+                },
+              });
+            } else if (allDone) {
+              // Attempt 2: all of the current order's lines are confirmed. Fall back to aggregating
+              // processed_qty from root + all REPICK outbound_orders (handles orders without tasks).
+              const { requested, fulfilled } = await aggregateFulfilledQty(tx, rootOrderId);
+              if (requested > 0 && fulfilled >= requested) {
+                await tx.outbound_orders.update({
+                  where: { id: rootOrderId },
+                  data: {
+                    status: "READY_TO_SHIP",
+                    processed_by_user_id: scope.currentUserId,
+                    updated_at: new Date(),
+                  },
+                });
+              }
+            } else if (!isRepickOrder && !allDone && order.status !== "PICKING") {
+              // PICK order still in progress → ensure PICKING status
+              await tx.outbound_orders.update({
+                where: { id: order.id },
+                data: {
+                  status: "PICKING",
+                  processed_by_user_id: scope.currentUserId,
+                  updated_at: new Date(),
+                },
+              });
+            }
           }
 
           await tx.inventory_audit_logs.create({
@@ -3527,6 +3774,109 @@ async function ensureRepicksEndpoint(req, res) {
   });
 }
 
+async function listPickingTasksHierarchy(req, res) {
+  const warehouseId = parseId(req.query?.warehouse_id);
+  const statusFilter = normalizeText(req.query?.status);
+
+  try {
+    const where = {};
+    if (warehouseId) where.warehouse_id = warehouseId;
+    if (statusFilter) where.status = statusFilter;
+    // Only return root PICK tasks; REPICKs are fetched via children endpoint
+    where.picking_type = "PICK";
+
+    const tasks = await prisma.picking_tasks.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      select: {
+        id: true,
+        task_number: true,
+        picking_type: true,
+        root_order_id: true,
+        parent_id: true,
+        warehouse_id: true,
+        assigned_picker_id: true,
+        status: true,
+        started_at: true,
+        completed_at: true,
+        created_at: true,
+        outbound_orders: { select: { outbound_number: true } },
+        warehouses: { select: { code: true, name: true } },
+        _count: { select: { child_tasks: true } },
+        picking_task_items: {
+          select: { requested_qty: true, picked_qty: true },
+        },
+      },
+    });
+
+    return res.json(
+      tasks.map((t) => ({
+        picking_task_id: t.id,
+        task_number: t.task_number,
+        picking_type: t.picking_type,
+        root_order_id: t.root_order_id,
+        root_order_number: t.outbound_orders?.outbound_number || null,
+        warehouse_id: t.warehouse_id,
+        warehouse_code: t.warehouses?.code || null,
+        warehouse_name: t.warehouses?.name || null,
+        assigned_picker_id: t.assigned_picker_id,
+        status: t.status,
+        started_at: t.started_at,
+        completed_at: t.completed_at,
+        created_at: t.created_at,
+        repick_count: t._count.child_tasks,
+        total_requested_qty: t.picking_task_items.reduce((s, i) => s + i.requested_qty, 0),
+        total_picked_qty: t.picking_task_items.reduce((s, i) => s + i.picked_qty, 0),
+      })),
+    );
+  } catch (error) {
+    console.error("Error listing picking tasks hierarchy:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function getPickingTaskChildren(req, res) {
+  const pickingTaskId = parseId(req.params.pickingTaskId);
+
+  if (!pickingTaskId) {
+    return res.status(400).json({ message: "Invalid pickingTaskId" });
+  }
+
+  try {
+    const children = await prisma.picking_tasks.findMany({
+      where: { parent_id: pickingTaskId },
+      orderBy: { created_at: "asc" },
+      select: {
+        id: true,
+        task_number: true,
+        picking_type: true,
+        root_order_id: true,
+        parent_id: true,
+        status: true,
+        started_at: true,
+        completed_at: true,
+        created_at: true,
+        picking_task_items: {
+          select: {
+            id: true,
+            variant_id: true,
+            requested_qty: true,
+            picked_qty: true,
+            short_qty: true,
+            status: true,
+            outbound_order_item_id: true,
+          },
+        },
+      },
+    });
+
+    return res.json(children);
+  } catch (error) {
+    console.error("Error fetching picking task children:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   listPickingTasks,
   claimPickingTask,
@@ -3537,4 +3887,6 @@ module.exports = {
   cancelTransferReturn,
   cancelOutboundReturn,
   ensureRepicksEndpoint,
+  listPickingTasksHierarchy,
+  getPickingTaskChildren,
 };
