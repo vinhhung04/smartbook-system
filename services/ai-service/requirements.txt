@@ -4,3 +4,4 @@ ollama
 python-multipart
 ddgs
 httpx
+cloakbrowser
