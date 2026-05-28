@@ -162,12 +162,36 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
 async function listOutboundQueue(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
   const scope = getTaskPermissionScope(req.user || {});
+
+  // Staff sees tasks where they are the outbound assignee.
+  // Backward compat: if outbound_assigned_user_id is null, fall back to processed_by_user_id / shipped_by_user_id.
   const outboundAssignment = scope.canManageAssignment
     ? {}
-    : { processed_by_user_id: scope.currentUserId };
+    : {
+        OR: [
+          { outbound_assigned_user_id: scope.currentUserId },
+          {
+            AND: [
+              { outbound_assigned_user_id: null },
+              { processed_by_user_id: scope.currentUserId },
+            ],
+          },
+        ],
+      };
+
   const transferAssignment = scope.canManageAssignment
     ? {}
-    : { shipped_by_user_id: scope.currentUserId };
+    : {
+        OR: [
+          { outbound_assigned_user_id: scope.currentUserId },
+          {
+            AND: [
+              { outbound_assigned_user_id: null },
+              { shipped_by_user_id: scope.currentUserId },
+            ],
+          },
+        ],
+      };
 
   try {
     const [outboundOrders, transferOrders] = await Promise.all([
@@ -218,6 +242,7 @@ async function listOutboundQueue(req, res) {
         target_warehouse_id: null,
         target_warehouse_code: null,
         target_warehouse_name: null,
+        outbound_assigned_user_id: order.outbound_assigned_user_id || null,
         total_quantity: (order.outbound_order_items || []).reduce(
           (sum, line) => sum + Number(line.quantity || 0),
           0,
@@ -246,6 +271,7 @@ async function listOutboundQueue(req, res) {
         target_warehouse_name:
           order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name ||
           null,
+        outbound_assigned_user_id: order.outbound_assigned_user_id || null,
         total_quantity: (order.transfer_order_items || []).reduce(
           (sum, line) => sum + Number(line.quantity || 0),
           0,
@@ -297,7 +323,11 @@ async function getOutboundOrderDetail(req, res) {
 
       if (!order)
         return res.status(404).json({ message: "Outbound order not found" });
-      if (!canAccessAssignedTask(req.user || {}, order.processed_by_user_id)) {
+
+      // Prefer outbound_assigned_user_id; fall back to processed_by_user_id for old data
+      const effectiveAssignee =
+        order.outbound_assigned_user_id || order.processed_by_user_id;
+      if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
         return res.status(403).json({ message: "Forbidden" });
       }
 
@@ -309,6 +339,7 @@ async function getOutboundOrderDetail(req, res) {
         source_warehouse_id: order.warehouse_id,
         source_warehouse_code: order.warehouses?.code || null,
         source_warehouse_name: order.warehouses?.name || null,
+        outbound_assigned_user_id: order.outbound_assigned_user_id || null,
         lines: (order.outbound_order_items || []).map((line) => ({
           line_id: line.id,
           variant_id: line.variant_id,
@@ -356,7 +387,11 @@ async function getOutboundOrderDetail(req, res) {
 
     if (!order)
       return res.status(404).json({ message: "Transfer order not found" });
-    if (!canAccessAssignedTask(req.user || {}, order.shipped_by_user_id)) {
+
+    // Prefer outbound_assigned_user_id; fall back to shipped_by_user_id for old data
+    const effectiveAssignee =
+      order.outbound_assigned_user_id || order.shipped_by_user_id;
+    if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -379,6 +414,7 @@ async function getOutboundOrderDetail(req, res) {
       target_warehouse_name:
         order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name ||
         null,
+      outbound_assigned_user_id: order.outbound_assigned_user_id || null,
       lines: (order.transfer_order_items || []).map((line) => ({
         line_id: line.id,
         variant_id: line.variant_id,
@@ -398,6 +434,94 @@ async function getOutboundOrderDetail(req, res) {
     });
   } catch (error) {
     console.error("Error while loading outbound detail:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function assignOutboundTask(req, res) {
+  const taskType = normalizeTaskType(req.params.taskType);
+  const taskId = parseId(req.params.taskId);
+  const assignedUserId = parseId(req.body?.outbound_assigned_user_id);
+  const actorUserId = parseId(req.user?.id || req.user?.sub);
+
+  if (!taskType || !taskId) {
+    return res.status(400).json({ message: "Invalid taskType or taskId" });
+  }
+  if (!assignedUserId) {
+    return res.status(400).json({ message: "outbound_assigned_user_id is required" });
+  }
+
+  const scope = getTaskPermissionScope(req.user || {});
+  if (!scope.canManageAssignment) {
+    return res.status(403).json({ message: "Only manager or admin can assign outbound tasks" });
+  }
+
+  try {
+    if (taskType === "outbound") {
+      const order = await prisma.outbound_orders.findUnique({
+        where: { id: taskId },
+        select: { id: true, outbound_number: true, status: true },
+      });
+      if (!order) return res.status(404).json({ message: "Outbound order not found" });
+      if (order.status !== "READY_FOR_OUTBOUND") {
+        return res.status(400).json({ message: "Order must be READY_FOR_OUTBOUND to assign" });
+      }
+
+      await prisma.outbound_orders.update({
+        where: { id: taskId },
+        data: {
+          outbound_assigned_user_id: assignedUserId,
+          outbound_assigned_at: new Date(),
+          outbound_assigned_by_user_id: actorUserId,
+          updated_at: new Date(),
+        },
+      });
+
+      await prisma.inventory_audit_logs.create({
+        data: {
+          actor_user_id: actorUserId,
+          action_name: "OUTBOUND_TASK_ASSIGNED",
+          entity_type: "OUTBOUND_ORDER",
+          entity_id: taskId,
+          after_data: { outbound_assigned_user_id: assignedUserId },
+        },
+      });
+
+      return res.json({ message: "Outbound task assigned successfully" });
+    }
+
+    const order = await prisma.transfer_orders.findUnique({
+      where: { id: taskId },
+      select: { id: true, transfer_number: true, status: true },
+    });
+    if (!order) return res.status(404).json({ message: "Transfer order not found" });
+    if (order.status !== "READY_FOR_OUTBOUND") {
+      return res.status(400).json({ message: "Transfer order must be READY_FOR_OUTBOUND to assign" });
+    }
+
+    await prisma.transfer_orders.update({
+      where: { id: taskId },
+      data: {
+        outbound_assigned_user_id: assignedUserId,
+        outbound_assigned_at: new Date(),
+        outbound_assigned_by_user_id: actorUserId,
+        updated_at: new Date(),
+      },
+    });
+
+    await prisma.inventory_audit_logs.create({
+      data: {
+        actor_user_id: actorUserId,
+        action_name: "TRANSFER_OUTBOUND_TASK_ASSIGNED",
+        entity_type: "TRANSFER_ORDER",
+        entity_id: taskId,
+        after_data: { outbound_assigned_user_id: assignedUserId },
+      },
+    });
+
+    return res.json({ message: "Transfer outbound task assigned successfully" });
+  } catch (error) {
+    console.error("Error while assigning outbound task:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -438,6 +562,7 @@ async function confirmOutbound(req, res) {
               status: true,
               warehouse_id: true,
               processed_by_user_id: true,
+              outbound_assigned_user_id: true,
             },
           });
 
@@ -456,15 +581,26 @@ async function confirmOutbound(req, res) {
           }
 
           const scope = getTaskPermissionScope(req.user || {});
-          if (
-            !scope.canManageAssignment &&
-            order.processed_by_user_id !== scope.currentUserId
-          ) {
-            return {
-              invalid: true,
-              statusCode: 403,
-              message: "Task must be assigned to current warehouse staff",
-            };
+          if (!scope.canManageAssignment) {
+            // New flow: check outbound_assigned_user_id first
+            if (order.outbound_assigned_user_id) {
+              if (order.outbound_assigned_user_id !== scope.currentUserId) {
+                return {
+                  invalid: true,
+                  statusCode: 403,
+                  message: "Task must be assigned to current warehouse staff",
+                };
+              }
+            } else {
+              // Backward compat: fall back to processed_by_user_id
+              if (order.processed_by_user_id !== scope.currentUserId) {
+                return {
+                  invalid: true,
+                  statusCode: 403,
+                  message: "Task must be assigned to current warehouse staff",
+                };
+              }
+            }
           }
 
           if (
@@ -621,6 +757,7 @@ async function confirmOutbound(req, res) {
             from_warehouse_id: true,
             to_warehouse_id: true,
             shipped_by_user_id: true,
+            outbound_assigned_user_id: true,
           },
         });
 
@@ -639,15 +776,26 @@ async function confirmOutbound(req, res) {
         }
 
         const scope = getTaskPermissionScope(req.user || {});
-        if (
-          !scope.canManageAssignment &&
-          order.shipped_by_user_id !== scope.currentUserId
-        ) {
-          return {
-            invalid: true,
-            statusCode: 403,
-            message: "Task must be assigned to current warehouse staff",
-          };
+        if (!scope.canManageAssignment) {
+          // New flow: check outbound_assigned_user_id first
+          if (order.outbound_assigned_user_id) {
+            if (order.outbound_assigned_user_id !== scope.currentUserId) {
+              return {
+                invalid: true,
+                statusCode: 403,
+                message: "Task must be assigned to current warehouse staff",
+              };
+            }
+          } else {
+            // Backward compat: fall back to shipped_by_user_id
+            if (order.shipped_by_user_id !== scope.currentUserId) {
+              return {
+                invalid: true,
+                statusCode: 403,
+                message: "Task must be assigned to current warehouse staff",
+              };
+            }
+          }
         }
 
         if (
@@ -761,64 +909,11 @@ async function confirmOutbound(req, res) {
           })),
         });
 
-        const existingReceipt = await tx.goods_receipts.findFirst({
-          where: {
-            warehouse_id: order.to_warehouse_id,
-            source_type: "TRANSFER",
-            source_reference_id: order.id,
-          },
-          select: {
-            id: true,
-            warehouse_id: true,
-            receipt_number: true,
-            status: true,
-          },
-        });
-
-        let destinationReceipt = existingReceipt;
-        if (!destinationReceipt) {
-          destinationReceipt = await tx.goods_receipts.create({
-            data: {
-              receipt_number: createReceiptNumber(baseTimestamp),
-              warehouse_id: order.to_warehouse_id,
-              source_type: "TRANSFER",
-              source_reference_id: order.id,
-              status: "POSTED",
-              received_by_user_id: actorUserIdRequired,
-              note: `Auto-created from transfer ${order.transfer_number}`,
-            },
-            select: {
-              id: true,
-              warehouse_id: true,
-              receipt_number: true,
-              status: true,
-            },
-          });
-
-          await tx.goods_receipt_items.createMany({
-            data: lines
-              .filter((line) => Number(line.shipped_qty || 0) > 0)
-              .map((line) => ({
-                goods_receipt_id: destinationReceipt.id,
-                variant_id: line.variant_id,
-                location_id: null,
-                quantity: Number(line.shipped_qty || 0),
-                unit_cost: Number(line.unit_cost || 0),
-                note: `Auto-created from transfer line ${line.id}`,
-              })),
-          });
-
-          await postTransferReceiptToReceiving(
-            tx,
-            destinationReceipt,
-            actorUserIdOptional,
-          );
-        }
-
+        // Transfer moves to IN_TRANSIT — goods receipt is created later by the destination warehouse staff.
         await tx.transfer_orders.update({
           where: { id: order.id },
           data: {
-            status: "OUTBOUND_COMPLETED",
+            status: "IN_TRANSIT",
             shipped_at: new Date(),
             shipped_by_user_id: actorUserIdOptional,
           },
@@ -827,13 +922,11 @@ async function confirmOutbound(req, res) {
         await tx.inventory_audit_logs.create({
           data: {
             actor_user_id: actorUserIdOptional,
-            action_name: "TRANSFER_OUTBOUND_CONFIRMED",
+            action_name: "TRANSFER_SHIPPED_WAITING_RECEIVE",
             entity_type: "TRANSFER_ORDER",
             entity_id: order.id,
             after_data: {
-              status: "OUTBOUND_COMPLETED",
-              destination_receipt_id: destinationReceipt.id,
-              destination_receipt_number: destinationReceipt.receipt_number,
+              status: "IN_TRANSIT",
               scan_code: scanCode,
             },
           },
@@ -843,9 +936,7 @@ async function confirmOutbound(req, res) {
           data: {
             task_type: "transfer",
             task_id: order.id,
-            status: "OUTBOUND_COMPLETED",
-            destination_receipt_id: destinationReceipt.id,
-            destination_receipt_number: destinationReceipt.receipt_number,
+            status: "IN_TRANSIT",
           },
         };
       },
@@ -887,5 +978,8 @@ async function confirmOutbound(req, res) {
 module.exports = {
   listOutboundQueue,
   getOutboundOrderDetail,
+  assignOutboundTask,
   confirmOutbound,
+  postTransferReceiptToReceiving,
+  createReceiptNumber,
 };

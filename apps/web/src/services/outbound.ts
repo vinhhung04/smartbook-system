@@ -13,6 +13,7 @@ export interface OutboundQueueItem {
   target_warehouse_id: string | null;
   target_warehouse_code: string | null;
   target_warehouse_name: string | null;
+  outbound_assigned_user_id: string | null;
   total_quantity: number;
   ready_quantity: number;
 }
@@ -40,6 +41,7 @@ export interface OutboundOrderDetail {
   target_warehouse_id?: string | null;
   target_warehouse_code?: string | null;
   target_warehouse_name?: string | null;
+  outbound_assigned_user_id: string | null;
   lines: OutboundDetailLine[];
 }
 
@@ -66,6 +68,13 @@ export const outboundService = {
   getOrderDetail: async (taskType: OutboundTaskType, taskId: string) => {
     const response = await inventoryAPI.get(`/api/outbound/orders/${taskType}/${taskId}`);
     return response.data as OutboundOrderDetail;
+  },
+
+  assignOutboundTask: async (taskType: OutboundTaskType, taskId: string, staffId: string) => {
+    const response = await inventoryAPI.patch(`/api/outbound/orders/${taskType}/${taskId}/assign`, {
+      outbound_assigned_user_id: staffId,
+    });
+    return response.data as { message: string };
   },
 
   confirmOutbound: async (taskType: OutboundTaskType, taskId: string, scanCode?: string | null) => {

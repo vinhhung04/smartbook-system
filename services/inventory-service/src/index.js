@@ -33,6 +33,7 @@ const supplierAccountRoutes = require('./routes/supplier-account.routes');
 const purchaseRequestRoutes = require('./routes/purchase-request.routes');
 const exceptionReportRoutes = require('./routes/exception-report.routes');
 const staffTaskRoutes = require('./routes/staff-task.routes');
+const transferReceivingRoutes = require('./routes/transfer-receiving.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -60,7 +61,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   }
 
   try {
-    const [goodsReceipts, outboundOrders, transferOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
+    const [goodsReceipts, outboundOrders, transferOrders, transferReceivingOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
       prisma.goods_receipts.findMany({
         where: { received_by_user_id: userId },
         select: {
@@ -76,7 +77,12 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         take: 20,
       }),
       prisma.outbound_orders.findMany({
-        where: { processed_by_user_id: userId },
+        where: {
+          OR: [
+            { outbound_assigned_user_id: userId },
+            { AND: [{ outbound_assigned_user_id: null }, { processed_by_user_id: userId }] },
+          ],
+        },
         select: {
           id: true,
           outbound_number: true,
@@ -90,7 +96,12 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         take: 20,
       }),
       prisma.transfer_orders.findMany({
-        where: { shipped_by_user_id: userId },
+        where: {
+          OR: [
+            { outbound_assigned_user_id: userId },
+            { AND: [{ outbound_assigned_user_id: null }, { shipped_by_user_id: userId }] },
+          ],
+        },
         select: {
           id: true,
           transfer_number: true,
@@ -104,6 +115,26 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           warehouses_transfer_orders_to_warehouse_idTowarehouses: { select: { code: true, name: true } },
         },
         orderBy: { requested_at: 'desc' },
+        take: 20,
+      }),
+      prisma.transfer_orders.findMany({
+        where: {
+          status: 'IN_TRANSIT',
+          received_by_user_id: userId,
+        },
+        select: {
+          id: true,
+          transfer_number: true,
+          status: true,
+          from_warehouse_id: true,
+          to_warehouse_id: true,
+          requested_at: true,
+          shipped_at: true,
+          received_at: true,
+          warehouses_transfer_orders_from_warehouse_idTowarehouses: { select: { code: true, name: true } },
+          warehouses_transfer_orders_to_warehouse_idTowarehouses: { select: { code: true, name: true } },
+        },
+        orderBy: { shipped_at: 'desc' },
         take: 20,
       }),
       prisma.purchase_requests.findMany({
@@ -195,7 +226,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
       })),
       ...transferOrders.map((task) => ({
         id: task.id,
-        type: ['READY_FOR_OUTBOUND', 'OUTBOUND_COMPLETED'].includes(task.status) ? 'OUTBOUND' : 'PICKING',
+        type: ['READY_FOR_OUTBOUND', 'IN_TRANSIT'].includes(task.status) ? 'OUTBOUND' : 'PICKING',
         title: task.transfer_number,
         status: task.status,
         warehouse: [
@@ -205,6 +236,19 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.requested_at,
         completed_at: task.received_at || task.shipped_at,
         action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+      })),
+      ...transferReceivingOrders.map((task) => ({
+        id: task.id,
+        type: 'TRANSFER_RECEIVING',
+        title: task.transfer_number,
+        status: task.status,
+        warehouse: [
+          task.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code,
+          task.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code,
+        ].filter(Boolean).join(' -> ') || null,
+        created_at: task.requested_at,
+        completed_at: task.received_at,
+        action_path: '/transfer-receiving',
       })),
       ...purchaseRequests.map((task) => ({
         id: task.id,
@@ -291,6 +335,7 @@ app.use('/api/supplier-account', supplierAccountRoutes);
 app.use('/api/purchase-requests', purchaseRequestRoutes);
 app.use('/api/exception-reports', exceptionReportRoutes);
 app.use('/api/staff-tasks', staffTaskRoutes);
+app.use('/api/transfer-receiving', transferReceivingRoutes);
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

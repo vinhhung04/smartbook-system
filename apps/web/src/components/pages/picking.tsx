@@ -364,7 +364,7 @@ export function PickingPage() {
         scanned_variant_id: selectedScannedVariantId || null,
       };
 
-      await pickingService.confirmLine(selectedTaskType, selectedTaskId, currentLine.line_id, payload);
+      const result = await pickingService.confirmLine(selectedTaskType, selectedTaskId, currentLine.line_id, payload);
 
       const nextLocationContext = locationInput.trim() || presenceResolvedLocationInput;
 
@@ -387,7 +387,13 @@ export function PickingPage() {
         loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
       ]);
 
-      toast.success("Đã xác nhận lấy dòng thành công");
+      if (result.data.task_completed) {
+        toast.success("Đã hoàn tất toàn bộ task picking");
+      } else if (result.data.line_remaining_quantity > 0) {
+        toast.success(`Đã pick một phần, còn ${result.data.line_remaining_quantity} sản phẩm cần pick tiếp`);
+      } else {
+        toast.success("Đã xác nhận lấy dòng thành công");
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Confirm pick line that bai"));
     } finally {

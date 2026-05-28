@@ -40,6 +40,7 @@ import { MyExceptionReportsPage } from "@/components/pages/my-exception-reports"
 import { PurchaseRequestsPage } from "@/components/pages/purchase-requests";
 import { ExceptionReportsPage } from "@/components/pages/exception-reports";
 import { StaffTasksPage } from "@/components/pages/staff-tasks";
+import { TransferReceivingPage } from "@/components/pages/transfer-receiving";
 import { LoginPage } from "@/components/pages/login";
 import { RegisterPage } from "@/components/pages/register";
 import { CustomerLayout } from "@/components/pages/customer/layout";
@@ -232,6 +233,7 @@ export const router = createBrowserRouter([
       { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },
       { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: MovementsPage },
       { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: OutboundPage },
+      { path: "transfer-receiving", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: TransferReceivingPage },
       { path: "warehouses", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehouseWrite), Component: WarehousesPage },
       { path: "shelves", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: ShelvesPage },
       { path: "ai-import", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: AIImportPage },
