@@ -135,9 +135,9 @@ export function AIImportPage() {
     }
   }
 
-  async function handleGenerateSummary() {
+  async function handleGenerateDescription() {
     if (!form.title.trim()) {
-      toast.error("Cần có tên sách trước khi tạo tóm tắt AI");
+      toast.error("Cần có tên sách trước khi tạo mô tả AI");
       return;
     }
     setSummaryLoading(true);
@@ -146,17 +146,17 @@ export function AIImportPage() {
         title: form.title.trim(),
         author: form.authorsText.split(",")[0].trim(),
         publisher: form.publisher || undefined,
-        description: form.description,
+        description: "",
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
       });
       setForm((prev) => ({
         ...prev,
-        summaryVi: result.summaryVi || prev.summaryVi,
+        description: result.summaryVi || prev.description,
         keywordsText: (result.keywords || []).join(", ") || prev.keywordsText,
       }));
-      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
+      toast.success(`Đã tạo mô tả AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
     } catch {
-      toast.error("Không thể tạo tóm tắt. Vui lòng thử lại.");
+      toast.error("Không thể tạo mô tả. Vui lòng thử lại.");
     } finally {
       setSummaryLoading(false);
     }
@@ -388,22 +388,20 @@ export function AIImportPage() {
 
             <div className="mt-3 grid grid-cols-1 gap-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Mô tả</label>
-                <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
-              </div>
-              <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-slate-500">Tóm tắt tiếng Việt (AI)</label>
-                  <button
-                    onClick={() => void handleGenerateSummary()}
-                    disabled={summaryLoading || !form.title.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-40"
-                  >
-                    {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    {summaryLoading ? "Đang tạo..." : "Tạo tóm tắt AI"}
-                  </button>
+                  <label className="text-[11px] font-semibold text-slate-500">Mô tả</label>
+                  {!form.description.trim() && (
+                    <button
+                      onClick={() => void handleGenerateDescription()}
+                      disabled={summaryLoading || !form.title.trim()}
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-40"
+                    >
+                      {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {summaryLoading ? "Đang tạo..." : "Tạo mô tả AI"}
+                    </button>
+                  )}
                 </div>
-                <textarea value={form.summaryVi} onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))} rows={6} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-500">Từ khóa (cách nhau dấu phẩy)</label>

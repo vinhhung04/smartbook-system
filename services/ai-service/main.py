@@ -92,6 +92,8 @@ BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SEC
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
+ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
+BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
 
 # Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
@@ -777,12 +779,420 @@ async def _fetch_first_valid(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    """Try each URL in order, return first successful parse."""
+    """Try each URL in order; for Fahasa, fall back to CloakBrowser when httpx fails.
+    If all DDGS URLs are exhausted with no result, do a final browser-based Fahasa
+    search to discover the real product URL via the internal Elastic search API."""
     for url in urls[:2]:
         metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
         if metadata:
+            metadata["sourceUrl"] = url
+            metadata["sourceProvider"] = source_name
+            metadata["sourceFetchMode"] = "httpx"
+
+            # Fahasa httpx usually only gets title/description/thumbnail from og: tags,
+            # missing authors/publisher/year. Enhance with DOM extraction on the same URL.
+            if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and not metadata.get("authors"):
+                dom = await _fahasa_enhance_metadata(url)
+                if dom:
+                    for field in ("authors", "publisher", "publishedDate", "pageCount", "language"):
+                        if not metadata.get(field) and dom.get(field):
+                            metadata[field] = dom[field]
+                    dom_desc = dom.get("description")
+                    http_desc = metadata.get("description") or ""
+                    if dom_desc:
+                        # Always prefer DOM description — it's cleaned and from #desc_content,
+                        # whereas httpx og:description often has title repetition prepended.
+                        metadata["description"] = dom_desc
+                    elif http_desc:
+                        metadata["description"] = _clean_fahasa_description(http_desc, metadata.get("title")) or http_desc
+                    if dom.get("thumbnail") and not metadata.get("thumbnail"):
+                        metadata["thumbnail"] = dom.get("thumbnail")
+                    metadata["sourceFetchMode"] = "httpx+cloakbrowser"
+                    score = _metadata_completeness_score(metadata)
+
             return metadata, score
+
+        if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER:
+            metadata, score = await _fetch_and_parse_product_page_with_browser(
+                url,
+                source_name,
+                search_code,
+            )
+            if metadata:
+                return metadata, score
+
+    # Last resort: use CloakBrowser to search Fahasa and extract metadata in one session
+    if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and search_code:
+        discovered_url, dom_meta = await _fahasa_discover_url_via_browser(search_code)
+        if discovered_url:
+            logger.info("Fahasa browser search found URL for %s: %s", search_code, discovered_url)
+            if dom_meta and (dom_meta.get("title") or dom_meta.get("description")):
+                metadata = {
+                    "title": dom_meta.get("title"),
+                    "subtitle": None,
+                    "authors": dom_meta.get("authors") or [],
+                    "publisher": dom_meta.get("publisher"),
+                    "publishedDate": dom_meta.get("publishedDate"),
+                    "description": dom_meta.get("description"),
+                    "categories": [],
+                    "language": dom_meta.get("language") or "vi",
+                    "pageCount": dom_meta.get("pageCount"),
+                    "thumbnail": dom_meta.get("thumbnail"),
+                    "sourceUrl": discovered_url,
+                    "sourceProvider": source_name,
+                    "sourceFetchMode": "cloakbrowser",
+                }
+                score = _metadata_completeness_score(metadata)
+                logger.info(
+                    "Browser marketplace [%s] found metadata score=%.3f from %s",
+                    source_name, score, discovered_url,
+                )
+                return metadata, score
+            # dom_meta empty or no useful fields → fallback to HTML-based parse
+            metadata, score = await _fetch_and_parse_product_page_with_browser(
+                discovered_url, source_name, search_code,
+            )
+            if metadata:
+                return metadata, score
+
     return None, 0.0
+
+
+# ── CloakBrowser fallback (Fahasa only) ────────────────────────────────────────
+
+def _fetch_html_with_cloakbrowser(url: str, search_code: str | None = None) -> str | None:
+    browser = None
+    try:
+        from cloakbrowser import launch
+
+        browser = launch(headless=True)
+        page = browser.new_page()
+        page.goto(
+            url,
+            wait_until="domcontentloaded",
+            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+        )
+        page.wait_for_timeout(1200)
+        html_text = page.content()
+
+        if search_code and search_code not in html_text:
+            logger.debug(
+                "CloakBrowser page does not contain code %s, skipping %s",
+                search_code,
+                url,
+            )
+            return None
+
+        return html_text
+
+    except Exception as exc:
+        logger.warning("CloakBrowser fetch failed %s: %s", url, exc)
+        return None
+
+    finally:
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
+
+
+async def _fetch_and_parse_product_page_with_browser(
+    url: str,
+    source_name: str,
+    search_code: str | None = None,
+) -> tuple[dict | None, float]:
+    html_text = await asyncio.to_thread(_fetch_html_with_cloakbrowser, url, search_code)
+
+    if not html_text:
+        return None, 0.0
+
+    metadata = _parse_json_ld_product(html_text) or _parse_meta_product(html_text)
+    if not metadata:
+        logger.debug("Browser marketplace [%s] no metadata from %s", source_name, url)
+        return None, 0.0
+
+    metadata["sourceUrl"] = url
+    metadata["sourceProvider"] = source_name
+    metadata["sourceFetchMode"] = "cloakbrowser"
+
+    score = _metadata_completeness_score(metadata)
+    logger.info(
+        "Browser marketplace [%s] found metadata score=%.3f from %s",
+        source_name,
+        score,
+        url,
+    )
+    return metadata, score
+
+
+def _evaluate_fahasa_product_metadata(page) -> dict:
+    """
+    Run JavaScript in a rendered Fahasa product page to extract book metadata
+    from the DOM. Uses multiple selector fallbacks for each field.
+    Returns a (possibly partial) dict — caller must handle empty/None values.
+    """
+    try:
+        data = page.evaluate("""() => {
+            const h1 = document.querySelector('h1.page-title span')
+                    || document.querySelector('h1.page-title')
+                    || document.querySelector('h1[itemprop="name"]')
+                    || document.querySelector('h1');
+            let title = h1 ? h1.innerText.trim() : null;
+            if (!title) {
+                title = document.title
+                    .replace(/ - FAHASA\\.COM$/i, '')
+                    .replace(/^Sách\\s+/i, '')
+                    .trim() || null;
+            }
+
+            const allImgs = Array.from(document.querySelectorAll('img'));
+            const coverImg = allImgs.find(img =>
+                img.src && img.src.includes('cdn1.fahasa.com/media/catalog/product')
+            );
+            const thumbnail = coverImg ? coverImg.src : null;
+
+            const descEl = document.querySelector('#desc_content')
+                        || document.querySelector('#product_tabs_description_contents')
+                        || document.querySelector('.product-description .value')
+                        || document.querySelector('#description .std')
+                        || document.querySelector('[itemprop="description"]')
+                        || document.querySelector('.product.description .value')
+                        || document.querySelector('.product-info-description p');
+            const description = descEl ? descEl.innerText.trim() || null : null;
+
+            const attrs = {};
+            const rows = document.querySelectorAll(
+                '.product-attribute, .product-info-attributes tr, ' +
+                'table.data.additional-attributes tr, .attributes-table tr, table tr'
+            );
+            rows.forEach(row => {
+                const labelEl = row.querySelector('.attribute-label, th, td:first-child, .label');
+                const valueEl = row.querySelector('.attribute-value, td:last-child, .value');
+                if (labelEl && valueEl) {
+                    const lbl = labelEl.innerText.trim().toLowerCase();
+                    const val = valueEl.innerText.trim();
+                    if (lbl && val) attrs[lbl] = val;
+                }
+            });
+
+            return { title, thumbnail, description, attrs };
+        }""")
+    except Exception:
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    attrs = data.get("attrs") or {}
+    authors: list[str] = []
+    publisher = None
+    published_date = None
+    page_count = None
+    language = None
+
+    for lbl, val in attrs.items():
+        if not val:
+            continue
+        lbl_lower = lbl.lower()
+        if any(k in lbl_lower for k in ("tác giả", "tac gia", "author")):
+            authors = [v.strip() for v in val.replace(";", ",").split(",") if v.strip()]
+        elif any(k in lbl_lower for k in ("nhà xuất bản", "nha xuat ban", "nxb", "publisher")):
+            publisher = val.strip() or None
+        elif any(k in lbl_lower for k in ("năm xb", "năm xuất bản", "nam xuat ban", "ngày xuất bản", "year")):
+            published_date = val.strip() or None
+        elif any(k in lbl_lower for k in ("số trang", "so trang", "page")):
+            try:
+                page_count = int("".join(filter(str.isdigit, val))) or None
+            except (ValueError, TypeError):
+                pass
+        elif any(k in lbl_lower for k in ("ngôn ngữ", "ngon ngu", "language")):
+            raw_lang = val.strip().lower()
+            if "việt" in raw_lang or "viet" in raw_lang:
+                language = "vi"
+            elif "anh" in raw_lang or "english" in raw_lang:
+                language = "en"
+            else:
+                language = val.strip() or None
+
+    raw_desc = data.get("description")
+    clean_desc = _clean_fahasa_description(raw_desc, data.get("title"))
+
+    return {
+        "title": data.get("title"),
+        "thumbnail": data.get("thumbnail"),
+        "description": clean_desc,
+        "authors": authors,
+        "publisher": publisher,
+        "publishedDate": published_date,
+        "pageCount": page_count,
+        "language": language,
+    }
+
+
+def _clean_fahasa_description(desc: str | None, title: str | None) -> str | None:
+    """Strip leading lines that repeat the book title from Fahasa description.
+    Checks both directions: title fragment in line, and line fragment in title —
+    because Fahasa h1 sometimes has a 'Bộ ' prefix not present in #desc_content.
+    """
+    if not desc:
+        return desc
+    title_lower = (title or "").strip().lower()
+    title_fragment = title_lower[:30]
+    lines = desc.split("\n")
+    start = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            start = i + 1
+            continue
+        stripped_lower = stripped.lower()
+        stripped_fragment = stripped_lower[:40]
+        is_title_line = (
+            (title_fragment and title_fragment in stripped_lower)
+            or (stripped_fragment and title_lower and stripped_fragment in title_lower)
+        )
+        if is_title_line:
+            start = i + 1
+        else:
+            break
+    cleaned = "\n".join(lines[start:]).strip()
+    return cleaned or desc
+
+
+def _fahasa_enhance_metadata_sync(product_url: str) -> dict:
+    """Load a known Fahasa product URL and extract full metadata via DOM evaluation."""
+    browser = None
+    try:
+        from cloakbrowser import launch
+
+        browser = launch(headless=True)
+        page = browser.new_page()
+        page.goto(
+            product_url,
+            wait_until="domcontentloaded",
+            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+        )
+        page.wait_for_timeout(1500)
+        return _evaluate_fahasa_product_metadata(page)
+    except Exception as exc:
+        logger.warning("Fahasa metadata enhancement failed %s: %s", product_url, exc)
+        return {}
+    finally:
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
+
+
+async def _fahasa_enhance_metadata(product_url: str) -> dict:
+    return await asyncio.to_thread(_fahasa_enhance_metadata_sync, product_url)
+
+
+def _fahasa_discover_url_sync(barcode: str) -> tuple[str | None, dict]:
+    """
+    Load Fahasa search page via CloakBrowser, intercept the internal Elastic search
+    API response to find the product URL, then navigate to that page and extract
+    metadata via DOM evaluation — all in one browser session.
+    Sync — must be called via asyncio.to_thread.
+    """
+    browser = None
+    try:
+        from cloakbrowser import launch
+
+        browser = launch(headless=True)
+        page = browser.new_page()
+        found_url: list[str] = []
+
+        def _on_response(resp):
+            if found_url:
+                return
+            if "elsearch" in resp.url and "search.json" in resp.url:
+                try:
+                    data = resp.json()
+                    for result in data.get("results") or []:
+                        sku = str((result.get("sku") or {}).get("raw", "")).strip()
+                        if sku == barcode:
+                            link = str((result.get("link") or {}).get("raw", "")).strip()
+                            if link:
+                                found_url.append("https://www.fahasa.com" + link)
+                                return
+                except Exception:
+                    pass
+
+        page.on("response", _on_response)
+        page.goto(
+            f"https://www.fahasa.com/catalogsearch/result/?q={barcode}",
+            wait_until="networkidle",
+            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+        )
+        page.wait_for_timeout(1000)
+
+        if not found_url:
+            return None, {}
+
+        product_url = found_url[0]
+
+        # Navigate to product page in the same browser session to extract metadata
+        page2 = browser.new_page()
+        dom_meta: dict = {}
+        try:
+            page2.goto(
+                product_url,
+                wait_until="domcontentloaded",
+                timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+            )
+            page2.wait_for_timeout(1500)
+
+            dom_meta = _evaluate_fahasa_product_metadata(page2)
+
+            # Fallback: extract title from <title> tag if DOM gave nothing
+            if not dom_meta.get("title"):
+                html = page2.content()
+                m = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE)
+                if m:
+                    raw_title = m.group(1)
+                    raw_title = re.sub(r"\s*-\s*FAHASA\.COM\s*$", "", raw_title, flags=re.IGNORECASE).strip()
+                    raw_title = re.sub(r"^Sách\s+", "", raw_title, flags=re.IGNORECASE).strip()
+                    if raw_title:
+                        dom_meta["title"] = raw_title
+
+            # Fallback: extract CDN thumbnail from raw HTML if DOM gave nothing
+            if not dom_meta.get("thumbnail"):
+                html = page2.content()
+                m = re.search(
+                    r"(https://cdn1\.fahasa\.com/media/catalog/product/[^\s\"']+\.(?:jpg|jpeg|png|webp))",
+                    html,
+                    re.IGNORECASE,
+                )
+                if m:
+                    dom_meta["thumbnail"] = m.group(1)
+
+        except Exception as exc:
+            logger.warning("Fahasa product page extraction failed %s: %s", product_url, exc)
+        finally:
+            try:
+                page2.close()
+            except Exception:
+                pass
+
+        return product_url, dom_meta
+
+    except Exception as exc:
+        logger.warning("Fahasa browser search failed for %s: %s", barcode, exc)
+        return None, {}
+
+    finally:
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
+
+
+async def _fahasa_discover_url_via_browser(barcode: str) -> tuple[str | None, dict]:
+    return await asyncio.to_thread(_fahasa_discover_url_sync, barcode)
 
 
 # ── 4. DuckDuckGo search (sync — each domain runs in its own thread) ─────────
@@ -950,7 +1360,7 @@ def _merge_with_marketplace(
     for src in [fahasa, tiki, vinabook]:
         if not src:
             continue
-        for field in ("title", "publisher"):
+        for field in ("title", "publisher", "publishedDate", "language", "pageCount"):
             if not result.get(field) and src.get(field):
                 result[field] = src[field]
         if not result.get("authors") and src.get("authors"):
@@ -1745,6 +2155,8 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         "summaryVi": summary_vi,
         "keywords": keywords,
         "manualEntryRequired": False,
+        "sourceUrl": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceUrl"),
+        "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceFetchMode"),
     }
 
 
