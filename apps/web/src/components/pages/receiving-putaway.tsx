@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FadeItem, PageWrapper } from "../motion-utils";
@@ -531,6 +531,13 @@ export function ReceivingPutawayPage() {
       <FadeItem>
         <h1 className="tracking-[-0.02em]">Receiving - Shelf Putaway</h1>
         <p className="text-[12px] text-slate-500 mt-1">Chuyen hang tu RECEIVING len SHELF_COMPARTMENT va reverse nguoc lai</p>
+        <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p className="text-[12px] text-amber-800">
+            Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
+            <a href="/putaway" className="font-semibold underline hover:text-amber-900">Putaway queue (/putaway)</a>.
+          </p>
+        </div>
       </FadeItem>
 
       {/* Warehouse Filter */}

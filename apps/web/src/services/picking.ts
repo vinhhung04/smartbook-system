@@ -169,6 +169,7 @@ export const pickingService = {
         confirmed_quantity: number;
         line_remaining_quantity: number;
         task_completed: boolean;
+        repick_created?: null;
       };
     };
   },

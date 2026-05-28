@@ -15,6 +15,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   PUTAWAY: "Cất hàng vào kho",
   PICKING: "Lấy hàng",
   OUTBOUND: "Xuất kho",
+  TRANSFER_RECEIVING: "Nhận hàng chuyển kho",
   PURCHASE_REQUEST: "Yêu cầu mua hàng",
   EXCEPTION_REPORT: "Báo cáo sự cố",
   STAFF_TASK: "Task được giao",
@@ -26,12 +27,13 @@ const TABS = [
   { key: "PUTAWAY", label: "Cất hàng" },
   { key: "PICKING", label: "Lấy hàng" },
   { key: "OUTBOUND", label: "Xuất kho" },
+  { key: "TRANSFER_RECEIVING", label: "Nhận chuyển kho" },
   { key: "PURCHASE_REQUEST", label: "Yêu cầu mua" },
   { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
   { key: "STAFF_TASK", label: "Task được giao" },
 ];
 
-const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND"];
+const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND", "TRANSFER_RECEIVING"];
 
 function taskActionLabel(type: string) {
   const upper = String(type || "").toUpperCase();
@@ -39,6 +41,7 @@ function taskActionLabel(type: string) {
   if (upper === "PUTAWAY") return "Thực hiện";
   if (upper === "PICKING") return "Thực hiện";
   if (upper === "OUTBOUND") return "Xác nhận";
+  if (upper === "TRANSFER_RECEIVING") return "Nhận hàng";
   if (upper === "PURCHASE_REQUEST") return "Xem yêu cầu";
   if (upper === "EXCEPTION_REPORT") return "Xem báo cáo";
   if (upper === "STAFF_TASK") return "Xem task";
@@ -73,6 +76,7 @@ function getTaskActionPath(task: MyWarehouseTask) {
   if (task.type === "PUTAWAY") return `/putaway/${task.id}`;
   if (task.type === "PICKING") return "/picking";
   if (task.type === "OUTBOUND") return "/outbound";
+  if (task.type === "TRANSFER_RECEIVING") return "/transfer-receiving";
   if (task.type === "STAFF_TASK") return "/staff-tasks";
   return null;
 }
@@ -88,6 +92,7 @@ export function MyWarehouseTasksPage() {
     putaway: tasks.filter((t) => t.type === "PUTAWAY").length,
     picking: tasks.filter((t) => t.type === "PICKING").length,
     outbound: tasks.filter((t) => t.type === "OUTBOUND").length,
+    transferReceiving: tasks.filter((t) => t.type === "TRANSFER_RECEIVING").length,
     purchaseRequest: tasks.filter((t) => t.type === "PURCHASE_REQUEST").length,
     exceptionReport: tasks.filter((t) => t.type === "EXCEPTION_REPORT").length,
     staffTask: tasks.filter((t) => t.type === "STAFF_TASK").length,
@@ -123,6 +128,7 @@ export function MyWarehouseTasksPage() {
     { label: "Cất hàng", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "PUTAWAY" },
     { label: "Lấy hàng", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100", tab: "PICKING" },
     { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100", tab: "OUTBOUND" },
+    { label: "Nhận hàng chuyển kho", value: counts.transferReceiving, icon: PackageCheck, tone: "text-teal-700 bg-teal-50 border-teal-100", tab: "TRANSFER_RECEIVING" },
     { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100", tab: "PURCHASE_REQUEST" },
     { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100", tab: "EXCEPTION_REPORT" },
     { label: "Task được giao", value: counts.staffTask, icon: ClipboardCheck, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "STAFF_TASK" },

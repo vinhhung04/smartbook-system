@@ -51,7 +51,7 @@ function countRemainingOutbound(items) {
   return items.reduce((sum, item) => {
     const qty = Number(item.quantity || 0);
     const picked = Number(item.processed_qty || 0);
-    return sum + calculateLineRemaining(qty, picked, item.note);
+    return sum + calculateLineRemaining(qty, picked);
   }, 0);
 }
 
@@ -59,7 +59,7 @@ function countRemainingTransfer(items) {
   return items.reduce((sum, item) => {
     const qty = Number(item.quantity || 0);
     const picked = Number(item.shipped_qty || 0);
-    return sum + calculateLineRemaining(qty, picked, item.note);
+    return sum + calculateLineRemaining(qty, picked);
   }, 0);
 }
 
@@ -239,11 +239,11 @@ function withLineShortPickedQty(note, qty) {
   });
 }
 
-function calculateLineRemaining(quantity, pickedQty, note) {
+// short-pick auto repick is deprecated; partial pick remains on original task
+function calculateLineRemaining(quantity, pickedQty) {
   const requested = Math.max(0, Number(quantity || 0));
   const picked = Math.max(0, Number(pickedQty || 0));
-  const shortPicked = getLineShortPickedQty(note);
-  return Math.max(requested - picked - shortPicked, 0);
+  return Math.max(requested - picked, 0);
 }
 
 function getTaskClassFromNote(note) {
@@ -1316,12 +1316,7 @@ async function getPickingTaskDetail(req, res) {
       for (const line of order.outbound_order_items) {
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.processed_qty || 0);
-        const shortPickedQty = getLineShortPickedQty(line.note);
-        const remainingQty = calculateLineRemaining(
-          requestedQty,
-          pickedQty,
-          line.note,
-        );
+        const remainingQty = calculateLineRemaining(requestedQty, pickedQty);
         const repickLineMeta = parseRepickLineMeta(line.note);
 
         let sourceLocationId = line.source_location_id || null;
@@ -1399,7 +1394,6 @@ async function getPickingTaskDetail(req, res) {
           book_title: line.book_variants?.books?.title || "Chua co ten sach",
           requested_qty: requestedQty,
           picked_qty: pickedQty,
-          short_picked_qty: shortPickedQty,
           remaining_qty: remainingQty,
           repick_line: repickLineMeta,
           note: line.note || null,
@@ -1559,12 +1553,7 @@ async function getPickingTaskDetail(req, res) {
     for (const line of order.transfer_order_items) {
       const requestedQty = Number(line.quantity || 0);
       const pickedQty = Number(line.shipped_qty || 0);
-      const shortPickedQty = getLineShortPickedQty(line.note);
-      const remainingQty = calculateLineRemaining(
-        requestedQty,
-        pickedQty,
-        line.note,
-      );
+      const remainingQty = calculateLineRemaining(requestedQty, pickedQty);
       const repickLineMeta = parseRepickLineMeta(line.note);
 
       let sourceLocationId = line.from_location_id || null;
@@ -1651,7 +1640,6 @@ async function getPickingTaskDetail(req, res) {
         book_title: line.book_variants?.books?.title || "Chua co ten sach",
         requested_qty: requestedQty,
         picked_qty: pickedQty,
-        short_picked_qty: shortPickedQty,
         remaining_qty: remainingQty,
         repick_line: repickLineMeta,
         note: line.note || null,
@@ -2231,12 +2219,7 @@ async function confirmPickingLine(req, res) {
 
           const requestedQty = Number(line.quantity || 0);
           const pickedQty = Number(line.processed_qty || 0);
-          const currentShortPickedQty = getLineShortPickedQty(line.note);
-          const remainingQty = calculateLineRemaining(
-            requestedQty,
-            pickedQty,
-            line.note,
-          );
+          const remainingQty = calculateLineRemaining(requestedQty, pickedQty);
 
           if (remainingQty <= 0) {
             return {
@@ -2496,18 +2479,10 @@ async function confirmPickingLine(req, res) {
             },
           });
 
-          const shortageDelta = Math.max(remainingQty - quantity, 0);
-          const nextShortPickedQty = currentShortPickedQty + shortageDelta;
-          const nextLineNote =
-            shortageDelta > 0
-              ? withLineShortPickedQty(line.note, nextShortPickedQty)
-              : line.note || null;
-
           await tx.outbound_order_items.update({
             where: { id: line.id },
             data: {
               processed_qty: { increment: quantity },
-              note: nextLineNote,
             },
           });
 
@@ -2541,24 +2516,14 @@ async function confirmPickingLine(req, res) {
           const allLines = await tx.outbound_order_items.findMany({
             where: { outbound_order_id: order.id },
             select: {
-              id: true,
-              variant_id: true,
-              source_location_id: true,
               quantity: true,
               processed_qty: true,
-              note: true,
             },
           });
 
           const allDone = allLines.every(
-            (item) =>
-              calculateLineRemaining(
-                item.quantity,
-                item.processed_qty,
-                item.note,
-              ) <= 0,
+            (item) => calculateLineRemaining(item.quantity, item.processed_qty) <= 0,
           );
-          let repickInfo = null;
 
           if (allDone) {
             await tx.outbound_orders.update({
@@ -2568,13 +2533,6 @@ async function confirmPickingLine(req, res) {
                 processed_by_user_id: scope.currentUserId,
               },
             });
-
-            repickInfo = await maybeCreateRepickFromOutbound(
-              tx,
-              order,
-              allLines,
-              scope.currentUserId,
-            );
           } else if (order.status !== "PICKING") {
             await tx.outbound_orders.update({
               where: { id: order.id },
@@ -2594,11 +2552,9 @@ async function confirmPickingLine(req, res) {
               after_data: {
                 line_id: lineId,
                 quantity,
-                short_pick_qty_added: shortageDelta,
                 expected_location_id: expectedLocation.id,
                 expected_location_code: expectedLocation.location_code,
                 all_done: allDone,
-                repick_task_id: repickInfo?.task_id || null,
               },
             },
           });
@@ -2609,13 +2565,8 @@ async function confirmPickingLine(req, res) {
               task_id: order.id,
               line_id: line.id,
               confirmed_quantity: quantity,
-              line_remaining_quantity: Math.max(
-                remainingQty - quantity - shortageDelta,
-                0,
-              ),
-              short_pick_recorded: shortageDelta,
+              line_remaining_quantity: Math.max(remainingQty - quantity, 0),
               task_completed: allDone,
-              repick_created: repickInfo,
             },
           };
         }
@@ -2712,12 +2663,7 @@ async function confirmPickingLine(req, res) {
 
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.shipped_qty || 0);
-        const currentShortPickedQty = getLineShortPickedQty(line.note);
-        const remainingQty = calculateLineRemaining(
-          requestedQty,
-          pickedQty,
-          line.note,
-        );
+        const remainingQty = calculateLineRemaining(requestedQty, pickedQty);
 
         if (remainingQty <= 0) {
           return {
@@ -2933,18 +2879,10 @@ async function confirmPickingLine(req, res) {
           },
         });
 
-        const shortageDelta = Math.max(remainingQty - quantity, 0);
-        const nextShortPickedQty = currentShortPickedQty + shortageDelta;
-        const nextLineNote =
-          shortageDelta > 0
-            ? withLineShortPickedQty(line.note, nextShortPickedQty)
-            : line.note || null;
-
         await tx.transfer_order_items.update({
           where: { id: line.id },
           data: {
             shipped_qty: { increment: quantity },
-            note: nextLineNote,
           },
         });
 
@@ -2978,25 +2916,14 @@ async function confirmPickingLine(req, res) {
         const allLines = await tx.transfer_order_items.findMany({
           where: { transfer_order_id: order.id },
           select: {
-            id: true,
-            variant_id: true,
-            from_location_id: true,
-            to_location_id: true,
             quantity: true,
             shipped_qty: true,
-            note: true,
           },
         });
 
         const allDone = allLines.every(
-          (item) =>
-            calculateLineRemaining(
-              item.quantity,
-              item.shipped_qty,
-              item.note,
-            ) <= 0,
+          (item) => calculateLineRemaining(item.quantity, item.shipped_qty) <= 0,
         );
-        let repickInfo = null;
 
         if (allDone) {
           await tx.transfer_orders.update({
@@ -3006,13 +2933,6 @@ async function confirmPickingLine(req, res) {
               shipped_by_user_id: scope.currentUserId,
             },
           });
-
-          repickInfo = await maybeCreateRepickFromTransfer(
-            tx,
-            order,
-            allLines,
-            scope.currentUserId,
-          );
         } else if (order.status !== "PICKING") {
           await tx.transfer_orders.update({
             where: { id: order.id },
@@ -3032,11 +2952,9 @@ async function confirmPickingLine(req, res) {
             after_data: {
               line_id: lineId,
               quantity,
-              short_pick_qty_added: shortageDelta,
               expected_location_id: expectedLocation.id,
               expected_location_code: expectedLocation.location_code,
               all_done: allDone,
-              repick_task_id: repickInfo?.task_id || null,
             },
           },
         });
@@ -3047,13 +2965,8 @@ async function confirmPickingLine(req, res) {
             task_id: order.id,
             line_id: line.id,
             confirmed_quantity: quantity,
-            line_remaining_quantity: Math.max(
-              remainingQty - quantity - shortageDelta,
-              0,
-            ),
-            short_pick_recorded: shortageDelta,
+            line_remaining_quantity: Math.max(remainingQty - quantity, 0),
             task_completed: allDone,
-            repick_created: repickInfo,
           },
         };
       },
@@ -3607,14 +3520,11 @@ async function cancelOutboundReturn(req, res) {
   }
 }
 
+// short-pick auto repick is deprecated; partial pick remains on original task
 async function ensureRepicksEndpoint(req, res) {
-  try {
-    await ensureRepicksFromShortages();
-    return res.json({ message: "Repicks checked and created if needed" });
-  } catch (error) {
-    console.error("Error while ensuring repicks:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
+  return res.json({
+    message: "Repick auto-creation is disabled. Partial picks remain on original task.",
+  });
 }
 
 module.exports = {

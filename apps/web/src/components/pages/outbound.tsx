@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CheckCircle2, ScanLine } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ScanLine, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
@@ -8,6 +8,7 @@ import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
+import { userService, type WarehouseStaffOption } from '@/services/user';
 import { canManageReceiving } from '@/lib/rbac';
 
 function taskLabel(taskType: 'outbound' | 'transfer'): string {
@@ -30,6 +31,11 @@ export function OutboundPage() {
   const [detail, setDetail] = useState<OutboundOrderDetail | null>(null);
   const [scanCode, setScanCode] = useState('');
   const [showScanModal, setShowScanModal] = useState(false);
+
+  const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
+  const [assigningStaffByTask, setAssigningStaffByTask] = useState<Record<string, string>>({});
+  const [assigningTaskKey, setAssigningTaskKey] = useState('');
+
   const currentUser = authService.getCurrentUser();
   const canManageQueue = canManageReceiving(currentUser);
 
@@ -67,10 +73,15 @@ export function OutboundPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const rows = canManageQueue ? await warehouseService.getAll() : [];
-        const list = Array.isArray(rows) ? rows : [];
+        const [warehouseRows, staffRows] = await Promise.all([
+          canManageQueue ? warehouseService.getAll() : Promise.resolve([]),
+          canManageQueue ? userService.getWarehouseStaff() : Promise.resolve({ data: [] }),
+        ]);
 
+        const list = Array.isArray(warehouseRows) ? warehouseRows : [];
         setWarehouses(list);
+        setWarehouseStaff(Array.isArray(staffRows?.data) ? staffRows.data : []);
+
         const preferredWarehouseId = list[0]?.id || '';
         setSelectedWarehouseId(preferredWarehouseId);
         await loadQueue(canManageQueue ? (preferredWarehouseId || undefined) : undefined);
@@ -107,6 +118,26 @@ export function OutboundPage() {
     }
   };
 
+  const handleAssignOutbound = async (task: OutboundQueueItem) => {
+    const key = `${task.task_type}:${task.task_id}`;
+    const staffId = assigningStaffByTask[key];
+    if (!staffId) {
+      toast.error('Chọn nhân viên trước khi giao task');
+      return;
+    }
+    try {
+      setAssigningTaskKey(key);
+      await outboundService.assignOutboundTask(task.task_type, task.task_id, staffId);
+      await loadQueue(canManageQueue ? (selectedWarehouseId || undefined) : undefined);
+      setAssigningStaffByTask((prev) => ({ ...prev, [key]: '' }));
+      toast.success(`Đã giao task xuất kho ${task.order_number}`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Giao task xuất kho thất bại'));
+    } finally {
+      setAssigningTaskKey('');
+    }
+  };
+
   const handleConfirm = async () => {
     if (!selectedTaskType || !selectedTaskId || !detail) {
       toast.error('Chưa chọn đơn cần xuất kho');
@@ -117,10 +148,11 @@ export function OutboundPage() {
       setConfirming(true);
       const normalizedCode = scanCode.trim() || null;
       const response = await outboundService.confirmOutbound(selectedTaskType, selectedTaskId, normalizedCode);
-      const destinationReceiptNumber = response.data.destination_receipt_number;
 
-      if (destinationReceiptNumber) {
-        toast.success(`Đã xuất kho. Phiếu nhập tại kho đích: ${destinationReceiptNumber}`);
+      if (selectedTaskType === 'transfer') {
+        toast.success('Đã xác nhận xuất kho. Hàng đang vận chuyển — chờ kho đích xác nhận nhận hàng.');
+      } else if (response.data.destination_receipt_number) {
+        toast.success(`Đã xuất kho. Phiếu nhập tại kho đích: ${response.data.destination_receipt_number}`);
       } else {
         toast.success('Đã xác nhận xuất kho thành công');
       }
@@ -137,6 +169,12 @@ export function OutboundPage() {
     }
   };
 
+  const getAssignedStaffName = (assignedUserId: string | null) => {
+    if (!assignedUserId) return null;
+    const staff = warehouseStaff.find((s) => s.id === assignedUserId);
+    return staff ? (staff.full_name || staff.username) : assignedUserId.slice(0, 8) + '...';
+  };
+
   if (loading) {
     return (
       <PageWrapper>
@@ -144,6 +182,10 @@ export function OutboundPage() {
       </PageWrapper>
     );
   }
+
+  const tableHeads = canManageQueue
+    ? ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tổng SL', 'Sẵn sàng', 'Nhân viên xuất kho', 'Thao tác']
+    : ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tổng SL', 'Sẵn sàng', 'Thao tác'];
 
   return (
     <PageWrapper className="space-y-5">
@@ -159,7 +201,7 @@ export function OutboundPage() {
       <FadeItem>
         <h1 className="tracking-[-0.02em]">Xuất kho</h1>
         <p className="text-[12px] text-slate-500 mt-1">
-          {canManageQueue ? 'Xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
+          {canManageQueue ? 'Giao task và xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
         </p>
       </FadeItem>
 
@@ -198,11 +240,11 @@ export function OutboundPage() {
           </FadeItem>
 
           <FadeItem>
-            <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+            <div className="overflow-x-auto overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-gradient-to-r from-sky-50/30 to-transparent">
-                    {["Mã đơn", "Loại", "Kho nguồn", "Kho đích", "Trạng thái", "Tổng SL", "Sẵn sàng", "Thao tác"].map((head) => (
+                    {tableHeads.map((head) => (
                       <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">
                         {head}
                       </th>
@@ -212,29 +254,75 @@ export function OutboundPage() {
                 <tbody>
                   {filteredQueue.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-10 text-center text-[13px] text-slate-400">
+                      <td colSpan={tableHeads.length} className="py-10 text-center text-[13px] text-slate-400">
                         Không có đơn nào cần xuất kho
                       </td>
                     </tr>
-                  ) : filteredQueue.map((task) => (
-                    <tr key={`${task.task_type}:${task.task_id}`} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-600">{taskLabel(task.task_type)}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.source_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.target_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3 text-[12px] text-sky-600 font-semibold">{task.status}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-600">{task.total_quantity}</td>
-                      <td className="px-4 py-3 text-[12px] font-semibold">{task.ready_quantity}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => void handleOpen(task)}
-                          className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
-                        >
-                          Xem & xuất <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  ) : filteredQueue.map((task) => {
+                    const key = `${task.task_type}:${task.task_id}`;
+                    const selectedStaffId = assigningStaffByTask[key] || '';
+                    const assignedName = getAssignedStaffName(task.outbound_assigned_user_id);
+                    const isAssigning = assigningTaskKey === key;
+
+                    return (
+                      <tr key={key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
+                        <td className="px-4 py-3 text-[12px] text-slate-600">{taskLabel(task.task_type)}</td>
+                        <td className="px-4 py-3 text-[12px] text-slate-600">{task.source_warehouse_code || '-'}</td>
+                        <td className="px-4 py-3 text-[12px] text-slate-600">{task.target_warehouse_code || '-'}</td>
+                        <td className="px-4 py-3 text-[12px] text-sky-600 font-semibold">{task.status}</td>
+                        <td className="px-4 py-3 text-[12px] text-slate-600">{task.total_quantity}</td>
+                        <td className="px-4 py-3 text-[12px] font-semibold">{task.ready_quantity}</td>
+                        {canManageQueue ? (
+                          <td className="px-4 py-3">
+                            {assignedName && !selectedStaffId ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 font-semibold">
+                                  <UserCheck className="w-3 h-3" /> {assignedName}
+                                </span>
+                                <button
+                                  onClick={() => setAssigningStaffByTask((prev) => ({ ...prev, [key]: 'PICK' }))}
+                                  className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                                >
+                                  Đổi
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={selectedStaffId === 'PICK' ? '' : selectedStaffId}
+                                  onChange={(e) => setAssigningStaffByTask((prev) => ({ ...prev, [key]: e.target.value }))}
+                                  className="h-8 min-w-[140px] rounded-[8px] border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
+                                >
+                                  <option value="">Chọn nhân viên</option>
+                                  {warehouseStaff.map((staff) => (
+                                    <option key={staff.id} value={staff.id}>
+                                      {staff.full_name || staff.username}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => void handleAssignOutbound(task)}
+                                  disabled={isAssigning || !selectedStaffId || selectedStaffId === 'PICK'}
+                                  className="h-8 rounded-[8px] bg-blue-600 px-3 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {isAssigning ? '...' : 'Giao'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        ) : null}
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => void handleOpen(task)}
+                            className="inline-flex items-center gap-1 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] hover:bg-slate-50 transition-colors"
+                          >
+                            Xem & xuất <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -253,6 +341,11 @@ export function OutboundPage() {
                     {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
                     {` | Số dòng: ${detail.lines.length}`}
                   </p>
+                  {detail.outbound_assigned_user_id ? (
+                    <p className="text-[11px] text-emerald-700 mt-1 font-semibold">
+                      Nhân viên xuất kho: {getAssignedStaffName(detail.outbound_assigned_user_id)}
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   onClick={() => {
@@ -341,7 +434,11 @@ export function OutboundPage() {
             <div className="rounded-[16px] border border-emerald-200/60 bg-emerald-50/50 p-4">
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <p className="text-[12px] text-emerald-800">Sau khi xác nhận xuất kho, hệ thống tự động tạo Phiếu nhập kho NHÁP tại kho đích.</p>
+                <p className="text-[12px] text-emerald-800">
+                  {detail.task_type === 'transfer'
+                    ? 'Sau khi xác nhận xuất kho chuyển kho, hàng chuyển sang trạng thái IN_TRANSIT. Manager kho đích cần giao task nhận hàng cho nhân viên.'
+                    : 'Sau khi xác nhận xuất kho, đơn sẽ chuyển sang trạng thái COMPLETED.'}
+                </p>
               </div>
             </div>
           </FadeItem>
