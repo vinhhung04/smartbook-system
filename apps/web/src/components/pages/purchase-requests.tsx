@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { ClipboardCheck, RefreshCw, Check, X, ArrowRight } from "lucide-react";
+import { ClipboardCheck, RefreshCw, Check, X, ArrowRight, Search } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest } from "@/services/purchase-requests";
 import { supplierService, type Supplier } from "@/services/supplier";
+import { purchaseOrderService, type VariantSearchItem } from "@/services/purchase-order";
 
 const REASONS: Record<string, string> = {
   LOW_STOCK: "Tồn kho thấp",
@@ -38,7 +39,9 @@ function formatDate(value: string | null | undefined) {
 interface RowAction {
   type: "reject" | "convert";
   id: string;
-  value: string;
+  value: string;       // supplier_id khi convert, lý do khi reject
+  variantId?: string;  // book_variant_id khi convert (nếu request chưa có)
+  variantLabel?: string;
 }
 
 export function PurchaseRequestsPage() {
@@ -48,6 +51,10 @@ export function PurchaseRequestsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [rowAction, setRowAction] = useState<RowAction | null>(null);
   const [acting, setActing] = useState(false);
+  const [variantQuery, setVariantQuery] = useState("");
+  const [variantResults, setVariantResults] = useState<VariantSearchItem[]>([]);
+  const [searchingVariant, setSearchingVariant] = useState(false);
+  const variantSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = async (status?: string) => {
     setLoading(true);
@@ -66,6 +73,20 @@ export function PurchaseRequestsPage() {
   };
 
   useEffect(() => { void load(statusFilter); }, [statusFilter]);
+
+  useEffect(() => {
+    if (variantSearchTimer.current) clearTimeout(variantSearchTimer.current);
+    if (variantQuery.trim().length < 2) { setVariantResults([]); return; }
+    setSearchingVariant(true);
+    variantSearchTimer.current = setTimeout(async () => {
+      try {
+        const results = await purchaseOrderService.searchVariants(variantQuery);
+        setVariantResults(results);
+      } catch { setVariantResults([]); }
+      finally { setSearchingVariant(false); }
+    }, 350);
+    return () => { if (variantSearchTimer.current) clearTimeout(variantSearchTimer.current); };
+  }, [variantQuery]);
 
   const handleApprove = async (id: string) => {
     if (!window.confirm("Xác nhận duyệt yêu cầu mua hàng này?")) return;
@@ -101,9 +122,13 @@ export function PurchaseRequestsPage() {
     if (!rowAction.value) { toast.error("Vui lòng chọn nhà cung cấp"); return; }
     setActing(true);
     try {
-      const result = await purchaseRequestService.convertToPO(rowAction.id, { supplier_id: rowAction.value });
+      const payload: { supplier_id: string; book_variant_id?: string } = { supplier_id: rowAction.value };
+      if (rowAction.variantId) payload.book_variant_id = rowAction.variantId;
+      const result = await purchaseRequestService.convertToPO(rowAction.id, payload);
       toast.success(`Đã chuyển thành PO: ${result.data.po_number}`);
       setRowAction(null);
+      setVariantQuery("");
+      setVariantResults([]);
       void load(statusFilter);
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Chuyển thành PO thất bại"));
@@ -236,7 +261,66 @@ export function PurchaseRequestsPage() {
                   )}
                   {rowAction?.id === req.id && rowAction.type === "convert" && (
                     <tr key={`${req.id}-convert`} className="bg-indigo-50/50 border-b border-border">
-                      <td colSpan={9} className="px-4 py-3">
+                      <td colSpan={9} className="px-4 py-3 space-y-2">
+                        {/* Nếu request chưa có book_variant_id, yêu cầu chọn biến thể */}
+                        {!req.book_variant_id && (
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-semibold text-indigo-800">
+                              Sách yêu cầu: <span className="font-normal italic">{req.book_title_hint || "Chưa rõ"}</span>
+                              {" "}— Cần chọn biến thể cụ thể để tạo PO:
+                            </p>
+                            {rowAction.variantId ? (
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-[13px] flex-1 max-w-sm">
+                                  ✓ {rowAction.variantLabel}
+                                </span>
+                                <Button type="button" size="sm" variant="outline"
+                                  onClick={() => setRowAction({ ...rowAction, variantId: undefined, variantLabel: undefined })}
+                                  className="h-7 px-2 text-[11px]">
+                                  Đổi sách
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="relative max-w-sm">
+                                <div className="relative">
+                                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                                  <input
+                                    type="text"
+                                    className="w-full rounded-md border border-indigo-200 bg-white pl-7 pr-3 py-1.5 text-[13px]"
+                                    placeholder="Tìm sách theo tên, ISBN13..."
+                                    value={variantQuery}
+                                    onChange={(e) => setVariantQuery(e.target.value)}
+                                    autoFocus
+                                  />
+                                </div>
+                                {variantQuery.length >= 2 && (
+                                  <div className="absolute z-20 mt-1 w-full rounded-md border border-indigo-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+                                    {searchingVariant ? (
+                                      <p className="px-3 py-2 text-[12px] text-muted-foreground">Đang tìm...</p>
+                                    ) : variantResults.length === 0 ? (
+                                      <p className="px-3 py-2 text-[12px] text-muted-foreground">Không tìm thấy sách</p>
+                                    ) : variantResults.map((v) => (
+                                      <button
+                                        key={v.variant_id}
+                                        type="button"
+                                        className="w-full text-left px-3 py-2 text-[12px] hover:bg-indigo-50 transition-colors"
+                                        onClick={() => {
+                                          setRowAction({ ...rowAction, variantId: v.variant_id, variantLabel: `${v.title}${v.isbn13 ? ` (${v.isbn13})` : ""}` });
+                                          setVariantQuery("");
+                                          setVariantResults([]);
+                                        }}
+                                      >
+                                        <span className="font-medium">{v.title}</span>
+                                        {v.isbn13 && <span className="ml-2 text-muted-foreground text-[11px]">{v.isbn13}</span>}
+                                        {v.sku && <span className="ml-2 text-muted-foreground text-[11px]">{v.sku}</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <select
                             className="flex-1 max-w-xs rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-[13px]"
@@ -248,17 +332,19 @@ export function PurchaseRequestsPage() {
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                           </select>
-                          <Button type="button" size="sm" disabled={acting || !rowAction.value} onClick={() => void handleConvert()}
+                          <Button
+                            type="button" size="sm"
+                            disabled={acting || !rowAction.value || (!req.book_variant_id && !rowAction.variantId)}
+                            onClick={() => void handleConvert()}
                             className="bg-indigo-600 hover:bg-indigo-700 h-7 px-3 text-[11px]">
                             Tạo đơn đặt hàng
                           </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setRowAction(null)} className="h-7 px-2">
+                          <Button type="button" size="sm" variant="outline"
+                            onClick={() => { setRowAction(null); setVariantQuery(""); setVariantResults([]); }}
+                            className="h-7 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
-                        <p className="mt-1.5 text-[11px] text-muted-foreground">
-                          PO sẽ được tạo ở trạng thái DRAFT với biến thể từ yêu cầu. Yêu cầu cần có biến thể sách cụ thể để chuyển.
-                        </p>
                       </td>
                     </tr>
                   )}

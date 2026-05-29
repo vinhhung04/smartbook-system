@@ -64,6 +64,7 @@ import { SuppliersPage } from "@/components/pages/suppliers";
 import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
 import { SupplierAccountPage } from "@/components/pages/supplier/supplier-account";
 import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
+import { ReceivingCheckPage } from "@/components/pages/receiving-check";
 import { NotFoundPage } from "@/components/pages/not-found";
 import { ForbiddenPage } from "@/components/pages/forbidden";
 import { authService } from "@/services/auth";
@@ -224,10 +225,11 @@ export const router = createBrowserRouter([
       { path: "purchase-orders/:id/edit", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), Component: PurchaseOrderFormPage },
       { path: "supplier-deliveries", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
       { path: "supplier-deliveries/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
+      { path: "receiving-check", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: ReceivingCheckPage },
       { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayPage },
       { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayDetailPage },
       { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayExecutePage },
-      { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: ReceivingPutawayPage },
+      { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), Component: ReceivingPutawayPage },
       { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: SmartReceivingPage },
       { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PickingPage },
       { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRightLeft, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { useLocation } from "react-router";
+import { AlertTriangle, ArrowRightLeft, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FadeItem, PageWrapper } from "../motion-utils";
@@ -13,6 +14,8 @@ import {
   type VariantLookupMatch,
 } from "@/services/receiving-putaway";
 import { StorageSuggestionPanel } from "@/components/inventory/StorageSuggestionPanel";
+import { authService } from "@/services/auth";
+import { canManageReceiving } from "@/lib/rbac";
 
 interface DraftAllocationLine {
   id: string;
@@ -27,7 +30,21 @@ function makeLineId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface PutawayContext {
+  warehouseId?: string;
+  variantId?: string;
+  bookTitle?: string;
+}
+
 export function ReceivingPutawayPage() {
+  const routerLocation = useLocation();
+  const lockedCtx: PutawayContext = (routerLocation.state as PutawayContext) || {};
+  const isWarehouseLocked = Boolean(lockedCtx.warehouseId);
+  const isVariantLocked = Boolean(lockedCtx.variantId);
+
+  const currentUser = authService.getCurrentUser();
+  const isManager = canManageReceiving(currentUser);
+
   const [loading, setLoading] = useState(true);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [loadingReverseItems, setLoadingReverseItems] = useState(false);
@@ -128,7 +145,11 @@ export function ReceivingPutawayPage() {
     const res = await receivingPutawayService.getReceivingItems(receivingId);
     const items = res.items || [];
     setReceivingItems(items);
-    const preferredVariantId = items[0]?.variant_id || "";
+    const lockedVariantExists = lockedCtx.variantId && items.some((i) => i.variant_id === lockedCtx.variantId);
+    if (lockedCtx.variantId && !lockedVariantExists) {
+      toast.warning("Không tìm thấy sách này trong khu RECEIVING đang chọn. Hãy thử chọn khu khác.");
+    }
+    const preferredVariantId = (lockedVariantExists ? lockedCtx.variantId : items[0]?.variant_id) || "";
     setSelectedVariantId(preferredVariantId);
     setDraftLines([]);
     setCandidates([]);
@@ -170,11 +191,11 @@ export function ReceivingPutawayPage() {
         const data = await warehouseService.getAll();
         const rows = Array.isArray(data) ? data : [];
         setWarehouses(rows);
-        const preferredWarehouseId = rows[0]?.id || "";
+        const preferredWarehouseId = lockedCtx.warehouseId || rows[0]?.id || "";
         setSelectedWarehouseId(preferredWarehouseId);
         await loadWarehouseContext(preferredWarehouseId);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu kho"));
+        toast.error(getApiErrorMessage(error, "Không tải được dữ liệu kho"));
       } finally {
         setLoading(false);
       }
@@ -186,21 +207,21 @@ export function ReceivingPutawayPage() {
   useEffect(() => {
     if (!selectedWarehouseId) return;
     void loadWarehouseContext(selectedWarehouseId).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu warehouse"));
+      toast.error(getApiErrorMessage(error, "Không tải được dữ liệu kho"));
     });
   }, [selectedWarehouseId]);
 
   useEffect(() => {
     if (!selectedReceivingId) return;
     void loadReceivingItems(selectedReceivingId).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc ton RECEIVING"));
+      toast.error(getApiErrorMessage(error, "Không tải được tồn kho RECEIVING"));
     });
   }, [selectedReceivingId]);
 
   useEffect(() => {
     if (!selectedReceivingId || !selectedVariantId) return;
     void loadCandidates(selectedReceivingId, selectedVariantId).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach vi tri de xep"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách vị trí để xếp"));
     });
   }, [selectedReceivingId, selectedVariantId]);
 
@@ -220,7 +241,7 @@ export function ReceivingPutawayPage() {
         setReverseVariantId(res.items?.[0]?.variant_id || "");
         setReverseQuantity(0);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc SKU trong compartment"));
+        toast.error(getApiErrorMessage(error, "Không tải được SKU trong ngăn"));
       } finally {
         setLoadingReverseItems(false);
       }
@@ -231,7 +252,7 @@ export function ReceivingPutawayPage() {
 
   const addDraftLine = () => {
     if (candidates.length === 0) {
-      toast.error("Khong con vi tri nao co cho trong");
+      toast.error("Không còn vị trí nào có chỗ trống");
       return;
     }
 
@@ -259,12 +280,12 @@ export function ReceivingPutawayPage() {
   const handleScanSku = async () => {
     const input = scanSkuInput.trim().replace(/[^0-9]/g, "");
     if (!input) {
-      toast.error("Nhap ISBN13 truoc khi scan");
+      toast.error("Nhập ISBN13 trước khi quét");
       return;
     }
 
     if (!/^\d{13}$/.test(input)) {
-      toast.error("ISBN13 phai gom dung 13 chu so");
+      toast.error("ISBN13 phải đúng 13 chữ số");
       return;
     }
 
@@ -272,13 +293,13 @@ export function ReceivingPutawayPage() {
       const res = await receivingPutawayService.lookupVariantByIsbn13(input);
       if (res.ambiguous) {
         setAmbiguousVariantMatches(res.matches || []);
-        toast.error("ISBN13 trung nhieu SKU, vui long chon thu cong");
+        toast.error("ISBN13 trùng nhiều SKU, vui lòng chọn thủ công");
         return;
       }
 
       const selected = res.selected;
       if (!selected) {
-        toast.error("Khong tim thay SKU hop le");
+        toast.error("Không tìm thấy SKU hợp lệ");
         return;
       }
 
@@ -286,27 +307,27 @@ export function ReceivingPutawayPage() {
 
       const inReceiving = receivingItems.find((item) => item.variant_id === selected.variant_id);
       if (!inReceiving) {
-        toast.error("SKU nay khong ton tai trong RECEIVING dang chon");
+        toast.error("SKU này không tồn tại trong RECEIVING đang chọn");
         return;
       }
 
       setSelectedVariantId(selected.variant_id);
       setDraftLines((prev) => prev.map((line) => ({ ...line, scanned_product_barcode: input })));
-      toast.success(`Da chon SKU: ${selected.book_title}`);
+      toast.success(`Đã chọn SKU: ${selected.book_title}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Scan SKU that bai"));
+      toast.error(getApiErrorMessage(error, "Quét SKU thất bại"));
     }
   };
 
   const handleScanTargetLocation = async () => {
     if (!selectedWarehouseId || draftLines.length === 0) {
-      toast.error("Vui long chon warehouse va tao draft line truoc");
+      toast.error("Vui lòng chọn kho và tạo dòng allocation trước");
       return;
     }
 
     const barcode = scanTargetBarcodeInput.trim();
     if (!barcode) {
-      toast.error("Nhap barcode vi tri dich truoc khi scan");
+      toast.error("Nhập barcode vị trí đích trước khi quét");
       return;
     }
 
@@ -327,7 +348,7 @@ export function ReceivingPutawayPage() {
           matched_compartment: location.location_code,
           result: "NOT_IN_CANDIDATES",
         });
-        toast.error("Vi tri scan duoc khong nam trong danh sach compartment con cho trong");
+        toast.error("Vị trí quét được không nằm trong danh sách ngăn còn chỗ trống");
         return;
       }
 
@@ -344,38 +365,38 @@ export function ReceivingPutawayPage() {
         remaining_capacity: matchedCandidate.remaining_capacity,
         result: "SUCCESS",
       });
-      toast.success(`Da ap dung vi tri ${location.location_code} cho dong dau tien`);
+      toast.success(`Đã áp dụng vị trí ${location.location_code} cho dòng đầu tiên`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Scan vi tri that bai"));
+      toast.error(getApiErrorMessage(error, "Quét vị trí thất bại"));
     }
   };
 
   const validateDraft = (): string | null => {
-    if (!selectedVariantItem) return "Chua chon SKU nguon";
-    if (draftLines.length === 0) return "Chua co allocation nao";
+    if (!selectedVariantItem) return "Chưa chọn SKU nguồn";
+    if (draftLines.length === 0) return "Chưa có allocation nào";
 
     for (const line of draftLines) {
       const qty = Number(line.quantity || 0);
       if (!line.target_location_id || !Number.isFinite(qty) || qty <= 0) {
-        return "Moi dong allocation phai co vi tri dich va so luong > 0";
+        return "Mỗi dòng allocation phải có vị trí đích và số lượng > 0";
       }
 
       if (!line.reason.trim()) {
-        return "Moi dong allocation bat buoc co ly do";
+        return "Mỗi dòng allocation bắt buộc có lý do";
       }
 
       const candidate = candidateMap.get(line.target_location_id);
       if (!candidate) {
-        return "Co vi tri dich khong hop le";
+        return "Có vị trí đích không hợp lệ";
       }
 
       if (qty > candidate.remaining_capacity) {
-        return `So luong vuot qua suc chua con lai tai ${candidate.location_code}`;
+        return `Số lượng vượt quá sức chứa còn lại tại ${candidate.location_code}`;
       }
     }
 
     if (totalDraftQty > selectedVariantItem.on_hand_qty) {
-      return "Tong so luong allocation vuot qua ton trong RECEIVING";
+      return "Tổng số lượng allocation vượt quá tồn trong RECEIVING";
     }
 
     return null;
@@ -383,7 +404,7 @@ export function ReceivingPutawayPage() {
 
   const handleConfirmTransfer = async () => {
     if (!selectedWarehouseId || !selectedReceivingId || !selectedVariantId) {
-      toast.error("Chua chon day du warehouse / receiving / sku");
+      toast.error("Chưa chọn đủ kho / receiving / SKU");
       return;
     }
 
@@ -424,9 +445,9 @@ export function ReceivingPutawayPage() {
         loadCandidates(selectedReceivingId, selectedVariantId),
       ]);
 
-      toast.success(`Da chuyen ${res.data.moved_quantity} quyen len ke (${res.data.allocation_count} vi tri)`);
+      toast.success(`Đã chuyển ${res.data.moved_quantity} quyển lên kệ (${res.data.allocation_count} vị trí)`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Xac nhan chuyen that bai"));
+      toast.error(getApiErrorMessage(error, "Xác nhận chuyển thất bại"));
     } finally {
       setSavingTransfer(false);
     }
@@ -434,7 +455,7 @@ export function ReceivingPutawayPage() {
 
   const handleReverse = async () => {
     if (!selectedWarehouseId || !selectedReverseCompartmentId || !reverseReceivingId || !reverseVariantId) {
-      toast.error("Vui long chon day du thong tin reverse");
+      toast.error("Vui lòng chọn đủ thông tin reverse");
       return;
     }
 
@@ -442,17 +463,17 @@ export function ReceivingPutawayPage() {
 
     const qty = Number(reverseQuantity || 0);
     if (!Number.isFinite(qty) || qty <= 0) {
-      toast.error("So luong reverse phai > 0");
+      toast.error("Số lượng reverse phải > 0");
       return;
     }
 
     if (!reverseReason.trim()) {
-      toast.error("Ly do reverse la bat buoc");
+      toast.error("Lý do reverse là bắt buộc");
       return;
     }
 
     if (!reverseItem || qty > reverseItem.on_hand_qty) {
-      toast.error("So luong reverse vuot qua ton trong compartment");
+      toast.error("Số lượng reverse vượt quá tồn trong ngăn");
       return;
     }
 
@@ -478,9 +499,9 @@ export function ReceivingPutawayPage() {
         selectedReceivingId && selectedVariantId ? loadCandidates(selectedReceivingId, selectedVariantId) : Promise.resolve(),
       ]);
 
-      toast.success(`Da tra ve RECEIVING ${res.data.moved_quantity} quyen`);
+      toast.success(`Đã trả về RECEIVING ${res.data.moved_quantity} quyển`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Reverse that bai"));
+      toast.error(getApiErrorMessage(error, "Reverse thất bại"));
     } finally {
       setSavingReverse(false);
     }
@@ -494,26 +515,41 @@ export function ReceivingPutawayPage() {
     shelf: string | null;
     bin: string | null;
   }) => {
+    const candidate = candidateMap.get(location.locationId);
+    if (!candidate) {
+      toast.warning(
+        `Vị trí ${location.locationCode} không còn trong danh sách hợp lệ. Vui lòng tải lại vị trí.`
+      );
+      return;
+    }
+
+    const maxQty = Math.min(
+      suggestionQuantity,
+      selectedVariantItem?.on_hand_qty ?? suggestionQuantity,
+      candidate.remaining_capacity
+    );
+    const safeQty = Math.max(1, maxQty);
+    const autoReason = `Gợi ý từ hệ thống: ${location.locationCode}`;
+
     if (draftLines.length > 0) {
-      // Update first draft line with suggested location
-      const firstLine = draftLines[0];
-      updateLine(firstLine.id, {
+      updateLine(draftLines[0].id, {
         target_location_id: location.locationId,
+        quantity: safeQty,
+        reason: autoReason,
       });
-      toast.success(`Da ap dung vi tri goi y: ${location.locationCode}`);
+      toast.success(`Đã áp dụng vị trí gợi ý: ${location.locationCode}`);
     } else {
-      // Create new draft line with suggested location
       setDraftLines([
         {
           id: makeLineId(),
           target_location_id: location.locationId,
-          quantity: suggestionQuantity,
-          reason: "Goi y tu he thong",
+          quantity: safeQty,
+          reason: autoReason,
           scanned_location_barcode: "",
           scanned_product_barcode: "",
         },
       ]);
-      toast.success(`Da tao dong allocation voi vi tri: ${location.locationCode}`);
+      toast.success(`Đã tạo dòng allocation với vị trí: ${location.locationCode}`);
     }
     setShowStorageSuggestion(false);
   };
@@ -521,7 +557,7 @@ export function ReceivingPutawayPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-500">Dang tai module Receiving - Shelf Putaway...</p>
+        <p className="text-[13px] text-slate-500">Đang tải module Nhận hàng - Xếp lên kệ...</p>
       </PageWrapper>
     );
   }
@@ -530,14 +566,25 @@ export function ReceivingPutawayPage() {
     <PageWrapper className="space-y-5">
       <FadeItem>
         <h1 className="tracking-[-0.02em]">Receiving - Shelf Putaway</h1>
-        <p className="text-[12px] text-slate-500 mt-1">Chuyen hang tu RECEIVING len SHELF_COMPARTMENT va reverse nguoc lai</p>
-        <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-[12px] text-amber-800">
-            Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
-            <a href="/putaway" className="font-semibold underline hover:text-amber-900">Putaway queue (/putaway)</a>.
-          </p>
-        </div>
+        <p className="text-[12px] text-slate-500 mt-1">Chuyển hàng từ RECEIVING lên SHELF_COMPARTMENT và reverse ngược lại</p>
+        {isVariantLocked ? (
+          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-violet-200 bg-violet-50 px-4 py-3">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+            <p className="text-[12px] text-violet-800">
+              Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
+              <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
+              Kho và SKU đã được khoá theo phiếu nhập.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="text-[12px] text-amber-800">
+              Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
+              <a href="/putaway" className="font-semibold underline hover:text-amber-900">Putaway queue (/putaway)</a>.
+            </p>
+          </div>
+        )}
       </FadeItem>
 
       {/* Warehouse Filter */}
@@ -545,26 +592,27 @@ export function ReceivingPutawayPage() {
         <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Warehouse</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 ml-1" />}</p>
               <select
                 value={selectedWarehouseId}
                 onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                disabled={isWarehouseLocked}
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] disabled:bg-slate-50 disabled:cursor-not-allowed"
               >
-                <option value="">Chon warehouse</option>
+                <option value="">Chọn kho</option>
                 {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Receiving source</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Nguồn RECEIVING</p>
               <select
                 value={selectedReceivingId}
                 onChange={(event) => setSelectedReceivingId(event.target.value)}
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
-                <option value="">Chon RECEIVING/STAGING</option>
+                <option value="">Chọn khu RECEIVING/STAGING</option>
                 {receivings.map((location) => (
                   <option key={location.id} value={location.id}>{location.location_code} ({location.location_type})</option>
                 ))}
@@ -575,7 +623,7 @@ export function ReceivingPutawayPage() {
                 onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}
                 className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 px-4 py-2.5 text-[13px] hover:bg-slate-50 transition-colors"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Reload
+                <RefreshCw className="w-3.5 h-3.5" /> Tải lại
               </button>
             </div>
           </div>
@@ -586,17 +634,20 @@ export function ReceivingPutawayPage() {
       <FadeItem>
         <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
           <h2 className="text-[14px] font-semibold mb-1">A. Receiving → Shelf</h2>
-          <p className="text-[11px] text-slate-500 mb-4">Chuyen sach tu vung nhan hang len ke</p>
+          <p className="text-[11px] text-slate-500 mb-4">Chuyển sách từ vùng nhận hàng lên kệ</p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong RECEIVING</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">
+                SKU trong RECEIVING {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 ml-1" />}
+              </p>
               <select
                 value={selectedVariantId}
                 onChange={(event) => setSelectedVariantId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                disabled={isVariantLocked}
+                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] disabled:bg-slate-50 disabled:cursor-not-allowed"
               >
-                <option value="">Chon SKU</option>
+                <option value="">Chọn SKU</option>
                 {receivingItems.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
                     {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
@@ -605,23 +656,25 @@ export function ReceivingPutawayPage() {
               </select>
             </div>
 
-            <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Scan ISBN13</p>
-              <div className="flex gap-2">
-                <input
-                  value={scanSkuInput}
-                  onChange={(event) => setScanSkuInput(event.target.value)}
-                  placeholder="Nhap ISBN13"
-                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
-                />
-                <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
-                  <ScanLine className="w-4 h-4" />
-                </button>
+            {!isVariantLocked && (
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quét ISBN13</p>
+                <div className="flex gap-2">
+                  <input
+                    value={scanSkuInput}
+                    onChange={(event) => setScanSkuInput(event.target.value)}
+                    placeholder="Nhập ISBN13"
+                    className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                  />
+                  <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                    <ScanLine className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Scan vi tri dich</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quét vị trí đích</p>
               <div className="flex gap-2">
                 <input
                   value={scanTargetBarcodeInput}
@@ -638,7 +691,7 @@ export function ReceivingPutawayPage() {
 
           {ambiguousVariantMatches.length > 0 ? (
             <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 bg-amber-50/50">
-              <p className="text-[12px] text-amber-800 font-semibold">ISBN13 trung nhieu SKU, vui long chon thu cong:</p>
+              <p className="text-[12px] text-amber-800 font-semibold">ISBN13 trùng nhiều SKU, vui lòng chọn thủ công:</p>
               <select
                 className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2.5 text-[12px]"
                 onChange={(event) => {
@@ -649,7 +702,7 @@ export function ReceivingPutawayPage() {
                 }}
                 value=""
               >
-                <option value="">Chon SKU dung</option>
+                <option value="">Chọn SKU đúng</option>
                 {ambiguousVariantMatches.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
                     {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} | {item.book_title} | {item.matched_by}
@@ -663,16 +716,16 @@ export function ReceivingPutawayPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                  {['Compartment', 'Zone', 'Shelf', 'Current', 'Max', 'Remaining', 'Mixed SKU', 'Priority'].map((head) => (
+                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
                     <th key={head} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">{head}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loadingCandidates ? (
-                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Dang tinh goi y vi tri...</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Đang tính toán vị trí...</td></tr>
                 ) : candidates.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Khong co compartment con cho trong</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Không có ngăn còn chỗ trống</td></tr>
                 ) : candidates.map((candidate) => (
                   <tr key={candidate.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-2.5 text-[12px] font-semibold">{candidate.location_code}</td>
@@ -682,7 +735,7 @@ export function ReceivingPutawayPage() {
                     <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.max_capacity}</td>
                     <td className="px-4 py-2.5 text-[12px] text-emerald-600 font-semibold">{candidate.remaining_capacity}</td>
                     <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.mixed_sku_count}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.priority_group === 0 ? 'Same shelf' : candidate.priority_group === 1 ? 'Same zone' : 'Other'}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -690,15 +743,15 @@ export function ReceivingPutawayPage() {
           </div>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-[12px] text-slate-500">Tong draft: {totalDraftQty} / on_hand source: {selectedVariantItem?.on_hand_qty || 0}</p>
+            <p className="text-[12px] text-slate-500">Tổng draft: {totalDraftQty} / tồn nguồn: {selectedVariantItem?.on_hand_qty || 0}</p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
                 className="rounded-[10px] border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-700 hover:bg-blue-100 transition-colors"
               >
-                {showStorageSuggestion ? "An goi y" : "Goi y vi tri (AI)"}
+                {showStorageSuggestion ? "Ẩn gợi ý" : "Gợi ý vị trí (AI)"}
               </button>
-              <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Them dong allocation</button>
+              <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Thêm dòng allocation</button>
             </div>
           </div>
 
@@ -711,7 +764,7 @@ export function ReceivingPutawayPage() {
               className="mt-4"
             >
               <div className="mb-3 flex items-center gap-3">
-                <label className="text-[12px] text-slate-600">So luong can goi y:</label>
+                <label className="text-[12px] text-slate-600">Số lượng cần gợi ý:</label>
                 <input
                   type="number"
                   min={1}
@@ -731,26 +784,26 @@ export function ReceivingPutawayPage() {
 
           <div className="mt-3 space-y-2">
             {draftLines.length === 0 ? (
-              <p className="text-[12px] text-slate-400 text-center py-4">Chua co draft allocation</p>
+              <p className="text-[12px] text-slate-400 text-center py-4">Chưa có allocation nào</p>
             ) : draftLines.map((line) => {
               const lineCandidate = candidateMap.get(line.target_location_id);
               return (
                 <div key={line.id} className="rounded-[12px] border border-slate-100 p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Compartment</p>
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ngăn đích</p>
                     <select
                       value={line.target_location_id}
                       onChange={(event) => updateLine(line.id, { target_location_id: event.target.value })}
                       className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     >
-                      <option value="">Chon vi tri dich</option>
+                      <option value="">Chọn vị trí đích</option>
                       {candidates.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>{candidate.location_code} (rem {candidate.remaining_capacity})</option>
+                        <option key={candidate.id} value={candidate.id}>{candidate.location_code} (còn {candidate.remaining_capacity})</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quantity</p>
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Số lượng</p>
                     <input
                       type="number"
                       min={1}
@@ -761,11 +814,11 @@ export function ReceivingPutawayPage() {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ly do (bat buoc)</p>
+                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Lý do (bắt buộc)</p>
                     <input
                       value={line.reason}
                       onChange={(event) => updateLine(line.id, { reason: event.target.value })}
-                      placeholder="Vi du: sap xep lai"
+                      placeholder="Ví dụ: sắp xếp lại"
                       className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                     />
                   </div>
@@ -774,7 +827,7 @@ export function ReceivingPutawayPage() {
                       onClick={() => removeLine(line.id)}
                       className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-600 hover:bg-red-100 transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Xoa
+                      <Trash2 className="w-3.5 h-3.5" /> Xóa
                     </button>
                   </div>
                 </div>
@@ -788,27 +841,27 @@ export function ReceivingPutawayPage() {
               disabled={savingTransfer || draftLines.length === 0}
               className="rounded-[10px] bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
             >
-              {savingTransfer ? 'Dang chuyen...' : 'Xac nhan chuyen len ke'}
+              {savingTransfer ? 'Đang chuyển...' : 'Xác nhận chuyển lên kệ'}
             </button>
           </div>
         </div>
       </FadeItem>
 
-      {/* Section B: Reverse */}
-      <FadeItem>
+      {/* Section B: Reverse — chỉ manager/admin mới thấy */}
+      {isManager && <FadeItem>
         <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <h2 className="text-[14px] font-semibold mb-1">B. Reverse tu Shelf ve Receiving</h2>
-          <p className="text-[11px] text-slate-500 mb-4">Tra sach tu ke ve vung nhan hang</p>
+          <h2 className="text-[14px] font-semibold mb-1">B. Hoàn trả từ kệ về RECEIVING</h2>
+          <p className="text-[11px] text-slate-500 mb-4">Trả sách từ kệ về vùng nhận hàng</p>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Source compartment</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ngăn nguồn</p>
               <select
                 value={selectedReverseCompartmentId}
                 onChange={(event) => setSelectedReverseCompartmentId(event.target.value)}
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
-                <option value="">Chon compartment</option>
+                <option value="">Chọn ngăn</option>
                 {occupiedCompartments.map((compartment) => (
                   <option key={compartment.id} value={compartment.id}>{compartment.location_code} (on_hand {compartment.on_hand_qty})</option>
                 ))}
@@ -816,14 +869,14 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong compartment</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong ngăn</p>
               <select
                 value={reverseVariantId}
                 onChange={(event) => setReverseVariantId(event.target.value)}
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
                 disabled={loadingReverseItems}
               >
-                <option value="">Chon SKU</option>
+                <option value="">Chọn SKU</option>
                 {reverseItems.map((item) => (
                   <option key={item.variant_id} value={item.variant_id}>
                     {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
@@ -833,13 +886,13 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Receiving dich</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Khu RECEIVING đích</p>
               <select
                 value={reverseReceivingId}
                 onChange={(event) => setReverseReceivingId(event.target.value)}
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               >
-                <option value="">Chon RECEIVING</option>
+                <option value="">Chọn khu RECEIVING</option>
                 {receivings.map((receiving) => (
                   <option key={receiving.id} value={receiving.id}>{receiving.location_code}</option>
                 ))}
@@ -847,7 +900,7 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quantity</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Số lượng</p>
               <input
                 type="number"
                 min={1}
@@ -859,11 +912,11 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ly do</p>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Lý do</p>
               <input
                 value={reverseReason}
                 onChange={(event) => setReverseReason(event.target.value)}
-                placeholder="Ly do bat buoc"
+                placeholder="Lý do (bắt buộc)"
                 className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
               />
             </div>
@@ -875,11 +928,11 @@ export function ReceivingPutawayPage() {
               disabled={savingReverse}
               className="rounded-[10px] bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
             >
-              {savingReverse ? 'Dang reverse...' : 'Reverse ve RECEIVING'}
+              {savingReverse ? 'Đang hoàn trả...' : 'Hoàn trả về RECEIVING'}
             </button>
           </div>
         </div>
-      </FadeItem>
+      </FadeItem>}
     </PageWrapper>
   );
 }

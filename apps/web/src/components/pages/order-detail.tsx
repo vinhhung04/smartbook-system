@@ -20,6 +20,7 @@ interface ReceiptDetailItem {
   book_title: string;
   location_code: string | null;
   quantity: number;
+  actual_quantity: number | null;
   unit_cost: number;
   line_total: number;
 }
@@ -106,10 +107,10 @@ export function OrderDetailPage() {
         const data = await goodsReceiptService.getById(id);
         const detail = data as ReceiptDetail;
         setReceipt(detail);
-        // Init counted qty from current receipt item quantities
+        // Init counted qty: dùng actual_quantity nếu đã kiểm đếm, không thì dùng planned quantity
         const init: Record<string, number> = {};
         for (const item of detail.items ?? []) {
-          init[item.id] = item.quantity;
+          init[item.id] = item.actual_quantity ?? item.quantity;
         }
         setCountedQty(init);
       } catch (error) {
@@ -144,12 +145,12 @@ export function OrderDetailPage() {
     if (!id || !receipt) return;
     try {
       setIsSavingItems(true);
+      // Lưu vào actual_quantity (không ghi đè quantity gốc từ PO)
       const items = receipt.items.map((item) => ({
         id: item.id,
-        quantity: countedQty[item.id] ?? item.quantity,
+        actual_quantity: countedQty[item.id] ?? item.quantity,
       }));
-      await goodsReceiptService.updateItems(id, items);
-      // Refresh receipt
+      await goodsReceiptService.verifyItems(id, items);
       const refreshed = await goodsReceiptService.getById(id);
       setReceipt(refreshed as ReceiptDetail);
       toast.success("Đã lưu số lượng kiểm đếm");
@@ -202,6 +203,10 @@ export function OrderDetailPage() {
   };
 
   const totalQty = useMemo(() => receipt?.items?.reduce((s, i) => s + i.quantity, 0) || 0, [receipt]);
+  const isVerified = useMemo(
+    () => Boolean(receipt && receipt.items.length > 0 && receipt.items.every((i) => i.actual_quantity !== null)),
+    [receipt],
+  );
   const timeline = useMemo(() => {
     const created = { step: 1, title: "Tạo phiếu nhập", time: formatDate(receipt?.created_at || ""), completed: true, description: "Đã tạo bản nháp" };
     const posted = {
@@ -305,27 +310,43 @@ export function OrderDetailPage() {
                     <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Mã vạch</th>
                     <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Tên sách</th>
                     {showLocation ? <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Vị trí</th> : null}
-                    <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Số lượng</th>
+                    <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">SL kế hoạch</th>
+                    <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">SL thực đếm</th>
                     {showUnitCost ? <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Đơn giá</th> : null}
                     {showUnitCost ? <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Thành tiền</th> : null}
                   </tr>
                 </thead>
                 <tbody>
-                  {receipt.items.map(item => (
-                    <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                  {receipt.items.map(item => {
+                    const diff = item.actual_quantity !== null ? item.actual_quantity - item.quantity : null;
+                    return (
+                    <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${diff !== null && diff !== 0 ? "bg-amber-50/40" : ""}`}>
                       <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.barcode || "-"}</td>
                       <td className="px-5 py-3.5 text-[13px] font-medium">{item.book_title}</td>
                       {showLocation ? <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.location_code || "-"}</td> : null}
                       <td className="px-5 py-3.5 text-right text-[13px] font-medium">{item.quantity}</td>
+                      <td className="px-5 py-3.5 text-right text-[13px] font-medium">
+                        {item.actual_quantity !== null ? (
+                          <span className={diff === 0 ? "text-emerald-600" : "text-amber-600"}>
+                            {item.actual_quantity}
+                            {diff !== 0 && diff !== null && (
+                              <span className="ml-1 text-[11px]">({diff > 0 ? "+" : ""}{diff})</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[12px]">—</span>
+                        )}
+                      </td>
                       {showUnitCost ? <td className="px-5 py-3.5 text-right text-[12px] font-mono text-muted-foreground">{formatCurrency(item.unit_cost)}</td> : null}
                       {showUnitCost ? <td className="px-5 py-3.5 text-right text-[13px] font-mono font-medium">{formatCurrency(item.line_total)}</td> : null}
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border bg-muted/30">
                     <td colSpan={showLocation ? 3 : 2} className="px-5 py-3 text-right text-[13px] font-semibold">Tổng:</td>
                     <td className="px-5 py-3 text-right text-[14px] font-mono font-bold">{totalQty}</td>
+                    <td className="px-5 py-3 text-right text-[13px] text-slate-400">—</td>
                     {showUnitCost ? <td colSpan={2} className="px-5 py-3 text-right text-[14px] font-mono font-bold">{formatCurrency(receipt.total_amount || 0)}</td> : null}
                   </tr>
                 </tfoot>
@@ -517,8 +538,8 @@ export function OrderDetailPage() {
               </div>
             </div>
 
-            {/* Scan bar — only on DRAFT */}
-            {receipt.status === "DRAFT" && (
+            {/* Scan bar — only on DRAFT and not yet verified */}
+            {receipt.status === "DRAFT" && !isVerified && (
               <div className="flex gap-2 mb-4">
                 <div className="relative flex-1">
                   <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -541,6 +562,15 @@ export function OrderDetailPage() {
                   <Save className="h-4 w-4" />
                   {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
                 </button>
+              </div>
+            )}
+            {/* Locked banner — shown after verification is saved */}
+            {receipt.status === "DRAFT" && isVerified && (
+              <div className="flex items-center gap-2 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                <p className="text-[13px] text-emerald-800 font-medium">
+                  Đã kiểm đếm xong — chờ manager duyệt phiếu nhập
+                </p>
               </div>
             )}
 
@@ -571,7 +601,7 @@ export function OrderDetailPage() {
                         <td className="px-4 py-2.5 font-mono text-[12px] text-slate-500">{invItem.isbn13 || invItem.sku || "-"}</td>
                         <td className="px-4 py-2.5 text-[13px] font-semibold text-indigo-700">{expected}</td>
                         <td className="px-4 py-2.5">
-                          {receiptItem && receipt.status === "DRAFT" ? (
+                          {receiptItem && receipt.status === "DRAFT" && !isVerified ? (
                             <input type="number" min={0}
                               value={countedQty[receiptItem.id] ?? receiptItem.quantity}
                               onChange={(e) => setCountedQty((prev) => ({ ...prev, [receiptItem.id]: Math.max(0, Number(e.target.value) || 0) }))}

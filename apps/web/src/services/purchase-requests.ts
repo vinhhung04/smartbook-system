@@ -66,7 +66,7 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  async convertToPO(id: string, payload: { supplier_id: string }): Promise<{ data: { purchase_order_id: string; po_number: string } }> {
+  async convertToPO(id: string, payload: { supplier_id: string; book_variant_id?: string }): Promise<{ data: { purchase_order_id: string; po_number: string } }> {
     const response = await inventoryAPI.post<{ data: { purchase_order_id: string; po_number: string } }>(`/api/purchase-requests/${id}/convert-to-po`, payload);
     return response.data;
   },

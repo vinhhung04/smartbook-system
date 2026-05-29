@@ -358,6 +358,7 @@ async function getGoodsReceiptById(req, res) {
       location_code: item.locations?.location_code || null,
       location_type: item.locations?.location_type || null,
       quantity: item.quantity,
+      actual_quantity: item.actual_quantity ?? null,
       unit_cost: Number(item.unit_cost),
       line_total: Number(item.unit_cost) * item.quantity,
     }));
@@ -1145,11 +1146,18 @@ async function updateGoodsReceipt(req, res) {
         };
       }
 
-      // Allow assigned staff to update item quantities on DRAFT receipts (e.g. scan-verify against NCC invoice).
+      // Allow assigned staff to verify item quantities on DRAFT receipts.
+      // Saves to actual_quantity (không ghi đè quantity gốc từ PO/hóa đơn).
       const itemUpdates = req.body.items;
       if (Array.isArray(itemUpdates) && existing.status === "DRAFT") {
         for (const item of itemUpdates) {
-          if (item.id && typeof item.quantity === "number" && item.quantity >= 0) {
+          if (item.id && typeof item.actual_quantity === "number" && item.actual_quantity >= 0) {
+            await tx.goods_receipt_items.updateMany({
+              where: { id: item.id, goods_receipt_id: id },
+              data: { actual_quantity: item.actual_quantity },
+            });
+          } else if (item.id && typeof item.quantity === "number" && item.quantity >= 0 && !('actual_quantity' in item)) {
+            // Backwards compat: nếu chỉ có quantity thì vẫn lưu vào quantity
             await tx.goods_receipt_items.updateMany({
               where: { id: item.id, goods_receipt_id: id },
               data: { quantity: item.quantity },
@@ -1257,7 +1265,7 @@ async function assignGoodsReceipt(req, res) {
     const updated = await prisma.goods_receipts.update({
       where: { id },
       data: {
-        received_by_user_id: receivedByUserId,
+        putaway_assignee_user_id: receivedByUserId,
         updated_at: new Date(),
       },
     });
@@ -1288,10 +1296,54 @@ async function assignGoodsReceipt(req, res) {
   }
 }
 
+async function getMyDraftReceiptsForVerification(req, res) {
+  const userId = req.user?.id || req.user?.sub;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const receipts = await prisma.goods_receipts.findMany({
+      where: {
+        status: 'DRAFT',
+        received_by_user_id: userId,
+      },
+      orderBy: { created_at: 'desc' },
+      include: {
+        warehouses: { select: { id: true, name: true, code: true } },
+        goods_receipt_items: { select: { id: true, quantity: true, actual_quantity: true } },
+      },
+    });
+
+    const data = receipts.map((r) => {
+      const items = r.goods_receipt_items;
+      const totalPlanned = items.reduce((sum, i) => sum + i.quantity, 0);
+      const totalActual = items.filter((i) => i.actual_quantity !== null).reduce((sum, i) => sum + (i.actual_quantity || 0), 0);
+      const isVerified = items.length > 0 && items.every((i) => i.actual_quantity !== null);
+      return {
+        id: r.id,
+        receipt_number: r.receipt_number,
+        status: r.status,
+        warehouse_code: r.warehouses?.code || null,
+        warehouse_name: r.warehouses?.name || null,
+        item_count: items.length,
+        total_planned_quantity: totalPlanned,
+        total_actual_quantity: isVerified ? totalActual : null,
+        is_verified: isVerified,
+        created_at: r.created_at,
+      };
+    });
+
+    return res.json({ data });
+  } catch (error) {
+    console.error('Error loading draft receipts for verification:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   getGoodsReceipts,
   getGoodsReceiptById,
   createGoodsReceipt,
   updateGoodsReceipt,
   assignGoodsReceipt,
+  getMyDraftReceiptsForVerification,
 };

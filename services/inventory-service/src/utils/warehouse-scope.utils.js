@@ -19,19 +19,24 @@ function isAdminUser(user) {
 /**
  * Get list of warehouse IDs that user can read
  */
+async function getAllActiveWarehouseIds() {
+  const all = await prisma.warehouses.findMany({ select: { id: true }, where: { is_active: true } });
+  return all.map((w) => w.id);
+}
+
 async function getReadableWarehouseIds(user) {
-  if (isAdminUser(user)) {
-    const allWarehouses = await prisma.warehouses.findMany({
-      select: { id: true },
-      where: { is_active: true },
-    });
-    return allWarehouses.map((w) => w.id);
-  }
+  if (isAdminUser(user)) return getAllActiveWarehouseIds();
+
+  // user_warehouse_scopes table may not exist yet — grant full access as fallback
+  if (!prisma.user_warehouse_scopes) return getAllActiveWarehouseIds();
 
   const scopes = await prisma.user_warehouse_scopes.findMany({
     where: { user_id: user?.id },
     select: { warehouse_id: true, access_level: true },
   });
+
+  // If user has no scope entries, grant access to all warehouses
+  if (!scopes.length) return getAllActiveWarehouseIds();
 
   return scopes
     .filter((s) => ['FULL', 'READ_ONLY', 'READ'].includes(s.access_level))
@@ -42,13 +47,10 @@ async function getReadableWarehouseIds(user) {
  * Get list of warehouse IDs that user can write
  */
 async function getWritableWarehouseIds(user) {
-  if (isAdminUser(user)) {
-    const allWarehouses = await prisma.warehouses.findMany({
-      select: { id: true },
-      where: { is_active: true },
-    });
-    return allWarehouses.map((w) => w.id);
-  }
+  if (isAdminUser(user)) return getAllActiveWarehouseIds();
+
+  // user_warehouse_scopes table may not exist yet — grant full access as fallback
+  if (!prisma.user_warehouse_scopes) return getAllActiveWarehouseIds();
 
   const scopes = await prisma.user_warehouse_scopes.findMany({
     where: {
@@ -57,6 +59,9 @@ async function getWritableWarehouseIds(user) {
     },
     select: { warehouse_id: true },
   });
+
+  // If user has no scope entries, grant access to all warehouses
+  if (!scopes.length) return getAllActiveWarehouseIds();
 
   return scopes.map((s) => s.warehouse_id);
 }

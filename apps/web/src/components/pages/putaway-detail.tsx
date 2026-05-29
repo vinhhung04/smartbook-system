@@ -87,11 +87,13 @@ export function PutawayDetailPage() {
             <p className="text-[12px] text-slate-500 mt-0.5">Kho: {detail.warehouse_code || detail.warehouse_name || "-"} · Ngay duyet: {formatDate(detail.received_at || detail.created_at)}</p>
           </div>
           <button
-            onClick={() => navigate(`/putaway/${detail.id}/execute`)}
+            onClick={() => navigate('/receiving-putaway', {
+              state: { warehouseId: detail.warehouse_id },
+            })}
             disabled={detail.remaining_quantity <= 0}
             className="inline-flex items-center gap-2 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
           >
-            <PackageCheck className="w-3.5 h-3.5" /> Nhap hang
+            <PackageCheck className="w-3.5 h-3.5" /> Nhập hàng
           </button>
         </div>
       </FadeItem>
@@ -132,13 +134,23 @@ export function PutawayDetailPage() {
                   <td className="px-5 py-3.5 text-[13px] text-emerald-700">{item.putaway_quantity}</td>
                   <td className="px-5 py-3.5 text-[13px] text-blue-700" style={{ fontWeight: 600 }}>{item.remaining_quantity}</td>
                   <td className="px-5 py-3.5 text-[12px]">
-                    <button
-                      onClick={() => navigate(`/putaway/${detail.id}/execute`)}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-violet-50 px-3 py-1.5 text-violet-700 hover:bg-violet-100"
-                      style={{ fontWeight: 600 }}
-                    >
-                      <PackageCheck className="w-3.5 h-3.5" /> Nhap hang
-                    </button>
+                    {item.remaining_quantity > 0 ? (
+                      <button
+                        onClick={() => navigate('/receiving-putaway', {
+                          state: {
+                            warehouseId: detail.warehouse_id,
+                            variantId: item.variant_id,
+                            bookTitle: item.book_title,
+                          },
+                        })}
+                        className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-violet-50 px-3 py-1.5 text-violet-700 hover:bg-violet-100"
+                        style={{ fontWeight: 600 }}
+                      >
+                        <PackageCheck className="w-3.5 h-3.5" /> Nhập hàng
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-emerald-600 font-semibold">Đã xong</span>
+                    )}
                   </td>
                 </tr>
               ))}

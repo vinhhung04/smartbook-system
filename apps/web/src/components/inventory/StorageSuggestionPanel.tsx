@@ -74,6 +74,15 @@ export function StorageSuggestionPanel({
 
   const canRead = hasPermission("inventory.stock.read");
   const canWrite = hasPermission("inventory.operation.decide");
+  const canTaskProgress = hasPermission("inventory.task.progress");
+  const canViewSuggestions = canRead || canWrite || canTaskProgress;
+  const canSelectSuggestion = canWrite || canTaskProgress;
+
+  const formatCapacity = (value: number | null | undefined): string => {
+    if (value === null || value === undefined) return "Chưa cấu hình";
+    if (!Number.isFinite(value)) return "Không giới hạn";
+    return value.toString();
+  };
 
   const handleGetSuggestions = useCallback(async () => {
     if (!warehouseId) {
@@ -86,10 +95,10 @@ export function StorageSuggestionPanel({
       return;
     }
 
-    setHasPermissionToRead(canRead);
+    setHasPermissionToRead(canViewSuggestions);
 
-    if (!canRead) {
-      toast.error("Bạn không có quyền xem gợi ý vị trí");
+    if (!canViewSuggestions) {
+      toast.error("Bạn cần quyền inventory.stock.read hoặc inventory.operation.decide");
       return;
     }
 
@@ -126,11 +135,11 @@ export function StorageSuggestionPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [warehouseId, bookId, variantId, quantity, canRead]);
+  }, [warehouseId, bookId, variantId, quantity, canRead, canWrite, canTaskProgress]);
 
   const handleSelectLocation = useCallback(
     (suggestion: StorageSuggestion) => {
-      if (!canWrite) {
+      if (!canSelectSuggestion) {
         toast.warning("Bạn không có quyền thao tác vị trí. Vui lòng liên hệ quản lý.");
         return;
       }
@@ -269,10 +278,10 @@ export function StorageSuggestionPanel({
 
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                          Sức chứa: {suggestion.availableCapacity}
+                          Sức chứa: {formatCapacity(suggestion.availableCapacity)}
                         </span>
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                          Hiện tại: {suggestion.currentOnHand}
+                          Hiện tại: {suggestion.currentOnHand ?? "—"}
                         </span>
                       </div>
                     </div>
@@ -281,7 +290,7 @@ export function StorageSuggestionPanel({
                       variant={isSelected ? "default" : "outline"}
                       size="sm"
                       onClick={() => handleSelectLocation(suggestion)}
-                      disabled={!canWrite}
+                      disabled={!canSelectSuggestion}
                       className="shrink-0"
                     >
                       {isSelected ? (
@@ -325,7 +334,7 @@ export function StorageSuggestionPanel({
               );
             })}
 
-            {!canWrite && (
+            {!canSelectSuggestion && (
               <div className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 p-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                 <p className="text-xs text-slate-600">

@@ -8,6 +8,8 @@ export interface PutawayReceiptSummary {
   warehouse_name: string | null;
   status: string;
   approved_by_user_id: string | null;
+  received_by_user_id: string | null;
+  putaway_assignee_user_id: string | null;
   received_at: string | null;
   created_at: string;
   line_count: number;
@@ -119,6 +121,11 @@ export const putawayService = {
 
   confirmPutaway: async (receiptId: string, payload: ConfirmPutawayPayload) => {
     const response = await inventoryAPI.post(`/api/putaway/receipts/${receiptId}/confirm`, payload);
+    return response.data;
+  },
+
+  claimSelf: async (receiptId: string) => {
+    const response = await inventoryAPI.patch(`/api/putaway/receipts/${receiptId}/claim-self`);
     return response.data;
   },
 };
