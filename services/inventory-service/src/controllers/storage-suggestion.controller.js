@@ -41,12 +41,16 @@ async function getSuggestions(req, res) {
   }
 
   const hasReadPermission = user.is_superuser ||
-    (Array.isArray(user.permissions) && user.permissions.includes('inventory.stock.read'));
+    (Array.isArray(user.permissions) && (
+      user.permissions.includes('inventory.stock.read') ||
+      user.permissions.includes('inventory.operation.decide') ||
+      user.permissions.includes('inventory.task.progress')
+    ));
 
   if (!hasReadPermission) {
     return res.status(403).json({
       success: false,
-      error: 'Bạn không có quyền xem gợi ý vị trí. Cần permission: inventory.stock.read',
+      error: 'Bạn không có quyền xem gợi ý vị trí. Cần permission: inventory.stock.read, inventory.operation.decide hoặc inventory.task.progress',
     });
   }
 
@@ -101,12 +105,15 @@ async function getContext(req, res) {
   }
 
   const hasReadPermission = user.is_superuser ||
-    (Array.isArray(user.permissions) && user.permissions.includes('inventory.stock.read'));
+    (Array.isArray(user.permissions) && (
+      user.permissions.includes('inventory.stock.read') ||
+      user.permissions.includes('inventory.operation.decide')
+    ));
 
   if (!hasReadPermission) {
     return res.status(403).json({
       success: false,
-      error: 'Bạn không có quyền xem thông tin vị trí. Cần permission: inventory.stock.read',
+      error: 'Bạn không có quyền xem thông tin vị trí. Cần permission: inventory.stock.read hoặc inventory.operation.decide',
     });
   }
 

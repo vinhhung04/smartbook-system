@@ -4,6 +4,7 @@ import { AlertTriangle, BookOpen, CheckCircle2, FileText, LogOut, PackageCheck, 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api";
 import { supplierAccountService } from "@/services/supplier-account";
@@ -51,6 +52,12 @@ export function SupplierAccountPage() {
   const [lines, setLines] = useState<InvoiceLines>({});
   const [redeliveryReportId, setRedeliveryReportId] = useState("");
   const [cannotReason, setCannotReason] = useState("");
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean; title: string; description?: string;
+    variant: "default" | "destructive"; onConfirm: () => Promise<void>;
+  }>({ open: false, title: "", variant: "default", onConfirm: async () => {} });
+  const openConfirm = (title: string, description: string, variant: "default" | "destructive", action: () => Promise<void>) =>
+    setConfirmState({ open: true, title, description, variant, onConfirm: action });
 
   const selectedOrder = useMemo(
     () => orders.find((order) => order.purchase_order.id === selectedPoId) || orders[0] || null,
@@ -101,19 +108,19 @@ export function SupplierAccountPage() {
     navigate("/login");
   }
 
-  async function confirmOrder() {
+  function confirmOrder() {
     if (!selectedOrder) return;
-    if (!window.confirm("Confirm this purchase order?")) return;
-    try {
-      setWorking(true);
-      await supplierAccountService.confirmOrder(selectedOrder.purchase_order.id);
-      toast.success("Order confirmed");
-      await load();
-    } catch (confirmError) {
-      toast.error(getApiErrorMessage(confirmError, "Confirm order failed"));
-    } finally {
-      setWorking(false);
-    }
+    openConfirm("Xác nhận đơn đặt hàng", "Bạn xác nhận sẽ cung cấp hàng theo đơn này?", "default", async () => {
+      try {
+        setWorking(true);
+        await supplierAccountService.confirmOrder(selectedOrder.purchase_order.id);
+        toast.success("Đã xác nhận đơn hàng");
+        setConfirmState((s) => ({ ...s, open: false }));
+        await load();
+      } catch (confirmError) {
+        toast.error(getApiErrorMessage(confirmError, "Xác nhận thất bại"));
+      } finally { setWorking(false); }
+    });
   }
 
   function setLineQty(itemId: string, value: number, max: number) {
@@ -144,48 +151,49 @@ export function SupplierAccountPage() {
       })
       .filter((item) => item.invoiced_qty > 0);
 
-    if (payloadItems.length === 0) return toast.error("Enter at least one quantity");
-    if (!window.confirm(redeliveryReport ? "Create redelivery invoice?" : "Submit invoice / delivery note?")) return;
-
-    try {
-      setWorking(true);
-      const payload = {
-        invoice_number: invoiceNumber.trim(),
-        delivery_number: deliveryNumber.trim(),
-        invoice_date: invoiceDate,
-        expected_delivery_date: expectedDate,
-        supplier_note: note.trim(),
-        ...(redeliveryReport ? { source_shortage_report_id: redeliveryReport.id, redelivery: true } : {}),
-        items: payloadItems,
-      };
-      if (redeliveryReport) {
-        await supplierAccountService.createRedeliveryInvoice(selectedOrder.purchase_order.id, redeliveryReport.id, payload);
-      } else {
-        await supplierAccountService.createInvoice(selectedOrder.purchase_order.id, payload);
-      }
-      toast.success(redeliveryReport ? "Redelivery invoice submitted" : "Invoice submitted");
-      setNote("");
-      await load();
-    } catch (submitError) {
-      toast.error(getApiErrorMessage(submitError, "Submit failed"));
-    } finally {
-      setWorking(false);
-    }
+    if (payloadItems.length === 0) return toast.error("Phải có ít nhất một dòng hàng");
+    const title = redeliveryReport ? "Tạo hóa đơn giao bù" : "Gửi hóa đơn / chứng từ";
+    const desc = redeliveryReport ? "Xác nhận tạo hóa đơn giao bù?" : "Xác nhận gửi hóa đơn này?";
+    openConfirm(title, desc, "default", async () => {
+      try {
+        setWorking(true);
+        const payload = {
+          invoice_number: invoiceNumber.trim(),
+          delivery_number: deliveryNumber.trim(),
+          invoice_date: invoiceDate,
+          expected_delivery_date: expectedDate,
+          supplier_note: note.trim(),
+          ...(redeliveryReport ? { source_shortage_report_id: redeliveryReport.id, redelivery: true } : {}),
+          items: payloadItems,
+        };
+        if (redeliveryReport) {
+          await supplierAccountService.createRedeliveryInvoice(selectedOrder.purchase_order.id, redeliveryReport.id, payload);
+        } else {
+          await supplierAccountService.createInvoice(selectedOrder.purchase_order.id, payload);
+        }
+        toast.success(redeliveryReport ? "Đã gửi hóa đơn giao bù" : "Đã gửi hóa đơn");
+        setNote("");
+        setConfirmState((s) => ({ ...s, open: false }));
+        await load();
+      } catch (submitError) {
+        toast.error(getApiErrorMessage(submitError, "Gửi thất bại"));
+      } finally { setWorking(false); }
+    });
   }
 
-  async function acknowledge(reportId: string) {
+  function acknowledge(reportId: string) {
     if (!selectedOrder) return;
-    if (!window.confirm("Acknowledge this shortage report?")) return;
-    try {
-      setWorking(true);
-      await supplierAccountService.acknowledgeShortage(selectedOrder.purchase_order.id, reportId);
-      toast.success("Shortage acknowledged");
-      await load();
-    } catch (ackError) {
-      toast.error(getApiErrorMessage(ackError, "Acknowledge failed"));
-    } finally {
-      setWorking(false);
-    }
+    openConfirm("Ghi nhận báo cáo thiếu hàng", "Xác nhận bạn đã nhận được thông báo thiếu hàng này?", "default", async () => {
+      try {
+        setWorking(true);
+        await supplierAccountService.acknowledgeShortage(selectedOrder.purchase_order.id, reportId);
+        toast.success("Đã ghi nhận báo cáo thiếu hàng");
+        setConfirmState((s) => ({ ...s, open: false }));
+        await load();
+      } catch (ackError) {
+        toast.error(getApiErrorMessage(ackError, "Ghi nhận thất bại"));
+      } finally { setWorking(false); }
+    });
   }
 
   async function cannotFulfill(reportId: string) {
@@ -426,6 +434,15 @@ export function SupplierAccountPage() {
           </div>
         ) : null}
       </main>
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        loading={working}
+      />
     </div>
   );
 }

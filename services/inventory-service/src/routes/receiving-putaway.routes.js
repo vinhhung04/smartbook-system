@@ -11,10 +11,11 @@ const {
   transferReceivingToShelf,
   reverseShelfToReceiving,
 } = require('../controllers/receiving-putaway.controller');
-const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
+const { authorizeManagerDecision, authorizeTaskProgress } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const canReadTask = authorizeManagerRead(['inventory.stock.read']);
+const canReadTask = authorizeTaskProgress(['inventory.task.progress']);
+const canExecuteTransfer = authorizeTaskProgress(['inventory.task.progress']);
 const canDecideOperation = authorizeManagerDecision(['inventory.operation.decide']);
 
 router.get('/warehouses/:warehouseId/receivings', canReadTask, getWarehouseReceivings);
@@ -24,7 +25,7 @@ router.get('/lookup/location-by-barcode', canReadTask, lookupCompartmentByBarcod
 router.get('/lookup/variant-by-barcode', canReadTask, lookupVariantByBarcode);
 router.get('/warehouses/:warehouseId/compartments/occupied', canReadTask, getOccupiedCompartments);
 router.get('/compartments/:compartmentId/items', canReadTask, getCompartmentItems);
-router.post('/transfer', canDecideOperation, transferReceivingToShelf);
+router.post('/transfer', canExecuteTransfer, transferReceivingToShelf);
 router.post('/reverse', canDecideOperation, reverseShelfToReceiving);
 
 module.exports = router;

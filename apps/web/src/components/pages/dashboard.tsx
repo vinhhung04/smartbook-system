@@ -313,39 +313,72 @@ export function DashboardPage() {
             </SectionCard>
           )}
 
-          {(pendingPR > 0 || openER > 0) && (
-            <div>
-              <h2 className="mb-3 text-[14px] font-semibold text-foreground">Cần xử lý ngay</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {pendingPR > 0 && (
-                  <NavLink to="/purchase-requests?status=PENDING">
-                    <div className="flex items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100 transition-colors">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white">
-                        <ShoppingCart className="h-5 w-5 text-orange-600" />
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-orange-700">{pendingPR}</div>
-                        <div className="text-[12px] text-orange-600">Yêu cầu mua hàng chờ duyệt</div>
-                      </div>
-                    </div>
-                  </NavLink>
-                )}
-                {openER > 0 && (
-                  <NavLink to="/exception-reports?status=OPEN">
-                    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 hover:bg-red-100 transition-colors">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white">
-                        <AlertTriangle className="h-5 w-5 text-red-600" />
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-red-700">{openER}</div>
-                        <div className="text-[12px] text-red-600">Báo cáo sự cố chưa xử lý</div>
-                      </div>
-                    </div>
-                  </NavLink>
-                )}
+          {/* Manager Decision Center */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-[15px] font-semibold text-foreground">Việc cần xử lý hôm nay</h2>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Các mục cần quyết định hoặc theo dõi ngay</p>
               </div>
             </div>
-          )}
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+              <NavLink to="/purchase-requests?status=PENDING" className="group">
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${pendingPR > 0 ? 'border-orange-200 bg-orange-50 hover:bg-orange-100' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${pendingPR > 0 ? 'bg-orange-100 border border-orange-200' : 'bg-muted border border-border'}`}>
+                    <ShoppingCart className={`h-4 w-4 ${pendingPR > 0 ? 'text-orange-600' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-xl font-bold leading-none ${pendingPR > 0 ? 'text-orange-700' : 'text-foreground'}`}>{pendingPR}</div>
+                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Yêu cầu mua hàng<br />chờ duyệt</div>
+                  </div>
+                </div>
+              </NavLink>
+              <NavLink to="/exception-reports?status=OPEN" className="group">
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${openER > 0 ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${openER > 0 ? 'bg-red-100 border border-red-200' : 'bg-muted border border-border'}`}>
+                    <AlertTriangle className={`h-4 w-4 ${openER > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-xl font-bold leading-none ${openER > 0 ? 'text-red-700' : 'text-foreground'}`}>{openER}</div>
+                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Báo cáo sự cố<br />chưa xử lý</div>
+                  </div>
+                </div>
+              </NavLink>
+              <NavLink to="/inventory" className="group">
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.low_stock_variants > 0 ? 'border-amber-200 bg-amber-50 hover:bg-amber-100' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.low_stock_variants > 0 ? 'bg-amber-100 border border-amber-200' : 'bg-muted border border-border'}`}>
+                    <Warehouse className={`h-4 w-4 ${kpis.low_stock_variants > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-xl font-bold leading-none ${kpis.low_stock_variants > 0 ? 'text-amber-700' : 'text-foreground'}`}>{kpis.low_stock_variants}</div>
+                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Đầu sách<br />tồn kho thấp</div>
+                  </div>
+                </div>
+              </NavLink>
+              <NavLink to="/borrow/loans?status=OVERDUE" className="group">
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.overdue_loans > 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.overdue_loans > 0 ? 'bg-rose-100 border border-rose-200' : 'bg-muted border border-border'}`}>
+                    <Clock className={`h-4 w-4 ${kpis.overdue_loans > 0 ? 'text-rose-600' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-xl font-bold leading-none ${kpis.overdue_loans > 0 ? 'text-rose-700' : 'text-foreground'}`}>{kpis.overdue_loans}</div>
+                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Phiếu mượn<br />quá hạn</div>
+                  </div>
+                </div>
+              </NavLink>
+              <NavLink to="/borrow/fines?status=UNPAID" className="group">
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${fines.unpaid_count > 0 ? 'border-violet-200 bg-violet-50 hover:bg-violet-100' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fines.unpaid_count > 0 ? 'bg-violet-100 border border-violet-200' : 'bg-muted border border-border'}`}>
+                    <Receipt className={`h-4 w-4 ${fines.unpaid_count > 0 ? 'text-violet-600' : 'text-muted-foreground'}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-xl font-bold leading-none ${fines.unpaid_count > 0 ? 'text-violet-700' : 'text-foreground'}`}>{fines.unpaid_count}</div>
+                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Tiền phạt<br />chưa thu</div>
+                  </div>
+                </div>
+              </NavLink>
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
             <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" />

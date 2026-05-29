@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { Loader2, RefreshCw, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
+import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
@@ -43,6 +43,13 @@ export function BorrowLoansPage() {
   const [dlForm, setDlForm] = useState({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[] });
   const [dlSaving, setDlSaving] = useState(false);
   const [dlBookSearch, setDlBookSearch] = useState('');
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    description?: string;
+    variant: 'default' | 'destructive';
+    onConfirm: () => Promise<void>;
+  }>({ open: false, title: '', variant: 'default', onConfirm: async () => {} });
 
   const loadLoans = async () => {
     try {
@@ -77,52 +84,68 @@ export function BorrowLoansPage() {
     });
   }, [loans, query, statusFilter]);
 
-  const returnLoan = async (loanId: string) => {
-    if (!window.confirm('Trả tất cả sách đang mượn trong phiếu này?')) return;
-
-    try {
-      await borrowService.returnLoan(loanId, {});
-      toast.success('Đã trả sách thành công');
-      await loadLoans();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Trả sách thất bại'));
-    }
+  const openConfirm = (title: string, description: string, variant: 'default' | 'destructive', action: () => Promise<void>) => {
+    setConfirmState({ open: true, title, description, variant, onConfirm: action });
   };
 
-  const reportDamage = async (loanId: string) => {
-    if (!window.confirm('Đánh dấu sách trả bị hư hỏng và tạo tiền phạt?')) return;
-
-    try {
-      await borrowService.returnLoan(loanId, { item_condition_on_return: 'DAMAGED' });
-      toast.success('Đã xử lý trả sách hư hỏng');
-      await loadLoans();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Báo hư hỏng thất bại'));
-    }
+  const returnLoan = (loanId: string) => {
+    openConfirm(
+      'Xác nhận trả sách',
+      'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
+      'default',
+      async () => {
+        try {
+          await borrowService.returnLoan(loanId, {});
+          toast.success('Đã trả sách thành công');
+          setConfirmState((s) => ({ ...s, open: false }));
+          await loadLoans();
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, 'Trả sách thất bại'));
+        }
+      },
+    );
   };
 
-  const markLost = async (loanId: string) => {
-    if (!window.confirm('Đánh dấu một sách đang mượn là mất và tạo tiền phạt?')) return;
+  const reportDamage = (loanId: string) => {
+    openConfirm(
+      'Báo hư hỏng sách',
+      'Đánh dấu sách trả bị hư hỏng và tạo tiền phạt?',
+      'destructive',
+      async () => {
+        try {
+          await borrowService.returnLoan(loanId, { item_condition_on_return: 'DAMAGED' });
+          toast.success('Đã xử lý trả sách hư hỏng');
+          setConfirmState((s) => ({ ...s, open: false }));
+          await loadLoans();
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, 'Báo hư hỏng thất bại'));
+        }
+      },
+    );
+  };
 
-    try {
-      const detail = await borrowService.getLoanById(loanId);
-      const activeItem = (detail.data.loan_items || []).find((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
-
-      if (!activeItem) {
-        toast.error('Không tìm thấy sách đang mượn để đánh dấu mất');
-        return;
-      }
-
-      await borrowService.returnLoan(loanId, {
-        loan_item_id: activeItem.id,
-        mark_lost: true,
-      });
-
-      toast.success('Đã xử lý sách mất');
-      await loadLoans();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Đánh dấu mất thất bại'));
-    }
+  const markLost = (loanId: string) => {
+    openConfirm(
+      'Đánh dấu mất sách',
+      'Đánh dấu một sách đang mượn là mất và tạo tiền phạt?',
+      'destructive',
+      async () => {
+        try {
+          const detail = await borrowService.getLoanById(loanId);
+          const activeItem = (detail.data.loan_items || []).find((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
+          if (!activeItem) {
+            toast.error('Không tìm thấy sách đang mượn để đánh dấu mất');
+            return;
+          }
+          await borrowService.returnLoan(loanId, { loan_item_id: activeItem.id, mark_lost: true });
+          toast.success('Đã xử lý sách mất');
+          setConfirmState((s) => ({ ...s, open: false }));
+          await loadLoans();
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, 'Đánh dấu mất thất bại'));
+        }
+      },
+    );
   };
 
   const openDirectLoanModal = async () => {
@@ -453,6 +476,15 @@ export function BorrowLoansPage() {
           </motion.div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+      />
     </div>
   );
 }

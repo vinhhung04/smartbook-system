@@ -6,6 +6,7 @@ const {
 	createGoodsReceipt,
 	updateGoodsReceipt,
 	assignGoodsReceipt,
+	getMyDraftReceiptsForVerification,
 } = require('../controllers/goods-receipt.controller');
 const {
 	authorizeManagerDecision,
@@ -20,6 +21,7 @@ const canDecideReceiving = authorizeManagerDecision(['inventory.operation.decide
 const canReadAssignedReceiving = authorizeTaskRead(['inventory.task.read']);
 const canUpdateAssignedReceiving = authorizeTaskProgress(['inventory.task.progress']);
 
+router.get('/pending-verification', canReadAssignedReceiving, getMyDraftReceiptsForVerification);
 router.get('/', canReadReceiving, getGoodsReceipts);
 router.get('/:id', canReadAssignedReceiving, getGoodsReceiptById);
 router.post('/', canUpdateAssignedReceiving, createGoodsReceipt);

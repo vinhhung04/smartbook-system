@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ClipboardList, Plus, RefreshCw, X, CheckCircle, PlayCircle } from "lucide-react";
+import { ClipboardList, Link2, Plus, RefreshCw, X, CheckCircle, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
+import { NavLink } from "react-router";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getApiErrorMessage } from "@/services/api";
-import { staffTaskService, type StaffTask, type StaffTaskCreateInput } from "@/services/staff-tasks";
+import {
+  staffTaskService,
+  type EntityOption,
+  type StaffTask,
+  type StaffTaskCreateInput,
+} from "@/services/staff-tasks";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { authService } from "@/services/auth";
 import { canManageReceiving } from "@/lib/rbac";
@@ -35,6 +41,43 @@ const PRIORITY_OPTIONS = [
 
 const STATUS_FILTERS = ["ALL", "OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
 
+const ENTITY_TYPE_OPTIONS = [
+  { value: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
+  { value: "PURCHASE_REQUEST", label: "Yêu cầu mua hàng" },
+  { value: "OUTBOUND_ORDER", label: "Đơn xuất kho" },
+  { value: "TRANSFER_ORDER", label: "Đơn chuyển kho" },
+];
+
+const ENTITY_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  ENTITY_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+const TASK_TYPE_ACTION: Record<string, string> = {
+  GENERAL: "Xử lý",
+  CHECK_SHELF: "Kiểm kệ",
+  STOCK_CHECK: "Kiểm tồn kho",
+  LOW_STOCK_REVIEW: "Xem xét hàng sắp hết",
+  EXCEPTION_FOLLOW_UP: "Xử lý sự cố",
+  REORDER_REVIEW: "Xem xét tái nhập",
+  RESERVATION_FOLLOW_UP: "Theo dõi đặt trước",
+  INVENTORY_AUDIT: "Kiểm kê kho",
+  OTHER: "Thực hiện",
+};
+
+function buildAutoTitle(taskType: string, entityType: string | null, option: EntityOption | null): string {
+  if (!entityType || !option) return "";
+  const action = TASK_TYPE_ACTION[taskType] ?? "Xử lý";
+  return `${action}: ${option.ref_number} (${option.status})`;
+}
+
+function getEntityNavPath(entityType: string): string {
+  if (entityType === "EXCEPTION_REPORT") return "/exception-reports";
+  if (entityType === "PURCHASE_REQUEST") return "/purchase-requests";
+  if (entityType === "OUTBOUND_ORDER") return "/outbound";
+  if (entityType === "TRANSFER_ORDER") return "/picking";
+  return "#";
+}
+
 function statusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
   const s = status.toUpperCase();
   if (s === "DONE") return "success";
@@ -59,7 +102,7 @@ function formatDate(value: string | null | undefined) {
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-const BLANK_FORM: StaffTaskCreateInput = {
+const BLANK_FORM: StaffTaskCreateInput & { related_entity_type: string | null; related_entity_id: string | null } = {
   title: "",
   description: "",
   task_type: "GENERAL",
@@ -67,6 +110,8 @@ const BLANK_FORM: StaffTaskCreateInput = {
   assignee_user_id: "",
   warehouse_id: null,
   due_date: null,
+  related_entity_type: null,
+  related_entity_id: null,
 };
 
 export function StaffTasksPage() {
@@ -78,9 +123,11 @@ export function StaffTasksPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<StaffTaskCreateInput>(BLANK_FORM);
+  const [form, setForm] = useState(BLANK_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
+  const [entityOptions, setEntityOptions] = useState<EntityOption[]>([]);
+  const [loadingEntityOptions, setLoadingEntityOptions] = useState(false);
 
   const load = async (status?: string) => {
     setLoading(true);
@@ -114,6 +161,31 @@ export function StaffTasksPage() {
     return map;
   }, [warehouseStaff]);
 
+  const handleEntityTypeChange = async (entityType: string) => {
+    setForm((f) => ({ ...f, related_entity_type: entityType || null, related_entity_id: null }));
+    setEntityOptions([]);
+    if (!entityType) return;
+    setLoadingEntityOptions(true);
+    try {
+      const res = await staffTaskService.getEntityOptions(entityType, form.warehouse_id ?? undefined);
+      setEntityOptions(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setEntityOptions([]);
+    } finally {
+      setLoadingEntityOptions(false);
+    }
+  };
+
+  const handleEntitySelect = (entityId: string) => {
+    const option = entityOptions.find((o) => o.id === entityId) ?? null;
+    setForm((f) => {
+      const newTitle = !f.title.trim() && option
+        ? buildAutoTitle(f.task_type ?? "GENERAL", f.related_entity_type, option)
+        : f.title;
+      return { ...f, related_entity_id: entityId || null, title: newTitle };
+    });
+  };
+
   const handleCreate = async () => {
     if (!form.title.trim()) { toast.error("Tiêu đề không được để trống"); return; }
     if (!form.assignee_user_id) { toast.error("Chọn nhân viên được giao"); return; }
@@ -124,10 +196,13 @@ export function StaffTasksPage() {
         description: form.description || null,
         warehouse_id: form.warehouse_id || null,
         due_date: form.due_date || null,
+        related_entity_type: form.related_entity_type || null,
+        related_entity_id: form.related_entity_id || null,
       });
       toast.success("Đã tạo task cho nhân viên");
       setShowForm(false);
       setForm(BLANK_FORM);
+      setEntityOptions([]);
       void load(statusFilter);
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Tạo task thất bại"));
@@ -148,6 +223,8 @@ export function StaffTasksPage() {
       setUpdatingId("");
     }
   };
+
+  const colSpan = isManager ? 10 : 9;
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -208,7 +285,7 @@ export function StaffTasksPage() {
           <SectionCard>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[14px] font-semibold">Tạo task mới</h2>
-              <button type="button" onClick={() => { setShowForm(false); setForm(BLANK_FORM); }} className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => { setShowForm(false); setForm(BLANK_FORM); setEntityOptions([]); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -279,9 +356,47 @@ export function StaffTasksPage() {
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
               </div>
+
+              {/* Entity Linking */}
+              <div className="lg:col-span-3">
+                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                  Liên kết đến nghiệp vụ cụ thể
+                  <span className="ml-1 font-normal text-muted-foreground/70">(tùy chọn — staff thấy chi tiết ngay trong task)</span>
+                </label>
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                  <select
+                    className="rounded-md border border-border bg-background px-3 py-2 text-[13px] w-full sm:w-[210px] shrink-0"
+                    value={form.related_entity_type ?? ""}
+                    onChange={(e) => void handleEntityTypeChange(e.target.value)}
+                  >
+                    <option value="">Không liên kết</option>
+                    {ENTITY_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  {form.related_entity_type && (
+                    <select
+                      className="flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                      value={form.related_entity_id ?? ""}
+                      onChange={(e) => handleEntitySelect(e.target.value)}
+                      disabled={loadingEntityOptions}
+                    >
+                      <option value="">{loadingEntityOptions ? "Đang tải..." : "Chọn đối tượng..."}</option>
+                      {entityOptions.map((opt) => (
+                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {form.related_entity_type && form.related_entity_id && (
+                  <p className="text-[11px] text-emerald-600 mt-1.5">
+                    ✓ Staff sẽ thấy chi tiết {ENTITY_TYPE_LABELS[form.related_entity_type] ?? form.related_entity_type} ngay trong task mà không cần chuyển trang.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-3">
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setForm(BLANK_FORM); }}>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setForm(BLANK_FORM); setEntityOptions([]); }}>
                 Hủy
               </Button>
               <Button type="button" size="sm" disabled={submitting} onClick={() => void handleCreate()}
@@ -300,11 +415,12 @@ export function StaffTasksPage() {
           </h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 {[
                   "Tiêu đề",
+                  "Liên kết",
                   "Loại",
                   "Độ ưu tiên",
                   ...(isManager ? ["Nhân viên"] : []),
@@ -320,10 +436,10 @@ export function StaffTasksPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={isManager ? 9 : 8} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <tr><td colSpan={colSpan} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
               ) : tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={isManager ? 9 : 8} className="px-5 py-10">
+                  <td colSpan={colSpan} className="px-5 py-10">
                     <EmptyState
                       icon={ClipboardList}
                       title="Chưa có task nào"
@@ -333,12 +449,35 @@ export function StaffTasksPage() {
                 </tr>
               ) : tasks.map((task) => (
                 <tr key={task.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 text-[13px] font-medium max-w-[200px]">
+                  <td className="px-4 py-3 text-[13px] font-medium max-w-[180px]">
                     <span className="block truncate" title={task.title}>{task.title}</span>
                     {task.description && (
                       <span className="block truncate text-[11px] text-muted-foreground" title={task.description}>{task.description}</span>
                     )}
                   </td>
+
+                  {/* Entity link column */}
+                  <td className="px-4 py-3 max-w-[200px]">
+                    {task.related_entity_type && task.related_entity_display ? (
+                      <div className="space-y-1">
+                        <NavLink
+                          to={getEntityNavPath(task.related_entity_type)}
+                          className="inline-flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 transition-colors"
+                        >
+                          <Link2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate max-w-[120px]">{task.related_entity_display.ref_number}</span>
+                        </NavLink>
+                        {task.related_entity_display.details && (
+                          <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                            {task.related_entity_display.details}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">—</span>
+                    )}
+                  </td>
+
                   <td className="px-4 py-3 text-[12px]">{TASK_TYPE_LABELS[task.task_type] || task.task_type}</td>
                   <td className="px-4 py-3">
                     <StatusBadge label={PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label || task.priority} variant={priorityVariant(task.priority)} dot />

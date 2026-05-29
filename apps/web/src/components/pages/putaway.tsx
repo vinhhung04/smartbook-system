@@ -31,9 +31,11 @@ export function PutawayPage() {
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [assignState, setAssignState] = useState<Record<string, string>>({});
   const [assigningId, setAssigningId] = useState("");
+  const [claimingId, setClaimingId] = useState("");
 
   const currentUser = authService.getCurrentUser();
   const showAssign = canManageReceiving(currentUser);
+  const currentUserId = currentUser?.id || "";
 
   useEffect(() => {
     const load = async () => {
@@ -67,6 +69,20 @@ export function PutawayPage() {
   }, [receipts, query]);
 
   const totalRemaining = receipts.reduce((sum, row) => sum + row.remaining_quantity, 0);
+
+  const handleClaimSelf = async (receiptId: string) => {
+    setClaimingId(receiptId);
+    try {
+      await putawayService.claimSelf(receiptId);
+      toast.success("Đã nhận task thành công");
+      const data = await putawayService.getReadyReceipts();
+      setReceipts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể nhận task"));
+    } finally {
+      setClaimingId("");
+    }
+  };
 
   const handleAssign = async (receiptId: string) => {
     const staffId = assignState[receiptId];
@@ -177,12 +193,29 @@ export function PutawayPage() {
                       </td>
                     )}
                     <td className="px-4 py-3.5">
-                      <NavLink
-                        to={`/putaway/${receipt.id}`}
-                        className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 px-2.5 py-1.5 text-[12px] text-blue-600 hover:bg-blue-100 font-semibold transition-colors"
-                      >
-                        Xem chi tiet <ArrowRight className="w-3 h-3" />
-                      </NavLink>
+                      <div className="flex items-center gap-2">
+                        {!receipt.putaway_assignee_user_id && (
+                          <button
+                            type="button"
+                            disabled={claimingId === receipt.id}
+                            onClick={() => void handleClaimSelf(receipt.id)}
+                            className="inline-flex items-center rounded-[8px] border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+                          >
+                            {claimingId === receipt.id ? "Đang nhận..." : "Tự nhận"}
+                          </button>
+                        )}
+                        {receipt.putaway_assignee_user_id && receipt.putaway_assignee_user_id === currentUserId && (
+                          <span className="rounded-[6px] bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                            Của bạn
+                          </span>
+                        )}
+                        <NavLink
+                          to={`/putaway/${receipt.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 px-2.5 py-1.5 text-[12px] text-blue-600 hover:bg-blue-100 font-semibold transition-colors"
+                        >
+                          Xem chi tiết <ArrowRight className="w-3 h-3" />
+                        </NavLink>
+                      </div>
                     </td>
                   </motion.tr>
                 ))

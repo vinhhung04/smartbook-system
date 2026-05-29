@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, ChevronDown, ChevronRight, ScanLine, UserCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown, ChevronRight, MapPin, Package, QrCode, ScanLine, UserCheck } from "lucide-react";
+import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { FadeItem, PageWrapper } from "../motion-utils";
@@ -788,14 +789,62 @@ export function PickingPage() {
 
           {!loadingDetail && detail.remaining_line_count > 0 ? (
             <>
+              {/* Focus Mode Stepper */}
+              <FadeItem>
+                <div className="rounded-[16px] border border-white/80 bg-white px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold mb-3">Tiến trình lấy hàng</p>
+                  <WorkflowStepper
+                    steps={[
+                      {
+                        id: 'presence',
+                        label: 'Xác nhận vị trí',
+                        description: 'Quét mã vị trí hiện tại',
+                        icon: UserCheck,
+                        status: presenceConfirmed ? 'completed' : 'active',
+                      },
+                      {
+                        id: 'location',
+                        label: 'Đi tới kệ',
+                        description: 'Quét mã vị trí lấy hàng',
+                        icon: MapPin,
+                        status: !presenceConfirmed ? 'pending' : locationVerified ? 'completed' : 'active',
+                      },
+                      {
+                        id: 'product',
+                        label: 'Quét sản phẩm',
+                        description: 'Quét mã vạch sách',
+                        icon: QrCode,
+                        status: !locationVerified ? 'pending' : productVerified ? 'completed' : 'active',
+                      },
+                      {
+                        id: 'quantity',
+                        label: 'Nhập số lượng',
+                        description: 'Điền số lượng lấy được',
+                        icon: Package,
+                        status: !productVerified ? 'pending' : canConfirmLine ? 'active' : 'pending',
+                      },
+                      {
+                        id: 'confirm',
+                        label: 'Xác nhận',
+                        description: 'Xác nhận dòng đã lấy',
+                        icon: CheckCircle2,
+                        status: canConfirmLine ? 'active' : 'pending',
+                      },
+                    ] satisfies WorkflowStep[]}
+                    compact
+                  />
+                </div>
+              </FadeItem>
+
               {taskClassLabel(detail.task_class) === "REPICK" ? (
                 <FadeItem>
                   <div className="rounded-[16px] border border-amber-200/60 bg-amber-50/50 p-4">
-                    <p className="text-[12px] text-amber-900 font-semibold">Đơn LẤY LẠI bổ sung phần thiếu</p>
+                    <p className="text-[12px] text-amber-900 font-semibold">
+                      {detail.repick_sequence ? `Lấy bù lần #${detail.repick_sequence}` : 'Đơn lấy bù bổ sung phần thiếu'}
+                    </p>
                     <p className="text-[12px] text-amber-800 mt-1">
                       Đơn gốc: {detail.root_order_number || detail.root_task_id || "-"}
-                      {detail.parent_order_number || detail.parent_task_id ? ` | Sinh tu: ${detail.parent_order_number || detail.parent_task_id}` : ""}
-                      {detail.repick_sequence ? ` | Lan REPICK: #${detail.repick_sequence}` : ""}
+                      {detail.parent_order_number || detail.parent_task_id ? ` | Sinh từ: ${detail.parent_order_number || detail.parent_task_id}` : ""}
                     </p>
                     <p className="text-[12px] text-amber-800 mt-1">Đơn này chỉ chứa phần còn thiếu cần lấy lại.</p>
                   </div>

@@ -239,11 +239,13 @@ async function convertPurchaseRequestToPO(req, res) {
     if (request.purchase_order_id || request.status === 'CONVERTED') {
       return res.status(400).json({ message: 'Request has already been converted to a Purchase Order' });
     }
-    if (!request.book_variant_id) {
-      return res.status(400).json({ message: 'Request must have a specific book variant before converting to PO' });
-    }
+    const { supplier_id, book_variant_id: overrideVariantId } = req.body;
 
-    const { supplier_id } = req.body;
+    // Manager có thể cung cấp book_variant_id khi convert nếu request chưa có
+    const resolvedVariantId = overrideVariantId || request.book_variant_id;
+    if (!resolvedVariantId) {
+      return res.status(400).json({ message: 'Vui lòng chọn biến thể sách cụ thể để tạo đơn đặt hàng' });
+    }
     if (!supplier_id) {
       return res.status(400).json({ message: 'supplier_id is required' });
     }
@@ -256,7 +258,7 @@ async function convertPurchaseRequestToPO(req, res) {
       return res.status(400).json({ message: 'Supplier is not active' });
     }
 
-    const variant = await prisma.book_variants.findUnique({ where: { id: request.book_variant_id } });
+    const variant = await prisma.book_variants.findUnique({ where: { id: resolvedVariantId } });
     if (!variant) {
       return res.status(400).json({ message: 'Book variant no longer exists' });
     }
@@ -280,7 +282,7 @@ async function convertPurchaseRequestToPO(req, res) {
       await tx.purchase_order_items.create({
         data: {
           purchase_order_id: po.id,
-          variant_id: request.book_variant_id,
+          variant_id: resolvedVariantId,
           ordered_qty: request.quantity_requested,
           unit_cost: 0,
         },

@@ -67,4 +67,27 @@ export const goodsReceiptService = {
     const response = await inventoryAPI.patch(`/api/goods-receipts/${id}`, { items });
     return response.data;
   },
+
+  verifyItems: async (id: string, items: { id: string; actual_quantity: number }[]) => {
+    const response = await inventoryAPI.patch(`/api/goods-receipts/${id}`, { items });
+    return response.data;
+  },
+
+  getMyDraftForVerification: async (): Promise<{
+    data: Array<{
+      id: string;
+      receipt_number: string;
+      status: string;
+      warehouse_code: string | null;
+      warehouse_name: string | null;
+      item_count: number;
+      total_planned_quantity: number;
+      total_actual_quantity: number | null;
+      is_verified: boolean;
+      created_at: string;
+    }>;
+  }> => {
+    const response = await inventoryAPI.get('/api/goods-receipts/pending-verification');
+    return response.data;
+  },
 };

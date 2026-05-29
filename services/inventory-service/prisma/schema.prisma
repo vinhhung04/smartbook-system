@@ -148,6 +148,7 @@ model goods_receipt_items {
   variant_id       String         @db.Uuid
   location_id      String?        @db.Uuid
   quantity         Int
+  actual_quantity  Int?
   unit_cost        Decimal        @default(0) @db.Decimal(12, 2)
   condition_grade  String         @default("NEW") @db.VarChar(20)
   note             String?
@@ -168,6 +169,7 @@ model goods_receipts {
   supplier_delivery_invoice_id String?       @db.Uuid
   status              String                @default("DRAFT") @db.VarChar(20)
   received_by_user_id String                @db.Uuid
+  putaway_assignee_user_id String?           @db.Uuid
   received_at         DateTime?             @db.Timestamptz(6)
   cancelled_at        DateTime?             @db.Timestamptz(6)
   cancelled_by_user_id String?              @db.Uuid

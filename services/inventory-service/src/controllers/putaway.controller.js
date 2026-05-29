@@ -81,15 +81,22 @@ function getTaskPermissionScope(user = {}) {
   };
 }
 
-function assignedReceiptWhere(req) {
+function filterReceiptsForStaff(receipts, req) {
   const scope = getTaskPermissionScope(req.user || {});
-  return scope.canManageAssignment ? {} : { received_by_user_id: scope.currentUserId };
+  if (scope.canManageAssignment) return receipts;
+  // Staff thấy: chưa giao cho ai (putaway_assignee_user_id = null)
+  // hoặc đã được giao cho chính họ
+  return receipts.filter(
+    (r) => !r.putaway_assignee_user_id || r.putaway_assignee_user_id === scope.currentUserId
+  );
 }
 
 function canAccessReceipt(req, receipt) {
   const scope = getTaskPermissionScope(req.user || {});
   if (scope.canManageAssignment) return true;
-  return Boolean(scope.currentUserId && receipt?.received_by_user_id === scope.currentUserId);
+  // Staff có thể xem nếu: chưa giao cho ai, hoặc đã giao cho chính họ
+  return !receipt?.putaway_assignee_user_id ||
+    Boolean(scope.currentUserId && receipt?.putaway_assignee_user_id === scope.currentUserId);
 }
 
 async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
@@ -122,8 +129,8 @@ async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
 
 async function getReadyReceipts(req, res) {
   try {
-    const receipts = await prisma.goods_receipts.findMany({
-      where: { status: READY_PUTAWAY_STATUS, ...assignedReceiptWhere(req) },
+    const allReceipts = await prisma.goods_receipts.findMany({
+      where: { status: READY_PUTAWAY_STATUS },
       orderBy: { created_at: 'desc' },
       include: {
         warehouses: {
@@ -143,6 +150,7 @@ async function getReadyReceipts(req, res) {
       },
     });
 
+    const receipts = filterReceiptsForStaff(allReceipts, req);
     const receiptIds = receipts.map((item) => item.id);
     const postedMovements = receiptIds.length > 0
       ? await prisma.stock_movements.findMany({
@@ -160,37 +168,8 @@ async function getReadyReceipts(req, res) {
       })
       : [];
 
-    // Also fetch transfer movements (RECEIVING_SHELF_PUTAWAY with null reference_id)
-    const transferMovements = receiptIds.length > 0
-      ? await prisma.stock_movements.findMany({
-        where: {
-          reference_type: PUTAWAY_REFERENCE_TYPE,
-          reference_id: null,
-          movement_status: 'POSTED',
-          metadata: {
-            path: ['movement_bucket'],
-            equals: 'PUTAWAY',
-          },
-        },
-        select: {
-          variant_id: true,
-          quantity: true,
-          metadata: true,
-        },
-      })
-      : [];
-
-    // Build map of variant_id -> goods_receipt_item_id for this warehouse's receipts
-    const variantToItemMap = new Map();
-    const variantIds = new Set();
-    receipts.forEach((receipt) => {
-      receipt.goods_receipt_items.forEach((item) => {
-        variantToItemMap.set(String(item.variant_id), String(item.id));
-        variantIds.add(String(item.variant_id));
-      });
-    });
-
-    // Sum PUTAWAY bucket per receipt line (same rules as getReadyReceiptDetail).
+    // Chỉ đếm movements được liên kết trực tiếp với goods receipt (reference_id khớp)
+    // Không đếm RECEIVING_SHELF_PUTAWAY có reference_id = null vì không biết thuộc phiếu nào
     const putawayQtyByReceiptItem = new Map();
     postedMovements.forEach((movement) => {
       const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
@@ -203,23 +182,6 @@ async function getReadyReceipts(req, res) {
         key,
         (putawayQtyByReceiptItem.get(key) || 0) + Number(movement.quantity || 0),
       );
-    });
-
-    // Add transfer movements using variant_id matching
-    transferMovements.forEach((movement) => {
-      const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
-      const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
-      if (bucket !== 'PUTAWAY' || !movement.variant_id) return;
-      const itemId = variantToItemMap.get(String(movement.variant_id));
-      if (!itemId) return;
-      // Transfer movements have null reference_id, need to find which receipt contains this variant
-      receipts.forEach((receipt) => {
-        const key = `${receipt.id}::${itemId}`;
-        putawayQtyByReceiptItem.set(
-          key,
-          (putawayQtyByReceiptItem.get(key) || 0) + Number(movement.quantity || 0),
-        );
-      });
     });
 
     const data = receipts.map((receipt) => {
@@ -248,6 +210,8 @@ async function getReadyReceipts(req, res) {
         warehouse_name: receipt.warehouses?.name || null,
         status: receipt.status,
         approved_by_user_id: receipt.received_by_user_id || null,
+        received_by_user_id: receipt.received_by_user_id || null,
+        putaway_assignee_user_id: receipt.putaway_assignee_user_id || null,
         received_at: receipt.received_at,
         created_at: receipt.created_at,
         line_count: totalLines,
@@ -330,28 +294,7 @@ async function getReadyReceiptDetail(req, res) {
       },
     });
 
-    // Fetch transfer movements (RECEIVING_SHELF_PUTAWAY with null reference_id and PUTAWAY bucket)
-    const variantIds = receipt.goods_receipt_items.map((item) => item.variant_id);
-    const transferMovements = variantIds.length > 0
-      ? await prisma.stock_movements.findMany({
-        where: {
-          reference_type: PUTAWAY_REFERENCE_TYPE,
-          reference_id: null,
-          movement_status: 'POSTED',
-          variant_id: { in: variantIds },
-          metadata: {
-            path: ['movement_bucket'],
-            equals: 'PUTAWAY',
-          },
-        },
-        select: {
-          variant_id: true,
-          quantity: true,
-          metadata: true,
-        },
-      })
-      : [];
-
+    // Chỉ đếm movements liên kết trực tiếp với goods receipt (reference_id = receiptId)
     const putawayQtyByItem = new Map();
     postedMovements.forEach((movement) => {
       const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
@@ -362,17 +305,6 @@ async function getReadyReceiptDetail(req, res) {
       }
       const current = putawayQtyByItem.get(itemId) || 0;
       putawayQtyByItem.set(itemId, current + Number(movement.quantity || 0));
-    });
-
-    // Add transfer movements using variant_id matching
-    transferMovements.forEach((movement) => {
-      const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
-      const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
-      if (bucket !== 'PUTAWAY' || !movement.variant_id) return;
-      const item = receipt.goods_receipt_items.find((i) => String(i.variant_id) === String(movement.variant_id));
-      if (!item) return;
-      const current = putawayQtyByItem.get(String(item.id)) || 0;
-      putawayQtyByItem.set(String(item.id), current + Number(movement.quantity || 0));
     });
 
     const items = receipt.goods_receipt_items.map((item) => {
@@ -1018,9 +950,49 @@ async function confirmPutaway(req, res) {
   }
 }
 
+async function claimPutawayTask(req, res) {
+  const receiptId = parseId(req.params.id);
+  if (!receiptId) {
+    return res.status(400).json({ message: 'Invalid goods receipt id' });
+  }
+
+  const userId = req.user?.id || req.user?.sub;
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const receipt = await prisma.goods_receipts.findUnique({
+      where: { id: receiptId },
+      select: { id: true, status: true, putaway_assignee_user_id: true },
+    });
+
+    if (!receipt) {
+      return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
+    }
+    if (receipt.status !== READY_PUTAWAY_STATUS) {
+      return res.status(400).json({ message: 'Phiếu nhập chưa được duyệt (cần status POSTED)' });
+    }
+    if (receipt.putaway_assignee_user_id) {
+      return res.status(409).json({ message: 'Task này đã được nhận bởi nhân viên khác' });
+    }
+
+    await prisma.goods_receipts.update({
+      where: { id: receiptId },
+      data: { putaway_assignee_user_id: userId },
+    });
+
+    return res.json({ success: true, message: 'Đã nhận task putaway thành công' });
+  } catch (error) {
+    console.error('Error claiming putaway task:', error);
+    return res.status(500).json({ message: 'Lỗi khi nhận task' });
+  }
+}
+
 module.exports = {
   getReadyReceipts,
   getReadyReceiptDetail,
   getPutawayLocations,
   confirmPutaway,
+  claimPutawayTask,
 };

@@ -6,3 +6,7 @@ export { DataTable, DataTablePagination } from "./data-table";
 export { FilterBar } from "./filter-bar";
 export { Button } from "./button";
 export { StatusBadge } from "./status-badge";
+export { ConfirmDialog } from "./confirm-dialog";
+export { PriorityBadge } from "./priority-badge";
+export { WorkflowStepper } from "./workflow-stepper";
+export type { WorkflowStep, StepStatus } from "./workflow-stepper";

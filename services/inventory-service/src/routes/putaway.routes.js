@@ -5,6 +5,7 @@ const {
   getReadyReceiptDetail,
   getPutawayLocations,
   confirmPutaway,
+  claimPutawayTask,
 } = require('../controllers/putaway.controller');
 const { assignGoodsReceipt } = require('../controllers/goods-receipt.controller');
 const { authorizeTaskProgress, authorizeManagerDecision } = require('../middlewares/auth.middleware');
@@ -18,5 +19,6 @@ router.get('/receipts/:id', canUpdateAssignedTask, getReadyReceiptDetail);
 router.get('/receipts/:id/locations', canUpdateAssignedTask, getPutawayLocations);
 router.post('/receipts/:id/confirm', canUpdateAssignedTask, confirmPutaway);
 router.patch('/receipts/:id/assign', canManagerDecide, assignGoodsReceipt);
+router.patch('/receipts/:id/claim-self', canUpdateAssignedTask, claimPutawayTask);
 
 module.exports = router;

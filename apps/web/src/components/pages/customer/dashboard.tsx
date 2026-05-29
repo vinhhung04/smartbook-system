@@ -139,6 +139,62 @@ export function CustomerDashboardPage() {
         </div>
       </motion.div>
 
+      {/* Việc cần làm */}
+      {(() => {
+        const overdueLoans = recentLoans.filter((l: any) => l.status === 'OVERDUE');
+        const readyReservations = recentReservations.filter((r: any) => r.status === 'READY_FOR_PICKUP');
+        const hasActions = overdueLoans.length > 0 || readyReservations.length > 0 || fineBalance > 0;
+        if (!hasActions) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03, duration: 0.3 }}>
+            <SectionCard>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <h2 className="text-[14px] font-semibold">Việc bạn cần làm</h2>
+              </div>
+              <div className="space-y-2">
+                {overdueLoans.map((loan: any) => (
+                  <NavLink key={loan.id} to="/customer/loans"
+                    className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 hover:bg-red-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                      <span className="text-[13px] text-red-800">
+                        Sách quá hạn: <span className="font-medium">{loan.loan_number || loan.id?.slice(0, 8)}</span>
+                      </span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-red-400" />
+                  </NavLink>
+                ))}
+                {readyReservations.map((res: any) => (
+                  <NavLink key={res.id} to="/customer/reservations"
+                    className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5 hover:bg-emerald-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-[13px] text-emerald-800">
+                        Sách sẵn sàng nhận: <span className="font-medium">{res.book_title || res.id?.slice(0, 8)}</span>
+                      </span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-emerald-400" />
+                  </NavLink>
+                ))}
+                {fineBalance > 0 && (
+                  <NavLink to="/customer/fines"
+                    className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 hover:bg-amber-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                      <span className="text-[13px] text-amber-800">
+                        Tiền phạt chưa thanh toán: <span className="font-medium">{formatCurrencyVnd(fineBalance)}</span>
+                      </span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-amber-400" />
+                  </NavLink>
+                )}
+              </div>
+            </SectionCard>
+          </motion.div>
+        );
+      })()}
+
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.3 }}>

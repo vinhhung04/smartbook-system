@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const VALID_TASK_TYPES = ['GENERAL', 'CHECK_SHELF', 'STOCK_CHECK', 'LOW_STOCK_REVIEW', 'EXCEPTION_FOLLOW_UP', 'REORDER_REVIEW', 'RESERVATION_FOLLOW_UP', 'INVENTORY_AUDIT', 'OTHER'];
 const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const VALID_STATUSES = ['OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED'];
+const VALID_ENTITY_TYPES = ['EXCEPTION_REPORT', 'PURCHASE_REQUEST', 'OUTBOUND_ORDER', 'TRANSFER_ORDER'];
 
 function isManagerOrAdmin(user = {}) {
   if (user.is_superuser) return true;
@@ -46,7 +47,8 @@ async function listStaffTasks(req, res) {
       prisma.staff_tasks.count({ where }),
     ]);
 
-    return res.json({ data: tasks, total, page: Number(page), limit: Number(limit) });
+    const enriched = await enrichTasksWithEntityInfo(tasks);
+    return res.json({ data: enriched, total, page: Number(page), limit: Number(limit) });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -73,7 +75,8 @@ async function getMyStaffTasks(req, res) {
       take: 50,
     });
 
-    return res.json({ data: tasks });
+    const enriched = await enrichTasksWithEntityInfo(tasks);
+    return res.json({ data: enriched });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -116,6 +119,14 @@ async function createStaffTask(req, res) {
     return res.status(400).json({ message: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
   }
 
+  let normalizedEntityType = null;
+  if (related_entity_type) {
+    normalizedEntityType = String(related_entity_type).toUpperCase();
+    if (!VALID_ENTITY_TYPES.includes(normalizedEntityType)) {
+      return res.status(400).json({ message: `related_entity_type must be one of: ${VALID_ENTITY_TYPES.join(', ')}` });
+    }
+  }
+
   try {
     if (warehouse_id) {
       const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
@@ -134,7 +145,7 @@ async function createStaffTask(req, res) {
         assignee_user_id: String(assignee_user_id).trim(),
         assigned_by_user_id: userId,
         warehouse_id: warehouse_id || null,
-        related_entity_type: related_entity_type || null,
+        related_entity_type: normalizedEntityType,
         related_entity_id: related_entity_id || null,
         due_date: due_date ? new Date(due_date) : null,
       },
@@ -288,10 +299,167 @@ async function updateStaffTaskStatus(req, res) {
   }
 }
 
+async function enrichTasksWithEntityInfo(tasks) {
+  const groups = { EXCEPTION_REPORT: [], PURCHASE_REQUEST: [], OUTBOUND_ORDER: [], TRANSFER_ORDER: [] };
+  for (const task of tasks) {
+    if (task.related_entity_type && task.related_entity_id && groups[task.related_entity_type]) {
+      groups[task.related_entity_type].push(task.related_entity_id);
+    }
+  }
+
+  const hasAny = Object.values(groups).some((g) => g.length > 0);
+  if (!hasAny) return tasks;
+
+  const [exReports, purchaseReqs, outboundOrders, transferOrders] = await Promise.all([
+    groups.EXCEPTION_REPORT.length > 0
+      ? prisma.warehouse_exception_reports.findMany({
+          where: { id: { in: groups.EXCEPTION_REPORT } },
+          select: {
+            id: true, report_number: true, status: true,
+            exception_type: true, task_type: true, note: true,
+            warehouses: { select: { code: true } },
+          },
+        })
+      : [],
+    groups.PURCHASE_REQUEST.length > 0
+      ? prisma.purchase_requests.findMany({
+          where: { id: { in: groups.PURCHASE_REQUEST } },
+          select: {
+            id: true, request_number: true, status: true,
+            reason: true, quantity_requested: true,
+            warehouses: { select: { code: true } },
+          },
+        })
+      : [],
+    groups.OUTBOUND_ORDER.length > 0
+      ? prisma.outbound_orders.findMany({
+          where: { id: { in: groups.OUTBOUND_ORDER } },
+          select: {
+            id: true, outbound_number: true, status: true, outbound_type: true,
+            warehouses: { select: { code: true } },
+          },
+        })
+      : [],
+    groups.TRANSFER_ORDER.length > 0
+      ? prisma.transfer_orders.findMany({
+          where: { id: { in: groups.TRANSFER_ORDER } },
+          select: {
+            id: true, transfer_number: true, status: true,
+            warehouses_transfer_orders_from_warehouse_idTowarehouses: { select: { code: true } },
+            warehouses_transfer_orders_to_warehouse_idTowarehouses: { select: { code: true } },
+          },
+        })
+      : [],
+  ]);
+
+  const entityMap = {
+    EXCEPTION_REPORT: Object.fromEntries(exReports.map((e) => [e.id, {
+      ref_number: e.report_number,
+      status: e.status,
+      details: [e.exception_type, e.task_type, e.warehouses?.code, e.note]
+        .filter(Boolean).join(' · '),
+    }])),
+    PURCHASE_REQUEST: Object.fromEntries(purchaseReqs.map((e) => [e.id, {
+      ref_number: e.request_number,
+      status: e.status,
+      details: [`SL: ${e.quantity_requested}`, e.warehouses?.code, e.reason]
+        .filter(Boolean).join(' · '),
+    }])),
+    OUTBOUND_ORDER: Object.fromEntries(outboundOrders.map((e) => [e.id, {
+      ref_number: e.outbound_number,
+      status: e.status,
+      details: [e.outbound_type, e.warehouses?.code].filter(Boolean).join(' · '),
+    }])),
+    TRANSFER_ORDER: Object.fromEntries(transferOrders.map((e) => [e.id, {
+      ref_number: e.transfer_number,
+      status: e.status,
+      details: [
+        e.warehouses_transfer_orders_from_warehouse_idTowarehouses?.code,
+        '→',
+        e.warehouses_transfer_orders_to_warehouse_idTowarehouses?.code,
+      ].filter(Boolean).join(' '),
+    }])),
+  };
+
+  return tasks.map((task) => {
+    if (!task.related_entity_type || !task.related_entity_id) return task;
+    const info = entityMap[task.related_entity_type]?.[task.related_entity_id];
+    return { ...task, related_entity_display: info || null };
+  });
+}
+
+async function getEntityOptions(req, res) {
+  const { type, warehouse_id } = req.query;
+  if (!type || !VALID_ENTITY_TYPES.includes(String(type).toUpperCase())) {
+    return res.status(400).json({ message: `type must be one of: ${VALID_ENTITY_TYPES.join(', ')}` });
+  }
+  const entityType = String(type).toUpperCase();
+  const wh = warehouse_id || null;
+  const LIMIT = 30;
+
+  try {
+    let options = [];
+    if (entityType === 'EXCEPTION_REPORT') {
+      const rows = await prisma.warehouse_exception_reports.findMany({
+        where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, ...(wh ? { warehouse_id: wh } : {}) },
+        select: { id: true, report_number: true, status: true, exception_type: true, task_type: true, note: true },
+        orderBy: { created_at: 'desc' }, take: LIMIT,
+      });
+      options = rows.map((r) => ({
+        id: r.id,
+        ref_number: r.report_number,
+        status: r.status,
+        label: `${r.report_number} — ${r.exception_type} / ${r.task_type}${r.note ? ' · ' + String(r.note).slice(0, 40) : ''}`,
+      }));
+    } else if (entityType === 'PURCHASE_REQUEST') {
+      const rows = await prisma.purchase_requests.findMany({
+        where: { status: 'PENDING', ...(wh ? { warehouse_id: wh } : {}) },
+        select: { id: true, request_number: true, status: true, reason: true, quantity_requested: true },
+        orderBy: { created_at: 'desc' }, take: LIMIT,
+      });
+      options = rows.map((r) => ({
+        id: r.id,
+        ref_number: r.request_number,
+        status: r.status,
+        label: `${r.request_number} — SL:${r.quantity_requested}${r.reason ? ' · ' + String(r.reason).slice(0, 40) : ''}`,
+      }));
+    } else if (entityType === 'OUTBOUND_ORDER') {
+      const rows = await prisma.outbound_orders.findMany({
+        where: { status: { in: ['APPROVED', 'PICKING', 'READY_FOR_OUTBOUND'] }, ...(wh ? { warehouse_id: wh } : {}) },
+        select: { id: true, outbound_number: true, status: true, outbound_type: true },
+        orderBy: { requested_at: 'desc' }, take: LIMIT,
+      });
+      options = rows.map((r) => ({
+        id: r.id,
+        ref_number: r.outbound_number,
+        status: r.status,
+        label: `${r.outbound_number} — ${r.status} / ${r.outbound_type}`,
+      }));
+    } else if (entityType === 'TRANSFER_ORDER') {
+      const rows = await prisma.transfer_orders.findMany({
+        where: { status: { in: ['APPROVED', 'PICKING', 'IN_TRANSIT'] }, ...(wh ? { from_warehouse_id: wh } : {}) },
+        select: { id: true, transfer_number: true, status: true },
+        orderBy: { requested_at: 'desc' }, take: LIMIT,
+      });
+      options = rows.map((r) => ({
+        id: r.id,
+        ref_number: r.transfer_number,
+        status: r.status,
+        label: `${r.transfer_number} — ${r.status}`,
+      }));
+    }
+    return res.json({ data: options });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   listStaffTasks,
   getMyStaffTasks,
   createStaffTask,
   updateStaffTask,
   updateStaffTaskStatus,
+  getEntityOptions,
 };
