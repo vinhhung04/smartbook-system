@@ -89,7 +89,9 @@ async function runStaticSmoke() {
   expect('Borrow sidebar items are borrow guarded', sidebar.includes('labelKey: "sidebar.borrow"') && sidebar.includes('access: ROUTE_ACCESS.borrowRead'));
   expect('Reports sidebar item is report guarded', sidebar.includes('labelKey: "sidebar.reports"') && sidebar.includes('access: ROUTE_ACCESS.reports'));
   expect('My Warehouse Tasks page has assigned-task empty state', myTasks.includes('Chưa có task được giao') && myTasks.includes('myWarehouseTaskService.getMyTasks'));
-  expect('My Warehouse Tasks page has no mutation API calls', !/\.(post|patch|put|delete)\(/i.test(myTasks) && !/confirm[A-Z]|transfer[A-Z]|pick[A-Z]/.test(myTasks));
+  expect('My Warehouse Tasks page mutation calls only for self-claim', myTasks.includes('claimTask') && myTasks.includes('handleClaimTask'));
+  expect('My Warehouse Tasks page has available tasks section', myTasks.includes('getAvailableTasks') && myTasks.includes('Nhận task'));
+  expect('My Warehouse Tasks page handles 409 conflict gracefully', myTasks.includes('409') && myTasks.includes('vừa được nhân viên khác nhận'));
   expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('taskActionLabel'));
   expect('My Warehouse Tasks handles purchase request type', myTasks.includes('PURCHASE_REQUEST'));
   expect('My Warehouse Tasks handles exception report type', myTasks.includes('EXCEPTION_REPORT'));

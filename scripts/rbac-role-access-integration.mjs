@@ -165,6 +165,14 @@ async function run() {
   await expectStatus('STAFF all exception reports forbidden', 'GET', '/api/exception-reports', staffToken, undefined, (status) => status === 403);
   await expectStatus('STAFF resolve exception report forbidden', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', staffToken, {}, (status) => status === 403);
 
+  // Self-claim available tasks: STAFF can read available list and claim endpoints reach controller
+  await expectStatus('STAFF available tasks allowed', 'GET', '/api/my-warehouse-tasks/available', staffToken, undefined, (status) => status === 200);
+  await expectStatus('STAFF picking claim-self not auth-blocked', 'POST', '/api/picking/tasks/outbound/00000000-0000-4000-8000-000000000000/claim-self', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF outbound claim-self not auth-blocked', 'PATCH', '/api/outbound/orders/outbound/00000000-0000-4000-8000-000000000000/claim-self', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('STAFF transfer-receiving claim-self not auth-blocked', 'PATCH', '/api/transfer-receiving/00000000-0000-4000-8000-000000000000/claim-self', staffToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('CUSTOMER available tasks forbidden', 'GET', '/api/my-warehouse-tasks/available', customerToken, undefined, (status) => status === 403);
+  await expectStatus('LIBRARIAN available tasks forbidden', 'GET', '/api/my-warehouse-tasks/available', librarianToken, undefined, (status) => status === 403);
+
   await expectStatus('MANAGER inventory read ok', 'GET', '/api/inventory', managerToken, undefined, (status) => status === 200);
   await expectStatus('MANAGER stock movements ok', 'GET', '/api/stock-movements', managerToken, undefined, (status) => status === 200);
   await expectStatus('MANAGER analytics ok', 'GET', '/analytics/dashboard/kpis', managerToken, undefined, (status) => status === 200);

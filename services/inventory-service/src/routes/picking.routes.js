@@ -3,6 +3,7 @@ const express = require("express");
 const {
   listPickingTasks,
   claimPickingTask,
+  claimSelfPickingTask,
   getPickingTaskDetail,
   confirmPickerPresence,
   lookupVariantByBarcode,
@@ -29,6 +30,11 @@ router.post(
   "/tasks/:taskType/:taskId/claim",
   canDecideOperation,
   claimPickingTask,
+);
+router.post(
+  "/tasks/:taskType/:taskId/claim-self",
+  canUpdateTaskProgress,
+  claimSelfPickingTask,
 );
 router.get("/tasks/:taskType/:taskId", canReadTask, getPickingTaskDetail);
 router.post(

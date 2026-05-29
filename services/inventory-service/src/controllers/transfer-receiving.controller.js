@@ -301,8 +301,77 @@ async function confirmTransferReceiving(req, res) {
   }
 }
 
+async function claimSelfTransferReceiving(req, res) {
+  const transferId = parseId(req.params.id);
+
+  if (!transferId) {
+    return res.status(400).json({ message: "Invalid transfer id" });
+  }
+
+  const scope = getTaskPermissionScope(req.user || {});
+  const currentUserId = scope.currentUserId;
+
+  if (!currentUserId) {
+    return res.status(401).json({ message: "Invalid current user context" });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE",
+        transferId,
+      );
+
+      const order = await tx.transfer_orders.findUnique({
+        where: { id: transferId },
+        select: { id: true, status: true, received_by_user_id: true },
+      });
+
+      if (!order) {
+        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+      }
+      if (order.received_by_user_id && order.received_by_user_id !== currentUserId) {
+        return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
+      }
+      if (order.received_by_user_id === currentUserId) {
+        return { data: { transfer_id: transferId, status: order.status } };
+      }
+      if (order.status !== "IN_TRANSIT") {
+        return { invalid: true, statusCode: 400, message: "Only IN_TRANSIT orders are available for self-claim" };
+      }
+
+      await tx.transfer_orders.update({
+        where: { id: transferId },
+        data: { received_by_user_id: currentUserId, updated_at: new Date() },
+      });
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: currentUserId,
+          action_name: "TRANSFER_RECEIVING_SELF_CLAIMED",
+          entity_type: "TRANSFER_ORDER",
+          entity_id: transferId,
+          after_data: { received_by_user_id: currentUserId },
+        },
+      });
+
+      return { data: { transfer_id: transferId, status: order.status } };
+    });
+
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({ message: result.message });
+    }
+
+    return res.json(result.data);
+  } catch (error) {
+    console.error("claimSelfTransferReceiving error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   listTransferReceivingQueue,
   assignTransferReceiving,
+  claimSelfTransferReceiving,
   confirmTransferReceiving,
 };
