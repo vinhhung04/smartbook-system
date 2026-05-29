@@ -3877,9 +3877,164 @@ async function getPickingTaskChildren(req, res) {
   }
 }
 
+async function claimSelfPickingTask(req, res) {
+  const taskType = normalizeTaskType(req.params.taskType);
+  const taskId = parseId(req.params.taskId);
+
+  if (!taskType || !taskId) {
+    return res.status(400).json({ message: "Invalid task type or task id" });
+  }
+
+  const scope = getTaskPermissionScope(req.user || {});
+  const currentUserId = scope.currentUserId;
+
+  if (!currentUserId) {
+    return res.status(401).json({ message: "Invalid current user context" });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      if (taskType === "outbound") {
+        await tx.$queryRawUnsafe(
+          "SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE",
+          taskId,
+        );
+
+        const order = await tx.outbound_orders.findUnique({
+          where: { id: taskId },
+          select: {
+            id: true,
+            status: true,
+            note: true,
+            processed_by_user_id: true,
+          },
+        });
+
+        if (!order) {
+          return { invalid: true, statusCode: 404, message: "Outbound order not found" };
+        }
+        if (order.processed_by_user_id && order.processed_by_user_id !== currentUserId) {
+          return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
+        }
+        if (order.processed_by_user_id === currentUserId) {
+          return { data: { task_type: "outbound", task_id: taskId, status: order.status } };
+        }
+        if (order.status !== "APPROVED") {
+          return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+        }
+
+        const updated = await tx.outbound_orders.update({
+          where: { id: taskId },
+          data: { processed_by_user_id: currentUserId, status: "PICKING", updated_at: new Date() },
+        });
+
+        const claimRepickMeta = parseRepickMeta(order.note);
+        const claimRootOrderId = claimRepickMeta?.root_task_id || taskId;
+        const claimPickingType = claimRepickMeta ? "REPICK" : "PICK";
+        await tx.picking_tasks.updateMany({
+          where: {
+            root_order_id: claimRootOrderId,
+            picking_type: claimPickingType,
+            status: { not: "CANCELLED" },
+          },
+          data: {
+            assigned_picker_id: currentUserId,
+            assigned_at: new Date(),
+            assigned_by_user_id: currentUserId,
+            status: "PICKING",
+            started_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: currentUserId,
+            action_name: "PICK_TASK_SELF_CLAIMED",
+            entity_type: "OUTBOUND_ORDER",
+            entity_id: taskId,
+            after_data: { picker_user_id: currentUserId },
+          },
+        });
+
+        return {
+          data: {
+            task_type: "outbound",
+            task_id: updated.id,
+            assigned_picker_user_id: updated.processed_by_user_id,
+            status: updated.status,
+          },
+        };
+      }
+
+      // transfer branch
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE",
+        taskId,
+      );
+
+      const order = await tx.transfer_orders.findUnique({
+        where: { id: taskId },
+        select: {
+          id: true,
+          status: true,
+          shipped_by_user_id: true,
+        },
+      });
+
+      if (!order) {
+        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+      }
+      if (order.shipped_by_user_id && order.shipped_by_user_id !== currentUserId) {
+        return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
+      }
+      if (order.shipped_by_user_id === currentUserId) {
+        return { data: { task_type: "transfer", task_id: taskId, status: order.status } };
+      }
+      if (order.status !== "APPROVED") {
+        return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+      }
+
+      const updated = await tx.transfer_orders.update({
+        where: { id: taskId },
+        data: { shipped_by_user_id: currentUserId, status: "PICKING", updated_at: new Date() },
+      });
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: currentUserId,
+          action_name: "PICK_TASK_SELF_CLAIMED",
+          entity_type: "TRANSFER_ORDER",
+          entity_id: taskId,
+          after_data: { picker_user_id: currentUserId },
+        },
+      });
+
+      return {
+        data: {
+          task_type: "transfer",
+          task_id: updated.id,
+          assigned_picker_user_id: updated.shipped_by_user_id,
+          status: updated.status,
+        },
+      };
+    });
+
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({ message: result.message });
+    }
+
+    return res.json(result.data);
+  } catch (error) {
+    console.error("claimSelfPickingTask error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   listPickingTasks,
   claimPickingTask,
+  claimSelfPickingTask,
   getPickingTaskDetail,
   confirmPickerPresence,
   lookupVariantByBarcode,

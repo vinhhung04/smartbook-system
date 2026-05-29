@@ -1137,10 +1137,135 @@ async function confirmOutbound(req, res) {
   }
 }
 
+async function claimSelfOutboundTask(req, res) {
+  const taskType = normalizeTaskType(req.params.taskType);
+  const taskId = parseId(req.params.taskId);
+
+  if (!taskType || !taskId) {
+    return res.status(400).json({ message: "Invalid taskType or taskId" });
+  }
+
+  const scope = getTaskPermissionScope(req.user || {});
+  const currentUserId = scope.currentUserId;
+
+  if (!currentUserId) {
+    return res.status(401).json({ message: "Invalid current user context" });
+  }
+
+  const CLAIMABLE_OUTBOUND_STATUSES = ["READY_FOR_OUTBOUND", "READY_TO_SHIP"];
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      if (taskType === "outbound") {
+        await tx.$queryRawUnsafe(
+          "SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE",
+          taskId,
+        );
+
+        const order = await tx.outbound_orders.findUnique({
+          where: { id: taskId },
+          select: { id: true, status: true, outbound_assigned_user_id: true },
+        });
+
+        if (!order) {
+          return { invalid: true, statusCode: 404, message: "Outbound order not found" };
+        }
+        if (order.outbound_assigned_user_id && order.outbound_assigned_user_id !== currentUserId) {
+          return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
+        }
+        if (order.outbound_assigned_user_id === currentUserId) {
+          return { data: { task_type: "outbound", task_id: taskId, status: order.status } };
+        }
+        if (!CLAIMABLE_OUTBOUND_STATUSES.includes(order.status)) {
+          return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+        }
+
+        await tx.outbound_orders.update({
+          where: { id: taskId },
+          data: {
+            outbound_assigned_user_id: currentUserId,
+            outbound_assigned_at: new Date(),
+            outbound_assigned_by_user_id: currentUserId,
+            updated_at: new Date(),
+          },
+        });
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: currentUserId,
+            action_name: "OUTBOUND_TASK_SELF_CLAIMED",
+            entity_type: "OUTBOUND_ORDER",
+            entity_id: taskId,
+            after_data: { outbound_assigned_user_id: currentUserId },
+          },
+        });
+
+        return { data: { task_type: "outbound", task_id: taskId, status: order.status } };
+      }
+
+      // transfer branch
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE",
+        taskId,
+      );
+
+      const order = await tx.transfer_orders.findUnique({
+        where: { id: taskId },
+        select: { id: true, status: true, outbound_assigned_user_id: true },
+      });
+
+      if (!order) {
+        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+      }
+      if (order.outbound_assigned_user_id && order.outbound_assigned_user_id !== currentUserId) {
+        return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
+      }
+      if (order.outbound_assigned_user_id === currentUserId) {
+        return { data: { task_type: "transfer", task_id: taskId, status: order.status } };
+      }
+      if (order.status !== "READY_FOR_OUTBOUND") {
+        return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+      }
+
+      await tx.transfer_orders.update({
+        where: { id: taskId },
+        data: {
+          outbound_assigned_user_id: currentUserId,
+          outbound_assigned_at: new Date(),
+          outbound_assigned_by_user_id: currentUserId,
+          updated_at: new Date(),
+        },
+      });
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: currentUserId,
+          action_name: "TRANSFER_OUTBOUND_TASK_SELF_CLAIMED",
+          entity_type: "TRANSFER_ORDER",
+          entity_id: taskId,
+          after_data: { outbound_assigned_user_id: currentUserId },
+        },
+      });
+
+      return { data: { task_type: "transfer", task_id: taskId, status: order.status } };
+    });
+
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({ message: result.message });
+    }
+
+    return res.json(result.data);
+  } catch (error) {
+    console.error("claimSelfOutboundTask error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   listOutboundQueue,
   getOutboundOrderDetail,
   assignOutboundTask,
+  claimSelfOutboundTask,
   confirmOutbound,
   postTransferReceiptToReceiving,
   createReceiptNumber,

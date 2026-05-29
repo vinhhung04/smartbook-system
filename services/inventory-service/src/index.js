@@ -34,6 +34,7 @@ const purchaseRequestRoutes = require('./routes/purchase-request.routes');
 const exceptionReportRoutes = require('./routes/exception-report.routes');
 const staffTaskRoutes = require('./routes/staff-task.routes');
 const transferReceivingRoutes = require('./routes/transfer-receiving.routes');
+const myWarehouseTasksRoutes = require('./routes/my-warehouse-tasks.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -313,6 +314,8 @@ app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+app.use('/api/my-warehouse-tasks', myWarehouseTasksRoutes);
 
 app.use('/api/books', bookRoutes);
 app.use('/api/warehouses', warehouseRoutes);

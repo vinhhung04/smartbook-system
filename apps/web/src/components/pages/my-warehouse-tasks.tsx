@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, ClipboardCheck, ClipboardList, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ClipboardList, Hand, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -8,7 +8,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApiErrorMessage } from "@/services/api";
-import { myWarehouseTaskService, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
+import { myWarehouseTaskService, type AvailableWarehouseTask, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận hàng",
@@ -86,6 +86,9 @@ export function MyWarehouseTasksPage() {
   const [tasks, setTasks] = useState<MyWarehouseTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ALL");
+  const [availableTasks, setAvailableTasks] = useState<AvailableWarehouseTask[]>([]);
+  const [loadingAvailable, setLoadingAvailable] = useState(true);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
     receiving: tasks.filter((t) => t.type === "RECEIVING").length,
@@ -106,12 +109,18 @@ export function MyWarehouseTasksPage() {
   const loadTasks = async () => {
     try {
       setLoading(true);
-      const response = await myWarehouseTaskService.getMyTasks();
+      setLoadingAvailable(true);
+      const [response, availableResponse] = await Promise.all([
+        myWarehouseTaskService.getMyTasks(),
+        myWarehouseTaskService.getAvailableTasks(),
+      ]);
       setTasks(Array.isArray(response.data) ? response.data : []);
+      setAvailableTasks(Array.isArray(availableResponse.data) ? availableResponse.data : []);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không tải được công việc kho"));
     } finally {
       setLoading(false);
+      setLoadingAvailable(false);
     }
   };
 
@@ -121,6 +130,24 @@ export function MyWarehouseTasksPage() {
     const params = new URLSearchParams({ task_id: task.id, task_type: task.type, task_warehouse: task.warehouse ?? "" });
     if (task.warehouse_id) params.set("warehouse_id", task.warehouse_id);
     void navigate(`/my-exception-reports?${params.toString()}`);
+  };
+
+  const handleClaimTask = async (task: AvailableWarehouseTask) => {
+    setClaimingId(task.id);
+    try {
+      await myWarehouseTaskService.claimTask(task.claim_endpoint);
+      toast.success(`Đã nhận task ${task.title} thành công`);
+      void loadTasks();
+    } catch (error: unknown) {
+      const apiError = error as { response?: { status?: number } };
+      if (apiError?.response?.status === 409) {
+        toast.error("Task này vừa được nhân viên khác nhận. Vui lòng làm mới danh sách.");
+      } else {
+        toast.error(getApiErrorMessage(error, "Không thể nhận task"));
+      }
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   const summaryCards = [
@@ -151,14 +178,16 @@ export function MyWarehouseTasksPage() {
             <p className="mt-0.5 text-[12px] text-muted-foreground">Theo dõi các task nhận hàng, cất hàng, lấy hàng và xuất kho được giao</p>
           </div>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading}>
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || loadingAvailable}>
+          <RefreshCw className={`h-3.5 w-3.5 ${(loading || loadingAvailable) ? "animate-spin" : ""}`} />
           Làm mới
         </Button>
       </motion.div>
 
       <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800">
-        Chỉ hiển thị task được giao và các yêu cầu/báo cáo do bạn tạo. Tạo đơn hàng, điều chỉnh tồn kho và các quyền quản trị thuộc về quản lý.
+        <span className="font-medium">Task của tôi:</span> các công việc bạn đã nhận hoặc được quản lý giao.{" "}
+        <span className="font-medium">Có thể nhận:</span> các công việc thường chưa phân công, bạn có thể tự nhận để xử lý.
+        Tạo đơn hàng, điều chỉnh tồn kho và các quyền quản trị thuộc về quản lý.
       </div>
 
       {/* Summary cards — clickable to filter */}
@@ -184,6 +213,7 @@ export function MyWarehouseTasksPage() {
         ))}
       </div>
 
+      {/* Task của tôi */}
       <SectionCard noPadding>
         {/* Tab bar */}
         <div className="border-b border-border">
@@ -275,6 +305,70 @@ export function MyWarehouseTasksPage() {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+
+      {/* Có thể nhận */}
+      <SectionCard noPadding>
+        <div className="px-5 py-3.5 border-b border-border flex items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50">
+            <Hand className="h-4 w-4 text-emerald-700" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Công việc có thể tự nhận</p>
+            <p className="text-[11px] text-muted-foreground">Lấy hàng, xuất kho, nhận chuyển kho chưa phân công — nhận task và bắt đầu ngay</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px]">
+            <thead>
+              <tr className="border-b border-border bg-muted/30">
+                {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Thao tác"].map((header) => (
+                  <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loadingAvailable ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td>
+                </tr>
+              ) : availableTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10">
+                    <EmptyState
+                      icon={Hand}
+                      title="Không có task nào đang chờ"
+                      description="Hiện tại tất cả task đã được phân công hoặc chưa có task mới. Cất hàng (putaway) luôn cần manager phân công trực tiếp."
+                    />
+                  </td>
+                </tr>
+              ) : availableTasks.map((task) => (
+                <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
+                  <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
+                  <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
+                  <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
+                  <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
+                  <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
+                  <td className="px-5 py-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleClaimTask(task)}
+                      disabled={claimingId === task.id}
+                      className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px]"
+                    >
+                      {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
