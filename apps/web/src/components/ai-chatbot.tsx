@@ -72,6 +72,60 @@ function getRoleSuggestions(user: AuthUser | null): string[] {
   }
 }
 
+function getPageSuggestions(pathname: string, user: AuthUser | null): string[] | null {
+  if (pathname.includes('/picking')) return [
+    'Task lấy hàng nào đang chờ tôi?',
+    'Hướng dẫn quy trình quét barcode.',
+    'Có đơn REPICK nào đang mở không?',
+  ];
+  if (pathname.includes('/outbound')) return [
+    'Đơn xuất kho nào chưa xác nhận?',
+    'Tổng hợp tình trạng xuất kho hôm nay.',
+  ];
+  if (pathname.includes('/putaway')) return [
+    'Phiếu nhập nào đang chờ cất hàng?',
+    'Vị trí kệ nào còn chỗ trống?',
+  ];
+  if (pathname.includes('/borrow/loans')) return [
+    'Có loan nào quá hạn hôm nay?',
+    'Nhắc nhở khách hàng trả sách.',
+    'Loan nào đến hạn trong 3 ngày tới?',
+  ];
+  if (pathname.includes('/borrow/reservations')) return [
+    'Đặt trước nào đang chờ xác nhận?',
+    'Có reservation nào sắp hết hạn?',
+  ];
+  if (pathname.includes('/borrow/fines')) return [
+    'Khách nào có phạt cao nhất?',
+    'Tổng tiền phạt chưa thu là bao nhiêu?',
+  ];
+  if (pathname.includes('/purchase-orders') || pathname.includes('/purchase-requests')) return [
+    'PO nào đang chờ xác nhận từ NCC?',
+    'Yêu cầu mua hàng nào cần duyệt gấp?',
+  ];
+  if (pathname.includes('/exception-reports')) return [
+    'Báo cáo sự cố nào đang mở?',
+    'Tổng hợp ngoại lệ theo loại hàng.',
+  ];
+  if (pathname.includes('/inventory') || pathname.includes('/movements')) return [
+    'Sách nào tồn kho dưới ngưỡng tối thiểu?',
+    'Biến động tồn kho trong tuần này.',
+    'Đề xuất nhập thêm các sách sắp hết.',
+  ];
+  if (pathname.includes('/my-warehouse-tasks')) return [
+    'Task nào tôi có thể tự nhận ngay?',
+    'Tóm tắt công việc của tôi hôm nay.',
+  ];
+  if (pathname.includes('/customer/loans')) return [
+    'Sách nào của tôi sắp đến hạn?',
+    'Tôi có thể gia hạn được không?',
+  ];
+  if (pathname.includes('/customer/reservations')) return [
+    'Đặt trước nào của tôi đã sẵn sàng nhận?',
+  ];
+  return getRoleSuggestions(user);
+}
+
 function getWelcomeGreeting(user: AuthUser | null): string {
   if (!user) return 'Xin chào! Tôi là SmartBook AI 👋';
   const name = user.full_name || user.username;
@@ -760,25 +814,29 @@ export function AIChatbot() {
                     Tôi có thể truy xuất dữ liệu thời gian thực và tạo các hành động cần xác nhận của bạn.
                   </p>
                 </div>
-                {showSuggestions && (
-                  <div className="w-full space-y-1.5">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-1">
-                      Gợi ý nhanh
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {getRoleSuggestions(currentUser).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => void sendMessage(s)}
-                          disabled={loading}
-                          className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {s}
-                        </button>
-                      ))}
+                {showSuggestions && (() => {
+                  const suggestions = getPageSuggestions(window.location.pathname, currentUser);
+                  const isPageSpecific = suggestions !== getRoleSuggestions(currentUser);
+                  return (
+                    <div className="w-full space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-1">
+                        {isPageSpecific ? 'Gợi ý cho trang này' : 'Gợi ý nhanh'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(suggestions || []).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => void sendMessage(s)}
+                            disabled={loading}
+                            className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

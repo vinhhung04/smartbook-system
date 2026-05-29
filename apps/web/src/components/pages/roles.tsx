@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
-import { Shield, Search, Plus, Settings2, Loader2, X } from "lucide-react";
+import { Shield, Search, Plus, Settings2, Loader2, X, LayoutList, Grid3x3, Check } from "lucide-react";
 import { toast } from "sonner";
 import { roleService } from "@/services/role";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -287,6 +287,7 @@ export function RolesPage() {
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionKeyword, setPermissionKeyword] = useState("");
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"list" | "matrix">("list");
 
   const loadData = async () => {
     try {
@@ -472,15 +473,100 @@ export function RolesPage() {
             searchPlaceholder="Tìm theo code, tên, mô tả vai trò..."
             showSearchClear
             actions={
-              <Button onClick={() => setShowCreateModal(true)}>
-                <Plus className="h-4 w-4" />
-                Tạo vai trò
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] transition-colors ${viewMode === "list" ? "bg-background shadow-sm text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <LayoutList className="h-3.5 w-3.5" /> Danh sách
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setViewMode("matrix"); void loadPermissions(); }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] transition-colors ${viewMode === "matrix" ? "bg-background shadow-sm text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <Grid3x3 className="h-3.5 w-3.5" /> Ma trận
+                  </button>
+                </div>
+                <Button onClick={() => setShowCreateModal(true)}>
+                  <Plus className="h-4 w-4" />
+                  Tạo vai trò
+                </Button>
+              </div>
             }
           />
         </div>
       </FadeItem>
 
+      {viewMode === "matrix" && (
+        <FadeItem>
+          <SectionCard noPadding>
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+              <p className="text-[13px] font-semibold">Ma trận Vai trò × Quyền</p>
+              {loadingPermissions && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {permissions.length === 0 && !loadingPermissions ? (
+              <div className="p-5 text-center text-[13px] text-muted-foreground">Chưa tải được dữ liệu quyền</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="sticky left-0 bg-muted/30 px-4 py-2.5 text-left font-semibold text-muted-foreground min-w-[200px] z-10">Module / Quyền</th>
+                      {filteredRoles.map((role) => (
+                        <th key={role.id} className="px-3 py-2.5 text-center font-semibold text-muted-foreground min-w-[90px]">
+                          <div className="truncate max-w-[80px] mx-auto">{role.code}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(
+                      permissions.reduce<Record<string, PermissionRow[]>>((acc, p) => {
+                        if (!acc[p.module_name]) acc[p.module_name] = [];
+                        acc[p.module_name].push(p);
+                        return acc;
+                      }, {})
+                    ).map(([moduleName, modulePerms]) => (
+                      <>
+                        <tr key={`module-${moduleName}`} className="bg-slate-50/70 border-b border-border">
+                          <td colSpan={filteredRoles.length + 1} className="px-4 py-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{moduleName}</span>
+                          </td>
+                        </tr>
+                        {modulePerms.map((perm) => (
+                          <tr key={perm.id} className="border-b border-border/60 hover:bg-muted/20">
+                            <td className="sticky left-0 bg-background px-4 py-2 text-[12px] text-muted-foreground">
+                              {perm.action_name}
+                            </td>
+                            {filteredRoles.map((role) => {
+                              const hasPermission = role.permissions.some((rp) => rp.id === perm.id);
+                              return (
+                                <td key={role.id} className="px-3 py-2 text-center">
+                                  {hasPermission ? (
+                                    <Check className="h-3.5 w-3.5 text-emerald-600 mx-auto" />
+                                  ) : (
+                                    <span className="text-slate-200">–</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+        </FadeItem>
+      )}
+
+      {viewMode === "list" && (
       <FadeItem>
         <SectionCard noPadding>
           <table className="w-full">
@@ -551,6 +637,7 @@ export function RolesPage() {
           </table>
         </SectionCard>
       </FadeItem>
+      )}
 
       <RoleCreateModal
         open={showCreateModal}

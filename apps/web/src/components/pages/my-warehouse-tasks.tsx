@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, ClipboardCheck, ClipboardList, Hand, Inbox, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -278,28 +278,46 @@ export function MyWarehouseTasksPage() {
                     <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
                     <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
                     <td className="px-5 py-3 text-[12px]">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {actionPath ? (
-                          <NavLink
-                            to={actionPath}
-                            className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
-                          >
-                            {taskActionLabel(task.type)}
-                          </NavLink>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                        {canReport && (
-                          <button
-                            type="button"
-                            onClick={() => handleReportException(task)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
-                            title="Báo cáo sự cố cho task này"
-                          >
-                            <AlertTriangle className="h-3 w-3" />
-                            Báo cáo
-                          </button>
-                        )}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {actionPath ? (
+                            <NavLink
+                              to={actionPath}
+                              className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                            >
+                              {taskActionLabel(task.type)}
+                            </NavLink>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                          {canReport && (
+                            <button
+                              type="button"
+                              onClick={() => handleReportException(task)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
+                              title="Báo cáo sự cố cho task này"
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              Báo cáo
+                            </button>
+                          )}
+                        </div>
+                        {/* Entity inline block for STAFF_TASK */}
+                        {task.type === "STAFF_TASK" && (() => {
+                          const ed = (task as MyWarehouseTask & { related_entity_display?: { ref_number: string; details?: string } | null }).related_entity_display;
+                          if (!ed) return null;
+                          return (
+                            <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1">
+                              <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700">
+                                <Link2 className="h-2.5 w-2.5 shrink-0" />
+                                {ed.ref_number}
+                              </p>
+                              {ed.details && (
+                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{ed.details}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
@@ -322,56 +340,87 @@ export function MyWarehouseTasksPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Thao tác"].map((header) => (
-                  <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loadingAvailable ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td>
-                </tr>
-              ) : availableTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-10">
-                    <EmptyState
-                      icon={Hand}
-                      title="Không có task nào đang chờ"
-                      description="Hiện tại tất cả task đã được phân công hoặc chưa có task mới. Cất hàng (putaway) luôn cần manager phân công trực tiếp."
-                    />
-                  </td>
-                </tr>
-              ) : availableTasks.map((task) => (
-                <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
-                  <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
-                  <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
-                  <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
-                  <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
-                  <td className="px-5 py-3">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleClaimTask(task)}
-                      disabled={claimingId === task.id}
-                      className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px]"
-                    >
-                      {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
-                    </Button>
-                  </td>
-                </tr>
+        {/* Mobile card layout */}
+        {loadingAvailable ? (
+          <div className="px-5 py-8 text-center text-sm text-muted-foreground">Đang tải...</div>
+        ) : availableTasks.length === 0 ? (
+          <div className="px-5 py-8">
+            <EmptyState
+              icon={Hand}
+              title="Không có task nào đang chờ"
+              description="Hiện tại tất cả task đã được phân công hoặc chưa có task mới. Cất hàng (putaway) luôn cần manager phân công trực tiếp."
+            />
+          </div>
+        ) : (
+          <>
+            {/* Mobile cards (< md) */}
+            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+              {availableTasks.map((task) => (
+                <div key={`avail-card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                      <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
+                    </div>
+                    <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span className="truncate">{task.warehouse || "-"}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{formatDate(task.created_at)}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleClaimTask(task)}
+                    disabled={claimingId === task.id}
+                    className="w-full text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[12px]"
+                  >
+                    {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
+                  </Button>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            {/* Desktop table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Thao tác"].map((header) => (
+                      <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {availableTasks.map((task) => (
+                    <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
+                      <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
+                      <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
+                      <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
+                      <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
+                      <td className="px-5 py-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void handleClaimTask(task)}
+                          disabled={claimingId === task.id}
+                          className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px]"
+                        >
+                          {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </SectionCard>
     </div>
   );

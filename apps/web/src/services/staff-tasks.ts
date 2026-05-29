@@ -26,6 +26,11 @@ export interface StaffTask {
   warehouse_id: string | null;
   related_entity_type: string | null;
   related_entity_id: string | null;
+  related_entity_display?: {
+    ref_number: string;
+    status: string;
+    details?: string;
+  } | null;
   due_date: string | null;
   completed_at: string | null;
   created_at: string;
@@ -54,6 +59,13 @@ export interface StaffTaskUpdateInput {
   assignee_user_id?: string;
   warehouse_id?: string | null;
   due_date?: string | null;
+}
+
+export interface EntityOption {
+  id: string;
+  ref_number: string;
+  status: string;
+  label: string;
 }
 
 export const staffTaskService = {
@@ -85,6 +97,13 @@ export const staffTaskService = {
 
   async updateStatus(id: string, status: StaffTaskStatus): Promise<{ data: StaffTask }> {
     const response = await inventoryAPI.patch<{ data: StaffTask }>(`/api/staff-tasks/${id}/status`, { status });
+    return response.data;
+  },
+
+  async getEntityOptions(entityType: string, warehouseId?: string): Promise<{ data: EntityOption[] }> {
+    const params: Record<string, string> = { type: entityType };
+    if (warehouseId) params.warehouse_id = warehouseId;
+    const response = await inventoryAPI.get<{ data: EntityOption[] }>('/api/staff-tasks/entity-options', { params });
     return response.data;
   },
 };

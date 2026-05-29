@@ -24,6 +24,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/status-badge";
+import { ConfirmDialog, WorkflowStepper, type WorkflowStep } from "@/components/ui";
 
 type PortalTab = "overview" | "order" | "invoices" | "shortages" | "redelivery" | "activity";
 
@@ -51,15 +52,17 @@ function statusVariant(status: string) {
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
-    SENT_TO_SUPPLIER: "Waiting for your confirmation",
-    SUPPLIER_CONFIRMED: "Confirmed by supplier",
-    SUBMITTED: "Delivery document submitted",
-    SHORTAGE_REPORTED: "Library reported shortage",
-    PARTIALLY_RECEIVED: "Partially received",
-    RECEIVED: "Received by library",
-    ACKNOWLEDGED: "Acknowledged by supplier",
-    RESOLVED: "Shortage resolved",
-    OPEN: "Open shortage",
+    SENT_TO_SUPPLIER: "Chờ xác nhận từ nhà cung cấp",
+    SUPPLIER_CONFIRMED: "NCC đã xác nhận",
+    SUBMITTED: "Đã gửi chứng từ giao hàng",
+    SHORTAGE_REPORTED: "Thư viện báo thiếu hàng",
+    PARTIALLY_RECEIVED: "Nhận một phần",
+    RECEIVED: "Thư viện đã nhận đủ",
+    ACKNOWLEDGED: "NCC đã ghi nhận",
+    RESOLVED: "Đã xử lý xong",
+    OPEN: "Đang mở",
+    CANCELLED: "Đã hủy",
+    REJECTED: "Từ chối",
   };
   return labels[status] || status;
 }
@@ -102,6 +105,17 @@ export function SupplierPortalPage() {
   const [redeliveryReportId, setRedeliveryReportId] = useState("");
   const [redeliveryQty, setRedeliveryQty] = useState<Record<string, number>>({});
   const [cannotReason, setCannotReason] = useState<Record<string, string>>({});
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    description?: string;
+    variant: "default" | "destructive";
+    onConfirm: () => Promise<void>;
+  }>({ open: false, title: "", variant: "default", onConfirm: async () => {} });
+
+  const openConfirm = (title: string, description: string, variant: "default" | "destructive", action: () => Promise<void>) => {
+    setConfirmState({ open: true, title, description, variant, onConfirm: action });
+  };
 
   const load = async () => {
     if (!token) return;
@@ -180,23 +194,31 @@ export function SupplierPortalPage() {
     );
   }, [redeliveryQty, selectedShortage]);
 
-  const confirmOrder = async () => {
-    if (!token || !window.confirm("Confirm this purchase order?")) return;
-    try {
-      setWorking(true);
-      await supplierPortalService.confirmPortalOrder(token);
-      toast.success("Order confirmed");
-      await load();
-    } catch (confirmError) {
-      toast.error(getApiErrorMessage(confirmError, "Confirm failed"));
-    } finally {
-      setWorking(false);
-    }
+  const confirmOrder = () => {
+    if (!token) return;
+    openConfirm(
+      "Xác nhận đơn đặt hàng",
+      "Bạn xác nhận sẽ cung cấp hàng theo đơn này?",
+      "default",
+      async () => {
+        try {
+          setWorking(true);
+          await supplierPortalService.confirmPortalOrder(token);
+          toast.success("Đã xác nhận đơn hàng");
+          setConfirmState((s) => ({ ...s, open: false }));
+          await load();
+        } catch (confirmError) {
+          toast.error(getApiErrorMessage(confirmError, "Xác nhận thất bại"));
+        } finally {
+          setWorking(false);
+        }
+      },
+    );
   };
 
-  const submitInvoice = async () => {
+  const submitInvoice = () => {
     if (!token || !order) return;
-    if (!invoiceNumber.trim()) return toast.error("Invoice number is required");
+    if (!invoiceNumber.trim()) { toast.error("Số hóa đơn là bắt buộc"); return; }
     const items = order.purchase_order.items
       .filter((item) => Number(invoiceQty[item.id] || 0) > 0)
       .map((item) => ({
@@ -205,69 +227,90 @@ export function SupplierPortalPage() {
         unit_cost: item.unit_cost,
         note: invoiceNotes[item.id],
       }));
-    if (items.length === 0) return toast.error("Invoice must include at least one line");
+    if (items.length === 0) { toast.error("Hóa đơn phải có ít nhất một dòng hàng"); return; }
     if (items.some((item) => item.invoiced_qty > (order.purchase_order.items.find((line) => line.id === item.purchase_order_item_id)?.remaining_qty || 0))) {
-      return toast.error("Invoice quantity cannot exceed PO remaining quantity");
+      toast.error("Số lượng hóa đơn không thể vượt quá số lượng còn lại của PO"); return;
     }
-    if (!window.confirm("Submit this invoice / delivery note?")) return;
-
-    try {
-      setWorking(true);
-      await supplierPortalService.createPortalInvoice(token, {
-        invoice_number: invoiceNumber.trim(),
-        delivery_number: deliveryNumber.trim(),
-        invoice_date: invoiceDate,
-        expected_delivery_date: expectedDeliveryDate,
-        supplier_note: supplierNote.trim(),
-        items,
-      });
-      toast.success("Invoice / delivery note submitted");
-      setInvoiceNumber(`INV-${Date.now()}`);
-      setDeliveryNumber(`DLV-${Date.now()}`);
-      setSupplierNote("");
-      setTab("invoices");
-      await load();
-    } catch (submitError) {
-      toast.error(getApiErrorMessage(submitError, "Create invoice failed"));
-    } finally {
-      setWorking(false);
-    }
+    openConfirm(
+      "Gửi hóa đơn / chứng từ giao hàng",
+      "Xác nhận gửi hóa đơn này cho thư viện?",
+      "default",
+      async () => {
+        try {
+          setWorking(true);
+          await supplierPortalService.createPortalInvoice(token, {
+            invoice_number: invoiceNumber.trim(),
+            delivery_number: deliveryNumber.trim(),
+            invoice_date: invoiceDate,
+            expected_delivery_date: expectedDeliveryDate,
+            supplier_note: supplierNote.trim(),
+            items,
+          });
+          toast.success("Đã gửi hóa đơn thành công");
+          setInvoiceNumber(`INV-${Date.now()}`);
+          setDeliveryNumber(`DLV-${Date.now()}`);
+          setSupplierNote("");
+          setConfirmState((s) => ({ ...s, open: false }));
+          setTab("invoices");
+          await load();
+        } catch (submitError) {
+          toast.error(getApiErrorMessage(submitError, "Gửi hóa đơn thất bại"));
+        } finally {
+          setWorking(false);
+        }
+      },
+    );
   };
 
-  const acknowledgeShortage = async (report: SupplierPortalShortageReport) => {
-    if (!token || !window.confirm("Acknowledge this shortage report?")) return;
-    try {
-      setWorking(true);
-      await supplierPortalService.acknowledgeShortage(token, report.id);
-      toast.success("Shortage acknowledged");
-      await load();
-    } catch (ackError) {
-      toast.error(getApiErrorMessage(ackError, "Acknowledge shortage failed"));
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  const markCannotFulfill = async (report: SupplierPortalShortageReport) => {
+  const acknowledgeShortage = (report: SupplierPortalShortageReport) => {
     if (!token) return;
-    const reason = cannotReason[report.id]?.trim() || window.prompt("Reason", "Out of stock at supplier");
-    if (!reason) return;
-    if (!window.confirm("Send cannot-fulfill note to library?")) return;
-    try {
-      setWorking(true);
-      await supplierPortalService.cannotFulfillShortage(token, report.id, reason);
-      toast.success("Shortage note sent");
-      await load();
-    } catch (cannotError) {
-      toast.error(getApiErrorMessage(cannotError, "Cannot update shortage"));
-    } finally {
-      setWorking(false);
-    }
+    openConfirm(
+      "Ghi nhận báo cáo thiếu hàng",
+      "Xác nhận bạn đã nhận được thông báo thiếu hàng này?",
+      "default",
+      async () => {
+        try {
+          setWorking(true);
+          await supplierPortalService.acknowledgeShortage(token, report.id);
+          toast.success("Đã ghi nhận báo cáo thiếu hàng");
+          setConfirmState((s) => ({ ...s, open: false }));
+          await load();
+        } catch (ackError) {
+          toast.error(getApiErrorMessage(ackError, "Ghi nhận thất bại"));
+        } finally {
+          setWorking(false);
+        }
+      },
+    );
   };
 
-  const submitRedelivery = async () => {
+  const markCannotFulfill = (report: SupplierPortalShortageReport) => {
+    if (!token) return;
+    const reason = cannotReason[report.id]?.trim();
+    if (!reason) { toast.error("Vui lòng nhập lý do không thể cung cấp hàng"); return; }
+    openConfirm(
+      "Thông báo không thể cung cấp hàng",
+      `Gửi thông báo không thể cung cấp đến thư viện?\nLý do: ${reason}`,
+      "destructive",
+      async () => {
+        try {
+          setWorking(true);
+          await supplierPortalService.cannotFulfillShortage(token, report.id, reason);
+          toast.success("Đã gửi thông báo không thể cung cấp");
+          setConfirmState((s) => ({ ...s, open: false }));
+          await load();
+        } catch (cannotError) {
+          toast.error(getApiErrorMessage(cannotError, "Cập nhật thất bại"));
+        } finally {
+          setWorking(false);
+        }
+      },
+    );
+  };
+
+  const submitRedelivery = () => {
     if (!token || !selectedShortage || !order) return;
-    if (!invoiceNumber.trim()) return toast.error("Invoice number is required");
+    if (!invoiceNumber.trim()) { toast.error("Số hóa đơn là bắt buộc"); return; }
     const poItems = new Map(order.purchase_order.items.map((item) => [item.id, item]));
     const items = selectedShortage.items
       .filter((item) => Number(redeliveryQty[item.purchase_order_item_id] || 0) > 0)
@@ -277,36 +320,42 @@ export function SupplierPortalPage() {
           purchase_order_item_id: item.purchase_order_item_id,
           invoiced_qty: Number(redeliveryQty[item.purchase_order_item_id] || 0),
           unit_cost: poItem?.unit_cost || 0,
-          note: "Redelivery for shortage report",
+          note: "Giao bù hàng thiếu",
         };
       });
-    if (items.length === 0) return toast.error("Redelivery must include at least one line");
-    if (redeliveryTotal.invalid) return toast.error("Redelivery quantity cannot exceed shortage quantity");
-    if (!window.confirm("Create redelivery invoice for this shortage?")) return;
-
-    try {
-      setWorking(true);
-      await supplierPortalService.createRedeliveryInvoice(token, selectedShortage.id, {
-        invoice_number: invoiceNumber.trim(),
-        delivery_number: deliveryNumber.trim(),
-        invoice_date: invoiceDate,
-        expected_delivery_date: expectedDeliveryDate,
-        supplier_note: supplierNote.trim() || "Redelivery for shortage report",
-        source_shortage_report_id: selectedShortage.id,
-        redelivery: true,
-        items,
-      });
-      toast.success("Redelivery invoice submitted");
-      setInvoiceNumber(`INV-${Date.now()}`);
-      setDeliveryNumber(`DLV-${Date.now()}`);
-      setSupplierNote("");
-      setTab("invoices");
-      await load();
-    } catch (redeliveryError) {
-      toast.error(getApiErrorMessage(redeliveryError, "Create redelivery failed"));
-    } finally {
-      setWorking(false);
-    }
+    if (items.length === 0) { toast.error("Phải có ít nhất một dòng hàng"); return; }
+    if (redeliveryTotal.invalid) { toast.error("Số lượng giao bù không thể vượt quá số lượng thiếu"); return; }
+    openConfirm(
+      "Tạo hóa đơn giao bù",
+      "Xác nhận tạo hóa đơn giao bù cho báo cáo thiếu hàng này?",
+      "default",
+      async () => {
+        try {
+          setWorking(true);
+          await supplierPortalService.createRedeliveryInvoice(token, selectedShortage.id, {
+            invoice_number: invoiceNumber.trim(),
+            delivery_number: deliveryNumber.trim(),
+            invoice_date: invoiceDate,
+            expected_delivery_date: expectedDeliveryDate,
+            supplier_note: supplierNote.trim() || "Giao bù hàng thiếu",
+            source_shortage_report_id: selectedShortage.id,
+            redelivery: true,
+            items,
+          });
+          toast.success("Đã gửi hóa đơn giao bù");
+          setInvoiceNumber(`INV-${Date.now()}`);
+          setDeliveryNumber(`DLV-${Date.now()}`);
+          setSupplierNote("");
+          setConfirmState((s) => ({ ...s, open: false }));
+          setTab("invoices");
+          await load();
+        } catch (redeliveryError) {
+          toast.error(getApiErrorMessage(redeliveryError, "Tạo hóa đơn giao bù thất bại"));
+        } finally {
+          setWorking(false);
+        }
+      },
+    );
   };
 
   if (loading) {
@@ -395,51 +444,68 @@ export function SupplierPortalPage() {
 
         {tab === "overview" ? (
           <div className="space-y-5">
-            <Section title="Overview" icon={PackageCheck}>
+            <Section title="Thông tin chung" icon={PackageCheck}>
               <div className="grid gap-4 p-5 md:grid-cols-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Supplier</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Nhà cung cấp</p>
                   <p className="mt-1 text-[13px] font-semibold">{order.purchase_order.supplier?.name || "-"}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Receiving warehouse</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Kho nhận hàng</p>
                   <p className="mt-1 text-[13px] font-semibold">{order.purchase_order.warehouse?.code || "-"} - {order.purchase_order.warehouse?.name || ""}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Expected date</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Ngày giao dự kiến</p>
                   <p className="mt-1 text-[13px] font-semibold">{formatDate(order.purchase_order.expected_date)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Invoice qty submitted</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Số lượng đã gửi HĐ</p>
                   <p className="mt-1 text-[18px] font-semibold">{summary.invoiceQty}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Open shortage qty</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Số lượng thiếu đang mở</p>
                   <p className="mt-1 text-[18px] font-semibold">{summary.openShortageQty}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase text-slate-400">Current state</p>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">Trạng thái hiện tại</p>
                   <div className="mt-1"><StatusBadge label={statusLabel(order.purchase_order.status)} variant={statusVariant(order.purchase_order.status)} /></div>
                 </div>
               </div>
             </Section>
-            <Section title="Timeline" icon={Truck}>
-              <div className="grid gap-3 p-5 md:grid-cols-6">
-                {["Created", "Approved", "Sent to Supplier", "Supplier Confirmed", "Invoice Submitted", "Received / Shortage"].map((step, index) => {
-                  const completed =
-                    index === 0 ||
-                    (index === 1 && order.purchase_order.status !== "DRAFT") ||
-                    (index === 2 && order.dispatch.sent_at) ||
-                    (index === 3 && ["SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED"].includes(order.purchase_order.status)) ||
-                    (index === 4 && order.invoices.length > 0) ||
-                    (index === 5 && (summary.receivedQty > 0 || order.shortage_reports.length > 0));
-                  return (
-                    <div key={step} className={`rounded-lg border p-3 ${completed ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
-                      <p className="text-[12px] font-semibold text-slate-800">{step}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">{completed ? "Done" : "Pending"}</p>
-                    </div>
-                  );
-                })}
+            <Section title="Tiến trình đơn hàng" icon={Truck}>
+              <div className="p-5">
+                <WorkflowStepper
+                  orientation="horizontal"
+                  steps={[
+                    { id: "sent", label: "PO đã gửi", status: "completed" },
+                    {
+                      id: "confirmed",
+                      label: "NCC xác nhận",
+                      status: ["SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED"].includes(order.purchase_order.status)
+                        ? "completed"
+                        : order.dispatch.sent_at ? "active" : "pending",
+                    },
+                    {
+                      id: "invoice",
+                      label: "Đã gửi hóa đơn",
+                      status: order.invoices.length > 0 ? "completed"
+                        : ["SUPPLIER_CONFIRMED"].includes(order.purchase_order.status) ? "active" : "pending",
+                    },
+                    {
+                      id: "received",
+                      label: "Kho đã nhận",
+                      status: summary.receivedQty > 0 ? "completed"
+                        : order.invoices.length > 0 ? "active" : "pending",
+                    },
+                    {
+                      id: "done",
+                      label: "Hoàn tất",
+                      status: order.purchase_order.status === "RECEIVED" ? "completed"
+                        : order.shortage_reports.length > 0 && summary.openShortageQty === 0 ? "completed"
+                        : summary.receivedQty > 0 ? "active" : "pending",
+                    },
+                  ] satisfies WorkflowStep[]}
+                />
               </div>
             </Section>
           </div>
@@ -771,6 +837,16 @@ export function SupplierPortalPage() {
           </Section>
         ) : null}
       </main>
+
+      <ConfirmDialog
+        open={confirmState.open}
+        onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        loading={working}
+      />
     </div>
   );
 }
