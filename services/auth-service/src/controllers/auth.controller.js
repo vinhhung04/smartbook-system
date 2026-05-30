@@ -26,6 +26,18 @@ function sanitizeUser(user) {
   return safeUser;
 }
 
+// Maps legacy role codes to canonical codes for JWT backward compatibility.
+const LEGACY_ROLE_MAP = {
+  MANAGER: 'WAREHOUSE_MANAGER',
+  STAFF: 'WAREHOUSE_STAFF',
+  WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF',
+  CUSTOMER_SERVICE: 'LIBRARIAN',
+};
+
+function normalizeRoles(roles = []) {
+  return roles.map((r) => LEGACY_ROLE_MAP[r] || r);
+}
+
 function normalizeIdentifier(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -226,8 +238,8 @@ async function me(req, res) {
 
 async function listWarehouseStaff(req, res) {
   try {
-    const roles = Array.isArray(req.auth?.roles) ? req.auth.roles.map((role) => String(role).toUpperCase()) : [];
-    const canManageAssignments = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN') || roles.includes('MANAGER');
+    const roles = normalizeRoles(Array.isArray(req.auth?.roles) ? req.auth.roles.map((role) => String(role).toUpperCase()) : []);
+    const canManageAssignments = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER');
 
     if (!canManageAssignments) {
       return res.status(403).json({ message: 'Forbidden' });
@@ -247,7 +259,7 @@ async function listWarehouseStaff(req, res) {
       WHERE u.deleted_at IS NULL
         AND u.status = 'ACTIVE'
         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-        AND r.code IN ('STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR')
+        AND r.code = 'WAREHOUSE_STAFF'
       ORDER BY u.full_name ASC, u.username ASC
       `
     );

@@ -11,7 +11,7 @@ async function getAvailableTasks(req, res) {
   const canManageAssignment =
     Boolean(req.user?.is_superuser) ||
     roles.includes('ADMIN') ||
-    roles.includes('MANAGER');
+    roles.includes('WAREHOUSE_MANAGER');
 
   // Warehouse scope: use warehouse_id from JWT if available, else from query param.
   // NOTE: Current JWT payload does not include warehouse_id. Until auth-service adds

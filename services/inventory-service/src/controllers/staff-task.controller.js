@@ -10,7 +10,7 @@ const VALID_ENTITY_TYPES = ['EXCEPTION_REPORT', 'PURCHASE_REQUEST', 'OUTBOUND_OR
 function isManagerOrAdmin(user = {}) {
   if (user.is_superuser) return true;
   const roles = Array.isArray(user.roles) ? user.roles.map((r) => String(r).toUpperCase()) : [];
-  return roles.includes('MANAGER') || roles.includes('ADMIN');
+  return roles.includes('WAREHOUSE_MANAGER') || roles.includes('ADMIN');
 }
 
 async function listStaffTasks(req, res) {

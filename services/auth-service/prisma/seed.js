@@ -140,24 +140,13 @@ async function main() {
     },
   });
 
-  const managerRole = await prisma.role.upsert({
-    where: { code: 'MANAGER' },
+  const warehouseManagerRole = await prisma.role.upsert({
+    where: { code: 'WAREHOUSE_MANAGER' },
     update: {},
     create: {
-      code: 'MANAGER',
-      name: 'Manager',
-      description: 'Can monitor operations, view analytics, approve documents, and manage staff',
-      is_system: true,
-    },
-  });
-
-  const staffRole = await prisma.role.upsert({
-    where: { code: 'STAFF' },
-    update: {},
-    create: {
-      code: 'STAFF',
-      name: 'Staff',
-      description: 'Warehouse staff who operate catalog, receiving, putaway, picking and stock workflows',
+      code: 'WAREHOUSE_MANAGER',
+      name: 'Warehouse Manager',
+      description: 'Monitor warehouse operations, approve POs, manage inventory and staff, view analytics',
       is_system: true,
     },
   });
@@ -168,29 +157,7 @@ async function main() {
     create: {
       code: 'WAREHOUSE_STAFF',
       name: 'Warehouse Staff',
-      description: 'Focused warehouse role for receiving, putaway, picking, outbound and stock movement workflows',
-      is_system: true,
-    },
-  });
-
-  const warehouseRole = await prisma.role.upsert({
-    where: { code: 'WAREHOUSE_OPERATOR' },
-    update: {},
-    create: {
-      code: 'WAREHOUSE_OPERATOR',
-      name: 'Warehouse Operator',
-      description: 'Focused on warehouse operations: receiving, putaway, picking, outbound',
-      is_system: true,
-    },
-  });
-
-  const customerServiceRole = await prisma.role.upsert({
-    where: { code: 'CUSTOMER_SERVICE' },
-    update: {},
-    create: {
-      code: 'CUSTOMER_SERVICE',
-      name: 'Customer Service',
-      description: 'Handle customer inquiries, reservations, and loan processing',
+      description: 'Execute warehouse tasks: receiving, putaway, picking, outbound and exception reporting',
       is_system: true,
     },
   });
@@ -256,7 +223,8 @@ async function main() {
   await setRolePermissions(adminRole, allPerms.map((perm) => perm.code));
   console.log('✅ Assigned all permissions to ADMIN');
 
-  const managerPermCodes = [
+  // WAREHOUSE_MANAGER: full inventory/warehouse/purchasing/analytics access. No borrow access.
+  const warehouseManagerPermCodes = [
     'inventory.catalog.read',
     'inventory.catalog.write',
     'inventory.stock.read',
@@ -281,9 +249,6 @@ async function main() {
     'inventory.audit.approve',
     'inventory.transfer.read',
     'inventory.transfer.write',
-    'borrow.read',
-    'borrow.customers.read',
-    'borrow.loans.read',
     'analytics.reports.view',
     'analytics.reports.export',
     'analytics.forecast.view',
@@ -295,8 +260,8 @@ async function main() {
     'inventory.purchase.request',
     'inventory.exception.report',
   ];
-  await setRolePermissions(managerRole, managerPermCodes);
-  console.log(`✅ Assigned ${managerPermCodes.length} permissions to MANAGER`);
+  await setRolePermissions(warehouseManagerRole, warehouseManagerPermCodes);
+  console.log(`✅ Assigned ${warehouseManagerPermCodes.length} permissions to WAREHOUSE_MANAGER`);
 
   const warehousePermCodes = [
     'inventory.catalog.read',
@@ -305,10 +270,8 @@ async function main() {
     'inventory.purchase.request',
     'inventory.exception.report',
   ];
-  await setRolePermissions(staffRole, warehousePermCodes);
   await setRolePermissions(warehouseStaffRole, warehousePermCodes);
-  await setRolePermissions(warehouseRole, warehousePermCodes);
-  console.log(`✅ Assigned ${warehousePermCodes.length} permissions to warehouse staff roles`);
+  console.log(`✅ Assigned ${warehousePermCodes.length} permissions to WAREHOUSE_STAFF`);
 
   const librarianPermCodes = [
     'inventory.catalog.read',
@@ -324,8 +287,7 @@ async function main() {
     'borrow.payments.process',
   ];
   await setRolePermissions(librarianRole, librarianPermCodes);
-  await setRolePermissions(customerServiceRole, librarianPermCodes);
-  console.log(`✅ Assigned ${librarianPermCodes.length} permissions to LIBRARIAN/CUSTOMER_SERVICE`);
+  console.log(`✅ Assigned ${librarianPermCodes.length} permissions to LIBRARIAN`);
 
   const customerPermCodes = [
     'inventory.catalog.read',
@@ -354,7 +316,52 @@ async function main() {
       });
     }
   }
-  console.log(`âœ… Assigned ${supplierPermCodes.length} permissions to SUPPLIER`);
+  console.log(`✅ Assigned ${supplierPermCodes.length} permissions to SUPPLIER`);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // STEP 3.5: MIGRATE LEGACY ROLES → CANONICAL ROLES
+  // Consolidates 9 legacy roles down to 6 canonical actors.
+  // Safe: canonical role is assigned BEFORE legacy is removed, metadata preserved.
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  const legacyToCanonicalMap = [
+    { fromCode: 'MANAGER',            canonicalRole: warehouseManagerRole },
+    { fromCode: 'STAFF',              canonicalRole: warehouseStaffRole   },
+    { fromCode: 'WAREHOUSE_OPERATOR', canonicalRole: warehouseStaffRole   },
+    { fromCode: 'CUSTOMER_SERVICE',   canonicalRole: librarianRole        },
+  ];
+
+  await prisma.$transaction(async (tx) => {
+    for (const { fromCode, canonicalRole } of legacyToCanonicalMap) {
+      const legacyRole = await tx.role.findUnique({ where: { code: fromCode } });
+      if (!legacyRole) continue;
+
+      const legacyUserRoles = await tx.userRole.findMany({ where: { role_id: legacyRole.id } });
+
+      for (const ur of legacyUserRoles) {
+        // Assign canonical role first (preserve metadata, upsert handles duplicates)
+        await tx.userRole.upsert({
+          where: { user_id_role_id: { user_id: ur.user_id, role_id: canonicalRole.id } },
+          update: {},
+          create: {
+            user_id: ur.user_id,
+            role_id: canonicalRole.id,
+            assigned_by_user_id: ur.assigned_by_user_id,
+            assigned_at: ur.assigned_at,
+            expires_at: ur.expires_at,
+          },
+        });
+        // Remove legacy mapping only after canonical is in place
+        await tx.userRole.delete({ where: { id: ur.id } });
+      }
+
+      await tx.rolePermission.deleteMany({ where: { role_id: legacyRole.id } });
+      await tx.role.delete({ where: { id: legacyRole.id } });
+      console.log(`✅ Migrated legacy role ${fromCode} → ${canonicalRole.code}`);
+    }
+  });
+
+  console.log('✅ Legacy role migration complete');
 
   const passwordHash = await bcrypt.hash('123456', 12);
 
@@ -559,9 +566,9 @@ async function main() {
   }
 
   await assignUserRoles('hung', [adminRole]);
-  await assignUserRoles('manager01', [managerRole]);
-  await assignUserRoles('staff01', [staffRole]);
-  await assignUserRoles('staff02', [staffRole]);
+  await assignUserRoles('manager01', [warehouseManagerRole]);
+  await assignUserRoles('staff01', [warehouseStaffRole]);
+  await assignUserRoles('staff02', [warehouseStaffRole]);
   await assignUserRoles('staff03', [warehouseStaffRole]);
   await assignUserRoles('warehouse01', [warehouseStaffRole]);
   await assignUserRoles('cs01', [librarianRole]);
@@ -666,18 +673,17 @@ async function main() {
   console.log('🔐 SMARTBOOK AUTH SEED COMPLETED SUCCESSFULLY!');
   console.log('═══════════════════════════════════════════════════════════════════════');
   console.log(`   • ${permissions.length} Permissions (organized by module)`);
-  console.log(`   • System Roles:`);
-  console.log(`     - ADMIN: Full access`);
-  console.log(`     - MANAGER: Operational decisions, approvals, and analytics`);
-  console.log(`     - STAFF / WAREHOUSE_STAFF: Assigned warehouse task tracking`);
-  console.log(`     - LIBRARIAN / CUSTOMER_SERVICE: Circulation workflows`);
+  console.log(`   • 6 System Roles (canonical actors):`);
+  console.log(`     - ADMIN: Full platform access`);
+  console.log(`     - WAREHOUSE_MANAGER: Inventory, PO approvals, analytics`);
+  console.log(`     - WAREHOUSE_STAFF: Warehouse task execution`);
+  console.log(`     - LIBRARIAN: Circulation desk workflows`);
   console.log(`     - CUSTOMER: Customer portal self-service`);
   console.log(`     - SUPPLIER: Supplier portal`);
   console.log(`   • ${users.length} Users`);
   console.log(`     - hung (Admin)`);
-  console.log(`     - manager01 (Manager)`);
-  console.log(`     - staff01, staff02 (Staff)`);
-  console.log(`     - staff03, warehouse01 (Warehouse Staff)`);
+  console.log(`     - manager01 (Warehouse Manager)`);
+  console.log(`     - staff01, staff02, staff03, warehouse01 (Warehouse Staff)`);
   console.log(`     - librarian01, cs01 (Librarian)`);
   console.log(`     - customer01 (Customer)`);
   console.log(`     - inactive01 (Inactive)`);

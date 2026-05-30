@@ -34,6 +34,8 @@ interface PutawayContext {
   warehouseId?: string;
   variantId?: string;
   bookTitle?: string;
+  goodsReceiptId?: string;
+  maxQuantity?: number;
 }
 
 export function ReceivingPutawayPage() {
@@ -41,6 +43,9 @@ export function ReceivingPutawayPage() {
   const lockedCtx: PutawayContext = (routerLocation.state as PutawayContext) || {};
   const isWarehouseLocked = Boolean(lockedCtx.warehouseId);
   const isVariantLocked = Boolean(lockedCtx.variantId);
+  const [receiptMaxQty, setReceiptMaxQty] = useState<number | null>(
+    typeof lockedCtx.maxQuantity === 'number' ? lockedCtx.maxQuantity : null
+  );
 
   const currentUser = authService.getCurrentUser();
   const isManager = canManageReceiving(currentUser);
@@ -399,6 +404,10 @@ export function ReceivingPutawayPage() {
       return "Tổng số lượng allocation vượt quá tồn trong RECEIVING";
     }
 
+    if (receiptMaxQty !== null && totalDraftQty > receiptMaxQty) {
+      return `Phiếu này còn ${receiptMaxQty} cuốn chưa nhập kệ. Không thể nhập quá số lượng còn lại của phiếu.`;
+    }
+
     return null;
   };
 
@@ -423,6 +432,7 @@ export function ReceivingPutawayPage() {
         warehouse_id: selectedWarehouseId,
         source_receiving_location_id: selectedReceivingId,
         variant_id: selectedVariantId,
+        goods_receipt_id: lockedCtx.goodsReceiptId || null,
         allocations: draftLines.map((line) => ({
           target_location_id: line.target_location_id,
           quantity: Number(line.quantity),
@@ -433,14 +443,19 @@ export function ReceivingPutawayPage() {
         idempotency_key: idempotencyKey,
       };
 
+      const movedQty: number = draftLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
       const res = await receivingPutawayService.transfer(payload);
 
       setDraftLines([]);
       setScanSkuInput("");
       setScanTargetBarcodeInput("");
       setAmbiguousVariantMatches([]);
+      if (receiptMaxQty !== null) {
+        setReceiptMaxQty(Math.max(0, receiptMaxQty - movedQty));
+      }
 
       await Promise.all([
+        loadWarehouseContext(selectedWarehouseId),
         loadReceivingItems(selectedReceivingId),
         loadCandidates(selectedReceivingId, selectedVariantId),
       ]);
@@ -743,7 +758,14 @@ export function ReceivingPutawayPage() {
           </div>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-[12px] text-slate-500">Tổng draft: {totalDraftQty} / tồn nguồn: {selectedVariantItem?.on_hand_qty || 0}</p>
+            <p className="text-[12px] text-slate-500">
+              Tổng draft: {totalDraftQty} / tồn nguồn: {selectedVariantItem?.on_hand_qty || 0}
+              {receiptMaxQty !== null && (
+                <span className={`ml-2 font-semibold ${totalDraftQty > receiptMaxQty ? 'text-red-600' : 'text-violet-700'}`}>
+                  · giới hạn phiếu: {receiptMaxQty} cuốn
+                </span>
+              )}
+            </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
@@ -807,7 +829,10 @@ export function ReceivingPutawayPage() {
                     <input
                       type="number"
                       min={1}
-                      max={lineCandidate?.remaining_capacity || 1}
+                      max={Math.min(
+                        lineCandidate?.remaining_capacity ?? Infinity,
+                        receiptMaxQty !== null ? receiptMaxQty : Infinity,
+                      )}
                       value={line.quantity}
                       onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
                       className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"

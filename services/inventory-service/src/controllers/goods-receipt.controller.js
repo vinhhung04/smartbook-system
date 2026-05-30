@@ -207,7 +207,7 @@ function canViewAllReceivingTasks(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => String(role).toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("MANAGER");
+  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
 }
 
 function canManageReceiving(user = {}) {
@@ -1265,7 +1265,7 @@ async function assignGoodsReceipt(req, res) {
     const updated = await prisma.goods_receipts.update({
       where: { id },
       data: {
-        putaway_assignee_user_id: receivedByUserId,
+        received_by_user_id: receivedByUserId,
         updated_at: new Date(),
       },
     });

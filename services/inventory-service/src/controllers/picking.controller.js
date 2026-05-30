@@ -38,7 +38,7 @@ function isManagerOrAdmin(user) {
   const roles = Array.isArray(user?.roles)
     ? user.roles.map((r) => String(r || "").toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("MANAGER");
+  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
 }
 
 function getTaskPermissionScope(user) {
@@ -2412,31 +2412,58 @@ async function confirmPickingLine(req, res) {
             };
           }
 
-          const expectedLocation = resolvedLocation.location;
+          let expectedLocation = resolvedLocation.location;
 
           if (
             !findExpectedLocationMatch(scannedLocationInput, expectedLocation)
           ) {
-            await tx.inventory_audit_logs.create({
-              data: {
-                actor_user_id: scope.currentUserId,
-                action_name: "PICK_SCAN_LOCATION_INVALID",
-                entity_type: "OUTBOUND_ORDER",
-                entity_id: taskId,
-                after_data: {
-                  line_id: lineId,
-                  expected_location_id: expectedLocation.id,
-                  expected_location_code: expectedLocation.location_code,
-                  scanned_input: scannedLocationInput,
-                },
+            // Race condition: resolved location may differ from what was shown at detail load time.
+            // If the scanned location has available stock for this variant, accept it as alternative.
+            const scannedLocationRecord = await tx.locations.findFirst({
+              where: {
+                warehouse_id: order.warehouse_id,
+                is_active: true,
+                OR: [
+                  { location_code: scannedLocationInput },
+                  { barcode: scannedLocationInput },
+                  ...(isUuid(scannedLocationInput) ? [{ id: scannedLocationInput }] : []),
+                ],
               },
+              select: { id: true, location_code: true, barcode: true, location_type: true, is_active: true, warehouse_id: true },
             });
 
-            return {
-              invalid: true,
-              statusCode: 400,
-              message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
-            };
+            const scannedBalance = scannedLocationRecord
+              ? await tx.stock_balances.findUnique({
+                  where: { variant_id_location_id: { variant_id: line.variant_id, location_id: scannedLocationRecord.id } },
+                  select: { available_qty: true },
+                })
+              : null;
+
+            if (scannedLocationRecord && Number(scannedBalance?.available_qty || 0) >= quantity) {
+              // Scanned location is a valid alternative — use it as the pick source
+              expectedLocation = scannedLocationRecord;
+            } else {
+              await tx.inventory_audit_logs.create({
+                data: {
+                  actor_user_id: scope.currentUserId,
+                  action_name: "PICK_SCAN_LOCATION_INVALID",
+                  entity_type: "OUTBOUND_ORDER",
+                  entity_id: taskId,
+                  after_data: {
+                    line_id: lineId,
+                    expected_location_id: expectedLocation.id,
+                    expected_location_code: expectedLocation.location_code,
+                    scanned_input: scannedLocationInput,
+                  },
+                },
+              });
+
+              return {
+                invalid: true,
+                statusCode: 400,
+                message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+              };
+            }
           }
 
           if (scannedVariantId && scannedVariantId !== line.variant_id) {
@@ -3004,31 +3031,56 @@ async function confirmPickingLine(req, res) {
           };
         }
 
-        const expectedLocation = resolvedLocation.location;
+        let expectedLocation = resolvedLocation.location;
 
         if (
           !findExpectedLocationMatch(scannedLocationInput, expectedLocation)
         ) {
-          await tx.inventory_audit_logs.create({
-            data: {
-              actor_user_id: scope.currentUserId,
-              action_name: "PICK_SCAN_LOCATION_INVALID",
-              entity_type: "TRANSFER_ORDER",
-              entity_id: taskId,
-              after_data: {
-                line_id: lineId,
-                expected_location_id: expectedLocation.id,
-                expected_location_code: expectedLocation.location_code,
-                scanned_input: scannedLocationInput,
-              },
+          // Race condition: allow alternative location if it has sufficient available stock
+          const scannedLocationRecord = await tx.locations.findFirst({
+            where: {
+              warehouse_id: order.from_warehouse_id,
+              is_active: true,
+              OR: [
+                { location_code: scannedLocationInput },
+                { barcode: scannedLocationInput },
+                ...(isUuid(scannedLocationInput) ? [{ id: scannedLocationInput }] : []),
+              ],
             },
+            select: { id: true, location_code: true, barcode: true, location_type: true, is_active: true, warehouse_id: true },
           });
 
-          return {
-            invalid: true,
-            statusCode: 400,
-            message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
-          };
+          const scannedBalance = scannedLocationRecord
+            ? await tx.stock_balances.findUnique({
+                where: { variant_id_location_id: { variant_id: line.variant_id, location_id: scannedLocationRecord.id } },
+                select: { available_qty: true },
+              })
+            : null;
+
+          if (scannedLocationRecord && Number(scannedBalance?.available_qty || 0) >= quantity) {
+            expectedLocation = scannedLocationRecord;
+          } else {
+            await tx.inventory_audit_logs.create({
+              data: {
+                actor_user_id: scope.currentUserId,
+                action_name: "PICK_SCAN_LOCATION_INVALID",
+                entity_type: "TRANSFER_ORDER",
+                entity_id: taskId,
+                after_data: {
+                  line_id: lineId,
+                  expected_location_id: expectedLocation.id,
+                  expected_location_code: expectedLocation.location_code,
+                  scanned_input: scannedLocationInput,
+                },
+              },
+            });
+
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+            };
+          }
         }
 
         if (scannedVariantId && scannedVariantId !== line.variant_id) {
@@ -3836,6 +3888,293 @@ async function ensureRepicksEndpoint(req, res) {
   });
 }
 
+// Staff-accessible endpoint: picker declares they cannot pick the remaining quantity.
+// Creates a REPICK order for the shortage, sets root order to REPICKING,
+// and completes the current PICK task. Idempotent — safe to call multiple times.
+async function declareOutboundShortage(req, res) {
+  const taskId = parseId(req.params.taskId);
+  if (!taskId) {
+    return res.status(400).json({ message: 'taskId is required' });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        'SELECT id FROM outbound_orders WHERE id = $1::uuid FOR UPDATE',
+        taskId,
+      );
+
+      const order = await tx.outbound_orders.findUnique({
+        where: { id: taskId },
+        select: {
+          id: true,
+          outbound_number: true,
+          status: true,
+          warehouse_id: true,
+          processed_by_user_id: true,
+          requested_by_user_id: true,
+          note: true,
+        },
+      });
+
+      if (!order) return { notFound: true };
+
+      if (!['PICKING', 'APPROVED'].includes(order.status)) {
+        return { invalid: true, message: `Order status is ${order.status}, expected PICKING or APPROVED` };
+      }
+
+      if (!canAccessTask(req.user || {}, order.processed_by_user_id)) {
+        return { forbidden: true };
+      }
+
+      const items = await tx.outbound_order_items.findMany({
+        where: { outbound_order_id: taskId },
+        select: {
+          id: true, variant_id: true, source_location_id: true,
+          quantity: true, processed_qty: true, note: true,
+        },
+      });
+
+      if (items.length === 0) {
+        return { invalid: true, message: 'Order has no items' };
+      }
+
+      const hasShortage = items.some(
+        (i) => calculateLineRemaining(i.quantity, i.processed_qty) > 0,
+      );
+      if (!hasShortage) {
+        return { invalid: true, message: 'All items are fully picked. No shortage to declare.' };
+      }
+
+      // Write SHORT_PICK markers for each short line
+      const itemsForRepick = [];
+      for (const item of items) {
+        const remaining = calculateLineRemaining(item.quantity, item.processed_qty);
+        if (remaining > 0) {
+          const newNote = withLineShortPickedQty(item.note || '', remaining);
+          await tx.outbound_order_items.update({
+            where: { id: item.id },
+            data: { note: newNote },
+          });
+          itemsForRepick.push({ ...item, note: newNote });
+        } else {
+          itemsForRepick.push(item);
+        }
+      }
+
+      // Complete the active PICK task so it no longer appears in queue
+      const activePickTask = await tx.picking_tasks.findFirst({
+        where: {
+          root_order_id: taskId,
+          picking_type: 'PICK',
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+        select: { id: true },
+      });
+      if (activePickTask) {
+        await tx.picking_tasks.update({
+          where: { id: activePickTask.id },
+          data: { status: 'COMPLETED', completed_at: new Date(), updated_at: new Date() },
+        });
+      }
+
+      // Create the REPICK order (idempotent — skips if one already exists)
+      const actorUserId = parseId(req.user?.id || req.user?.sub);
+      const repickResult = await maybeCreateRepickFromOutbound(
+        tx, order, itemsForRepick, actorUserId,
+      );
+
+      // Ensure root order status is REPICKING regardless of whether a picking_task exists.
+      // For REPICK orders, the root order is the original PICK order (via REPICK_META).
+      const repickMeta = parseRepickMeta(order.note);
+      const rootOrderId = repickMeta?.root_task_id || taskId;
+      const rootToCheck = rootOrderId !== taskId
+        ? await tx.outbound_orders.findUnique({ where: { id: rootOrderId }, select: { status: true } })
+        : await tx.outbound_orders.findUnique({ where: { id: taskId }, select: { status: true } });
+      if (rootToCheck && !['REPICKING', 'READY_TO_SHIP', 'CANCELLED'].includes(rootToCheck.status)) {
+        await tx.outbound_orders.update({
+          where: { id: rootOrderId },
+          data: { status: 'REPICKING', updated_at: new Date() },
+        });
+      }
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: actorUserId,
+          action_name: 'SHORTAGE_DECLARED',
+          entity_type: 'OUTBOUND_ORDER',
+          entity_id: taskId,
+          after_data: {
+            order_number: order.outbound_number,
+            short_lines: items
+              .filter((i) => calculateLineRemaining(i.quantity, i.processed_qty) > 0)
+              .map((i) => ({
+                item_id: i.id,
+                variant_id: i.variant_id,
+                required: i.quantity,
+                picked: i.processed_qty,
+                short: calculateLineRemaining(i.quantity, i.processed_qty),
+              })),
+          },
+        },
+      });
+
+      return { success: true, repick: repickResult };
+    });
+
+    if (result.notFound) return res.status(404).json({ message: 'Outbound order not found' });
+    if (result.forbidden) return res.status(403).json({ message: 'Forbidden' });
+    if (result.invalid) return res.status(400).json({ message: result.message });
+
+    return res.status(201).json({
+      message: 'Shortage declared. REPICK order created and visible to all warehouse staff.',
+      data: result.repick,
+    });
+  } catch (error) {
+    console.error('declareOutboundShortage error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+// Transfer variant of declare-shortage. Same logic, different tables/fields.
+async function declareTransferShortage(req, res) {
+  const taskId = parseId(req.params.taskId);
+  if (!taskId) {
+    return res.status(400).json({ message: 'taskId is required' });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        'SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE',
+        taskId,
+      );
+
+      const order = await tx.transfer_orders.findUnique({
+        where: { id: taskId },
+        select: {
+          id: true,
+          transfer_number: true,
+          status: true,
+          from_warehouse_id: true,
+          to_warehouse_id: true,
+          shipped_by_user_id: true,
+          requested_by_user_id: true,
+          note: true,
+        },
+      });
+
+      if (!order) return { notFound: true };
+
+      if (!['PICKING', 'APPROVED'].includes(order.status)) {
+        return { invalid: true, message: `Transfer order status is ${order.status}, expected PICKING or APPROVED` };
+      }
+
+      if (!canAccessTask(req.user || {}, order.shipped_by_user_id)) {
+        return { forbidden: true };
+      }
+
+      const items = await tx.transfer_order_items.findMany({
+        where: { transfer_order_id: taskId },
+        select: {
+          id: true, variant_id: true, from_location_id: true, to_location_id: true,
+          quantity: true, shipped_qty: true, note: true,
+        },
+      });
+
+      if (items.length === 0) return { invalid: true, message: 'Transfer order has no items' };
+
+      const hasShortage = items.some((i) => i.quantity - (i.shipped_qty || 0) > 0);
+      if (!hasShortage) {
+        return { invalid: true, message: 'All items are fully shipped. No shortage to declare.' };
+      }
+
+      // Write SHORT_PICK markers on short lines
+      const itemsForRepick = [];
+      for (const item of items) {
+        const remaining = item.quantity - (item.shipped_qty || 0);
+        if (remaining > 0) {
+          const newNote = withLineShortPickedQty(item.note || '', remaining);
+          await tx.transfer_order_items.update({
+            where: { id: item.id },
+            data: { note: newNote },
+          });
+          itemsForRepick.push({ ...item, note: newNote });
+        } else {
+          itemsForRepick.push(item);
+        }
+      }
+
+      // Complete active PICK task if any
+      const activePickTask = await tx.picking_tasks.findFirst({
+        where: {
+          root_order_id: taskId,
+          picking_type: 'PICK',
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+        select: { id: true },
+      });
+      if (activePickTask) {
+        await tx.picking_tasks.update({
+          where: { id: activePickTask.id },
+          data: { status: 'COMPLETED', completed_at: new Date(), updated_at: new Date() },
+        });
+      }
+
+      const actorUserId = parseId(req.user?.id || req.user?.sub);
+      const repickResult = await maybeCreateRepickFromTransfer(tx, order, itemsForRepick, actorUserId);
+
+      // Ensure root transfer order status is REPICKING
+      const repickMeta = parseRepickMeta(order.note);
+      const rootOrderId = repickMeta?.root_task_id || taskId;
+      const rootToCheck = await tx.transfer_orders.findUnique({
+        where: { id: rootOrderId }, select: { status: true },
+      });
+      if (rootToCheck && !['REPICKING', 'READY_FOR_OUTBOUND', 'CANCELLED'].includes(rootToCheck.status)) {
+        await tx.transfer_orders.update({
+          where: { id: rootOrderId },
+          data: { status: 'REPICKING', updated_at: new Date() },
+        });
+      }
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: actorUserId,
+          action_name: 'SHORTAGE_DECLARED',
+          entity_type: 'TRANSFER_ORDER',
+          entity_id: taskId,
+          after_data: {
+            order_number: order.transfer_number,
+            short_lines: items
+              .filter((i) => i.quantity - (i.shipped_qty || 0) > 0)
+              .map((i) => ({
+                item_id: i.id,
+                variant_id: i.variant_id,
+                required: i.quantity,
+                shipped: i.shipped_qty,
+                short: i.quantity - (i.shipped_qty || 0),
+              })),
+          },
+        },
+      });
+
+      return { success: true, repick: repickResult };
+    });
+
+    if (result.notFound) return res.status(404).json({ message: 'Transfer order not found' });
+    if (result.forbidden) return res.status(403).json({ message: 'Forbidden' });
+    if (result.invalid) return res.status(400).json({ message: result.message });
+
+    return res.status(201).json({
+      message: 'Shortage declared. REPICK transfer order created and visible to all warehouse staff.',
+      data: result.repick,
+    });
+  } catch (error) {
+    console.error('declareTransferShortage error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function listPickingTasksHierarchy(req, res) {
   const warehouseId = parseId(req.query?.warehouse_id);
   const statusFilter = normalizeText(req.query?.status);
@@ -4104,6 +4443,8 @@ module.exports = {
   cancelTransferReturn,
   cancelOutboundReturn,
   ensureRepicksEndpoint,
+  declareOutboundShortage,
+  declareTransferShortage,
   listPickingTasksHierarchy,
   getPickingTaskChildren,
 };

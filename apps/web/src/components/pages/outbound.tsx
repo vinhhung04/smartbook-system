@@ -29,8 +29,11 @@ function outboundStatusBadge(status: string): { label: string; className: string
   }
 }
 
-function canConfirmOutbound(status: string): boolean {
-  return status === 'READY_FOR_OUTBOUND' || status === 'READY_TO_SHIP';
+function canConfirmOutbound(status: string, aggregateRemaining?: number): boolean {
+  if (status === 'READY_FOR_OUTBOUND' || status === 'READY_TO_SHIP') return true;
+  // REPICKING allowed when aggregate pick + repick chain is complete
+  if (status === 'REPICKING') return (aggregateRemaining ?? 1) === 0;
+  return false;
 }
 
 export function OutboundPage() {
@@ -430,8 +433,8 @@ export function OutboundPage() {
                 </button>
                 <button
                   onClick={() => void handleConfirm()}
-                  disabled={confirming || !canConfirmOutbound(detail.status)}
-                  title={!canConfirmOutbound(detail.status) ? `Đơn đang ở trạng thái ${detail.status} — chưa thể xuất kho` : undefined}
+                  disabled={confirming || !canConfirmOutbound(detail.status, detail.aggregate_remaining_qty)}
+                  title={!canConfirmOutbound(detail.status, detail.aggregate_remaining_qty) ? `Đơn đang ở trạng thái ${detail.status} — chưa thể xuất kho` : undefined}
                   className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
                 >
                   {confirming ? 'Đang xuất...' : 'Xác nhận xuất kho'}

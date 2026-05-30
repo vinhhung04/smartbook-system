@@ -56,8 +56,8 @@ async function runStaticSmoke() {
   ]);
 
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
-  expect('STAFF home path is my warehouse tasks', rbac.includes('role === "STAFF"') && rbac.includes('return "/my-warehouse-tasks"'));
-  expect('MANAGER home path is reports', rbac.includes('role === "MANAGER"') && rbac.includes('return "/reports"'));
+  expect('WAREHOUSE_STAFF home path is my warehouse tasks', rbac.includes('role === "WAREHOUSE_STAFF"') && rbac.includes('return "/my-warehouse-tasks"'));
+  expect('WAREHOUSE_MANAGER home path is reports', rbac.includes('role === "WAREHOUSE_MANAGER"') && rbac.includes('return "/reports"'));
   expect('LIBRARIAN home path is borrow', rbac.includes('role === "LIBRARIAN"') && rbac.includes('return "/borrow"'));
   expect('CUSTOMER home path is customer portal', rbac.includes('role === "CUSTOMER"') && rbac.includes('return "/customer"'));
   expect('ADMIN home path is users', rbac.includes('role === "ADMIN"') && rbac.includes('return "/users"'));
@@ -103,8 +103,8 @@ async function runStaticSmoke() {
   expect('exceptionReport access in ROUTE_ACCESS', rbac.includes('exceptionReport:') && rbac.includes('inventory.exception.report'));
   expect('my-purchase-requests route uses purchaseRequestSelf', routes.includes('path: "my-purchase-requests"') && routes.includes('ROUTE_ACCESS.purchaseRequestSelf'));
   expect('my-exception-reports route uses exceptionReportSelf', routes.includes('path: "my-exception-reports"') && routes.includes('ROUTE_ACCESS.exceptionReportSelf'));
-  expect('My Purchase Requests sidebar item is STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_purchase_requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestSelf'));
-  expect('My Exception Reports sidebar item is STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_exception_reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportSelf'));
+  expect('My Purchase Requests sidebar item is WAREHOUSE_STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_purchase_requests"') && sidebar.includes('access: ROUTE_ACCESS.purchaseRequestSelf'));
+  expect('My Exception Reports sidebar item is WAREHOUSE_STAFF-only guarded', sidebar.includes('labelKey: "sidebar.my_exception_reports"') && sidebar.includes('access: ROUTE_ACCESS.exceptionReportSelf'));
 
   expect('MyPurchaseRequestsPage uses getReceivingWarehouses', myPurchaseRequests.includes('getReceivingWarehouses'));
   expect('MyExceptionReportsPage uses getReceivingWarehouses', myExceptionReports.includes('getReceivingWarehouses'));
@@ -127,8 +127,8 @@ async function runStaticSmoke() {
   expect('i18n provider syncs document.documentElement.lang', i18nFile.includes('document.documentElement.lang = locale'));
   expect('i18n covers staff self-service sidebar labels (vi)', i18nFile.includes("'sidebar.my_tasks': 'Công việc kho của tôi'") && i18nFile.includes("'sidebar.my_purchase_requests': 'Yêu cầu mua hàng của tôi'") && i18nFile.includes("'sidebar.my_exception_reports': 'Báo cáo sự cố của tôi'"));
   expect('sidebar uses useI18n for label rendering', sidebar.includes('useI18n') && sidebar.includes('t(item.labelKey)') && sidebar.includes('t(group.labelKey)'));
-  expect('purchaseRequestSelf in ROUTE_ACCESS STAFF only', rbac.includes('purchaseRequestSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
-  expect('exceptionReportSelf in ROUTE_ACCESS STAFF only', rbac.includes('exceptionReportSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
+  expect('purchaseRequestSelf in ROUTE_ACCESS WAREHOUSE_STAFF only', rbac.includes('purchaseRequestSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
+  expect('exceptionReportSelf in ROUTE_ACCESS WAREHOUSE_STAFF only', rbac.includes('exceptionReportSelf:') && rbac.includes('STAFF_TRACKING_ROLES'));
 
   // Phase 2 — siết role + helpers field-level visibility
   expect('staffTasks restricted to STAFF_TRACKING_ROLES only', rbac.includes('staffTasks: { roles: STAFF_TRACKING_ROLES'));

@@ -1,3 +1,8 @@
+-- OUTDATED: This file is superseded by services/auth-service/prisma/seed.js
+-- Docker deploy uses prisma db push + prisma db seed. Do NOT use this file for new deployments.
+-- Role definitions here (MANAGER, STAFF, WAREHOUSE_OPERATOR, CUSTOMER_SERVICE) are legacy codes
+-- that have been consolidated into 6 canonical roles in the active seed.
+
 -- SmartBook Sample Seed Data
 -- Consolidated seed for: auth_db, inventory_db, borrow_db
 -- Run AFTER schema has been created (prisma db push or docker init scripts).

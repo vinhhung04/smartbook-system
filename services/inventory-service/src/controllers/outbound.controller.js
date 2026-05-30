@@ -34,7 +34,7 @@ function getTaskPermissionScope(user = {}) {
     canManageAssignment:
       Boolean(user.is_superuser) ||
       roles.includes("ADMIN") ||
-      roles.includes("MANAGER"),
+      roles.includes("WAREHOUSE_MANAGER"),
   };
 }
 
@@ -208,6 +208,8 @@ async function listOutboundQueue(req, res) {
       prisma.outbound_orders.findMany({
         where: {
           status: { in: OUTBOUND_VISIBLE_STATUSES },
+          // Exclude REPICK orders — they are accounted for in the root order's aggregate
+          external_reference: { not: { startsWith: "REPICK:" } },
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
           ...outboundAssignment,
         },
@@ -221,7 +223,9 @@ async function listOutboundQueue(req, res) {
       }),
       prisma.transfer_orders.findMany({
         where: {
-          status: "READY_FOR_OUTBOUND",
+          // Include REPICKING status so root transfers with active repick chain are visible
+          status: { in: ["READY_FOR_OUTBOUND", "REPICKING"] },
+          // Note: REPICK orders are filtered in JS below (Prisma OR on nullable note unreliable)
           ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
           ...transferAssignment,
         },
@@ -297,9 +301,72 @@ async function listOutboundQueue(req, res) {
       });
     }
 
+    // Filter out REPICK transfer orders (those with [REPICK_META] in note) — show only root orders
+    const filteredTransferOrders = transferOrders.filter(
+      (o) => !o.note?.includes("[REPICK_META]"),
+    );
+
+    // For root outbound orders without picking_tasks: aggregate repick chain processed_qty.
+    // Query all REPICK orders that belong to the root orders in our result set.
+    const rootOrderIds = outboundOrders.map((o) => o.id);
+    let repickChainByRoot = new Map(); // rootOrderId → total repick processed_qty
+    if (rootOrderIds.length > 0) {
+      const repickOrders = await prisma.outbound_orders.findMany({
+        where: {
+          external_reference: { startsWith: "REPICK:" },
+          status: { not: "CANCELLED" },
+        },
+        select: {
+          note: true,
+          outbound_order_items: { select: { processed_qty: true } },
+        },
+      });
+      for (const ro of repickOrders) {
+        // Extract root_task_id from note e.g. "root_task_id=7b762433-..."
+        const match = (ro.note || "").match(/root_task_id=([0-9a-f-]{36})/);
+        if (!match) continue;
+        const rootId = match[1];
+        if (!rootOrderIds.includes(rootId)) continue;
+        const qty = (ro.outbound_order_items || []).reduce(
+          (s, i) => s + Number(i.processed_qty || 0), 0,
+        );
+        repickChainByRoot.set(rootId, (repickChainByRoot.get(rootId) || 0) + qty);
+      }
+    }
+
+    // For root transfer orders with REPICKING status: aggregate repick chain shipped_qty.
+    const rootTransferIds = filteredTransferOrders.map((o) => o.id);
+    let repickChainByTransferRoot = new Map(); // rootTransferId → total repick shipped_qty
+    if (rootTransferIds.length > 0) {
+      const repickTransfers = await prisma.transfer_orders.findMany({
+        where: {
+          note: { contains: "[REPICK_META]" },
+          status: { not: "CANCELLED" },
+        },
+        select: {
+          note: true,
+          transfer_order_items: { select: { shipped_qty: true } },
+        },
+      });
+      for (const ro of repickTransfers) {
+        const match = (ro.note || "").match(/root_task_id=([0-9a-f-]{36})/);
+        if (!match) continue;
+        const rootId = match[1];
+        if (!rootTransferIds.includes(rootId)) continue;
+        const qty = (ro.transfer_order_items || []).reduce(
+          (s, i) => s + Number(i.shipped_qty || 0), 0,
+        );
+        repickChainByTransferRoot.set(rootId, (repickChainByTransferRoot.get(rootId) || 0) + qty);
+      }
+    }
+
     const data = [
       ...outboundOrders.map((order) => {
         const ptMeta = pickingMetaByOrder.get(order.id);
+        const rootProcessedQty = (order.outbound_order_items || []).reduce(
+          (sum, line) => sum + Number(line.processed_qty || 0), 0,
+        );
+        const repickQty = repickChainByRoot.get(order.id) || 0;
         return {
           task_type: "outbound",
           task_id: order.id,
@@ -316,17 +383,13 @@ async function listOutboundQueue(req, res) {
             (sum, line) => sum + Number(line.quantity || 0),
             0,
           ),
-          ready_quantity: ptMeta?.aggregate_picked_qty
-            ?? (order.outbound_order_items || []).reduce(
-              (sum, line) => sum + Number(line.processed_qty || 0),
-              0,
-            ),
+          ready_quantity: ptMeta?.aggregate_picked_qty ?? (rootProcessedQty + repickQty),
           picking_task_id: ptMeta?.picking_task_id || null,
           repick_count: ptMeta?.repick_count || 0,
           active_repick_count: ptMeta?.active_repick_count || 0,
         };
       }),
-      ...transferOrders.map((order) => ({
+      ...filteredTransferOrders.map((order) => ({
         task_type: "transfer",
         task_id: order.id,
         order_number: order.transfer_number,
@@ -351,9 +414,8 @@ async function listOutboundQueue(req, res) {
           0,
         ),
         ready_quantity: (order.transfer_order_items || []).reduce(
-          (sum, line) => sum + Number(line.shipped_qty || 0),
-          0,
-        ),
+          (sum, line) => sum + Number(line.shipped_qty || 0), 0,
+        ) + (repickChainByTransferRoot.get(order.id) || 0),
       })),
     ];
 
@@ -439,13 +501,15 @@ async function getOutboundOrderDetail(req, res) {
       // Aggregate quantities across ALL picking_task_items (PICK + all REPICKs)
       let aggregateTotalRequested = 0;
       let aggregateTotalPicked = 0;
+      let repickPickedByVariant = new Map();
       for (const task of allPickingTasks) {
         for (const item of task.picking_task_items) {
           aggregateTotalRequested += item.requested_qty;
           aggregateTotalPicked += item.picked_qty;
         }
       }
-      // Fallback to outbound_order_items if no picking_tasks exist yet
+      // Fallback to outbound_order_items if no picking_tasks exist yet.
+      // Also aggregates REPICK chain orders (linked via [REPICK_META] root_task_id in note).
       if (allPickingTasks.length === 0) {
         aggregateTotalRequested = (order.outbound_order_items || []).reduce(
           (s, l) => s + Number(l.quantity || 0), 0,
@@ -453,6 +517,29 @@ async function getOutboundOrderDetail(req, res) {
         aggregateTotalPicked = (order.outbound_order_items || []).reduce(
           (s, l) => s + Number(l.processed_qty || 0), 0,
         );
+        // Add processed_qty from all REPICK orders in the chain (any depth)
+        const repickChainOrders = await prisma.outbound_orders.findMany({
+          where: {
+            note: { contains: `root_task_id=${encodeURIComponent(taskId)}` },
+            status: { not: "CANCELLED" },
+          },
+          select: {
+            outbound_order_items: { select: { variant_id: true, processed_qty: true } },
+          },
+        });
+        for (const ro of repickChainOrders) {
+          for (const item of ro.outbound_order_items || []) {
+            aggregateTotalPicked += Number(item.processed_qty || 0);
+          }
+        }
+        // Build per-variant repick aggregate for line-level ready_qty
+        repickPickedByVariant = new Map();
+        for (const ro of repickChainOrders) {
+          for (const item of ro.outbound_order_items || []) {
+            const prev = repickPickedByVariant.get(item.variant_id) || 0;
+            repickPickedByVariant.set(item.variant_id, prev + Number(item.processed_qty || 0));
+          }
+        }
       }
 
       return res.json({
@@ -490,7 +577,7 @@ async function getOutboundOrderDetail(req, res) {
           line_id: line.id,
           variant_id: line.variant_id,
           quantity: Number(line.quantity || 0),
-          ready_qty: Number(line.processed_qty || 0),
+          ready_qty: Number(line.processed_qty || 0) + (repickPickedByVariant.get(line.variant_id) || 0),
           sku: line.book_variants?.sku || null,
           isbn13: line.book_variants?.isbn13 || null,
           isbn10: line.book_variants?.isbn10 || null,
@@ -541,6 +628,48 @@ async function getOutboundOrderDetail(req, res) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    // Aggregate shipped_qty from REPICK chain per variant (for REPICKING root transfers)
+    const transferRepickChain = await prisma.transfer_orders.findMany({
+      where: {
+        note: { contains: `root_task_id=${encodeURIComponent(taskId)}` },
+        status: { not: "CANCELLED" },
+      },
+      select: {
+        transfer_order_items: { select: { variant_id: true, shipped_qty: true } },
+      },
+    });
+    const transferRepickByVariant = new Map();
+    for (const ro of transferRepickChain) {
+      for (const item of ro.transfer_order_items || []) {
+        const prev = transferRepickByVariant.get(item.variant_id) || 0;
+        transferRepickByVariant.set(item.variant_id, prev + Number(item.shipped_qty || 0));
+      }
+    }
+
+    const transferLines = (order.transfer_order_items || []).map((line) => {
+      const rootShipped = Number(line.shipped_qty || 0);
+      const repickShipped = transferRepickByVariant.get(line.variant_id) || 0;
+      return {
+        line_id: line.id,
+        variant_id: line.variant_id,
+        quantity: Number(line.quantity || 0),
+        ready_qty: rootShipped + repickShipped,
+        sku: line.book_variants?.sku || null,
+        isbn13: line.book_variants?.isbn13 || null,
+        isbn10: line.book_variants?.isbn10 || null,
+        barcode:
+          line.book_variants?.internal_barcode ||
+          line.book_variants?.isbn13 ||
+          line.book_variants?.isbn10 ||
+          line.book_variants?.sku ||
+          null,
+        book_title: line.book_variants?.books?.title || "Chua co ten sach",
+      };
+    });
+
+    const aggregateRequestedQty = transferLines.reduce((s, l) => s + l.quantity, 0);
+    const aggregatePickedQty = transferLines.reduce((s, l) => s + l.ready_qty, 0);
+
     return res.json({
       task_type: "transfer",
       task_id: order.id,
@@ -561,22 +690,10 @@ async function getOutboundOrderDetail(req, res) {
         order.warehouses_transfer_orders_to_warehouse_idTowarehouses?.name ||
         null,
       outbound_assigned_user_id: order.outbound_assigned_user_id || null,
-      lines: (order.transfer_order_items || []).map((line) => ({
-        line_id: line.id,
-        variant_id: line.variant_id,
-        quantity: Number(line.quantity || 0),
-        ready_qty: Number(line.shipped_qty || 0),
-        sku: line.book_variants?.sku || null,
-        isbn13: line.book_variants?.isbn13 || null,
-        isbn10: line.book_variants?.isbn10 || null,
-        barcode:
-          line.book_variants?.internal_barcode ||
-          line.book_variants?.isbn13 ||
-          line.book_variants?.isbn10 ||
-          line.book_variants?.sku ||
-          null,
-        book_title: line.book_variants?.books?.title || "Chua co ten sach",
-      })),
+      aggregate_requested_qty: aggregateRequestedQty,
+      aggregate_picked_qty: aggregatePickedQty,
+      aggregate_remaining_qty: Math.max(0, aggregateRequestedQty - aggregatePickedQty),
+      lines: transferLines,
     });
   } catch (error) {
     console.error("Error while loading outbound detail:", error);
@@ -719,7 +836,7 @@ async function confirmOutbound(req, res) {
               statusCode: 404,
               message: "Outbound order not found",
             };
-          if (!["READY_FOR_OUTBOUND", "READY_TO_SHIP"].includes(order.status)) {
+          if (!["READY_FOR_OUTBOUND", "READY_TO_SHIP", "REPICKING"].includes(order.status)) {
             return {
               invalid: true,
               statusCode: 400,
@@ -740,6 +857,34 @@ async function confirmOutbound(req, res) {
               statusCode: 400,
               message: `Còn ${pendingPickingTasks} picking task chưa hoàn tất. Vui lòng hoàn thành tất cả PICK/REPICK trước khi xuất kho.`,
             };
+          }
+
+          // For REPICKING orders: validate that aggregate quantity (root + repick chain) is complete
+          if (order.status === "REPICKING") {
+            const rootItems = await tx.outbound_order_items.findMany({
+              where: { outbound_order_id: taskId },
+              select: { quantity: true, processed_qty: true },
+            });
+            const totalRequested = rootItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+            const rootPicked = rootItems.reduce((s, i) => s + Number(i.processed_qty || 0), 0);
+            const repickOrders = await tx.outbound_orders.findMany({
+              where: {
+                note: { contains: `root_task_id=${encodeURIComponent(taskId)}` },
+                status: { not: "CANCELLED" },
+              },
+              select: { outbound_order_items: { select: { processed_qty: true } } },
+            });
+            const repickPicked = repickOrders
+              .flatMap((o) => o.outbound_order_items)
+              .reduce((s, i) => s + Number(i.processed_qty || 0), 0);
+            const totalPicked = rootPicked + repickPicked;
+            if (totalPicked < totalRequested) {
+              return {
+                invalid: true,
+                statusCode: 400,
+                message: `Chưa đủ số lượng. Đã lấy: ${totalPicked}/${totalRequested}. Vui lòng hoàn thành REPICK trước khi xuất kho.`,
+              };
+            }
           }
 
           const scope = getTaskPermissionScope(req.user || {});
@@ -782,6 +927,27 @@ async function confirmOutbound(req, res) {
             select: { variant_id: true, processed_qty: true, quantity: true },
           });
 
+          // For REPICKING orders: aggregate processed_qty from REPICK chain per variant
+          // so the full picked quantity (root + all repicks) is shipped in one confirmation.
+          let repickQtyByVariant = new Map();
+          if (order.status === "REPICKING") {
+            const repickChain = await tx.outbound_orders.findMany({
+              where: {
+                note: { contains: `root_task_id=${encodeURIComponent(order.id)}` },
+                status: { not: "CANCELLED" },
+              },
+              select: {
+                outbound_order_items: { select: { variant_id: true, processed_qty: true } },
+              },
+            });
+            for (const ro of repickChain) {
+              for (const item of ro.outbound_order_items || []) {
+                const prev = repickQtyByVariant.get(item.variant_id) || 0;
+                repickQtyByVariant.set(item.variant_id, prev + Number(item.processed_qty || 0));
+              }
+            }
+          }
+
           const shippingLocation = await resolveOrCreateShippingLocation(
             tx,
             order.warehouse_id,
@@ -790,7 +956,7 @@ async function confirmOutbound(req, res) {
           const movementRows = [];
 
           for (const line of lines) {
-            const qty = Number(line.processed_qty || 0);
+            const qty = Number(line.processed_qty || 0) + (repickQtyByVariant.get(line.variant_id) || 0);
             if (qty <= 0) continue;
 
             await tx.$queryRawUnsafe(
@@ -929,12 +1095,39 @@ async function confirmOutbound(req, res) {
             statusCode: 404,
             message: "Transfer order not found",
           };
-        if (order.status !== "READY_FOR_OUTBOUND") {
+        if (!["READY_FOR_OUTBOUND", "REPICKING"].includes(order.status)) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Transfer order must be READY_FOR_OUTBOUND",
+            message: "Transfer order must be READY_FOR_OUTBOUND to confirm",
           };
+        }
+
+        // For REPICKING transfers: validate aggregate quantity is complete
+        if (order.status === "REPICKING") {
+          const rootItems = await tx.transfer_order_items.findMany({
+            where: { transfer_order_id: taskId },
+            select: { quantity: true, shipped_qty: true },
+          });
+          const totalRequested = rootItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+          const rootShipped = rootItems.reduce((s, i) => s + Number(i.shipped_qty || 0), 0);
+          const repickOrders = await tx.transfer_orders.findMany({
+            where: {
+              note: { contains: `root_task_id=${encodeURIComponent(taskId)}` },
+              status: { not: "CANCELLED" },
+            },
+            select: { transfer_order_items: { select: { shipped_qty: true } } },
+          });
+          const repickShipped = repickOrders
+            .flatMap((o) => o.transfer_order_items)
+            .reduce((s, i) => s + Number(i.shipped_qty || 0), 0);
+          if (rootShipped + repickShipped < totalRequested) {
+            return {
+              invalid: true,
+              statusCode: 400,
+              message: `Chưa đủ số lượng. Đã lấy: ${rootShipped + repickShipped}/${totalRequested}. Vui lòng hoàn thành REPICK trước khi xuất kho.`,
+            };
+          }
         }
 
         const scope = getTaskPermissionScope(req.user || {});
@@ -983,6 +1176,26 @@ async function confirmOutbound(req, res) {
           },
         });
 
+        // For REPICKING transfers: aggregate shipped_qty from REPICK chain per variant
+        let repickShippedByVariant = new Map();
+        if (order.status === "REPICKING") {
+          const repickChain = await tx.transfer_orders.findMany({
+            where: {
+              note: { contains: `root_task_id=${encodeURIComponent(order.id)}` },
+              status: { not: "CANCELLED" },
+            },
+            select: {
+              transfer_order_items: { select: { variant_id: true, shipped_qty: true } },
+            },
+          });
+          for (const ro of repickChain) {
+            for (const item of ro.transfer_order_items || []) {
+              const prev = repickShippedByVariant.get(item.variant_id) || 0;
+              repickShippedByVariant.set(item.variant_id, prev + Number(item.shipped_qty || 0));
+            }
+          }
+        }
+
         const shippingLocation = await resolveOrCreateShippingLocation(
           tx,
           order.from_warehouse_id,
@@ -990,7 +1203,7 @@ async function confirmOutbound(req, res) {
 
         const movementRows = [];
         for (const line of lines) {
-          const qty = Number(line.shipped_qty || 0);
+          const qty = Number(line.shipped_qty || 0) + (repickShippedByVariant.get(line.variant_id) || 0);
           if (qty <= 0) continue;
 
           await tx.$queryRawUnsafe(
@@ -1097,14 +1310,20 @@ async function confirmOutbound(req, res) {
             select: { id: true },
           });
 
-          const draftLines = lines.filter((l) => Number(l.shipped_qty || 0) > 0);
+          // Use aggregate quantity (root shipped + repick chain) for the GR
+          const draftLines = lines
+            .map((l) => ({
+              ...l,
+              total_shipped: Number(l.shipped_qty || 0) + (repickShippedByVariant.get(l.variant_id) || 0),
+            }))
+            .filter((l) => l.total_shipped > 0);
           if (draftLines.length > 0) {
             await tx.goods_receipt_items.createMany({
               data: draftLines.map((line) => ({
                 goods_receipt_id: draftReceipt.id,
                 variant_id: line.variant_id,
                 location_id: null,
-                quantity: Number(line.shipped_qty || 0),
+                quantity: line.total_shipped,
                 unit_cost: Number(line.unit_cost || 0),
               })),
             });

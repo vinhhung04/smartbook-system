@@ -89,11 +89,11 @@ async function main() {
   const rolesResponse = await request('GET', '/iam/roles', { token: adminToken, expectedStatus: 200 });
   const roles = Array.isArray(rolesResponse.data?.data) ? rolesResponse.data.data : [];
   if (!roles.length) fail('No roles returned from /iam/roles', rolesResponse);
-  const createRole = chooseRole(roles, ['STAFF', 'LIBRARIAN', 'WAREHOUSE_OPERATOR', 'CUSTOMER_SERVICE']);
+  const createRole = chooseRole(roles, ['WAREHOUSE_STAFF', 'LIBRARIAN', 'SUPPLIER', 'CUSTOMER']);
   if (!createRole?.id) fail('Could not choose role for create test', { roles });
   const updateRole = chooseRole(
     roles,
-    ['WAREHOUSE_OPERATOR', 'CUSTOMER_SERVICE', 'MANAGER', 'STAFF'],
+    ['LIBRARIAN', 'WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF', 'CUSTOMER'],
     new Set([createRole.id])
   );
   if (!updateRole?.id) fail('Could not choose different role for update test', { roles, createRole });
