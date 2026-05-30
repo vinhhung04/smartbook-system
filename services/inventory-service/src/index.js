@@ -217,13 +217,13 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
       })),
       ...outboundOrders.map((task) => ({
         id: task.id,
-        type: 'OUTBOUND',
+        type: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'].includes(task.status) ? 'OUTBOUND' : 'PICKING',
         title: task.outbound_number,
         status: task.status,
         warehouse: task.warehouses?.code || task.warehouses?.name || null,
         created_at: task.requested_at,
         completed_at: task.completed_at,
-        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+        action_path: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'].includes(task.status) ? '/outbound' : '/picking',
       })),
       ...transferOrders.map((task) => ({
         id: task.id,

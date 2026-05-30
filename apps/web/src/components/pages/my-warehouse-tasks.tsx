@@ -360,12 +360,19 @@ export function MyWarehouseTasksPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                      {task.type === "PICKING" && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
+                      {task.type === "OUTBOUND" && <p className="text-[10px] text-muted-foreground">Bước 2: Xuất kho</p>}
+                      {task.type === "TRANSFER_RECEIVING" && <p className="text-[10px] text-muted-foreground">Nhận chuyển kho</p>}
                       <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
                     </div>
                     <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
                   </div>
                   <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <span className="truncate">{task.warehouse || "-"}</span>
+                    <span className="truncate">
+                      {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
+                        ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
+                        : task.warehouse || "-"}
+                    </span>
                     <span>·</span>
                     <span className="shrink-0">{formatDate(task.created_at)}</span>
                   </div>
@@ -397,9 +404,24 @@ export function MyWarehouseTasksPage() {
                 <tbody>
                   {availableTasks.map((task) => (
                     <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
+                      <td className="px-5 py-3">
+                        <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                        {task.type === "PICKING" && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Bước 1: Lấy hàng</p>
+                        )}
+                        {task.type === "OUTBOUND" && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Bước 2: Xuất kho</p>
+                        )}
+                        {task.type === "TRANSFER_RECEIVING" && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Nhận chuyển kho</p>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
-                      <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
+                      <td className="px-5 py-3 text-[13px] text-muted-foreground">
+                        {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
+                          ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
+                          : task.warehouse || "-"}
+                      </td>
                       <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
                       <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
                       <td className="px-5 py-3">

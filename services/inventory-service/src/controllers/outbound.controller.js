@@ -1071,7 +1071,46 @@ async function confirmOutbound(req, res) {
           })),
         });
 
-        // Transfer moves to IN_TRANSIT — goods receipt is created later by the destination warehouse staff.
+        // Create DRAFT goods_receipt at destination warehouse so receiving staff can see and claim it.
+        // Idempotency: transfer order is locked FOR UPDATE in this Serializable transaction,
+        // plus the unique index on (source_reference_id, warehouse_id) WHERE source_type='TRANSFER'.
+        const existingDraftReceipt = await tx.goods_receipts.findFirst({
+          where: {
+            source_type: "TRANSFER",
+            source_reference_id: order.id,
+            warehouse_id: order.to_warehouse_id,
+          },
+          select: { id: true },
+        });
+
+        if (!existingDraftReceipt) {
+          const draftReceipt = await tx.goods_receipts.create({
+            data: {
+              receipt_number: createReceiptNumber(Date.now()),
+              warehouse_id: order.to_warehouse_id,
+              source_type: "TRANSFER",
+              source_reference_id: order.id,
+              status: "DRAFT",
+              received_by_user_id: null,
+              note: `Chờ nhận hàng từ chuyển kho ${order.transfer_number}`,
+            },
+            select: { id: true },
+          });
+
+          const draftLines = lines.filter((l) => Number(l.shipped_qty || 0) > 0);
+          if (draftLines.length > 0) {
+            await tx.goods_receipt_items.createMany({
+              data: draftLines.map((line) => ({
+                goods_receipt_id: draftReceipt.id,
+                variant_id: line.variant_id,
+                location_id: null,
+                quantity: Number(line.shipped_qty || 0),
+                unit_cost: Number(line.unit_cost || 0),
+              })),
+            });
+          }
+        }
+
         await tx.transfer_orders.update({
           where: { id: order.id },
           data: {

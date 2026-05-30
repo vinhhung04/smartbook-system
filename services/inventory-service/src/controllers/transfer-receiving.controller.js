@@ -175,6 +175,23 @@ async function confirmTransferReceiving(req, res) {
 
         if (!order)
           return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+
+        // Idempotent re-confirm: already received
+        if (order.status === "RECEIVED") {
+          const postedReceipt = await tx.goods_receipts.findFirst({
+            where: { source_type: "TRANSFER", source_reference_id: order.id },
+            select: { id: true, receipt_number: true },
+          });
+          return {
+            data: {
+              transfer_id: order.id,
+              status: "RECEIVED",
+              goods_receipt_id: postedReceipt?.id ?? null,
+              goods_receipt_number: postedReceipt?.receipt_number ?? null,
+            },
+          };
+        }
+
         if (order.status !== "IN_TRANSIT") {
           return {
             invalid: true,
@@ -194,44 +211,81 @@ async function confirmTransferReceiving(req, res) {
           }
         }
 
-        // Idempotency: check if goods_receipt already exists for this transfer
+        // Three-branch receipt promotion: POSTED (idempotent) | DRAFT→POSTED | no receipt (fallback)
         const existingReceipt = await tx.goods_receipts.findFirst({
           where: {
-            warehouse_id: order.to_warehouse_id,
             source_type: "TRANSFER",
             source_reference_id: order.id,
+            warehouse_id: order.to_warehouse_id,
           },
-          select: { id: true, receipt_number: true },
+          select: { id: true, receipt_number: true, status: true, warehouse_id: true },
         });
 
-        let destinationReceipt = existingReceipt;
-        if (!destinationReceipt) {
-          const baseTimestamp = Date.now();
+        let destinationReceipt;
+
+        if (existingReceipt?.status === "POSTED") {
+          // Already posted — idempotent, skip stock movement work
+          destinationReceipt = existingReceipt;
+
+        } else if (existingReceipt?.status === "DRAFT") {
+          // Normal path: DRAFT was created by confirmOutbound; promote to POSTED
+          destinationReceipt = await tx.goods_receipts.update({
+            where: { id: existingReceipt.id },
+            data: {
+              status: "POSTED",
+              received_by_user_id: actorUserIdRequired,
+              received_at: new Date(),
+              updated_at: new Date(),
+            },
+            select: { id: true, warehouse_id: true, receipt_number: true, status: true },
+          });
+
+          // Items created by confirmOutbound; add fallback in case DRAFT had no items
+          const existingItemCount = await tx.goods_receipt_items.count({
+            where: { goods_receipt_id: existingReceipt.id },
+          });
+          if (existingItemCount === 0) {
+            const shippedLines = order.transfer_order_items.filter(
+              (l) => Number(l.shipped_qty || 0) > 0,
+            );
+            if (shippedLines.length > 0) {
+              await tx.goods_receipt_items.createMany({
+                data: shippedLines.map((line) => ({
+                  goods_receipt_id: destinationReceipt.id,
+                  variant_id: line.variant_id,
+                  location_id: null,
+                  quantity: Number(line.shipped_qty || 0),
+                  unit_cost: Number(line.unit_cost || 0),
+                  note: `Tu chuyen kho line ${line.id}`,
+                })),
+              });
+            }
+          }
+
+          // postTransferReceiptToReceiving has its own idempotency guard (stock_movements count check)
+          await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
+
+        } else {
+          // No receipt: migration period — order went IN_TRANSIT before this fix was deployed
           const shippedLines = order.transfer_order_items.filter(
             (line) => Number(line.shipped_qty || 0) > 0,
           );
-
           if (shippedLines.length === 0) {
-            return {
-              invalid: true,
-              statusCode: 400,
-              message: "No shipped items to receive",
-            };
+            return { invalid: true, statusCode: 400, message: "No shipped items to receive" };
           }
-
           destinationReceipt = await tx.goods_receipts.create({
             data: {
-              receipt_number: createReceiptNumber(baseTimestamp),
+              receipt_number: createReceiptNumber(Date.now()),
               warehouse_id: order.to_warehouse_id,
               source_type: "TRANSFER",
               source_reference_id: order.id,
               status: "POSTED",
               received_by_user_id: actorUserIdRequired,
+              received_at: new Date(),
               note: `Nhan hang tu chuyen kho ${order.transfer_number}`,
             },
             select: { id: true, warehouse_id: true, receipt_number: true, status: true },
           });
-
           await tx.goods_receipt_items.createMany({
             data: shippedLines.map((line) => ({
               goods_receipt_id: destinationReceipt.id,
@@ -242,7 +296,6 @@ async function confirmTransferReceiving(req, res) {
               note: `Tu chuyen kho line ${line.id}`,
             })),
           });
-
           await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
         }
 
@@ -343,6 +396,20 @@ async function claimSelfTransferReceiving(req, res) {
       await tx.transfer_orders.update({
         where: { id: transferId },
         data: { received_by_user_id: currentUserId, updated_at: new Date() },
+      });
+
+      // Assign the DRAFT goods_receipt so it appears in staff's pending-verification queue.
+      await tx.goods_receipts.updateMany({
+        where: {
+          source_type: "TRANSFER",
+          source_reference_id: transferId,
+          status: "DRAFT",
+          received_by_user_id: null,
+        },
+        data: {
+          received_by_user_id: currentUserId,
+          updated_at: new Date(),
+        },
       });
 
       await tx.inventory_audit_logs.create({
