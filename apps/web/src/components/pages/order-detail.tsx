@@ -510,6 +510,44 @@ export function OrderDetailPage() {
           </motion.div>
         </div>
       </div>
+      {/* Staff verification scan bar — shown for ANY DRAFT GR, not restricted to invoice GRs */}
+      {receipt.status === "DRAFT" && !receipt.invoice && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
+          <SectionCard title="Kiểm đếm hàng nhận" subtitle="Nhập hoặc scan số lượng thực tế trước khi manager duyệt">
+            {!isVerified ? (
+              <div className="flex gap-2 mb-2">
+                <div className="relative flex-1">
+                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    ref={scanInputRef}
+                    type="text"
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
+                    placeholder="Scan hoặc nhập mã vạch để đếm..."
+                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <button type="button" onClick={() => setShowScannerModal(true)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
+                  <ScanBarcode className="h-4 w-4" /> Camera
+                </button>
+                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                  <Save className="h-4 w-4" />
+                  {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                <p className="text-[13px] text-emerald-800 font-medium">Đã kiểm đếm xong — chờ manager duyệt phiếu nhập</p>
+              </div>
+            )}
+          </SectionCard>
+        </motion.div>
+      )}
+
       {/* NCC invoice comparison — full width, below the main grid, visible to all roles */}
       {receipt.invoice && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
