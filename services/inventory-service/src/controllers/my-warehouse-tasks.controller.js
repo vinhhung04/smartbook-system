@@ -41,6 +41,7 @@ async function getAvailableTasks(req, res) {
           outbound_number: true,
           status: true,
           warehouse_id: true,
+          external_reference: true,
           requested_at: true,
           created_at: true,
           warehouses: { select: { code: true, name: true } },
@@ -151,20 +152,29 @@ async function getAvailableTasks(req, res) {
     }
 
     const tasks = [
-      ...pickingOutbound.map((o) => ({
-        id: o.id,
-        type: 'PICKING',
-        task_type: 'outbound',
-        title: o.outbound_number,
-        status: o.status,
-        warehouse: o.warehouses?.code || o.warehouses?.name || null,
-        warehouse_id: o.warehouse_id,
-        created_at: o.created_at,
-        completed_at: null,
-        action_path: '/picking',
-        claimable: true,
-        claim_endpoint: `/api/picking/tasks/outbound/${o.id}/claim-self`,
-      })),
+      ...pickingOutbound.map((o) => {
+        const isRepick = typeof o.external_reference === 'string' &&
+          o.external_reference.startsWith('REPICK:');
+        const parentOrderNumber = isRepick
+          ? o.external_reference.replace('REPICK:', '')
+          : null;
+        return {
+          id: o.id,
+          type: 'PICKING',
+          task_type: 'outbound',
+          title: o.outbound_number,
+          status: o.status,
+          warehouse: o.warehouses?.code || o.warehouses?.name || null,
+          warehouse_id: o.warehouse_id,
+          is_repick: isRepick,
+          parent_order_number: parentOrderNumber,
+          created_at: o.created_at,
+          completed_at: null,
+          action_path: '/picking',
+          claimable: true,
+          claim_endpoint: `/api/picking/tasks/outbound/${o.id}/claim-self`,
+        };
+      }),
       ...pickingTransfer.map((o) => ({
         id: o.id,
         type: 'PICKING',

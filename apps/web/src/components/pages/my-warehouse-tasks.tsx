@@ -359,8 +359,16 @@ export function MyWarehouseTasksPage() {
                 <div key={`avail-card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                      {task.type === "PICKING" && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                        {task.is_repick && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">Bổ sung</span>
+                        )}
+                      </div>
+                      {task.type === "PICKING" && !task.is_repick && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
+                      {task.type === "PICKING" && task.is_repick && (
+                        <p className="text-[10px] text-muted-foreground">Bổ sung cho <span className="font-mono">{task.parent_order_number}</span></p>
+                      )}
                       {task.type === "OUTBOUND" && <p className="text-[10px] text-muted-foreground">Bước 2: Xuất kho</p>}
                       {task.type === "TRANSFER_RECEIVING" && <p className="text-[10px] text-muted-foreground">Nhận chuyển kho</p>}
                       <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
@@ -405,9 +413,21 @@ export function MyWarehouseTasksPage() {
                   {availableTasks.map((task) => (
                     <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="px-5 py-3">
-                        <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                        {task.type === "PICKING" && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                          {task.is_repick && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Bổ sung
+                            </span>
+                          )}
+                        </div>
+                        {task.type === "PICKING" && !task.is_repick && (
                           <p className="text-[11px] text-muted-foreground mt-0.5">Bước 1: Lấy hàng</p>
+                        )}
+                        {task.type === "PICKING" && task.is_repick && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Bổ sung cho <span className="font-mono">{task.parent_order_number}</span>
+                          </p>
                         )}
                         {task.type === "OUTBOUND" && (
                           <p className="text-[11px] text-muted-foreground mt-0.5">Bước 2: Xuất kho</p>
