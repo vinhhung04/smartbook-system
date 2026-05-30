@@ -89,6 +89,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           outbound_number: true,
           status: true,
           warehouse_id: true,
+          external_reference: true,
           requested_at: true,
           completed_at: true,
           warehouses: { select: { code: true, name: true } },
@@ -215,16 +216,25 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         completed_at: task.received_at,
         action_path: task.status === 'POSTED' ? `/putaway` : `/orders/${task.id}`,
       })),
-      ...outboundOrders.map((task) => ({
-        id: task.id,
-        type: 'OUTBOUND',
-        title: task.outbound_number,
-        status: task.status,
-        warehouse: task.warehouses?.code || task.warehouses?.name || null,
-        created_at: task.requested_at,
-        completed_at: task.completed_at,
-        action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
-      })),
+      ...outboundOrders.map((task) => {
+        const isOutboundPhase = ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'].includes(task.status);
+        const isRepick = typeof task.external_reference === 'string' &&
+          task.external_reference.startsWith('REPICK:');
+        return {
+          id: task.id,
+          type: isOutboundPhase ? 'OUTBOUND' : 'PICKING',
+          title: task.outbound_number,
+          status: task.status,
+          warehouse: task.warehouses?.code || task.warehouses?.name || null,
+          is_repick: isRepick,
+          parent_order_number: isRepick
+            ? task.external_reference.replace('REPICK:', '')
+            : null,
+          created_at: task.requested_at,
+          completed_at: task.completed_at,
+          action_path: isOutboundPhase ? '/outbound' : '/picking',
+        };
+      }),
       ...transferOrders.map((task) => ({
         id: task.id,
         type: ['READY_FOR_OUTBOUND', 'IN_TRANSIT'].includes(task.status) ? 'OUTBOUND' : 'PICKING',

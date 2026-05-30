@@ -168,7 +168,7 @@ model goods_receipts {
   source_reference_id String?               @db.Uuid
   supplier_delivery_invoice_id String?       @db.Uuid
   status              String                @default("DRAFT") @db.VarChar(20)
-  received_by_user_id String                @db.Uuid
+  received_by_user_id String?               @db.Uuid
   putaway_assignee_user_id String?           @db.Uuid
   received_at         DateTime?             @db.Timestamptz(6)
   cancelled_at        DateTime?             @db.Timestamptz(6)

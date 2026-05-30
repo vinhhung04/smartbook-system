@@ -25,9 +25,13 @@ export interface AvailableWarehouseTask {
   status: string;
   warehouse: string | null;
   warehouse_id: string | null;
+  from_warehouse_name?: string | null;
+  to_warehouse_name?: string | null;
+  is_repick?: boolean;
+  parent_order_number?: string | null;
   created_at: string | null;
   completed_at: null;
-  action_path: null;
+  action_path: string | null;
   claimable: true;
   claim_endpoint: string;
 }

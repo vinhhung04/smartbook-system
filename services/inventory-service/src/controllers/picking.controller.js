@@ -2790,6 +2790,68 @@ async function confirmPickingLine(req, res) {
             }
           }
 
+          // Auto-create repick when the PICK task completes with short-picked items.
+          // Only for PICK orders (not REPICK) — maybeCreateRepickFromOutbound handles chains.
+          if (allDone && !isRepickOrder) {
+            const itemsAfterPick = await tx.outbound_order_items.findMany({
+              where: { outbound_order_id: order.id },
+              select: {
+                id: true,
+                variant_id: true,
+                source_location_id: true,
+                quantity: true,
+                processed_qty: true,
+                note: true,
+              },
+            });
+
+            // Write SHORT_PICK note for each item that was not fully picked,
+            // then pass the updated items to maybeCreateRepickFromOutbound.
+            const itemsForRepick = [];
+            for (const item of itemsAfterPick) {
+              const remaining = Math.max(
+                0,
+                Number(item.quantity || 0) - Number(item.processed_qty || 0),
+              );
+              if (remaining > 0) {
+                const newNote = withLineShortPickedQty(item.note || "", remaining);
+                await tx.outbound_order_items.update({
+                  where: { id: item.id },
+                  data: { note: newNote },
+                });
+                itemsForRepick.push({ ...item, note: newNote });
+              } else {
+                itemsForRepick.push(item);
+              }
+            }
+
+            const hasShortPicks = itemsForRepick.some(
+              (item) => item.note && item.note.includes(`[${SHORT_PICK_MARKER}]`),
+            );
+
+            if (hasShortPicks) {
+              const orderForRepick = await tx.outbound_orders.findUnique({
+                where: { id: order.id },
+                select: {
+                  id: true,
+                  outbound_number: true,
+                  warehouse_id: true,
+                  requested_by_user_id: true,
+                  processed_by_user_id: true,
+                  note: true,
+                },
+              });
+              if (orderForRepick) {
+                await maybeCreateRepickFromOutbound(
+                  tx,
+                  orderForRepick,
+                  itemsForRepick,
+                  scope.currentUserId,
+                );
+              }
+            }
+          }
+
           await tx.inventory_audit_logs.create({
             data: {
               actor_user_id: scope.currentUserId,
