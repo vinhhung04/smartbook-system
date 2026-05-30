@@ -11,6 +11,8 @@ const {
   cancelTransferReturn,
   cancelOutboundReturn,
   ensureRepicksEndpoint,
+  declareOutboundShortage,
+  declareTransferShortage,
   listPickingTasksHierarchy,
   getPickingTaskChildren,
 } = require("../controllers/picking.controller");
@@ -63,6 +65,16 @@ router.post(
   cancelOutboundReturn,
 );
 router.post("/repicks/ensure", canDecideOperation, ensureRepicksEndpoint);
+router.post(
+  "/tasks/outbound/:taskId/declare-shortage",
+  canUpdateTaskProgress,
+  declareOutboundShortage,
+);
+router.post(
+  "/tasks/transfer/:taskId/declare-shortage",
+  canUpdateTaskProgress,
+  declareTransferShortage,
+);
 
 // New relational hierarchy endpoints for picking_tasks
 router.get("/picking-tasks", canReadTask, listPickingTasksHierarchy);

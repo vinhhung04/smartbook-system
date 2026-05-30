@@ -77,7 +77,7 @@ function getTaskPermissionScope(user = {}) {
     canManageAssignment:
       Boolean(user.is_superuser) ||
       roles.includes('ADMIN') ||
-      roles.includes('MANAGER'),
+      roles.includes('WAREHOUSE_MANAGER'),
   };
 }
 
@@ -143,6 +143,7 @@ async function getReadyReceipts(req, res) {
         goods_receipt_items: {
           select: {
             id: true,
+            variant_id: true,
             location_id: true,
             quantity: true,
           },
@@ -164,19 +165,30 @@ async function getReadyReceipts(req, res) {
           variant_id: true,
           quantity: true,
           metadata: true,
+          reference_type: true,
         },
       })
       : [];
 
-    // Chỉ đếm movements được liên kết trực tiếp với goods receipt (reference_id khớp)
-    // Không đếm RECEIVING_SHELF_PUTAWAY có reference_id = null vì không biết thuộc phiếu nào
+    // Build variant→item map per receipt for movements that lack goods_receipt_item_id
+    // (e.g. RECEIVING_SHELF_PUTAWAY from barcode-scan flow that only records variant_id)
+    const variantToItemByReceipt = new Map(); // `${receiptId}::${variantId}` → itemId
+    receipts.forEach((receipt) => {
+      receipt.goods_receipt_items.forEach((item) => {
+        variantToItemByReceipt.set(`${receipt.id}::${String(item.variant_id)}`, String(item.id));
+      });
+    });
+
     const putawayQtyByReceiptItem = new Map();
     postedMovements.forEach((movement) => {
       const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
-      const itemId = metadata && metadata.goods_receipt_item_id ? String(metadata.goods_receipt_item_id) : null;
       const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
-      if (!itemId || bucket !== 'PUTAWAY' || !movement.reference_id) return;
+      if (bucket !== 'PUTAWAY' || !movement.reference_id) return;
       const rid = String(movement.reference_id);
+      // Prefer explicit goods_receipt_item_id; fall back to variant→item lookup
+      const explicitItemId = metadata && metadata.goods_receipt_item_id ? String(metadata.goods_receipt_item_id) : null;
+      const itemId = explicitItemId || variantToItemByReceipt.get(`${rid}::${String(movement.variant_id)}`);
+      if (!itemId) return;
       const key = `${rid}::${itemId}`;
       putawayQtyByReceiptItem.set(
         key,
@@ -289,20 +301,25 @@ async function getReadyReceiptDetail(req, res) {
         movement_status: 'POSTED',
       },
       select: {
+        variant_id: true,
         quantity: true,
         metadata: true,
       },
     });
 
-    // Chỉ đếm movements liên kết trực tiếp với goods receipt (reference_id = receiptId)
+    // Build variant→item fallback for barcode-scan movements that lack goods_receipt_item_id
+    const variantToItem = new Map(
+      receipt.goods_receipt_items.map((item) => [String(item.variant_id), String(item.id)])
+    );
+
     const putawayQtyByItem = new Map();
     postedMovements.forEach((movement) => {
       const metadata = movement.metadata && typeof movement.metadata === 'object' ? movement.metadata : null;
-      const itemId = metadata && metadata.goods_receipt_item_id ? String(metadata.goods_receipt_item_id) : null;
       const bucket = metadata && metadata.movement_bucket ? String(metadata.movement_bucket) : null;
-      if (!itemId || bucket !== 'PUTAWAY') {
-        return;
-      }
+      if (bucket !== 'PUTAWAY') return;
+      const explicitItemId = metadata && metadata.goods_receipt_item_id ? String(metadata.goods_receipt_item_id) : null;
+      const itemId = explicitItemId || variantToItem.get(String(movement.variant_id || ''));
+      if (!itemId) return;
       const current = putawayQtyByItem.get(itemId) || 0;
       putawayQtyByItem.set(itemId, current + Number(movement.quantity || 0));
     });

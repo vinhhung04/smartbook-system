@@ -10,9 +10,17 @@ import httpx
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 _TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
 
+# Legacy role codes mapped to their canonical replacements (backward compat).
+_LEGACY_ROLE_MAP: dict[str, str] = {
+    "MANAGER": "WAREHOUSE_MANAGER",
+    "STAFF": "WAREHOUSE_STAFF",
+    "WAREHOUSE_OPERATOR": "WAREHOUSE_STAFF",
+    "CUSTOMER_SERVICE": "LIBRARIAN",
+}
+
 _ROLE_PRIORITY = [
-    "ADMIN", "MANAGER", "LIBRARIAN", "CUSTOMER_SERVICE",
-    "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "STAFF", "SUPPLIER", "CUSTOMER",
+    "ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN",
+    "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER",
 ]
 
 _ROLE_ENDPOINTS: dict[str, list[str]] = {
@@ -22,15 +30,13 @@ _ROLE_ENDPOINTS: dict[str, list[str]] = {
         "/borrow/my/fines",
         "/borrow/my/membership",
     ],
-    "STAFF": ["/api/my-warehouse-tasks"],
     "WAREHOUSE_STAFF": [
         "/api/my-warehouse-tasks",
         "/api/picking/tasks",
         "/api/putaway/receipts",
         "/api/my-exception-reports",
     ],
-    "WAREHOUSE_OPERATOR": ["/api/my-warehouse-tasks", "/api/putaway/receipts"],
-    "MANAGER": [
+    "WAREHOUSE_MANAGER": [
         "/analytics/dashboard/kpis",
         "/analytics/warehouse-stock-risk",
         "/api/my-warehouse-tasks",
@@ -41,7 +47,6 @@ _ROLE_ENDPOINTS: dict[str, list[str]] = {
         "/api/my-warehouse-tasks",
     ],
     "LIBRARIAN": ["/borrow/loans", "/borrow/reservations", "/borrow/fines"],
-    "CUSTOMER_SERVICE": ["/borrow/loans", "/borrow/reservations", "/borrow/fines"],
     "SUPPLIER": [],
 }
 
@@ -51,20 +56,12 @@ _ROLE_PERSONAS: dict[str, str] = {
         "Chỉ dùng dữ liệu cá nhân của họ. "
         "Không hiện analytics toàn hệ thống hay dữ liệu người dùng khác."
     ),
-    "STAFF": (
-        "Bạn đang hỗ trợ nhân viên {name}. "
-        "Ưu tiên task được giao cho họ, không hiện task của người khác."
-    ),
     "WAREHOUSE_STAFF": (
         "Bạn đang hỗ trợ nhân viên kho {name}. "
         "Ưu tiên các task picking/putaway/receiving được giao cho họ."
     ),
-    "WAREHOUSE_OPERATOR": (
-        "Bạn đang hỗ trợ vận hành kho {name}. "
-        "Tập trung vào các thao tác kho được giao."
-    ),
-    "MANAGER": (
-        "Bạn đang hỗ trợ quản lý {name}. "
+    "WAREHOUSE_MANAGER": (
+        "Bạn đang hỗ trợ quản lý kho {name}. "
         "Có thể xem tổng quan vận hành, tồn kho, task nhân viên và báo cáo."
     ),
     "ADMIN": (
@@ -74,10 +71,6 @@ _ROLE_PERSONAS: dict[str, str] = {
     "LIBRARIAN": (
         "Bạn đang hỗ trợ thủ thư {name}. "
         "Tập trung nghiệp vụ mượn trả, reservation, loan, fine."
-    ),
-    "CUSTOMER_SERVICE": (
-        "Bạn đang hỗ trợ CSKH {name}. "
-        "Tập trung hỗ trợ khách hàng, mượn trả, phạt."
     ),
     "SUPPLIER": (
         "Bạn đang hỗ trợ nhà cung cấp {name}. "
@@ -94,8 +87,9 @@ ANALYTICS_BLOCKED_ROLES: frozenset[str] = frozenset({"CUSTOMER", "SUPPLIER"})
 
 
 def get_primary_role(user_ctx: Any) -> str:
-    """Return the highest-priority role for the user context object."""
-    roles = [r.upper() for r in (getattr(user_ctx, "roles", None) or [])]
+    """Return the highest-priority canonical role for the user context object."""
+    raw = [r.upper() for r in (getattr(user_ctx, "roles", None) or [])]
+    roles = [_LEGACY_ROLE_MAP.get(r, r) for r in raw]
     for role in _ROLE_PRIORITY:
         if role in roles:
             return role
@@ -291,7 +285,7 @@ def _fmt_exception_reports(data: Any) -> str:
 
 
 def _fmt_borrow_loans_all(data: Any) -> str:
-    """For LIBRARIAN/CUSTOMER_SERVICE: all system loans."""
+    """For LIBRARIAN: all system loans."""
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu loan trong hệ thống."
@@ -312,7 +306,7 @@ def _fmt_borrow_loans_all(data: Any) -> str:
 
 
 def _fmt_borrow_fines_all(data: Any) -> str:
-    """For LIBRARIAN/CUSTOMER_SERVICE: all system fines."""
+    """For LIBRARIAN: all system fines."""
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu phạt trong hệ thống."
@@ -323,7 +317,7 @@ def _fmt_borrow_fines_all(data: Any) -> str:
 
 
 def _fmt_reservations_all(data: Any) -> str:
-    """For LIBRARIAN/CUSTOMER_SERVICE: all system reservations."""
+    """For LIBRARIAN: all system reservations."""
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu đặt sách."

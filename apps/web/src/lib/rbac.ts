@@ -5,10 +5,24 @@ export interface RouteAccessMeta {
   permissions?: string[];
 }
 
-const INTERNAL_ROLES = ["ADMIN", "MANAGER", "STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "LIBRARIAN", "CUSTOMER_SERVICE"];
-const MANAGER_OPERATION_ROLES = ["ADMIN", "MANAGER"];
-const STAFF_TRACKING_ROLES = ["STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR"];
-const LIBRARY_ROLES = ["ADMIN", "MANAGER", "LIBRARIAN", "CUSTOMER_SERVICE"];
+// Maps legacy role codes to canonical codes for JWT backward compatibility.
+// Applied in hasAnyRole and getPrimaryRole so old tokens still work.
+export const LEGACY_ROLE_MAP: Record<string, string> = {
+  MANAGER: "WAREHOUSE_MANAGER",
+  STAFF: "WAREHOUSE_STAFF",
+  WAREHOUSE_OPERATOR: "WAREHOUSE_STAFF",
+  CUSTOMER_SERVICE: "LIBRARIAN",
+};
+
+function normalizeRole(role: string): string {
+  return LEGACY_ROLE_MAP[role.toUpperCase()] ?? role.toUpperCase();
+}
+
+// CUSTOMER and SUPPLIER are portal users, not internal staff.
+const INTERNAL_ROLES = ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"];
+const MANAGER_OPERATION_ROLES = ["ADMIN", "WAREHOUSE_MANAGER"];
+const STAFF_TRACKING_ROLES = ["WAREHOUSE_STAFF"];
+const LIBRARY_ROLES = ["ADMIN", "LIBRARIAN"];
 const ADMIN_ROLES = ["ADMIN"];
 
 export const ROUTE_ACCESS = {
@@ -31,7 +45,7 @@ export const ROUTE_ACCESS = {
   supplierDeliveries: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.supplier.read", "inventory.purchase.read"] },
   orderRequests: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide", "inventory.purchase.approve"] },
   borrowRead: { roles: LIBRARY_ROLES, permissions: ["borrow.read", "borrow.customers.read", "borrow.loans.read"] },
-  borrowWrite: { roles: ["ADMIN", "LIBRARIAN", "CUSTOMER_SERVICE"], permissions: ["borrow.write", "borrow.loans.write", "borrow.customers.write"] },
+  borrowWrite: { roles: ["ADMIN", "LIBRARIAN"], permissions: ["borrow.write", "borrow.loans.write", "borrow.customers.write"] },
   reports: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
   admin: { roles: ADMIN_ROLES, permissions: ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"] },
   customer: { roles: ["CUSTOMER"], permissions: ["customer.self.read", "inventory.catalog.read"] },
@@ -51,7 +65,7 @@ export const ROUTE_ACCESS = {
 export function hasAnyRole(user: AuthUser | null | undefined, roles: string[] = []) {
   if (!roles.length) return true;
   if (user?.is_superuser) return true;
-  const userRoles = new Set((user?.roles || []).map((role) => role.toUpperCase()));
+  const userRoles = new Set((user?.roles || []).map(normalizeRole));
   return roles.some((role) => userRoles.has(role.toUpperCase()));
 }
 
@@ -69,7 +83,7 @@ export function canAccess(user: AuthUser | null | undefined, meta?: RouteAccessM
 }
 
 // Field-level visibility helpers. Backend remains the source of truth for security;
-// these helpers chỉ ẩn UI cho phù hợp role (STAFF không cần thấy giá nhập, vị trí kho nội bộ).
+// these helpers only hide UI for the appropriate role.
 export function canViewUnitCost(user: AuthUser | null | undefined) {
   if (user?.is_superuser) return true;
   return hasAnyRole(user, MANAGER_OPERATION_ROLES);
@@ -86,8 +100,8 @@ export function canViewLocationCode(user: AuthUser | null | undefined) {
 }
 
 export function getPrimaryRole(user: AuthUser | null | undefined) {
-  const roles = user?.roles || [];
-  const order = ["ADMIN", "MANAGER", "LIBRARIAN", "CUSTOMER_SERVICE", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "STAFF", "SUPPLIER", "CUSTOMER"];
+  const roles = (user?.roles || []).map(normalizeRole);
+  const order = ["ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER"];
   return order.find((role) => roles.includes(role)) || roles[0] || "UNKNOWN";
 }
 
@@ -96,8 +110,8 @@ export function getHomePathForUser(user: AuthUser | null | undefined) {
   if (role === "CUSTOMER") return "/customer";
   if (role === "SUPPLIER") return "/supplier";
   if (role === "ADMIN") return "/users";
-  if (role === "MANAGER") return "/reports";
-  if (role === "LIBRARIAN" || role === "CUSTOMER_SERVICE") return "/borrow";
-  if (role === "STAFF" || role === "WAREHOUSE_STAFF" || role === "WAREHOUSE_OPERATOR") return "/my-warehouse-tasks";
+  if (role === "WAREHOUSE_MANAGER") return "/reports";
+  if (role === "LIBRARIAN") return "/borrow";
+  if (role === "WAREHOUSE_STAFF") return "/my-warehouse-tasks";
   return "/";
 }

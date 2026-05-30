@@ -283,7 +283,7 @@ def _build_reservation_draft(
 
     user_roles = {r.upper().replace("-", "_") for r in (user_context.roles if user_context else [])}
     requires_customer_selection = bool(
-        user_roles & {"ADMIN", "MANAGER", "LIBRARIAN", "STAFF"} and not (user_context and user_context.user_id)
+        user_roles & {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF"} and not (user_context and user_context.user_id)
     )
 
     return {
@@ -370,7 +370,7 @@ def _build_stock_alert(
             "items": items,
             "severity": severity,
             "sources": [s.get("name") for s in sources if s.get("status") == "ok"],
-            "target_roles": ["MANAGER", "WAREHOUSE_STAFF"],
+            "target_roles": ["WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
         },
         "risk": RISK_LOW,
         "sources": sources,

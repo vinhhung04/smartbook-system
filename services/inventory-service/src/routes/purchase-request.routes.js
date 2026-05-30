@@ -16,9 +16,9 @@ const {
 
 const router = express.Router();
 
-// STAFF can create and view their own requests
+// WAREHOUSE_STAFF can create and view their own requests
 const canStaffRequest = authorizeAnyPermission(['inventory.purchase.request']);
-// Only MANAGER/ADMIN can see all requests or make decisions
+// Only WAREHOUSE_MANAGER/ADMIN can see all requests or make decisions
 const canManagerDecide = authorizeManagerDecision(['inventory.purchase.request']);
 // Convert to PO requires purchase.write permission (creating a PO)
 const canManagerConvert = authorizeManagerDecision(['inventory.purchase.write']);

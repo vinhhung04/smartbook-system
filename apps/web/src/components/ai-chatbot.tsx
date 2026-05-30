@@ -37,16 +37,14 @@ function getRoleSuggestions(user: AuthUser | null): string[] {
         'Gợi ý sách phù hợp với tôi.',
         'Tình trạng đặt sách của tôi?',
       ];
-    case 'STAFF':
     case 'WAREHOUSE_STAFF':
-    case 'WAREHOUSE_OPERATOR':
       return [
         'Task hôm nay của tôi là gì?',
         'Tôi có đơn picking nào cần làm?',
         'Tôi có phiếu putaway nào được giao?',
         'Báo cáo ngoại lệ của tôi.',
       ];
-    case 'MANAGER':
+    case 'WAREHOUSE_MANAGER':
     case 'ADMIN':
       return [
         'Tổng quan vận hành hôm nay.',
@@ -55,7 +53,6 @@ function getRoleSuggestions(user: AuthUser | null): string[] {
         'Tổng quan loan và phạt hôm nay.',
       ];
     case 'LIBRARIAN':
-    case 'CUSTOMER_SERVICE':
       return [
         'Có loan nào quá hạn?',
         'Reservation nào đang chờ xử lý?',
@@ -131,12 +128,9 @@ function getWelcomeGreeting(user: AuthUser | null): string {
   const name = user.full_name || user.username;
   const roleLabel: Record<string, string> = {
     ADMIN: 'Admin',
-    MANAGER: 'Manager',
+    WAREHOUSE_MANAGER: 'Quản lý kho',
     LIBRARIAN: 'Thủ thư',
-    CUSTOMER_SERVICE: 'CSKH',
     WAREHOUSE_STAFF: 'Nhân viên kho',
-    WAREHOUSE_OPERATOR: 'Vận hành kho',
-    STAFF: 'Nhân viên',
     CUSTOMER: '',
     SUPPLIER: 'Nhà cung cấp',
   };
@@ -516,7 +510,7 @@ function MessageText({ text }: { text: string }) {
 async function gatherSystemContext(user: AuthUser | null): Promise<SystemContext | undefined> {
   // Backend fetches personal context for these roles; no need to send system_context.
   const role = user ? getPrimaryRole(user) : null;
-  const skipRoles = new Set(['CUSTOMER', 'STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR', 'SUPPLIER']);
+  const skipRoles = new Set(['CUSTOMER', 'WAREHOUSE_STAFF', 'SUPPLIER']);
   if (role && skipRoles.has(role)) return undefined;
 
   const ctx: SystemContext = {};

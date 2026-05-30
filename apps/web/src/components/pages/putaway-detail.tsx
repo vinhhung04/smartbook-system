@@ -141,6 +141,8 @@ export function PutawayDetailPage() {
                             warehouseId: detail.warehouse_id,
                             variantId: item.variant_id,
                             bookTitle: item.book_title,
+                            goodsReceiptId: detail.id,
+                            maxQuantity: item.remaining_quantity,
                           },
                         })}
                         className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-violet-50 px-3 py-1.5 text-violet-700 hover:bg-violet-100"

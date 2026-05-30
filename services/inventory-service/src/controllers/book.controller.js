@@ -578,7 +578,7 @@ function canManageFullCatalog(user = {}) {
     : [];
   const permissions = Array.isArray(user.permissions) ? user.permissions : [];
   return (
-    (roles.includes('ADMIN') || roles.includes('MANAGER')) &&
+    (roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER')) &&
     permissions.includes('inventory.catalog.write')
   );
 }
@@ -587,7 +587,7 @@ function canLibrarianCompleteIncompleteBook(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => String(role).toUpperCase())
     : [];
-  return roles.includes('LIBRARIAN') || roles.includes('CUSTOMER_SERVICE');
+  return roles.includes('LIBRARIAN');
 }
 
 async function getOrCreatePublisher(tx, publisherName) {

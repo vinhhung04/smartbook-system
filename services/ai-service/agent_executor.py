@@ -22,7 +22,7 @@ logger = logging.getLogger("uvicorn.error")
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 EXECUTOR_TIMEOUT = float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "10"))
 
-_STAFF_ROLES = {"ADMIN", "MANAGER", "LIBRARIAN", "STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR"}
+_STAFF_ROLES = {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF"}
 
 
 def _short_id() -> str:
@@ -143,7 +143,7 @@ async def _exec_reservation(
     user_roles = _user_roles_set(user_context)
     idempotency_key = f"ai-reservation-{pending_action.id}"
 
-    is_customer = "CUSTOMER" in user_roles and not (user_roles & _STAFF_ROLES - {"STAFF"})
+    is_customer = "CUSTOMER" in user_roles and not (user_roles & _STAFF_ROLES)
 
     if is_customer or "CUSTOMER" in user_roles:
         # Customer self-service route

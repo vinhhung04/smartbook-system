@@ -206,6 +206,14 @@ export const pickingService = {
     };
   },
 
+  declareShortage: async (taskType: PickingTaskType, taskId: string) => {
+    const response = await inventoryAPI.post(`/api/picking/tasks/${taskType}/${taskId}/declare-shortage`);
+    return response.data as {
+      message: string;
+      data: { task_type: string; task_id: string | null; order_number: string | null; reused_existing?: boolean } | null;
+    };
+  },
+
   getPickingTasksHierarchy: async (warehouseId?: string, status?: string) => {
     const response = await inventoryAPI.get('/api/picking/picking-tasks', {
       params: { warehouse_id: warehouseId || undefined, status: status || undefined },

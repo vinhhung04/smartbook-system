@@ -86,6 +86,10 @@ export function PickingPage() {
   const [repickChildren, setRepickChildren] = useState<(PickingTaskRecord & { picking_task_items: PickingTaskItemRecord[] })[]>([]);
   const [loadingRepickChildren, setLoadingRepickChildren] = useState(false);
 
+  // Declare shortage (create REPICK)
+  const [declaringShortage, setDeclaringShortage] = useState(false);
+  const [showShortageConfirm, setShowShortageConfirm] = useState(false);
+
   const currentUser = authService.getCurrentUser();
   const canManageAssignment = canManageReceiving(currentUser);
   const currentUserId = String((currentUser as { id?: string } | null)?.id || "");
@@ -124,6 +128,13 @@ export function PickingPage() {
   const totalPickedQty = useMemo(
     () => (detail?.lines || []).reduce((sum, line) => sum + Number(line.picked_qty || 0), 0),
     [detail],
+  );
+
+  // Can declare shortage when: some items were picked but not all lines complete (PICK or REPICK task)
+  const canDeclareShortage = Boolean(
+    detail
+    && totalPickedQty > 0
+    && (detail.lines || []).some((line) => Number(line.picked_qty || 0) < Number(line.requested_qty || 0)),
   );
 
   const canConfirmLine = Boolean(
@@ -424,6 +435,25 @@ export function PickingPage() {
     setSelectedScannedVariantId("");
     setAmbiguousMatches([]);
     setActiveScanTarget(null);
+    setShowShortageConfirm(false);
+  };
+
+  const handleDeclareShortage = async () => {
+    if (!selectedTaskId || declaringShortage) return;
+    setShowShortageConfirm(false);
+    setDeclaringShortage(true);
+    try {
+      const res = await pickingService.declareShortage(selectedTaskType!, selectedTaskId);
+      toast.success(res.data?.order_number
+        ? `Đã tạo REPICK ${res.data.order_number} — nhân viên khác có thể nhận và lấy bù`
+        : "Đã khai báo thiếu hàng và tạo REPICK thành công");
+      await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
+      handleBackToList();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Khai báo thiếu hàng thất bại"));
+    } finally {
+      setDeclaringShortage(false);
+    }
   };
 
   const handleVerifyLocation = (inputOverride?: string) => {
@@ -1064,6 +1094,44 @@ export function PickingPage() {
                   )}
                 </div>
               </FadeItem>
+
+              {canDeclareShortage ? (
+                <FadeItem>
+                  <div className="rounded-[16px] border border-orange-200/70 bg-orange-50/60 p-4">
+                    <p className="text-[13px] font-semibold text-orange-900 mb-1">Không đủ hàng để pick?</p>
+                    <p className="text-[12px] text-orange-800 mb-3">
+                      Nếu bạn đã pick tối đa có thể nhưng vẫn thiếu, hãy khai báo thiếu hàng.
+                      Hệ thống sẽ tạo đơn REPICK để nhân viên khác có thể nhận và lấy bù phần còn thiếu.
+                    </p>
+                    {showShortageConfirm ? (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <p className="text-[12px] text-orange-900 font-semibold">Xác nhận khai báo thiếu hàng?</p>
+                        <button
+                          onClick={() => void handleDeclareShortage()}
+                          disabled={declaringShortage}
+                          className="rounded-[9px] bg-orange-600 px-4 py-2 text-[12px] font-semibold text-white hover:bg-orange-700 disabled:opacity-60 transition-colors"
+                        >
+                          {declaringShortage ? "Đang tạo REPICK..." : "Xác nhận, tạo REPICK"}
+                        </button>
+                        <button
+                          onClick={() => setShowShortageConfirm(false)}
+                          disabled={declaringShortage}
+                          className="rounded-[9px] border border-orange-200 px-4 py-2 text-[12px] text-orange-700 hover:bg-orange-100 transition-colors"
+                        >
+                          Huỷ
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowShortageConfirm(true)}
+                        className="rounded-[9px] border border-orange-300 bg-white px-4 py-2 text-[12px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors"
+                      >
+                        Khai báo thiếu hàng &amp; tạo REPICK
+                      </button>
+                    )}
+                  </div>
+                </FadeItem>
+              ) : null}
             </>
           ) : null}
         </>

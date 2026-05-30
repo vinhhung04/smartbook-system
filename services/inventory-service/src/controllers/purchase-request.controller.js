@@ -129,7 +129,7 @@ async function getAllPurchaseRequests(req, res) {
 async function getPurchaseRequestById(req, res) {
   const userId = req.user?.id || req.user?.sub;
   const userRoles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
-  const isManager = userRoles.includes('MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
+  const isManager = userRoles.includes('WAREHOUSE_MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
 
   try {
     const request = await prisma.purchase_requests.findUnique({

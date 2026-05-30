@@ -94,9 +94,9 @@ export function BookDetailPage() {
   });
   const currentUser = authService.getCurrentUser();
   const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
-  const canCompleteIncompleteBook = currentUserRoles.includes("LIBRARIAN") || currentUserRoles.includes("CUSTOMER_SERVICE");
-  const canCreateReceivingDraft = currentUserRoles.some((role) => ["STAFF", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "MANAGER", "ADMIN"].includes(role));
+  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("WAREHOUSE_MANAGER");
+  const canCompleteIncompleteBook = currentUserRoles.includes("LIBRARIAN");
+  const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "WAREHOUSE_MANAGER", "ADMIN"].includes(role));
   const canEditBook = Boolean(book && (canManageCatalog || (canCompleteIncompleteBook && book.is_incomplete)));
 
   const loadBook = async () => {

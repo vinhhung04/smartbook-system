@@ -43,7 +43,7 @@ async function createExceptionReport(req, res) {
   if (!note || !note.trim()) return res.status(400).json({ message: 'note is required' });
 
   const userRoles = (req.user?.roles || []).map((r) => String(r).toUpperCase());
-  const isManager = req.user?.is_superuser || userRoles.some((r) => ['MANAGER', 'ADMIN'].includes(r));
+  const isManager = req.user?.is_superuser || userRoles.some((r) => ['WAREHOUSE_MANAGER', 'ADMIN'].includes(r));
 
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
@@ -197,7 +197,7 @@ async function getAllExceptionReports(req, res) {
 async function getExceptionReportById(req, res) {
   const userId = req.user?.id || req.user?.sub;
   const userRoles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
-  const isManager = userRoles.includes('MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
+  const isManager = userRoles.includes('WAREHOUSE_MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
 
   try {
     const report = await prisma.warehouse_exception_reports.findUnique({

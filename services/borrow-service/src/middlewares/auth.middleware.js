@@ -1,5 +1,16 @@
 const jwt = require('jsonwebtoken');
 
+const LEGACY_ROLE_MAP = {
+  MANAGER: 'WAREHOUSE_MANAGER',
+  STAFF: 'WAREHOUSE_STAFF',
+  WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF',
+  CUSTOMER_SERVICE: 'LIBRARIAN',
+};
+
+function normalizeRoles(roles = []) {
+  return roles.map((r) => LEGACY_ROLE_MAP[r] || r);
+}
+
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -49,7 +60,8 @@ function authorizeAnyPermission(permissions = []) {
 }
 
 function getUserRoles(user = {}) {
-  return Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+  const raw = Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+  return normalizeRoles(raw);
 }
 
 function authorizeAnyRole(roles = []) {
@@ -77,7 +89,7 @@ function authorizeBorrowAdminRead(req, res, next) {
 
   const roles = getUserRoles(req.user);
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'MANAGER', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role));
+  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN'].includes(role));
   const permissionAllowed = permissions.some((permission) => [
     'borrow.read',
     'borrow.customers.read',
@@ -96,7 +108,7 @@ function authorizeBorrowAdminWrite(req, res, next) {
 
   const roles = getUserRoles(req.user);
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN', 'CUSTOMER_SERVICE'].includes(role));
+  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN'].includes(role));
   const permissionAllowed = permissions.some((permission) => [
     'borrow.write',
     'borrow.customers.write',

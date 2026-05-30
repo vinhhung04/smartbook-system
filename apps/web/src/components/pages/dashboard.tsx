@@ -144,7 +144,7 @@ export function DashboardPage() {
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const isWarehouseStaff = roles.some((role) => ['STAFF', 'WAREHOUSE_STAFF', 'WAREHOUSE_OPERATOR'].includes(role));
+  const isWarehouseStaff = roles.includes('WAREHOUSE_STAFF');
 
   if (isWarehouseStaff) {
     return <Navigate to="/my-warehouse-tasks" replace />;

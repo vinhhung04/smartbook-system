@@ -23,35 +23,35 @@ RISK_HIGH = "HIGH"
 # ── Action configuration ──────────────────────────────────────────────────────
 ACTION_CONFIG: dict[str, dict] = {
     CREATE_REORDER_DRAFT: {
-        "allowed_roles": ["ADMIN", "MANAGER", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "STAFF"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
         "allowed_permissions": ["inventory.purchase.request"],
         "risk": RISK_MEDIUM,
         "requires_confirmation": True,
         "description": "Tạo purchase request/đề xuất nhập sách, không cập nhật tồn kho.",
     },
     CREATE_REPORT_DRAFT: {
-        "allowed_roles": ["ADMIN", "MANAGER", "LIBRARIAN", "STAFF"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN"],
         "allowed_permissions": ["analytics.read", "borrow.report.read", "inventory.report.read"],
         "risk": RISK_LOW,
         "requires_confirmation": True,
         "description": "Tạo báo cáo markdown từ dữ liệu retrieval, không ghi DB.",
     },
     CREATE_RESERVATION_DRAFT: {
-        "allowed_roles": ["ADMIN", "MANAGER", "LIBRARIAN", "STAFF", "CUSTOMER"],
+        "allowed_roles": ["ADMIN", "LIBRARIAN", "CUSTOMER"],
         "allowed_permissions": ["borrow.reservation.write", "customer.self.write"],
         "risk": RISK_MEDIUM,
         "requires_confirmation": True,
         "description": "Tạo reservation draft, chỉ gọi API thật nếu đủ variant_id + warehouse_id + customer context.",
     },
     CREATE_STOCK_ALERT: {
-        "allowed_roles": ["ADMIN", "MANAGER", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "STAFF"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
         "allowed_permissions": ["inventory.stock.read", "inventory.task.read"],
         "risk": RISK_LOW,
         "requires_confirmation": True,
         "description": "Tạo cảnh báo tồn kho thấp/hết hàng từ warehouse-stock-risk, không chỉnh tồn kho.",
     },
     CREATE_STAFF_TASK_DRAFT: {
-        "allowed_roles": ["ADMIN", "MANAGER", "WAREHOUSE_STAFF", "WAREHOUSE_OPERATOR", "STAFF"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
         "allowed_permissions": ["inventory.task.read", "inventory.exception.report", "inventory.purchase.request"],
         "risk": RISK_MEDIUM,
         "requires_confirmation": True,

@@ -1,5 +1,16 @@
 const jwt = require('jsonwebtoken');
 
+const LEGACY_ROLE_MAP = {
+  MANAGER: 'WAREHOUSE_MANAGER',
+  STAFF: 'WAREHOUSE_STAFF',
+  WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF',
+  CUSTOMER_SERVICE: 'LIBRARIAN',
+};
+
+function normalizeRoles(roles = []) {
+  return roles.map((r) => LEGACY_ROLE_MAP[r] || r);
+}
+
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -49,7 +60,8 @@ function authorizeAnyPermission(permissions = []) {
 }
 
 function getUserRoles(user = {}) {
-  return Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+  const raw = Array.isArray(user.roles) ? user.roles.map((role) => String(role).toUpperCase()) : [];
+  return normalizeRoles(raw);
 }
 
 function authorizeAnyRole(roles = []) {
@@ -82,7 +94,7 @@ function authorizeManagerRead(permissions = []) {
 
 function authorizeManagerDecision(permissions = ['inventory.operation.decide']) {
   const requirePermission = authorizeAnyPermission(permissions);
-  const requireRole = authorizeAnyRole(['MANAGER', 'ADMIN']);
+  const requireRole = authorizeAnyRole(['WAREHOUSE_MANAGER', 'ADMIN']);
 
   return (req, res, next) => {
     if (req.user?.is_superuser) {
@@ -99,10 +111,8 @@ function authorizeManagerDecision(permissions = ['inventory.operation.decide']) 
 function authorizeTaskRead(permissions = ['inventory.task.read']) {
   const requirePermission = authorizeAnyPermission(permissions);
   const requireRole = authorizeAnyRole([
-    'STAFF',
     'WAREHOUSE_STAFF',
-    'WAREHOUSE_OPERATOR',
-    'MANAGER',
+    'WAREHOUSE_MANAGER',
     'ADMIN',
   ]);
 

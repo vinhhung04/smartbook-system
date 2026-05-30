@@ -655,6 +655,7 @@ async function transferReceivingToShelf(req, res) {
     req.body?.source_receiving_location_id,
   );
   const variantId = parseId(req.body?.variant_id);
+  const goodsReceiptId = parseId(req.body?.goods_receipt_id) || null;
   const allocations = Array.isArray(req.body?.allocations)
     ? req.body.allocations
     : [];
@@ -924,7 +925,7 @@ async function transferReceivingToShelf(req, res) {
             unit_cost: 0,
             source_service: "INVENTORY_SERVICE",
             reference_type: "RECEIVING_SHELF_PUTAWAY",
-            reference_id: null,
+            reference_id: goodsReceiptId,
             idempotency_key: clientIdempotencyKey
               ? `${clientIdempotencyKey}:${allocation.target_location_id}`.slice(-99)
               : null,
