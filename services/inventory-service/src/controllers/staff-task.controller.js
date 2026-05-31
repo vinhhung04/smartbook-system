@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { pushEvents, pushToRooms } = require('../lib/socket-emitter');
 
 const prisma = new PrismaClient();
 
@@ -166,6 +167,13 @@ async function createStaffTask(req, res) {
       });
     } catch (_) { /* audit log is non-critical */ }
 
+    const assigneeId = task.assignee_user_id;
+    setImmediate(() => void pushEvents([
+      { room: 'warehouse_manager', event: 'warehouse_task:assigned', data: { id: task.id, title: task.title, assignee_user_id: assigneeId, status: task.status } },
+      { room: 'warehouse_staff',   event: 'warehouse_task:assigned', data: { id: task.id, title: task.title, assignee_user_id: assigneeId, status: task.status } },
+      { room: `user:${assigneeId}`, event: 'warehouse_task:assigned', data: { id: task.id, title: task.title, assignee_user_id: assigneeId, status: task.status } },
+    ]));
+
     return res.status(201).json({ message: 'Staff task created successfully', data: task });
   } catch (error) {
     console.error(error);
@@ -288,6 +296,12 @@ async function updateStaffTaskStatus(req, res) {
     }
 
     const updated = await prisma.staff_tasks.update({ where: { id }, data: updateData });
+
+    setImmediate(() => void pushToRooms(['admin', 'warehouse_manager'], 'warehouse_task:status_changed', {
+      id: updated.id,
+      status: updated.status,
+      assignee_user_id: updated.assignee_user_id,
+    }));
 
     return res.json({ data: updated });
   } catch (error) {

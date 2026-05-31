@@ -3294,6 +3294,38 @@ async function confirmPickingLine(req, res) {
               shipped_by_user_id: scope.currentUserId,
             },
           });
+
+          // If this is a REPICK transfer, also check whether the root transfer
+          // should now transition from REPICKING → READY_FOR_OUTBOUND.
+          const repickMeta = parseRepickMeta(order.note);
+          if (repickMeta?.root_task_id) {
+            const rootOrderId = repickMeta.root_task_id;
+            const rootItems = await tx.transfer_order_items.findMany({
+              where: { transfer_order_id: rootOrderId },
+              select: { quantity: true, shipped_qty: true },
+            });
+            const totalRequested = rootItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+            const rootShipped = rootItems.reduce((s, i) => s + Number(i.shipped_qty || 0), 0);
+
+            // Sum shipped_qty from all REPICK transfer orders in this chain
+            const repickChain = await tx.transfer_orders.findMany({
+              where: {
+                note: { contains: `root_task_id=${encodeMetaValue(rootOrderId)}` },
+                status: { not: "CANCELLED" },
+              },
+              select: { transfer_order_items: { select: { shipped_qty: true } } },
+            });
+            const repickShipped = repickChain
+              .flatMap((o) => o.transfer_order_items)
+              .reduce((s, i) => s + Number(i.shipped_qty || 0), 0);
+
+            if (totalRequested > 0 && rootShipped + repickShipped >= totalRequested) {
+              await tx.transfer_orders.update({
+                where: { id: rootOrderId },
+                data: { status: "READY_FOR_OUTBOUND", updated_at: new Date() },
+              });
+            }
+          }
         } else if (order.status !== "PICKING") {
           await tx.transfer_orders.update({
             where: { id: order.id },

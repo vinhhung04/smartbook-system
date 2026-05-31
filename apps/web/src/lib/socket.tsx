@@ -22,12 +22,32 @@ const SocketContext = createContext<SocketContextValue>({
 const GATEWAY_URL =
   import.meta.env.VITE_GATEWAY_BASE_URL || 'http://localhost:3000';
 
+const isDev = import.meta.env.DEV;
+
 export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+
+  // Sync token state from localStorage when auth changes (login/logout/cross-tab)
+  useEffect(() => {
+    const sync = () => setToken(localStorage.getItem(TOKEN_KEY));
+    window.addEventListener('smartbook:auth-changed', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('smartbook:auth-changed', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    // Disconnect any previous socket before creating a new one
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setConnected(false);
+    }
+
     if (!token) return;
 
     const socket = io(GATEWAY_URL, {
@@ -44,16 +64,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect', () => {
       setConnected(true);
-      console.log('[ws] connected', socket.id);
+      if (isDev) console.log('[ws] connected', socket.id);
     });
 
     socket.on('disconnect', (reason) => {
       setConnected(false);
-      console.log('[ws] disconnected:', reason);
+      if (isDev) console.log('[ws] disconnected:', reason);
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('[ws] connect error:', err.message);
+      if (isDev) console.warn('[ws] connect error:', err.message);
     });
 
     return () => {
@@ -61,7 +81,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
       setConnected(false);
     };
-  }, []);
+  }, [token]);
 
   return (
     <SocketContext.Provider value={{ socket: socketRef.current, connected }}>

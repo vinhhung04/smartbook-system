@@ -49,18 +49,39 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
             "payload": payload,
         }
 
+    valid_items = []
+    skipped_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        variant_id = item.get("book_variant_id") or item.get("variant_id")
+        if variant_id:
+            valid_items.append(item)
+        else:
+            skipped_items.append(item.get("title") or "Unknown")
+
+    if not valid_items:
+        return {
+            "success": True,
+            "mode": "draft_only",
+            "request_id": f"REORDER-DRAFT-{_short_id()}",
+            "message": (
+                "Không thể tạo phiếu thật vì tất cả sách đề xuất đều thiếu book_variant_id. "
+                "Vui lòng tra cứu catalog để lấy đúng variant trước khi tạo phiếu."
+            ),
+            "skipped_items": skipped_items,
+            "payload": payload,
+        }
+
     created_requests = []
     failed_items = []
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
-        for item in items:
-            if not isinstance(item, dict):
-                continue
+        for item in valid_items:
             variant_id = item.get("book_variant_id") or item.get("variant_id")
             title = item.get("title") or "Unknown"
             quantity = max(1, int(item.get("suggested_quantity") or 1))
             reason_text = item.get("reason") or "LOW_STOCK"
-            # Map to valid reason enum values
             valid_reasons = {"LOW_STOCK", "CUSTOMER_REQUEST", "DAMAGED", "LOST", "OTHER"}
             reason = reason_text if reason_text in valid_reasons else "LOW_STOCK"
 
@@ -82,7 +103,12 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                     headers={"Authorization": auth_header, "Content-Type": "application/json"},
                 )
                 if resp.status_code in (200, 201):
-                    created_requests.append({"title": title, "response": resp.json()})
+                    data = resp.json()
+                    created_requests.append({
+                        "title": title,
+                        "request_number": (data.get("data") or data).get("request_number"),
+                        "response": data,
+                    })
                 else:
                     failed_items.append({
                         "title": title,
@@ -92,19 +118,36 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
             except Exception as exc:
                 failed_items.append({"title": title, "error": str(exc)})
 
-    mode = "real_api" if created_requests and not failed_items else (
-        "partial" if created_requests else "draft_only"
-    )
+    has_skipped = bool(skipped_items)
+    if created_requests and not failed_items and not has_skipped:
+        mode = "real_api"
+    elif created_requests:
+        mode = "partial"
+    else:
+        mode = "draft_only"
+
+    request_numbers = [r["request_number"] for r in created_requests if r.get("request_number")]
+    message_parts = []
+    if created_requests:
+        message_parts.append(f"Đã tạo {len(created_requests)} phiếu yêu cầu nhập thật.")
+        if request_numbers:
+            message_parts.append(f"Mã phiếu: {', '.join(request_numbers)}.")
+    if failed_items:
+        message_parts.append(f"{len(failed_items)} sách thất bại.")
+    if skipped_items:
+        message_parts.append(
+            f"{len(skipped_items)} sách bị bỏ qua do thiếu book_variant_id: {', '.join(skipped_items[:3])}{'...' if len(skipped_items) > 3 else ''}."
+        )
+    if not created_requests:
+        message_parts.append("Không có phiếu thật nào được tạo.")
+
     return {
         "success": bool(created_requests) or mode == "draft_only",
         "mode": mode,
         "created_requests": created_requests,
         "failed_items": failed_items,
-        "message": (
-            f"{len(created_requests)} purchase request(s) created successfully."
-            if created_requests
-            else "No purchase requests could be created. Returning draft."
-        ),
+        "skipped_items": skipped_items,
+        "message": " ".join(message_parts),
     }
 
 
@@ -233,12 +276,16 @@ async def _exec_reservation(
 # ── Stock Alert Executor ───────────────────────────────────────────────────────
 
 async def _exec_stock_alert(payload: dict) -> dict:
-    # Production TODO: integrate with real notification/alert service
+    # TODO: integrate with real notification/alert service when available
     return {
         "success": True,
         "mode": "draft_only",
-        "alert_id": f"ALERT-DEMO-{_short_id()}",
-        "message": "Stock alert draft created. No inventory data was changed.",
+        "alert_id": f"ALERT-DRAFT-{_short_id()}",
+        "message": (
+            "Đã tạo bản nháp cảnh báo tồn kho. "
+            "Chức năng tích hợp notification service chưa sẵn sàng — "
+            "không có thông báo thật nào được gửi đi."
+        ),
         "alert": payload,
     }
 
@@ -251,7 +298,10 @@ async def _exec_staff_task(payload: dict, auth_header: str) -> dict:
         return {
             "success": True,
             "mode": "draft_only",
-            "message": "Task draft created. Provide assignee_user_id to persist the real task.",
+            "message": (
+                "Chưa tạo task thật vì thiếu người được giao (assignee_user_id). "
+                "Vui lòng tạo task trực tiếp trong giao diện quản lý task và chỉ định nhân viên thực hiện."
+            ),
             "task": payload,
         }
 

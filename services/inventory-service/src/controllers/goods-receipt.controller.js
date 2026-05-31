@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const { parseId, normalizeIsbn13 } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
 const { resolveOrCreateReceivingLocation } = require("../utils/locations");
+const { pushToRooms } = require("../lib/socket-emitter");
 
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
@@ -685,6 +686,13 @@ async function createGoodsReceipt(req, res) {
 
       return goodsReceipt;
     });
+
+    setImmediate(() => void pushToRooms(['admin', 'warehouse_manager', 'warehouse_staff'], 'goods_receipt:created', {
+      id: result.id,
+      receipt_number: result.receipt_number,
+      warehouse_id: result.warehouse_id,
+      status: result.status,
+    }));
 
     return res.status(201).json({
       message: "Goods receipt created successfully in DRAFT status",

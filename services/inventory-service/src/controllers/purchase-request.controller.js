@@ -1,6 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
+const { requireWarehouseWriteAccess } = require('../utils/warehouse-scope.utils');
+const { pushToRooms } = require('../lib/socket-emitter');
 
 const prisma = new PrismaClient();
+
+const PR_STAFF_ROOMS = ['admin', 'warehouse_manager'];
 
 function generateRequestNumber() {
   const now = new Date();
@@ -29,12 +33,15 @@ async function createPurchaseRequest(req, res) {
   const resolvedReason = reason && validReasons.includes(reason) ? reason : 'OTHER';
 
   try {
-    // MVP: staff selects from warehouses returned by /api/receiving-context/warehouses.
-    // TODO: add warehouse-scope enforcement when staff assignment model is available.
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
     if (!warehouse) {
       return res.status(404).json({ message: 'Warehouse not found' });
     }
+
+    // Enforce warehouse write scope. Note: if user_warehouse_scopes table has no entries
+    // for this user, the utility grants access to all active warehouses as fallback.
+    const canWrite = await requireWarehouseWriteAccess(req, res, warehouse_id);
+    if (!canWrite) return;
 
     if (book_variant_id) {
       const variant = await prisma.book_variants.findUnique({ where: { id: book_variant_id } });
@@ -56,6 +63,14 @@ async function createPurchaseRequest(req, res) {
         status: 'PENDING',
       },
     });
+
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:created', {
+      id: request.id,
+      request_number: request.request_number,
+      warehouse_id: request.warehouse_id,
+      status: request.status,
+      created_by_user_id: userId,
+    }));
 
     return res.status(201).json({ data: request });
   } catch (error) {
@@ -182,6 +197,13 @@ async function approvePurchaseRequest(req, res) {
       },
     });
 
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:status_changed', {
+      id: updated.id,
+      request_number: updated.request_number,
+      status: updated.status,
+      warehouse_id: updated.warehouse_id,
+    }));
+
     return res.json({ data: updated });
   } catch (error) {
     console.error(error);
@@ -212,6 +234,13 @@ async function rejectPurchaseRequest(req, res) {
         updated_at: new Date(),
       },
     });
+
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:status_changed', {
+      id: updated.id,
+      request_number: updated.request_number,
+      status: updated.status,
+      warehouse_id: updated.warehouse_id,
+    }));
 
     return res.json({ data: updated });
   } catch (error) {

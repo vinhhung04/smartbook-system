@@ -19,6 +19,7 @@ interface UIMessage {
   intent?: string;
   context_sources?: any[];
   retrieval_warnings?: string[];
+  suggestions?: string[];
 }
 
 function getRoleSuggestions(user: AuthUser | null): string[] {
@@ -298,7 +299,7 @@ function PayloadPreview({ action }: { action: PendingAction }) {
 
 interface ActionCardProps {
   action: PendingAction;
-  onConfirmed: (actionId: string, result: any) => void;
+  onConfirmed: (actionId: string, result: any, actionType: string) => void;
   onCancelled: (actionId: string) => void;
 }
 
@@ -307,6 +308,7 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
   const [confirming, setConfirming] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [warehouseLoadError, setWarehouseLoadError] = useState<string | null>(null);
 
   const isReorder = action.type === 'CREATE_REORDER_DRAFT';
   const isDone = localStatus !== 'PENDING_CONFIRMATION';
@@ -317,11 +319,18 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       const list: Warehouse[] = Array.isArray(data) ? data : (data?.data ?? []);
       setWarehouses(list);
       if (list.length === 1) setSelectedWarehouseId(list[0].id);
-    }).catch(() => {});
+    }).catch(() => {
+      setWarehouseLoadError('Không tải được danh sách kho. Vui lòng thử lại.');
+      toast.error('Không tải được danh sách kho.');
+    });
   }, [isReorder, isDone]);
 
   const handleConfirm = async () => {
     if (confirming || isDone) return;
+    if (isReorder && warehouseLoadError) {
+      toast.error('Danh sách kho chưa tải được. Vui lòng thử lại.');
+      return;
+    }
     if (isReorder && !selectedWarehouseId) {
       toast.error('Vui lòng chọn kho trước khi xác nhận.');
       return;
@@ -333,7 +342,7 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
         : undefined;
       const resp = await aiService.confirmAction(action.id, override);
       setLocalStatus(resp.status);
-      onConfirmed(action.id, resp.result);
+      onConfirmed(action.id, resp.result, action.type);
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 403) {
@@ -401,7 +410,9 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
           <label className="text-[10px] font-medium text-gray-600">
             Chọn kho nhập hàng <span className="text-red-500">*</span>
           </label>
-          {warehouses.length === 0 ? (
+          {warehouseLoadError ? (
+            <p className="text-[10px] text-red-500">{warehouseLoadError}</p>
+          ) : warehouses.length === 0 ? (
             <p className="text-[10px] text-gray-400 italic">Đang tải danh sách kho...</p>
           ) : (
             <select
@@ -425,7 +436,7 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
         <div className="flex gap-2 pt-0.5">
           <button
             onClick={() => void handleConfirm()}
-            disabled={confirming}
+            disabled={confirming || (isReorder && !!warehouseLoadError)}
             className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
           >
             {confirming ? (
@@ -455,7 +466,7 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       {localStatus === 'EXECUTED' && (
         <div className="flex items-center gap-1 text-emerald-600 font-medium">
           <CheckCircle size={11} />
-          Đã xác nhận và thực thi thành công.
+          Đã xác nhận. Xem kết quả bên dưới.
         </div>
       )}
       {localStatus === 'CANCELLED' && (
@@ -698,21 +709,77 @@ export function AIChatbot() {
     }
   };
 
-  const handleActionConfirmed = useCallback((_actionId: string, result: any) => {
-    const resultText = result?.report_markdown
-      ? null
-      : result?.message || 'Hành động đã được thực thi thành công.';
+  const ACTION_FOLLOWUP_SUGGESTIONS: Record<string, string[]> = {
+    CREATE_STOCK_ALERT: [
+      'Tạo phiếu yêu cầu nhập hàng cho các sách tồn kho thấp',
+      'Tạo task cho staff kiểm tra các sách hết hàng',
+    ],
+    CREATE_REORDER_DRAFT: [
+      'Xem danh sách phiếu yêu cầu nhập vừa tạo',
+      'Tạo báo cáo tổng quan tồn kho',
+    ],
+    CREATE_STAFF_TASK_DRAFT: [
+      'Xem task của tôi hôm nay',
+      'Tạo thêm task cho nhân viên khác',
+    ],
+    CREATE_REPORT_DRAFT: [
+      'Tạo cảnh báo tồn kho thấp',
+      'Nên nhập thêm sách nào?',
+    ],
+  };
+
+  const handleActionConfirmed = useCallback((_actionId: string, result: any, actionType: string) => {
+    const followUpSuggestions = ACTION_FOLLOWUP_SUGGESTIONS[actionType] ?? [];
+
+    if (result?.report_markdown) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: 'assistant',
+          text: '✅ Hành động đã xác nhận. Xem báo cáo bên dưới.',
+          action_result: result,
+          suggestions: followUpSuggestions,
+        },
+      ]);
+      return;
+    }
+
+    const modeLabel: Record<string, string> = {
+      real_api: '✅ Đã tạo phiếu yêu cầu nhập thật trong hệ thống.',
+      partial: '⚠️ Một số phiếu tạo thành công, một số thất bại.',
+      draft_only: '📋 Chỉ tạo bản nháp — chưa có phiếu thật trong hệ thống.',
+      generated: '✅ Hành động đã hoàn thành.',
+    };
+
+    const modeText = result?.mode ? (modeLabel[result.mode] ?? '') : '';
+    const baseMessage = result?.message || 'Hành động đã được thực thi.';
+    const requestNumbers = (result?.created_requests ?? [])
+      .map((r: any) => r.request_number)
+      .filter(Boolean);
+    const requestLine = requestNumbers.length > 0
+      ? `\nMã phiếu: ${requestNumbers.join(', ')}`
+      : '';
+    const skippedLine = result?.skipped_items?.length > 0
+      ? `\nBỏ qua (thiếu variant): ${(result.skipped_items as string[]).slice(0, 3).join(', ')}${result.skipped_items.length > 3 ? '...' : ''}`
+      : '';
+
+    const fullText = [modeText, baseMessage, requestLine, skippedLine]
+      .filter(Boolean)
+      .join('\n')
+      .trim();
 
     setMessages((prev) => [
       ...prev,
       {
         id: Date.now(),
         role: 'assistant',
-        text: resultText ?? '✅ Hành động đã xác nhận. Xem báo cáo bên dưới.',
+        text: fullText || 'Hành động đã được thực thi.',
         action_result: result,
+        suggestions: followUpSuggestions,
       },
     ]);
-  }, []);
+  }, [ACTION_FOLLOWUP_SUGGESTIONS]);
 
   const handleActionCancelled = useCallback((_actionId: string) => {
     setMessages((prev) => [
@@ -871,6 +938,43 @@ export function AIChatbot() {
                   {msg.role === 'assistant' && msg.action_result?.report_markdown && (
                     <div className="w-full">
                       <ReportResult markdown={msg.action_result.report_markdown} />
+                    </div>
+                  )}
+
+                  {/* Retrieval warnings */}
+                  {msg.role === 'assistant' && msg.retrieval_warnings && msg.retrieval_warnings.length > 0 && (
+                    <div className="mt-1 space-y-0.5 w-full">
+                      {msg.retrieval_warnings.slice(0, 2).map((w, i) => (
+                        <p key={i} className="text-[10px] text-amber-500">⚠ {w}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Data sources */}
+                  {msg.role === 'assistant' && msg.context_sources && msg.context_sources.length > 0 && (() => {
+                    const okSources = msg.context_sources
+                      .filter((s: any) => s.status === 'ok')
+                      .map((s: any) => s.name as string);
+                    return okSources.length > 0 ? (
+                      <p className="text-[9px] text-gray-400 mt-0.5">
+                        Nguồn: {okSources.join(', ')}
+                      </p>
+                    ) : null;
+                  })()}
+
+                  {/* Follow-up suggestion chips */}
+                  {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {msg.suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => void sendMessage(s)}
+                          disabled={loading}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {s}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
