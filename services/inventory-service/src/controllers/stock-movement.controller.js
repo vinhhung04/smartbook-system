@@ -5,11 +5,16 @@ const prisma = new PrismaClient();
 function mapMovementType(rawType, fromLocationId, toLocationId) {
   const normalized = String(rawType || '').toUpperCase();
 
+  if (normalized === 'BORROW') return 'borrow';
+  if (normalized === 'RETURN') return 'return';
+  if (normalized === 'ADJUSTMENT') return 'adjustment';
+  if (normalized === 'RESERVE' || normalized === 'RELEASE') return 'transfer';
+
   if (normalized.includes('TRANSFER') || (fromLocationId && toLocationId)) {
     return 'transfer';
   }
 
-  if (normalized.includes('OUT')) {
+  if (normalized.includes('OUT') || normalized === 'OUTBOUND') {
     return 'outbound';
   }
 
@@ -75,7 +80,7 @@ async function getStockMovements(req, res) {
         movement_type: movement.movement_type,
         type,
         quantity: movement.quantity,
-        delta: type === 'outbound' ? -movement.quantity : movement.quantity,
+        delta: ['outbound', 'borrow'].includes(type) ? -movement.quantity : movement.quantity,
         unit_cost: Number(movement.unit_cost || 0),
         warehouse_id: movement.warehouse_id,
         warehouse_name: movement.warehouses?.name || null,
