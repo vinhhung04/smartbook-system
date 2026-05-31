@@ -1197,7 +1197,9 @@ async function confirmOutbound(req, res) {
           },
         });
 
-        // For REPICKING transfers: aggregate shipped_qty from REPICK chain per variant
+        // Always aggregate repick chain shipped_qty regardless of order status.
+        // When a repick completes fully, root order may transition to READY_FOR_OUTBOUND
+        // (no longer REPICKING), but repick-picked stock must still be included.
         let repickShippedByVariant = new Map();
         if (order.status === "REPICKING") {
           const repickChain = await tx.transfer_orders.findMany({
@@ -1210,6 +1212,26 @@ async function confirmOutbound(req, res) {
             },
           });
           for (const ro of repickChain) {
+            for (const item of ro.transfer_order_items || []) {
+              const prev = repickShippedByVariant.get(item.variant_id) || 0;
+              repickShippedByVariant.set(item.variant_id, prev + Number(item.shipped_qty || 0));
+            }
+          }
+        }
+
+        // For READY_FOR_OUTBOUND root transfers that went through a repick chain,
+        // the repick quantities are missing from the map above — fill them in now.
+        if (repickShippedByVariant.size === 0) {
+          const repickChainAll = await tx.transfer_orders.findMany({
+            where: {
+              note: { contains: `root_task_id=${encodeURIComponent(order.id)}` },
+              status: { not: "CANCELLED" },
+            },
+            select: {
+              transfer_order_items: { select: { variant_id: true, shipped_qty: true } },
+            },
+          });
+          for (const ro of repickChainAll) {
             for (const item of ro.transfer_order_items || []) {
               const prev = repickShippedByVariant.get(item.variant_id) || 0;
               repickShippedByVariant.set(item.variant_id, prev + Number(item.shipped_qty || 0));

@@ -515,29 +515,73 @@ export function OrderDetailPage() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
           <SectionCard title="Kiểm đếm hàng nhận" subtitle="Nhập hoặc scan số lượng thực tế trước khi manager duyệt">
             {!isVerified ? (
-              <div className="flex gap-2 mb-2">
-                <div className="relative flex-1">
-                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    ref={scanInputRef}
-                    type="text"
-                    value={scanInput}
-                    onChange={(e) => setScanInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
-                    placeholder="Scan hoặc nhập mã vạch để đếm..."
-                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
-                  />
+              <>
+                <div className="flex gap-2 mb-4">
+                  <div className="relative flex-1">
+                    <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      ref={scanInputRef}
+                      type="text"
+                      value={scanInput}
+                      onChange={(e) => setScanInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
+                      placeholder="Scan hoặc nhập mã vạch để đếm..."
+                      className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+                  <button type="button" onClick={() => setShowScannerModal(true)}
+                    className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
+                    <ScanBarcode className="h-4 w-4" /> Camera
+                  </button>
+                  <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                    <Save className="h-4 w-4" />
+                    {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
+                  </button>
                 </div>
-                <button type="button" onClick={() => setShowScannerModal(true)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
-                  <ScanBarcode className="h-4 w-4" /> Camera
-                </button>
-                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
-                  <Save className="h-4 w-4" />
-                  {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
-                </button>
-              </div>
+                {/* Per-item quantity inputs — allows manual entry without barcode scanner */}
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        {["Tên sách", "Mã vạch", "SL kế hoạch", "SL thực đếm"].map((h) => (
+                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receipt.items.map((item) => {
+                        const counted = countedQty[item.id] ?? item.quantity;
+                        const diff = counted - item.quantity;
+                        const isHighlighted = item.id === highlightedItemId;
+                        return (
+                          <tr key={item.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50" : "hover:bg-slate-50/40"}`}>
+                            <td className="px-4 py-3 text-[13px] font-medium">{item.book_title}</td>
+                            <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{item.barcode || "-"}</td>
+                            <td className="px-4 py-3 text-[13px] font-semibold text-indigo-700">{item.quantity}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={counted}
+                                  onChange={(e) => setCountedQty((prev) => ({ ...prev, [item.id]: Math.max(0, Number(e.target.value) || 0) }))}
+                                  className="w-20 rounded-[6px] border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
+                                />
+                                {diff !== 0 && (
+                                  <span className={`text-[11px] font-semibold ${diff > 0 ? "text-rose-600" : "text-amber-600"}`}>
+                                    {diff > 0 ? `+${diff}` : diff}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
                 <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
