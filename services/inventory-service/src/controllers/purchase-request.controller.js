@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { requireWarehouseWriteAccess } = require('../utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 
@@ -29,12 +30,15 @@ async function createPurchaseRequest(req, res) {
   const resolvedReason = reason && validReasons.includes(reason) ? reason : 'OTHER';
 
   try {
-    // MVP: staff selects from warehouses returned by /api/receiving-context/warehouses.
-    // TODO: add warehouse-scope enforcement when staff assignment model is available.
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
     if (!warehouse) {
       return res.status(404).json({ message: 'Warehouse not found' });
     }
+
+    // Enforce warehouse write scope. Note: if user_warehouse_scopes table has no entries
+    // for this user, the utility grants access to all active warehouses as fallback.
+    const canWrite = await requireWarehouseWriteAccess(req, res, warehouse_id);
+    if (!canWrite) return;
 
     if (book_variant_id) {
       const variant = await prisma.book_variants.findUnique({ where: { id: book_variant_id } });

@@ -3038,37 +3038,85 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
 
 @app.post("/actions/cancel")
-async def cancel_action(req: CancelActionRequest):
+async def cancel_action(request: Request, req: CancelActionRequest):
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required to cancel actions.")
+
+    action = get_pending_action(req.action_id)
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found.")
+
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.user_id:
+        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
+
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="You can only cancel your own actions.")
+
     cancel_pending_action(req.action_id)
     return {"success": True, "action_id": req.action_id, "status": CANCELLED}
 
 
 @app.get("/actions/pending/{action_id}")
-async def get_action(action_id: str):
+async def get_action(request: Request, action_id: str):
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+
     action = get_pending_action(action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
+
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.user_id:
+        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
+
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="Forbidden.")
+
     return action.model_dump()
 
 
 @app.get("/actions/stats")
-async def actions_stats():
+async def actions_stats(request: Request):
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+        raise HTTPException(status_code=403, detail="Admin access required.")
     return {
         "pending": sum(1 for a in PENDING_ACTIONS.values() if a.status == PENDING_CONFIRMATION),
         "executed": len(ACTION_RESULTS),
         "total": len(PENDING_ACTIONS),
     }
 
+
 @app.post("/cache/clear")
-async def clear_cache():
-    """Xóa response cache (admin endpoint)."""
+async def clear_cache(request: Request):
+    """Xóa response cache (admin only)."""
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+        raise HTTPException(status_code=403, detail="Admin access required.")
     response_cache.clear()
     return {"status": "ok", "message": "Cache đã được xóa"}
 
 
 @app.get("/cache/stats")
-async def cache_stats():
-    """Xem thống kê cache."""
+async def cache_stats(request: Request):
+    """Xem thống kê cache (admin only)."""
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+        raise HTTPException(status_code=403, detail="Admin access required.")
     return {
         "cached_responses": len(response_cache._cache),
         "max_size": response_cache.max_size,
