@@ -5,6 +5,8 @@ import { bookService } from '@/services/book';
 import { borrowService } from '@/services/borrow';
 import { stockMovementService } from '@/services/stock-movement';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
+import { userService, type WarehouseStaffOption } from '@/services/user';
+import { supplierService, type Supplier } from '@/services/supplier';
 import { authService, type AuthUser } from '@/services/auth';
 import { getPrimaryRole } from '@/lib/rbac';
 import { toast } from 'sonner';
@@ -206,29 +208,64 @@ function PayloadPreview({ action }: { action: PendingAction }) {
   if (action.type === 'CREATE_REORDER_DRAFT') {
     const items: any[] = p.items || [];
     if (!items.length) return <p className="text-gray-500 italic">Không có dữ liệu items.</p>;
+
+    // Group items by warehouse, collect supplier suggestion per warehouse
+    const itemsWithWh = items.filter((it: any) => it.warehouse_id);
+    const itemsNoWh = items.filter((it: any) => !it.warehouse_id);
+    const byWarehouse: Record<string, { name: string; code: string; items: any[]; supplierName: string }> = {};
+    for (const it of itemsWithWh) {
+      const key = it.warehouse_id;
+      if (!byWarehouse[key]) byWarehouse[key] = { name: it.warehouse_name || it.warehouse_code || key, code: it.warehouse_code || '', items: [], supplierName: '' };
+      byWarehouse[key].items.push(it);
+      // Use first available supplier suggestion for this warehouse group
+      if (!byWarehouse[key].supplierName && it.suggested_supplier_name) {
+        byWarehouse[key].supplierName = it.suggested_supplier_name;
+      }
+    }
+    const warehouseGroups = Object.values(byWarehouse);
+
     return (
-      <div className="space-y-1">
-        <p className="font-medium text-gray-600">Danh sách sách đề xuất nhập ({items.length} đầu sách):</p>
-        <div className="space-y-1 max-h-28 overflow-y-auto">
-          {items.slice(0, 8).map((item: any, i: number) => (
-            <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-1 border border-gray-100">
-              <span className="truncate flex-1 text-gray-700" title={item.title}>{item.title || 'Unknown'}</span>
-              <div className="flex items-center gap-2 ml-2 shrink-0">
-                <span className="text-gray-400">Còn: {item.current_stock ?? '?'}</span>
-                <span className="text-indigo-600 font-medium">Nhập: {item.suggested_quantity ?? 1}</span>
-                {item.priority && (
-                  <span className={`text-[9px] px-1 rounded ${item.priority === 'HIGH' ? 'bg-red-100 text-red-600' : item.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {item.priority}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-          {items.length > 8 && <p className="text-gray-400 text-center">... và {items.length - 8} đầu sách khác</p>}
-        </div>
-        {!p.warehouse_id && (
-          <p className="text-amber-600 text-[10px]">⚠ Chưa có kho — chọn kho bên dưới để tạo đề xuất nhập thật.</p>
+      <div className="space-y-1.5">
+        {warehouseGroups.length > 0 && (
+          <p className="font-medium text-gray-600 text-[11px]">
+            Theo kho ({warehouseGroups.length} kho, {itemsWithWh.length} dòng):
+          </p>
         )}
+        {warehouseGroups.map((group, gi) => (
+          <div key={gi} className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-indigo-700">
+              🏭 {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} sách
+              {group.supplierName && (
+                <span className="ml-1.5 font-normal text-gray-500">· NCC: {group.supplierName}</span>
+              )}
+            </p>
+            <div className="space-y-0.5 max-h-20 overflow-y-auto">
+              {group.items.map((item: any, i: number) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
+                  <span className="truncate flex-1 text-gray-700 text-[11px]" title={item.title}>{item.title || 'Unknown'}</span>
+                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                    <span className="text-gray-400 text-[10px]">Còn: {item.current_stock ?? '?'}</span>
+                    <span className="text-indigo-600 font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
+                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600">HIGH</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {itemsNoWh.length > 0 && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-amber-700">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
+            {itemsNoWh.slice(0, 4).map((item: any, i: number) => (
+              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100">
+                <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
+                <span className="text-gray-400 text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
+              </div>
+            ))}
+            {itemsNoWh.length > 4 && <p className="text-gray-400 text-[10px] text-center">... và {itemsNoWh.length - 4} sách khác</p>}
+          </div>
+        )}
+        {items.length > 10 && <p className="text-gray-400 text-[10px] text-center">Tổng: {items.length} dòng</p>}
       </div>
     );
   }
@@ -263,31 +300,81 @@ function PayloadPreview({ action }: { action: PendingAction }) {
 
   if (action.type === 'CREATE_STOCK_ALERT') {
     const items: any[] = p.items || [];
+    const itemsWithWh = items.filter((it: any) => it.warehouse_id);
+    const itemsNoWh = items.filter((it: any) => !it.warehouse_id);
+    const byWarehouse: Record<string, { name: string; code: string; items: any[] }> = {};
+    for (const it of itemsWithWh) {
+      const key = it.warehouse_id;
+      if (!byWarehouse[key]) byWarehouse[key] = { name: it.warehouse_name || it.warehouse_code || key, code: it.warehouse_code || '', items: [] };
+      byWarehouse[key].items.push(it);
+    }
+    const warehouseGroups = Object.values(byWarehouse);
+
     return (
-      <div className="space-y-1">
-        <p className="font-medium text-gray-600">
-          Loại cảnh báo: <span className="text-red-600">{p.alert_type || 'LOW_STOCK'}</span>
+      <div className="space-y-1.5">
+        <p className="font-medium text-gray-600 text-[11px]">
+          Loại: <span className="text-red-600">{p.alert_type || 'LOW_STOCK'}</span>
           {' '}· Mức độ: <RiskBadge risk={p.severity || 'MEDIUM'} />
         </p>
-        <div className="space-y-1 max-h-24 overflow-y-auto">
-          {items.slice(0, 5).map((item: any, i: number) => (
-            <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-1 border border-gray-100">
-              <span className="truncate flex-1 text-gray-700">{item.title || 'Unknown'}</span>
-              <span className="text-gray-400 ml-2">Tồn: {item.current_stock ?? '?'}</span>
+        {warehouseGroups.length > 0 && (
+          <p className="text-[10px] text-gray-500 font-medium">Theo kho ({warehouseGroups.length} kho):</p>
+        )}
+        {warehouseGroups.map((group, gi) => (
+          <div key={gi} className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-red-700">🏭 {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} cảnh báo</p>
+            <div className="space-y-0.5 max-h-16 overflow-y-auto">
+              {group.items.map((item: any, i: number) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
+                  <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
+                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                    <span className="text-gray-400 text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
+                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600">HIGH</span>}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+        {itemsNoWh.length > 0 && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-semibold text-amber-700">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
+            {itemsNoWh.slice(0, 3).map((item: any, i: number) => (
+              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100">
+                <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
+                <span className="text-gray-400 text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
   if (action.type === 'CREATE_STAFF_TASK_DRAFT') {
+    const relatedItems: any[] = p.related_items || [];
     return (
-      <div className="bg-white rounded p-2 border border-gray-100 space-y-1">
-        <p><span className="text-gray-500">Tiêu đề:</span> <span className="font-medium">{p.task_title || 'N/A'}</span></p>
-        <p><span className="text-gray-500">Loại task:</span> {p.task_type || 'N/A'}</p>
-        <p><span className="text-gray-500">Ưu tiên:</span> {p.priority || 'MEDIUM'}</p>
-        <p><span className="text-gray-500">Vai trò được giao:</span> {p.assignee_role || 'N/A'}</p>
+      <div className="space-y-1.5">
+        <div className="bg-white rounded p-2 border border-gray-100 space-y-1">
+          <p><span className="text-gray-500">Tiêu đề:</span> <span className="font-medium">{p.task_title || p.title || 'N/A'}</span></p>
+          <p><span className="text-gray-500">Loại task:</span> {p.task_type || 'N/A'}</p>
+          <p><span className="text-gray-500">Ưu tiên:</span> {p.priority || 'MEDIUM'}</p>
+          {!p.assignee_user_id && (
+            <p className="text-amber-600 text-[10px]">⚠ Chưa có người thực hiện — chọn nhân viên bên dưới.</p>
+          )}
+        </div>
+        {relatedItems.length > 0 && (
+          <div className="space-y-0.5">
+            <p className="text-[10px] text-gray-500 font-medium">Sách liên quan ({relatedItems.length}):</p>
+            <div className="max-h-16 overflow-y-auto space-y-0.5">
+              {relatedItems.map((item: any, i: number) => (
+                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
+                  <span className="truncate flex-1 text-gray-700 text-[10px]">{item.title || 'Unknown'}</span>
+                  <span className="text-gray-400 ml-2 text-[10px]">Còn: {item.quantity ?? '?'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -309,12 +396,26 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [warehouseLoadError, setWarehouseLoadError] = useState<string | null>(null);
+  const [staffList, setStaffList] = useState<WarehouseStaffOption[]>([]);
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [selectedSupplierName, setSelectedSupplierName] = useState<string>('');
 
   const isReorder = action.type === 'CREATE_REORDER_DRAFT';
+  const isStockAlert = action.type === 'CREATE_STOCK_ALERT';
+  const isStaffTask = action.type === 'CREATE_STAFF_TASK_DRAFT';
   const isDone = localStatus !== 'PENDING_CONFIRMATION';
 
+  // Check if any item is missing warehouse_id (needs fallback selector)
+  const reorderHasItemsWithoutWarehouse = isReorder && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
+  const alertHasItemsWithoutWarehouse = isStockAlert && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
+  // Show warehouse selector when: stock alert with missing-warehouse items, OR reorder with missing-warehouse items
+  const needsWarehouseSelector = alertHasItemsWithoutWarehouse || reorderHasItemsWithoutWarehouse;
+
+  // Load warehouses for stock alert and reorder items missing warehouse
   useEffect(() => {
-    if (!isReorder || isDone) return;
+    if (!needsWarehouseSelector || isDone) return;
     warehouseService.getAll({ is_active: true }).then((data: any) => {
       const list: Warehouse[] = Array.isArray(data) ? data : (data?.data ?? []);
       setWarehouses(list);
@@ -323,23 +424,59 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       setWarehouseLoadError('Không tải được danh sách kho. Vui lòng thử lại.');
       toast.error('Không tải được danh sách kho.');
     });
+  }, [needsWarehouseSelector, isDone]);
+
+  // Load suppliers for reorder (optional selection)
+  useEffect(() => {
+    if (!isReorder || isDone) return;
+    supplierService.getAll()
+      .then((data: any) => {
+        const list: Supplier[] = Array.isArray(data) ? data : (data?.data ?? []);
+        setSuppliers(list.filter((s: any) => s.status === 'ACTIVE'));
+      })
+      .catch(() => { /* silent — supplier list is optional */ });
   }, [isReorder, isDone]);
+
+  // Load warehouse staff list for staff task picker
+  useEffect(() => {
+    if (!isStaffTask || isDone) return;
+    userService.getWarehouseStaff()
+      .then((resp) => setStaffList(resp.data || []))
+      .catch(() => {
+        toast.error('Không tải được danh sách nhân viên kho.');
+      });
+  }, [isStaffTask, isDone]);
 
   const handleConfirm = async () => {
     if (confirming || isDone) return;
-    if (isReorder && warehouseLoadError) {
+    if (needsWarehouseSelector && warehouseLoadError) {
       toast.error('Danh sách kho chưa tải được. Vui lòng thử lại.');
       return;
     }
-    if (isReorder && !selectedWarehouseId) {
-      toast.error('Vui lòng chọn kho trước khi xác nhận.');
+    // Require warehouse only if some items are still missing warehouse
+    if ((alertHasItemsWithoutWarehouse || (isReorder && reorderHasItemsWithoutWarehouse)) && !selectedWarehouseId) {
+      toast.error('Vui lòng chọn kho dự phòng cho sách chưa xác định được kho.');
+      return;
+    }
+    // Staff task requires assignee selection if not already in payload
+    if (isStaffTask && !action.payload?.assignee_user_id && !selectedAssigneeId) {
+      toast.error('Vui lòng chọn nhân viên trước khi xác nhận.');
       return;
     }
     setConfirming(true);
     try {
-      const override = isReorder && selectedWarehouseId
-        ? { warehouse_id: selectedWarehouseId }
-        : undefined;
+      const overrideMap: Record<string, string> = {};
+      if ((alertHasItemsWithoutWarehouse || reorderHasItemsWithoutWarehouse) && selectedWarehouseId) {
+        overrideMap.warehouse_id = selectedWarehouseId;
+      }
+      if (isReorder && selectedSupplierId) {
+        overrideMap.supplier_id = selectedSupplierId;
+        overrideMap.supplier_name = selectedSupplierName;
+      }
+      if (isStaffTask && selectedAssigneeId) {
+        overrideMap.assignee_user_id = selectedAssigneeId;
+      }
+      const override = Object.keys(overrideMap).length > 0 ? overrideMap : undefined;
       const resp = await aiService.confirmAction(action.id, override);
       setLocalStatus(resp.status);
       onConfirmed(action.id, resp.result, action.type);
@@ -404,11 +541,14 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       {/* Payload preview */}
       <PayloadPreview action={action} />
 
-      {/* Warehouse selector for reorder drafts */}
-      {isReorder && !isDone && (
+      {/* Warehouse selector for stock alerts (always) and reorder items without warehouse (fallback) */}
+      {needsWarehouseSelector && !isDone && (
         <div className="space-y-1">
           <label className="text-[10px] font-medium text-gray-600">
-            Chọn kho nhập hàng <span className="text-red-500">*</span>
+            {isStockAlert
+              ? 'Chọn kho tạo cảnh báo'
+              : 'Chọn kho dự phòng cho sách chưa xác định kho'}
+            {isStockAlert && <span className="text-red-500"> *</span>}
           </label>
           {warehouseLoadError ? (
             <p className="text-[10px] text-red-500">{warehouseLoadError}</p>
@@ -431,12 +571,72 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
         </div>
       )}
 
+      {/* Supplier selector for reorder drafts (optional) */}
+      {isReorder && !isDone && (
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium text-gray-600">
+            Nhà cung cấp{' '}
+            <span className="text-gray-400 font-normal">(tùy chọn — ghi vào phiếu như gợi ý cho quản lý)</span>
+          </label>
+          {suppliers.length === 0 ? (
+            <p className="text-[10px] text-gray-400 italic">Đang tải hoặc chưa có NCC trong hệ thống...</p>
+          ) : (
+            <select
+              value={selectedSupplierId}
+              onChange={(e) => {
+                setSelectedSupplierId(e.target.value);
+                const s = suppliers.find((sup) => sup.id === e.target.value);
+                setSelectedSupplierName(s?.name || '');
+              }}
+              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            >
+              <option value="">-- Dùng NCC gợi ý tự động theo từng sách --</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.code ? ` (${s.code})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {!selectedSupplierId && (
+            <p className="text-[10px] text-gray-400">
+              Hệ thống sẽ dùng NCC liên kết với từng đầu sách (nếu có). Nếu chưa có liên kết, phiếu vẫn được tạo và quản lý chọn NCC khi duyệt.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Staff assignee selector for staff task drafts */}
+      {isStaffTask && !action.payload?.assignee_user_id && !isDone && (
+        <div className="space-y-1">
+          <label className="text-[10px] font-medium text-gray-600">
+            Giao cho nhân viên <span className="text-red-500">*</span>
+          </label>
+          {staffList.length === 0 ? (
+            <p className="text-[10px] text-gray-400 italic">Đang tải danh sách nhân viên...</p>
+          ) : (
+            <select
+              value={selectedAssigneeId}
+              onChange={(e) => setSelectedAssigneeId(e.target.value)}
+              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            >
+              <option value="">-- Chọn nhân viên --</option>
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name || s.username}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
       {/* Buttons */}
       {!isDone && (
         <div className="flex gap-2 pt-0.5">
           <button
             onClick={() => void handleConfirm()}
-            disabled={confirming || (isReorder && !!warehouseLoadError)}
+            disabled={confirming || (needsWarehouseSelector && !!warehouseLoadError)}
             className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
           >
             {confirming ? (
@@ -745,26 +945,61 @@ export function AIChatbot() {
       return;
     }
 
-    const modeLabel: Record<string, string> = {
-      real_api: '✅ Đã tạo phiếu yêu cầu nhập thật trong hệ thống.',
-      partial: '⚠️ Một số phiếu tạo thành công, một số thất bại.',
-      draft_only: '📋 Chỉ tạo bản nháp — chưa có phiếu thật trong hệ thống.',
+    const modeLabelGeneral: Record<string, string> = {
+      real_api: '✅ Đã tạo thật trong hệ thống.',
+      partial: '⚠️ Một phần tạo thành công, một phần thất bại hoặc bị bỏ qua.',
+      draft_only: '📋 Chỉ tạo bản nháp — chưa có bản ghi thật trong hệ thống.',
       generated: '✅ Hành động đã hoàn thành.',
     };
 
-    const modeText = result?.mode ? (modeLabel[result.mode] ?? '') : '';
+    const modeText = result?.mode ? (modeLabelGeneral[result.mode] ?? '') : '';
     const baseMessage = result?.message || 'Hành động đã được thực thi.';
-    const requestNumbers = (result?.created_requests ?? [])
-      .map((r: any) => r.request_number)
-      .filter(Boolean);
-    const requestLine = requestNumbers.length > 0
-      ? `\nMã phiếu: ${requestNumbers.join(', ')}`
-      : '';
-    const skippedLine = result?.skipped_items?.length > 0
-      ? `\nBỏ qua (thiếu variant): ${(result.skipped_items as string[]).slice(0, 3).join(', ')}${result.skipped_items.length > 3 ? '...' : ''}`
+
+    // Reorder: show PR numbers grouped by warehouse with supplier info
+    const createdReqs: any[] = result?.created_requests ?? [];
+    let requestLine = '';
+    if (createdReqs.length > 0) {
+      // Group by warehouse
+      const byWh: Record<string, { wh: string; prs: string[]; supplier: string }> = {};
+      for (const r of createdReqs) {
+        const key = r.warehouse_name || 'Chưa rõ kho';
+        if (!byWh[key]) byWh[key] = { wh: key, prs: [], supplier: r.suggested_supplier_name || '' };
+        if (r.request_number) byWh[key].prs.push(r.request_number);
+      }
+      const whLines = Object.values(byWh)
+        .map((g) => `  ${g.wh}: ${g.prs.join(', ')}${g.supplier ? ` (NCC: ${g.supplier})` : ''}`)
+        .join('\n');
+      requestLine = `\nĐã tạo ${createdReqs.length} phiếu:\n${whLines}`;
+    }
+    // Show no-warehouse skipped items
+    const noWhItems: string[] = result?.no_warehouse_items ?? [];
+    const noWhLine = noWhItems.length > 0
+      ? `\nBỏ qua (thiếu kho): ${noWhItems.slice(0, 3).join(', ')}${noWhItems.length > 3 ? '...' : ''}`
       : '';
 
-    const fullText = [modeText, baseMessage, requestLine, skippedLine]
+    // Stock alert: show created alert count
+    const createdAlerts: any[] = result?.created_alerts ?? [];
+    const alertLine = createdAlerts.length > 0
+      ? `\nĐã tạo ${createdAlerts.length} cảnh báo tồn kho.`
+      : '';
+    const duplicateAlerts: string[] = result?.duplicate_items ?? [];
+    const dupLine = duplicateAlerts.length > 0
+      ? `\n${duplicateAlerts.length} cảnh báo đã tồn tại (bỏ qua).`
+      : '';
+
+    // Staff task: show task info
+    const taskResult = result?.task;
+    const taskLine = taskResult
+      ? `\nTask đã tạo${taskResult.id ? ` (ID: ${String(taskResult.id).slice(0, 8)})` : ''}.`
+      : '';
+
+    // Skipped items (reorder + stock alert)
+    const skippedItems: string[] = result?.skipped_items ?? [];
+    const skippedLine = skippedItems.length > 0
+      ? `\nBỏ qua (thiếu variant_id): ${skippedItems.slice(0, 3).join(', ')}${skippedItems.length > 3 ? '...' : ''}`
+      : '';
+
+    const fullText = [modeText, baseMessage, requestLine, noWhLine, alertLine, dupLine, taskLine, skippedLine]
       .filter(Boolean)
       .join('\n')
       .trim();

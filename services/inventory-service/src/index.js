@@ -35,6 +35,8 @@ const exceptionReportRoutes = require('./routes/exception-report.routes');
 const staffTaskRoutes = require('./routes/staff-task.routes');
 const transferReceivingRoutes = require('./routes/transfer-receiving.routes');
 const myWarehouseTasksRoutes = require('./routes/my-warehouse-tasks.routes');
+const stockAlertRoutes = require('./routes/stock-alert.routes');
+const stockBalanceRoutes = require('./routes/stock-balance.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -83,6 +85,9 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
             { outbound_assigned_user_id: userId },
             { AND: [{ outbound_assigned_user_id: null }, { processed_by_user_id: userId }] },
           ],
+          // Exclude terminal statuses — completed/cancelled orders are history, not active tasks.
+          // Picking page only shows APPROVED/PICKING; outbound page shows up to READY_TO_SHIP.
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
         select: {
           id: true,
@@ -103,6 +108,9 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
             { outbound_assigned_user_id: userId },
             { AND: [{ outbound_assigned_user_id: null }, { shipped_by_user_id: userId }] },
           ],
+          // Exclude terminal statuses — IN_TRANSIT/RECEIVED/CANCELLED are past the active phase.
+          // Picking page: APPROVED/PICKING. Outbound page: READY_FOR_OUTBOUND/REPICKING.
+          status: { notIn: ['IN_TRANSIT', 'RECEIVED', 'CANCELLED'] },
         },
         select: {
           id: true,
@@ -346,6 +354,8 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 app.use('/api/supplier-account', supplierAccountRoutes);
 app.use('/api/purchase-requests', purchaseRequestRoutes);
+app.use('/api/stock-alerts', stockAlertRoutes);
+app.use('/api/stock-balances', stockBalanceRoutes);
 app.use('/api/exception-reports', exceptionReportRoutes);
 app.use('/api/staff-tasks', staffTaskRoutes);
 app.use('/api/transfer-receiving', transferReceivingRoutes);

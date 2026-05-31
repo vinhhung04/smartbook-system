@@ -2942,7 +2942,7 @@ async def chat(request: Request, req: ChatRequest):
                         asyncio.ensure_future(push_ai_action_event(
                             "ai_action:created",
                             action.action_id,
-                            action.action_type,
+                            action.type,
                             user_ctx.user_id if user_ctx else None,
                             {"summary": action.summary, "risk": action.risk},
                         ))
@@ -3016,7 +3016,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:cancelled",
             req.action_id,
-            action.action_type,
+            action.type,
             action.created_by_user_id,
         ))
         return ConfirmActionResponse(
@@ -3038,7 +3038,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:confirmed",
         req.action_id,
-        action.action_type,
+        action.type,
         user_id_for_emit,
     ))
 
@@ -3048,7 +3048,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:executed",
             req.action_id,
-            action.action_type,
+            action.type,
             user_id_for_emit,
             {"result_summary": str(result)[:200] if result else None},
         ))
@@ -3066,7 +3066,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:failed",
             req.action_id,
-            action.action_type,
+            action.type,
             user_id_for_emit,
             {"error": str(exc)[:200]},
         ))
@@ -3095,7 +3095,7 @@ async def cancel_action(request: Request, req: CancelActionRequest):
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:cancelled",
         req.action_id,
-        action.action_type,
+        action.type,
         action.created_by_user_id,
     ))
     return {"success": True, "action_id": req.action_id, "status": CANCELLED}

@@ -37,6 +37,7 @@ SOURCE_NAMES = {
     "/analytics/reservation-funnel": "Reservation Funnel",
     "/analytics/reorder-suggestions": "Reorder Suggestions",
     "/api/books": "Catalog Books",
+    "/api/stock-balances/low-stock": "Low Stock By Warehouse",
 }
 
 
@@ -260,6 +261,7 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             results = await asyncio.gather(
                 _fetch(client, "/analytics/warehouse-stock-risk", auth_header),
                 _fetch(client, "/api/books", auth_header),
+                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 20}),
             )
             for source, payload, warning in results:
                 sources.append(source)
@@ -274,12 +276,28 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 key=lambda book: (book["quantity"], book["title"]),
             )[:10]
             raw["low_stock_books"] = low_books
+
+            # Per-warehouse low-stock items (has variant_id + warehouse_id per item)
+            low_stock_by_wh = _as_list(raw.get("Low Stock By Warehouse"))
+            raw["low_stock_by_warehouse"] = low_stock_by_wh
+
             stock = raw.get("Warehouse Stock Risk") or []
-            lines = [f"- {book['title']} ({book['author'] or 'khong ro tac gia'}): con {book['quantity']} ban." for book in low_books]
+            out_of_stock = [b for b in low_books if b["quantity"] == 0]
+            low = [b for b in low_books if b["quantity"] > 0]
+            lines = [
+                f"{'🔴' if b['quantity'] == 0 else '🟡'} **{b['title']}** — còn {b['quantity']} bản"
+                for b in low_books
+            ]
+            wh_lines = [
+                f"🏭 {it.get('warehouse_name','?')} · **{it.get('title','?')}** còn {_int(it.get('available_qty'))} bản"
+                for it in low_stock_by_wh[:8]
+                if isinstance(it, dict)
+            ]
             summary = "\n".join([
-                f"Co {len(low_books)} sach trong nhom ton kho thap/het hang (quantity <= 10) trong 10 ket qua uu tien.",
-                _limit_lines(lines, 10),
-                f"Bao cao warehouse co {len(stock) if isinstance(stock, list) else 0} dong tong hop rui ro.",
+                f"⚠️ **{len(low_books)} sách** tồn kho thấp (🔴 {len(out_of_stock)} hết hàng, 🟡 {len(low)} sắp hết):",
+                _limit_lines(lines, 8),
+                f"\n📊 Tồn kho theo kho ({len(low_stock_by_wh)} dòng):",
+                _limit_lines(wh_lines, 6),
             ])
 
         elif intent == TOP_BORROWED_BOOKS_QUERY:
@@ -384,17 +402,22 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             summary = f"Ket qua tim sach cho '{query}':\n" + _limit_lines(lines, 10)
 
         elif intent == REORDER_SUGGESTION_QUERY:
-            source, payload, warning = await _fetch(
-                client,
-                "/analytics/reorder-suggestions",
-                auth_header,
-                {"days": 30, "limit": 10},
+            results = await asyncio.gather(
+                _fetch(client, "/analytics/reorder-suggestions", auth_header, {"days": 30, "limit": 10}),
+                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 20}),
             )
-            sources.append(source)
-            if warning:
-                warnings.append(warning)
-            data = _data(payload) or {}
-            raw["Reorder Suggestions"] = data
+            for source, payload, warning in results:
+                sources.append(source)
+                if warning:
+                    warnings.append(warning)
+                if payload is not None:
+                    raw[source["name"]] = _data(payload)
+
+            data = raw.get("Reorder Suggestions") or {}
+
+            # Per-warehouse low-stock items with variant_id + warehouse_id
+            low_stock_by_wh = _as_list(raw.get("Low Stock By Warehouse"))
+            raw["low_stock_by_warehouse"] = low_stock_by_wh
 
             summary_data = data.get("summary") if isinstance(data, dict) else {}
             items = data.get("items") if isinstance(data, dict) else []
@@ -403,23 +426,27 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             if not isinstance(items, list):
                 items = []
 
+            def _priority_icon(p: str) -> str:
+                return {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(str(p).upper(), "⚪")
+
             lines = [
-                "- {title}: {priority}, con {available} ban, forecast 30 ngay {forecast}, goi y nhap {qty} ban. Ly do: {reason}".format(
+                "{icon} **{title}** — còn {available} bản, gợi ý nhập {qty} bản".format(
+                    icon=_priority_icon(row.get("priority", "LOW")),
                     title=row.get("title", "Khong ro ten"),
-                    priority=row.get("priority", "LOW"),
                     available=_int(row.get("available_qty")),
-                    forecast=_int(row.get("forecast_30d")),
                     qty=_int(row.get("suggested_reorder_qty")),
-                    reason=row.get("reason") or "Khong co ly do chi tiet.",
                 )
                 for row in items[:5]
                 if isinstance(row, dict)
             ]
+            high = _int(summary_data.get('high_priority'))
+            med = _int(summary_data.get('medium_priority'))
+            total = _int(summary_data.get('total_candidates'))
+            total_qty = _int(summary_data.get('estimated_total_reorder_qty'))
             summary = "\n".join([
-                "Goi y nhap them la goi y ho tro ra quyet dinh, khong phai lenh bat buoc tao purchase order.",
-                f"Tong candidates: {_int(summary_data.get('total_candidates'))}; HIGH: {_int(summary_data.get('high_priority'))}; MEDIUM: {_int(summary_data.get('medium_priority'))}; LOW: {_int(summary_data.get('low_priority'))}.",
-                f"Tong so luong goi y nhap: {_int(summary_data.get('estimated_total_reorder_qty'))}.",
-                "Top sach can xem xet:",
+                f"📦 **{total} đầu sách** cần xem xét nhập thêm (🔴 {high} HIGH, 🟡 {med} MEDIUM) — tổng {total_qty} bản.",
+                "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
+                "Top sách cần ưu tiên:",
                 _limit_lines(lines, 5),
             ])
 
