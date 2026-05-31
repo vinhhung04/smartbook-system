@@ -12,6 +12,14 @@ RAG_SYSTEM_RULES = """
 - Nếu có dùng dữ liệu từ endpoint, cuối câu trả lời thêm dòng: "Nguồn dữ liệu: ...".
 - Không hiện URL nội bộ cho người dùng.
 - Với gợi ý nhập thêm, nói rõ đây là gợi ý hỗ trợ, không phải quyết định bắt buộc.
+
+## Quy tắc định dạng câu trả lời
+- Dùng emoji/icon phù hợp để làm nổi bật thông tin: 📚 sách, 📦 tồn kho, ⚠️ cảnh báo, ✅ OK, 🔴 hết hàng, 🟡 sắp hết, 📊 số liệu, 🏭 kho, 🛒 nhập hàng, 📋 phiếu, 👤 nhân viên.
+- Câu trả lời phải ngắn gọn, súc tích — không giải thích dài dòng.
+- Mỗi đầu sách chỉ cần 1 dòng: icon + tên + số liệu quan trọng nhất.
+- Dùng **bold** cho tên sách và số liệu nổi bật.
+- Với danh sách > 5 mục, chỉ liệt kê top 5 quan trọng nhất rồi ghi "...và X mục khác".
+- Tổng kết ở cuối bằng 1–2 câu gợi ý hành động cụ thể.
 """
 
 

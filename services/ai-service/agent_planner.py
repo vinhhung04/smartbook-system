@@ -96,6 +96,82 @@ def _get_item_field(item: dict, *keys) -> object:
     return None
 
 
+def _detect_warehouse_hint(normalized_msg: str) -> str | None:
+    """Extract a warehouse name/code hint from the user message (normalized).
+    Returns the extracted hint string (for fuzzy matching), or None if not found.
+
+    Examples:
+      "tao phieu nhap kho ha noi"   → "ha noi"
+      "kho hcm can nhap them sach"  → "hcm"
+      "nha cung cap o kho hn"       → "hn"
+    """
+    # Common warehouse-related stop words to remove before matching
+    _WAREHOUSE_STOPWORDS = [
+        "kho", "tai", "cho", "o", "theo", "trong", "cua", "thuoc",
+        "tao", "phieu", "nhap", "sach", "nha", "cung", "cap",
+        "nhà", "cung", "cấp", "phiếu", "nhập", "sách",
+    ]
+    # Try to find the word after "kho" in message
+    words = normalized_msg.split()
+    for i, word in enumerate(words):
+        if word == "kho" and i + 1 < len(words):
+            # The word(s) after "kho" are likely the warehouse name/code
+            # Take up to 3 words after "kho"
+            hint_words = []
+            for j in range(i + 1, min(i + 4, len(words))):
+                if words[j] in _WAREHOUSE_STOPWORDS:
+                    break
+                hint_words.append(words[j])
+            if hint_words:
+                return " ".join(hint_words)
+
+    # Fallback: look for known warehouse code patterns (2–6 uppercase-like chars)
+    import re
+    codes = re.findall(r'\b(wh[-_]?\w+|hcm|hn|hni|can\s*tho|da\s*nang|branch\s*\w*)\b', normalized_msg)
+    if codes:
+        return codes[0].strip()
+
+    return None
+
+
+def _filter_items_by_warehouse_hint(
+    items: list[dict],
+    hint: str | None,
+) -> tuple[list[dict], str | None]:
+    """Filter items with warehouse_id to only those matching the warehouse hint.
+    Returns (filtered_items, matched_warehouse_name).
+    If hint is None or no match found, returns original items unchanged.
+    """
+    if not hint or not items:
+        return items, None
+
+    normalized_hint = normalize_text(hint)
+    if len(normalized_hint) < 2:
+        return items, None
+
+    items_with_wh = [it for it in items if it.get("warehouse_id")]
+    items_no_wh = [it for it in items if not it.get("warehouse_id")]
+
+    matched = []
+    matched_name = None
+    for it in items_with_wh:
+        wh_text = normalize_text(
+            (it.get("warehouse_name") or "") + " " +
+            (it.get("warehouse_code") or "")
+        )
+        if normalized_hint in wh_text or any(w in wh_text for w in normalized_hint.split() if len(w) >= 2):
+            matched.append(it)
+            if not matched_name:
+                matched_name = it.get("warehouse_name") or it.get("warehouse_code")
+
+    if not matched:
+        # No items matched the hint — return all items unchanged
+        return items, None
+
+    # Return only matching warehouse items + items without warehouse (need fallback)
+    return matched + items_no_wh, matched_name
+
+
 # ── Builder helpers ────────────────────────────────────────────────────────────
 
 def _build_reorder_draft(
@@ -106,33 +182,83 @@ def _build_reorder_draft(
     warnings: list[str],
     user_context: UserContext | None,
 ) -> dict | None:
+    # Priority 1: Per-warehouse low-stock data (has variant_id + warehouse_id per item)
+    low_stock_by_wh = raw.get("low_stock_by_warehouse") or []
+    if not isinstance(low_stock_by_wh, list):
+        low_stock_by_wh = []
+
+    # Priority 2: Reorder suggestions from analytics (has variant_id but no warehouse_id)
     reorder_data = raw.get("Reorder Suggestions") or {}
     if isinstance(reorder_data, dict):
         items_raw = reorder_data.get("items") or []
     else:
         items_raw = reorder_data if isinstance(reorder_data, list) else []
 
+    # Priority 3: Catalog low-stock books (may have variant_id but no warehouse)
     low_stock = raw.get("low_stock_books") or []
     if not isinstance(low_stock, list):
         low_stock = []
 
     items = []
-    for row in items_raw:
+
+    # Build from per-warehouse data first (best quality: has variant_id + warehouse_id)
+    seen_variant_warehouse = set()
+    for row in low_stock_by_wh[:20]:
         if not isinstance(row, dict):
             continue
-        item = {
-            "book_id": _get_item_field(row, "book_id", "id"),
-            "book_variant_id": _get_item_field(row, "book_variant_id", "variant_id"),
-            "title": _get_item_field(row, "title", "book_title") or "Unknown",
-            "current_stock": _int_safe(_get_item_field(row, "available_qty", "current_stock", "quantity", "stock")),
-            "forecast_30d": _int_safe(_get_item_field(row, "forecast_30d")),
-            "suggested_quantity": _int_safe(_get_item_field(row, "suggested_reorder_qty", "suggested_quantity", "reorder_qty")) or 1,
-            "priority": _get_item_field(row, "priority") or "LOW",
-            "reason": _get_item_field(row, "reason") or "LOW_STOCK",
-        }
-        items.append(item)
+        variant_id = row.get("variant_id")
+        warehouse_id = row.get("warehouse_id")
+        # Deduplicate by (variant_id, warehouse_id)
+        key = (str(variant_id), str(warehouse_id))
+        if key in seen_variant_warehouse:
+            continue
+        seen_variant_warehouse.add(key)
+        items.append({
+            "book_id": row.get("book_id"),
+            "book_variant_id": variant_id,
+            "title": row.get("title") or "Unknown",
+            "isbn": row.get("isbn"),
+            "current_stock": _int_safe(row.get("available_qty")),
+            "reorder_point": _int_safe(row.get("reorder_point")),
+            "suggested_quantity": _int_safe(row.get("suggested_quantity")) or 1,
+            "priority": row.get("priority") or "MEDIUM",
+            "reason": row.get("reason") or "LOW_STOCK",
+            # Per-item warehouse — executor uses this directly
+            "warehouse_id": warehouse_id,
+            "warehouse_name": row.get("warehouse_name"),
+            "warehouse_code": row.get("warehouse_code"),
+            # Suggested supplier from supplier_variants lookup (null if no record)
+            "suggested_supplier_id": row.get("suggested_supplier_id"),
+            "suggested_supplier_name": row.get("suggested_supplier_name"),
+            "suggested_supplier_code": row.get("suggested_supplier_code"),
+        })
 
-    # Fill from low_stock_books if no reorder items
+    # Supplement from reorder suggestions if needed (adds variant_id, no warehouse)
+    if len(items) < 10:
+        seen_variants = {it.get("book_variant_id") for it in items if it.get("book_variant_id")}
+        for row in items_raw:
+            if not isinstance(row, dict):
+                continue
+            variant_id = _get_item_field(row, "book_variant_id", "variant_id")
+            if variant_id in seen_variants:
+                continue  # already have per-warehouse entry
+            seen_variants.add(variant_id)
+            items.append({
+                "book_id": _get_item_field(row, "book_id", "id"),
+                "book_variant_id": variant_id,
+                "title": _get_item_field(row, "title", "book_title") or "Unknown",
+                "current_stock": _int_safe(_get_item_field(row, "available_qty", "current_stock")),
+                "forecast_30d": _int_safe(_get_item_field(row, "forecast_30d")),
+                "suggested_quantity": _int_safe(_get_item_field(row, "suggested_reorder_qty", "suggested_quantity")) or 1,
+                "priority": _get_item_field(row, "priority") or "LOW",
+                "reason": _get_item_field(row, "reason") or "LOW_STOCK",
+                # No warehouse_id — user must select fallback warehouse
+                "warehouse_id": None,
+            })
+            if len(items) >= 10:
+                break
+
+    # Last resort: catalog low_stock_books
     if not items:
         for book in low_stock[:10]:
             if not isinstance(book, dict):
@@ -142,32 +268,68 @@ def _build_reorder_draft(
                 "book_variant_id": _get_item_field(book, "variant_id"),
                 "title": book.get("title") or "Unknown",
                 "current_stock": _int_safe(_get_item_field(book, "quantity", "available_qty")),
-                "forecast_30d": 0,
                 "suggested_quantity": max(5, 10 - _int_safe(_get_item_field(book, "quantity", "available_qty"))),
                 "priority": "HIGH" if _int_safe(_get_item_field(book, "quantity", "available_qty")) == 0 else "MEDIUM",
                 "reason": "LOW_STOCK",
+                "warehouse_id": None,
             })
 
     if not items:
         return None
 
+    # Detect warehouse hint from user message and filter items accordingly
+    normalized_msg = normalize_text(message)
+    warehouse_hint = _detect_warehouse_hint(normalized_msg)
+    filtered_items, matched_warehouse_name = _filter_items_by_warehouse_hint(items, warehouse_hint)
+    if matched_warehouse_name:
+        items = filtered_items
+
     action_warnings = list(warnings or [])
-    requires_review = False
     payload_warnings = []
 
-    if not any(item.get("book_variant_id") for item in items):
-        requires_review = True
-        payload_warnings.append("Missing book_variant_id for most items. Staff must verify before executing real purchase request.")
+    items_with_variant = [it for it in items if it.get("book_variant_id")]
+    items_with_warehouse = [it for it in items if it.get("warehouse_id")]
+    items_missing_warehouse = [it for it in items if not it.get("warehouse_id")]
+    items_missing_variant = [it for it in items if not it.get("book_variant_id")]
 
-    payload_warnings.append("Missing warehouse_id. User/staff must choose warehouse before executing real purchase request.")
-    requires_review = True
+    # requires_review = True only if any item is missing warehouse (user must choose fallback)
+    requires_review = bool(items_missing_warehouse)
+
+    if warehouse_hint and matched_warehouse_name:
+        payload_warnings.append(
+            f"Đã lọc theo kho: {matched_warehouse_name} (từ yêu cầu '{warehouse_hint}')."
+        )
+    elif warehouse_hint and not matched_warehouse_name:
+        payload_warnings.append(
+            f"Không tìm thấy kho phù hợp với '{warehouse_hint}'. Hiển thị tất cả kho."
+        )
+    if items_missing_variant:
+        payload_warnings.append(
+            f"{len(items_missing_variant)} sách thiếu book_variant_id — sẽ bị bỏ qua khi tạo phiếu."
+        )
+    if items_missing_warehouse:
+        payload_warnings.append(
+            f"{len(items_missing_warehouse)} sách chưa xác định được kho — "
+            "vui lòng chọn kho dự phòng bên dưới để áp dụng cho các sách này."
+        )
+
+    warehouses_covered = list({it["warehouse_code"] for it in items_with_warehouse if it.get("warehouse_code")})
 
     return {
         "type": CREATE_REORDER_DRAFT,
-        "summary": f"Tạo đề xuất nhập {len(items)} đầu sách từ dữ liệu tồn kho",
+        "summary": (
+            f"Tạo đề xuất nhập {len(items)} dòng sách từ {len(set(it.get('warehouse_id') for it in items_with_warehouse))} kho"
+            if items_with_warehouse
+            else f"Tạo đề xuất nhập {len(items)} đầu sách từ dữ liệu tồn kho"
+        ),
         "payload": {
-            "items": items[:10],
+            "items": items[:20],
+            # Global fallback warehouse_id (None = user must select for items without warehouse)
             "warehouse_id": None,
+            # Global supplier override (None = use per-item suggested_supplier, user can select)
+            "supplier_id": None,
+            "supplier_name": None,
+            "warehouses_covered": warehouses_covered,
             "reason": "LOW_STOCK",
             "note": f"Tạo bởi SmartBook AI Agent từ intent {intent_info.get('intent')}.",
             "source_intent": intent_info.get("intent"),
@@ -317,66 +479,129 @@ def _build_stock_alert(
     sources: list[dict],
     user_context: UserContext | None,
 ) -> dict | None:
+    # Priority 1: Per-warehouse data (has variant_id + warehouse_id per item) — best quality
+    low_stock_by_wh = raw.get("low_stock_by_warehouse") or []
+    if not isinstance(low_stock_by_wh, list):
+        low_stock_by_wh = []
+
+    # Priority 2: Catalog low_stock_books (variant_id but no warehouse_id)
     low_stock = raw.get("low_stock_books") or []
     if not isinstance(low_stock, list):
         low_stock = []
 
-    stock_risk = raw.get("Warehouse Stock Risk") or []
-    if not isinstance(stock_risk, list):
-        stock_risk = []
-
     items = []
-    for book in low_stock[:10]:
-        if not isinstance(book, dict):
+    seen_variant_warehouse: set = set()
+
+    # Build from per-warehouse data first
+    for row in low_stock_by_wh[:20]:
+        if not isinstance(row, dict):
             continue
-        qty = _int_safe(_get_item_field(book, "quantity", "available_qty"))
+        variant_id = row.get("variant_id")
+        warehouse_id = row.get("warehouse_id")
+        key = (str(variant_id), str(warehouse_id))
+        if key in seen_variant_warehouse:
+            continue
+        seen_variant_warehouse.add(key)
+        qty = _int_safe(row.get("available_qty"))
         items.append({
-            "book_id": _get_item_field(book, "id", "book_id"),
-            "book_variant_id": _get_item_field(book, "variant_id"),
-            "title": book.get("title") or "Unknown",
+            "book_id": row.get("book_id"),
+            "book_variant_id": variant_id,
+            "title": row.get("title") or "Unknown",
             "current_stock": qty,
-            "threshold": 10,
-            "priority": "HIGH" if qty == 0 else "MEDIUM",
+            "threshold": _int_safe(row.get("reorder_point")) or 10,
+            "priority": row.get("priority") or ("HIGH" if qty == 0 else "MEDIUM"),
             "reason": "OUT_OF_STOCK" if qty == 0 else "LOW_STOCK",
             "suggested_action": "Tạo purchase request ngay" if qty == 0 else "Xem xét nhập thêm",
+            # Per-item warehouse — executor uses this directly
+            "warehouse_id": warehouse_id,
+            "warehouse_name": row.get("warehouse_name"),
+            "warehouse_code": row.get("warehouse_code"),
         })
 
-    if not items and stock_risk:
-        for row in stock_risk[:10]:
-            if not isinstance(row, dict):
+    # Supplement from catalog low_stock_books if needed
+    if len(items) < 10:
+        seen_variants = {it.get("book_variant_id") for it in items if it.get("book_variant_id")}
+        for book in low_stock[:10]:
+            if not isinstance(book, dict):
                 continue
+            variant_id = _get_item_field(book, "variant_id")
+            if variant_id and variant_id in seen_variants:
+                continue
+            if variant_id:
+                seen_variants.add(variant_id)
+            qty = _int_safe(_get_item_field(book, "quantity", "available_qty"))
             items.append({
-                "book_id": None,
-                "book_variant_id": None,
-                "title": row.get("book_title") or row.get("title") or "Unknown",
-                "current_stock": _int_safe(_get_item_field(row, "available_qty", "quantity")),
+                "book_id": _get_item_field(book, "id", "book_id"),
+                "book_variant_id": variant_id,
+                "title": book.get("title") or "Unknown",
+                "current_stock": qty,
                 "threshold": 10,
-                "priority": "HIGH",
-                "reason": "LOW_STOCK",
-                "suggested_action": "Kiểm tra và nhập thêm",
+                "priority": "HIGH" if qty == 0 else "MEDIUM",
+                "reason": "OUT_OF_STOCK" if qty == 0 else "LOW_STOCK",
+                "suggested_action": "Tạo purchase request ngay" if qty == 0 else "Xem xét nhập thêm",
+                # No warehouse_id from catalog data
+                "warehouse_id": None,
             })
+            if len(items) >= 10:
+                break
 
     if not items:
         items = [{"message": "Không có dữ liệu tồn kho thấp trong context hiện tại."}]
 
-    high_count = sum(1 for it in items if isinstance(it, dict) and it.get("priority") == "HIGH")
+    # Detect warehouse hint from user message and filter items
+    _normalized_alert_msg = normalize_text(message)
+    _alert_warehouse_hint = _detect_warehouse_hint(_normalized_alert_msg)
+    _alert_filtered, _alert_matched_wh = _filter_items_by_warehouse_hint(
+        [i for i in items if isinstance(i, dict) and i.get("title")],
+        _alert_warehouse_hint,
+    )
+    if _alert_matched_wh:
+        items = _alert_filtered + [i for i in items if not (isinstance(i, dict) and i.get("title"))]
+
+    named_items = [i for i in items if isinstance(i, dict) and i.get("title")]
+    items_with_warehouse = [i for i in named_items if i.get("warehouse_id")]
+    items_missing_warehouse = [i for i in named_items if not i.get("warehouse_id")]
+    high_count = sum(1 for it in named_items if it.get("priority") == "HIGH")
     severity = "HIGH" if high_count > 0 else "MEDIUM"
+
+    warnings = []
+    if _alert_matched_wh:
+        warnings.append(f"Đã lọc theo kho: {_alert_matched_wh}.")
+    elif _alert_warehouse_hint and not _alert_matched_wh:
+        warnings.append(f"Không tìm thấy kho phù hợp với '{_alert_warehouse_hint}'. Hiển thị tất cả kho.")
+    if items_missing_warehouse:
+        warnings.append(
+            f"{len(items_missing_warehouse)} sách chưa xác định được kho — "
+            "chọn kho dự phòng bên dưới để tạo cảnh báo cho các sách này."
+        )
+    missing_variant = [i for i in named_items if not i.get("book_variant_id")]
+    if missing_variant:
+        warnings.append(f"{len(missing_variant)} sách thiếu book_variant_id — sẽ bị bỏ qua.")
+
+    warehouses_covered = list({it["warehouse_code"] for it in items_with_warehouse if it.get("warehouse_code")})
 
     return {
         "type": CREATE_STOCK_ALERT,
-        "summary": f"Tạo cảnh báo tồn kho {len([i for i in items if isinstance(i, dict) and i.get('title')])} đầu sách",
+        "summary": (
+            f"Tạo cảnh báo tồn kho {len(named_items)} dòng sách từ {len({it.get('warehouse_id') for it in items_with_warehouse})} kho"
+            if items_with_warehouse
+            else f"Tạo cảnh báo tồn kho {len(named_items)} đầu sách"
+        ),
         "payload": {
             "alert_type": "OUT_OF_STOCK" if severity == "HIGH" else "LOW_STOCK",
             "items": items,
             "severity": severity,
+            "warehouse_id": None,  # global fallback — user selects if items missing warehouse
+            "warehouses_covered": warehouses_covered,
             "sources": [s.get("name") for s in sources if s.get("status") == "ok"],
             "target_roles": ["WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
         },
         "risk": RISK_LOW,
         "sources": sources,
         "intent": intent_info.get("intent"),
-        "warnings": [],
-        "requires_review": False,
+        "warnings": warnings,
+        # requires_review only if some items still missing warehouse
+        "requires_review": bool(items_missing_warehouse),
     }
 
 
@@ -390,25 +615,37 @@ def _build_staff_task_draft(
     intent = intent_info.get("intent", "")
     normalized_msg = normalize_text(message)
 
-    task_type = "GENERAL_LIBRARY_TASK"
+    # Internal task type key (used to look up title/route)
+    _internal_type = "GENERAL_LIBRARY_TASK"
     if intent == LOW_STOCK_QUERY or intent == REORDER_SUGGESTION_QUERY:
-        task_type = "REVIEW_LOW_STOCK"
+        _internal_type = "REVIEW_LOW_STOCK"
     elif intent == OVERDUE_LOAN_QUERY:
-        task_type = "REVIEW_OVERDUE"
+        _internal_type = "REVIEW_OVERDUE"
     elif intent == FINE_SUMMARY_QUERY:
-        task_type = "REVIEW_FINE"
+        _internal_type = "REVIEW_FINE"
     elif intent == RESERVATION_QUERY:
-        task_type = "FOLLOW_UP_RESERVATION"
+        _internal_type = "FOLLOW_UP_RESERVATION"
     elif _contains_any(normalized_msg, ["nhap", "nhap sach", "reorder"]):
-        task_type = "REVIEW_REORDER"
+        _internal_type = "REVIEW_REORDER"
+
+    # Map to backend-valid task_type enum values (from staff-task.controller.js VALID_TASK_TYPES)
+    _TASK_TYPE_MAP = {
+        "REVIEW_LOW_STOCK":      "LOW_STOCK_REVIEW",
+        "REVIEW_REORDER":        "REORDER_REVIEW",
+        "FOLLOW_UP_RESERVATION": "RESERVATION_FOLLOW_UP",
+        "REVIEW_OVERDUE":        "OTHER",
+        "REVIEW_FINE":           "OTHER",
+        "GENERAL_LIBRARY_TASK":  "GENERAL",
+    }
+    task_type = _TASK_TYPE_MAP.get(_internal_type, "GENERAL")
 
     task_title_map = {
-        "REVIEW_LOW_STOCK": "Kiểm tra và xử lý sách tồn kho thấp",
-        "REVIEW_REORDER": "Xem xét đề xuất nhập sách mới",
+        "REVIEW_LOW_STOCK":      "Kiểm tra và xử lý sách tồn kho thấp",
+        "REVIEW_REORDER":        "Xem xét đề xuất nhập sách mới",
         "FOLLOW_UP_RESERVATION": "Theo dõi và xử lý đặt chỗ",
-        "REVIEW_OVERDUE": "Xử lý sách quá hạn trả",
-        "REVIEW_FINE": "Kiểm tra và thu phạt tồn đọng",
-        "GENERAL_LIBRARY_TASK": "Nhiệm vụ thư viện tổng quát",
+        "REVIEW_OVERDUE":        "Xử lý sách quá hạn trả",
+        "REVIEW_FINE":           "Kiểm tra và thu phạt tồn đọng",
+        "GENERAL_LIBRARY_TASK":  "Nhiệm vụ thư viện tổng quát",
     }
 
     related_items = []
@@ -420,27 +657,32 @@ def _build_staff_task_draft(
             if isinstance(b, dict)
         ]
 
+    task_title = task_title_map.get(_internal_type, "Nhiệm vụ thư viện")
+    priority = "HIGH" if _internal_type in ("REVIEW_LOW_STOCK", "REVIEW_OVERDUE") else "MEDIUM"
+
     return {
         "type": CREATE_STAFF_TASK_DRAFT,
-        "summary": f"Tạo task cho staff: {task_title_map.get(task_type, task_type)}",
+        "summary": f"Tạo task cho staff: {task_title}",
         "payload": {
-            "task_title": task_title_map.get(task_type, "Nhiệm vụ thư viện"),
+            "task_title": task_title,
+            "title": task_title,
             "task_type": task_type,
             "assignee_role": "WAREHOUSE_STAFF",
             "assignee_user_id": None,
-            "priority": "HIGH" if task_type in ("REVIEW_LOW_STOCK", "REVIEW_OVERDUE") else "MEDIUM",
+            "priority": priority,
             "due_date": None,
             "related_action_type": intent,
             "related_items": related_items,
-            "suggested_route": "/inventory/purchase-requests" if "REORDER" in task_type or "STOCK" in task_type else "/borrow/loans",
+            "suggested_route": "/inventory/purchase-requests" if _internal_type in ("REVIEW_LOW_STOCK", "REVIEW_REORDER") else "/borrow/loans",
             "instructions": f"Kiểm tra và xử lý theo yêu cầu AI: {message[:200]}",
             "sources": [s.get("name") for s in sources if s.get("status") == "ok"],
         },
         "risk": RISK_MEDIUM,
         "sources": sources,
         "intent": intent,
-        "warnings": [],
-        "requires_review": False,
+        # assignee_user_id is always None from AI — user must select assignee in UI
+        "warnings": ["Chưa có người thực hiện — vui lòng chọn nhân viên trước khi xác nhận."],
+        "requires_review": True,
     }
 
 

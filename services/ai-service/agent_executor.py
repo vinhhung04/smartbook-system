@@ -37,63 +37,94 @@ def _user_roles_set(user_context: UserContext) -> set[str]:
 
 async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict:
     payload = pending_action.payload
-    warehouse_id = payload.get("warehouse_id")
+    # Global fallback warehouse_id (from user override or payload-level selection)
+    global_warehouse_id = payload.get("warehouse_id")
     items = payload.get("items") or []
 
-    if not warehouse_id or not items:
+    if not items:
         return {
             "success": True,
             "mode": "draft_only",
             "request_id": f"REORDER-DRAFT-{_short_id()}",
-            "message": "Reorder draft created for review. Missing warehouse/items so no purchase request was persisted.",
+            "message": "Không có danh sách sách để tạo phiếu nhập.",
             "payload": payload,
         }
 
     valid_items = []
     skipped_items = []
+    no_warehouse_items = []
+
     for item in items:
         if not isinstance(item, dict):
             continue
         variant_id = item.get("book_variant_id") or item.get("variant_id")
-        if variant_id:
-            valid_items.append(item)
-        else:
+        if not variant_id:
             skipped_items.append(item.get("title") or "Unknown")
+            continue
+        # Per-item warehouse_id takes priority; fallback to global
+        effective_warehouse = item.get("warehouse_id") or global_warehouse_id
+        if not effective_warehouse:
+            no_warehouse_items.append(item.get("title") or "Unknown")
+            continue
+        valid_items.append({**item, "_effective_warehouse_id": effective_warehouse})
 
     if not valid_items:
+        reasons = []
+        if skipped_items:
+            reasons.append(f"Thiếu book_variant_id: {', '.join(skipped_items[:3])}")
+        if no_warehouse_items:
+            reasons.append(f"Thiếu warehouse_id: {', '.join(no_warehouse_items[:3])}")
         return {
             "success": True,
             "mode": "draft_only",
             "request_id": f"REORDER-DRAFT-{_short_id()}",
             "message": (
-                "Không thể tạo phiếu thật vì tất cả sách đề xuất đều thiếu book_variant_id. "
-                "Vui lòng tra cứu catalog để lấy đúng variant trước khi tạo phiếu."
+                "Không thể tạo phiếu thật — " + "; ".join(reasons) + ". "
+                "Vui lòng chọn kho dự phòng và thử lại."
             ),
             "skipped_items": skipped_items,
+            "no_warehouse_items": no_warehouse_items,
             "payload": payload,
         }
 
-    created_requests = []
-    failed_items = []
+    created_requests: list[dict] = []
+    failed_items: list[dict] = []
+
+    # Global supplier override (from user selection in UI)
+    global_supplier_id = payload.get("supplier_id")
+    global_supplier_name = payload.get("supplier_name")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
         for item in valid_items:
             variant_id = item.get("book_variant_id") or item.get("variant_id")
+            effective_warehouse_id = item["_effective_warehouse_id"]
             title = item.get("title") or "Unknown"
             quantity = max(1, int(item.get("suggested_quantity") or 1))
             reason_text = item.get("reason") or "LOW_STOCK"
             valid_reasons = {"LOW_STOCK", "CUSTOMER_REQUEST", "DAMAGED", "LOST", "OTHER"}
             reason = reason_text if reason_text in valid_reasons else "LOW_STOCK"
 
+            # Resolve effective supplier: global override takes priority over per-item suggestion
+            if global_supplier_id:
+                effective_supplier_name = global_supplier_name or global_supplier_id
+            else:
+                effective_supplier_name = item.get("suggested_supplier_name")
+
+            wh_note = f"Kho: {item.get('warehouse_code') or item.get('warehouse_name') or effective_warehouse_id}. " if item.get("warehouse_id") else ""
+            supplier_note = f"NCC đề xuất: {effective_supplier_name}. " if effective_supplier_name else ""
+
             body = {
-                "warehouse_id": warehouse_id,
+                "warehouse_id": effective_warehouse_id,
                 "book_variant_id": variant_id,
                 "book_title_hint": title,
                 "quantity_requested": quantity,
                 "reason": reason,
-                "note": f"Tạo bởi SmartBook AI Agent từ intent {payload.get('source_intent')}. "
-                        f"Priority: {item.get('priority', 'MEDIUM')}. "
-                        f"Current stock: {item.get('current_stock', '?')}.",
+                "note": (
+                    f"{wh_note}{supplier_note}"
+                    f"Tạo bởi SmartBook AI Agent từ intent {payload.get('source_intent')}. "
+                    f"Priority: {item.get('priority', 'MEDIUM')}. "
+                    f"Current stock: {item.get('current_stock', '?')}."
+                ),
             }
 
             try:
@@ -104,10 +135,13 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                 )
                 if resp.status_code in (200, 201):
                     data = resp.json()
+                    req_data = data.get("data") or data
                     created_requests.append({
                         "title": title,
-                        "request_number": (data.get("data") or data).get("request_number"),
-                        "response": data,
+                        "warehouse_name": item.get("warehouse_name") or item.get("warehouse_code") or effective_warehouse_id,
+                        "request_number": req_data.get("request_number"),
+                        "quantity": quantity,
+                        "suggested_supplier_name": effective_supplier_name,
                     })
                 else:
                     failed_items.append({
@@ -118,7 +152,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
             except Exception as exc:
                 failed_items.append({"title": title, "error": str(exc)})
 
-    has_skipped = bool(skipped_items)
+    has_skipped = bool(skipped_items) or bool(no_warehouse_items)
     if created_requests and not failed_items and not has_skipped:
         mode = "real_api"
     elif created_requests:
@@ -136,7 +170,13 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
         message_parts.append(f"{len(failed_items)} sách thất bại.")
     if skipped_items:
         message_parts.append(
-            f"{len(skipped_items)} sách bị bỏ qua do thiếu book_variant_id: {', '.join(skipped_items[:3])}{'...' if len(skipped_items) > 3 else ''}."
+            f"{len(skipped_items)} sách bị bỏ qua do thiếu book_variant_id: "
+            f"{', '.join(skipped_items[:3])}{'...' if len(skipped_items) > 3 else ''}."
+        )
+    if no_warehouse_items:
+        message_parts.append(
+            f"{len(no_warehouse_items)} sách bị bỏ qua do thiếu kho: "
+            f"{', '.join(no_warehouse_items[:3])}{'...' if len(no_warehouse_items) > 3 else ''}."
         )
     if not created_requests:
         message_parts.append("Không có phiếu thật nào được tạo.")
@@ -147,6 +187,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
         "created_requests": created_requests,
         "failed_items": failed_items,
         "skipped_items": skipped_items,
+        "no_warehouse_items": no_warehouse_items,
         "message": " ".join(message_parts),
     }
 
@@ -275,18 +316,131 @@ async def _exec_reservation(
 
 # ── Stock Alert Executor ───────────────────────────────────────────────────────
 
-async def _exec_stock_alert(payload: dict) -> dict:
-    # TODO: integrate with real notification/alert service when available
+async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
+    items = payload.get("items") or []
+    # Global fallback warehouse (from user selection for items without warehouse_id)
+    global_warehouse_id = payload.get("warehouse_id")
+
+    valid_items = []
+    skipped_items: list[str] = []
+    no_warehouse_items: list[str] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        variant_id = item.get("book_variant_id") or item.get("variant_id")
+        if not variant_id:
+            skipped_items.append(item.get("title", "Unknown"))
+            continue
+        effective_warehouse = item.get("warehouse_id") or global_warehouse_id
+        if not effective_warehouse:
+            no_warehouse_items.append(item.get("title", "Unknown"))
+            continue
+        valid_items.append({**item, "_effective_warehouse_id": effective_warehouse})
+
+    if not valid_items:
+        reasons = []
+        if skipped_items:
+            reasons.append(f"Thiếu book_variant_id: {', '.join(skipped_items[:3])}")
+        if no_warehouse_items:
+            reasons.append(f"Thiếu warehouse_id: {', '.join(no_warehouse_items[:3])}")
+        return {
+            "success": True,
+            "mode": "draft_only",
+            "message": "Không thể tạo cảnh báo thật — " + "; ".join(reasons) + ". Vui lòng chọn kho dự phòng và thử lại.",
+            "skipped_items": skipped_items,
+            "no_warehouse_items": no_warehouse_items,
+            "alert": payload,
+        }
+
+    created_alerts: list[dict] = []
+    failed_items: list[dict] = []
+    duplicate_items: list[str] = []
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+        for item in valid_items:
+            variant_id = item.get("book_variant_id") or item.get("variant_id")
+            effective_warehouse_id = item["_effective_warehouse_id"]
+            title = item.get("title", "Unknown")
+            current_stock = item.get("current_stock")
+            alert_type = "OUT_OF_STOCK" if (current_stock is not None and int(current_stock) == 0) else "LOW_STOCK"
+            alert_level = str(item.get("priority", "MEDIUM")).upper()
+            if alert_level not in ("LOW", "MEDIUM", "HIGH"):
+                alert_level = "MEDIUM"
+
+            body = {
+                "variant_id": variant_id,
+                "warehouse_id": effective_warehouse_id,
+                "alert_type": alert_type,
+                "alert_level": alert_level,
+                "current_value": current_stock,
+                "threshold_value": item.get("threshold", 10),
+                "payload": {
+                    "title": title,
+                    "source": "AI_ASSISTANT",
+                    "warehouse_name": item.get("warehouse_name"),
+                    "warehouse_code": item.get("warehouse_code"),
+                    "suggested_action": item.get("suggested_action"),
+                    "reason": item.get("reason"),
+                },
+            }
+
+            try:
+                resp = await client.post(
+                    f"{GATEWAY_URL}/api/stock-alerts",
+                    json=body,
+                    headers={"Authorization": auth_header, "Content-Type": "application/json"},
+                )
+                if resp.status_code == 201:
+                    data = resp.json()
+                    created_alerts.append({
+                        "title": title,
+                        "warehouse_name": item.get("warehouse_name") or item.get("warehouse_code") or effective_warehouse_id,
+                        "id": (data.get("data") or {}).get("id"),
+                        "alert_type": alert_type,
+                    })
+                elif resp.status_code == 200:
+                    duplicate_items.append(title)
+                else:
+                    failed_items.append({
+                        "title": title,
+                        "error": f"HTTP {resp.status_code}",
+                        "detail": resp.text[:200],
+                    })
+            except Exception as exc:
+                failed_items.append({"title": title, "error": str(exc)})
+
+    has_skipped = bool(skipped_items) or bool(no_warehouse_items)
+    if created_alerts and not failed_items and not has_skipped:
+        mode = "real_api"
+    elif created_alerts or duplicate_items:
+        mode = "partial"
+    else:
+        mode = "draft_only"
+
+    parts = []
+    if created_alerts:
+        parts.append(f"Đã tạo {len(created_alerts)} cảnh báo mới.")
+    if duplicate_items:
+        parts.append(f"{len(duplicate_items)} cảnh báo đã tồn tại (bỏ qua).")
+    if failed_items:
+        parts.append(f"{len(failed_items)} sách thất bại.")
+    if skipped_items:
+        parts.append(f"{len(skipped_items)} sách bỏ qua (thiếu variant_id).")
+    if no_warehouse_items:
+        parts.append(f"{len(no_warehouse_items)} sách bỏ qua (thiếu warehouse).")
+    if not parts:
+        parts.append("Không tạo được cảnh báo nào.")
+
     return {
-        "success": True,
-        "mode": "draft_only",
-        "alert_id": f"ALERT-DRAFT-{_short_id()}",
-        "message": (
-            "Đã tạo bản nháp cảnh báo tồn kho. "
-            "Chức năng tích hợp notification service chưa sẵn sàng — "
-            "không có thông báo thật nào được gửi đi."
-        ),
-        "alert": payload,
+        "success": bool(created_alerts) or bool(duplicate_items),
+        "mode": mode,
+        "created_alerts": created_alerts,
+        "duplicate_items": duplicate_items,
+        "failed_items": failed_items,
+        "skipped_items": skipped_items,
+        "no_warehouse_items": no_warehouse_items,
+        "message": " ".join(parts),
     }
 
 
@@ -329,11 +483,12 @@ async def _exec_staff_task(payload: dict, auth_header: str) -> dict:
         raise HTTPException(status_code=resp.status_code, detail=f"Gateway error creating staff task: {resp.text[:200]}")
 
     data = resp.json()
+    task = data.get("data", data)
     return {
         "success": True,
-        "mode": "real",
-        "message": "Staff task created successfully.",
-        "task": data.get("data", data),
+        "mode": "real_api",
+        "message": f"Đã tạo staff task thành công.",
+        "task": task,
     }
 
 
@@ -364,7 +519,7 @@ async def execute_agent_action(
     if action_type == CREATE_RESERVATION_DRAFT:
         return await _exec_reservation(pending_action, auth_header, user_context)
     if action_type == CREATE_STOCK_ALERT:
-        return await _exec_stock_alert(pending_action.payload)
+        return await _exec_stock_alert(pending_action.payload, auth_header)
     if action_type == CREATE_STAFF_TASK_DRAFT:
         return await _exec_staff_task(pending_action.payload, auth_header)
 
