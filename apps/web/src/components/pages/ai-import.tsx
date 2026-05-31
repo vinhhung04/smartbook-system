@@ -4,7 +4,7 @@ import { BookCheck, Loader2, ScanBarcode, Search, Sparkles } from "lucide-react"
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
-import { aiService, type LookupBookByIsbnResponse } from "@/services/ai";
+import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 
@@ -89,6 +89,8 @@ export function AIImportPage() {
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [enrichLoading, setEnrichLoading] = useState<EnrichMode | null>(null);
+  const [enrichResult, setEnrichResult] = useState<EnrichBookMetadataResponse | null>(null);
 
   const manualMode = Boolean(lookupData && !lookupData.found);
 
@@ -146,7 +148,7 @@ export function AIImportPage() {
         title: form.title.trim(),
         author: form.authorsText.split(",")[0].trim(),
         publisher: form.publisher || undefined,
-        description: "",
+        description: form.description,
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
       });
       setForm((prev) => ({
@@ -160,6 +162,63 @@ export function AIImportPage() {
     } finally {
       setSummaryLoading(false);
     }
+  }
+
+  async function handleEnrichMetadata(mode: EnrichMode) {
+    if (!form.title.trim()) {
+      toast.error("Cần có tên sách để sử dụng công cụ AI");
+      return;
+    }
+    setEnrichLoading(mode);
+    setEnrichResult(null);
+    try {
+      const result = await aiService.enrichBookMetadata({
+        title: form.title.trim(),
+        authors: form.authorsText.split(",").map((a) => a.trim()).filter(Boolean),
+        publisher: form.publisher || undefined,
+        description: form.description || undefined,
+        categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
+        mode,
+      });
+      setEnrichResult(result);
+      if (result.success) {
+        toast.success("AI đã xử lý xong");
+      } else {
+        toast.warning(result.qualityWarnings[0] || "AI không tạo được kết quả");
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Công cụ AI gặp lỗi, vui lòng thử lại"));
+    } finally {
+      setEnrichLoading(null);
+    }
+  }
+
+  function applyEnrichResult() {
+    if (!enrichResult) return;
+    const { mode } = enrichResult;
+
+    if (mode === "keywords" && enrichResult.keywords.length > 0) {
+      const sanitized = [
+        ...new Set(enrichResult.keywords.map((k) => k.trim()).filter((k) => k.length > 0 && k.length <= 50)),
+      ].slice(0, 15);
+      setForm((prev) => ({ ...prev, keywordsText: sanitized.join(", ") }));
+      toast.success("Đã áp dụng từ khóa AI");
+    } else if (mode === "short_summary" && enrichResult.shortSummary) {
+      setForm((prev) => ({ ...prev, summaryVi: enrichResult.shortSummary! }));
+      toast.success("Đã áp dụng tóm tắt ngắn");
+    } else if (mode === "normalize_description" && enrichResult.normalizedDescription) {
+      setForm((prev) => ({ ...prev, description: enrichResult.normalizedDescription! }));
+      toast.success("Đã áp dụng mô tả đã chuẩn hóa");
+    } else if (mode === "suggest_categories" && enrichResult.suggestedCategories.length > 0) {
+      setForm((prev) => {
+        const existing = prev.categoriesText.split(",").map((c) => c.trim()).filter(Boolean);
+        const merged = [...new Set([...existing, ...enrichResult.suggestedCategories])];
+        return { ...prev, categoriesText: merged.join(", ") };
+      });
+      toast.success("Đã thêm thể loại AI (merge với thể loại cũ)");
+    }
+
+    setEnrichResult(null);
   }
 
   async function handleSave() {
@@ -219,6 +278,20 @@ export function AIImportPage() {
       if (year) updatePayload.publish_year = year;
 
       if (form.thumbnail.trim()) updatePayload.cover_image_url = form.thumbnail.trim();
+
+      const pageCountNum = parseInt(form.pageCount, 10);
+      if (form.pageCount && !isNaN(pageCountNum) && pageCountNum > 0) {
+        updatePayload.page_count = pageCountNum;
+      }
+
+      const keywords = form.keywordsText
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0 && k.length <= 50);
+      const uniqueKeywords = [...new Set(keywords)].slice(0, 15);
+      if (uniqueKeywords.length > 0) {
+        updatePayload.keywords = uniqueKeywords;
+      }
 
       await bookService.update(String(payload.book_id), updatePayload);
       toast.success("Đã lưu sách với metadata ISBN");
@@ -388,25 +461,121 @@ export function AIImportPage() {
 
             <div className="mt-3 grid grid-cols-1 gap-3">
               <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-slate-500">Mô tả</label>
-                  {!form.description.trim() && (
-                    <button
-                      onClick={() => void handleGenerateDescription()}
-                      disabled={summaryLoading || !form.title.trim()}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-40"
-                    >
-                      {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      {summaryLoading ? "Đang tạo..." : "Tạo mô tả AI"}
-                    </button>
-                  )}
-                </div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Mô tả</label>
                 <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tóm tắt ngắn (summary_vi)</label>
+                <textarea
+                  value={form.summaryVi}
+                  onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))}
+                  rows={2}
+                  placeholder="Tóm tắt 2-3 câu dùng cho AI chatbot..."
+                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]"
+                />
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-500">Từ khóa (cách nhau dấu phẩy)</label>
                 <input value={form.keywordsText} onChange={(e) => setForm((prev) => ({ ...prev, keywordsText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
               </div>
+
+              {/* AI Tools section */}
+              {form.title.trim() && (
+                <div className="rounded-[12px] border border-violet-100 bg-violet-50/40 p-4">
+                  <div className="mb-2.5 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet-500">Công cụ AI</span>
+                  </div>
+
+                  {!form.description.trim() ? (
+                    <button
+                      onClick={() => void handleGenerateDescription()}
+                      disabled={summaryLoading}
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-40"
+                    >
+                      {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {summaryLoading ? "Đang tạo mô tả..." : "Tạo mô tả AI"}
+                    </button>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {(
+                        [
+                          { mode: "keywords" as const, label: "Tạo từ khóa AI" },
+                          { mode: "short_summary" as const, label: "Tóm tắt ngắn AI" },
+                          { mode: "normalize_description" as const, label: "Chuẩn hóa mô tả AI" },
+                          { mode: "suggest_categories" as const, label: "Gợi ý thể loại AI" },
+                          { mode: "quality_check" as const, label: "Kiểm tra chất lượng" },
+                        ] as const
+                      ).map(({ mode, label }) => (
+                        <button
+                          key={mode}
+                          onClick={() => void handleEnrichMetadata(mode)}
+                          disabled={!!enrichLoading || summaryLoading}
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:opacity-40"
+                        >
+                          {enrichLoading === mode
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Sparkles className="h-3 w-3" />}
+                          {enrichLoading === mode ? "Đang xử lý..." : label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {enrichResult && (
+                    <div className="mt-3 rounded-[10px] border border-violet-200 bg-white p-3 text-[12px]">
+                      <div className="mb-2 font-semibold text-violet-700">
+                        Kết quả AI{enrichResult.ai_provider !== "none" ? ` (${enrichResult.ai_provider})` : ""}
+                      </div>
+
+                      {enrichResult.mode === "keywords" && enrichResult.keywords.length > 0 && (
+                        <p className="mb-2 text-slate-700">Từ khóa: {enrichResult.keywords.join(", ")}</p>
+                      )}
+                      {enrichResult.mode === "short_summary" && enrichResult.shortSummary && (
+                        <p className="mb-2 text-slate-700">{enrichResult.shortSummary}</p>
+                      )}
+                      {enrichResult.mode === "normalize_description" && enrichResult.normalizedDescription && (
+                        <p className="mb-2 whitespace-pre-wrap text-slate-700">{enrichResult.normalizedDescription}</p>
+                      )}
+                      {enrichResult.mode === "suggest_categories" && enrichResult.suggestedCategories.length > 0 && (
+                        <p className="mb-2 text-slate-700">
+                          Thể loại gợi ý: {enrichResult.suggestedCategories.join(", ")}
+                          <span className="ml-1 text-slate-400">(sẽ merge với thể loại cũ)</span>
+                        </p>
+                      )}
+                      {enrichResult.mode === "quality_check" && (
+                        enrichResult.qualityWarnings.length === 0
+                          ? <p className="mb-2 font-medium text-emerald-600">Metadata đạt chất lượng tốt ✓</p>
+                          : (
+                            <ul className="mb-2 list-disc space-y-0.5 pl-4 text-amber-700">
+                              {enrichResult.qualityWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                          )
+                      )}
+                      {!enrichResult.success && enrichResult.qualityWarnings.length > 0 && enrichResult.mode !== "quality_check" && (
+                        <p className="mb-2 text-red-600">{enrichResult.qualityWarnings[0]}</p>
+                      )}
+
+                      <div className="flex gap-2">
+                        {enrichResult.mode !== "quality_check" && enrichResult.success && (
+                          <button
+                            onClick={applyEnrichResult}
+                            className="rounded-[8px] bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-700"
+                          >
+                            Áp dụng
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setEnrichResult(null)}
+                          className="rounded-[8px] border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-4 flex items-center justify-end gap-2">

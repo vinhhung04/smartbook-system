@@ -186,6 +186,34 @@ export interface ReadingStatsResponse {
   badges: { id: string; name: string; icon: string; description: string }[];
 }
 
+export type EnrichMode =
+  | 'keywords'
+  | 'short_summary'
+  | 'normalize_description'
+  | 'suggest_categories'
+  | 'quality_check';
+
+export interface EnrichBookMetadataRequest {
+  title: string;
+  authors: string[];
+  publisher?: string;
+  description?: string;
+  categories: string[];
+  mode: EnrichMode;
+}
+
+export interface EnrichBookMetadataResponse {
+  success: boolean;
+  mode: string;
+  ai_provider: string;
+  keywords: string[];
+  shortSummary: string | null;
+  normalizedDescription: string | null;
+  suggestedCategories: string[];
+  qualityWarnings: string[];
+  confidence: number;
+}
+
 export const aiService = {
   analyzeImage: async (data: AIAnalysisRequest): Promise<AIAnalysisResponse> => {
     const formData = new FormData();
@@ -305,6 +333,13 @@ export const aiService = {
 
   getPendingAction: async (actionId: string): Promise<PendingAction> => {
     const response = await aiAPI.get(`/actions/pending/${actionId}`);
+    return response.data;
+  },
+
+  enrichBookMetadata: async (
+    payload: EnrichBookMetadataRequest,
+  ): Promise<EnrichBookMetadataResponse> => {
+    const response = await aiAPI.post('/enrich-book-metadata', payload);
     return response.data;
   },
 

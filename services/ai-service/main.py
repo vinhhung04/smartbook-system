@@ -1520,6 +1520,82 @@ Trả về DUY NHẤT JSON hợp lệ:
         return None, [], False
 
 
+async def _call_groq_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+    """Generic Groq call returning parsed JSON dict. Parse via _extract_json (no json_object mode)."""
+    if not GROQ_API_KEY:
+        return {}, False
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as client:
+            resp = await client.post(
+                f"{GROQ_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": GROQ_SUMMARY_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": max_tokens,
+                },
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+            return _extract_json(raw), True
+    except Exception as e:
+        logger.warning("Groq JSON call failed: %s", e)
+        return {}, False
+
+
+async def _call_ollama_json(system_prompt: str, user_prompt: str) -> tuple[dict, bool]:
+    """Generic Ollama call returning parsed JSON dict. Reuses _ollama_generate_with_summary_fallback."""
+    try:
+        client = ollama.Client(host=OLLAMA_HOST)
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        response = await asyncio.to_thread(
+            _ollama_generate_with_summary_fallback,
+            client,
+            full_prompt,
+            {"temperature": 0.3, "num_predict": 600},
+        )
+        raw = response.get("response", "")
+        return _extract_json(raw), True
+    except Exception as e:
+        logger.warning("Ollama JSON call failed: %s", e)
+        return {}, False
+
+
+def _check_book_quality(
+    title: str,
+    authors: list[str],
+    publisher: str | None,
+    description: str | None,
+    categories: list[str],
+) -> list[str]:
+    """Rule-based quality checks for book metadata. No AI needed."""
+    warnings = []
+    if not authors:
+        warnings.append("Thiếu thông tin tác giả")
+    if not publisher:
+        warnings.append("Thiếu thông tin nhà xuất bản")
+    if not categories:
+        warnings.append("Thiếu thể loại sách")
+    if not description:
+        warnings.append("Mô tả sách còn trống")
+    else:
+        desc = description.strip()
+        if len(desc) < 80:
+            warnings.append(f"Mô tả quá ngắn ({len(desc)} ký tự, nên có ít nhất 80 ký tự)")
+        if re.search(r"<[^>]+>", desc):
+            warnings.append("Mô tả chứa thẻ HTML cần loại bỏ")
+        if re.search(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", desc):
+            warnings.append("Mô tả chứa ký tự rác (control characters)")
+        vi_chars = set("àáâãèéêìíòóôõùúưăđÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚƯĂĐ")
+        if len(desc) > 50 and not any(c in vi_chars for c in desc):
+            warnings.append("Mô tả có thể không phải tiếng Việt hoặc đang thiếu dấu tiếng Việt")
+    return warnings
+
+
 def _metadata_completeness_score(data: dict) -> float:
     weighted = {
         "title": 2.0,
@@ -2288,6 +2364,133 @@ async def generate_summary_vi(req: SummaryViRequest):
         return result
 
     raise HTTPException(status_code=503, detail="Không thể sinh summary. Vui lòng nhập tay.")
+
+
+class EnrichBookMetadataRequest(BaseModel):
+    title: str
+    authors: list[str] = []
+    publisher: str | None = None
+    description: str | None = None
+    categories: list[str] = []
+    mode: str = "keywords"  # keywords | short_summary | normalize_description | suggest_categories | quality_check
+
+
+class EnrichBookMetadataResponse(BaseModel):
+    success: bool
+    mode: str
+    ai_provider: str = "none"
+    keywords: list[str] = []
+    shortSummary: str | None = None
+    normalizedDescription: str | None = None
+    suggestedCategories: list[str] = []
+    qualityWarnings: list[str] = []
+    confidence: float = 0.8
+
+
+VALID_ENRICH_MODES = {"keywords", "short_summary", "normalize_description", "suggest_categories", "quality_check"}
+
+
+@app.post("/enrich-book-metadata")
+async def enrich_book_metadata(req: EnrichBookMetadataRequest):
+    """
+    AI enrichment toolkit for book metadata.
+    Modes: keywords, short_summary, normalize_description, suggest_categories, quality_check.
+    quality_check is rule-based (no AI). Others use Groq → Ollama fallback.
+    Never overwrites frontend data — returns suggestions for user to apply.
+    """
+    title = (req.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required")
+
+    mode = (req.mode or "keywords").strip()
+    if mode not in VALID_ENRICH_MODES:
+        raise HTTPException(status_code=422, detail=f"mode must be one of {sorted(VALID_ENRICH_MODES)}")
+
+    authors_str = ", ".join(req.authors) if req.authors else "Chưa rõ"
+    desc = (req.description or "").strip()
+    categories_str = ", ".join(req.categories[:3]) if req.categories else "Chưa phân loại"
+
+    # quality_check: rule-based only, no AI call
+    if mode == "quality_check":
+        warnings = _check_book_quality(title, req.authors, req.publisher, req.description, req.categories)
+        return EnrichBookMetadataResponse(
+            success=True,
+            mode=mode,
+            ai_provider="rule_based",
+            qualityWarnings=warnings,
+            confidence=1.0,
+        )
+
+    SYSTEM = (
+        "Bạn là biên tập viên nội dung sách cho nhà sách Việt Nam. "
+        "Chỉ dùng thông tin được cung cấp. "
+        "Tuyệt đối không bịa nhân vật, tình tiết, giải thưởng, số liệu, hay nội dung cụ thể. "
+        "Trả về JSON hợp lệ duy nhất."
+    )
+
+    if mode == "keywords":
+        user_prompt = (
+            f"Sách: {title}\nTác giả: {authors_str}\nNhà xuất bản: {req.publisher or 'Chưa rõ'}\n"
+            f"Thể loại: {categories_str}\nMô tả: {desc[:800] or 'Không có'}\n\n"
+            "Tạo 5-10 từ khóa tìm kiếm tiếng Việt ngắn gọn, bám sát thông tin trên.\n"
+            'Trả về: {"keywords": ["...", ...]}'
+        )
+    elif mode == "short_summary":
+        user_prompt = (
+            f"Sách: {title}\nTác giả: {authors_str}\nMô tả gốc: {desc[:1000] or 'Không có'}\n\n"
+            "Viết tóm tắt 2-3 câu tiếng Việt, bám sát mô tả gốc. Không thêm thông tin mới.\n"
+            'Trả về: {"shortSummary": "..."}'
+        )
+    elif mode == "normalize_description":
+        if not desc:
+            return EnrichBookMetadataResponse(
+                success=False,
+                mode=mode,
+                ai_provider="none",
+                qualityWarnings=["Mô tả đang trống, không có gì để chuẩn hóa"],
+            )
+        user_prompt = (
+            f"Mô tả gốc:\n{desc[:1500]}\n\n"
+            "Chuẩn hóa: loại bỏ HTML, ký tự rác, whitespace thừa; đảm bảo tiếng Việt tự nhiên. "
+            "KHÔNG thêm thông tin mới.\n"
+            'Trả về: {"normalizedDescription": "..."}'
+        )
+    elif mode == "suggest_categories":
+        user_prompt = (
+            f"Sách: {title}\nTác giả: {authors_str}\nMô tả: {desc[:600] or 'Không có'}\n\n"
+            "Đề xuất 1-3 thể loại sách phù hợp, chỉ dựa vào thông tin trên. Không đoán mò.\n"
+            'Trả về: {"suggestedCategories": ["..."]}'
+        )
+    else:
+        raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
+
+    # Try Groq first, fallback Ollama
+    data, ok = await _call_groq_json(SYSTEM, user_prompt)
+    ai_provider = "groq" if ok else "none"
+    if not ok:
+        data, ok = await _call_ollama_json(SYSTEM, user_prompt)
+        ai_provider = "ollama" if ok else "none"
+
+    if not ok:
+        return EnrichBookMetadataResponse(
+            success=False,
+            mode=mode,
+            ai_provider="none",
+            qualityWarnings=["AI không khả dụng. Kiểm tra GROQ_API_KEY hoặc kết nối Ollama."],
+        )
+
+    keywords = _safe_list(data.get("keywords", []))[:15]
+
+    return EnrichBookMetadataResponse(
+        success=True,
+        mode=mode,
+        ai_provider=ai_provider,
+        keywords=keywords,
+        shortSummary=_safe_text(data.get("shortSummary")),
+        normalizedDescription=_safe_text(data.get("normalizedDescription")),
+        suggestedCategories=_safe_list(data.get("suggestedCategories", []))[:5],
+        confidence=0.85,
+    )
 
 
 async def _generate_book_summary(req: BookSummaryRequest):

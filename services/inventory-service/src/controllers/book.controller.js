@@ -678,6 +678,8 @@ async function updateBookDetails(req, res) {
     cover_image_url,
     language,
     publish_year,
+    page_count,
+    keywords,
   } = req.body;
 
   const normalizedLanguage = language !== undefined ? normalizeLanguageCode(language) || 'vi' : undefined;
@@ -715,9 +717,19 @@ async function updateBookDetails(req, res) {
           ...(description !== undefined ? { description: String(description).trim() || null } : {}),
           ...(normalizedLanguage !== undefined ? { default_language: normalizedLanguage } : {}),
           ...(publisher ? { publisher_id: publisher.id } : {}),
+          ...(page_count !== undefined && page_count !== null
+            ? { page_count: Number.isInteger(Number(page_count)) && Number(page_count) > 0 ? Number(page_count) : null }
+            : {}),
           metadata: {
             ...(existingBook.metadata || {}),
             ...(summary_vi !== undefined ? { summary_vi: String(summary_vi).trim() || null } : {}),
+            ...(keywords !== undefined
+              ? {
+                  keywords: Array.isArray(keywords)
+                    ? keywords.filter((k) => typeof k === 'string' && k.trim().length > 0).map((k) => k.trim()).slice(0, 15)
+                    : null,
+                }
+              : {}),
             ...(author || publisher || category ? { is_incomplete: false, requires_librarian_review: false } : {}),
           },
         },
