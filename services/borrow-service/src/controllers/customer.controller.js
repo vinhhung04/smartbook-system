@@ -590,6 +590,46 @@ async function provisionCustomerFromAuth(req, res) {
   }
 }
 
+async function resolveCustomerByAuth(req, res) {
+  const internalKey = process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key';
+  if (req.headers['x-internal-service-key'] !== internalKey) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  const { email, user_id } = req.query;
+  if (!email && !user_id) {
+    return res.status(400).json({ message: 'email or user_id is required' });
+  }
+
+  try {
+    let customer = null;
+
+    if (email) {
+      customer = await prisma.customers.findFirst({
+        where: { email: String(email).trim().toLowerCase() },
+        select: { id: true },
+      });
+    }
+
+    if (!customer && user_id) {
+      const code = `AUTH-${String(user_id).slice(0, 12).toUpperCase()}`;
+      customer = await prisma.customers.findFirst({
+        where: { customer_code: code },
+        select: { id: true },
+      });
+    }
+
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    return res.json({ customer_id: customer.id });
+  } catch (err) {
+    console.error('[resolveCustomerByAuth] error:', err.message);
+    return res.status(500).json({ message: 'Internal error' });
+  }
+}
+
 module.exports = {
   listCustomers,
   createCustomer,
@@ -601,4 +641,5 @@ module.exports = {
   getMyMembership,
   provisionCustomerFromAuth,
   ensureCurrentCustomer,
+  resolveCustomerByAuth,
 };

@@ -57,16 +57,22 @@ function parseJwtPayload(token: string): TokenPayload | null {
   }
 }
 
+function notifyAuthChanged() {
+  window.dispatchEvent(new CustomEvent('smartbook:auth-changed'));
+}
+
 function setSession(token: string, user?: AuthUser) {
   localStorage.setItem(TOKEN_KEY, token);
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
+  notifyAuthChanged();
 }
 
 function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  notifyAuthChanged();
 }
 
 export const authService = {

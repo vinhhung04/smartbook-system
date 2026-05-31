@@ -4,9 +4,13 @@ import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { authService } from "@/services/auth";
 import { toast } from "sonner";
-import { useSocket, useSocketEvent } from "@/lib/socket";
+import { useSocket } from "@/lib/socket";
 import { useTheme } from "@/lib/theme";
 import { LanguageToggle, useI18n } from "@/lib/i18n";
+import { useBorrowRealtime } from "@/hooks/useBorrowRealtime";
+import { useInventoryRealtime } from "@/hooks/useInventoryRealtime";
+import { useWarehouseTaskRealtime } from "@/hooks/useWarehouseTaskRealtime";
+import { useAIActionRealtime } from "@/hooks/useAIActionRealtime";
 
 type Crumb = { labelKey: string; to?: string };
 
@@ -42,6 +46,7 @@ function resolveBreadcrumb(pathname: string): { crumbs: Crumb[]; color: string }
 }
 
 interface AdminNotification {
+  event_type: string;
   title: string;
   desc: string;
   time: string;
@@ -50,10 +55,41 @@ interface AdminNotification {
 }
 
 const EVENT_CONFIG: Record<string, { titleKey: string; color: string }> = {
-  'loan:status_changed': { titleKey: 'topbar.event.loan_status_changed', color: 'bg-amber-500' },
-  'reservation:status_changed': { titleKey: 'topbar.event.reservation_status_changed', color: 'bg-indigo-500' },
-  'fine:created': { titleKey: 'topbar.event.fine_created', color: 'bg-rose-500' },
-  'notification:new': { titleKey: 'topbar.event.notification_new', color: 'bg-cyan-500' },
+  // Borrow
+  'loan:created':               { titleKey: 'topbar.event.loan_created',               color: 'bg-amber-500' },
+  'loan:status_changed':        { titleKey: 'topbar.event.loan_status_changed',         color: 'bg-amber-500' },
+  'loan:returned':              { titleKey: 'topbar.event.loan_returned',               color: 'bg-emerald-500' },
+  'loan:overdue':               { titleKey: 'topbar.event.loan_overdue',                color: 'bg-red-500' },
+  'loan:renewal_requested':     { titleKey: 'topbar.event.loan_renewal_requested',      color: 'bg-amber-400' },
+  'loan:renewal_reviewed':      { titleKey: 'topbar.event.loan_renewal_reviewed',       color: 'bg-amber-600' },
+  'reservation:created':        { titleKey: 'topbar.event.reservation_created',         color: 'bg-indigo-500' },
+  'reservation:confirmed':      { titleKey: 'topbar.event.reservation_confirmed',       color: 'bg-indigo-400' },
+  'reservation:cancelled':      { titleKey: 'topbar.event.reservation_cancelled',       color: 'bg-slate-500' },
+  'reservation:expired':        { titleKey: 'topbar.event.reservation_expired',         color: 'bg-slate-400' },
+  'reservation:converted_to_loan': { titleKey: 'topbar.event.reservation_converted',   color: 'bg-violet-500' },
+  'fine:created':               { titleKey: 'topbar.event.fine_created',                color: 'bg-rose-500' },
+  'fine:paid':                  { titleKey: 'topbar.event.fine_paid',                   color: 'bg-emerald-600' },
+  'fine:waived':                { titleKey: 'topbar.event.fine_waived',                 color: 'bg-slate-500' },
+  // Inventory
+  'purchase_request:created':   { titleKey: 'topbar.event.purchase_request_created',    color: 'bg-cyan-600' },
+  'purchase_request:status_changed': { titleKey: 'topbar.event.purchase_request_status_changed', color: 'bg-cyan-500' },
+  'goods_receipt:created':      { titleKey: 'topbar.event.goods_receipt_created',       color: 'bg-teal-500' },
+  'stock:movement_created':     { titleKey: 'topbar.event.stock_movement_created',      color: 'bg-blue-500' },
+  'stock:low':                  { titleKey: 'topbar.event.stock_low',                   color: 'bg-orange-500' },
+  'stock:out_of_stock':         { titleKey: 'topbar.event.stock_out_of_stock',          color: 'bg-red-600' },
+  // Warehouse tasks
+  'warehouse_task:assigned':    { titleKey: 'topbar.event.warehouse_task_assigned',     color: 'bg-violet-500' },
+  'warehouse_task:status_changed': { titleKey: 'topbar.event.warehouse_task_status_changed', color: 'bg-violet-400' },
+  'exception_report:created':   { titleKey: 'topbar.event.exception_report_created',    color: 'bg-rose-600' },
+  'exception_report:resolved':  { titleKey: 'topbar.event.exception_report_resolved',   color: 'bg-emerald-500' },
+  // AI
+  'ai_action:created':          { titleKey: 'topbar.event.ai_action_created',           color: 'bg-purple-500' },
+  'ai_action:confirmed':        { titleKey: 'topbar.event.ai_action_confirmed',         color: 'bg-purple-400' },
+  'ai_action:executed':         { titleKey: 'topbar.event.ai_action_executed',          color: 'bg-emerald-500' },
+  'ai_action:failed':           { titleKey: 'topbar.event.ai_action_failed',            color: 'bg-red-500' },
+  'ai_action:cancelled':        { titleKey: 'topbar.event.ai_action_cancelled',         color: 'bg-slate-500' },
+  // Fallback
+  'notification:new':           { titleKey: 'topbar.event.notification_new',            color: 'bg-cyan-500' },
 };
 
 function ThemeToggle() {
@@ -77,14 +113,16 @@ export function Topbar() {
   const { crumbs, color } = resolveBreadcrumb(location.pathname);
   const user = authService.getCurrentUser();
 
-  const handleAdminEvent = useCallback((eventName: string) => (data: any) => {
+  const handleAdminEvent = useCallback((eventName: string) => (data: unknown) => {
     const cfg = EVENT_CONFIG[eventName] || { titleKey: 'topbar.event.notification_new', color: 'bg-slate-500' };
-    const subject = data?.subject || t(cfg.titleKey);
-    const body = data?.body || '';
+    const d = data as Record<string, unknown>;
+    const subject = (d?.subject as string) || t(cfg.titleKey);
+    const body = (d?.body as string) || '';
 
     toast(subject, { description: body, duration: 5000 });
 
     setAdminNotifs((prev) => [{
+      event_type: eventName,
       title: subject,
       desc: body,
       time: 'just now',
@@ -93,10 +131,25 @@ export function Topbar() {
     }, ...prev].slice(0, 10));
   }, [t]);
 
-  useSocketEvent('loan:status_changed', handleAdminEvent('loan:status_changed'));
-  useSocketEvent('reservation:status_changed', handleAdminEvent('reservation:status_changed'));
-  useSocketEvent('fine:created', handleAdminEvent('fine:created'));
-  useSocketEvent('notification:new', handleAdminEvent('notification:new'));
+  useBorrowRealtime({
+    onLoanEvent: (event, data) => handleAdminEvent(event)(data),
+    onReservationEvent: (event, data) => handleAdminEvent(event)(data),
+    onFineEvent: (event, data) => handleAdminEvent(event)(data),
+  });
+
+  useInventoryRealtime({
+    onStockEvent: (event, data) => handleAdminEvent(event)(data),
+    onPurchaseRequestEvent: (event, data) => handleAdminEvent(event)(data),
+    onGoodsReceiptEvent: (event, data) => handleAdminEvent(event)(data),
+  });
+
+  useWarehouseTaskRealtime({
+    onWarehouseTaskEvent: (event, data) => handleAdminEvent(event)(data),
+    onExceptionReportEvent: (event, data) => handleAdminEvent(event)(data),
+  });
+
+  useAIActionRealtime((event, data) => handleAdminEvent(event)(data));
+
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)
@@ -126,7 +179,7 @@ export function Topbar() {
       </nav>
 
       <div className="flex items-center gap-2">
-<NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
+        <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
           <ScanBarcode className="w-4 h-4" />
         </NavLink>
 
@@ -171,8 +224,11 @@ export function Topbar() {
                         <div className="flex items-start gap-2.5">
                           <div className={`w-2 h-2 rounded-full ${n.color} mt-1.5 shrink-0`} />
                           <div className="flex-1 min-w-0">
-                            <div className="text-[12px]" style={{ fontWeight: n.unread ? 600 : 450 }}>{n.title}</div>
-                            <div className="text-[11px] text-slate-500 mt-0.5">{n.desc}</div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <div className="text-[12px]" style={{ fontWeight: n.unread ? 600 : 450 }}>{n.title}</div>
+                              <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5 shrink-0">{n.event_type.replace(':', ' ')}</span>
+                            </div>
+                            {n.desc && <div className="text-[11px] text-slate-500 mt-0.5 truncate">{n.desc}</div>}
                             <div className="text-[10px] text-slate-400 mt-1">{n.time}</div>
                           </div>
                         </div>

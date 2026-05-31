@@ -1,6 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
+const { pushToRooms } = require('../lib/socket-emitter');
 
 const prisma = new PrismaClient();
+
+const EXC_STAFF_ROOMS = ['admin', 'warehouse_manager'];
 
 function generateReportNumber() {
   const now = new Date();
@@ -122,6 +125,15 @@ async function createExceptionReport(req, res) {
         },
       });
     } catch (_) { /* audit log is non-critical */ }
+
+    setImmediate(() => void pushToRooms(EXC_STAFF_ROOMS, 'exception_report:created', {
+      id: report.id,
+      report_number: report.report_number,
+      warehouse_id: report.warehouse_id,
+      exception_type: report.exception_type,
+      task_type: report.task_type,
+      status: report.status,
+    }));
 
     return res.status(201).json({ data: report });
   } catch (error) {
@@ -247,6 +259,14 @@ async function resolveExceptionReport(req, res) {
         updated_at: new Date(),
       },
     });
+
+    setImmediate(() => void pushToRooms(EXC_STAFF_ROOMS, 'exception_report:resolved', {
+      id: updated.id,
+      report_number: updated.report_number,
+      warehouse_id: updated.warehouse_id,
+      status: updated.status,
+      resolved_by_user_id: updated.resolved_by_user_id,
+    }));
 
     return res.json({ data: updated });
   } catch (error) {

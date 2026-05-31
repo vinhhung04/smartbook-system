@@ -953,6 +953,27 @@ async function confirmOutbound(req, res) {
             order.warehouse_id,
           );
 
+          // Always aggregate repick chain quantities regardless of order status.
+          // When a repick completes fully, root order transitions to READY_TO_SHIP
+          // (no longer REPICKING), but repick-picked stock must still be included.
+          if (repickQtyByVariant.size === 0) {
+            const repickChainAll = await tx.outbound_orders.findMany({
+              where: {
+                note: { contains: `root_task_id=${encodeURIComponent(order.id)}` },
+                status: { not: "CANCELLED" },
+              },
+              select: {
+                outbound_order_items: { select: { variant_id: true, processed_qty: true } },
+              },
+            });
+            for (const ro of repickChainAll) {
+              for (const item of ro.outbound_order_items || []) {
+                const prev = repickQtyByVariant.get(item.variant_id) || 0;
+                repickQtyByVariant.set(item.variant_id, prev + Number(item.processed_qty || 0));
+              }
+            }
+          }
+
           const movementRows = [];
 
           for (const line of lines) {

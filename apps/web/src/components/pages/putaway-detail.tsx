@@ -88,7 +88,10 @@ export function PutawayDetailPage() {
           </div>
           <button
             onClick={() => navigate('/receiving-putaway', {
-              state: { warehouseId: detail.warehouse_id },
+              state: {
+                warehouseId: detail.warehouse_id,
+                goodsReceiptId: detail.id,
+              },
             })}
             disabled={detail.remaining_quantity <= 0}
             className="inline-flex items-center gap-2 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60"

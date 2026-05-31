@@ -25,6 +25,7 @@ from rag import (
 from retrieval import retrieve_context
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
 from agent_planner import plan_agent_action
+from socket_emitter import push_ai_action_event
 from agent_store import (
     create_pending_action,
     get_pending_action,
@@ -2938,6 +2939,13 @@ async def chat(request: Request, req: ChatRequest):
                         )
                         pending_action_data = action.model_dump()
                         reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                        asyncio.ensure_future(push_ai_action_event(
+                            "ai_action:created",
+                            action.action_id,
+                            action.action_type,
+                            user_ctx.user_id if user_ctx else None,
+                            {"summary": action.summary, "risk": action.risk},
+                        ))
             except Exception as exc:
                 logger.warning("Agent planning failed (non-fatal): %s", exc)
 
@@ -3005,6 +3013,12 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
     if not req.confirm:
         cancel_pending_action(req.action_id)
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:cancelled",
+            req.action_id,
+            action.action_type,
+            action.created_by_user_id,
+        ))
         return ConfirmActionResponse(
             success=True,
             action_id=req.action_id,
@@ -3020,9 +3034,24 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         merged_payload = {**action.payload, **req.override_payload}
         action = action.model_copy(update={"payload": merged_payload})
 
+    user_id_for_emit = action.created_by_user_id
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:confirmed",
+        req.action_id,
+        action.action_type,
+        user_id_for_emit,
+    ))
+
     try:
         result = await execute_agent_action(action, auth_header, user_ctx)
         mark_action_executed(req.action_id, result)
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:executed",
+            req.action_id,
+            action.action_type,
+            user_id_for_emit,
+            {"result_summary": str(result)[:200] if result else None},
+        ))
         return ConfirmActionResponse(
             success=True,
             action_id=req.action_id,
@@ -3034,6 +3063,13 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         raise
     except Exception as exc:
         mark_action_failed(req.action_id, str(exc))
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:failed",
+            req.action_id,
+            action.action_type,
+            user_id_for_emit,
+            {"error": str(exc)[:200]},
+        ))
         raise HTTPException(status_code=500, detail=f"Action execution failed: {exc}")
 
 
@@ -3056,6 +3092,12 @@ async def cancel_action(request: Request, req: CancelActionRequest):
             raise HTTPException(status_code=403, detail="You can only cancel your own actions.")
 
     cancel_pending_action(req.action_id)
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:cancelled",
+        req.action_id,
+        action.action_type,
+        action.created_by_user_id,
+    ))
     return {"success": True, "action_id": req.action_id, "status": CANCELLED}
 
 

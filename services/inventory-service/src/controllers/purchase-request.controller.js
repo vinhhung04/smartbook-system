@@ -1,7 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
 const { requireWarehouseWriteAccess } = require('../utils/warehouse-scope.utils');
+const { pushToRooms } = require('../lib/socket-emitter');
 
 const prisma = new PrismaClient();
+
+const PR_STAFF_ROOMS = ['admin', 'warehouse_manager'];
 
 function generateRequestNumber() {
   const now = new Date();
@@ -60,6 +63,14 @@ async function createPurchaseRequest(req, res) {
         status: 'PENDING',
       },
     });
+
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:created', {
+      id: request.id,
+      request_number: request.request_number,
+      warehouse_id: request.warehouse_id,
+      status: request.status,
+      created_by_user_id: userId,
+    }));
 
     return res.status(201).json({ data: request });
   } catch (error) {
@@ -186,6 +197,13 @@ async function approvePurchaseRequest(req, res) {
       },
     });
 
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:status_changed', {
+      id: updated.id,
+      request_number: updated.request_number,
+      status: updated.status,
+      warehouse_id: updated.warehouse_id,
+    }));
+
     return res.json({ data: updated });
   } catch (error) {
     console.error(error);
@@ -216,6 +234,13 @@ async function rejectPurchaseRequest(req, res) {
         updated_at: new Date(),
       },
     });
+
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:status_changed', {
+      id: updated.id,
+      request_number: updated.request_number,
+      status: updated.status,
+      warehouse_id: updated.warehouse_id,
+    }));
 
     return res.json({ data: updated });
   } catch (error) {

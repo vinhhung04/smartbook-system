@@ -24,11 +24,39 @@ const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
 const JWT_SECRET = process.env.JWT_SECRET || "smartbook_shared_jwt_secret";
 const INTERNAL_SERVICE_KEY =
   process.env.INTERNAL_SERVICE_KEY || "smartbook_internal_key";
+const SOCKET_CORS_ORIGIN =
+  process.env.SOCKET_CORS_ORIGIN || "http://localhost:5173";
+
+// --------------- Event & room allowlists ---------------
+const ALLOWED_EVENTS = new Set([
+  "notification:new",
+  "loan:created", "loan:status_changed", "loan:returned", "loan:overdue",
+  "loan:renewal_requested", "loan:renewal_reviewed",
+  "reservation:created", "reservation:confirmed", "reservation:ready_for_pickup",
+  "reservation:cancelled", "reservation:expired", "reservation:converted_to_loan",
+  "fine:created", "fine:paid", "fine:waived",
+  "stock:low", "stock:out_of_stock", "stock:movement_created", "stock:adjusted",
+  "purchase_request:created", "purchase_request:status_changed",
+  "purchase_order:created", "purchase_order:status_changed",
+  "goods_receipt:created",
+  "putaway:created", "putaway:completed",
+  "picking:created", "picking:completed",
+  "warehouse_task:assigned", "warehouse_task:status_changed",
+  "exception_report:created", "exception_report:resolved",
+  "ai_action:created", "ai_action:confirmed", "ai_action:executed",
+  "ai_action:failed", "ai_action:cancelled",
+]);
+
+// Matches: user:{uuid}, customer:{uuid}, supplier:{uuid}, warehouse:{uuid},
+//          admin, warehouse_manager, warehouse_staff, librarian
+const ROOM_PATTERN = /^(user|customer|supplier|warehouse):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^(admin|warehouse_manager|warehouse_staff|librarian)$/;
+
+const MAX_PAYLOAD_BYTES = 65536; // 64 KB
 
 // --------------- Socket.io ---------------
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: SOCKET_CORS_ORIGIN,
     methods: ["GET", "POST"],
   },
   path: "/socket.io",
@@ -51,60 +79,153 @@ io.use((socket, next) => {
   }
 });
 
-io.on("connection", (socket) => {
-  const user = socket.user;
-  const roles = Array.isArray(user.roles) ? user.roles : [];
-  const isCustomer = roles.includes("CUSTOMER");
-
-  if (isCustomer && user.customer_id) {
-    socket.join(`customer:${user.customer_id}`);
-    console.log(
-      `[ws] customer ${user.customer_id} connected (socket ${socket.id})`,
+async function resolveCustomerId(userId, email) {
+  try {
+    const params = new URLSearchParams();
+    if (email) params.set("email", email);
+    if (userId) params.set("user_id", userId);
+    const res = await fetch(
+      `${borrowTarget}/internal/customers/resolve?${params}`,
+      {
+        headers: { "x-internal-service-key": INTERNAL_SERVICE_KEY },
+        signal: AbortSignal.timeout(3000),
+      }
     );
-  } else {
-    socket.join("admin");
-    console.log(`[ws] admin ${user.id} connected (socket ${socket.id})`);
+    if (res.ok) {
+      const body = await res.json();
+      return body.customer_id || null;
+    }
+  } catch (err) {
+    console.warn("[ws] customer resolve error:", err.message);
   }
+  return null;
+}
+
+io.on("connection", async (socket) => {
+  const user = socket.user;
+  const userId = user.id;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+
+  // Always join personal room
+  socket.join(`user:${userId}`);
+
+  const joinedRooms = [`user:${userId}`];
+
+  if (roles.includes("ADMIN")) {
+    socket.join("admin");
+    joinedRooms.push("admin");
+  }
+
+  if (roles.includes("LIBRARIAN")) {
+    socket.join("librarian");
+    joinedRooms.push("librarian");
+  }
+
+  if (roles.includes("WAREHOUSE_MANAGER")) {
+    socket.join("warehouse_manager");
+    joinedRooms.push("warehouse_manager");
+  }
+
+  if (roles.includes("WAREHOUSE_STAFF")) {
+    socket.join("warehouse_staff");
+    joinedRooms.push("warehouse_staff");
+  }
+
+  if (roles.includes("CUSTOMER")) {
+    const customerId = await resolveCustomerId(userId, user.email);
+    if (customerId) {
+      socket.join(`customer:${customerId}`);
+      joinedRooms.push(`customer:${customerId}`);
+    } else {
+      console.warn(`[ws] CUSTOMER ${userId} - could not resolve customer_id, staying in user room only`);
+    }
+  }
+
+  // SUPPLIER: TODO — no user→supplier DB link yet, stays in user:{id} only
+
+  console.log(`[ws] ${userId} (${roles.join(",") || "no-role"}) connected → rooms: ${joinedRooms.join(", ")} (socket ${socket.id})`);
 
   socket.on("disconnect", (reason) => {
     console.log(`[ws] ${socket.id} disconnected: ${reason}`);
   });
 });
 
-// --------------- Internal push endpoint ---------------
-app.post("/internal/push-event", express.json(), (req, res) => {
+// --------------- Internal push endpoints ---------------
+function validateInternalKey(req, res) {
   const key = req.headers["x-internal-service-key"];
   if (key !== INTERNAL_SERVICE_KEY) {
-    return res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Forbidden" });
+    return false;
+  }
+  return true;
+}
+
+function validateEvent(event, res) {
+  if (!ALLOWED_EVENTS.has(event)) {
+    res.status(400).json({ message: `Unknown event: ${event}` });
+    return false;
+  }
+  return true;
+}
+
+function validateRoom(room, res) {
+  if (!ROOM_PATTERN.test(room)) {
+    res.status(400).json({ message: `Invalid room: ${room}` });
+    return false;
+  }
+  return true;
+}
+
+app.post("/internal/push-event", express.json({ limit: "64kb" }), (req, res) => {
+  if (!validateInternalKey(req, res)) return;
+
+  const rawSize = Buffer.byteLength(JSON.stringify(req.body));
+  if (rawSize > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ message: "Payload too large" });
   }
 
   const { room, event, data } = req.body;
   if (!room || !event) {
     return res.status(400).json({ message: "room and event are required" });
   }
+  if (!validateEvent(event, res)) return;
+  if (!validateRoom(room, res)) return;
+
+  const service = req.headers["x-service-name"] || "unknown";
+  console.log(`[push] service=${service} room=${room} event=${event}`);
 
   io.to(room).emit(event, data || {});
   return res.json({ ok: true });
 });
 
-// Batch push: send multiple events in one request
-app.post("/internal/push-events", express.json(), (req, res) => {
-  const key = req.headers["x-internal-service-key"];
-  if (key !== INTERNAL_SERVICE_KEY) {
-    return res.status(403).json({ message: "Forbidden" });
-  }
+app.post("/internal/push-events", express.json({ limit: "256kb" }), (req, res) => {
+  if (!validateInternalKey(req, res)) return;
 
   const events = req.body?.events;
   if (!Array.isArray(events)) {
     return res.status(400).json({ message: "events array is required" });
   }
 
+  const service = req.headers["x-service-name"] || "unknown";
+  let pushed = 0;
+  const errors = [];
+
   for (const evt of events) {
-    if (evt.room && evt.event) {
-      io.to(evt.room).emit(evt.event, evt.data || {});
+    if (!evt.room || !evt.event) continue;
+    if (!ALLOWED_EVENTS.has(evt.event)) {
+      errors.push(`unknown event: ${evt.event}`);
+      continue;
     }
+    if (!ROOM_PATTERN.test(evt.room)) {
+      errors.push(`invalid room: ${evt.room}`);
+      continue;
+    }
+    console.log(`[push] service=${service} room=${evt.room} event=${evt.event}`);
+    io.to(evt.room).emit(evt.event, evt.data || {});
+    pushed++;
   }
-  return res.json({ ok: true, pushed: events.length });
+
+  return res.json({ ok: true, pushed, errors: errors.length ? errors : undefined });
 });
 
 // --------------- Express middleware ---------------

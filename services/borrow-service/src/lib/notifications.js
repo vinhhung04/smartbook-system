@@ -2,20 +2,23 @@ const { pushEvents } = require('./socket-emitter');
 const { sendEmail } = require('./email-sender');
 
 const TEMPLATE_TO_EVENT = {
-  RESERVATION_CREATED: 'reservation:status_changed',
-  RESERVATION_CONFIRMED: 'reservation:status_changed',
-  RESERVATION_CANCELLED: 'reservation:status_changed',
-  RESERVATION_EXPIRED: 'reservation:status_changed',
-  LOAN_CREATED: 'loan:status_changed',
-  LOAN_RETURNED: 'loan:status_changed',
-  LOAN_OVERDUE: 'loan:status_changed',
-  LOAN_DUE_REMINDER: 'loan:status_changed',
-  LOAN_RENEWAL_REQUEST: 'loan:status_changed',
-  LOAN_RENEWAL_REVIEWED: 'loan:status_changed',
-  FINE_CREATED: 'fine:created',
-  FINE_PAYMENT_RECORDED: 'fine:created',
-  FINE_WAIVED: 'fine:created',
+  RESERVATION_CREATED:       'reservation:created',
+  RESERVATION_CONFIRMED:     'reservation:confirmed',
+  RESERVATION_CANCELLED:     'reservation:cancelled',
+  RESERVATION_EXPIRED:       'reservation:expired',
+  LOAN_CREATED:              'loan:created',
+  LOAN_RETURNED:             'loan:returned',
+  LOAN_OVERDUE:              'loan:overdue',
+  LOAN_DUE_REMINDER:         'loan:status_changed',
+  LOAN_RENEWAL_REQUEST:      'loan:renewal_requested',
+  LOAN_RENEWAL_REVIEWED:     'loan:renewal_reviewed',
+  FINE_CREATED:              'fine:created',
+  FINE_PAYMENT_RECORDED:     'fine:paid',
+  FINE_WAIVED:               'fine:waived',
 };
+
+// Roles that should receive domain events for staff-facing modules
+const STAFF_ROOMS = ['admin', 'librarian'];
 
 async function createNotificationRecord(tx, payload) {
   const record = await tx.customer_notifications.create({
@@ -53,14 +56,13 @@ async function createNotificationRecord(tx, payload) {
 
   const domainEvent = TEMPLATE_TO_EVENT[payload.template_code];
   if (domainEvent) {
-    events.push({
-      room: 'admin',
-      event: domainEvent,
-      data: {
-        ...notificationData,
-        customer_id: payload.customer_id,
-      },
-    });
+    const staffPayload = {
+      ...notificationData,
+      customer_id: payload.customer_id,
+    };
+    for (const room of STAFF_ROOMS) {
+      events.push({ room, event: domainEvent, data: staffPayload });
+    }
   }
 
   setImmediate(() => void pushEvents(events));

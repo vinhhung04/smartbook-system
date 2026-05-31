@@ -57,6 +57,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
+      - GATEWAY_URL=http://api-gateway:3000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
     depends_on:
       db:
         condition: service_healthy
@@ -132,6 +134,7 @@ services:
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
       # Mặc định là llama3 (LLM text) thay vì llava — llava là vision model, không phù hợp cho tóm tắt văn bản
@@ -168,6 +171,7 @@ services:
       - AI_SERVICE_URL=http://ai-service:8000
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       - auth-service
       - inventory-service
