@@ -5,6 +5,7 @@ export interface StockMovement {
   movement_number: string;
   created_at: string;
   movement_type: string;
+  reason_code: string | null;
   type: 'inbound' | 'outbound' | 'transfer';
   quantity: number;
   delta: number;

@@ -242,12 +242,11 @@ async function reserveFromBorrow(req, res) {
         throw new Error('INSUFFICIENT_AVAILABLE_STOCK');
       }
 
-      await tx.stock_balances.update({
+      const reserveUpdate = await tx.stock_balances.updateMany({
         where: {
-          variant_id_location_id: {
-            variant_id,
-            location_id: balance.location_id,
-          },
+          variant_id,
+          location_id: balance.location_id,
+          available_qty: { gte: normalizedQuantity },
         },
         data: {
           available_qty: { decrement: normalizedQuantity },
@@ -255,6 +254,10 @@ async function reserveFromBorrow(req, res) {
           last_movement_at: new Date(),
         },
       });
+
+      if (reserveUpdate.count === 0) {
+        throw new Error('INSUFFICIENT_AVAILABLE_STOCK');
+      }
 
       const stockReservation = await tx.stock_reservations.create({
         data: {
@@ -608,15 +611,18 @@ async function returnBorrowedLoan(req, res) {
         }
       }
 
-      await tx.stock_balances.update({
+      const returnUpdate = await tx.stock_balances.updateMany({
         where: {
-          variant_id_location_id: {
-            variant_id,
-            location_id: balance.location_id,
-          },
+          variant_id,
+          location_id: balance.location_id,
+          borrowed_qty: { gte: normalizedQuantity },
         },
         data: sourceUpdate,
       });
+
+      if (returnUpdate.count === 0) {
+        throw new Error('BORROWED_STOCK_NOT_FOUND');
+      }
 
       if (!isLost && !isSameLocation) {
         await tx.stock_balances.upsert({

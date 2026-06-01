@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
 
 const prisma = new PrismaClient();
 
@@ -27,39 +28,73 @@ function mapBookSummary(book) {
   const variants = book.book_variants || [];
   const locationMap = new Map();
 
-  const quantity = variants.reduce((bookSum, variant) => {
-    const stockQty = (variant.stock_balances || []).reduce((sum, stock) => {
-      const currentQty = stock.available_qty || 0;
+  let availableQty = 0;
+  let receivingQty = 0;
 
-      if (currentQty > 0) {
-        const locationCode = stock.locations?.location_code || '-';
-        const warehouseName = stock.warehouses?.name || stock.warehouses?.code || 'Kho';
-        const key = `${stock.warehouse_id}:${stock.location_id}`;
-        const existing = locationMap.get(key);
+  for (const variant of variants) {
+    for (const stock of (variant.stock_balances || [])) {
+      const locType = stock.locations?.location_type;
+      const isReceivingLoc = RECEIVING_LOCATION_TYPES.includes(locType);
+      const warehouseName = stock.warehouses?.name || stock.warehouses?.code || 'Kho';
 
-        if (existing) {
-          existing.quantity += currentQty;
-        } else {
-          locationMap.set(key, {
-            warehouse_id: stock.warehouse_id,
-            location_id: stock.location_id,
-            warehouse_name: warehouseName,
-            location_code: locationCode,
-            quantity: currentQty,
-            label: `${warehouseName} / ${locationCode}`,
-          });
+      if (isReceivingLoc) {
+        const qty = stock.on_hand_qty || 0;
+        if (qty > 0) {
+          receivingQty += qty;
+          const key = `RECV:${stock.warehouse_id}`;
+          const existing = locationMap.get(key);
+          if (existing) {
+            existing.quantity += qty;
+            existing.receiving_quantity += qty;
+          } else {
+            locationMap.set(key, {
+              warehouse_id: stock.warehouse_id,
+              location_id: stock.location_id,
+              warehouse_name: warehouseName,
+              location_code: 'RECEIVING',
+              quantity: qty,
+              available_quantity: 0,
+              receiving_quantity: qty,
+              label: `${warehouseName} / Receiving - Chờ putaway`,
+              is_receiving: true,
+            });
+          }
+        }
+      } else {
+        const qty = stock.available_qty || 0;
+        if (qty > 0) {
+          availableQty += qty;
+          const key = `${stock.warehouse_id}:${stock.location_id}`;
+          const locationCode = stock.locations?.location_code || '-';
+          const existing = locationMap.get(key);
+          if (existing) {
+            existing.quantity += qty;
+            existing.available_quantity += qty;
+          } else {
+            locationMap.set(key, {
+              warehouse_id: stock.warehouse_id,
+              location_id: stock.location_id,
+              warehouse_name: warehouseName,
+              location_code: locationCode,
+              quantity: qty,
+              available_quantity: qty,
+              receiving_quantity: 0,
+              label: `${warehouseName} / ${locationCode}`,
+              is_receiving: false,
+            });
+          }
         }
       }
+    }
+  }
 
-      return sum + currentQty;
-    }, 0);
-    return bookSum + stockQty;
-  }, 0);
+  const quantity = availableQty + receivingQty;
 
   const firstVariant = variants[0] || null;
   const locations = Array.from(locationMap.values()).sort((a, b) => b.quantity - a.quantity || a.label.localeCompare(b.label));
   const locationSummary = locations.length > 0 ? `${locations[0].label}${locations.length > 1 ? ` +${locations.length - 1}` : ''}` : '-';
-  const defaultLocation = locations[0] || null;
+  const shelfLocations = locations.filter((l) => !l.is_receiving);
+  const defaultLocation = shelfLocations[0] || locations[0] || null;
 
   return {
     id: book.id,
@@ -79,11 +114,13 @@ function mapBookSummary(book) {
     variant_id: firstVariant?.id || null,
     default_warehouse_id: defaultLocation?.warehouse_id || null,
     default_location_id: defaultLocation?.location_id || null,
-    reservable: Boolean(firstVariant?.id && defaultLocation?.warehouse_id && quantity > 0),
+    reservable: Boolean(firstVariant?.id && defaultLocation?.warehouse_id && availableQty > 0),
     location: locationSummary,
     locations,
     location_count: locations.length,
     quantity,
+    available_quantity: availableQty,
+    receiving_quantity: receivingQty,
     is_incomplete: Boolean(book.metadata?.is_incomplete),
     variant_count: variants.length,
     created_at: book.created_at,
@@ -143,6 +180,7 @@ async function getAllBooks(req, res) {
                   select: {
                     id: true,
                     location_code: true,
+                    location_type: true,
                   },
                 },
               },
@@ -241,6 +279,7 @@ async function getBookById(req, res) {
                   select: {
                     id: true,
                     location_code: true,
+                    location_type: true,
                   },
                 },
               },

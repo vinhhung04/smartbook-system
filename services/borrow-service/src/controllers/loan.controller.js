@@ -977,6 +977,9 @@ async function returnLoan(req, res) {
     mark_lost,
   } = req.body || {};
   const markLost = mark_lost === true;
+  const normalizedReturnCondition = markLost
+    ? 'LOST'
+    : String(item_condition_on_return || 'GOOD').trim().toUpperCase();
 
   if (!loanId || !isUuid(loanId)) {
     return res.status(400).json({ message: 'Invalid loan id' });
@@ -1019,8 +1022,6 @@ async function returnLoan(req, res) {
     if (targets.length === 0) {
       return res.status(409).json({ message: 'No active loan items to return' });
     }
-
-    const normalizedReturnCondition = String(item_condition_on_return || 'GOOD').trim().toUpperCase();
 
     for (let index = 0; index < targets.length; index += 1) {
       const item = targets[index];

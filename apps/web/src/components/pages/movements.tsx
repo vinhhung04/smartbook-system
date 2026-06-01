@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, Minus, BookOpen, RotateCcw, ChevronDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRightLeft, Minus, BookOpen, RotateCcw, ChevronDown, AlertTriangle, Wrench } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { motion, AnimatePresence } from "motion/react";
 import { stockMovementService, type StockMovement } from "@/services/stock-movement";
@@ -17,6 +17,48 @@ const movementTypes = {
   borrow: { label: "Mượn", color: "violet", icon: BookOpen, gradient: "from-violet-500 to-purple-500" },
   return: { label: "Trả", color: "sky", icon: RotateCcw, gradient: "from-sky-500 to-blue-500" },
 };
+
+const REASON_CONFIG: Record<string, { label: string; icon: React.ElementType; className: string }> = {
+  LOST:           { label: "Mất sách",    icon: AlertTriangle, className: "bg-red-50 text-red-700 border-red-200" },
+  DAMAGED_RETURN: { label: "Trả hư hỏng", icon: Wrench,        className: "bg-orange-50 text-orange-700 border-orange-200" },
+  RETURNED:       { label: "Trả bình thường", icon: RotateCcw,  className: "bg-sky-50 text-sky-700 border-sky-200" },
+};
+
+function ReasonBadge({ reasonCode }: { reasonCode: string | null }) {
+  if (!reasonCode) return null;
+  const cfg = REASON_CONFIG[reasonCode.toUpperCase()];
+  if (!cfg) return null;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${cfg.className}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
+const DELTA_LABEL: Record<string, (qty: number) => string> = {
+  LOST:           (qty) => `Mất ${qty} cuốn`,
+  DAMAGED_RETURN: (qty) => `Hư hỏng ${qty} cuốn`,
+  RETURNED:       (qty) => `Trả lại ${qty} cuốn`,
+};
+
+function formatDeltaLabel(m: StockMovement): { text: string; className: string } {
+  const code = m.reason_code?.toUpperCase() ?? '';
+  const fn = DELTA_LABEL[code];
+  if (fn) {
+    const colorClass =
+      code === 'LOST'           ? 'text-red-600' :
+      code === 'DAMAGED_RETURN' ? 'text-orange-600' :
+      'text-emerald-600';
+    return { text: fn(Math.abs(m.delta)), className: colorClass };
+  }
+  if (m.type === 'transfer') return { text: `${Math.abs(m.delta)} cuốn`, className: 'text-blue-600' };
+  return {
+    text: `${m.delta >= 0 ? '+' : ''}${m.delta} cuốn`,
+    className: m.delta >= 0 ? 'text-emerald-600' : 'text-rose-600',
+  };
+}
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -131,17 +173,16 @@ export function MovementsPage() {
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2.5 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-[13px] font-semibold">{m.movement_number || m.id}</span>
                           <StatusBadge label={typeConfig.label} variant={typeConfig.color as "success" | "warning" | "danger" | "info"} dot />
+                          <ReasonBadge reasonCode={m.reason_code} />
                           <span className="text-[11px] text-muted-foreground ml-auto">{formatDate(m.created_at)}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                           <span className="font-medium">{m.book_title}</span>
                           <span>·</span>
-                          <span className={m.type === "transfer" ? "text-blue-600" : (m.delta >= 0 ? "text-emerald-600" : "text-rose-600") + " font-medium"}>
-                            {m.delta >= 0 ? "+" : ""}{m.delta} units
-                          </span>
+                          {(() => { const d = formatDeltaLabel(m); return <span className={`font-medium ${d.className}`}>{d.text}</span>; })()}
                         </div>
                       </div>
                       <motion.div animate={{ rotate: expandedId === m.id ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -156,22 +197,31 @@ export function MovementsPage() {
                           <div className="p-4 space-y-3">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                               {[
-                                { label: "From/To", value: m.transfer_note || `${m.from_location_code || "-"} -> ${m.to_location_code || "-"}` },
-                                { label: "Warehouse", value: m.warehouse_name || m.warehouse_code || "-" },
-                                { label: "Location", value: m.to_location_code || m.from_location_code || "-", mono: true },
-                                { label: "User", value: m.created_by_user_id || "-" },
-                                { label: "Qty", value: `${m.delta >= 0 ? "+" : ""}${m.delta}`, bold: true },
+                                { label: "FROM/TO", value: m.transfer_note || `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` },
+                                { label: "WAREHOUSE", value: m.warehouse_name || m.warehouse_code || "-" },
+                                { label: "LOCATION", value: m.to_location_code || m.from_location_code || "-", mono: true },
+                                { label: "USER", value: m.created_by_user_id || "-" },
+                                { label: "QTY", value: formatDeltaLabel(m).text, bold: true, colored: true, positive: m.delta >= 0 },
                               ].map(f => (
                                 <div key={f.label}>
                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">{f.label}</p>
-                                  <p className={`text-[12px] ${f.mono ? "font-mono text-muted-foreground" : ""} ${f.bold ? "text-foreground" : "text-muted-foreground"}`} style={{ fontWeight: f.bold ? 600 : 500 }}>
+                                  <p
+                                    className={`text-[12px] ${(f as any).mono ? "font-mono text-muted-foreground" : ""} ${(f as any).colored ? ((f as any).positive ? "text-emerald-600" : "text-rose-600") : "text-muted-foreground"}`}
+                                    style={{ fontWeight: (f as any).bold ? 600 : 500 }}
+                                  >
                                     {f.value}
                                   </p>
                                 </div>
                               ))}
+                              {m.reason_code && REASON_CONFIG[m.reason_code.toUpperCase()] && (
+                                <div>
+                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">LÝ DO</p>
+                                  <ReasonBadge reasonCode={m.reason_code} />
+                                </div>
+                              )}
                             </div>
                             <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Notes</p>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">NOTES</p>
                               <p className="text-[12px] text-muted-foreground">
                                 Ref: {m.reference_type || "-"} / {m.reference_id || "-"}
                               </p>

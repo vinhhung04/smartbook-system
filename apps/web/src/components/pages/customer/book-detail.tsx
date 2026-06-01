@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { BookOpen, MapPin, ShoppingCart, Star, Calendar, ChevronRight, MessageSquare, Trash2 } from 'lucide-react';
+import { ReserveModal } from './_shared/reserve-modal';
 
 interface BookReview {
   id: string;
@@ -290,7 +291,7 @@ export function CustomerBookDetailPage() {
   const [book, setBook] = useState<CustomerCatalogBook | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isReserving, setIsReserving] = useState(false);
+  const [showReserveModal, setShowReserveModal] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -309,25 +310,8 @@ export function CustomerBookDetailPage() {
     void run();
   }, [id]);
 
-  const handleReserve = async () => {
-    if (!book?.variant_id || !book?.default_warehouse_id) {
-      toast.error('Sách hiện không thể đặt trước');
-      return;
-    }
-    try {
-      setIsReserving(true);
-      await customerBorrowService.createReservation({
-        variant_id: book.variant_id,
-        warehouse_id: book.default_warehouse_id,
-        pickup_location_id: book.default_location_id || null,
-        quantity: 1,
-      });
-      toast.success('Đặt trước thành công!');
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Đặt trước sách thất bại'));
-    } finally {
-      setIsReserving(false);
-    }
+  const handleReserve = () => {
+    setShowReserveModal(true);
   };
 
   if (loading) return <LoadingOverlay />;
@@ -344,7 +328,8 @@ export function CustomerBookDetailPage() {
     </div>
   );
 
-  const isAvailable = Number(book.quantity || 0) > 0;
+  const availableStock = Number(book.available_quantity ?? book.quantity ?? 0);
+  const isAvailable = availableStock > 0;
   const isReservable = book.reservable && isAvailable;
 
   return (
@@ -378,12 +363,12 @@ export function CustomerBookDetailPage() {
           </div>
           <div className="ml-auto shrink-0">
             <button
-              onClick={() => void handleReserve()}
-              disabled={!isReservable || isReserving}
+              onClick={handleReserve}
+              disabled={!isReservable}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-indigo-700 text-[13px] font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShoppingCart className="w-4 h-4" />
-              {isReserving ? 'Đang đặt trước...' : 'Đặt trước ngay'}
+              Đặt trước ngay
             </button>
           </div>
         </div>
@@ -424,7 +409,7 @@ export function CustomerBookDetailPage() {
                 {isAvailable ? 'Có thể đặt trước' : 'Hết sách'}
               </p>
               <p className={`text-[11px] ${isAvailable ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {isAvailable ? `${book.quantity || 0} cuốn còn trong kho` : 'Hiện không có sẵn'}
+                {isAvailable ? `${availableStock} cuốn sẵn sàng` : 'Hiện không có sẵn'}
               </p>
             </div>
           </div>
@@ -438,7 +423,7 @@ export function CustomerBookDetailPage() {
               { label: 'NXB', value: book.publisher || '-' },
               { label: 'ISBN', value: book.isbn || '-', mono: true },
               { label: 'Ngôn ngữ', value: book.language || 'vi' },
-              { label: 'Tồn kho', value: `${book.quantity || 0} cuốn` },
+              { label: 'Sẵn sàng', value: `${availableStock} cuốn` },
             ].map((meta) => (
               <div key={meta.label} className="flex items-start justify-between gap-3 text-[12px]">
                 <span className="text-muted-foreground shrink-0">{meta.label}</span>
@@ -490,12 +475,12 @@ export function CustomerBookDetailPage() {
                     : 'Sách hiện đã hết. Vui lòng kiểm tra lại sau hoặc tìm sách khác.'}
                 </p>
                 <button
-                  onClick={() => void handleReserve()}
-                  disabled={!isReservable || isReserving}
+                  onClick={handleReserve}
+                  disabled={!isReservable}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  {isReserving ? 'Đang đặt trước...' : 'Đặt trước ngay'}
+                  Đặt trước ngay
                 </button>
               </div>
             </div>
@@ -512,6 +497,12 @@ export function CustomerBookDetailPage() {
 
       {/* Reviews Section */}
       {id && <ReviewSection bookId={id} />}
+
+      <ReserveModal
+        book={showReserveModal ? book : null}
+        onClose={() => setShowReserveModal(false)}
+        onSuccess={() => setShowReserveModal(false)}
+      />
     </div>
   );
 }
