@@ -20,9 +20,13 @@ export interface CustomerCatalogBook {
   reservable?: boolean;
   is_incomplete?: boolean;
   locations?: Array<{
+    warehouse_id?: string;
     warehouse_name: string;
     location_code: string;
     quantity: number;
+    available_quantity?: number;
+    receiving_quantity?: number;
+    is_receiving?: boolean;
   }>;
 }
 

@@ -73,14 +73,20 @@ async function getStockMovements(req, res) {
         ? `${fromLocation.location_code} -> ${toLocation.location_code}`
         : null;
 
+      const reasonCode = String(movement.reason_code || '').toUpperCase();
+      const isNegativeDelta =
+        ['outbound', 'borrow'].includes(type) ||
+        (type === 'adjustment' && ['LOST', 'DAMAGED_RETURN'].includes(reasonCode));
+
       return {
         id: movement.id,
         movement_number: movement.movement_number,
         created_at: movement.created_at,
         movement_type: movement.movement_type,
+        reason_code: movement.reason_code || null,
         type,
         quantity: movement.quantity,
-        delta: ['outbound', 'borrow'].includes(type) ? -movement.quantity : movement.quantity,
+        delta: isNegativeDelta ? -movement.quantity : movement.quantity,
         unit_cost: Number(movement.unit_cost || 0),
         warehouse_id: movement.warehouse_id,
         warehouse_name: movement.warehouses?.name || null,

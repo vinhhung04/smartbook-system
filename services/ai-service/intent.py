@@ -109,6 +109,12 @@ def detect_intent(message: str) -> dict:
         "tao de xuat",
         "purchase request",
         "don nhap",
+        # Phrases for "create purchase request" in Vietnamese
+        "phieu nhap",
+        "tao phieu nhap",
+        "phieu yeu cau nhap",
+        "nhap sach",
+        "yeu cau nhap",
     ]):
         return {
             "intent": REORDER_SUGGESTION_QUERY,

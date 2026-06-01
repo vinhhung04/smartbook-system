@@ -407,11 +407,23 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
   const isStaffTask = action.type === 'CREATE_STAFF_TASK_DRAFT';
   const isDone = localStatus !== 'PENDING_CONFIRMATION';
 
+  // Warehouse resolution metadata from AI planner
+  const warehouseResolutionStatus = action.payload?.warehouse_resolution_status as string | undefined;
+  const warehouseCandidates: { id: string; code: string; name: string }[] =
+    action.payload?.warehouse_candidates || [];
+  const warehouseHint: string = action.payload?.warehouse_hint || '';
+  const resolvedWarehouseCode: string = action.payload?.resolved_warehouse_code || '';
+  const resolvedWarehouseName: string = action.payload?.resolved_warehouse_name || '';
+
   // Check if any item is missing warehouse_id (needs fallback selector)
   const reorderHasItemsWithoutWarehouse = isReorder && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
   const alertHasItemsWithoutWarehouse = isStockAlert && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
-  // Show warehouse selector when: stock alert with missing-warehouse items, OR reorder with missing-warehouse items
-  const needsWarehouseSelector = alertHasItemsWithoutWarehouse || reorderHasItemsWithoutWarehouse;
+  // Show warehouse selector when: ambiguous/not-found resolution, stock alert, or missing-warehouse reorder items
+  const needsWarehouseSelector =
+    alertHasItemsWithoutWarehouse ||
+    reorderHasItemsWithoutWarehouse ||
+    warehouseResolutionStatus === 'AMBIGUOUS' ||
+    warehouseResolutionStatus === 'NOT_FOUND';
 
   // Load warehouses for stock alert and reorder items missing warehouse
   useEffect(() => {
@@ -453,9 +465,18 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       toast.error('Danh sách kho chưa tải được. Vui lòng thử lại.');
       return;
     }
-    // Require warehouse only if some items are still missing warehouse
-    if ((alertHasItemsWithoutWarehouse || (isReorder && reorderHasItemsWithoutWarehouse)) && !selectedWarehouseId) {
-      toast.error('Vui lòng chọn kho dự phòng cho sách chưa xác định được kho.');
+    // Require warehouse selection when items are missing one, or when resolution was ambiguous/not found
+    const isWarehouseRequired =
+      alertHasItemsWithoutWarehouse ||
+      reorderHasItemsWithoutWarehouse ||
+      warehouseResolutionStatus === 'AMBIGUOUS' ||
+      warehouseResolutionStatus === 'NOT_FOUND';
+    if (isWarehouseRequired && !selectedWarehouseId) {
+      toast.error(
+        warehouseResolutionStatus === 'AMBIGUOUS'
+          ? `Tìm thấy nhiều kho khớp với "${warehouseHint}". Vui lòng chọn đúng kho cần tạo phiếu.`
+          : 'Vui lòng chọn kho trước khi xác nhận.'
+      );
       return;
     }
     // Staff task requires assignee selection if not already in payload
@@ -466,7 +487,12 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
     setConfirming(true);
     try {
       const overrideMap: Record<string, string> = {};
-      if ((alertHasItemsWithoutWarehouse || reorderHasItemsWithoutWarehouse) && selectedWarehouseId) {
+      const isWarehouseRequired =
+        alertHasItemsWithoutWarehouse ||
+        reorderHasItemsWithoutWarehouse ||
+        warehouseResolutionStatus === 'AMBIGUOUS' ||
+        warehouseResolutionStatus === 'NOT_FOUND';
+      if (isWarehouseRequired && selectedWarehouseId) {
         overrideMap.warehouse_id = selectedWarehouseId;
       }
       if (isReorder && selectedSupplierId) {
@@ -541,18 +567,39 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
       {/* Payload preview */}
       <PayloadPreview action={action} />
 
-      {/* Warehouse selector for stock alerts (always) and reorder items without warehouse (fallback) */}
+      {/* Warehouse resolution status banners */}
+      {isReorder && !isDone && warehouseResolutionStatus === 'RESOLVED' && resolvedWarehouseCode && (
+        <div className="text-[10px] bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-green-700">
+          Kho xác định từ yêu cầu của bạn: <strong>{resolvedWarehouseCode} — {resolvedWarehouseName}</strong>
+        </div>
+      )}
+      {isReorder && !isDone && warehouseResolutionStatus === 'AMBIGUOUS' && (
+        <div className="text-[10px] bg-yellow-50 border border-yellow-200 rounded-lg px-2 py-1.5 text-yellow-700">
+          ⚠ AI tìm thấy {warehouseCandidates.length} kho khớp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn đúng kho cần tạo phiếu bên dưới.
+        </div>
+      )}
+      {isReorder && !isDone && warehouseResolutionStatus === 'NOT_FOUND' && warehouseHint && (
+        <div className="text-[10px] bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 text-red-700">
+          ⚠ Không tìm thấy kho phù hợp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn kho từ danh sách.
+        </div>
+      )}
+
+      {/* Warehouse selector for stock alerts, reorder fallback, ambiguous/not-found resolution */}
       {needsWarehouseSelector && !isDone && (
         <div className="space-y-1">
           <label className="text-[10px] font-medium text-gray-600">
-            {isStockAlert
+            {warehouseResolutionStatus === 'AMBIGUOUS'
+              ? `Chọn kho (tìm thấy ${warehouseCandidates.length} kho khớp)`
+              : warehouseResolutionStatus === 'NOT_FOUND'
+              ? 'Chọn kho (không tìm thấy kho phù hợp)'
+              : isStockAlert
               ? 'Chọn kho tạo cảnh báo'
               : 'Chọn kho dự phòng cho sách chưa xác định kho'}
-            {isStockAlert && <span className="text-red-500"> *</span>}
+            <span className="text-red-500"> *</span>
           </label>
           {warehouseLoadError ? (
             <p className="text-[10px] text-red-500">{warehouseLoadError}</p>
-          ) : warehouses.length === 0 ? (
+          ) : warehouses.length === 0 && warehouseCandidates.length === 0 ? (
             <p className="text-[10px] text-gray-400 italic">Đang tải danh sách kho...</p>
           ) : (
             <select
@@ -561,7 +608,10 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
               className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
             >
               <option value="">-- Chọn kho --</option>
-              {warehouses.map((wh) => (
+              {(warehouseResolutionStatus === 'AMBIGUOUS' && warehouseCandidates.length > 0
+                ? warehouseCandidates
+                : warehouses
+              ).map((wh) => (
                 <option key={wh.id} value={wh.id}>
                   {wh.name} ({wh.code})
                 </option>

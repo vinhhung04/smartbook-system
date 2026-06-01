@@ -37,9 +37,26 @@ def _user_roles_set(user_context: UserContext) -> set[str]:
 
 async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict:
     payload = pending_action.payload
+
     # Global fallback warehouse_id (from user override or payload-level selection)
     global_warehouse_id = payload.get("warehouse_id")
+    resolution_status = payload.get("warehouse_resolution_status")
     items = payload.get("items") or []
+
+    # Block execution when warehouse was ambiguous/not-found AND user still hasn't chosen one.
+    # Once user picks a warehouse via the confirm dialog, global_warehouse_id is set via override.
+    if resolution_status in ("AMBIGUOUS", "NOT_FOUND") and not global_warehouse_id:
+        hint = payload.get("warehouse_hint") or ""
+        return {
+            "success": True,
+            "mode": "draft_only",
+            "request_id": f"REORDER-DRAFT-{_short_id()}",
+            "message": (
+                f"Chưa thể tạo phiếu — kho '{hint}' chưa được xác định rõ. "
+                "Vui lòng chọn kho cụ thể trong modal xác nhận rồi thử lại."
+            ),
+            "payload": payload,
+        }
 
     if not items:
         return {
@@ -61,8 +78,13 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
         if not variant_id:
             skipped_items.append(item.get("title") or "Unknown")
             continue
-        # Per-item warehouse_id takes priority; fallback to global
-        effective_warehouse = item.get("warehouse_id") or global_warehouse_id
+        # For AMBIGUOUS resolution, user explicitly chose a warehouse — override per-item warehouses
+        # so all items go to the single warehouse the user selected.
+        if resolution_status == "AMBIGUOUS" and global_warehouse_id:
+            effective_warehouse = global_warehouse_id
+        else:
+            # Per-item warehouse_id takes priority; fallback to global
+            effective_warehouse = item.get("warehouse_id") or global_warehouse_id
         if not effective_warehouse:
             no_warehouse_items.append(item.get("title") or "Unknown")
             continue
@@ -112,6 +134,12 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
 
             wh_note = f"Kho: {item.get('warehouse_code') or item.get('warehouse_name') or effective_warehouse_id}. " if item.get("warehouse_id") else ""
             supplier_note = f"NCC đề xuất: {effective_supplier_name}. " if effective_supplier_name else ""
+            wh_source_note = ""
+            if payload.get("warehouse_resolution_source") == "USER_MESSAGE":
+                wh_source_note = (
+                    f"Kho theo yêu cầu người dùng: "
+                    f"{payload.get('resolved_warehouse_code')} — {payload.get('resolved_warehouse_name')}. "
+                )
 
             body = {
                 "warehouse_id": effective_warehouse_id,
@@ -120,7 +148,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                 "quantity_requested": quantity,
                 "reason": reason,
                 "note": (
-                    f"{wh_note}{supplier_note}"
+                    f"{wh_source_note}{wh_note}{supplier_note}"
                     f"Tạo bởi SmartBook AI Agent từ intent {payload.get('source_intent')}. "
                     f"Priority: {item.get('priority', 'MEDIUM')}. "
                     f"Current stock: {item.get('current_stock', '?')}."

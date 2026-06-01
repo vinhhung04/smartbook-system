@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import logging
+import os
+import re
+import unicodedata
 from datetime import datetime, timezone
+
+import httpx
 
 from agent_actions import (
     CREATE_REORDER_DRAFT,
@@ -40,6 +46,8 @@ _WANTS_ACTION_KEYWORDS = [
 _REORDER_KEYWORDS = [
     "de xuat nhap", "tao de xuat", "purchase request", "nhap them", "dat mua",
     "tao don nhap", "can nhap", "nhan nhap",
+    # Vietnamese "create purchase request" phrases
+    "phieu nhap", "tao phieu nhap", "phieu yeu cau nhap", "nhap sach", "yeu cau nhap",
 ]
 
 _REPORT_KEYWORDS = [
@@ -72,6 +80,104 @@ _INTENT_LABELS: dict[str, str] = {
     RESERVATION_QUERY: "Đặt chỗ",
     BOOK_SEARCH_QUERY: "Tìm sách",
 }
+
+
+_GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
+_planner_logger = logging.getLogger("uvicorn.error")
+
+# Abbreviation → normalized expansion keywords for Vietnamese cities
+_WAREHOUSE_ABBREV_MAP: dict[str, list[str]] = {
+    "hn": ["ha noi", "hanoi"],
+    "hni": ["ha noi", "hanoi"],
+    "hcm": ["ho chi minh", "saigon", "sai gon", "tphcm"],
+    "dn": ["da nang"],
+    "ct": ["can tho"],
+    "hp": ["hai phong"],
+    "hue": ["hue", "thua thien"],
+    "bd": ["binh duong"],
+    "bn": ["bac ninh"],
+    "vt": ["vung tau"],
+    "dl": ["da lat"],
+}
+
+
+def _norm_wh(text: str) -> str:
+    """Normalize for warehouse matching: lowercase, strip Vietnamese diacritics, collapse separators."""
+    t = unicodedata.normalize("NFD", text.lower().strip())
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+    # đ/Đ doesn't decompose in NFD — handle explicitly
+    t = t.replace("đ", "d")  # đ → d
+    return re.sub(r"[-_.\s]+", " ", t).strip()
+
+
+def _word_match(needle: str, haystack: str) -> bool:
+    """True if needle appears as a whole word in haystack or vice versa."""
+    return f" {needle} " in f" {haystack} " or f" {haystack} " in f" {needle} "
+
+
+def _resolve_warehouse_hint_against_db(hint: str, warehouses: list[dict]) -> dict:
+    """Match user warehouse hint against actual warehouse list from DB.
+
+    Returns {"status": "RESOLVED"|"AMBIGUOUS"|"NOT_FOUND", "warehouse": dict|None, "candidates": list}
+    """
+    if not hint or not warehouses:
+        return {"status": "NOT_FOUND", "warehouse": None, "candidates": []}
+
+    norm_hint = _norm_wh(hint)
+
+    # 1. Exact code match (highest priority — e.g. user typed "WH-HN" exactly)
+    exact = [w for w in warehouses if _norm_wh(w.get("code", "")) == norm_hint]
+    if len(exact) == 1:
+        return {"status": "RESOLVED", "warehouse": exact[0], "candidates": []}
+
+    # 2. Expand abbreviations so "hn" also matches "ha noi" etc.
+    expanded: set[str] = {norm_hint}
+    for abbrev, expansions in _WAREHOUSE_ABBREV_MAP.items():
+        if norm_hint == abbrev or norm_hint in expansions:
+            expanded.update(expansions)
+            expanded.add(abbrev)
+
+    # 3. Check code, name, province, district of each warehouse using whole-word matching
+    #    to avoid false positives (e.g. "ct" matching "district").
+    matches: list[dict] = []
+    for w in warehouses:
+        wh_texts = [
+            t for t in [
+                _norm_wh(w.get("code", "")),
+                _norm_wh(w.get("name", "")),
+                _norm_wh(w.get("province", "") or ""),
+                _norm_wh(w.get("district", "") or ""),
+            ] if t
+        ]
+        for h in expanded:
+            if any(_word_match(h, t) for t in wh_texts):
+                matches.append(w)
+                break
+
+    if len(matches) == 1:
+        return {"status": "RESOLVED", "warehouse": matches[0], "candidates": []}
+    if len(matches) > 1:
+        return {"status": "AMBIGUOUS", "warehouse": None, "candidates": matches}
+    return {"status": "NOT_FOUND", "warehouse": None, "candidates": []}
+
+
+async def _fetch_active_warehouses(auth_header: str | None) -> list[dict]:
+    """Fetch active warehouses from Gateway /api/warehouses."""
+    if not auth_header:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.get(
+                f"{_GATEWAY_URL}/api/warehouses",
+                headers={"Authorization": auth_header},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                all_wh = data if isinstance(data, list) else (data.get("data") or [])
+                return [w for w in all_wh if isinstance(w, dict) and w.get("is_active", True)]
+    except Exception as exc:
+        _planner_logger.warning("Failed to fetch warehouses for hint resolution: %s", exc)
+    return []
 
 
 def _contains_any(text: str, keywords: list[str]) -> bool:
@@ -174,13 +280,14 @@ def _filter_items_by_warehouse_hint(
 
 # ── Builder helpers ────────────────────────────────────────────────────────────
 
-def _build_reorder_draft(
+async def _build_reorder_draft(
     message: str,
     intent_info: dict,
     raw: dict,
     sources: list[dict],
     warnings: list[str],
     user_context: UserContext | None,
+    auth_header: str | None = None,
 ) -> dict | None:
     # Priority 1: Per-warehouse low-stock data (has variant_id + warehouse_id per item)
     low_stock_by_wh = raw.get("low_stock_by_warehouse") or []
@@ -277,12 +384,34 @@ def _build_reorder_draft(
     if not items:
         return None
 
-    # Detect warehouse hint from user message and filter items accordingly
+    # ── Warehouse resolution via DB API ──────────────────────────────────────────
     normalized_msg = normalize_text(message)
     warehouse_hint = _detect_warehouse_hint(normalized_msg)
-    filtered_items, matched_warehouse_name = _filter_items_by_warehouse_hint(items, warehouse_hint)
-    if matched_warehouse_name:
-        items = filtered_items
+
+    warehouse_resolution_status: str = "NONE"   # no hint → no DB lookup needed
+    resolved_warehouse: dict | None = None
+    warehouse_candidates: list[dict] = []
+
+    if warehouse_hint:
+        db_warehouses = await _fetch_active_warehouses(auth_header)
+        resolution = _resolve_warehouse_hint_against_db(warehouse_hint, db_warehouses)
+        warehouse_resolution_status = resolution["status"]
+        resolved_warehouse = resolution.get("warehouse")
+        warehouse_candidates = resolution.get("candidates") or []
+
+        if warehouse_resolution_status == "RESOLVED":
+            # Override ALL items to the warehouse the user explicitly asked for
+            rw_id = resolved_warehouse["id"]
+            rw_code = resolved_warehouse.get("code", "")
+            rw_name = resolved_warehouse.get("name", "")
+            items = [
+                {**it, "warehouse_id": rw_id, "warehouse_code": rw_code, "warehouse_name": rw_name}
+                for it in items
+            ]
+        # AMBIGUOUS / NOT_FOUND: keep items as-is; executor will block creation
+    else:
+        # No warehouse hint — apply the original per-item filter (no-op when hint is None)
+        filtered_items, _ = _filter_items_by_warehouse_hint(items, None)
 
     action_warnings = list(warnings or [])
     payload_warnings = []
@@ -292,22 +421,31 @@ def _build_reorder_draft(
     items_missing_warehouse = [it for it in items if not it.get("warehouse_id")]
     items_missing_variant = [it for it in items if not it.get("book_variant_id")]
 
-    # requires_review = True only if any item is missing warehouse (user must choose fallback)
-    requires_review = bool(items_missing_warehouse)
+    requires_review = bool(items_missing_warehouse) or warehouse_resolution_status in ("AMBIGUOUS", "NOT_FOUND")
 
-    if warehouse_hint and matched_warehouse_name:
+    if warehouse_resolution_status == "RESOLVED":
         payload_warnings.append(
-            f"Đã lọc theo kho: {matched_warehouse_name} (từ yêu cầu '{warehouse_hint}')."
+            f"Đã xác định kho: {resolved_warehouse.get('code')} — {resolved_warehouse.get('name')} "
+            f"(từ yêu cầu '{warehouse_hint}')."
         )
-    elif warehouse_hint and not matched_warehouse_name:
+    elif warehouse_resolution_status == "AMBIGUOUS":
+        cand_names = ", ".join(
+            f"{w.get('code')} ({w.get('name')})" for w in warehouse_candidates[:5]
+        )
         payload_warnings.append(
-            f"Không tìm thấy kho phù hợp với '{warehouse_hint}'. Hiển thị tất cả kho."
+            f"Tìm thấy {len(warehouse_candidates)} kho khớp với '{warehouse_hint}': {cand_names}. "
+            "Vui lòng chọn đúng kho cần tạo phiếu."
+        )
+    elif warehouse_resolution_status == "NOT_FOUND":
+        payload_warnings.append(
+            f"Không tìm thấy kho phù hợp với '{warehouse_hint}'. "
+            "Vui lòng chọn kho từ danh sách."
         )
     if items_missing_variant:
         payload_warnings.append(
             f"{len(items_missing_variant)} sách thiếu book_variant_id — sẽ bị bỏ qua khi tạo phiếu."
         )
-    if items_missing_warehouse:
+    if items_missing_warehouse and warehouse_resolution_status not in ("AMBIGUOUS", "NOT_FOUND"):
         payload_warnings.append(
             f"{len(items_missing_warehouse)} sách chưa xác định được kho — "
             "vui lòng chọn kho dự phòng bên dưới để áp dụng cho các sách này."
@@ -324,9 +462,7 @@ def _build_reorder_draft(
         ),
         "payload": {
             "items": items[:20],
-            # Global fallback warehouse_id (None = user must select for items without warehouse)
             "warehouse_id": None,
-            # Global supplier override (None = use per-item suggested_supplier, user can select)
             "supplier_id": None,
             "supplier_name": None,
             "warehouses_covered": warehouses_covered,
@@ -335,6 +471,17 @@ def _build_reorder_draft(
             "source_intent": intent_info.get("intent"),
             "sources": [s.get("name") for s in sources if s.get("status") == "ok"],
             "created_from_message": message,
+            # Warehouse resolution metadata
+            "warehouse_resolution_status": warehouse_resolution_status,
+            "warehouse_resolution_source": "USER_MESSAGE" if warehouse_hint else "AUTO",
+            "warehouse_hint": warehouse_hint,
+            "warehouse_candidates": [
+                {"id": w["id"], "code": w.get("code"), "name": w.get("name")}
+                for w in warehouse_candidates[:10]
+            ],
+            "resolved_warehouse_id": resolved_warehouse["id"] if resolved_warehouse else None,
+            "resolved_warehouse_code": resolved_warehouse.get("code") if resolved_warehouse else None,
+            "resolved_warehouse_name": resolved_warehouse.get("name") if resolved_warehouse else None,
         },
         "risk": RISK_MEDIUM,
         "sources": sources,
@@ -688,11 +835,12 @@ def _build_staff_task_draft(
 
 # ── Main planner entry point ──────────────────────────────────────────────────
 
-def plan_agent_action(
+async def plan_agent_action(
     message: str,
     intent_info: dict,
     retrieval: dict,
     user_context: UserContext | None,
+    auth_header: str | None = None,
 ) -> dict | None:
     """Deterministically plan an agent action from message + intent + retrieval context.
 
@@ -715,7 +863,10 @@ def plan_agent_action(
 
     # Reorder draft: explicit reorder intent or keywords
     if intent == REORDER_SUGGESTION_QUERY or _contains_any(normalized, _REORDER_KEYWORDS):
-        result = _build_reorder_draft(message, intent_info, raw, sources, warnings, user_context)
+        result = await _build_reorder_draft(
+            message, intent_info, raw, sources, warnings, user_context,
+            auth_header=auth_header,
+        )
         if result:
             return result
 

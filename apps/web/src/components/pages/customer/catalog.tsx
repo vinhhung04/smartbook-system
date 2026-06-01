@@ -10,6 +10,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { BookCard } from './_shared/book-card';
 import { DetailDrawer } from './_shared/detail-drawer';
+import { ReserveModal } from './_shared/reserve-modal';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { BookOpen, RefreshCw, Star } from 'lucide-react';
 
@@ -20,7 +21,7 @@ export function CustomerCatalogPage() {
   const [books, setBooks] = useState<CustomerCatalogBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reservingBookId, setReservingBookId] = useState<string | null>(null);
+  const [reserveTarget, setReserveTarget] = useState<CustomerCatalogBook | null>(null);
   const [previewBook, setPreviewBook] = useState<CustomerCatalogBook | null>(null);
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState<'available' | 'unavailable' | ''>('');
@@ -69,30 +70,12 @@ export function CustomerCatalogPage() {
 
   const stats = useMemo(() => ({
     total: books.length,
-    available: books.filter((b) => Number(b.quantity || 0) > 0).length,
-    unavailable: books.filter((b) => Number(b.quantity || 0) <= 0).length,
+    available: books.filter((b) => Number(b.available_quantity ?? b.quantity ?? 0) > 0).length,
+    unavailable: books.filter((b) => Number(b.available_quantity ?? b.quantity ?? 0) <= 0).length,
   }), [books]);
 
-  const handleReserve = async (book: CustomerCatalogBook) => {
-    if (!book.variant_id || !book.default_warehouse_id) {
-      toast.error('Sách hiện không thể đặt trước');
-      return;
-    }
-
-    try {
-      setReservingBookId(book.id);
-      await customerBorrowService.createReservation({
-        variant_id: book.variant_id,
-        warehouse_id: book.default_warehouse_id,
-        pickup_location_id: book.default_location_id || null,
-        quantity: 1,
-      });
-      toast.success('Đặt trước thành công');
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Đặt trước sách thất bại'));
-    } finally {
-      setReservingBookId(null);
-    }
+  const handleReserve = (book: CustomerCatalogBook) => {
+    setReserveTarget(book);
   };
 
   return (
@@ -185,7 +168,7 @@ export function CustomerCatalogPage() {
       <SectionCard noPadding className="!rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/20">
           <p className="text-[12px] text-muted-foreground font-medium">
-            Hiển thị {stats.total} đầu sách — {stats.available} còn sách
+            Hiển thị {stats.total} đầu sách — {stats.available} có thể đặt trước
           </p>
         </div>
 
@@ -243,7 +226,7 @@ export function CustomerCatalogPage() {
                       setPreviewBook(found);
                     }}
                     onReserve={handleReserve}
-                    reserving={reservingBookId === book.id}
+                    reserving={false}
                     ratingInfo={ratingsMap[book.id] || null}
                   />
                 </motion.div>
@@ -294,11 +277,11 @@ export function CustomerCatalogPage() {
 
             <div className="flex items-center gap-2 pt-2">
               <button
-                onClick={() => void handleReserve(previewBook)}
-                disabled={reservingBookId === previewBook.id || Number(previewBook.quantity || 0) <= 0}
+                onClick={() => handleReserve(previewBook)}
+                disabled={!previewBook.reservable}
                 className="flex-1 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {reservingBookId === previewBook.id ? 'Đang đặt trước...' : Number(previewBook.quantity || 0) <= 0 ? 'Hết sách' : 'Đặt trước ngay'}
+                {!previewBook.reservable ? 'Hết sách' : 'Đặt trước ngay'}
               </button>
               <button
                 onClick={() => navigate(`/customer/books/${previewBook.id}`)}
@@ -310,6 +293,12 @@ export function CustomerCatalogPage() {
           </div>
         ) : null}
       </DetailDrawer>
+
+      <ReserveModal
+        book={reserveTarget}
+        onClose={() => setReserveTarget(null)}
+        onSuccess={() => { setReserveTarget(null); void loadBooks(); }}
+      />
     </div>
   );
 }

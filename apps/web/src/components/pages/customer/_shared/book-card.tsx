@@ -12,10 +12,10 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, onView, onReserve, reserving = false, ratingInfo }: BookCardProps) {
-  const stock = Number(book.quantity || 0);
-  const isAvailable = stock > 0;
+  const availableStock = Number(book.available_quantity ?? book.quantity ?? 0);
+  const isAvailable = availableStock > 0;
   const canReserve = Boolean(book.reservable && isAvailable);
-  const stockLabel = isAvailable ? `${stock} cuốn còn trong kho` : 'Hết sách';
+  const stockLabel = isAvailable ? `${availableStock} cuốn sẵn sàng` : 'Hết sách';
 
   return (
     <article className="rounded-[14px] border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">

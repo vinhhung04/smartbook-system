@@ -137,7 +137,7 @@ export function BorrowLoansPage() {
             toast.error('Không tìm thấy sách đang mượn để đánh dấu mất');
             return;
           }
-          await borrowService.returnLoan(loanId, { loan_item_id: activeItem.id, mark_lost: true });
+          await borrowService.returnLoan(loanId, { loan_item_id: activeItem.id, mark_lost: true, item_condition_on_return: 'LOST' });
           toast.success('Đã xử lý sách mất');
           setConfirmState((s) => ({ ...s, open: false }));
           await loadLoans();

@@ -2919,7 +2919,7 @@ async def chat(request: Request, req: ChatRequest):
 
         if user_ctx is not None:
             try:
-                planned = plan_agent_action(req.message, intent_info, retrieval, user_ctx)
+                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
                 if planned is not None:
                     temp_action = _make_temp_action_for_check(planned)
                     if not can_confirm_action(user_ctx, temp_action):

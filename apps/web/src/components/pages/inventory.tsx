@@ -17,7 +17,10 @@ interface InventoryLocation {
   warehouse_name: string;
   location_code: string;
   quantity: number;
+  available_quantity?: number;
+  receiving_quantity?: number;
   label: string;
+  is_receiving?: boolean;
 }
 
 interface InventoryBook {
@@ -26,6 +29,8 @@ interface InventoryBook {
   isbn: string;
   category: string;
   quantity: number;
+  available_quantity?: number;
+  receiving_quantity?: number;
   location: string;
   locations?: InventoryLocation[];
   updated_at: string;
@@ -36,6 +41,8 @@ interface InventoryWarehouseRow extends InventoryBook {
   warehouseId: string;
   warehouseName: string;
   warehouseQty: number;
+  warehouseAvailQty: number;
+  warehouseRecvQty: number;
   locationSummary: string;
 }
 
@@ -82,18 +89,24 @@ function expandBooksByWarehouse(data: InventoryBook[]): InventoryWarehouseRow[] 
         warehouseId: "__none__",
         warehouseName: "-",
         warehouseQty: 0,
+        warehouseAvailQty: 0,
+        warehouseRecvQty: 0,
         locationSummary: "-",
       });
       continue;
     }
     for (const [key, { name: whName, locs: whLocs }] of byWh) {
       const warehouseQty = whLocs.reduce((s, l) => s + Number(l.quantity || 0), 0);
+      const warehouseAvailQty = whLocs.reduce((s, l) => s + Number(l.available_quantity ?? l.quantity), 0);
+      const warehouseRecvQty = whLocs.reduce((s, l) => s + Number(l.receiving_quantity ?? 0), 0);
       rows.push({
         ...item,
         rowKey: `${item.id}::${key}`,
         warehouseId: key,
         warehouseName: whName,
         warehouseQty,
+        warehouseAvailQty,
+        warehouseRecvQty,
         locationSummary: summarizeLocationCodes(whLocs),
       });
     }
@@ -143,7 +156,7 @@ export function InventoryPage() {
 
   const filtered = whScopedRows
     .filter((row) => {
-      const status = getStockStatus(Number(row.warehouseQty || 0));
+      const status = getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty));
       if (statusFilter === "Còn hàng" && status !== "in-stock") return false;
       if (statusFilter === "Sắp hết" && status !== "low-stock") return false;
       if (statusFilter === "Hết hàng" && status !== "out-of-stock") return false;
@@ -156,9 +169,9 @@ export function InventoryPage() {
     });
 
   const totalUnits = whScopedRows.reduce((sum, row) => sum + Number(row.warehouseQty || 0), 0);
-  const healthyCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseQty || 0)) === "in-stock").length;
-  const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseQty || 0)) === "low-stock").length;
-  const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseQty || 0)) === "out-of-stock").length;
+  const healthyCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "in-stock").length;
+  const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "low-stock").length;
+  const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "out-of-stock").length;
 
   const healthData = [
     { name: "Tốt", value: healthyCount, color: "#10b981" },
@@ -292,8 +305,10 @@ export function InventoryPage() {
                 <tr><td colSpan={9}><EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td></tr>
               ) : filtered.map((row, i) => {
                 const qty = Number(row.warehouseQty || 0);
-                const status = getStockStatus(qty);
-                const healthPct = Math.min(Math.max((qty / 5) * 100, 0), 100);
+                const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
+                const recvQty = Number(row.warehouseRecvQty || 0);
+                const status = getStockStatus(availQty);
+                const healthPct = Math.min(Math.max((availQty / 5) * 100, 0), 100);
                 return (
                   <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                     className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
@@ -302,8 +317,13 @@ export function InventoryPage() {
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{row.category || "-"}</td>
                     <td className="px-5 py-3.5 text-[12px] font-medium">{row.warehouseName}</td>
                     <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{row.locationSummary}</td>
-                    <td className="px-5 py-3.5 text-right text-[14px] font-mono font-bold">
-                      <span className={qty === 0 ? "text-red-500" : qty <= 5 ? "text-amber-600" : "text-emerald-600"}>{qty}</span>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={`text-[14px] font-mono font-bold ${qty === 0 ? "text-red-500" : qty <= 5 ? "text-amber-600" : "text-emerald-600"}`}>{qty}</span>
+                      {recvQty > 0 && (
+                        <div className="text-[10px] text-amber-500 leading-tight mt-0.5">
+                          Sẵn sàng: {availQty} · Nhận: {recvQty}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
