@@ -8,8 +8,10 @@ from intent import (
     REORDER_SUGGESTION_QUERY,
     TOP_BORROWED_BOOKS_QUERY,
     detect_intent,
+    normalize_text,
 )
 from rag import build_rag_context
+from agent_planner import _wants_action, _is_all_warehouses_intent
 
 
 class IntentDetectionTests(unittest.TestCase):
@@ -35,6 +37,101 @@ class IntentDetectionTests(unittest.TestCase):
         for message in ["demand forecasting", "reorder suggestion", "sach nao can bo sung"]:
             with self.subTest(message=message):
                 self.assertEqual(detect_intent(message)["intent"], REORDER_SUGGESTION_QUERY)
+
+
+class IntentNewKeywordsTests(unittest.TestCase):
+    """Test new LOW_STOCK_QUERY keywords added for under-threshold patterns."""
+
+    def test_duoi_nguong_ton_is_low_stock(self):
+        self.assertEqual(
+            detect_intent("Kho nào đang có sách dưới ngưỡng tồn?")["intent"],
+            LOW_STOCK_QUERY,
+        )
+
+    def test_ton_thap_is_low_stock(self):
+        self.assertEqual(
+            detect_intent("Tình trạng tồn thấp của từng kho")["intent"],
+            LOW_STOCK_QUERY,
+        )
+
+    def test_sach_thieu_is_low_stock(self):
+        self.assertEqual(
+            detect_intent("Kho Hà Nội đang thiếu sách gì?")["intent"],
+            LOW_STOCK_QUERY,
+        )
+
+    def test_reorder_phrase_is_reorder_query(self):
+        self.assertEqual(
+            detect_intent("Sách nào cần nhập thêm theo từng kho?")["intent"],
+            REORDER_SUGGESTION_QUERY,
+        )
+
+    def test_create_phieu_nhap_is_reorder(self):
+        self.assertEqual(
+            detect_intent("Tạo phiếu nhập cho kho Hà Nội")["intent"],
+            REORDER_SUGGESTION_QUERY,
+        )
+
+    def test_lap_phieu_yeu_cau_is_reorder(self):
+        self.assertEqual(
+            detect_intent("Lập phiếu yêu cầu nhập kho HCM")["intent"],
+            REORDER_SUGGESTION_QUERY,
+        )
+
+
+class WantsActionTests(unittest.TestCase):
+    """Test that _wants_action correctly distinguishes info queries from action requests."""
+
+    def _n(self, msg: str) -> str:
+        return normalize_text(msg)
+
+    # --- Should NOT trigger action (pure info queries) ---
+    def test_info_query_no_action(self):
+        queries = [
+            "Sách nào cần nhập thêm theo từng kho?",
+            "Kho Hà Nội đang thiếu sách gì?",
+            "Kho nào có sách dưới ngưỡng tồn?",
+            "Liệt kê sách tồn kho thấp theo từng kho",
+            "Gợi ý nhập thêm sách gì?",  # "gợi ý" alone should not trigger
+        ]
+        for q in queries:
+            with self.subTest(q=q):
+                self.assertFalse(_wants_action(self._n(q)), msg=f"Should NOT trigger action: {q}")
+
+    # --- Should trigger action (explicit create verbs) ---
+    def test_create_phieu_triggers_action(self):
+        queries = [
+            "Tạo phiếu nhập cho kho Hà Nội",
+            "Lập phiếu yêu cầu nhập kho HCM",
+            "Sinh phiếu nhập cho kho Đà Nẵng",
+            "Tạo purchase request cho các sách tồn thấp",
+            "Tạo phiếu yêu cầu nhập cho từng kho",
+        ]
+        for q in queries:
+            with self.subTest(q=q):
+                self.assertTrue(_wants_action(self._n(q)), msg=f"Should trigger action: {q}")
+
+
+class AllWarehousesIntentTests(unittest.TestCase):
+    """Test _is_all_warehouses_intent detects multi-warehouse scope correctly."""
+
+    def _n(self, msg: str) -> str:
+        return normalize_text(msg)
+
+    def test_tung_kho_is_all(self):
+        self.assertTrue(_is_all_warehouses_intent(self._n("Tạo phiếu nhập cho từng kho đang thiếu sách")))
+
+    def test_tat_ca_kho_is_all(self):
+        self.assertTrue(_is_all_warehouses_intent(self._n("Tạo phiếu nhập cho tất cả kho")))
+
+    def test_moi_kho_is_all(self):
+        self.assertTrue(_is_all_warehouses_intent(self._n("Tạo phiếu cho mỗi kho có sách dưới ngưỡng")))
+
+    def test_specific_warehouse_is_not_all(self):
+        self.assertFalse(_is_all_warehouses_intent(self._n("Tạo phiếu nhập cho kho Hà Nội")))
+
+    def test_specific_code_is_not_all(self):
+        self.assertFalse(_is_all_warehouses_intent(self._n("Tạo phiếu nhập cho WH-HCM")))
 
 
 class RagContextTests(unittest.TestCase):

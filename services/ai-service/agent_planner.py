@@ -32,15 +32,18 @@ from intent import (
 
 # ── Action-trigger keywords ────────────────────────────────────────────────────
 _WANTS_ACTION_KEYWORDS = [
+    # Explicit create/generate verbs — must appear to trigger an action
     "tao", "lap", "sinh", "tao giup", "lap giup", "lam giup", "dat giup",
-    "xuat", "canh bao", "nhac staff", "giao viec", "tao task", "tao nhiem vu",
-    "create", "generate", "reserve", "assign", "task",
-    "de xuat", "nhap them", "bao cao", "report",
+    "xuat bao cao", "canh bao", "nhac staff", "giao viec", "tao task", "tao nhiem vu",
+    "create", "generate", "assign", "task",
+    "bao cao", "report",
     # Reservation triggers
-    "dat sach", "giu sach", "dat cho", "muon sach", "dang ky muon",
+    "dat sach", "giu sach", "dat cho", "dang ky muon",
     "reservation", "reserve",
     # Alert triggers
-    "canh bao", "alert", "nhac",
+    "alert",
+    # NOTE: "nhap them", "de xuat", "muon sach", "nhac" removed — too generic,
+    # causes false-positive action creation for pure info queries.
 ]
 
 _REORDER_KEYWORDS = [
@@ -90,6 +93,8 @@ _WAREHOUSE_ABBREV_MAP: dict[str, list[str]] = {
     "hn": ["ha noi", "hanoi"],
     "hni": ["ha noi", "hanoi"],
     "hcm": ["ho chi minh", "saigon", "sai gon", "tphcm"],
+    "sg": ["ho chi minh", "saigon", "sai gon", "tphcm"],
+    "tphcm": ["ho chi minh", "saigon", "sai gon", "hcm"],
     "dn": ["da nang"],
     "ct": ["can tho"],
     "hp": ["hai phong"],
@@ -99,6 +104,18 @@ _WAREHOUSE_ABBREV_MAP: dict[str, list[str]] = {
     "vt": ["vung tau"],
     "dl": ["da lat"],
 }
+
+# Keywords indicating user wants action on ALL warehouses (no single-warehouse resolve)
+_ALL_WAREHOUSES_KEYWORDS = [
+    "tat ca kho", "tung kho", "moi kho", "toan bo kho",
+    "cac kho", "nhieu kho", "tat ca cac kho",
+    "theo kho", "cho cac kho", "cho tung kho", "moi cac kho",
+]
+
+
+def _is_all_warehouses_intent(normalized_msg: str) -> bool:
+    """Return True if the user wants action across ALL warehouses (not a single specific one)."""
+    return any(kw in normalized_msg for kw in _ALL_WAREHOUSES_KEYWORDS)
 
 
 def _norm_wh(text: str) -> str:
@@ -209,31 +226,56 @@ def _detect_warehouse_hint(normalized_msg: str) -> str | None:
     Examples:
       "tao phieu nhap kho ha noi"   → "ha noi"
       "kho hcm can nhap them sach"  → "hcm"
-      "nha cung cap o kho hn"       → "hn"
+      "tao phieu tai tp hcm"        → "tp hcm"
+      "o kho wh-hn"                 → "wh-hn"
     """
-    # Common warehouse-related stop words to remove before matching
-    _WAREHOUSE_STOPWORDS = [
+    _WAREHOUSE_STOPWORDS = {
         "kho", "tai", "cho", "o", "theo", "trong", "cua", "thuoc",
         "tao", "phieu", "nhap", "sach", "nha", "cung", "cap",
-        "nhà", "cung", "cấp", "phiếu", "nhập", "sách",
-    ]
-    # Try to find the word after "kho" in message
+        "dang", "co", "va", "cac", "nhung", "la", "se", "da",
+        "can", "muon", "them", "tat", "ca", "tung", "moi",
+        # Adjectives that follow "kho" in stock-level phrases (NOT warehouse names)
+        "thap", "cao", "rong", "day", "nao", "nay", "do", "khac",
+        "tot", "xau", "trang", "trong",
+    }
+    # "kho" used as part of compound inventory terms (not standalone warehouse word)
+    _COMPOUND_KHO_PREFIXES = {"ton", "nhap", "xuat", "quan", "ly", "kiem", "kiem"}
+
     words = normalized_msg.split()
+
+    def _extract_after(idx: int) -> str | None:
+        hint_words = []
+        for j in range(idx + 1, min(idx + 4, len(words))):
+            if words[j] in _WAREHOUSE_STOPWORDS:
+                break
+            hint_words.append(words[j])
+        return " ".join(hint_words) if hint_words else None
+
+    # Priority 1: word after "kho" (e.g. "kho ha noi", "kho WH-HN")
+    # Skip "kho" that's part of compound: "tồn kho", "nhập kho", "xuất kho", etc.
     for i, word in enumerate(words):
         if word == "kho" and i + 1 < len(words):
-            # The word(s) after "kho" are likely the warehouse name/code
-            # Take up to 3 words after "kho"
-            hint_words = []
-            for j in range(i + 1, min(i + 4, len(words))):
-                if words[j] in _WAREHOUSE_STOPWORDS:
-                    break
-                hint_words.append(words[j])
-            if hint_words:
-                return " ".join(hint_words)
+            # Skip if preceded by a compound-kho prefix word
+            if i > 0 and words[i - 1] in _COMPOUND_KHO_PREFIXES:
+                continue
+            hint = _extract_after(i)
+            if hint:
+                return hint
 
-    # Fallback: look for known warehouse code patterns (2–6 uppercase-like chars)
-    import re
-    codes = re.findall(r'\b(wh[-_]?\w+|hcm|hn|hni|can\s*tho|da\s*nang|branch\s*\w*)\b', normalized_msg)
+    # Priority 2: location prepositions "tai", "o" (e.g. "tai tp hcm", "o ha noi")
+    for i, word in enumerate(words):
+        if word in ("tai", "o") and i + 1 < len(words):
+            next_word = words[i + 1]
+            if next_word not in _WAREHOUSE_STOPWORDS:
+                hint = _extract_after(i)
+                if hint:
+                    return hint
+
+    # Priority 3: known code patterns standalone
+    codes = re.findall(
+        r'\b(wh[-_]?\w+|hcm|hn|hni|sg|hp|ct|dn|can\s*tho|da\s*nang)\b',
+        normalized_msg,
+    )
     if codes:
         return codes[0].strip()
 
@@ -386,32 +428,54 @@ async def _build_reorder_draft(
 
     # ── Warehouse resolution via DB API ──────────────────────────────────────────
     normalized_msg = normalize_text(message)
-    warehouse_hint = _detect_warehouse_hint(normalized_msg)
 
     warehouse_resolution_status: str = "NONE"   # no hint → no DB lookup needed
     resolved_warehouse: dict | None = None
     warehouse_candidates: list[dict] = []
+    warehouse_hint: str | None = None
 
-    if warehouse_hint:
-        db_warehouses = await _fetch_active_warehouses(auth_header)
-        resolution = _resolve_warehouse_hint_against_db(warehouse_hint, db_warehouses)
-        warehouse_resolution_status = resolution["status"]
-        resolved_warehouse = resolution.get("warehouse")
-        warehouse_candidates = resolution.get("candidates") or []
-
-        if warehouse_resolution_status == "RESOLVED":
-            # Override ALL items to the warehouse the user explicitly asked for
-            rw_id = resolved_warehouse["id"]
-            rw_code = resolved_warehouse.get("code", "")
-            rw_name = resolved_warehouse.get("name", "")
-            items = [
-                {**it, "warehouse_id": rw_id, "warehouse_code": rw_code, "warehouse_name": rw_name}
-                for it in items
-            ]
-        # AMBIGUOUS / NOT_FOUND: keep items as-is; executor will block creation
+    # If user explicitly says "all warehouses / each warehouse", skip single-warehouse resolution
+    if _is_all_warehouses_intent(normalized_msg):
+        warehouse_resolution_status = "NONE"
+        # Keep per-item warehouse_id as-is; don't resolve to one warehouse
     else:
-        # No warehouse hint — apply the original per-item filter (no-op when hint is None)
-        filtered_items, _ = _filter_items_by_warehouse_hint(items, None)
+        warehouse_hint = _detect_warehouse_hint(normalized_msg)
+
+        if warehouse_hint:
+            db_warehouses = await _fetch_active_warehouses(auth_header)
+            resolution = _resolve_warehouse_hint_against_db(warehouse_hint, db_warehouses)
+            warehouse_resolution_status = resolution["status"]
+            resolved_warehouse = resolution.get("warehouse")
+            warehouse_candidates = resolution.get("candidates") or []
+
+            if warehouse_resolution_status == "RESOLVED":
+                rw_id = resolved_warehouse["id"]
+                rw_code = resolved_warehouse.get("code", "")
+                rw_name = resolved_warehouse.get("name", "")
+
+                # If items already have per-warehouse data, FILTER to only the specified warehouse.
+                # Do NOT override items from other warehouses — that would be wrong.
+                items_with_wh = [it for it in items if it.get("warehouse_id")]
+                if items_with_wh:
+                    items = [it for it in items if it.get("warehouse_id") == rw_id]
+                    # items may now be empty — caller handles None return
+                else:
+                    # No per-warehouse data → safe to override warehouse for all items
+                    items = [
+                        {**it, "warehouse_id": rw_id, "warehouse_code": rw_code, "warehouse_name": rw_name}
+                        for it in items
+                    ]
+            # AMBIGUOUS / NOT_FOUND: keep items as-is; executor will block creation
+
+    # If warehouse was resolved but no items belong to that warehouse → nothing to create
+    if warehouse_resolution_status == "RESOLVED" and not items:
+        rw_code = resolved_warehouse.get("code", "") if resolved_warehouse else warehouse_hint or "?"
+        rw_name = resolved_warehouse.get("name", "") if resolved_warehouse else ""
+        _planner_logger.info(
+            "No low-stock items found for resolved warehouse %s (%s) — returning None",
+            rw_code, rw_name,
+        )
+        return None
 
     action_warnings = list(warnings or [])
     payload_warnings = []

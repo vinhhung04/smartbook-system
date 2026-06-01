@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from agent_planner import _norm_wh, _resolve_warehouse_hint_against_db
+from agent_planner import (
+    _norm_wh,
+    _resolve_warehouse_hint_against_db,
+    _detect_warehouse_hint,
+    _is_all_warehouses_intent,
+)
+from intent import normalize_text
 
 SAMPLE_WAREHOUSES = [
     {
@@ -154,3 +160,91 @@ def test_saigon_matches_hcm_ambiguous():
     ids = {c["id"] for c in result["candidates"]}
     assert "wh-2" in ids
     assert "wh-4" in ids
+
+
+# ── _detect_warehouse_hint tests ──────────────────────────────────────────────
+
+def test_detect_hint_after_kho():
+    assert _detect_warehouse_hint(normalize_text("Tạo phiếu nhập cho kho Hà Nội")) == "ha noi"
+
+
+def test_detect_hint_exact_code_after_kho():
+    assert _detect_warehouse_hint(normalize_text("Tạo phiếu nhập cho kho WH-HN")) == "wh-hn"
+
+
+def test_detect_hint_tai_pattern():
+    hint = _detect_warehouse_hint(normalize_text("Tạo phiếu nhập tại TP.HCM"))
+    # Should extract something after "tai"
+    assert hint is not None
+    assert len(hint) >= 2
+
+
+def test_detect_hint_standalone_code():
+    hint = _detect_warehouse_hint(normalize_text("Tình trạng tồn kho ở WH-HCM"))
+    assert hint is not None
+    assert "hcm" in hint.lower() or "wh" in hint.lower()
+
+
+def test_detect_hint_sg_alias():
+    hint = _detect_warehouse_hint(normalize_text("Tạo phiếu nhập cho kho SG"))
+    assert hint == "sg"
+
+
+def test_detect_hint_no_warehouse():
+    # Generic query with no warehouse indicator
+    assert _detect_warehouse_hint(normalize_text("Sách nào đang quá hạn?")) is None
+
+
+def test_detect_hint_ton_kho_thap_not_extracted():
+    # "tồn kho thấp" — "kho" is part of compound "tồn kho", NOT a warehouse indicator.
+    # "thap" (thấp) must NOT be extracted as a warehouse hint.
+    assert _detect_warehouse_hint(normalize_text("Tạo đề xuất nhập cho các sách tồn kho thấp")) is None
+
+
+def test_detect_hint_nhap_kho_not_extracted():
+    # "nhập kho" is a verb phrase, not a warehouse name
+    assert _detect_warehouse_hint(normalize_text("Tạo phiếu nhập kho từ nhà cung cấp")) is None
+
+
+def test_detect_hint_nhap_kho_then_specific():
+    # "nhập kho cho kho Hà Nội" — first "kho" is compound, second is standalone
+    hint = _detect_warehouse_hint(normalize_text("Tạo phiếu nhập kho cho kho Hà Nội"))
+    assert hint == "ha noi"
+
+
+# ── _is_all_warehouses_intent tests ──────────────────────────────────────────
+
+def test_all_warehouses_tung_kho():
+    assert _is_all_warehouses_intent(normalize_text("Tạo phiếu nhập cho từng kho đang thiếu sách"))
+
+
+def test_all_warehouses_tat_ca():
+    assert _is_all_warehouses_intent(normalize_text("Tạo phiếu nhập cho tất cả kho"))
+
+
+def test_all_warehouses_theo_kho():
+    assert _is_all_warehouses_intent(normalize_text("Liệt kê sách tồn kho thấp theo kho"))
+
+
+def test_not_all_warehouses_specific():
+    assert not _is_all_warehouses_intent(normalize_text("Tạo phiếu nhập cho kho Hà Nội"))
+
+
+def test_not_all_warehouses_code():
+    assert not _is_all_warehouses_intent(normalize_text("Tạo phiếu nhập cho WH-HCM"))
+
+
+# ── sg/tphcm alias resolution tests ──────────────────────────────────────────
+
+def test_sg_alias_resolves_to_hcm_ambiguous():
+    # "sg" should expand to HCM aliases and match wh-2, wh-4 (both HCM province)
+    result = _resolve_warehouse_hint_against_db("sg", SAMPLE_WAREHOUSES)
+    assert result["status"] == "AMBIGUOUS"
+    ids = {c["id"] for c in result["candidates"]}
+    assert "wh-2" in ids
+
+
+def test_tphcm_alias_resolves_to_hcm():
+    result = _resolve_warehouse_hint_against_db("tphcm", SAMPLE_WAREHOUSES)
+    # Should match both HCM warehouses → AMBIGUOUS
+    assert result["status"] in ("AMBIGUOUS", "RESOLVED")

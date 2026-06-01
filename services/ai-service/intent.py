@@ -164,7 +164,19 @@ def detect_intent(message: str) -> dict:
             "query": message.strip(),
         }
 
-    if _contains_any(normalized, ["sap het hang", "ton kho thap", "het hang", "rui ro ton kho", "low stock", "out of stock", "canh bao ton kho", "stock alert"]):
+    if _contains_any(normalized, [
+        "sap het hang", "ton kho thap", "het hang", "rui ro ton kho",
+        "low stock", "out of stock", "canh bao ton kho", "stock alert",
+        # Additional patterns for low-stock queries
+        "ton thap",        # tồn thấp (without kho)
+        "duoi nguong",     # dưới ngưỡng
+        "nguong ton",      # ngưỡng tồn
+        "thieu sach",      # thiếu sách (natural Vietnamese word order)
+        "sach thieu",      # sách thiếu (reversed)
+        "dang thieu",      # đang thiếu
+        "con it sach",     # còn ít sách
+        "sach sap het",    # sách sắp hết
+    ]):
         return {
             "intent": LOW_STOCK_QUERY,
             "confidence": 0.9,

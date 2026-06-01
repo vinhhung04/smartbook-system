@@ -743,27 +743,102 @@ function ReportResult({ markdown }: { markdown: string }) {
 
 function MessageText({ text }: { text: string }) {
   const lines = text.split('\n');
-  return (
-    <span className="text-sm leading-relaxed">
-      {lines.map((line, lineIdx) => {
-        const parts = line.split(/\*\*(.*?)\*\*/g);
-        return (
-          <span key={lineIdx}>
-            {lineIdx > 0 && <br />}
-            {parts.map((part, i) =>
-              i % 2 === 1 ? (
-                <strong key={i} className="font-semibold">
-                  {part}
-                </strong>
-              ) : (
-                part
-              ),
-            )}
-          </span>
-        );
-      })}
-    </span>
-  );
+
+  function renderInline(line: string) {
+    const parts = line.split(/\*\*(.*?)\*\*/g);
+    return parts.map((part, i) =>
+      i % 2 === 1 ? (
+        <strong key={i} className="font-semibold">
+          {part}
+        </strong>
+      ) : (
+        part
+      ),
+    );
+  }
+
+  const elements: React.ReactNode[] = [];
+  let listBuffer: { type: 'ul' | 'ol'; items: React.ReactNode[] } | null = null;
+
+  function flushList() {
+    if (!listBuffer) return;
+    const { type, items } = listBuffer;
+    const Tag = type;
+    elements.push(
+      <Tag key={`list-${elements.length}`} className={type === 'ul' ? 'list-disc ml-4 space-y-0.5' : 'list-decimal ml-4 space-y-0.5'}>
+        {items}
+      </Tag>,
+    );
+    listBuffer = null;
+  }
+
+  lines.forEach((line, idx) => {
+    // Heading level 1: # Text
+    if (/^#\s+/.test(line)) {
+      flushList();
+      elements.push(
+        <p key={idx} className="font-semibold text-[12px] mt-2 mb-0.5">
+          {renderInline(line.replace(/^#+\s+/, ''))}
+        </p>,
+      );
+      return;
+    }
+    // Heading level 2: ## Text
+    if (/^##\s+/.test(line)) {
+      flushList();
+      elements.push(
+        <p key={idx} className="font-semibold text-[11px] mt-1.5 mb-0.5 text-gray-600">
+          {renderInline(line.replace(/^#+\s+/, ''))}
+        </p>,
+      );
+      return;
+    }
+    // Unordered list: - item or * item
+    const ulMatch = line.match(/^[-*]\s+(.*)/);
+    if (ulMatch) {
+      if (!listBuffer || listBuffer.type !== 'ul') {
+        flushList();
+        listBuffer = { type: 'ul', items: [] };
+      }
+      listBuffer.items.push(
+        <li key={idx} className="text-[11px] leading-snug">
+          {renderInline(ulMatch[1])}
+        </li>,
+      );
+      return;
+    }
+    // Ordered list: 1. item
+    const olMatch = line.match(/^\d+\.\s+(.*)/);
+    if (olMatch) {
+      if (!listBuffer || listBuffer.type !== 'ol') {
+        flushList();
+        listBuffer = { type: 'ol', items: [] };
+      }
+      listBuffer.items.push(
+        <li key={idx} className="text-[11px] leading-snug">
+          {renderInline(olMatch[1])}
+        </li>,
+      );
+      return;
+    }
+    // Blank line — flush list, add spacer
+    if (line.trim() === '') {
+      flushList();
+      elements.push(<br key={idx} />);
+      return;
+    }
+    // Normal text line
+    flushList();
+    elements.push(
+      <span key={idx} className="block text-[11px] leading-snug">
+        {renderInline(line)}
+      </span>,
+    );
+  });
+
+  flushList();
+
+  return <div className="text-sm leading-relaxed space-y-0.5">{elements}</div>;
 }
 
 // ── System context gathering ──────────────────────────────────────────────────
