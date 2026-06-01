@@ -181,7 +181,7 @@ export function BookDetailPage() {
         categories: editForm.category_name ? [editForm.category_name] : [],
       });
       setEditForm((prev) => ({ ...prev, summary_vi: result.summaryVi || prev.summary_vi }));
-      toast.success(`AI summary created (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
+      toast.success(`AI summary created (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
     } catch {
       toast.error("Cannot generate summary. Please try again.");
     } finally {

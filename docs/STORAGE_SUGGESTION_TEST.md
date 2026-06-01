@@ -35,7 +35,7 @@ Chức năng gợi ý vị trí lưu trữ sách trong kho có tích hợp AI v�
 
 ### 1. AI Explanation
 - Gọi AI để tạo câu giải thích tự nhiên cho các gợi ý
-- Ưu tiên Groq (nhanh, free), fallback Ollama local
+- Ưu tiên Anthropic, fallback Ollama local
 - Nếu AI lỗi → dùng rule-based explanation
 
 ### 2. Redis Cache
@@ -221,7 +221,8 @@ REDIS_URL=redis://localhost:6379
 ```
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=llama3.2
-GROQ_API_KEY=your_groq_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+ANTHROPIC_MODEL=claude-sonnet-4-6
 ```
 
 ## Hạn chế còn lại

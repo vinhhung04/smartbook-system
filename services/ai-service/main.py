@@ -96,10 +96,10 @@ MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
 
-# Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-GROQ_SUMMARY_MODEL = os.getenv("GROQ_SUMMARY_MODEL", "llama-3.3-70b-versatile")
+# Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
 PROMPT = (
@@ -1435,13 +1435,39 @@ def _ollama_generate_with_summary_fallback(client: ollama.Client, prompt: str, o
         raise
 
 
-async def _call_groq(metadata: dict) -> tuple[str | None, list[str], bool]:
+def _anthropic_extract_text(payload: dict) -> str:
+    content = payload.get("content") or []
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            parts.append(str(item.get("text", "")))
+        elif isinstance(item, str):
+            parts.append(item)
+    return "".join(parts).strip()
+
+
+def _split_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
+    system_parts: list[str] = []
+    filtered: list[dict] = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            if content:
+                system_parts.append(content)
+            continue
+        if role in {"user", "assistant"}:
+            filtered.append({"role": role, "content": content})
+    return "\n\n".join(system_parts).strip(), filtered
+
+
+async def _call_anthropic(metadata: dict) -> tuple[str | None, list[str], bool]:
     """
-    Gọi Groq cloud LLM (OpenAI-compatible) để sinh summaryVi + keywords.
+    Gọi Anthropic Claude để sinh summaryVi + keywords.
     Trả về (summary_vi, keywords, success).
-    Chỉ gọi khi GROQ_API_KEY đã được set.
+    Chỉ gọi khi ANTHROPIC_API_KEY đã được set.
     """
-    if not GROQ_API_KEY:
+    if not ANTHROPIC_API_KEY:
         return None, [], False
 
     title = _safe_text(metadata.get("title")) or "Không rõ"
@@ -1489,23 +1515,22 @@ Trả về DUY NHẤT JSON hợp lệ:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
             resp = await http_client.post(
-                f"{GROQ_BASE_URL}/chat/completions",
+                f"{ANTHROPIC_BASE_URL}/messages",
                 headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
                 },
                 json={
-                    "model": GROQ_SUMMARY_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
+                    "model": ANTHROPIC_MODEL,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
                     "temperature": 0.55,
                     "max_tokens": 900,
                 },
             )
             resp.raise_for_status()
-            raw = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            raw = _anthropic_extract_text(resp.json())
 
             parsed = _extract_json(raw)
             summary_vi = _safe_text(parsed.get("summaryVi"))
@@ -1517,34 +1542,36 @@ Trả về DUY NHẤT JSON hợp lệ:
 
             return summary_vi, keywords, bool(summary_vi)
     except Exception as exc:
-        logger.warning("Groq call failed: %s", exc)
+        logger.warning("Anthropic call failed: %s", exc)
         return None, [], False
 
 
-async def _call_groq_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
-    """Generic Groq call returning parsed JSON dict. Parse via _extract_json (no json_object mode)."""
-    if not GROQ_API_KEY:
+async def _call_anthropic_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+    """Generic Anthropic call returning parsed JSON dict. Parse via _extract_json (no json_object mode)."""
+    if not ANTHROPIC_API_KEY:
         return {}, False
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as client:
             resp = await client.post(
-                f"{GROQ_BASE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                f"{ANTHROPIC_BASE_URL}/messages",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                },
                 json={
-                    "model": GROQ_SUMMARY_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
+                    "model": ANTHROPIC_MODEL,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
                     "temperature": 0.3,
                     "max_tokens": max_tokens,
                 },
             )
             resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"]
+            raw = _anthropic_extract_text(resp.json())
             return _extract_json(raw), True
     except Exception as e:
-        logger.warning("Groq JSON call failed: %s", e)
+        logger.warning("Anthropic JSON call failed: %s", e)
         return {}, False
 
 
@@ -2174,9 +2201,9 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     keywords = []
     ai_provider = "none"
     if req.generateVietnameseSummary and _should_generate_summary(merged):
-        summary_vi, keywords, groq_ok = await _call_groq(merged)
-        if groq_ok:
-            ai_provider = "groq"
+        summary_vi, keywords, anthropic_ok = await _call_anthropic(merged)
+        if anthropic_ok:
+            ai_provider = "anthropic"
         else:
             summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(merged)
             ai_provider = "ollama" if ollama_ok else "none"
@@ -2322,7 +2349,7 @@ class SummaryViRequest(BaseModel):
 async def generate_summary_vi(req: SummaryViRequest):
     """
     Endpoint nhẹ: chỉ sinh summaryVi + keywords.
-    Ưu tiên Groq (nhanh, free), fallback Ollama local.
+    Ưu tiên Anthropic, fallback Ollama local.
     Dùng cho bước 2 trên UI — user click nút riêng sau khi đã lookup metadata.
     """
     if not req.title.strip():
@@ -2348,11 +2375,11 @@ async def generate_summary_vi(req: SummaryViRequest):
         "categories": req.categories,
     }
 
-    # Ưu tiên Groq
-    summary_vi, keywords, groq_ok = await _call_groq(metadata)
-    if groq_ok:
+    # Ưu tiên Anthropic
+    summary_vi, keywords, anthropic_ok = await _call_anthropic(metadata)
+    if anthropic_ok:
         description = _normalize_bookstore_description(summary_vi or "")
-        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "groq"}
+        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "anthropic"}
         summary_cache.set(cache_key, result)
         return result
 
@@ -2396,7 +2423,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     """
     AI enrichment toolkit for book metadata.
     Modes: keywords, short_summary, normalize_description, suggest_categories, quality_check.
-    quality_check is rule-based (no AI). Others use Groq → Ollama fallback.
+    quality_check is rule-based (no AI). Others use Anthropic → Ollama fallback.
     Never overwrites frontend data — returns suggestions for user to apply.
     """
     title = (req.title or "").strip()
@@ -2465,9 +2492,9 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    # Try Groq first, fallback Ollama
-    data, ok = await _call_groq_json(SYSTEM, user_prompt)
-    ai_provider = "groq" if ok else "none"
+    # Try Anthropic first, fallback Ollama
+    data, ok = await _call_anthropic_json(SYSTEM, user_prompt)
+    ai_provider = "anthropic" if ok else "none"
     if not ok:
         data, ok = await _call_ollama_json(SYSTEM, user_prompt)
         ai_provider = "ollama" if ok else "none"
@@ -2477,7 +2504,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
             success=False,
             mode=mode,
             ai_provider="none",
-            qualityWarnings=["AI không khả dụng. Kiểm tra GROQ_API_KEY hoặc kết nối Ollama."],
+            qualityWarnings=["AI không khả dụng. Kiểm tra ANTHROPIC_API_KEY hoặc kết nối Ollama."],
         )
 
     keywords = _safe_list(data.get("keywords", []))[:15]
@@ -2518,20 +2545,20 @@ async def _generate_book_summary(req: BookSummaryRequest):
     try:
         client = ollama.Client(host=OLLAMA_HOST)
 
-        # Ưu tiên Groq (nhanh, free) trước
-        summary_vi, keywords, groq_ok = await _call_groq({
+        # Ưu tiên Anthropic trước
+        summary_vi, keywords, anthropic_ok = await _call_anthropic({
             "title": req.title.strip(),
             "author": req.author.strip(),
             "description": web_context or "",
             "categories": [],
         })
 
-        if groq_ok:
+        if anthropic_ok:
             description = _format_summary_description(summary_vi or "", {
                 "title": req.title.strip(),
                 "author": req.author.strip(),
             })
-            return {"description": description, "web_context_used": bool(web_context), "ai_provider": "groq"}
+            return {"description": description, "web_context_used": bool(web_context), "ai_provider": "anthropic"}
 
         # Fallback Ollama local
         response = await asyncio.to_thread(
@@ -2683,30 +2710,34 @@ class ChatRequest(BaseModel):
     system_context: dict | None = None
 
 
-async def _chat_with_groq(messages: list[dict]) -> tuple[str | None, bool]:
-    if not GROQ_API_KEY:
+async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
+    if not ANTHROPIC_API_KEY:
         return None, False
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
+            system_prompt, filtered = _split_anthropic_messages(messages)
+            payload: dict = {
+                "model": ANTHROPIC_MODEL,
+                "messages": filtered,
+                "temperature": 0.4,
+                "max_tokens": 800,
+            }
+            if system_prompt:
+                payload["system"] = system_prompt
             resp = await http_client.post(
-                f"{GROQ_BASE_URL}/chat/completions",
+                f"{ANTHROPIC_BASE_URL}/messages",
                 headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
                     "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
                 },
-                json={
-                    "model": GROQ_SUMMARY_MODEL,
-                    "messages": messages,
-                    "temperature": 0.4,
-                    "max_tokens": 800,
-                },
+                json=payload,
             )
             resp.raise_for_status()
-            data = resp.json()
-            reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            reply = _anthropic_extract_text(resp.json())
             return reply.strip() or None, bool(reply.strip())
     except Exception as exc:
-        logger.warning("Groq chat failed: %s", exc)
+        logger.warning("Anthropic chat failed: %s", exc)
         return None, False
 
 
@@ -2951,13 +2982,13 @@ async def chat(request: Request, req: ChatRequest):
 
         return reply_text, pending_action_data
 
-    reply, groq_ok = await _chat_with_groq(messages)
-    if groq_ok and reply:
+    reply, anthropic_ok = await _chat_with_anthropic(messages)
+    if anthropic_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": "groq", **metadata}
+        result = {"reply": reply_with_sources, "ai_provider": "anthropic", **metadata}
         if pending_action_data:
             result["pending_action"] = pending_action_data
         return result
@@ -3255,11 +3286,11 @@ async def get_recommendations(req: RecommendationRequest):
         {"role": "user", "content": user_prompt},
     ]
 
-    reply, groq_ok = await _chat_with_groq(messages)
-    if groq_ok and reply:
+    reply, anthropic_ok = await _chat_with_anthropic(messages)
+    if anthropic_ok and reply:
         recs = _parse_recommendation_json(reply)
         if recs:
-            return {"recommendations": recs, "ai_provider": "groq"}
+            return {"recommendations": recs, "ai_provider": "anthropic"}
 
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
@@ -3396,7 +3427,7 @@ class StorageSuggestionRequest(BaseModel):
 async def explain_storage_suggestion(req: StorageSuggestionRequest):
     """
     Tạo câu giải thích tự nhiên cho các gợi ý vị trí lưu trữ sách.
-    Dùng Ollama hoặc Groq để sinh text tự nhiên.
+    Dùng Ollama hoặc Anthropic để sinh text tự nhiên.
     """
     if not req.suggestions:
         return {"explanations": []}
@@ -3425,11 +3456,11 @@ Trả về JSON array với đúng {len(req.suggestions)} câu:
 
 CHỈ trả về JSON, không markdown."""
 
-    # Thử Groq trước
+    # Thử Anthropic trước
     explanations = await _get_ai_explanations(prompt, len(req.suggestions))
     
     if explanations and len(explanations) == len(req.suggestions):
-        return {"explanations": explanations, "ai_provider": "groq"}
+        return {"explanations": explanations, "ai_provider": "anthropic"}
 
     # Fallback: dùng rule-based explanation
     explanations = _generate_rule_based_explanation(book_title, req.suggestions)
@@ -3437,36 +3468,34 @@ CHỈ trả về JSON, không markdown."""
 
 
 async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | None:
-    """Gọi Groq hoặc Ollama để sinh explanations."""
-    # Thử Groq
-    if GROQ_API_KEY:
+    """Gọi Anthropic hoặc Ollama để sinh explanations."""
+    # Thử Anthropic
+    if ANTHROPIC_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as http_client:
                 resp = await http_client.post(
-                    f"{GROQ_BASE_URL}/chat/completions",
+                    f"{ANTHROPIC_BASE_URL}/messages",
                     headers={
-                        "Authorization": f"Bearer {GROQ_API_KEY}",
                         "Content-Type": "application/json",
+                        "x-api-key": ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
                     },
                     json={
-                        "model": GROQ_SUMMARY_MODEL,
-                        "messages": [
-                            {"role": "system", "content": "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array."},
-                            {"role": "user", "content": prompt},
-                        ],
+                        "model": ANTHROPIC_MODEL,
+                        "system": "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
+                        "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.3,
                         "max_tokens": 300,
                     },
                 )
                 resp.raise_for_status()
-                data = resp.json()
-                raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                raw = _anthropic_extract_text(resp.json())
                 
                 explanations = _parse_json_array(raw)
                 if explanations and len(explanations) >= expected_count // 2:
                     return explanations[:expected_count]
         except Exception as exc:
-            logger.warning(f"Groq storage explanation failed: {exc}")
+            logger.warning(f"Anthropic storage explanation failed: {exc}")
 
     # Thử Ollama
     try:
