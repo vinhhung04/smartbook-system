@@ -261,7 +261,7 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             results = await asyncio.gather(
                 _fetch(client, "/analytics/warehouse-stock-risk", auth_header),
                 _fetch(client, "/api/books", auth_header),
-                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 20}),
+                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 50}),
             )
             for source, payload, warning in results:
                 sources.append(source)
@@ -277,28 +277,58 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             )[:10]
             raw["low_stock_books"] = low_books
 
-            # Per-warehouse low-stock items (has variant_id + warehouse_id per item)
+            # Per-warehouse low-stock items — already aggregated by (warehouse_id, variant_id)
+            # by the backend SQL GROUP BY query. No client-side dedup needed.
             low_stock_by_wh = _as_list(raw.get("Low Stock By Warehouse"))
             raw["low_stock_by_warehouse"] = low_stock_by_wh
 
-            stock = raw.get("Warehouse Stock Risk") or []
-            out_of_stock = [b for b in low_books if b["quantity"] == 0]
-            low = [b for b in low_books if b["quantity"] > 0]
-            lines = [
-                f"{'🔴' if b['quantity'] == 0 else '🟡'} **{b['title']}** — còn {b['quantity']} bản"
-                for b in low_books
-            ]
-            wh_lines = [
-                f"🏭 {it.get('warehouse_name','?')} · **{it.get('title','?')}** còn {_int(it.get('available_qty'))} bản"
-                for it in low_stock_by_wh[:8]
-                if isinstance(it, dict)
-            ]
-            summary = "\n".join([
-                f"⚠️ **{len(low_books)} sách** tồn kho thấp (🔴 {len(out_of_stock)} hết hàng, 🟡 {len(low)} sắp hết):",
-                _limit_lines(lines, 8),
-                f"\n📊 Tồn kho theo kho ({len(low_stock_by_wh)} dòng):",
-                _limit_lines(wh_lines, 6),
-            ])
+            # Build warehouse-grouped summary (primary source for AI reply)
+            wh_groups: dict[str, list] = {}
+            for it in low_stock_by_wh:
+                key = it.get("warehouse_code") or it.get("warehouse_id") or "UNKNOWN"
+                wh_groups.setdefault(key, []).append(it)
+
+            wh_section_lines: list[str] = []
+            total_low_items = len(low_stock_by_wh)
+            for wh_code, wh_items in list(wh_groups.items())[:5]:
+                wh_name = wh_items[0].get("warehouse_name") or wh_code
+                wh_section_lines.append(f"\n🏭 **{wh_name}** ({wh_code}) — {len(wh_items)} sách:")
+                for it in wh_items[:5]:
+                    total_qty = _int(it.get("available_qty"))   # on_hand total (shelf+receiving)
+                    shelf_qty = _int(it.get("shelf_qty"))        # truly on-shelf
+                    icon = "🔴" if total_qty == 0 else "🟡"
+                    # Show shelf breakdown only when receiving stock is present
+                    qty_str = (
+                        f"{total_qty} (sẵn: {shelf_qty})"
+                        if shelf_qty != total_qty and shelf_qty >= 0
+                        else str(total_qty)
+                    )
+                    sup = f", NCC: {it['suggested_supplier_name']}" if it.get("suggested_supplier_name") else ""
+                    wh_section_lines.append(
+                        f"  {icon} **{it.get('title')}** — tồn {qty_str}, "
+                        f"gợi ý nhập {_int(it.get('suggested_quantity'))}, {it.get('priority', 'MEDIUM')}{sup}"
+                    )
+                extra = len(wh_items) - 5
+                if extra > 0:
+                    wh_section_lines.append(f"  ...và {extra} sách khác")
+
+            if wh_section_lines:
+                summary = "\n".join([
+                    f"📦 **Sách tồn kho thấp theo kho** ({total_low_items} dòng, {len(wh_groups)} kho):",
+                    *wh_section_lines,
+                ])
+            else:
+                # Fallback to catalog-level summary when no per-warehouse data
+                out_of_stock = [b for b in low_books if b["quantity"] == 0]
+                low = [b for b in low_books if b["quantity"] > 0]
+                lines = [
+                    f"{'🔴' if b['quantity'] == 0 else '🟡'} **{b['title']}** — tồn {b['quantity']} bản"
+                    for b in low_books
+                ]
+                summary = "\n".join([
+                    f"⚠️ **{len(low_books)} sách** tồn kho thấp (🔴 {len(out_of_stock)} hết hàng, 🟡 {len(low)} sắp hết):",
+                    _limit_lines(lines, 8),
+                ])
 
         elif intent == TOP_BORROWED_BOOKS_QUERY:
             params = {"limit": 10, **_time_params(intent_info, default_30_days=True)}
@@ -404,7 +434,7 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
         elif intent == REORDER_SUGGESTION_QUERY:
             results = await asyncio.gather(
                 _fetch(client, "/analytics/reorder-suggestions", auth_header, {"days": 30, "limit": 10}),
-                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 20}),
+                _fetch(client, "/api/stock-balances/low-stock", auth_header, {"limit": 50}),
             )
             for source, payload, warning in results:
                 sources.append(source)
@@ -415,40 +445,79 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
 
             data = raw.get("Reorder Suggestions") or {}
 
-            # Per-warehouse low-stock items with variant_id + warehouse_id
+            # Per-warehouse low-stock items — already aggregated by SQL GROUP BY.
             low_stock_by_wh = _as_list(raw.get("Low Stock By Warehouse"))
             raw["low_stock_by_warehouse"] = low_stock_by_wh
 
             summary_data = data.get("summary") if isinstance(data, dict) else {}
-            items = data.get("items") if isinstance(data, dict) else []
             if not isinstance(summary_data, dict):
                 summary_data = {}
-            if not isinstance(items, list):
-                items = []
 
-            def _priority_icon(p: str) -> str:
-                return {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(str(p).upper(), "⚪")
-
-            lines = [
-                "{icon} **{title}** — còn {available} bản, gợi ý nhập {qty} bản".format(
-                    icon=_priority_icon(row.get("priority", "LOW")),
-                    title=row.get("title", "Khong ro ten"),
-                    available=_int(row.get("available_qty")),
-                    qty=_int(row.get("suggested_reorder_qty")),
-                )
-                for row in items[:5]
-                if isinstance(row, dict)
-            ]
             high = _int(summary_data.get('high_priority'))
             med = _int(summary_data.get('medium_priority'))
             total = _int(summary_data.get('total_candidates'))
             total_qty = _int(summary_data.get('estimated_total_reorder_qty'))
-            summary = "\n".join([
-                f"📦 **{total} đầu sách** cần xem xét nhập thêm (🔴 {high} HIGH, 🟡 {med} MEDIUM) — tổng {total_qty} bản.",
-                "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
-                "Top sách cần ưu tiên:",
-                _limit_lines(lines, 5),
-            ])
+
+            # Build warehouse-grouped summary from per-warehouse low-stock data (best quality)
+            wh_groups: dict[str, list] = {}
+            for it in low_stock_by_wh:
+                key = it.get("warehouse_code") or it.get("warehouse_id") or "UNKNOWN"
+                wh_groups.setdefault(key, []).append(it)
+
+            wh_section_lines: list[str] = []
+            for wh_code, wh_items in list(wh_groups.items())[:5]:
+                wh_name = wh_items[0].get("warehouse_name") or wh_code
+                wh_section_lines.append(f"\n🏭 **{wh_name}** ({wh_code}) — {len(wh_items)} sách:")
+                for it in wh_items[:5]:
+                    total_qty2 = _int(it.get("available_qty"))
+                    shelf_qty2 = _int(it.get("shelf_qty"))
+                    icon = "🔴" if total_qty2 == 0 else "🟡"
+                    qty_str2 = (
+                        f"{total_qty2} (sẵn: {shelf_qty2})"
+                        if shelf_qty2 != total_qty2 and shelf_qty2 >= 0
+                        else str(total_qty2)
+                    )
+                    sup = f", NCC: {it['suggested_supplier_name']}" if it.get("suggested_supplier_name") else ""
+                    wh_section_lines.append(
+                        f"  {icon} **{it.get('title')}** — tồn {qty_str2}, "
+                        f"gợi ý nhập {_int(it.get('suggested_quantity'))}, {it.get('priority', 'MEDIUM')}{sup}"
+                    )
+                extra = len(wh_items) - 5
+                if extra > 0:
+                    wh_section_lines.append(f"  ...và {extra} sách khác")
+
+            if wh_section_lines:
+                summary = "\n".join([
+                    f"📦 **Gợi ý nhập thêm theo từng kho** ({len(low_stock_by_wh)} dòng, {len(wh_groups)} kho):",
+                    *wh_section_lines,
+                    f"\n📊 Tổng analytics: {total} đầu sách (🔴 {high} HIGH, 🟡 {med} MEDIUM) — {total_qty} bản.",
+                    "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
+                ])
+            else:
+                # Fallback to analytics-only summary
+                items_raw = data.get("items") if isinstance(data, dict) else []
+                if not isinstance(items_raw, list):
+                    items_raw = []
+
+                def _priority_icon(p: str) -> str:
+                    return {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(str(p).upper(), "⚪")
+
+                lines = [
+                    "{icon} **{title}** — còn {available} bản, gợi ý nhập {qty} bản".format(
+                        icon=_priority_icon(row.get("priority", "LOW")),
+                        title=row.get("title", "Khong ro ten"),
+                        available=_int(row.get("available_qty")),
+                        qty=_int(row.get("suggested_reorder_qty")),
+                    )
+                    for row in items_raw[:5]
+                    if isinstance(row, dict)
+                ]
+                summary = "\n".join([
+                    f"📦 **{total} đầu sách** cần xem xét nhập thêm (🔴 {high} HIGH, 🟡 {med} MEDIUM) — tổng {total_qty} bản.",
+                    "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
+                    "Top sách cần ưu tiên:",
+                    _limit_lines(lines, 5),
+                ])
 
         else:
             summary = ""

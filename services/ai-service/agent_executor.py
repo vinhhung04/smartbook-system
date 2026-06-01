@@ -166,6 +166,8 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                     req_data = data.get("data") or data
                     created_requests.append({
                         "title": title,
+                        "warehouse_id": item.get("warehouse_id") or effective_warehouse_id,
+                        "warehouse_code": item.get("warehouse_code"),
                         "warehouse_name": item.get("warehouse_name") or item.get("warehouse_code") or effective_warehouse_id,
                         "request_number": req_data.get("request_number"),
                         "quantity": quantity,
