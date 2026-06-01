@@ -1,5 +1,5 @@
 """
-Simple in-memory cache + rate limiter for Groq API.
+Simple in-memory cache + rate limiter for LLM API calls.
 Prevents duplicate requests and excessive usage.
 """
 import hashlib
@@ -11,7 +11,7 @@ from typing import Optional
 # ── Response Cache ────────────────────────────────────────────────────────────
 
 class ResponseCache:
-    """LRU cache for chat responses — avoids re-calling Groq for same questions."""
+    """LRU cache for chat responses — avoids re-calling LLM for same questions."""
 
     def __init__(self, max_size: int = 100, ttl_seconds: int = 300):
         self.max_size = max_size

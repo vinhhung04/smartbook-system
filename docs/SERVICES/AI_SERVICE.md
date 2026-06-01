@@ -44,7 +44,8 @@ Ghi chú quan trọng:
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
 | OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
-| GROQ_API_KEY | rỗng | Fallback cloud LLM tùy chọn |
+| ANTHROPIC_API_KEY | rỗng | Cloud LLM key (nếu không set sẽ fallback Ollama) |
+| ANTHROPIC_MODEL | claude-sonnet-4-6 | Model Anthropic dùng cho text |
 | ENABLE_WORLDCAT_LOOKUP | false | Bật/tắt tra cứu WorldCat |
 | ENABLE_MARKETPLACE_LOOKUP | false | Bật tra cứu Fahasa/Tiki/Vinabook |
 | BOOK_MARKETPLACE_TIMEOUT_SECONDS | 6 | Timeout (giây) cho marketplace lookup |

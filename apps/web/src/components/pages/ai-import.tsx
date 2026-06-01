@@ -109,7 +109,7 @@ export function AIImportPage() {
 
     setLookupLoading(true);
     try {
-      // Lookup nhanh: không chờ Ollama/Groq sinh summary
+      // Lookup nhanh: không chờ Ollama/Anthropic sinh summary
       const result = await aiService.lookupBookByIsbn({
         isbn: normalized,
         generateVietnameseSummary: false,
@@ -156,7 +156,7 @@ export function AIImportPage() {
         description: result.summaryVi || prev.description,
         keywordsText: (result.keywords || []).join(", ") || prev.keywordsText,
       }));
-      toast.success(`Đã tạo mô tả AI (${result.ai_provider === "groq" ? "Groq" : "Ollama"})`);
+      toast.success(`Đã tạo mô tả AI (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
     } catch {
       toast.error("Không thể tạo mô tả. Vui lòng thử lại.");
     } finally {

@@ -145,10 +145,9 @@ services:
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
-      # Groq cloud LLM — free tier, không cần credit. Lấy key tại https://console.groq.com
-      # Nếu không set, sẽ fallback về Ollama local
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GROQ_SUMMARY_MODEL=${GROQ_SUMMARY_MODEL:-llama-3.3-70b-versatile}
+      # Anthropic Claude LLM — nếu không set, sẽ fallback về Ollama local
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
       - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-6}
