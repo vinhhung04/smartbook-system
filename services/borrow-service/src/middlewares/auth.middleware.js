@@ -89,14 +89,15 @@ function authorizeBorrowAdminRead(req, res, next) {
 
   const roles = getUserRoles(req.user);
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN'].includes(role));
+  const roleAllowed = roles.some((role) => ['LIBRARIAN', 'ADMIN', 'WAREHOUSE_MANAGER'].includes(role));
   const permissionAllowed = permissions.some((permission) => [
     'borrow.read',
     'borrow.customers.read',
     'borrow.loans.read',
+    'borrow.fines.read',
   ].includes(permission));
 
-  if (!roleAllowed || !permissionAllowed) {
+  if (!roleAllowed && !permissionAllowed) {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
@@ -118,7 +119,7 @@ function authorizeBorrowAdminWrite(req, res, next) {
     'borrow.membership.write',
   ].includes(permission));
 
-  if (!roleAllowed || !permissionAllowed) {
+  if (!roleAllowed && !permissionAllowed) {
     return res.status(403).json({ message: 'Forbidden' });
   }
 

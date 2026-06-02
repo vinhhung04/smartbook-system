@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useParams } from 'react-router';
 import { customerBorrowService } from '@/services/customer-borrow';
+import { customerCatalogService } from '@/services/customer-catalog';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { CustomerStateBlock } from './_shared/customer-state-block';
@@ -12,17 +13,25 @@ import { printLoanReceipt } from '@/lib/print-utils';
 export function CustomerLoanDetailPage() {
   const { id } = useParams();
   const [loan, setLoan] = useState<any | null>(null);
+  const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingRenew, setIsSubmittingRenew] = useState(false);
+
+  const getBookTitle = (variantId: string) =>
+    books.find((b) => b.variant_id === variantId)?.title ?? variantId;
 
   const load = async () => {
     if (!id) return;
     try {
       setLoading(true);
       setError(null);
-      const response = await customerBorrowService.getMyLoanById(id);
-      setLoan(response?.data || null);
+      const [loanResp, booksResp] = await Promise.allSettled([
+        customerBorrowService.getMyLoanById(id),
+        customerCatalogService.getBooks(),
+      ]);
+      if (loanResp.status === 'fulfilled') setLoan(loanResp.value?.data || null);
+      if (booksResp.status === 'fulfilled') setBooks(booksResp.value);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Không tải được chi tiết phiếu mượn'));
     } finally {
@@ -101,7 +110,7 @@ export function CustomerLoanDetailPage() {
             <div className="mt-2 space-y-2">
               {loan.loan_items.map((item: any) => (
                 <div key={item.id} className="rounded-[10px] border border-slate-200 p-3 text-[13px]">
-                  <div><span className="text-slate-500">Biến thể:</span> {item.variant_id}</div>
+                  <div><span className="text-slate-500">Tên sách:</span> {getBookTitle(item.variant_id)}</div>
                   <div><span className="text-slate-500">Trạng thái:</span> {getStatusTone(item.status).label}</div>
                   <div><span className="text-slate-500">Hạn:</span> {formatDateTime(item.due_date)}</div>
                 </div>
