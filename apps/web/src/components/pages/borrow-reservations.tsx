@@ -15,6 +15,7 @@ import {
   type WarehouseLookupItem,
 } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { bookService } from '@/services/book';
 import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
 
 const statuses: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'];
@@ -71,7 +72,11 @@ function isUuid(value: string) {
 
 export function BorrowReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const getBookTitle = (variantId: string) =>
+    books.find((b) => b.variant_id === variantId)?.title ?? variantId.slice(0, 8) + '...';
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ReservationStatus>('ALL');
@@ -97,8 +102,12 @@ export function BorrowReservationsPage() {
   const loadReservations = async () => {
     try {
       setLoading(true);
-      const response = await borrowService.getReservations();
-      setReservations(response.data ?? []);
+      const [resResp, booksResp] = await Promise.allSettled([
+        borrowService.getReservations(),
+        bookService.getAll(),
+      ]);
+      if (resResp.status === 'fulfilled') setReservations(resResp.value.data ?? []);
+      if (booksResp.status === 'fulfilled' && Array.isArray(booksResp.value)) setBooks(booksResp.value);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Không tải được danh sách đặt trước'));
     } finally {
@@ -554,7 +563,7 @@ export function BorrowReservationsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Số đặt trước', 'Khách hàng', 'Biến thể', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
+                  {['Số đặt trước', 'Khách hàng', 'Tên sách', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
                     <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
                     </th>
@@ -593,7 +602,7 @@ export function BorrowReservationsPage() {
                     >
                       <td className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.variant_id}>{reservation.variant_id?.slice(0, 8)}...</td>
+                      <td className="px-5 py-3.5 text-sm" title={reservation.variant_id}>{getBookTitle(reservation.variant_id)}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.quantity}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
