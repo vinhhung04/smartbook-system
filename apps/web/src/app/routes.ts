@@ -32,6 +32,7 @@ import { PutawayExecutePage } from "@/components/pages/putaway-execute";
 import { ReceivingPutawayPage } from "@/components/pages/receiving-putaway";
 import { SmartReceivingPage } from "@/components/pages/receiving-smart";
 import { PickingPage } from "@/components/pages/picking";
+import { PackingPage } from "@/components/pages/packing";
 import { OrderRequestsPage } from "@/components/pages/order-requests";
 import { OutboundPage } from "@/components/pages/outbound";
 import { MyWarehouseTasksPage } from "@/components/pages/my-warehouse-tasks";
@@ -232,6 +233,7 @@ export const router = createBrowserRouter([
       { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), Component: ReceivingPutawayPage },
       { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: SmartReceivingPage },
       { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PickingPage },
+      { path: "packing", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PackingPage },
       { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },
       { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: MovementsPage },
       { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: OutboundPage },

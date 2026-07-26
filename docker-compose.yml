@@ -59,6 +59,8 @@ services:
       - AI_SERVICE_URL=http://ai-service:8000
       - GATEWAY_URL=http://api-gateway:3000
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+    volumes:
+      - packing_evidence_data:/app/evidence/packing
     depends_on:
       db:
         condition: service_healthy
@@ -188,6 +190,7 @@ services:
       - VITE_AUTH_BASE_URL=http://localhost:3000
       - VITE_AI_BASE_URL=http://localhost:3000/ai
       - VITE_GATEWAY_BASE_URL=http://localhost:3000
+      - VITE_PACKING_RECORD_DELAY_SECONDS=${PACKING_RECORD_DELAY_SECONDS:-15}
     depends_on:
       - api-gateway
       - inventory-service
@@ -208,3 +211,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  packing_evidence_data:
