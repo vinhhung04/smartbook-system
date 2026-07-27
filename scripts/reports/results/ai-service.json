@@ -1,0 +1,30 @@
+{
+  "suite": "ai-service",
+  "startedAt": "2026-07-27T12:01:33.082Z",
+  "durationMs": 112,
+  "passed": 5,
+  "total": 5,
+  "ok": true,
+  "steps": [
+    {
+      "label": "ai/health",
+      "ok": true
+    },
+    {
+      "label": "ai/recommendations (static payload)",
+      "ok": true
+    },
+    {
+      "label": "ai/reading-stats (deterministic aggregation)",
+      "ok": true
+    },
+    {
+      "label": "ai/cache/stats",
+      "ok": true
+    },
+    {
+      "label": "ai/cache/clear",
+      "ok": true
+    }
+  ]
+}
