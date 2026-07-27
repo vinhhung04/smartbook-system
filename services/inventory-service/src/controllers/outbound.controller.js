@@ -212,6 +212,14 @@ async function listOutboundQueue(req, res) {
           external_reference: { not: { startsWith: "REPICK:" } },
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
           ...outboundAssignment,
+          // Orders that finished Picking must complete Packing before showing up as
+          // ready-to-ship — they stay in the Packing queue until then (see Packing module).
+          NOT: {
+            AND: [
+              { status: { in: ["READY_FOR_OUTBOUND", "READY_TO_SHIP"] } },
+              { packing_tasks: { none: { status: "COMPLETED" } } },
+            ],
+          },
         },
         include: {
           warehouses: { select: { id: true, code: true, name: true } },
@@ -856,6 +864,19 @@ async function confirmOutbound(req, res) {
               invalid: true,
               statusCode: 400,
               message: `Còn ${pendingPickingTasks} picking task chưa hoàn tất. Vui lòng hoàn thành tất cả PICK/REPICK trước khi xuất kho.`,
+            };
+          }
+
+          // Packing must be completed before Outbound can confirm (see Packing module)
+          const completedPackingTask = await tx.packing_tasks.findFirst({
+            where: { root_order_id: taskId, status: "COMPLETED" },
+            select: { id: true },
+          });
+          if (!completedPackingTask) {
+            return {
+              invalid: true,
+              statusCode: 409,
+              message: "Đơn hàng chưa hoàn tất đóng gói. Vui lòng hoàn tất bước Gói hàng trước khi xuất kho.",
             };
           }
 

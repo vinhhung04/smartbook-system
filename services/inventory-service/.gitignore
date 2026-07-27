@@ -3,3 +3,6 @@ node_modules
 .env
 
 /generated/prisma
+
+# Packing evidence videos written locally (Docker uses a named volume instead)
+evidence/
