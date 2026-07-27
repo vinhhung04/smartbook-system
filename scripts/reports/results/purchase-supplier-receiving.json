@@ -1,0 +1,62 @@
+{
+  "suite": "purchase-supplier-receiving",
+  "startedAt": "2026-07-27T12:01:27.216Z",
+  "durationMs": 1763,
+  "passed": 13,
+  "total": 13,
+  "ok": true,
+  "steps": [
+    {
+      "label": "create purchase order",
+      "ok": true
+    },
+    {
+      "label": "submit purchase order",
+      "ok": true
+    },
+    {
+      "label": "approve purchase order",
+      "ok": true
+    },
+    {
+      "label": "no auto goods receipt after approve",
+      "ok": true
+    },
+    {
+      "label": "send to supplier",
+      "ok": true
+    },
+    {
+      "label": "supplier confirm invoice",
+      "ok": true
+    },
+    {
+      "label": "create goods receipt draft from invoice",
+      "ok": true
+    },
+    {
+      "label": "draft does not increase stock",
+      "ok": true
+    },
+    {
+      "label": "post receipt increases stock",
+      "ok": true
+    },
+    {
+      "label": "full receipt updates PO RECEIVED",
+      "ok": true
+    },
+    {
+      "label": "over receive blocked",
+      "ok": true
+    },
+    {
+      "label": "shortage creates report",
+      "ok": true
+    },
+    {
+      "label": "supplier portal cannot post stock",
+      "ok": true
+    }
+  ]
+}

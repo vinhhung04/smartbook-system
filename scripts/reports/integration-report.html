@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SmartBook Integration Test Report</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --text: #1a1d24;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --green: #1a7f37;
+    --green-bg: #e9f7ee;
+    --red: #b3261e;
+    --red-bg: #fdecea;
+    --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --text: #e6e8eb;
+      --muted: #9aa1ac;
+      --border: #2a2e37;
+      --green: #4ade80;
+      --green-bg: #123321;
+      --red: #f87171;
+      --red-bg: #3a1414;
+      --accent: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+  .subtitle { color: var(--muted); font-size: 0.875rem; margin: 0 0 1.5rem; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .badge-pass { background: var(--green-bg); color: var(--green); }
+  .badge-fail { background: var(--red-bg); color: var(--red); }
+  .stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    min-width: 140px;
+  }
+  .stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat-value { font-size: 1.25rem; font-weight: 700; }
+  .suite {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+  }
+  .suite-pass { border-left-color: var(--green); }
+  .suite-fail { border-left-color: var(--red); }
+  .suite summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    flex-wrap: wrap;
+  }
+  .suite summary::-webkit-details-marker { display: none; }
+  .suite-status {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+  }
+  .suite-pass .suite-status { background: var(--green-bg); color: var(--green); }
+  .suite-fail .suite-status { background: var(--red-bg); color: var(--red); }
+  .suite-name { font-weight: 600; }
+  .suite-file { color: var(--muted); font-size: 0.8rem; font-family: monospace; }
+  .suite-count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.85rem; }
+  .suite-duration { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; min-width: 3.5rem; text-align: right; }
+  .steps { list-style: none; margin: 0; padding: 0 1rem 1rem; border-top: 1px solid var(--border); }
+  .step { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0; font-size: 0.9rem; flex-wrap: wrap; }
+  .step-icon { font-weight: 700; width: 1rem; flex: none; }
+  .step-pass .step-icon { color: var(--green); }
+  .step-fail .step-icon { color: var(--red); }
+  .step-detail {
+    flex-basis: 100%;
+    margin: 0.25rem 0 0.25rem 1.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--muted);
+    max-height: 240px;
+    overflow: auto;
+  }
+  footer { margin-top: 2rem; color: var(--muted); font-size: 0.75rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>SmartBook Integration Test Report</h1>
+    <p class="subtitle">Generated 2026-07-27T12:01:33.230Z</p>
+    <div class="badge badge-pass">
+      ✓ All suites passed
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-label">Suites</div><div class="stat-value">9</div></div>
+      <div class="stat"><div class="stat-label">Steps passed</div><div class="stat-value">124/124</div></div>
+      <div class="stat"><div class="stat-label">Failed suites</div><div class="stat-value">0</div></div>
+    </div>
+    
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Auth Core</span>
+      <span class="suite-file">auth-core-integration.mjs</span>
+      <span class="suite-count">14/14</span>
+      <span class="suite-duration">1.1s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">register new customer</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">duplicate register rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">short password register rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">login by username</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">login by email</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">login by identifier</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">wrong password rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">get current user profile</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">update profile full_name</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">invalid email update rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">change password</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">login with new password</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">change password with wrong current password rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">logout</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Admin User Management (IAM)</span>
+      <span class="suite-file">admin-user-management-integration.mjs</span>
+      <span class="suite-count">14/14</span>
+      <span class="suite-duration">1.1s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">admin login</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list roles</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create user with role_ids</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">created user has assigned role</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list users includes new user</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">new user can login</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">new user has roles and permissions</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">update user roles</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">missing email rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">short password rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">invalid role id rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">unknown role id rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">duplicate user rejected</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">lock user</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Inventory Catalog</span>
+      <span class="suite-file">inventory-catalog-integration.mjs</span>
+      <span class="suite-count">19/19</span>
+      <span class="suite-duration">0.9s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">login as inventory admin</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list warehouses</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list books</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create incomplete book</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">get book by id</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">find book by isbn13</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">search books by title</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">update book details (author/category upsert)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">delete book</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">deleted book returns 404</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create warehouse with default location tree</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">warehouse auto-generates location tree</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">update warehouse</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">delete warehouse blocked while locations exist</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list stock movements</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">borrow availability check (in stock)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">borrow availability check (insufficient stock)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">search borrow variants</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">list borrow warehouses</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Purchase Order -&gt; Supplier -&gt; Goods Receipt</span>
+      <span class="suite-file">purchase-supplier-receiving-integration.mjs</span>
+      <span class="suite-count">13/13</span>
+      <span class="suite-duration">1.9s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create purchase order</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">submit purchase order</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">approve purchase order</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">no auto goods receipt after approve</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">send to supplier</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier confirm invoice</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create goods receipt draft from invoice</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">draft does not increase stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">post receipt increases stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">full receipt updates PO RECEIVED</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">over receive blocked</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">shortage creates report</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier portal cannot post stock</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Supplier Portal</span>
+      <span class="suite-file">supplier-portal-integration.mjs</span>
+      <span class="suite-count">22/22</span>
+      <span class="suite-duration">1.9s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create PO</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">submit PO</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">approve PO</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">no auto GR after approve</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">send to supplier</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier portal loads</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier account loads</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier account confirm</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier account creates invoice</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">staff creates GR draft</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">draft does not increase stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">post GR increases stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">PO received</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">shortage report created</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">shortage sent to supplier</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier account acknowledges shortage</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier account creates redelivery invoice</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">redelivery GR posted</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">shortage resolved</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">supplier cannot post stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">over invoice blocked</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">invalid token rejected</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Borrow Phase 1 (Reservation -&gt; Pickup -&gt; Loan -&gt; Return)</span>
+      <span class="suite-file">borrow-phase1-integration.mjs</span>
+      <span class="suite-count">14/14</span>
+      <span class="suite-duration">0.7s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">provision test customer via self-profile</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create reservation</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">duplicate idempotency key returns same reservation</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">confirm reservation (CONFIRMED)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">mark reservation ready for pickup (pickup code issued)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">convert reservation to loan via pickup code</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">return loan from reservation</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">create direct loan</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">customer requests loan renewal</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">approve loan renewal</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">return direct loan</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">cancel reservation</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">reservation rejected for insufficient stock</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">reservation rejected without idempotency key</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Borrow Phase 2 (Loans / Fines)</span>
+      <span class="suite-file">borrow-phase2-integration.mjs</span>
+      <span class="suite-count">15/15</span>
+      <span class="suite-duration">0.8s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">1.self customer ensure</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">2.direct loan create</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">3.reservation-&gt;loan convert</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">4.renew request</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">5.renew approval</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">6.return normal</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">7.return mark lost</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">8.return damaged</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">9.fines list/detail</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">10.fine payment</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">11.fine waive/reduce</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">E1.missing required data</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">E2.invalid loan return</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">E3.approve renewal closed/no pending</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">E4.overpay fine</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">Analytics</span>
+      <span class="suite-file">analytics-integration.mjs</span>
+      <span class="suite-count">8/8</span>
+      <span class="suite-duration">0.7s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/dashboard/kpis</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/borrow-trends</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/top-books</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/overdue-summary</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/fine-summary</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/warehouse-stock-risk</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/reservation-funnel</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">analytics/customer-denied</span>
+      
+    </li>
+    </ul>
+  </details>
+
+  <details class="suite suite-pass" >
+    <summary>
+      <span class="suite-status">PASS</span>
+      <span class="suite-name">AI Service</span>
+      <span class="suite-file">ai-service-integration.mjs</span>
+      <span class="suite-count">5/5</span>
+      <span class="suite-duration">0.2s</span>
+    </summary>
+    <ul class="steps">
+      
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">ai/health</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">ai/recommendations (static payload)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">ai/reading-stats (deterministic aggregation)</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">ai/cache/stats</span>
+      
+    </li>
+
+    <li class="step step-pass">
+      <span class="step-icon">✓</span>
+      <span class="step-label">ai/cache/clear</span>
+      
+    </li>
+    </ul>
+  </details>
+    <footer>SmartBook System &mdash; scripts/run-all-integration-tests.mjs</footer>
+  </div>
+</body>
+</html>

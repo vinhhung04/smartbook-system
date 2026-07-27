@@ -1,0 +1,66 @@
+{
+  "suite": "borrow-phase1",
+  "startedAt": "2026-07-27T12:01:30.989Z",
+  "durationMs": 566,
+  "passed": 14,
+  "total": 14,
+  "ok": true,
+  "steps": [
+    {
+      "label": "provision test customer via self-profile",
+      "ok": true
+    },
+    {
+      "label": "create reservation",
+      "ok": true
+    },
+    {
+      "label": "duplicate idempotency key returns same reservation",
+      "ok": true
+    },
+    {
+      "label": "confirm reservation (CONFIRMED)",
+      "ok": true
+    },
+    {
+      "label": "mark reservation ready for pickup (pickup code issued)",
+      "ok": true
+    },
+    {
+      "label": "convert reservation to loan via pickup code",
+      "ok": true
+    },
+    {
+      "label": "return loan from reservation",
+      "ok": true
+    },
+    {
+      "label": "create direct loan",
+      "ok": true
+    },
+    {
+      "label": "customer requests loan renewal",
+      "ok": true
+    },
+    {
+      "label": "approve loan renewal",
+      "ok": true
+    },
+    {
+      "label": "return direct loan",
+      "ok": true
+    },
+    {
+      "label": "cancel reservation",
+      "ok": true
+    },
+    {
+      "label": "reservation rejected for insufficient stock",
+      "ok": true
+    },
+    {
+      "label": "reservation rejected without idempotency key",
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "suite": "borrow-phase2",
+  "startedAt": "2026-07-27T12:01:31.637Z",
+  "durationMs": 706,
+  "passed": 15,
+  "total": 15,
+  "ok": true,
+  "steps": [
+    {
+      "label": "1.self customer ensure",
+      "ok": true
+    },
+    {
+      "label": "2.direct loan create",
+      "ok": true
+    },
+    {
+      "label": "3.reservation->loan convert",
+      "ok": true
+    },
+    {
+      "label": "4.renew request",
+      "ok": true
+    },
+    {
+      "label": "5.renew approval",
+      "ok": true
+    },
+    {
+      "label": "6.return normal",
+      "ok": true
+    },
+    {
+      "label": "7.return mark lost",
+      "ok": true
+    },
+    {
+      "label": "8.return damaged",
+      "ok": true
+    },
+    {
+      "label": "9.fines list/detail",
+      "ok": true
+    },
+    {
+      "label": "10.fine payment",
+      "ok": true
+    },
+    {
+      "label": "11.fine waive/reduce",
+      "ok": true
+    },
+    {
+      "label": "E1.missing required data",
+      "ok": true
+    },
+    {
+      "label": "E2.invalid loan return",
+      "ok": true
+    },
+    {
+      "label": "E3.approve renewal closed/no pending",
+      "ok": true
+    },
+    {
+      "label": "E4.overpay fine",
+      "ok": true
+    }
+  ]
+}
