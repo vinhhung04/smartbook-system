@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { StatusBadge } from '../status-badge';
 import { borrowService, type Loan } from '@/services/borrow';
-import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { printLoanReceipt } from '@/lib/print-utils';
 
@@ -20,7 +19,6 @@ function getVariant(status: string) {
 export function BorrowLoanDetailPage() {
   const { id } = useParams();
   const [loan, setLoan] = useState<Loan | null>(null);
-  const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,12 +27,8 @@ export function BorrowLoanDetailPage() {
     const load = async () => {
       try {
         setLoading(true);
-        const [loanResp, booksResp] = await Promise.allSettled([
-          borrowService.getLoanById(id),
-          bookService.getAll(),
-        ]);
-        if (loanResp.status === 'fulfilled') setLoan(loanResp.value.data);
-        if (booksResp.status === 'fulfilled' && Array.isArray(booksResp.value)) setBooks(booksResp.value);
+        const response = await borrowService.getLoanById(id);
+        setLoan(response.data);
       } catch (error) {
         toast.error(getApiErrorMessage(error, 'Failed to load loan detail'));
       } finally {
@@ -44,9 +38,6 @@ export function BorrowLoanDetailPage() {
 
     void load();
   }, [id]);
-
-  const getBookTitle = (variantId: string) =>
-    books.find((b) => b.variant_id === variantId)?.title ?? variantId;
 
   return (
     <PageWrapper className="space-y-5">
@@ -116,7 +107,7 @@ export function BorrowLoanDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/80">
-                    {['Loan Item', 'Sách', 'Due Date', 'Return Date', 'Status', 'Fine'].map((header) => (
+                    {['Loan Item', 'Variant', 'Due Date', 'Return Date', 'Status', 'Fine'].map((header) => (
                       <th key={header} className="text-left text-[11px] text-slate-400 px-4 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
                         {header}
                       </th>
@@ -127,7 +118,7 @@ export function BorrowLoanDetailPage() {
                   {(loan.loan_items || []).map((item) => (
                     <tr key={item.id} className="border-b border-slate-50 last:border-0">
                       <td className="px-4 py-3 text-[12px] text-slate-700">{item.item_barcode || item.id}</td>
-                      <td className="px-4 py-3 text-[12px] text-slate-700">{getBookTitle(item.variant_id)}</td>
+                      <td className="px-4 py-3 text-[12px] text-slate-500">{item.variant_id}</td>
                       <td className="px-4 py-3 text-[12px] text-slate-500">{new Date(item.due_date).toLocaleString('vi-VN')}</td>
                       <td className="px-4 py-3 text-[12px] text-slate-500">{item.return_date ? new Date(item.return_date).toLocaleString('vi-VN') : '-'}</td>
                       <td className="px-4 py-3 text-[12px] text-slate-700">{item.status}</td>

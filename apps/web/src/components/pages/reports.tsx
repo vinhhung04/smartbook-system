@@ -49,7 +49,7 @@ function groupByDate(items: { date: string }[]): { date: string; count: number }
 }
 
 export function ReportsPage() {
-  const [range, setRange] = useState<DateRange>('all');
+  const [range, setRange] = useState<DateRange>('30d');
   const [loading, setLoading] = useState(true);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
@@ -68,14 +68,9 @@ export function ReportsPage() {
 
       if (loanResp.status === 'fulfilled') {
         setLoans(Array.isArray(loanResp.value?.data) ? loanResp.value.data : []);
-      } else {
-        console.error('[Reports] Loans failed:', loanResp.reason);
-        toast.error('Không tải được dữ liệu mượn/trả: ' + (loanResp.reason?.response?.data?.message || loanResp.reason?.message || 'Lỗi không xác định'));
       }
       if (fineResp.status === 'fulfilled') {
         setFines(Array.isArray(fineResp.value?.data) ? fineResp.value.data : []);
-      } else {
-        console.error('[Reports] Fines failed:', fineResp.reason);
       }
       if (bookResp.status === 'fulfilled') {
         setBooks(Array.isArray(bookResp.value) ? bookResp.value : []);
@@ -129,21 +124,33 @@ export function ReportsPage() {
   const topBooksData = useMemo(() => {
     const countMap = new Map<string, { title: string; count: number }>();
     for (const loan of filteredLoans) {
-      for (const item of (loan.loan_items || [])) {
-        const book = books.find((b: any) => b.variant_id === item.variant_id);
-        if (!book) continue;
-        const existing = countMap.get(book.title);
+      if (loan.loan_items) {
+        for (const item of loan.loan_items) {
+          const key = item.variant_id;
+          const existing = countMap.get(key);
+          if (existing) {
+            existing.count++;
+          } else {
+            countMap.set(key, { title: key, count: 1 });
+          }
+        }
+      } else {
+        const key = loan.id;
+        const existing = countMap.get(key);
         if (existing) {
           existing.count++;
         } else {
-          countMap.set(book.title, { title: book.title, count: 1 });
+          countMap.set(key, {
+            title: loan.loan_number || loan.id.slice(0, 8),
+            count: 1,
+          });
         }
       }
     }
     return Array.from(countMap.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-  }, [filteredLoans, books]);
+  }, [filteredLoans]);
 
   // --- Fine status distribution ---
   const fineStatusData = useMemo(() => {
