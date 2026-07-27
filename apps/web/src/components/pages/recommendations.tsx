@@ -28,8 +28,6 @@ export function RecommendationsPage() {
     try {
       setLoading(true);
       setError("");
-      setRecommendations([]);
-      setProvider("");
 
       const [booksResp, loansResp] = await Promise.allSettled([
         bookService.getAll(),
@@ -39,24 +37,12 @@ export function RecommendationsPage() {
       const books = booksResp.status === "fulfilled" && Array.isArray(booksResp.value) ? booksResp.value : [];
       const loans = loansResp.status === "fulfilled" ? loansResp.value?.data || [] : [];
 
-      // Deduplicate by title — this is library-wide loan data, not a single user's history.
-      // Sending unique books (sorted by borrow count) lets the AI analyze demand trends
-      // without thinking one person read all books, which would block all recommendations.
-      const titleCountMap: Record<string, { title: string; author: string; category: string; count: number }> = {};
-      loans.forEach((loan: any) => {
-        (loan.loan_items || []).forEach((item: any) => {
-          const book = books.find((b: any) => b.variant_id === item.variant_id);
-          if (!book) return;
-          if (titleCountMap[book.title]) {
-            titleCountMap[book.title].count++;
-          } else {
-            titleCountMap[book.title] = { title: book.title, author: book.author || "", category: book.category || "", count: 1 };
-          }
-        });
-      });
-      const borrowHistory = Object.values(titleCountMap)
-        .sort((a, b) => b.count - a.count)
-        .map(({ title, author, category }) => ({ title, author, category }));
+      const borrowHistory = loans.flatMap((loan: any) =>
+        (loan.loan_items || []).map((item: any) => {
+          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
+          return { title: book?.title || "Unknown", author: book?.author || "", category: book?.category || "" };
+        })
+      );
 
       const catalogBooks = books.map((b: any) => ({
         id: b.id, title: b.title, author: b.author || "", category: b.category || "", quantity: Number(b.quantity || 0),
@@ -73,9 +59,9 @@ export function RecommendationsPage() {
 
       const bookDemand = loans.reduce((acc: Record<string, number>, loan: any) => {
         (loan.loan_items || []).forEach((item: any) => {
-          const book = books.find((b: any) => b.variant_id === item.variant_id);
-          if (!book) return;
-          acc[book.title] = (acc[book.title] || 0) + 1;
+          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
+          const title = book?.title || "Unknown";
+          acc[title] = (acc[title] || 0) + 1;
         });
         return acc;
       }, {});
@@ -183,11 +169,7 @@ export function RecommendationsPage() {
       ) : recommendations.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-[12px] border border-white/80">
           <BookOpen className="w-8 h-8 text-violet-300 mx-auto mb-2" />
-          {provider === "fallback" ? (
-            <p className="text-[13px] text-slate-400">AI chưa khả dụng. Vui lòng kiểm tra cấu hình ANTHROPIC_API_KEY hoặc kết nối Ollama.</p>
-          ) : (
-            <p className="text-[13px] text-slate-400">Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!</p>
-          )}
+          <p className="text-[13px] text-slate-400">Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

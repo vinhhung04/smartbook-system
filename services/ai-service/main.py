@@ -3204,18 +3204,20 @@ async def cache_stats(request: Request):
 RECOMMENDATION_SYSTEM_PROMPT = (
     "Bạn là hệ thống gợi ý sách thông minh của thư viện SmartBook.\n\n"
     "## Nhiệm vụ\n"
-    "Dữ liệu đầu vào là xu hướng mượn sách của toàn thư viện. "
-    "Dựa trên xu hướng đó và danh mục sách hiện có, hãy gợi ý các đầu sách phù hợp.\n\n"
-    "## Quy tắc bắt buộc\n"
+    "Dựa trên lịch sử mượn sách và danh mục sách hiện có, hãy:\n"
+    "1. Phân tích sở thích đọc (thể loại, tác giả ưa thích)\n"
+    "2. Gợi ý sách phù hợp TỪ DANH MỤC HIỆN CÓ\n"
+    "3. Giải thích ngắn gọn lý do gợi ý\n\n"
+    "## Quy tắc\n"
     "- CHỈ gợi ý sách có trong [DANH MỤC SÁCH]. KHÔNG bịa ra sách không tồn tại.\n"
-    "- LUÔN trả về ít nhất 1 gợi ý, ngay cả khi tất cả sách đều hết hàng.\n"
-    "- Trả về ĐÚNG JSON array, KHÔNG có text giải thích hay markdown bên ngoài.\n"
-    "- Tối đa 6 gợi ý.\n\n"
-    "## Ghi chú\n"
-    "- Sách có qty > 0 được ưu tiên hơn, nhưng sách hết hàng (qty=0) vẫn có thể được gợi ý.\n"
-    "- Mỗi gợi ý phải có: book_id, title, author, category, reason (tiếng Việt), score.\n\n"
-    "## Định dạng output — chỉ trả về JSON array này, không có gì khác:\n"
+    "- KHÔNG gợi ý sách mà người dùng đã mượn.\n"
+    "- Ưu tiên sách còn hàng (quantity > 0).\n"
+    "- Mỗi gợi ý phải có: book_id, title, author, category, reason (lý do gợi ý tiếng Việt).\n"
+    "- Trả về ĐÚNG JSON array, không có markdown hay text thừa.\n"
+    "- Tối đa 6 gợi ý, tối thiểu 1.\n\n"
+    "## Định dạng output (JSON array)\n"
     '[{"book_id":"...","title":"...","author":"...","category":"...","reason":"...","score":0.95}]\n'
+    "score là độ phù hợp từ 0.0 đến 1.0.\n"
 )
 
 
@@ -3275,38 +3277,6 @@ def _parse_recommendation_json(text: str) -> list[dict]:
     return []
 
 
-async def _chat_with_anthropic_long(messages: list[dict]) -> tuple[str | None, bool]:
-    """Like _chat_with_anthropic but with a 45s timeout for heavy prompts (e.g. recommendations)."""
-    if not ANTHROPIC_API_KEY:
-        return None, False
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(45.0)) as http_client:
-            system_prompt, filtered = _split_anthropic_messages(messages)
-            payload: dict = {
-                "model": ANTHROPIC_MODEL,
-                "messages": filtered,
-                "temperature": 0.4,
-                "max_tokens": 800,
-            }
-            if system_prompt:
-                payload["system"] = system_prompt
-            resp = await http_client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json=payload,
-            )
-            resp.raise_for_status()
-            reply = _anthropic_extract_text(resp.json())
-            return reply.strip() or None, bool(reply.strip())
-    except Exception as exc:
-        logger.warning("Anthropic long chat failed: type=%s msg=%r", type(exc).__name__, str(exc))
-        return None, False
-
-
 @app.post("/recommendations")
 async def get_recommendations(req: RecommendationRequest):
     user_prompt = _build_recommendation_prompt(req)
@@ -3316,7 +3286,7 @@ async def get_recommendations(req: RecommendationRequest):
         {"role": "user", "content": user_prompt},
     ]
 
-    reply, anthropic_ok = await _chat_with_anthropic_long(messages)
+    reply, anthropic_ok = await _chat_with_anthropic(messages)
     if anthropic_ok and reply:
         recs = _parse_recommendation_json(reply)
         if recs:
