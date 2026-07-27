@@ -5,7 +5,7 @@ import {
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
-  ShoppingCart, AlertTriangle,
+  ShoppingCart, AlertTriangle, PackageCheck,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
@@ -31,6 +31,7 @@ const navGroups = [
     items: [
       { to: "/order-requests", icon: ListOrdered, labelKey: "sidebar.order_requests", access: ROUTE_ACCESS.orderRequests, activeColor: "from-cyan-500/15 to-blue-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
       { to: "/picking", icon: Hand, labelKey: "sidebar.picking", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-700", iconBg: "bg-emerald-500/10" },
+      { to: "/packing", icon: PackageCheck, labelKey: "sidebar.packing", access: ROUTE_ACCESS.staffTaskProgress, activeColor: "from-fuchsia-500/15 to-purple-500/10", textColor: "text-fuchsia-700", iconBg: "bg-fuchsia-500/10" },
       { to: "/outbound", icon: Truck, labelKey: "sidebar.outbound", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/receiving-check", icon: ClipboardList, labelKey: "sidebar.receiving_check", access: ROUTE_ACCESS.staffTaskProgress, activeColor: "from-teal-500/15 to-cyan-500/10", textColor: "text-teal-700", iconBg: "bg-teal-500/10" },
       { to: "/putaway", icon: MapPinned, labelKey: "sidebar.putaway", access: ROUTE_ACCESS.staffTaskProgress, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
