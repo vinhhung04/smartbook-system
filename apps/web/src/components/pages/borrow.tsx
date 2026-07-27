@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { BookMarked, Users, CalendarClock, CircleAlert, ArrowRight, RefreshCw } from 'lucide-react';
 import { StatCard, SectionCard } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { borrowService, type Customer, type Reservation, type Loan } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
@@ -58,26 +59,25 @@ export function BorrowPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center border border-rose-200/40 shadow-sm">
-            <BookMarked className="w-6 h-6 text-rose-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Quản lý mượn trả</h1>
-            <p className="text-sm text-muted-foreground">Luồng khách hàng và đặt trước thời gian thực</p>
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadDashboard()}
-          className="gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Làm mới
-        </Button>
+        <PageHeader
+          icon={BookMarked}
+          title="Quản lý mượn trả"
+          description="Luồng khách hàng và đặt trước thời gian thực"
+          iconBg="bg-gradient-to-br from-rose-100 to-pink-50 border border-rose-200/40 shadow-sm dark:from-rose-500/15 dark:to-pink-500/10 dark:border-rose-500/20"
+          iconColor="text-rose-600 dark:text-rose-400"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadDashboard()}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Làm mới
+            </Button>
+          }
+        />
       </motion.div>
 
       {/* Stats Grid */}

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
-import { Loader2, RefreshCw, Plus, X } from 'lucide-react';
+import { BookOpen, Loader2, RefreshCw, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { StatusBadge } from '@/components/status-badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
@@ -22,12 +24,12 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Đã hủy',
 };
 
-function getBadgeVariant(status: LoanStatus) {
-  if (status === 'BORROWED') return 'secondary';
-  if (status === 'RETURNED') return 'default';
-  if (status === 'OVERDUE' || status === 'LOST' || status === 'DAMAGED') return 'destructive';
-  if (status === 'CANCELLED') return 'outline';
-  return 'secondary';
+function getStatusVariant(status: LoanStatus) {
+  if (status === 'BORROWED') return 'info';
+  if (status === 'RETURNED') return 'success';
+  if (status === 'OVERDUE' || status === 'LOST') return 'danger';
+  if (status === 'CANCELLED') return 'neutral';
+  return 'primary';
 }
 
 export function BorrowLoansPage() {
@@ -208,27 +210,24 @@ export function BorrowLoansPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center border border-blue-200/40 shadow-sm">
-            <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Phiếu mượn sách</h1>
-            <p className="text-sm text-muted-foreground">{loans.length} phiếu mượn</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
-            <Plus className="w-4 h-4" /> Mượn trực tiếp
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => void loadLoans()} className="gap-2">
-            <RefreshCw className="w-4 h-4" /> Làm mới
-          </Button>
-        </div>
+        <PageHeader
+          icon={BookOpen}
+          title="Phiếu mượn sách"
+          description={`${loans.length} phiếu mượn`}
+          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 border border-blue-200/40 shadow-sm dark:from-blue-500/15 dark:to-indigo-500/10 dark:border-blue-500/20"
+          iconColor="text-blue-600 dark:text-blue-400"
+          actions={
+            <>
+              <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
+                <Plus className="w-4 h-4" /> Mượn trực tiếp
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void loadLoans()} className="gap-2">
+                <RefreshCw className="w-4 h-4" /> Làm mới
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -294,7 +293,7 @@ export function BorrowLoansPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
                         onClick={() => void reviewRenewal(request.loan!.id, 'APPROVE')}
                       >
                         Duyệt
@@ -302,7 +301,7 @@ export function BorrowLoansPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                        className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
                         onClick={() => void reviewRenewal(request.loan!.id, 'REJECT')}
                       >
                         Từ chối
@@ -337,14 +336,7 @@ export function BorrowLoansPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-14">
-                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Đang tải phiếu mượn...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <SkeletonTableRow columns={7} rows={5} />
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -375,7 +367,7 @@ export function BorrowLoansPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</td>
                       <td className="px-5 py-3.5 text-sm">{loan.total_items}</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant={getBadgeVariant(loan.status)}>{loan.status}</Badge>
+                        <StatusBadge label={loan.status} variant={getStatusVariant(loan.status)} dot />
                       </td>
                       <td className="px-5 py-3.5">
                         {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (
@@ -383,7 +375,7 @@ export function BorrowLoansPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
                               onClick={() => void returnLoan(loan.id)}
                             >
                               Trả sách
@@ -391,7 +383,7 @@ export function BorrowLoansPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
                               onClick={() => void reportDamage(loan.id)}
                             >
                               Báo hư hỏng
@@ -399,7 +391,7 @@ export function BorrowLoansPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                              className="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
                               onClick={() => void markLost(loan.id)}
                             >
                               Đánh dấu mất
@@ -424,13 +416,13 @@ export function BorrowLoansPage() {
             className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[16px] font-semibold">Tạo phiếu mượn trực tiếp</h3>
-              <button onClick={() => setShowDirectLoan(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowDirectLoan(false)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Khách hàng</label>
                 <select value={dlForm.customer_id} onChange={(e) => setDlForm({ ...dlForm, customer_id: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400">
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
                   <option value="">Chọn khách hàng...</option>
                   {dlCustomers.map((c: any) => <option key={c.id} value={c.id}>{c.full_name} ({c.customer_code})</option>)}
                 </select>
@@ -438,7 +430,7 @@ export function BorrowLoansPage() {
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Kho</label>
                 <select value={dlForm.warehouse_id} onChange={(e) => setDlForm({ ...dlForm, warehouse_id: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400">
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
                   <option value="">Chọn kho...</option>
                   {dlWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name} ({warehouse.code})</option>)}
                 </select>
@@ -446,24 +438,24 @@ export function BorrowLoansPage() {
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Sách</label>
                 <input value={dlBookSearch} onChange={(e) => { setDlBookSearch(e.target.value); bookService.getAll({ search: e.target.value, page: 1, pageSize: 50 }).then((res: any) => setDlBooks(Array.isArray(res) ? res : res?.data ?? [])).catch(() => {}); }}
-                  placeholder="Tìm sách..." className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 mb-2" />
+                  placeholder="Tìm sách..." className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 mb-2" />
                 {dlForm.items.map((item, idx) => (
                   <div key={idx} className="flex gap-2 mb-2">
                     <select value={item.variant_id} onChange={(e) => { const items = [...dlForm.items]; items[idx].variant_id = e.target.value; setDlForm({ ...dlForm, items }); }}
-                      className="flex-1 h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                      className="flex-1 h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20">
                       <option value="">Chọn biến thể sách...</option>
                       {dlBooks.map((b: any) => (b.variants || []).map((v: any) => <option key={v.id} value={v.id}>{b.title} - {v.format || v.isbn13 || v.id.slice(0, 8)}</option>))}
                     </select>
                     <input type="number" value={item.quantity} min={1} max={5} onChange={(e) => { const items = [...dlForm.items]; items[idx].quantity = Number(e.target.value) || 1; setDlForm({ ...dlForm, items }); }}
-                      className="w-16 h-9 px-2 rounded-lg border border-slate-200 text-[13px] text-center" />
+                      className="w-16 h-9 px-2 rounded-lg border border-input bg-background text-[13px] text-center" />
                     {dlForm.items.length > 1 && (
                       <button onClick={() => { const items = dlForm.items.filter((_, i) => i !== idx); setDlForm({ ...dlForm, items }); }}
-                        className="h-9 px-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"><X className="w-3.5 h-3.5" /></button>
+                        aria-label="Xóa sách" className="h-9 px-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10"><X className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
                 ))}
                 <button onClick={() => setDlForm({ ...dlForm, items: [...dlForm.items, { variant_id: '', quantity: 1 }] })}
-                  className="text-[12px] text-indigo-600 hover:underline">+ Thêm sách khác</button>
+                  className="text-[12px] text-indigo-600 dark:text-indigo-400 hover:underline">+ Thêm sách khác</button>
               </div>
             </div>
             <div className="mt-5 flex gap-3">

@@ -7,6 +7,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import {
   staffTaskService,
@@ -232,47 +234,40 @@ export function StaffTasksPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-100 bg-violet-50">
-            <ClipboardList className="h-5 w-5 text-violet-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {isManager ? "Giao việc nhân viên" : "Task được giao"}
-            </h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {isManager
-                ? "Tạo và theo dõi task giao cho nhân viên kho"
-                : "Các task được quản lý giao cho bạn"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>
-                {s === "ALL" ? "Tất cả trạng thái" : s === "IN_PROGRESS" ? "Đang làm" : s === "DONE" ? "Hoàn thành" : s === "CANCELLED" ? "Đã hủy" : "Mới"}
-              </option>
-            ))}
-          </select>
-          <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
-          {isManager && (
-            <Button type="button" size="sm" onClick={() => setShowForm(!showForm)}
-              className="bg-violet-600 hover:bg-violet-700">
-              <Plus className="h-3.5 w-3.5" />
-              Tạo task
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          icon={ClipboardList}
+          title={isManager ? "Giao việc nhân viên" : "Task được giao"}
+          description={isManager ? "Tạo và theo dõi task giao cho nhân viên kho" : "Các task được quản lý giao cho bạn"}
+          iconBg="bg-violet-100 dark:bg-violet-500/15"
+          iconColor="text-violet-700 dark:text-violet-400"
+          actions={
+            <>
+              <select
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                {STATUS_FILTERS.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "ALL" ? "Tất cả trạng thái" : s === "IN_PROGRESS" ? "Đang làm" : s === "DONE" ? "Hoàn thành" : s === "CANCELLED" ? "Đã hủy" : "Mới"}
+                  </option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                Làm mới
+              </Button>
+              {isManager && (
+                <Button type="button" size="sm" onClick={() => setShowForm(!showForm)}
+                  className="bg-violet-600 hover:bg-violet-700">
+                  <Plus className="h-3.5 w-3.5" />
+                  Tạo task
+                </Button>
+              )}
+            </>
+          }
+        />
       </motion.div>
 
       {/* Create form — Manager only */}
@@ -285,7 +280,7 @@ export function StaffTasksPage() {
           <SectionCard>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[14px] font-semibold">Tạo task mới</h2>
-              <button type="button" onClick={() => { setShowForm(false); setForm(BLANK_FORM); setEntityOptions([]); }} className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => { setShowForm(false); setForm(BLANK_FORM); setEntityOptions([]); }} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -389,7 +384,7 @@ export function StaffTasksPage() {
                   )}
                 </div>
                 {form.related_entity_type && form.related_entity_id && (
-                  <p className="text-[11px] text-emerald-600 mt-1.5">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1.5">
                     ✓ Staff sẽ thấy chi tiết {ENTITY_TYPE_LABELS[form.related_entity_type] ?? form.related_entity_type} ngay trong task mà không cần chuyển trang.
                   </p>
                 )}
@@ -436,7 +431,7 @@ export function StaffTasksPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={colSpan} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <SkeletonTableRow columns={colSpan} rows={4} />
               ) : tasks.length === 0 ? (
                 <tr>
                   <td colSpan={colSpan} className="px-5 py-10">
@@ -462,7 +457,7 @@ export function StaffTasksPage() {
                       <div className="space-y-1">
                         <NavLink
                           to={getEntityNavPath(task.related_entity_type)}
-                          className="inline-flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 transition-colors"
+                          className="inline-flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/15"
                         >
                           <Link2 className="h-3 w-3 shrink-0" />
                           <span className="truncate max-w-[120px]">{task.related_entity_display.ref_number}</span>

@@ -7,6 +7,8 @@ import { warehouseService, type LocationNode, type Warehouse } from "@/services/
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingOverlay } from "@/components/ui/loading-state";
 
 type WarehouseMode = "create" | "edit";
 type LocationMode = "create-root" | "create-child" | "edit";
@@ -98,7 +100,7 @@ function TreeNode({
             onSelect(node.id);
           }
         }}
-        className={`w-full flex items-center gap-2 py-2 px-3 rounded-lg transition-colors text-left ${selectedId === node.id ? "bg-violet-50 border border-violet-200" : "hover:bg-muted/60 border border-transparent"}`}
+        className={`w-full flex items-center gap-2 py-2 px-3 rounded-lg transition-colors text-left ${selectedId === node.id ? "bg-violet-50 border border-violet-200 dark:bg-violet-500/10 dark:border-violet-500/20" : "hover:bg-muted/60 border border-transparent"}`}
       >
         <button
           type="button"
@@ -499,15 +501,14 @@ export function WarehousesPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex items-center gap-3"
       >
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
-          <Package className="w-5 h-5 text-violet-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Quản lý kho</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{warehouses.length} kho · Quản lý cấu trúc vị trí phân cấp</p>
-        </div>
+        <PageHeader
+          icon={Package}
+          title="Quản lý kho"
+          description={`${warehouses.length} kho · Quản lý cấu trúc vị trí phân cấp`}
+          iconBg="bg-gradient-to-br from-violet-100 to-purple-50 dark:from-violet-500/20 dark:to-purple-500/10"
+          iconColor="text-violet-600 dark:text-violet-400"
+        />
       </motion.div>
 
       {pageError ? (
@@ -515,8 +516,8 @@ export function WarehousesPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-          <SectionCard className="border-red-200 bg-red-50">
-            <p className="text-[13px] text-red-700">{pageError}</p>
+          <SectionCard className="border-red-200 bg-red-50 dark:border-red-500/20 dark:bg-red-500/10">
+            <p className="text-[13px] text-red-700 dark:text-red-400">{pageError}</p>
           </SectionCard>
         </motion.div>
       ) : null}
@@ -536,7 +537,7 @@ export function WarehousesPage() {
           </motion.div>
 
           {loadingWarehouses ? (
-            <SectionCard><p className="text-center py-8 text-[12px] text-muted-foreground">Đang tải danh sách kho...</p></SectionCard>
+            <SectionCard><LoadingOverlay /></SectionCard>
           ) : warehouses.length === 0 ? (
             <SectionCard>
               <EmptyState variant="no-data" title="Chưa có kho nào" description="Hãy tạo kho mới để bắt đầu" />
@@ -555,7 +556,7 @@ export function WarehousesPage() {
                       <h3 className="text-[12px] font-semibold">{warehouse.code}</h3>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{warehouse.name}</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-violet-600" />
+                    <ChevronRight className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                   </div>
                   <p className="mt-2 text-[10px] text-muted-foreground">{warehouse.warehouse_type || "WAREHOUSE"} · {warehouse.is_active === false ? "INACTIVE" : "ACTIVE"}</p>
                 </motion.button>
@@ -616,7 +617,7 @@ export function WarehousesPage() {
               }
             >
               {loadingLocations ? (
-                <p className="text-center py-8 text-[12px] text-muted-foreground">Đang tải cấu trúc vị trí...</p>
+                <LoadingOverlay />
               ) : locationTree.length === 0 ? (
                 <EmptyState variant="no-data" title="Chưa có vị trí nào" description="Thêm vị trí đầu tiên để bắt đầu" />
               ) : (
@@ -643,7 +644,7 @@ export function WarehousesPage() {
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{warehouseMode === "create" ? "Thêm kho" : "Sửa kho"}</h3>
-              <button onClick={() => setShowWarehouseForm(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowWarehouseForm(false)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -680,7 +681,7 @@ export function WarehousesPage() {
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{locationMode === "edit" ? "Sửa vị trí" : "Thêm vị trí"}</h3>
-              <button onClick={() => setShowLocationForm(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowLocationForm(false)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>

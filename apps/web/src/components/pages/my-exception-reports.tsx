@@ -7,6 +7,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport, type ExceptionReportCreateInput } from "@/services/exception-reports";
 import { warehouseService } from "@/services/warehouse";
@@ -175,32 +177,29 @@ export function MyExceptionReportsPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-red-50">
-            <AlertTriangle className="h-5 w-5 text-red-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Báo cáo sự cố của tôi</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Ghi nhận sự cố thiếu/dư/hư hỏng trong quá trình làm việc để quản lý xử lý
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
-          <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
-            <Plus className="h-3.5 w-3.5" />
-            Báo cáo sự cố
-          </Button>
-        </div>
+        <PageHeader
+          icon={AlertTriangle}
+          title="Báo cáo sự cố của tôi"
+          description="Ghi nhận sự cố thiếu/dư/hư hỏng trong quá trình làm việc để quản lý xử lý"
+          iconBg="bg-red-100 dark:bg-red-500/15"
+          iconColor="text-red-700 dark:text-red-400"
+          actions={
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                Làm mới
+              </Button>
+              <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
+                <Plus className="h-3.5 w-3.5" />
+                Báo cáo sự cố
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800">
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
         Báo cáo sự cố không tự động điều chỉnh tồn kho. Quản lý sẽ xem xét và quyết định xử lý phù hợp.
       </div>
 
@@ -209,7 +208,7 @@ export function MyExceptionReportsPage() {
         <SectionCard>
           <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
             <h2 className="text-[14px] font-semibold">Báo cáo sự cố mới</h2>
-            <button type="button" onClick={closeForm} className="text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={closeForm} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -233,7 +232,7 @@ export function MyExceptionReportsPage() {
                     ))}
                   </select>
                 ) : (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
                     Không tìm thấy task đang hoạt động. Kiểm tra lại "Công việc kho của tôi" hoặc liên hệ quản lý.
                   </div>
                 )}
@@ -343,7 +342,7 @@ export function MyExceptionReportsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <SkeletonTableRow columns={8} rows={4} />
               ) : reports.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-10">

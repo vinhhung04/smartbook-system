@@ -394,14 +394,14 @@ export function OrderRequestsPage() {
   }
 
   return (
-    <PageWrapper className="space-y-5 lg:space-y-6">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={ListOrdered}
           title="Order Requests"
           description="Tao don yeu cau va duyet truoc khi vao Picking"
-          iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50"
-          iconColor="text-cyan-700"
+          iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50 dark:from-cyan-500/15 dark:to-sky-500/10 dark:border-cyan-500/20"
+          iconColor="text-cyan-700 dark:text-cyan-400"
         />
       </FadeItem>
 
@@ -619,7 +619,7 @@ export function OrderRequestsPage() {
                         type="button"
                         variant="ghost"
                         size="sm-icon"
-                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                         onClick={() => handleRemoveLine(line.isbn13)}
                         aria-label="Xoa dong"
                       >
@@ -674,7 +674,7 @@ export function OrderRequestsPage() {
           )}
         >
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="min-w-[920px] w-full">
+            <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
                   {["Order", "Loai", "Nguon", "Dich", "Trang thai", "So luong", "Requested at", "Action"].map((head) => (

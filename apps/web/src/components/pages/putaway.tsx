@@ -10,6 +10,10 @@ import { userService, type WarehouseStaffOption } from "@/services/user";
 import { authService } from "@/services/auth";
 import { canManageReceiving } from "@/lib/rbac";
 import { FadeItem, PageWrapper } from "../motion-utils";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -69,6 +73,7 @@ export function PutawayPage() {
   }, [receipts, query]);
 
   const totalRemaining = receipts.reduce((sum, row) => sum + row.remaining_quantity, 0);
+  const colSpan = showAssign ? 9 : 8;
 
   const handleClaimSelf = async (receiptId: string) => {
     setClaimingId(receiptId);
@@ -104,124 +109,130 @@ export function PutawayPage() {
   };
 
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <NavLink
           to="/orders"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 transition-colors hover:text-blue-600"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
         >
           <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lai danh sach
         </NavLink>
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Putaway</h1>
-        <p className="text-[12px] text-slate-500 mt-1">{receipts.length} phieu da duyet · {totalRemaining} quyen chua nhap ke</p>
+        <PageHeader
+          icon={ClipboardCheck}
+          title="Putaway"
+          description={`${receipts.length} phieu da duyet · ${totalRemaining} quyen chua nhap ke`}
+          iconBg="bg-blue-100 dark:bg-blue-500/15"
+          iconColor="text-blue-600 dark:text-blue-400"
+        />
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Tim theo ma phieu / kho"
-            className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+            className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
           />
         </div>
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-[16px] border border-white/80 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-gradient-to-r from-blue-50/30 to-transparent">
-                {["Ma phieu", "Kho", "Ngay", "Trang thai", "Nguoi duyet", "Tong dong", "Con lai", ...(showAssign ? ["Giao putaway"] : []), "Action"].map((header) => (
-                  <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={showAssign ? 9 : 8} className="text-center py-14 text-[13px] text-slate-400">Dang tai danh sach phieu nhap...</td>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-gradient-to-r from-blue-50/30 to-transparent dark:from-blue-500/10">
+                  {["Ma phieu", "Kho", "Ngay", "Trang thai", "Nguoi duyet", "Tong dong", "Con lai", ...(showAssign ? ["Giao putaway"] : []), "Action"].map((header) => (
+                    <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{header}</th>
+                  ))}
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={showAssign ? 9 : 8} className="py-12 text-center">
-                    <p className="text-[13px] text-slate-400">Khong co phieu nhap nao san sang putaway</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Cac phieu nhap da duyet se hien o day</p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((receipt, index) => (
-                  <motion.tr
-                    key={receipt.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.02 }}
-                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.receipt_number}</td>
-                    <td className="px-4 py-3.5 text-[13px] text-slate-600">{receipt.warehouse_code || receipt.warehouse_name || "-"}</td>
-                    <td className="px-4 py-3.5 text-[12px] text-slate-500">{formatDate(receipt.received_at || receipt.created_at)}</td>
-                    <td className="px-4 py-3.5 text-[12px] text-emerald-600 font-semibold">{receipt.status}</td>
-                    <td className="px-4 py-3.5 text-[12px] text-slate-500">{receipt.approved_by_user_id ? receipt.approved_by_user_id.slice(0, 8) : "-"}</td>
-                    <td className="px-4 py-3.5 text-[13px] text-slate-600">{receipt.line_count}</td>
-                    <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.remaining_quantity}</td>
-                    {showAssign && (
+              </thead>
+              <tbody>
+                {loading ? (
+                  <SkeletonTableRow columns={colSpan} rows={4} />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={colSpan} className="py-12 text-center">
+                      <EmptyState
+                        variant="no-data"
+                        title="Khong co phieu nhap nao san sang putaway"
+                        description="Cac phieu nhap da duyet se hien o day"
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((receipt, index) => (
+                    <motion.tr
+                      key={receipt.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: index * 0.02 }}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.receipt_number}</td>
+                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.warehouse_code || receipt.warehouse_name || "-"}</td>
+                      <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{formatDate(receipt.received_at || receipt.created_at)}</td>
+                      <td className="px-4 py-3.5 text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{receipt.status}</td>
+                      <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{receipt.approved_by_user_id ? receipt.approved_by_user_id.slice(0, 8) : "-"}</td>
+                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.line_count}</td>
+                      <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.remaining_quantity}</td>
+                      {showAssign && (
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={assignState[receipt.id] || ""}
+                              onChange={(e) => setAssignState((prev) => ({ ...prev, [receipt.id]: e.target.value }))}
+                              className="h-8 rounded-md border border-border bg-background px-2 text-[12px]"
+                            >
+                              <option value="">Chọn nhân viên</option>
+                              {warehouseStaff.map((s) => (
+                                <option key={s.id} value={s.id}>{s.full_name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={assigningId === receipt.id}
+                              onClick={() => void handleAssign(receipt.id)}
+                              className="h-8 rounded-md bg-violet-600 px-2.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                            >
+                              {assigningId === receipt.id ? "..." : "Giao"}
+                            </button>
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={assignState[receipt.id] || ""}
-                            onChange={(e) => setAssignState((prev) => ({ ...prev, [receipt.id]: e.target.value }))}
-                            className="h-8 rounded-md border border-slate-200 bg-white px-2 text-[12px]"
+                        <div className="flex items-center gap-2">
+                          {!receipt.putaway_assignee_user_id && (
+                            <button
+                              type="button"
+                              disabled={claimingId === receipt.id}
+                              onClick={() => void handleClaimSelf(receipt.id)}
+                              className="inline-flex items-center rounded-[8px] border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 disabled:opacity-50 transition-colors"
+                            >
+                              {claimingId === receipt.id ? "Đang nhận..." : "Tự nhận"}
+                            </button>
+                          )}
+                          {receipt.putaway_assignee_user_id && receipt.putaway_assignee_user_id === currentUserId && (
+                            <StatusBadge label="Của bạn" variant="success" />
+                          )}
+                          <NavLink
+                            to={`/putaway/${receipt.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 font-semibold transition-colors"
                           >
-                            <option value="">Chọn nhân viên</option>
-                            {warehouseStaff.map((s) => (
-                              <option key={s.id} value={s.id}>{s.full_name}</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={assigningId === receipt.id}
-                            onClick={() => void handleAssign(receipt.id)}
-                            className="h-8 rounded-md bg-violet-600 px-2.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
-                          >
-                            {assigningId === receipt.id ? "..." : "Giao"}
-                          </button>
+                            Xem chi tiết <ArrowRight className="w-3 h-3" />
+                          </NavLink>
                         </div>
                       </td>
-                    )}
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        {!receipt.putaway_assignee_user_id && (
-                          <button
-                            type="button"
-                            disabled={claimingId === receipt.id}
-                            onClick={() => void handleClaimSelf(receipt.id)}
-                            className="inline-flex items-center rounded-[8px] border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                          >
-                            {claimingId === receipt.id ? "Đang nhận..." : "Tự nhận"}
-                          </button>
-                        )}
-                        {receipt.putaway_assignee_user_id && receipt.putaway_assignee_user_id === currentUserId && (
-                          <span className="rounded-[6px] bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-                            Của bạn
-                          </span>
-                        )}
-                        <NavLink
-                          to={`/putaway/${receipt.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 px-2.5 py-1.5 text-[12px] text-blue-600 hover:bg-blue-100 font-semibold transition-colors"
-                        >
-                          Xem chi tiết <ArrowRight className="w-3 h-3" />
-                        </NavLink>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </FadeItem>
     </PageWrapper>

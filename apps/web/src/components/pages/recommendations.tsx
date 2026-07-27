@@ -3,7 +3,7 @@ import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import {
   Sparkles, BookOpen, RefreshCw, Star, TrendingUp,
-  BarChart3, Loader2, AlertCircle,
+  BarChart3, AlertCircle,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { aiService, AIRecommendation } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { borrowService } from "@/services/borrow";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingSpinner } from "@/components/ui/loading-state";
 
 const PIE_COLORS = ["#6366f1", "#a78bfa", "#c084fc", "#e879f9", "#f472b6", "#fb7185", "#38bdf8", "#34d399"];
 
@@ -100,31 +103,26 @@ export function RecommendationsPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-violet-100 to-purple-50 flex items-center justify-center border border-violet-200/40">
-              <Sparkles className="w-5 h-5 text-violet-600" />
-            </div>
-            <div>
-              <h1 className="tracking-[-0.02em]">AI Recommendations</h1>
-              <p className="text-[12px] text-slate-400 mt-0.5">
-                Gợi ý sách cá nhân hóa dựa trên lịch sử mượn
-                {provider && <span className="ml-1 text-violet-400">({provider})</span>}
-              </p>
-            </div>
-          </div>
-          <button onClick={() => void loadRecommendations()} disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 text-[12px] hover:bg-violet-50 transition-all disabled:opacity-50" style={{ fontWeight: 550 }}>
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Phân tích lại
-          </button>
-        </div>
+        <PageHeader
+          icon={Sparkles}
+          title="AI Recommendations"
+          description={`Gợi ý sách cá nhân hóa dựa trên lịch sử mượn${provider ? ` (${provider})` : ""}`}
+          iconBg="bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200/40 dark:from-violet-500/15 dark:to-purple-500/10 dark:border-violet-500/20"
+          iconColor="text-violet-600 dark:text-violet-400"
+          actions={
+            <button onClick={() => void loadRecommendations()} disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 dark:border-violet-500/20 text-violet-700 dark:text-violet-400 text-[12px] hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all disabled:opacity-50" style={{ fontWeight: 550 }}>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Phân tích lại
+            </button>
+          }
+        />
       </FadeItem>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <FadeItem>
-          <div className="bg-white rounded-[16px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-            <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
-              <TrendingUp className="w-4 h-4 text-indigo-500" /> Sách mượn nhiều nhất
+          <div className="bg-card rounded-[16px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+            <h3 className="text-[14px] mb-4 flex items-center gap-2 text-foreground" style={{ fontWeight: 650 }}>
+              <TrendingUp className="w-4 h-4 text-indigo-500 dark:text-indigo-400" /> Sách mượn nhiều nhất
             </h3>
             {demandData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
@@ -139,14 +137,14 @@ export function RecommendationsPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+              <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Chưa có dữ liệu mượn để thống kê." className="py-10" />
             )}
           </div>
         </FadeItem>
         <FadeItem>
-          <div className="bg-white rounded-[16px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-            <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
-              <BarChart3 className="w-4 h-4 text-violet-500" /> Phân bố thể loại
+          <div className="bg-card rounded-[16px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+            <h3 className="text-[14px] mb-4 flex items-center gap-2 text-foreground" style={{ fontWeight: 650 }}>
+              <BarChart3 className="w-4 h-4 text-violet-500 dark:text-violet-400" /> Phân bố thể loại
             </h3>
             {categoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
@@ -158,64 +156,65 @@ export function RecommendationsPage() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+              <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Chưa có thể loại để thống kê." className="py-10" />
             )}
           </div>
         </FadeItem>
       </div>
 
       <FadeItem>
-        <h3 className="text-[14px] flex items-center gap-2" style={{ fontWeight: 650 }}>
-          <Sparkles className="w-4 h-4 text-violet-500" /> Gợi ý cho bạn
+        <h3 className="text-[14px] flex items-center gap-2 text-foreground" style={{ fontWeight: 650 }}>
+          <Sparkles className="w-4 h-4 text-violet-500 dark:text-violet-400" /> Gợi ý cho bạn
         </h3>
       </FadeItem>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
-          <p className="text-[13px] text-slate-400">AI đang phân tích lịch sử mượn sách...</p>
+        <div className="flex items-center justify-center py-16">
+          <LoadingSpinner message="AI đang phân tích lịch sử mượn sách..." />
         </div>
       ) : error ? (
-        <div className="text-center py-12 bg-white rounded-[12px] border border-rose-200/60">
-          <AlertCircle className="w-8 h-8 text-rose-400 mx-auto mb-2" />
-          <p className="text-[13px] text-rose-600">{error}</p>
-        </div>
+        <EmptyState
+          variant="error"
+          icon={AlertCircle}
+          title="Không thể tải gợi ý"
+          description={error}
+          className="bg-card rounded-[12px] border border-rose-200/60 dark:border-rose-500/20 py-12"
+        />
       ) : recommendations.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[12px] border border-white/80">
-          <BookOpen className="w-8 h-8 text-violet-300 mx-auto mb-2" />
-          {provider === "fallback" ? (
-            <p className="text-[13px] text-slate-400">AI chưa khả dụng. Vui lòng kiểm tra cấu hình ANTHROPIC_API_KEY hoặc kết nối Ollama.</p>
-          ) : (
-            <p className="text-[13px] text-slate-400">Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!</p>
-          )}
-        </div>
+        <EmptyState
+          variant="no-data"
+          icon={BookOpen}
+          title="Chưa có gợi ý"
+          description={provider === "fallback" ? "AI chưa khả dụng. Vui lòng kiểm tra cấu hình ANTHROPIC_API_KEY hoặc kết nối Ollama." : "Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!"}
+          className="bg-card rounded-[12px] border border-border py-12"
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {recommendations.map((rec, i) => (
             <motion.div key={rec.book_id || i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-              className="bg-white rounded-[14px] border border-white/80 p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-all group">
+              className="bg-card rounded-[14px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-none transition-all group">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
                   <BookOpen className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-[13px] truncate group-hover:text-violet-700 transition-colors" style={{ fontWeight: 650 }}>{rec.title}</h4>
-                  <p className="text-[11px] text-slate-400 truncate">{rec.author}</p>
+                  <h4 className="text-[13px] truncate text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-400 transition-colors" style={{ fontWeight: 650 }}>{rec.title}</h4>
+                  <p className="text-[11px] text-muted-foreground truncate">{rec.author}</p>
                 </div>
               </div>
               {rec.category && (
-                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-violet-50 text-violet-600 border border-violet-100/60 mb-2" style={{ fontWeight: 550 }}>
+                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-violet-50 text-violet-600 border border-violet-100/60 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 mb-2" style={{ fontWeight: 550 }}>
                   {rec.category}
                 </span>
               )}
-              <p className="text-[12px] text-slate-600 leading-relaxed mb-3">{rec.reason}</p>
+              <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">{rec.reason}</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   {Array.from({ length: 5 }).map((_, si) => (
-                    <Star key={si} className={`w-3 h-3 ${si < Math.round((rec.score || 0) * 5) ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
+                    <Star key={si} className={`w-3 h-3 ${si < Math.round((rec.score || 0) * 5) ? "text-amber-400 fill-amber-400" : "text-slate-200 dark:text-slate-700"}`} />
                   ))}
                 </div>
-                <span className="text-[10px] text-slate-400" style={{ fontWeight: 550 }}>
+                <span className="text-[10px] text-muted-foreground" style={{ fontWeight: 550 }}>
                   Phù hợp {Math.round((rec.score || 0) * 100)}%
                 </span>
               </div>
@@ -227,14 +226,14 @@ export function RecommendationsPage() {
       <FadeItem>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Gợi ý", value: recommendations.length, color: "from-violet-50 to-purple-50/50 border-violet-100/60" },
-            { label: "Thể loại phân tích", value: categoryData.length, color: "from-blue-50 to-indigo-50/50 border-blue-100/60" },
-            { label: "Sách đã phân tích", value: demandData.reduce((s, d) => s + d.demand, 0), color: "from-emerald-50 to-teal-50/50 border-emerald-100/60" },
-            { label: "AI Provider", value: provider || "—", color: "from-rose-50 to-pink-50/50 border-rose-100/60" },
+            { label: "Gợi ý", value: recommendations.length, color: "from-violet-50 to-purple-50/50 border-violet-100/60 dark:from-violet-500/10 dark:to-purple-500/5 dark:border-violet-500/20" },
+            { label: "Thể loại phân tích", value: categoryData.length, color: "from-blue-50 to-indigo-50/50 border-blue-100/60 dark:from-blue-500/10 dark:to-indigo-500/5 dark:border-blue-500/20" },
+            { label: "Sách đã phân tích", value: demandData.reduce((s, d) => s + d.demand, 0), color: "from-emerald-50 to-teal-50/50 border-emerald-100/60 dark:from-emerald-500/10 dark:to-teal-500/5 dark:border-emerald-500/20" },
+            { label: "AI Provider", value: provider || "—", color: "from-rose-50 to-pink-50/50 border-rose-100/60 dark:from-rose-500/10 dark:to-pink-500/5 dark:border-rose-500/20" },
           ].map((s) => (
             <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-[12px] border p-3`}>
-              <p className="text-[11px] text-slate-500 mb-1" style={{ fontWeight: 550 }}>{s.label}</p>
-              <p className="text-[22px] text-slate-700" style={{ fontWeight: 700, lineHeight: 1 }}>{s.value}</p>
+              <p className="text-[11px] text-muted-foreground mb-1" style={{ fontWeight: 550 }}>{s.label}</p>
+              <p className="text-[22px] text-foreground" style={{ fontWeight: 700, lineHeight: 1 }}>{s.value}</p>
             </div>
           ))}
         </div>

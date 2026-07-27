@@ -9,6 +9,7 @@ import {
   Clock,
   Crown,
   FileText,
+  LayoutDashboard,
   Package,
   PackageCheck,
   Receipt,
@@ -34,6 +35,7 @@ import {
 } from 'recharts';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
 import {
@@ -240,35 +242,35 @@ export function DashboardPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+        className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none"
       >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-[22px] font-bold tracking-tight text-foreground">Bảng phân tích</h1>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void loadDashboard()}
-              disabled={loading || !canViewAnalytics}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Làm mới
-            </button>
-            {canViewAnalytics ? (
-              <NavLink
-                to="/reports"
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Bảng phân tích"
+          description="Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt."
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => void loadDashboard()}
+                disabled={loading || !canViewAnalytics}
+                aria-label="Làm mới dữ liệu"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
               >
-                Báo cáo <ArrowRight className="h-4 w-4" />
-              </NavLink>
-            ) : null}
-          </div>
-        </div>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Làm mới
+              </button>
+              {canViewAnalytics ? (
+                <NavLink
+                  to="/reports"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                  Báo cáo <ArrowRight className="h-4 w-4" />
+                </NavLink>
+              ) : null}
+            </>
+          }
+        />
       </motion.div>
 
       {!canViewAnalytics ? (
@@ -323,56 +325,56 @@ export function DashboardPage() {
             </div>
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
               <NavLink to="/purchase-requests?status=PENDING" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${pendingPR > 0 ? 'border-orange-200 bg-orange-50 hover:bg-orange-100' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${pendingPR > 0 ? 'bg-orange-100 border border-orange-200' : 'bg-muted border border-border'}`}>
-                    <ShoppingCart className={`h-4 w-4 ${pendingPR > 0 ? 'text-orange-600' : 'text-muted-foreground'}`} />
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${pendingPR > 0 ? 'border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:hover:bg-orange-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${pendingPR > 0 ? 'bg-orange-100 border border-orange-200 dark:bg-orange-500/15 dark:border-orange-500/20' : 'bg-muted border border-border'}`}>
+                    <ShoppingCart className={`h-4 w-4 ${pendingPR > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${pendingPR > 0 ? 'text-orange-700' : 'text-foreground'}`}>{pendingPR}</div>
+                    <div className={`text-xl font-bold leading-none ${pendingPR > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>{pendingPR}</div>
                     <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Yêu cầu mua hàng<br />chờ duyệt</div>
                   </div>
                 </div>
               </NavLink>
               <NavLink to="/exception-reports?status=OPEN" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${openER > 0 ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${openER > 0 ? 'bg-red-100 border border-red-200' : 'bg-muted border border-border'}`}>
-                    <AlertTriangle className={`h-4 w-4 ${openER > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${openER > 0 ? 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:hover:bg-red-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${openER > 0 ? 'bg-red-100 border border-red-200 dark:bg-red-500/15 dark:border-red-500/20' : 'bg-muted border border-border'}`}>
+                    <AlertTriangle className={`h-4 w-4 ${openER > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${openER > 0 ? 'text-red-700' : 'text-foreground'}`}>{openER}</div>
+                    <div className={`text-xl font-bold leading-none ${openER > 0 ? 'text-red-700 dark:text-red-400' : 'text-foreground'}`}>{openER}</div>
                     <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Báo cáo sự cố<br />chưa xử lý</div>
                   </div>
                 </div>
               </NavLink>
               <NavLink to="/inventory" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.low_stock_variants > 0 ? 'border-amber-200 bg-amber-50 hover:bg-amber-100' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.low_stock_variants > 0 ? 'bg-amber-100 border border-amber-200' : 'bg-muted border border-border'}`}>
-                    <Warehouse className={`h-4 w-4 ${kpis.low_stock_variants > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.low_stock_variants > 0 ? 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.low_stock_variants > 0 ? 'bg-amber-100 border border-amber-200 dark:bg-amber-500/15 dark:border-amber-500/20' : 'bg-muted border border-border'}`}>
+                    <Warehouse className={`h-4 w-4 ${kpis.low_stock_variants > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${kpis.low_stock_variants > 0 ? 'text-amber-700' : 'text-foreground'}`}>{kpis.low_stock_variants}</div>
+                    <div className={`text-xl font-bold leading-none ${kpis.low_stock_variants > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>{kpis.low_stock_variants}</div>
                     <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Đầu sách<br />tồn kho thấp</div>
                   </div>
                 </div>
               </NavLink>
               <NavLink to="/borrow/loans?status=OVERDUE" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.overdue_loans > 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.overdue_loans > 0 ? 'bg-rose-100 border border-rose-200' : 'bg-muted border border-border'}`}>
-                    <Clock className={`h-4 w-4 ${kpis.overdue_loans > 0 ? 'text-rose-600' : 'text-muted-foreground'}`} />
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.overdue_loans > 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:hover:bg-rose-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.overdue_loans > 0 ? 'bg-rose-100 border border-rose-200 dark:bg-rose-500/15 dark:border-rose-500/20' : 'bg-muted border border-border'}`}>
+                    <Clock className={`h-4 w-4 ${kpis.overdue_loans > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${kpis.overdue_loans > 0 ? 'text-rose-700' : 'text-foreground'}`}>{kpis.overdue_loans}</div>
+                    <div className={`text-xl font-bold leading-none ${kpis.overdue_loans > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-foreground'}`}>{kpis.overdue_loans}</div>
                     <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Phiếu mượn<br />quá hạn</div>
                   </div>
                 </div>
               </NavLink>
               <NavLink to="/borrow/fines?status=UNPAID" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${fines.unpaid_count > 0 ? 'border-violet-200 bg-violet-50 hover:bg-violet-100' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fines.unpaid_count > 0 ? 'bg-violet-100 border border-violet-200' : 'bg-muted border border-border'}`}>
-                    <Receipt className={`h-4 w-4 ${fines.unpaid_count > 0 ? 'text-violet-600' : 'text-muted-foreground'}`} />
+                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${fines.unpaid_count > 0 ? 'border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:hover:bg-violet-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fines.unpaid_count > 0 ? 'bg-violet-100 border border-violet-200 dark:bg-violet-500/15 dark:border-violet-500/20' : 'bg-muted border border-border'}`}>
+                    <Receipt className={`h-4 w-4 ${fines.unpaid_count > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
                   </div>
                   <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${fines.unpaid_count > 0 ? 'text-violet-700' : 'text-foreground'}`}>{fines.unpaid_count}</div>
+                    <div className={`text-xl font-bold leading-none ${fines.unpaid_count > 0 ? 'text-violet-700 dark:text-violet-400' : 'text-foreground'}`}>{fines.unpaid_count}</div>
                     <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Tiền phạt<br />chưa thu</div>
                   </div>
                 </div>
@@ -466,7 +468,7 @@ export function DashboardPage() {
             </SectionCard>
 
             <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-[11px] uppercase text-muted-foreground">Chưa trả</p>
                   <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
@@ -517,8 +519,8 @@ export function DashboardPage() {
                       {stockRisk.map((item) => (
                         <tr key={item.warehouse_id} className="border-b border-border/60 last:border-0">
                           <td className="py-3 pr-3 font-medium">{item.warehouse_name}</td>
-                          <td className="py-3 pr-3 text-amber-700">{item.low_stock_variants}</td>
-                          <td className="py-3 pr-3 text-rose-700">{item.out_of_stock_variants}</td>
+                          <td className="py-3 pr-3 text-amber-700 dark:text-amber-400">{item.low_stock_variants}</td>
+                          <td className="py-3 pr-3 text-rose-700 dark:text-rose-400">{item.out_of_stock_variants}</td>
                           <td className="py-3 pr-3">{item.total_available_qty}</td>
                           <td className="py-3 pr-3">{item.total_reserved_qty}</td>
                           <td className="py-3 pr-3">{item.total_borrowed_qty}</td>
@@ -542,7 +544,7 @@ export function DashboardPage() {
                         <p className="truncate text-[12px] text-muted-foreground">{item.customer_name}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[13px] font-semibold text-rose-700">{item.overdue_days} ngày</p>
+                        <p className="text-[13px] font-semibold text-rose-700 dark:text-rose-400">{item.overdue_days} ngày</p>
                         <p className="text-[12px] text-muted-foreground">{item.due_date ? item.due_date.slice(0, 10) : 'Không có hạn'}</p>
                       </div>
                     </div>

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { CircleAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { StatusBadge } from '@/components/status-badge';
 import { borrowService, type Fine } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -16,11 +18,11 @@ const STATUS_LABELS: Record<string, string> = {
   WAIVED: 'Đã miễn',
 };
 
-function getBadgeVariant(status: string) {
-  if (status === 'PAID') return 'default';
-  if (status === 'WAIVED') return 'outline';
-  if (status === 'UNPAID') return 'destructive';
-  return 'secondary';
+function getStatusVariant(status: string) {
+  if (status === 'PAID') return 'success';
+  if (status === 'WAIVED') return 'neutral';
+  if (status === 'UNPAID') return 'danger';
+  return 'warning';
 }
 
 export function BorrowFinesPage() {
@@ -130,28 +132,25 @@ export function BorrowFinesPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-100 to-orange-50 flex items-center justify-center border border-amber-200/40 shadow-sm">
-            <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Tiền phạt mượn trả</h1>
-            <p className="text-sm text-muted-foreground">{fines.length} khoản phạt</p>
-          </div>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void loadFines()}
-          className="gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Làm mới
-        </Button>
+        <PageHeader
+          icon={CircleAlert}
+          title="Tiền phạt mượn trả"
+          description={`${fines.length} khoản phạt`}
+          iconBg="bg-gradient-to-br from-amber-100 to-orange-50 border border-amber-200/40 shadow-sm dark:from-amber-500/15 dark:to-orange-500/10 dark:border-amber-500/20"
+          iconColor="text-amber-600 dark:text-amber-400"
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadFines()}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Làm mới
+            </Button>
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -202,14 +201,7 @@ export function BorrowFinesPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-14">
-                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Đang tải tiền phạt...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <SkeletonTableRow columns={7} rows={5} />
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -236,7 +228,7 @@ export function BorrowFinesPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{Number(fine.amount || 0).toLocaleString('vi-VN')} VND</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{Number(fine.summary?.remaining_balance || 0).toLocaleString('vi-VN')} VND</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant={getBadgeVariant(fine.status)}>{fine.status}</Badge>
+                        <StatusBadge label={fine.status} variant={getStatusVariant(fine.status)} dot />
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
@@ -250,7 +242,7 @@ export function BorrowFinesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
                             onClick={() => void recordPayment(fine)}
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >
@@ -259,7 +251,7 @@ export function BorrowFinesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                            className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
                             onClick={() => void waiveFine(fine)}
                             disabled={Number(fine.summary?.remaining_balance || 0) <= 0}
                           >

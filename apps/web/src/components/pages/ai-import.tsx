@@ -315,14 +315,14 @@ export function AIImportPage() {
           </div>
           <div>
             <h1 className="tracking-[-0.02em]">Nhập sách qua AI</h1>
-            <p className="mt-0.5 text-[12px] text-slate-400">Quét mã vạch hoặc nhập ISBN để tự động điền metadata</p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">Quét mã vạch hoặc nhập ISBN để tự động điền metadata</p>
           </div>
         </div>
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Bước 1 — Tra cứu</div>
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Bước 1 — Tra cứu</div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[260px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500" />
@@ -352,13 +352,13 @@ export function AIImportPage() {
             <button
               onClick={() => setShowScanner(true)}
               disabled={lookupLoading}
-              className="inline-flex items-center gap-2 rounded-[12px] border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] font-semibold text-indigo-700"
+              className="inline-flex items-center gap-2 rounded-[12px] border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] font-semibold text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400"
             >
               <ScanBarcode className="h-4 w-4" />
               Quét camera
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">Hỗ trợ scanner có khoảng trắng/dấu gạch ngang — hệ thống sẽ tự động chuẩn hóa.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Hỗ trợ scanner có khoảng trắng/dấu gạch ngang — hệ thống sẽ tự động chuẩn hóa.</p>
         </div>
       </FadeItem>
 
@@ -367,17 +367,17 @@ export function AIImportPage() {
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]"
+            className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none"
           >
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-400">Bước 2 — Xem & sửa</div>
-                <h3 className="text-[15px] font-semibold text-slate-800">
+                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Bước 2 — Xem & sửa</div>
+                <h3 className="text-[15px] font-semibold text-foreground">
                   {lookupData.found ? "Đã tìm thấy metadata" : "Không tìm thấy metadata"}
                 </h3>
               </div>
-              <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-right text-[11px] text-slate-500">
-                <div>Độ tin cậy: <span className="font-semibold text-slate-700">{confidenceText}</span></div>
+              <div className="rounded-[10px] border border-border bg-muted px-3 py-2 text-right text-[11px] text-muted-foreground">
+                <div>Độ tin cậy: <span className="font-semibold text-foreground">{confidenceText}</span></div>
                 <div>
                   Nguồn:{" "}
                   {(() => {
@@ -397,101 +397,101 @@ export function AIImportPage() {
             </div>
 
             {manualMode ? (
-              <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700">
+              <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
                 Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
               </div>
             ) : null}
 
             {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
-              <div className="mb-4 rounded-[10px] border border-yellow-200 bg-yellow-50 px-3 py-2 text-[12px] text-yellow-700">
+              <div className="mb-4 rounded-[10px] border border-yellow-200 bg-yellow-50 px-3 py-2 text-[12px] text-yellow-700 dark:border-yellow-500/20 dark:bg-yellow-500/10 dark:text-yellow-300">
                 Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
               </div>
             ) : null}
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">ISBN</label>
-                <input value={form.isbn} onChange={(e) => setForm((prev) => ({ ...prev, isbn: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">ISBN</label>
+                <input value={form.isbn} onChange={(e) => setForm((prev) => ({ ...prev, isbn: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px] font-mono" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tên sách</label>
-                <input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Tên sách</label>
+                <input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tựa phụ</label>
-                <input value={form.subtitle} onChange={(e) => setForm((prev) => ({ ...prev, subtitle: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Tựa phụ</label>
+                <input value={form.subtitle} onChange={(e) => setForm((prev) => ({ ...prev, subtitle: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tác giả (cách nhau dấu phẩy)</label>
-                <input value={form.authorsText} onChange={(e) => setForm((prev) => ({ ...prev, authorsText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Tác giả (cách nhau dấu phẩy)</label>
+                <input value={form.authorsText} onChange={(e) => setForm((prev) => ({ ...prev, authorsText: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Nhà xuất bản</label>
-                <input value={form.publisher} onChange={(e) => setForm((prev) => ({ ...prev, publisher: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Nhà xuất bản</label>
+                <input value={form.publisher} onChange={(e) => setForm((prev) => ({ ...prev, publisher: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngày xuất bản</label>
-                <input value={form.publishedDate} onChange={(e) => setForm((prev) => ({ ...prev, publishedDate: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Ngày xuất bản</label>
+                <input value={form.publishedDate} onChange={(e) => setForm((prev) => ({ ...prev, publishedDate: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Thể loại (cách nhau dấu phẩy)</label>
-                <input value={form.categoriesText} onChange={(e) => setForm((prev) => ({ ...prev, categoriesText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Thể loại (cách nhau dấu phẩy)</label>
+                <input value={form.categoriesText} onChange={(e) => setForm((prev) => ({ ...prev, categoriesText: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Ngôn ngữ</label>
-                <input value={form.language} onChange={(e) => setForm((prev) => ({ ...prev, language: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Ngôn ngữ</label>
+                <input value={form.language} onChange={(e) => setForm((prev) => ({ ...prev, language: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">ISBN13</label>
-                <input value={form.isbn13} onChange={(e) => setForm((prev) => ({ ...prev, isbn13: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">ISBN13</label>
+                <input value={form.isbn13} onChange={(e) => setForm((prev) => ({ ...prev, isbn13: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px] font-mono" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">ISBN10</label>
-                <input value={form.isbn10} onChange={(e) => setForm((prev) => ({ ...prev, isbn10: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] font-mono" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">ISBN10</label>
+                <input value={form.isbn10} onChange={(e) => setForm((prev) => ({ ...prev, isbn10: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px] font-mono" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Số trang</label>
-                <input value={form.pageCount} onChange={(e) => setForm((prev) => ({ ...prev, pageCount: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Số trang</label>
+                <input value={form.pageCount} onChange={(e) => setForm((prev) => ({ ...prev, pageCount: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">URL ảnh bìa</label>
-                <input value={form.thumbnail} onChange={(e) => setForm((prev) => ({ ...prev, thumbnail: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">URL ảnh bìa</label>
+                <input value={form.thumbnail} onChange={(e) => setForm((prev) => ({ ...prev, thumbnail: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-3">
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Mô tả</label>
-                <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Mô tả</label>
+                <textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Tóm tắt ngắn (summary_vi)</label>
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Tóm tắt ngắn (summary_vi)</label>
                 <textarea
                   value={form.summaryVi}
                   onChange={(e) => setForm((prev) => ({ ...prev, summaryVi: e.target.value }))}
                   rows={2}
                   placeholder="Tóm tắt 2-3 câu dùng cho AI chatbot..."
-                  className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]"
+                  className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-semibold text-slate-500">Từ khóa (cách nhau dấu phẩy)</label>
-                <input value={form.keywordsText} onChange={(e) => setForm((prev) => ({ ...prev, keywordsText: e.target.value }))} className="w-full rounded-[10px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Từ khóa (cách nhau dấu phẩy)</label>
+                <input value={form.keywordsText} onChange={(e) => setForm((prev) => ({ ...prev, keywordsText: e.target.value }))} className="w-full rounded-[10px] border border-border px-3 py-2 text-[13px]" />
               </div>
 
               {/* AI Tools section */}
               {form.title.trim() && (
-                <div className="rounded-[12px] border border-violet-100 bg-violet-50/40 p-4">
+                <div className="rounded-[12px] border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-500/20 dark:bg-violet-500/5">
                   <div className="mb-2.5 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet-500">Công cụ AI</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet-500 dark:text-violet-400">Công cụ AI</span>
                   </div>
 
                   {!form.description.trim() ? (
                     <button
                       onClick={() => void handleGenerateDescription()}
                       disabled={summaryLoading}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-card px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-40 dark:border-violet-500/20 dark:text-violet-400 dark:hover:bg-violet-500/10"
                     >
                       {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                       {summaryLoading ? "Đang tạo mô tả..." : "Tạo mô tả AI"}
@@ -511,7 +511,7 @@ export function AIImportPage() {
                           key={mode}
                           onClick={() => void handleEnrichMetadata(mode)}
                           disabled={!!enrichLoading || summaryLoading}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:opacity-40"
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 bg-card px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:opacity-40 dark:border-violet-500/20 dark:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
                         >
                           {enrichLoading === mode
                             ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -523,51 +523,51 @@ export function AIImportPage() {
                   )}
 
                   {enrichResult && (
-                    <div className="mt-3 rounded-[10px] border border-violet-200 bg-white p-3 text-[12px]">
-                      <div className="mb-2 font-semibold text-violet-700">
+                    <div className="mt-3 rounded-[10px] border border-violet-200 bg-card p-3 text-[12px] dark:border-violet-500/20">
+                      <div className="mb-2 font-semibold text-violet-700 dark:text-violet-400">
                         Kết quả AI{enrichResult.ai_provider !== "none" ? ` (${enrichResult.ai_provider})` : ""}
                       </div>
 
                       {enrichResult.mode === "keywords" && enrichResult.keywords.length > 0 && (
-                        <p className="mb-2 text-slate-700">Từ khóa: {enrichResult.keywords.join(", ")}</p>
+                        <p className="mb-2 text-foreground">Từ khóa: {enrichResult.keywords.join(", ")}</p>
                       )}
                       {enrichResult.mode === "short_summary" && enrichResult.shortSummary && (
-                        <p className="mb-2 text-slate-700">{enrichResult.shortSummary}</p>
+                        <p className="mb-2 text-foreground">{enrichResult.shortSummary}</p>
                       )}
                       {enrichResult.mode === "normalize_description" && enrichResult.normalizedDescription && (
-                        <p className="mb-2 whitespace-pre-wrap text-slate-700">{enrichResult.normalizedDescription}</p>
+                        <p className="mb-2 whitespace-pre-wrap text-foreground">{enrichResult.normalizedDescription}</p>
                       )}
                       {enrichResult.mode === "suggest_categories" && enrichResult.suggestedCategories.length > 0 && (
-                        <p className="mb-2 text-slate-700">
+                        <p className="mb-2 text-foreground">
                           Thể loại gợi ý: {enrichResult.suggestedCategories.join(", ")}
-                          <span className="ml-1 text-slate-400">(sẽ merge với thể loại cũ)</span>
+                          <span className="ml-1 text-muted-foreground">(sẽ merge với thể loại cũ)</span>
                         </p>
                       )}
                       {enrichResult.mode === "quality_check" && (
                         enrichResult.qualityWarnings.length === 0
-                          ? <p className="mb-2 font-medium text-emerald-600">Metadata đạt chất lượng tốt ✓</p>
+                          ? <p className="mb-2 font-medium text-emerald-600 dark:text-emerald-400">Metadata đạt chất lượng tốt ✓</p>
                           : (
-                            <ul className="mb-2 list-disc space-y-0.5 pl-4 text-amber-700">
+                            <ul className="mb-2 list-disc space-y-0.5 pl-4 text-amber-700 dark:text-amber-400">
                               {enrichResult.qualityWarnings.map((w, i) => <li key={i}>{w}</li>)}
                             </ul>
                           )
                       )}
                       {!enrichResult.success && enrichResult.qualityWarnings.length > 0 && enrichResult.mode !== "quality_check" && (
-                        <p className="mb-2 text-red-600">{enrichResult.qualityWarnings[0]}</p>
+                        <p className="mb-2 text-red-600 dark:text-red-400">{enrichResult.qualityWarnings[0]}</p>
                       )}
 
                       <div className="flex gap-2">
                         {enrichResult.mode !== "quality_check" && enrichResult.success && (
                           <button
                             onClick={applyEnrichResult}
-                            className="rounded-[8px] bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-700"
+                            className="rounded-[8px] bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
                           >
                             Áp dụng
                           </button>
                         )}
                         <button
                           onClick={() => setEnrichResult(null)}
-                          className="rounded-[8px] border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                          className="rounded-[8px] border border-border px-3 py-1 text-[11px] font-semibold text-muted-foreground dark:text-slate-400 hover:bg-muted"
                         >
                           Đóng
                         </button>
@@ -586,7 +586,7 @@ export function AIImportPage() {
                   setIsbnInput("");
                 }}
                 disabled={saving}
-                className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700"
+                className="rounded-[10px] border border-border bg-card px-4 py-2 text-[13px] font-semibold text-foreground"
               >
                 Đặt lại
               </button>

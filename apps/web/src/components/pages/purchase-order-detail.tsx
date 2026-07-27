@@ -7,6 +7,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { StatusBadge } from "@/components/status-badge";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingOverlay } from "@/components/ui/loading-state";
 import { Button } from "@/components/ui/button";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
@@ -114,7 +115,7 @@ export function PurchaseOrderDetailPage() {
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto text-[13px] text-muted-foreground">Loading purchase order...</div>;
+    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><LoadingOverlay /></div>;
   }
 
   if (!po) {
@@ -171,7 +172,7 @@ export function PurchaseOrderDetailPage() {
       <SectionCard title="Timeline">
         <div className="grid gap-3 md:grid-cols-4">
           {po.timeline.map((step) => (
-            <div key={step.label} className={`rounded-xl border p-3 ${step.completed ? "border-emerald-200 bg-emerald-50" : "border-input bg-muted/20"}`}>
+            <div key={step.label} className={`rounded-xl border p-3 ${step.completed ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10" : "border-input bg-muted/20"}`}>
               <div className="text-[13px] font-semibold">{step.label}</div>
               <div className="mt-1 text-[11px] text-muted-foreground">{step.completed ? formatDate(step.time) : "Pending"}</div>
             </div>
@@ -191,7 +192,7 @@ export function PurchaseOrderDetailPage() {
 
       {po.status === "SENT_TO_SUPPLIER" ? (
         <SectionCard title="Supplier Fulfillment" icon={Truck}>
-          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-800">
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
             Waiting for supplier confirmation. Goods receipt can only be created after the supplier confirms the order and submits an invoice or delivery note.
           </div>
         </SectionCard>
@@ -199,7 +200,7 @@ export function PurchaseOrderDetailPage() {
 
       {supplierDocs?.dispatches.length ? (
         <SectionCard title="Supplier Dispatches" noPadding>
-          <table className="w-full">
+          <div className="overflow-x-auto"><table className="w-full">
             <tbody>
               {supplierDocs.dispatches.map((dispatch) => (
                 <tr key={dispatch.id} className="border-b border-border last:border-0">
@@ -216,7 +217,7 @@ export function PurchaseOrderDetailPage() {
                         >
                           <Clipboard className="h-3.5 w-3.5" /> Copy Link
                         </Button>
-                        <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
+                        <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
                           Open <ExternalLink className="h-3.5 w-3.5" />
                         </NavLink>
                       </div>
@@ -225,12 +226,13 @@ export function PurchaseOrderDetailPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </SectionCard>
       ) : null}
 
       {supplierDocs?.invoices.length ? (
         <SectionCard title="Supplier Invoices / Delivery Notes" noPadding>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[760px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
@@ -259,11 +261,13 @@ export function PurchaseOrderDetailPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </SectionCard>
       ) : null}
 
       {supplierDocs?.shortage_reports.length ? (
         <SectionCard title="Shortage Reports" noPadding>
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[760px]">
             <tbody>
               {supplierDocs.shortage_reports.map((report) => {
@@ -286,6 +290,7 @@ export function PurchaseOrderDetailPage() {
               })}
             </tbody>
           </table>
+          </div>
         </SectionCard>
       ) : null}
 
@@ -325,7 +330,7 @@ export function PurchaseOrderDetailPage() {
             <tbody>
               {po.goods_receipts.map((receipt) => (
                 <tr key={receipt.id} className="border-b border-border last:border-0">
-                  <td className="px-5 py-3.5"><NavLink to={`/orders/${receipt.id}`} className="text-[13px] font-semibold text-indigo-600">{receipt.receipt_number}</NavLink></td>
+                  <td className="px-5 py-3.5"><NavLink to={`/orders/${receipt.id}`} className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400">{receipt.receipt_number}</NavLink></td>
                   <td className="px-5 py-3.5"><StatusBadge label={receipt.status} variant={statusVariant(receipt.status)} /></td>
                   <td className="px-5 py-3.5 text-[13px]">{receipt.total_quantity} units</td>
                   <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(receipt.received_at)}</td>

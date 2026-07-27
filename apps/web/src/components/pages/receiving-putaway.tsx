@@ -16,6 +16,9 @@ import {
 import { StorageSuggestionPanel } from "@/components/inventory/StorageSuggestionPanel";
 import { authService } from "@/services/auth";
 import { canManageReceiving } from "@/lib/rbac";
+import { LoadingOverlay } from "@/components/ui/loading-state";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 
 interface DraftAllocationLine {
   id: string;
@@ -572,31 +575,36 @@ export function ReceivingPutawayPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <p className="text-[13px] text-slate-500">Đang tải module Nhận hàng - Xếp lên kệ...</p>
+        <LoadingOverlay />
       </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Receiving - Shelf Putaway</h1>
-        <p className="text-[12px] text-slate-500 mt-1">Chuyển hàng từ RECEIVING lên SHELF_COMPARTMENT và reverse ngược lại</p>
+        <PageHeader
+          icon={ArrowRightLeft}
+          title="Receiving - Shelf Putaway"
+          description="Chuyển hàng từ RECEIVING lên SHELF_COMPARTMENT và reverse ngược lại"
+          iconBg="bg-violet-100 dark:bg-violet-500/15"
+          iconColor="text-violet-600 dark:text-violet-400"
+        />
         {isVariantLocked ? (
-          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-violet-200 bg-violet-50 px-4 py-3">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-            <p className="text-[12px] text-violet-800">
+          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-4 py-3">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+            <p className="text-[12px] text-violet-800 dark:text-violet-300">
               Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
               <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
               Kho và SKU đã được khoá theo phiếu nhập.
             </p>
           </div>
         ) : (
-          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <p className="text-[12px] text-amber-800">
+          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <p className="text-[12px] text-amber-800 dark:text-amber-300">
               Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
-              <a href="/putaway" className="font-semibold underline hover:text-amber-900">Putaway queue (/putaway)</a>.
+              <a href="/putaway" className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200">Putaway queue (/putaway)</a>.
             </p>
           </div>
         )}
@@ -604,15 +612,15 @@ export function ReceivingPutawayPage() {
 
       {/* Warehouse Filter */}
       <FadeItem>
-        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 ml-1" />}</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}</p>
               <select
                 value={selectedWarehouseId}
                 onChange={(event) => setSelectedWarehouseId(event.target.value)}
                 disabled={isWarehouseLocked}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] disabled:bg-slate-50 disabled:cursor-not-allowed"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] disabled:bg-muted disabled:cursor-not-allowed"
               >
                 <option value="">Chọn kho</option>
                 {warehouses.map((warehouse) => (
@@ -621,11 +629,11 @@ export function ReceivingPutawayPage() {
               </select>
             </div>
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Nguồn RECEIVING</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Nguồn RECEIVING</p>
               <select
                 value={selectedReceivingId}
                 onChange={(event) => setSelectedReceivingId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
               >
                 <option value="">Chọn khu RECEIVING/STAGING</option>
                 {receivings.map((location) => (
@@ -636,7 +644,7 @@ export function ReceivingPutawayPage() {
             <div className="flex items-end justify-end">
               <button
                 onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 px-4 py-2.5 text-[13px] hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-border px-4 py-2.5 text-[13px] hover:bg-muted transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Tải lại
               </button>
@@ -647,20 +655,20 @@ export function ReceivingPutawayPage() {
 
       {/* Section A: Receiving -> Shelf */}
       <FadeItem>
-        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
           <h2 className="text-[14px] font-semibold mb-1">A. Receiving → Shelf</h2>
-          <p className="text-[11px] text-slate-500 mb-4">Chuyển sách từ vùng nhận hàng lên kệ</p>
+          <p className="text-[11px] text-muted-foreground mb-4">Chuyển sách từ vùng nhận hàng lên kệ</p>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">
-                SKU trong RECEIVING {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 ml-1" />}
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
+                SKU trong RECEIVING {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}
               </p>
               <select
                 value={selectedVariantId}
                 onChange={(event) => setSelectedVariantId(event.target.value)}
                 disabled={isVariantLocked}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px] disabled:bg-slate-50 disabled:cursor-not-allowed"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] disabled:bg-muted disabled:cursor-not-allowed"
               >
                 <option value="">Chọn SKU</option>
                 {receivingItems.map((item) => (
@@ -673,15 +681,15 @@ export function ReceivingPutawayPage() {
 
             {!isVariantLocked && (
               <div>
-                <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quét ISBN13</p>
+                <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét ISBN13</p>
                 <div className="flex gap-2">
                   <input
                     value={scanSkuInput}
                     onChange={(event) => setScanSkuInput(event.target.value)}
                     placeholder="Nhập ISBN13"
-                    className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                    className="flex-1 rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                   />
-                  <button onClick={handleScanSku} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                  <button onClick={handleScanSku} aria-label="Quét ISBN13" className="rounded-[10px] border border-border px-3 py-2.5 hover:bg-muted transition-colors">
                     <ScanLine className="w-4 h-4" />
                   </button>
                 </div>
@@ -689,15 +697,15 @@ export function ReceivingPutawayPage() {
             )}
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Quét vị trí đích</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét vị trí đích</p>
               <div className="flex gap-2">
                 <input
                   value={scanTargetBarcodeInput}
                   onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
                   placeholder="locations.barcode"
-                  className="flex-1 rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                  className="flex-1 rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                 />
-                <button onClick={handleScanTargetLocation} className="rounded-[10px] border border-slate-200 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                <button onClick={handleScanTargetLocation} aria-label="Quét vị trí đích" className="rounded-[10px] border border-border px-3 py-2.5 hover:bg-muted transition-colors">
                   <ScanLine className="w-4 h-4" />
                 </button>
               </div>
@@ -705,10 +713,10 @@ export function ReceivingPutawayPage() {
           </div>
 
           {ambiguousVariantMatches.length > 0 ? (
-            <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 bg-amber-50/50">
-              <p className="text-[12px] text-amber-800 font-semibold">ISBN13 trùng nhiều SKU, vui lòng chọn thủ công:</p>
+            <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/10">
+              <p className="text-[12px] text-amber-800 dark:text-amber-300 font-semibold">ISBN13 trùng nhiều SKU, vui lòng chọn thủ công:</p>
               <select
-                className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2.5 text-[12px]"
+                className="mt-2 w-full rounded-[10px] border border-amber-200 dark:border-amber-500/20 bg-background px-3 py-2.5 text-[12px]"
                 onChange={(event) => {
                   const variantId = event.target.value;
                   if (!variantId) return;
@@ -727,41 +735,43 @@ export function ReceivingPutawayPage() {
             </div>
           ) : null}
 
-          <div className="mt-4 overflow-hidden rounded-[12px] border border-slate-100">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100">
-                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
-                    <th key={head} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-slate-400">{head}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loadingCandidates ? (
-                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Đang tính toán vị trí...</td></tr>
-                ) : candidates.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-slate-400">Không có ngăn còn chỗ trống</td></tr>
-                ) : candidates.map((candidate) => (
-                  <tr key={candidate.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-2.5 text-[12px] font-semibold">{candidate.location_code}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.zone_code}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.shelf_code}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.current_on_hand}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.max_capacity}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-emerald-600 font-semibold">{candidate.remaining_capacity}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.mixed_sku_count}</td>
-                    <td className="px-4 py-2.5 text-[12px] text-slate-600">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</td>
+          <div className="mt-4 overflow-hidden rounded-[12px] border border-border">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border">
+                    {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
+                      <th key={head} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {loadingCandidates ? (
+                    <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</td></tr>
+                  ) : candidates.length === 0 ? (
+                    <tr><td colSpan={8}><EmptyState variant="no-data" title="Không có ngăn còn chỗ trống" className="py-6" /></td></tr>
+                  ) : candidates.map((candidate) => (
+                    <tr key={candidate.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 text-[12px] font-semibold">{candidate.location_code}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.zone_code}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.shelf_code}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.current_on_hand}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.max_capacity}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</td>
+                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-[12px] text-slate-500">
+            <p className="text-[12px] text-muted-foreground">
               Tổng draft: {totalDraftQty} / tồn nguồn: {selectedVariantItem?.on_hand_qty || 0}
               {receiptMaxQty !== null && (
-                <span className={`ml-2 font-semibold ${totalDraftQty > receiptMaxQty ? 'text-red-600' : 'text-violet-700'}`}>
+                <span className={`ml-2 font-semibold ${totalDraftQty > receiptMaxQty ? 'text-red-600 dark:text-red-400' : 'text-violet-700 dark:text-violet-400'}`}>
                   · giới hạn phiếu: {receiptMaxQty} cuốn
                 </span>
               )}
@@ -769,11 +779,11 @@ export function ReceivingPutawayPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
-                className="rounded-[10px] border border-blue-200 bg-blue-50 px-3 py-2 text-[13px] text-blue-700 hover:bg-blue-100 transition-colors"
+                className="rounded-[10px] border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 px-3 py-2 text-[13px] text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors"
               >
                 {showStorageSuggestion ? "Ẩn gợi ý" : "Gợi ý vị trí (AI)"}
               </button>
-              <button onClick={addDraftLine} className="rounded-[10px] border border-slate-200 px-3 py-2 text-[13px] hover:bg-slate-50 transition-colors">Thêm dòng allocation</button>
+              <button onClick={addDraftLine} className="rounded-[10px] border border-border px-3 py-2 text-[13px] hover:bg-muted transition-colors">Thêm dòng allocation</button>
             </div>
           </div>
 
@@ -786,13 +796,13 @@ export function ReceivingPutawayPage() {
               className="mt-4"
             >
               <div className="mb-3 flex items-center gap-3">
-                <label className="text-[12px] text-slate-600">Số lượng cần gợi ý:</label>
+                <label className="text-[12px] text-muted-foreground">Số lượng cần gợi ý:</label>
                 <input
                   type="number"
                   min={1}
                   value={suggestionQuantity}
                   onChange={(e) => setSuggestionQuantity(Math.max(1, Number(e.target.value)))}
-                  className="w-20 rounded-[8px] border border-slate-200 px-2 py-1.5 text-[12px]"
+                  className="w-20 rounded-[8px] border border-border bg-background px-2 py-1.5 text-[12px]"
                 />
               </div>
               <StorageSuggestionPanel
@@ -806,17 +816,17 @@ export function ReceivingPutawayPage() {
 
           <div className="mt-3 space-y-2">
             {draftLines.length === 0 ? (
-              <p className="text-[12px] text-slate-400 text-center py-4">Chưa có allocation nào</p>
+              <p className="text-[12px] text-muted-foreground text-center py-4">Chưa có allocation nào</p>
             ) : draftLines.map((line) => {
               const lineCandidate = candidateMap.get(line.target_location_id);
               return (
-                <div key={line.id} className="rounded-[12px] border border-slate-100 p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+                <div key={line.id} className="rounded-[12px] border border-border p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ngăn đích</p>
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn đích</p>
                     <select
                       value={line.target_location_id}
                       onChange={(event) => updateLine(line.id, { target_location_id: event.target.value })}
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                     >
                       <option value="">Chọn vị trí đích</option>
                       {candidates.map((candidate) => (
@@ -825,7 +835,7 @@ export function ReceivingPutawayPage() {
                     </select>
                   </div>
                   <div>
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Số lượng</p>
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
                     <input
                       type="number"
                       min={1}
@@ -835,22 +845,22 @@ export function ReceivingPutawayPage() {
                       )}
                       value={line.quantity}
                       onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Lý do (bắt buộc)</p>
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do (bắt buộc)</p>
                     <input
                       value={line.reason}
                       onChange={(event) => updateLine(line.id, { reason: event.target.value })}
                       placeholder="Ví dụ: sắp xếp lại"
-                      className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                     />
                   </div>
                   <div>
                     <button
                       onClick={() => removeLine(line.id)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-600 hover:bg-red-100 transition-colors"
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-2.5 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/15 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Xóa
                     </button>
@@ -874,17 +884,17 @@ export function ReceivingPutawayPage() {
 
       {/* Section B: Reverse — chỉ manager/admin mới thấy */}
       {isManager && <FadeItem>
-        <div className="rounded-[16px] border border-white/80 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
           <h2 className="text-[14px] font-semibold mb-1">B. Hoàn trả từ kệ về RECEIVING</h2>
-          <p className="text-[11px] text-slate-500 mb-4">Trả sách từ kệ về vùng nhận hàng</p>
+          <p className="text-[11px] text-muted-foreground mb-4">Trả sách từ kệ về vùng nhận hàng</p>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Ngăn nguồn</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn nguồn</p>
               <select
                 value={selectedReverseCompartmentId}
                 onChange={(event) => setSelectedReverseCompartmentId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
               >
                 <option value="">Chọn ngăn</option>
                 {occupiedCompartments.map((compartment) => (
@@ -894,11 +904,11 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">SKU trong ngăn</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">SKU trong ngăn</p>
               <select
                 value={reverseVariantId}
                 onChange={(event) => setReverseVariantId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
                 disabled={loadingReverseItems}
               >
                 <option value="">Chọn SKU</option>
@@ -911,11 +921,11 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Khu RECEIVING đích</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu RECEIVING đích</p>
               <select
                 value={reverseReceivingId}
                 onChange={(event) => setReverseReceivingId(event.target.value)}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
               >
                 <option value="">Chọn khu RECEIVING</option>
                 {receivings.map((receiving) => (
@@ -925,24 +935,24 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Số lượng</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
               <input
                 type="number"
                 min={1}
                 max={reverseItem?.on_hand_qty || 1}
                 value={reverseQuantity}
                 onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(event.target.value || 0))))}
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
               />
             </div>
 
             <div>
-              <p className="text-[11px] text-slate-500 mb-1.5 font-semibold">Lý do</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do</p>
               <input
                 value={reverseReason}
                 onChange={(event) => setReverseReason(event.target.value)}
                 placeholder="Lý do (bắt buộc)"
-                className="w-full rounded-[10px] border border-slate-200 px-3 py-2.5 text-[13px]"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
               />
             </div>
           </div>

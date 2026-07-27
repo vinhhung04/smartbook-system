@@ -16,6 +16,8 @@ import { StatCard } from '@/components/ui/stat-card';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { LoadingSpinner } from '@/components/ui/loading-state';
 import { Button } from '@/components/ui/button';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -197,43 +199,41 @@ export function MembershipPlansPage() {
   };
 
   const inputClass =
-    'w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400';
+    'w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40';
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-            <Crown className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-[20px] tracking-[-0.02em]" style={{ fontWeight: 700 }}>
-              Gói hội viên
-            </h1>
-            <p className="text-[12px] text-slate-400">Quản lý các gói hội viên</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={loading}
-            onClick={() => void loadPlans()}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
-          </Button>
-          <Button type="button" size="sm" className="gap-2" onClick={openCreate}>
-            <Plus className="w-4 h-4" />
-            Gói mới
-          </Button>
-        </div>
+        <PageHeader
+          icon={Crown}
+          title="Gói hội viên"
+          description="Quản lý các gói hội viên"
+          iconBg="bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg"
+          iconColor="text-white"
+          iconSize="sm"
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={loading}
+                onClick={() => void loadPlans()}
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Làm mới
+              </Button>
+              <Button type="button" size="sm" className="gap-2" onClick={openCreate}>
+                <Plus className="w-4 h-4" />
+                Gói mới
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -269,10 +269,7 @@ export function MembershipPlansPage() {
       >
         <SectionCard noPadding>
           {loading ? (
-            <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground text-[13px]">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Đang tải gói hội viên...
-            </div>
+            <LoadingSpinner message="Đang tải gói hội viên..." className="justify-center py-16" />
           ) : plans.length === 0 ? (
             <EmptyState
               variant="no-data"
@@ -496,21 +493,22 @@ export function MembershipPlansPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
                 <div>
                   <p className="text-[13px] font-medium text-foreground">Hoạt động</p>
                   <p className="text-[11px] text-muted-foreground">Gói có thể được đăng ký mới</p>
                 </div>
                 <button
                   type="button"
+                  aria-label={form.is_active ? 'Tắt hoạt động' : 'Bật hoạt động'}
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
                   aria-pressed={form.is_active}
                 >
                   {form.is_active ? (
-                    <ToggleRight className="w-9 h-9 text-emerald-600" />
+                    <ToggleRight className="w-9 h-9 text-emerald-600 dark:text-emerald-400" />
                   ) : (
-                    <ToggleLeft className="w-9 h-9 text-slate-400" />
+                    <ToggleLeft className="w-9 h-9 text-muted-foreground" />
                   )}
                 </button>
               </div>

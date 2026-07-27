@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserPlus, Search, Loader2, Send, X } from 'lucide-react';
+import { Users, UserPlus, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { StatusBadge } from '@/components/status-badge';
 import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -29,11 +31,11 @@ const initialFormState: CustomerFormState = {
   status: 'ACTIVE',
 };
 
-function getBadgeVariant(status: CustomerStatus) {
-  if (status === 'ACTIVE') return 'default';
-  if (status === 'SUSPENDED') return 'destructive';
-  if (status === 'BLOCKED') return 'destructive';
-  return 'outline';
+function getStatusVariant(status: CustomerStatus) {
+  if (status === 'ACTIVE') return 'success';
+  if (status === 'SUSPENDED') return 'warning';
+  if (status === 'BLOCKED') return 'danger';
+  return 'neutral';
 }
 
 export function BorrowCustomersPage() {
@@ -136,23 +138,20 @@ export function BorrowCustomersPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-emerald-50 flex items-center justify-center border border-teal-200/40 shadow-sm">
-            <svg className="w-6 h-6 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Khách hàng thư viện</h1>
-            <p className="text-sm text-muted-foreground">{customers.length} khách hàng</p>
-          </div>
-        </div>
-        <Button size="sm" onClick={() => { setFormState(initialFormState); setFormOpen(true); }} className="gap-2">
-          <UserPlus className="w-4 h-4" />
-          Khách hàng mới
-        </Button>
+        <PageHeader
+          icon={Users}
+          title="Khách hàng thư viện"
+          description={`${customers.length} khách hàng`}
+          iconBg="bg-gradient-to-br from-teal-100 to-emerald-50 border border-teal-200/40 shadow-sm dark:from-teal-500/15 dark:to-emerald-500/10 dark:border-teal-500/20"
+          iconColor="text-teal-600 dark:text-teal-400"
+          actions={
+            <Button size="sm" onClick={() => { setFormState(initialFormState); setFormOpen(true); }} className="gap-2">
+              <UserPlus className="w-4 h-4" />
+              Khách hàng mới
+            </Button>
+          }
+        />
       </motion.div>
 
       {/* Filter Bar */}
@@ -210,14 +209,7 @@ export function BorrowCustomersPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-14">
-                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Đang tải khách hàng...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <SkeletonTableRow columns={7} rows={5} />
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -243,17 +235,17 @@ export function BorrowCustomersPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.email || '-'}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.phone || '-'}</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant={getBadgeVariant(customer.status)}>{customer.status}</Badge>
+                        <StatusBadge label={customer.status} variant={getStatusVariant(customer.status)} dot />
                       </td>
-                      <td className="px-5 py-3.5 text-sm font-medium text-rose-600">
+                      <td className="px-5 py-3.5 text-sm font-medium text-rose-600 dark:text-rose-400">
                         {Number(customer.total_fine_balance).toLocaleString('vi-VN')} VND
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
-                          <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => openEdit(customer)}>
+                          <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10" onClick={() => openEdit(customer)}>
                             Sửa
                           </Button>
-                          <Button size="sm" variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => { setNotifyTarget(customer); setNotifyForm({ subject: '', body: '' }); }}>
+                          <Button size="sm" variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/10" onClick={() => { setNotifyTarget(customer); setNotifyForm({ subject: '', body: '' }); }}>
                             <Send className="w-3 h-3 mr-1" /> Thông báo
                           </Button>
                         </div>
@@ -360,20 +352,20 @@ export function BorrowCustomersPage() {
             className="bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[16px] font-semibold">Gửi thông báo</h3>
-              <button onClick={() => setNotifyTarget(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+              <button onClick={() => setNotifyTarget(null)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
             <p className="text-[12px] text-muted-foreground mb-3">Gửi đến: <strong>{notifyTarget.full_name}</strong> ({notifyTarget.customer_code})</p>
             <div className="space-y-3">
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1">Tiêu đề</label>
                 <input value={notifyForm.subject} onChange={(e) => setNotifyForm({ ...notifyForm, subject: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   placeholder="Tiêu đề thông báo..." />
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-muted-foreground mb-1">Nội dung</label>
                 <textarea value={notifyForm.body} onChange={(e) => setNotifyForm({ ...notifyForm, body: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 resize-none"
                   rows={4} placeholder="Nhập nội dung thông báo..." />
               </div>
             </div>

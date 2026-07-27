@@ -474,6 +474,7 @@ export function CatalogPage() {
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-140">
                           <NavLink
                             to={`/book/${book.id}`}
+                            aria-label="Xem chi tiết sách"
                             className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-primary/10 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5 text-primary" />
@@ -483,9 +484,10 @@ export function CatalogPage() {
                               e.stopPropagation();
                               setDeleteBook(book);
                             }}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
+                            aria-label="Xóa sách"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
                           </button>
                         </div>
                       </td>
@@ -531,6 +533,7 @@ export function CatalogPage() {
                 </div>
                 <button
                   onClick={() => setShowDrawer(false)}
+                  aria-label="Đóng"
                   className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
                 >
                   <X className="w-4 h-4 text-muted-foreground" />

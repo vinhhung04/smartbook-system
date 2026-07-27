@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/status-badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -72,20 +74,18 @@ function SupplierDeliveryListView() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-50 text-sky-700">
-            <Truck className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Giao hàng nhà cung cấp</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp</p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới
-        </Button>
-      </div>
+      <PageHeader
+        icon={Truck}
+        title="Giao hàng nhà cung cấp"
+        description="Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp"
+        iconBg="bg-sky-50 dark:bg-sky-500/10"
+        iconColor="text-sky-700 dark:text-sky-400"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới
+          </Button>
+        }
+      />
 
       <SectionCard>
         <div className="grid gap-3 md:grid-cols-[1fr_220px]">
@@ -116,7 +116,7 @@ function SupplierDeliveryListView() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải giao hàng...</td></tr>
+                <SkeletonTableRow columns={9} rows={5} />
               ) : filteredRows.length === 0 ? (
                 <tr><td colSpan={9}><EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" /></td></tr>
               ) : filteredRows.map((row) => {
@@ -126,11 +126,11 @@ function SupplierDeliveryListView() {
                 return (
                   <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-5 py-3.5">
-                      <NavLink to={`/supplier-deliveries/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800">{row.invoice_number}</NavLink>
+                      <NavLink to={`/supplier-deliveries/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.invoice_number}</NavLink>
                       <div className="text-[11px] text-muted-foreground">{row.delivery_number || "-"}</div>
                     </td>
                     <td className="px-5 py-3.5">
-                      {row.purchase_order_id ? <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-[13px] text-indigo-600">{row.po_number || row.purchase_order_id}</NavLink> : "-"}
+                      {row.purchase_order_id ? <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-[13px] text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink> : "-"}
                     </td>
                     <td className="px-5 py-3.5 text-[13px]">{row.supplier_name || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px]">{row.warehouse_code || row.warehouse_name || "-"}</td>
@@ -247,7 +247,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto text-[13px] text-muted-foreground">Đang tải giao hàng...</div>;
+    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><LoadingOverlay /></div>;
   }
 
   if (!invoice) {
@@ -307,9 +307,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                     <td className="px-5 py-3.5 text-[13px]">{item.ordered_qty}</td>
                     <td className="px-5 py-3.5 text-[13px]">{item.previously_received_qty}</td>
                     <td className="px-5 py-3.5 text-[13px] font-medium">{item.remaining_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px] font-semibold text-indigo-700">{item.invoiced_qty}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{item.invoiced_qty}</td>
                     <td className="px-5 py-3.5">
-                      <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[12px] font-semibold text-emerald-700">{willReceive}</span>
+                      <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[12px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">{willReceive}</span>
                     </td>
                     <td className="px-5 py-3.5"><StatusBadge label={rowStatus} variant={rowVariant} /></td>
                   </tr>
@@ -321,13 +321,13 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       </SectionCard>
 
       {totals.shortage > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           Một số mục NCC xuất ít hơn PO còn lại. Hệ thống sẽ tự tạo báo cáo thiếu hàng.
         </div>
       )}
 
-      <div className="rounded-lg border border-sky-100 bg-sky-50 p-4 text-[13px] text-sky-800">
+      <div className="rounded-lg border border-sky-100 bg-sky-50 p-4 text-[13px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
         Tồn kho chỉ tăng sau khi manager <strong>duyệt phiếu</strong>. Phiếu tạo ra sẽ ở trạng thái DRAFT để nhân viên kho kiểm đếm thực tế trước khi duyệt.
       </div>
 

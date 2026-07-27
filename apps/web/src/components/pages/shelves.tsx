@@ -14,6 +14,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
 
 function formatQty(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -57,7 +59,7 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
         </div>
         <div className="text-right">
           <p className="text-[11px] text-muted-foreground">Available</p>
-          <p className="text-[12px] text-emerald-700 font-semibold">{formatQty(compartment.availableQty)}</p>
+          <p className="text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(compartment.availableQty)}</p>
         </div>
       </div>
 
@@ -203,19 +205,17 @@ export function ShelvesPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex items-center justify-between gap-4 flex-wrap"
+        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-100 to-blue-50 flex items-center justify-center border border-cyan-200/40">
-            <Layers3 className="w-5 h-5 text-cyan-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Quản lý kệ sách</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">{shelves.length} kệ · {totals.compartments} ngăn · {formatQty(totals.occupied)} đang chứa</p>
-          </div>
-        </div>
+        <PageHeader
+          icon={Layers3}
+          title="Quản lý kệ sách"
+          description={`${shelves.length} kệ · ${totals.compartments} ngăn · ${formatQty(totals.occupied)} đang chứa`}
+          iconBg="bg-gradient-to-br from-cyan-100 to-blue-50 dark:from-cyan-500/20 dark:to-blue-500/10"
+          iconColor="text-cyan-700 dark:text-cyan-400"
+        />
 
-        <div className="grid grid-cols-3 gap-2.5 min-w-[300px]">
+        <div className="grid grid-cols-3 gap-2.5 sm:min-w-[300px]">
           <StatCard label="Đang chứa" value={formatQty(totals.occupied)} variant="warning" />
           <StatCard label="Sức chứa" value={formatQty(totals.capacity)} variant="info" />
           <StatCard label="Ngăn kệ" value={formatQty(totals.compartments)} variant="default" />
@@ -258,6 +258,7 @@ export function ShelvesPage() {
         transition={{ duration: 0.3, delay: 0.1 }}
       >
         <SectionCard noPadding>
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/40">
@@ -268,9 +269,7 @@ export function ShelvesPage() {
             </thead>
             <tbody>
               {loadingShelves ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-[13px] text-muted-foreground">Đang tải danh sách kệ...</td>
-                </tr>
+                <SkeletonTableRow columns={7} rows={4} />
               ) : shelves.length === 0 ? (
                 <tr>
                   <td colSpan={7}><EmptyState variant="no-data" title="Không tìm thấy kệ nào" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td>
@@ -280,11 +279,11 @@ export function ShelvesPage() {
                   <tr
                     key={shelf.id}
                     onClick={() => setSelectedShelfId(shelf.id)}
-                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${selectedShelfId === shelf.id ? "bg-cyan-50/30" : "hover:bg-muted/60"}`}
+                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${selectedShelfId === shelf.id ? "bg-cyan-50/30 dark:bg-cyan-500/10" : "hover:bg-muted/60"}`}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-600" />
+                        <BookOpen className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
                         <div>
                           <p className="text-[13px] text-foreground font-semibold">{shelf.code}</p>
                           <p className="text-[11px] text-muted-foreground">Khu vực: {shelf.zone || "-"}</p>
@@ -295,7 +294,7 @@ export function ShelvesPage() {
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatQty(shelf.compartmentCount)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-foreground font-semibold">{formatQty(shelf.occupiedQty)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatQty(shelf.capacityQty)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-emerald-700 font-semibold">{formatQty(shelf.availableQty)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(shelf.availableQty)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground min-w-[160px]">
                       <div className="space-y-1">
                         <UtilizationBar value={shelf.utilizationPct} />
@@ -307,6 +306,7 @@ export function ShelvesPage() {
               )}
             </tbody>
           </table>
+          </div>
         </SectionCard>
       </motion.div>
 
@@ -319,7 +319,7 @@ export function ShelvesPage() {
           title={selectedShelf ? `Chi tiết kệ - ${selectedShelf.code}` : "Chi tiết kệ"}
           subtitle="Xem ngăn chứa, số lượng hiện tại và ngày nhập theo biến thể sách."
           actions={detail?.shelf ? (
-            <div className="grid grid-cols-3 gap-2 min-w-[280px]">
+            <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
               <div className="rounded-lg border border-border bg-card px-3 py-2">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Đang chứa</p>
                 <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.occupiedQty)}</p>
@@ -330,13 +330,13 @@ export function ShelvesPage() {
               </div>
               <div className="rounded-lg border border-border bg-card px-3 py-2">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Khả dụng</p>
-                <p className="text-[14px] text-emerald-700 font-bold">{formatQty(detail.shelf.availableQty)}</p>
+                <p className="text-[14px] text-emerald-700 dark:text-emerald-400 font-bold">{formatQty(detail.shelf.availableQty)}</p>
               </div>
             </div>
           ) : undefined}
         >
           {loadingDetail ? (
-            <div className="rounded-xl border border-border bg-card p-8 text-center text-[13px] text-muted-foreground">Đang tải chi tiết kệ...</div>
+            <LoadingOverlay />
           ) : !detail ? (
             <EmptyState variant="no-data" title="Chọn kệ để xem chi tiết" description="Nhấn vào một hàng kệ ở trên để xem ngăn và sách" />
           ) : detail.compartments.length === 0 ? (

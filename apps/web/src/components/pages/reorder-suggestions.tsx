@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { LoadingSpinner } from '@/components/ui/loading-state';
 import { analyticsService, type ReorderSuggestionItem, type ReorderSuggestionsData } from '@/services/analytics';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -70,36 +72,39 @@ export function ReorderSuggestionsPage() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="space-y-6 p-6"
+      className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-violet-500">Analytics + AI decision support</p>
-          <h1 className="mt-2 text-[28px] font-bold tracking-tight text-foreground">
-            AI Demand Forecasting &amp; Reorder Suggestion
-          </h1>
-          <p className="mt-2 max-w-2xl text-[14px] text-muted-foreground">
-            Phân tích lượt mượn, đặt chỗ, wishlist, cảnh báo chờ hàng và tồn kho để đề xuất nhập thêm sách.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAskAi}
-            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[13px] font-medium text-violet-700 transition hover:bg-violet-100"
-          >
-            <Copy className="h-4 w-4" />
-            Ask AI about this plan
-          </button>
-          <button
-            type="button"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
-          </button>
+      <div>
+        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-violet-500 dark:text-violet-400">Analytics + AI decision support</p>
+        <div className="mt-2">
+          <PageHeader
+            icon={BrainCircuit}
+            title="AI Demand Forecasting & Reorder Suggestion"
+            description="Phân tích lượt mượn, đặt chỗ, wishlist, cảnh báo chờ hàng và tồn kho để đề xuất nhập thêm sách."
+            iconBg="bg-violet-100 dark:bg-violet-500/15"
+            iconColor="text-violet-600 dark:text-violet-400"
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAskAi}
+                  className="inline-flex items-center gap-2 rounded-lg border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-3 py-2 text-[13px] font-medium text-violet-700 dark:text-violet-400 transition hover:bg-violet-100 dark:hover:bg-violet-500/20"
+                >
+                  <Copy className="h-4 w-4" />
+                  Ask AI about this plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadData()}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  Làm mới
+                </button>
+              </div>
+            }
+          />
         </div>
       </div>
 
@@ -109,14 +114,14 @@ export function ReorderSuggestionsPage() {
         icon={BrainCircuit}
       >
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+          <div className="flex rounded-lg border border-border bg-card p-1">
             {dayOptions.map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setDays(option)}
                 className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${
-                  days === option ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  days === option ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {option} ngày
@@ -126,7 +131,7 @@ export function ReorderSuggestionsPage() {
           <select
             value={priority}
             onChange={(event) => setPriority(event.target.value as PriorityFilter)}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none focus:border-indigo-300"
+            className="h-9 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
           >
             {priorityOptions.map((option) => (
               <option key={option} value={option}>{option}</option>
@@ -140,7 +145,7 @@ export function ReorderSuggestionsPage() {
               max={100}
               value={limit}
               onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
-              className="h-9 w-20 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none focus:border-indigo-300"
+              className="h-9 w-20 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
             />
           </label>
         </div>
@@ -160,9 +165,8 @@ export function ReorderSuggestionsPage() {
         noPadding
       >
         {loading ? (
-          <div className="flex min-h-[260px] items-center justify-center text-[14px] text-muted-foreground">
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            Đang phân tích nhu cầu...
+          <div className="flex min-h-[260px] items-center justify-center">
+            <LoadingSpinner message="Đang phân tích nhu cầu..." />
           </div>
         ) : error ? (
           <EmptyState
@@ -188,7 +192,7 @@ export function ReorderSuggestionsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-left text-[13px]">
-              <thead className="border-y border-slate-100 bg-slate-50 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Title</th>
                   <th className="px-3 py-3 font-semibold">Available</th>
@@ -201,9 +205,9 @@ export function ReorderSuggestionsPage() {
                   <th className="px-5 py-3 font-semibold">Reason</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {items.map((item) => (
-                  <tr key={item.variant_id} className="align-top transition hover:bg-slate-50/80">
+                  <tr key={item.variant_id} className="align-top transition hover:bg-muted/40">
                     <td className="px-5 py-4">
                       <div className="max-w-[280px]">
                         <p className="font-semibold text-foreground">{item.title || 'Chưa có tên sách'}</p>
@@ -220,9 +224,9 @@ export function ReorderSuggestionsPage() {
                     <td className="px-3 py-4">
                       <StatusBadge label={item.priority} variant={priorityVariant(item.priority)} dot />
                     </td>
-                    <td className="px-3 py-4 font-semibold text-emerald-700">{item.suggested_reorder_qty}</td>
+                    <td className="px-3 py-4 font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty}</td>
                     <td className="px-5 py-4">
-                      <p className="max-w-[420px] text-[12px] leading-relaxed text-slate-600">{item.reason}</p>
+                      <p className="max-w-[420px] text-[12px] leading-relaxed text-muted-foreground">{item.reason}</p>
                     </td>
                   </tr>
                 ))}

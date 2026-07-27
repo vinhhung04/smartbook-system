@@ -10,6 +10,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 
 function formatCurrency(value: number): string {
   return `${value.toLocaleString("vi-VN")} VND`;
@@ -79,28 +81,27 @@ export function OrdersPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex items-center justify-between"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center border border-blue-200/40">
-            <Package className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Goods Receipts</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">{receiptsData.length} receipts · {totalUnits} total items</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <NavLink to="/putaway" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 bg-white text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm font-medium">
-            <ClipboardCheck className="w-3.5 h-3.5" /> Putaway
-          </NavLink>
-          <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium">
-            <Download className="w-3.5 h-3.5" /> Export
-          </button>
-          <NavLink to="/orders/new" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all font-medium">
-            <Plus className="w-3.5 h-3.5" /> New Receipt
-          </NavLink>
-        </div>
+        <PageHeader
+          icon={Package}
+          title="Goods Receipts"
+          description={`${receiptsData.length} receipts · ${totalUnits} total items`}
+          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/15 dark:to-indigo-500/10"
+          iconColor="text-blue-600 dark:text-blue-400"
+          actions={
+            <>
+              <NavLink to="/putaway" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-card text-emerald-700 dark:text-emerald-400 text-[13px] hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all shadow-sm font-medium">
+                <ClipboardCheck className="w-3.5 h-3.5" /> Putaway
+              </NavLink>
+              <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 dark:border-blue-500/20 bg-card text-blue-700 dark:text-blue-400 text-[13px] hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all shadow-sm font-medium">
+                <Download className="w-3.5 h-3.5" /> Export
+              </button>
+              <NavLink to="/orders/new" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all font-medium">
+                <Plus className="w-3.5 h-3.5" /> New Receipt
+              </NavLink>
+            </>
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -126,7 +127,7 @@ export function OrdersPage() {
           searchPlaceholder="Search by receipt or warehouse..."
           showSearchClear
           filters={
-            <div className="flex items-center gap-1 bg-white border border-input rounded-lg p-[3px] shadow-sm">
+            <div className="flex items-center gap-1 bg-card border border-input rounded-lg p-[3px] shadow-sm">
               {["All", "Draft", "Posted", "Cancelled"].map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)} className={`relative px-3.5 py-1.5 rounded-lg text-[12px] transition-all duration-160 font-medium ${statusFilter === s ? "text-white" : "text-muted-foreground hover:text-foreground"}`}>
                   {statusFilter === s && <motion.div layoutId="orders-status-filter" className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 shadow-sm" transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} />}
@@ -144,48 +145,50 @@ export function OrdersPage() {
         transition={{ duration: 0.3, delay: 0.15 }}
       >
         <SectionCard noPadding>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                {["Receipt ID", "Warehouse", "Status", "Created By", "Date", "Items", "Total", "Action"].map(h => (
-                  <th key={h} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">{h}</th>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  {["Receipt ID", "Warehouse", "Status", "Created By", "Date", "Items", "Total", "Action"].map(h => (
+                    <th key={h} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <SkeletonTableRow columns={8} rows={4} />
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8}><EmptyState variant="no-results" title="No receipts found" description="Try adjusting your search or filters" className="py-12" /></td></tr>
+                ) : filtered.map((r, i) => (
+                  <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                    className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <NavLink to={`/orders/${r.id}`} className="text-[13px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">{r.receipt_number}</NavLink>
+                    </td>
+                    <td className="px-5 py-3.5 text-[13px]">{r.warehouse_code || r.warehouse_name || "-"}</td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge label={r.status} variant={r.status === "DRAFT" ? "info" : r.status === "POSTED" ? "success" : "danger"} dot />
+                    </td>
+                    <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{r.received_by_user_id?.slice(0, 8) || "-"}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-medium">{r.item_count}</td>
+                    <td className="px-5 py-3.5 text-[13px] font-mono font-medium">{formatCurrency(r.total_amount || 0)}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button aria-label="Thao tác khác" className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </motion.tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="text-center py-14 text-[13px] text-muted-foreground">Loading receipts...</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8}><EmptyState variant="no-data" title="No receipts found" description="Try adjusting your search or filters" className="py-12" /></td></tr>
-              ) : filtered.map((r, i) => (
-                <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <NavLink to={`/orders/${r.id}`} className="text-[13px] text-indigo-600 hover:text-indigo-800 font-medium">{r.receipt_number}</NavLink>
-                  </td>
-                  <td className="px-5 py-3.5 text-[13px]">{r.warehouse_code || r.warehouse_name || "-"}</td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge label={r.status} variant={r.status === "DRAFT" ? "info" : r.status === "POSTED" ? "success" : "danger"} dot />
-                  </td>
-                  <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{r.received_by_user_id?.slice(0, 8) || "-"}</td>
-                  <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
-                  <td className="px-5 py-3.5 text-[13px] font-medium">{r.item_count}</td>
-                  <td className="px-5 py-3.5 text-[13px] font-mono font-medium">{formatCurrency(r.total_amount || 0)}</td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
           <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
             <span>Showing {filtered.length} of {receiptsData.length} receipts</span>
             <div className="flex items-center gap-1">
               <button className="px-2 py-1 rounded text-muted-foreground cursor-default">1</button>
               <button className="px-2 py-1 rounded text-muted-foreground cursor-default">2</button>
-              <button className="px-3 py-1 rounded border border-input text-blue-600 cursor-pointer hover:bg-blue-50">Next</button>
+              <button className="px-3 py-1 rounded border border-input text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10">Next</button>
             </div>
           </div>
         </SectionCard>

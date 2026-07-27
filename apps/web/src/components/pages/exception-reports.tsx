@@ -6,6 +6,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
 import { userService, type WarehouseStaffOption } from "@/services/user";
@@ -112,37 +114,34 @@ export function ExceptionReportsPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-red-50">
-            <AlertTriangle className="h-5 w-5 text-red-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Báo cáo sự cố</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Xem xét và xử lý báo cáo thiếu/dư/hư hỏng từ nhân viên kho
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</option>
-            ))}
-          </select>
-          <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
-        </div>
+        <PageHeader
+          icon={AlertTriangle}
+          title="Báo cáo sự cố"
+          description="Xem xét và xử lý báo cáo thiếu/dư/hư hỏng từ nhân viên kho"
+          iconBg="bg-red-50 dark:bg-red-500/10"
+          iconColor="text-red-700 dark:text-red-400"
+          actions={
+            <>
+              <select
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                {STATUS_FILTERS.map((s) => (
+                  <option key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                Làm mới
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
         Giải quyết báo cáo sự cố KHÔNG tự động điều chỉnh tồn kho. Nếu cần chỉnh tồn kho, sử dụng chức năng Stock Adjustment riêng.
       </div>
 
@@ -151,7 +150,7 @@ export function ExceptionReportsPage() {
           <h2 className="text-[15px] font-semibold">Danh sách báo cáo sự cố</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px]">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 {["Mã báo cáo", "Kho", "Loại task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Mô tả", "Trạng thái", "Tạo lúc", "Giao xử lý", "Thao tác"].map((h) => (
@@ -161,7 +160,7 @@ export function ExceptionReportsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <SkeletonTableRow columns={11} rows={4} />
               ) : reports.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-5 py-10">
@@ -190,7 +189,7 @@ export function ExceptionReportsPage() {
                           <select
                             value={assignState[r.id] || r.assigned_to_user_id || ""}
                             onChange={(e) => setAssignState((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                            className="h-7 rounded border border-slate-200 bg-white px-1.5 text-[11px]"
+                            className="h-7 rounded border border-border bg-card px-1.5 text-[11px]"
                           >
                             <option value="">Chọn nhân viên</option>
                             {warehouseStaff.map((s) => (
@@ -201,6 +200,7 @@ export function ExceptionReportsPage() {
                             type="button"
                             disabled={assigningId === r.id}
                             onClick={() => void handleAssign(r.id)}
+                            aria-label="Giao xử lý"
                             className="h-7 rounded bg-amber-500 px-2 text-[10px] font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
                           >
                             <UserCheck className="h-3 w-3" />
@@ -227,12 +227,12 @@ export function ExceptionReportsPage() {
                     </td>
                   </tr>
                   {resolveState?.id === r.id && (
-                    <tr key={`${r.id}-resolve`} className="bg-emerald-50/50 border-b border-border">
+                    <tr key={`${r.id}-resolve`} className="bg-emerald-50/50 dark:bg-emerald-500/10 border-b border-border">
                       <td colSpan={11} className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            className="flex-1 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-[13px]"
+                            className="flex-1 rounded-md border border-emerald-200 bg-card px-3 py-1.5 text-[13px] dark:border-emerald-500/20"
                             placeholder="Ghi chú xử lý (tùy chọn — không tự động điều chỉnh stock)..."
                             value={resolveState.notes}
                             onChange={(e) => setResolveState({ ...resolveState, notes: e.target.value })}
@@ -241,7 +241,7 @@ export function ExceptionReportsPage() {
                             className="bg-emerald-600 hover:bg-emerald-700 h-7 px-3 text-[11px]">
                             Xác nhận xử lý
                           </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} className="h-7 px-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} aria-label="Hủy" className="h-7 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
