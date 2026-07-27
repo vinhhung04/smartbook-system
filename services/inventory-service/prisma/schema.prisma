@@ -95,7 +95,6 @@ model book_variants {
   purchase_requests          purchase_requests[]
   warehouse_exception_reports warehouse_exception_reports[]
   picking_task_items          picking_task_items[]
-  packing_task_items          packing_task_items[]
 
   @@index([book_id], map: "idx_book_variants_book_id")
   @@index([isbn13], map: "idx_book_variants_isbn13")
@@ -309,7 +308,6 @@ model outbound_order_items {
   locations            locations?           @relation(fields: [source_location_id], references: [id], onUpdate: NoAction)
   book_variants        book_variants        @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
   picking_task_items   picking_task_items[]
-  packing_task_items   packing_task_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -335,7 +333,6 @@ model outbound_orders {
   outbound_order_items          outbound_order_items[]
   warehouses                    warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
   picking_tasks                 picking_tasks[]
-  packing_tasks                 packing_tasks[]
 
   @@index([status, requested_at], map: "idx_outbound_orders_status")
 }
@@ -417,80 +414,6 @@ model picking_task_items {
 
   @@index([picking_task_id], map: "idx_pti_task")
   @@index([outbound_order_item_id], map: "idx_pti_ooi")
-}
-
-/// Packing module: verifies picked items are correctly boxed before Outbound is allowed to confirm.
-model packing_tasks {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  task_number         String    @unique @db.VarChar(40)
-  root_order_id       String    @db.Uuid
-  warehouse_id        String    @db.Uuid
-  assigned_packer_id  String?   @db.Uuid
-  assigned_at         DateTime? @db.Timestamptz(6)
-  assigned_by_user_id String?   @db.Uuid
-  status              String    @default("PENDING") @db.VarChar(20)
-  scan_invoice_code   String?   @db.VarChar(100)
-  started_at          DateTime? @db.Timestamptz(6)
-  completed_at        DateTime? @db.Timestamptz(6)
-  created_at          DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
-
-  outbound_orders         outbound_orders           @relation(fields: [root_order_id], references: [id], onUpdate: NoAction)
-  warehouses               warehouses                @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
-  packing_task_items       packing_task_items[]
-  packing_scan_events      packing_scan_events[]
-  packing_camera_evidence  packing_camera_evidence[]
-
-  @@index([root_order_id], map: "idx_packing_tasks_root_order")
-  @@index([status, warehouse_id], map: "idx_packing_tasks_status_wh")
-}
-
-model packing_task_items {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  packing_task_id        String   @db.Uuid
-  outbound_order_item_id String   @db.Uuid
-  variant_id              String   @db.Uuid
-  expected_qty            Int
-  scanned_qty              Int      @default(0)
-  status                  String   @default("PENDING") @db.VarChar(20)
-  created_at               DateTime @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime @default(now()) @db.Timestamptz(6)
-
-  packing_tasks         packing_tasks         @relation(fields: [packing_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  outbound_order_items  outbound_order_items  @relation(fields: [outbound_order_item_id], references: [id], onUpdate: NoAction)
-  book_variants         book_variants         @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
-
-  @@index([packing_task_id], map: "idx_pkti_task")
-  @@index([outbound_order_item_id], map: "idx_pkti_ooi")
-}
-
-model packing_scan_events {
-  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  packing_task_id       String   @db.Uuid
-  packing_task_item_id  String?  @db.Uuid
-  scanned_code          String   @db.VarChar(150)
-  scan_result           String   @db.VarChar(20)
-  scanned_by_user_id    String   @db.Uuid
-  scanned_at             DateTime @default(now()) @db.Timestamptz(6)
-
-  packing_tasks packing_tasks @relation(fields: [packing_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([packing_task_id], map: "idx_pkse_task")
-}
-
-/// Integration point for camera/photo/video evidence captured during packing; no AI processing yet.
-model packing_camera_evidence {
-  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  packing_task_id       String   @db.Uuid
-  evidence_type         String   @db.VarChar(20)
-  storage_ref           String
-  captured_by_user_id   String   @db.Uuid
-  captured_at            DateTime @default(now()) @db.Timestamptz(6)
-  metadata               Json?
-
-  packing_tasks packing_tasks @relation(fields: [packing_task_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([packing_task_id], map: "idx_pkce_task")
 }
 
 model publishers {
@@ -921,7 +844,6 @@ model warehouses {
   warehouse_exception_reports                                   warehouse_exception_reports[]
   staff_tasks                                                   staff_tasks[]
   picking_tasks                                                 picking_tasks[]
-  packing_tasks                                                 packing_tasks[]
 }
 
 /// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.
