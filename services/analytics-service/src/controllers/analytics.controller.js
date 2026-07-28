@@ -7,9 +7,14 @@ const {
   parseLimit,
   round,
 } = require('../utils/date-range');
+const { findSeasonalEvent } = require('../config/seasonal-events');
 
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 const DAY_MS = 24 * 60 * 60 * 1000;
+const YEAR_MS = 365 * DAY_MS;
+const SEASONAL_INDEX_MIN = 0.5;
+const SEASONAL_INDEX_MAX = 2.0;
+const SEASONAL_MIN_SAMPLE_SIZE = 5;
 const REORDER_PRIORITIES = new Set(['ALL', 'HIGH', 'MEDIUM', 'LOW']);
 
 function number(value) {
@@ -484,6 +489,36 @@ async function getBorrowDemandByVariant(from, to) {
   return rowsToNumberMap(rows, 'variant_id', 'borrow_count');
 }
 
+async function getYearlyBorrowCountByVariant(to) {
+  const from = new Date(to.getTime() - YEAR_MS);
+  return getBorrowDemandByVariant(from, to);
+}
+
+// Seasonal index per variant = (borrow count in the same calendar window last
+// year) / (expected count for a window this size, based on the trailing-year
+// average). Clamped to avoid wild swings on thin history, and left at neutral
+// (no entry) for variants without enough trailing-year samples.
+async function getSeasonalIndexByVariant(ranges) {
+  const lastYearFrom = new Date(ranges.from.getTime() - YEAR_MS);
+  const lastYearTo = new Date(ranges.to.getTime() - YEAR_MS);
+
+  const [samePeriodLastYearByVariant, yearlyTotalByVariant] = await Promise.all([
+    getBorrowDemandByVariant(lastYearFrom, lastYearTo),
+    getYearlyBorrowCountByVariant(ranges.to),
+  ]);
+
+  const index = new Map();
+  for (const [variantId, yearlyTotal] of yearlyTotalByVariant.entries()) {
+    if (yearlyTotal < SEASONAL_MIN_SAMPLE_SIZE) continue;
+    const expectedForWindow = (yearlyTotal / 365) * ranges.days;
+    if (expectedForWindow <= 0) continue;
+    const samePeriodLastYear = samePeriodLastYearByVariant.get(variantId) || 0;
+    const raw = samePeriodLastYear / expectedForWindow;
+    index.set(variantId, Math.min(SEASONAL_INDEX_MAX, Math.max(SEASONAL_INDEX_MIN, raw)));
+  }
+  return index;
+}
+
 async function getReservationDemandByVariant(from, to) {
   const rows = await query(
     borrowPool,
@@ -636,11 +671,14 @@ function buildReason(item, days, leadTimeDays) {
   } else {
     parts.push('Chưa cần nhập thêm ngay, nhưng nên tiếp tục theo dõi nhu cầu.');
   }
+  if (item.seasonal_event && item.seasonal_index !== 1) {
+    parts.push(`Dự báo đã điều chỉnh theo mùa vụ "${item.seasonal_event}" (hệ số ${item.seasonal_index}x dựa trên cùng kỳ năm trước).`);
+  }
 
   return parts.join(' ');
 }
 
-function calculateSuggestion(row, demand, ranges) {
+function calculateSuggestion(row, demand, ranges, seasonal = {}) {
   const availableQty = number(row.available_qty);
   const onHandQty = number(row.on_hand_qty);
   const reservedQty = number(row.reserved_qty);
@@ -651,9 +689,11 @@ function calculateSuggestion(row, demand, ranges) {
   const reservationCount = demand.reservationCount;
   const wishlistCount = demand.wishlistCount;
   const availabilityAlertCount = demand.availabilityAlertCount;
+  const seasonalIndex = seasonal.index ?? 1;
+  const seasonalEvent = seasonal.event ?? null;
   const avgDailyDemand = borrowCount / ranges.days;
-  const forecast7d = Math.ceil(avgDailyDemand * 7);
-  const forecast30d = Math.ceil(avgDailyDemand * 30);
+  const forecast7d = Math.ceil(avgDailyDemand * 7 * seasonalIndex);
+  const forecast30d = Math.ceil(avgDailyDemand * 30 * seasonalIndex);
   const demandTrendPct = previousBorrowCount > 0
     ? round(((borrowCount - previousBorrowCount) / previousBorrowCount) * 100, 1)
     : (borrowCount > 0 ? 100 : 0);
@@ -712,6 +752,8 @@ function calculateSuggestion(row, demand, ranges) {
     demand_score: demandScore,
     priority,
     suggested_reorder_qty: suggestedReorderQty,
+    seasonal_index: round(seasonalIndex, 2),
+    seasonal_event: seasonalEvent,
   };
 
   return {
@@ -737,6 +779,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     reservationByVariant,
     wishlistByBook,
     alertsByBook,
+    seasonalIndexByVariant,
   ] = await Promise.all([
     getInventorySnapshot(),
     getBorrowDemandByVariant(ranges.from, ranges.to),
@@ -744,7 +787,10 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     getReservationDemandByVariant(ranges.from, ranges.to),
     getWishlistDemandByBook(),
     getAvailabilityAlertDemandByBook(),
+    getSeasonalIndexByVariant(ranges),
   ]);
+
+  const seasonalEvent = findSeasonalEvent(ranges.to);
 
   const candidates = inventoryRows
     .map((row) => calculateSuggestion(row, {
@@ -753,7 +799,10 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
       reservationCount: reservationByVariant.get(row.variant_id) || 0,
       wishlistCount: wishlistByBook.get(row.book_id) || 0,
       availabilityAlertCount: alertsByBook.get(row.book_id) || 0,
-    }, ranges))
+    }, ranges, {
+      index: seasonalIndexByVariant.get(row.variant_id) ?? 1,
+      event: seasonalEvent,
+    }))
     .filter((item) => {
       if (priority !== 'ALL' && item.priority !== priority) return false;
       if (includeLowDemand) return true;
@@ -801,6 +850,106 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   });
 });
 
+const getBookTurnover = asyncHandler(async (req, res) => {
+  const days = parsePositiveInteger(req.query.days, 90, 365, 'days');
+  const to = new Date();
+  const from = new Date(to.getTime() - days * DAY_MS);
+
+  const borrowByVariant = await getBorrowDemandByVariant(from, to);
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      days,
+      items: Array.from(borrowByVariant.entries()).map(([variant_id, borrow_count]) => ({ variant_id, borrow_count })),
+    },
+  });
+});
+
+const getAgingInventory = asyncHandler(async (req, res) => {
+  const days = parsePositiveInteger(req.query.days, 90, 365, 'days');
+  const limit = parseLimit(req.query.limit, 50, 200);
+  const cutoff = new Date(Date.now() - days * DAY_MS);
+
+  const [stockRows, lastBorrowRows, lastMovementRows] = await Promise.all([
+    query(
+      inventoryPool,
+      `
+      SELECT
+        sb.variant_id::text AS variant_id,
+        sb.warehouse_id::text AS warehouse_id,
+        b.id::text AS book_id,
+        b.title,
+        w.name AS warehouse_name,
+        SUM(sb.on_hand_qty) AS on_hand_qty
+      FROM stock_balances sb
+      JOIN book_variants bv ON bv.id = sb.variant_id
+      JOIN books b ON b.id = bv.book_id
+      JOIN warehouses w ON w.id = sb.warehouse_id
+      WHERE bv.is_active = true AND b.is_active = true
+      GROUP BY sb.variant_id, sb.warehouse_id, b.id, b.title, w.name
+      HAVING SUM(sb.on_hand_qty) > 0
+      `,
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT li.variant_id::text AS variant_id, MAX(lt.borrow_date) AS last_borrowed_at
+      FROM loan_items li
+      JOIN loan_transactions lt ON lt.id = li.loan_id
+      GROUP BY li.variant_id
+      `,
+    ),
+    query(
+      inventoryPool,
+      `
+      SELECT variant_id::text AS variant_id, warehouse_id::text AS warehouse_id, MAX(created_at) AS last_movement_at
+      FROM stock_movements
+      GROUP BY variant_id, warehouse_id
+      `,
+    ),
+  ]);
+
+  const lastBorrowByVariant = new Map(lastBorrowRows.map((row) => [row.variant_id, row.last_borrowed_at]));
+  const lastMovementByVariantWarehouse = new Map(
+    lastMovementRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_movement_at]),
+  );
+
+  const items = stockRows
+    .map((row) => {
+      const lastBorrowedAt = lastBorrowByVariant.get(row.variant_id) || null;
+      const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
+      const lastActivityAt = [lastBorrowedAt, lastMovementAt]
+        .filter(Boolean)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+      const daysSinceLastActivity = lastActivityAt
+        ? Math.floor((Date.now() - new Date(lastActivityAt).getTime()) / DAY_MS)
+        : null;
+
+      return {
+        variant_id: row.variant_id,
+        book_id: row.book_id,
+        title: row.title,
+        warehouse_id: row.warehouse_id,
+        warehouse_name: row.warehouse_name,
+        on_hand_qty: number(row.on_hand_qty),
+        last_activity_at: toIso(lastActivityAt),
+        days_since_last_activity: daysSinceLastActivity,
+      };
+    })
+    .filter((item) => item.days_since_last_activity === null || item.days_since_last_activity >= days)
+    .sort((a, b) => (b.days_since_last_activity ?? Infinity) - (a.days_since_last_activity ?? Infinity));
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      threshold_days: days,
+      cutoff: cutoff.toISOString(),
+      items: items.slice(0, limit),
+    },
+  });
+});
+
 const getReservationFunnel = asyncHandler(async (_req, res) => {
   const rows = await query(
     borrowPool,
@@ -836,4 +985,6 @@ module.exports = {
   getWarehouseStockRisk,
   getReorderSuggestions,
   getReservationFunnel,
+  getAgingInventory,
+  getBookTurnover,
 };

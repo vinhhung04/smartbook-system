@@ -131,6 +131,8 @@ export type ReorderSuggestionItem = {
   demand_score: number;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   suggested_reorder_qty: number;
+  seasonal_index: number;
+  seasonal_event: string | null;
   reason: string;
 };
 
@@ -150,6 +152,24 @@ export type ReorderSuggestionsData = {
     estimated_total_reorder_qty: number;
   };
   items: ReorderSuggestionItem[];
+};
+
+export type AgingInventoryItem = {
+  variant_id: string;
+  book_id: string;
+  title: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  on_hand_qty: number;
+  last_activity_at: string | null;
+  days_since_last_activity: number | null;
+};
+
+export type AgingInventoryData = {
+  generated_at: string;
+  threshold_days: number;
+  cutoff: string;
+  items: AgingInventoryItem[];
 };
 
 async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T> {
@@ -189,6 +209,10 @@ export function getReorderSuggestions(params?: ReorderSuggestionsParams) {
   return unwrap<ReorderSuggestionsData>(gatewayAPI.get('/analytics/reorder-suggestions', { params }));
 }
 
+export function getAgingInventory(params?: { days?: number; limit?: number }) {
+  return unwrap<AgingInventoryData>(gatewayAPI.get('/analytics/aging-inventory', { params }));
+}
+
 export const analyticsService = {
   getDashboardKpis,
   getBorrowTrends,
@@ -198,4 +222,5 @@ export const analyticsService = {
   getWarehouseStockRisk,
   getReservationFunnel,
   getReorderSuggestions,
+  getAgingInventory,
 };

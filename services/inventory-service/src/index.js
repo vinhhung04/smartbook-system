@@ -27,6 +27,7 @@ const outboundRoutes = require('./routes/outbound.routes');
 const supplierRoutes = require('./routes/supplier.routes');
 const receivingSmartRoutes = require('./routes/receiving-smart.routes');
 const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
+const reslottingSuggestionRoutes = require('./routes/reslotting-suggestion.routes');
 const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
@@ -38,6 +39,7 @@ const transferReceivingRoutes = require('./routes/transfer-receiving.routes');
 const myWarehouseTasksRoutes = require('./routes/my-warehouse-tasks.routes');
 const stockAlertRoutes = require('./routes/stock-alert.routes');
 const stockBalanceRoutes = require('./routes/stock-balance.routes');
+const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -352,6 +354,7 @@ app.use('/api/outbound', outboundRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/receiving-smart', receivingSmartRoutes);
 app.use('/api/storage-suggestions', storageSuggestionRoutes);
+app.use('/api/reslotting-suggestions', reslottingSuggestionRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
 app.use('/api/supplier-account', supplierAccountRoutes);
@@ -522,4 +525,5 @@ app.use((err, req, res, next) => {
 // ─── Start server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Inventory Service running on http://localhost:${PORT}`);
+  startAgingInventoryJob();
 });

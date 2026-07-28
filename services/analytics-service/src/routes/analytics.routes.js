@@ -12,6 +12,21 @@ const readAnalytics = authorizeAnyPermission([
   'reports.read',
 ]);
 
+// Allows the inventory-service periodic job to call this read-only endpoint
+// without a user JWT, using the same internal service key convention as
+// other cross-service calls in this codebase (e.g. auth-service -> borrow-service).
+function authenticateInternalOrUser(req, res, next) {
+  const providedKey = String(req.headers['x-internal-service-key'] || '').trim();
+  const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+  if (providedKey && providedKey === expectedKey) {
+    return next();
+  }
+  return authenticateToken(req, res, () => readAnalytics(req, res, next));
+}
+
+router.get('/aging-inventory', authenticateInternalOrUser, analyticsController.getAgingInventory);
+router.get('/book-turnover', authenticateInternalOrUser, analyticsController.getBookTurnover);
+
 router.use(authenticateToken, readAnalytics);
 
 router.get('/dashboard/kpis', analyticsController.getDashboardKpis);
