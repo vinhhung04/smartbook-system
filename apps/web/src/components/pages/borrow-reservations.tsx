@@ -76,9 +76,6 @@ export function BorrowReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const getBookTitle = (variantId: string) =>
-    books.find((b) => b.variant_id === variantId)?.title ?? variantId.slice(0, 8) + '...';
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ReservationStatus>('ALL');
@@ -116,6 +113,9 @@ export function BorrowReservationsPage() {
       setLoading(false);
     }
   };
+
+  const getBookTitle = (variantId: string) =>
+    books.find((b) => b.variant_id === variantId)?.title ?? variantId.slice(0, 8) + '...';
 
   useEffect(() => {
     void loadReservations();
