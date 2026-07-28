@@ -268,10 +268,10 @@ export function BookDetailPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-4">
             {book.cover_image_url ? (
-              <img src={book.cover_image_url} alt={book.title} className="w-16 h-20 rounded-[12px] border border-blue-200/40 shrink-0 shadow-sm object-cover" />
+              <img src={book.cover_image_url} alt={book.title} className="w-16 h-20 rounded-[12px] border border-blue-200/40 dark:border-blue-500/20 shrink-0 shadow-sm object-cover" />
             ) : (
-              <div className="w-16 h-20 rounded-[12px] bg-gradient-to-br from-blue-100 to-teal-50 flex items-center justify-center border border-blue-200/40 shrink-0">
-                <BookOpen className="w-6 h-6 text-blue-500" />
+              <div className="w-16 h-20 rounded-[12px] bg-gradient-to-br from-blue-100 to-teal-50 dark:from-blue-500/15 dark:to-teal-500/10 flex items-center justify-center border border-blue-200/40 dark:border-blue-500/20 shrink-0">
+                <BookOpen className="w-6 h-6 text-blue-500 dark:text-blue-400" />
               </div>
             )}
             <div>
@@ -282,9 +282,9 @@ export function BookDetailPage() {
               <p className="text-[13px] text-muted-foreground mt-0.5">{book.subtitle || "-"}</p>
               <div className="flex items-center gap-4 mt-2 text-[12px] text-muted-foreground">
                 <span>{book.author || "-"}</span>
-                <span className="text-slate-300">|</span>
+                <span className="text-muted-foreground/40">|</span>
                 <span>{book.publisher || "-"}{book.publish_year ? `, ${book.publish_year}` : ""}</span>
-                <span className="text-slate-300">|</span>
+                <span className="text-muted-foreground/40">|</span>
                 <span className="font-mono">{book.isbn || "-"}</span>
               </div>
             </div>
@@ -292,7 +292,7 @@ export function BookDetailPage() {
           <div className="flex items-center gap-2 shrink-0">
             {canEditBook ? (
             <button onClick={() => setShowEditModal(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm">
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10 transition-all shadow-sm">
               <Edit className="w-3.5 h-3.5" /> Edit
             </button>
             ) : null}
@@ -310,7 +310,7 @@ export function BookDetailPage() {
         {/* Left: Metadata */}
         <div className="lg:col-span-2 space-y-5">
           <FadeItem>
-            <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
               <h3 className="text-[14px] font-semibold mb-4">Book Metadata</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -343,35 +343,37 @@ export function BookDetailPage() {
           </FadeItem>
 
           <FadeItem>
-            <div className="rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4">
                 <div className="flex items-center gap-2.5">
                   <h3 className="text-[14px] font-semibold">Inventory by Location</h3>
                   <StatusBadge label={`${totalStock} total`} variant="info" />
                 </div>
               </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {["Warehouse", "Location", "Qty"].map((header) => (
-                      <th key={header} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">{header}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(book.locations || []).length === 0 ? (
-                    <tr><td colSpan={3} className="px-5 py-8 text-center text-[12px] text-muted-foreground">No inventory records found.</td></tr>
-                  ) : (
-                    (book.locations || []).map((location, index) => (
-                      <tr key={`${location.warehouse_name}-${location.location_code}-${index}`} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5 text-[13px] font-medium">{location.warehouse_name || "-"}</td>
-                        <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{location.location_code || "-"}</td>
-                        <td className="px-5 py-3.5 text-[14px] font-bold">{location.quantity}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      {["Warehouse", "Location", "Qty"].map((header) => (
+                        <th key={header} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">{header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(book.locations || []).length === 0 ? (
+                      <tr><td colSpan={3} className="px-5 py-8 text-center text-[12px] text-muted-foreground">No inventory records found.</td></tr>
+                    ) : (
+                      (book.locations || []).map((location, index) => (
+                        <tr key={`${location.warehouse_name}-${location.location_code}-${index}`} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="px-5 py-3.5 text-[13px] font-medium">{location.warehouse_name || "-"}</td>
+                          <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{location.location_code || "-"}</td>
+                          <td className="px-5 py-3.5 text-[14px] font-bold">{location.quantity}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </FadeItem>
         </div>
@@ -379,7 +381,7 @@ export function BookDetailPage() {
         {/* Right: Stock Summary */}
         <div className="space-y-5">
           <FadeItem>
-            <div className="rounded-xl border border-black/5 bg-gradient-to-br from-blue-50/80 to-teal-50/50 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="rounded-xl border border-border bg-gradient-to-br from-blue-50/80 to-teal-50/50 dark:from-blue-500/10 dark:to-teal-500/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
               <h3 className="text-[14px] font-semibold mb-3">Stock Summary</h3>
               <div className="text-center py-2">
                 <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}
@@ -392,9 +394,9 @@ export function BookDetailPage() {
               <div className="space-y-1.5 mt-3">
                 {(book.locations || []).slice(0, 5).map((location, index) => (
                   <div key={`${location.warehouse_name}-${location.location_code}-${index}`}
-                    className="flex items-center justify-between text-[12px] py-1.5 px-2 rounded-[7px] hover:bg-white/60 transition-colors">
-                    <span className="text-muted-foreground flex items-center gap-1.5"><MapPin className="w-3 h-3 text-teal-500" />{location.warehouse_name} / {location.location_code}</span>
-                    <span className="text-blue-700 font-semibold">{location.quantity}</span>
+                    className="flex items-center justify-between text-[12px] py-1.5 px-2 rounded-[7px] hover:bg-white/60 dark:hover:bg-white/5 transition-colors">
+                    <span className="text-muted-foreground flex items-center gap-1.5"><MapPin className="w-3 h-3 text-teal-500 dark:text-teal-400" />{location.warehouse_name} / {location.location_code}</span>
+                    <span className="text-blue-700 dark:text-blue-400 font-semibold">{location.quantity}</span>
                   </div>
                 ))}
               </div>
@@ -407,7 +409,7 @@ export function BookDetailPage() {
       {showEditModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEditModal(false)}>
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-3xl rounded-2xl bg-card p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-5 text-[16px] font-semibold">Edit Book Information</h3>
             <div className="space-y-4">
@@ -441,7 +443,7 @@ export function BookDetailPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-[12px] font-semibold text-muted-foreground">ISBN / Barcode</label>
                     <button type="button" onClick={() => void handleApplyAiMetadata()} disabled={isApplyingAiMetadata}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
                       <Sparkles className="w-3.5 h-3.5" />
                       {isApplyingAiMetadata ? "Loading..." : "AI Fill"}
                     </button>
@@ -492,7 +494,7 @@ export function BookDetailPage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-[12px] font-semibold text-muted-foreground">AI Summary (Vietnamese)</label>
                   <button type="button" onClick={() => void handleGenerateSummaryVi()} disabled={summaryLoading || !editForm.title.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-40">
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-40">
                     {summaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                     {summaryLoading ? "Generating..." : "Generate AI"}
                   </button>

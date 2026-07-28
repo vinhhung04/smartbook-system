@@ -16,11 +16,11 @@ export function ForbiddenPage() {
       <Card className="w-full max-w-xl rounded-xl border-border/70 shadow-sm">
         <CardContent className="p-8">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-rose-100">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-500/20">
               <ShieldAlert className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-rose-600">Access denied</p>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-rose-600 dark:text-rose-400">Access denied</p>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">You do not have permission</h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 Current role: <span className="font-semibold text-foreground">{getPrimaryRole(user)}</span>. The route

@@ -261,7 +261,7 @@ export function OrderDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge label={receipt.status} variant={receipt.status === "POSTED" ? "success" : receipt.status === "DRAFT" ? "info" : "danger"} dot />
-          <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-white text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium">
+          <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
             <Download className="w-3.5 h-3.5" /> Tải xuống
           </button>
         </div>
@@ -304,6 +304,7 @@ export function OrderDetailPage() {
             transition={{ duration: 0.3, delay: 0.15 }}
           >
             <SectionCard title={`Danh sách hàng nhận (${receipt.items.length})`} noPadding>
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
@@ -320,21 +321,21 @@ export function OrderDetailPage() {
                   {receipt.items.map(item => {
                     const diff = item.actual_quantity !== null ? item.actual_quantity - item.quantity : null;
                     return (
-                    <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${diff !== null && diff !== 0 ? "bg-amber-50/40" : ""}`}>
+                    <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${diff !== null && diff !== 0 ? "bg-amber-50/40 dark:bg-amber-500/10" : ""}`}>
                       <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.barcode || "-"}</td>
                       <td className="px-5 py-3.5 text-[13px] font-medium">{item.book_title}</td>
                       {showLocation ? <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.location_code || "-"}</td> : null}
                       <td className="px-5 py-3.5 text-right text-[13px] font-medium">{item.quantity}</td>
                       <td className="px-5 py-3.5 text-right text-[13px] font-medium">
                         {item.actual_quantity !== null ? (
-                          <span className={diff === 0 ? "text-emerald-600" : "text-amber-600"}>
+                          <span className={diff === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
                             {item.actual_quantity}
                             {diff !== 0 && diff !== null && (
                               <span className="ml-1 text-[11px]">({diff > 0 ? "+" : ""}{diff})</span>
                             )}
                           </span>
                         ) : (
-                          <span className="text-slate-400 text-[12px]">—</span>
+                          <span className="text-muted-foreground text-[12px]">—</span>
                         )}
                       </td>
                       {showUnitCost ? <td className="px-5 py-3.5 text-right text-[12px] font-mono text-muted-foreground">{formatCurrency(item.unit_cost)}</td> : null}
@@ -346,11 +347,12 @@ export function OrderDetailPage() {
                   <tr className="border-t-2 border-border bg-muted/30">
                     <td colSpan={showLocation ? 3 : 2} className="px-5 py-3 text-right text-[13px] font-semibold">Tổng:</td>
                     <td className="px-5 py-3 text-right text-[14px] font-mono font-bold">{totalQty}</td>
-                    <td className="px-5 py-3 text-right text-[13px] text-slate-400">—</td>
+                    <td className="px-5 py-3 text-right text-[13px] text-muted-foreground">—</td>
                     {showUnitCost ? <td colSpan={2} className="px-5 py-3 text-right text-[14px] font-mono font-bold">{formatCurrency(receipt.total_amount || 0)}</td> : null}
                   </tr>
                 </tfoot>
               </table>
+              </div>
             </SectionCard>
           </motion.div>
         </div>
@@ -361,7 +363,7 @@ export function OrderDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
           >
-            <SectionCard title="Tóm tắt phiếu nhập" className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-100/60">
+            <SectionCard title="Tóm tắt phiếu nhập" className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-100/60 dark:from-blue-500/10 dark:to-indigo-500/5 dark:border-blue-500/20">
               <div className="space-y-4">
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Kho</p>
@@ -369,31 +371,31 @@ export function OrderDetailPage() {
                 </div>
                 {receipt.purchase_order_id && (
                   <>
-                    <div className="h-px bg-blue-200/40" />
+                    <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                     <div>
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">PO liên kết</p>
-                      <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="text-[13px] font-medium text-indigo-600 hover:text-indigo-800">
+                      <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
                         {receipt.po_number || receipt.purchase_order_id}
                       </NavLink>
                     </div>
                   </>
                 )}
-                <div className="h-px bg-blue-200/40" />
+                <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Số dòng sách</p>
-                  <p className="text-[26px] text-blue-700 font-bold mt-1" style={{ lineHeight: 1 }}>{receipt.items.length}</p>
+                  <p className="text-[26px] text-blue-700 dark:text-blue-400 font-bold mt-1" style={{ lineHeight: 1 }}>{receipt.items.length}</p>
                 </div>
-                <div className="h-px bg-blue-200/40" />
+                <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Tổng số lượng</p>
-                  <p className="text-[26px] text-emerald-700 font-bold mt-1" style={{ lineHeight: 1 }}>{totalQty}</p>
+                  <p className="text-[26px] text-emerald-700 dark:text-emerald-400 font-bold mt-1" style={{ lineHeight: 1 }}>{totalQty}</p>
                 </div>
                 {showUnitCost ? (
                   <>
-                    <div className="h-px bg-blue-200/40" />
+                    <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                     <div>
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Tổng giá trị</p>
-                      <p className="text-[18px] font-mono font-bold text-indigo-600 mt-1">{formatCurrency(receipt.total_amount || 0)}</p>
+                      <p className="text-[18px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-1">{formatCurrency(receipt.total_amount || 0)}</p>
                     </div>
                   </>
                 ) : null}
@@ -409,15 +411,15 @@ export function OrderDetailPage() {
             <SectionCard title="Thao tác" className="overflow-hidden">
               <div className="space-y-2">
                 {showManageReceiving && receipt.status === "DRAFT" ? (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 space-y-2">
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 space-y-2 dark:border-emerald-500/20 dark:bg-emerald-500/10">
                     {receipt.received_by_user_id && !selectedReceiverId ? (
                       // Already assigned — show who + option to reassign
                       <>
-                        <p className="text-[12px] font-semibold text-emerald-800">Nhân viên kiểm đếm</p>
+                        <p className="text-[12px] font-semibold text-emerald-800 dark:text-emerald-300">Nhân viên kiểm đếm</p>
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                            <span className="text-[12px] font-medium text-emerald-900">
+                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span className="text-[12px] font-medium text-emerald-900 dark:text-emerald-300">
                               {warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.full_name
                                 || warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.username
                                 || "Đã giao"}
@@ -425,7 +427,7 @@ export function OrderDetailPage() {
                           </div>
                           <button
                             onClick={() => setSelectedReceiverId(receipt.received_by_user_id ?? "")}
-                            className="text-[11px] text-emerald-700 underline hover:text-emerald-900"
+                            className="text-[11px] text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
                           >
                             Đổi
                           </button>
@@ -434,14 +436,14 @@ export function OrderDetailPage() {
                     ) : (
                       // Not assigned or reassigning
                       <>
-                        <p className="text-[12px] font-semibold text-emerald-800">
+                        <p className="text-[12px] font-semibold text-emerald-800 dark:text-emerald-300">
                           {receipt.received_by_user_id ? "Đổi nhân viên kiểm đếm" : "Giao phiếu cho nhân viên kho"}
                         </p>
                         <div className="flex gap-2">
                           <select
                             value={selectedReceiverId}
                             onChange={(event) => setSelectedReceiverId(event.target.value)}
-                            className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-2 text-[12px]"
+                            className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-card px-2.5 py-2 text-[12px] dark:border-emerald-500/20"
                           >
                             <option value="">Chọn nhân viên</option>
                             {warehouseStaff.map((staff) => (
@@ -460,7 +462,7 @@ export function OrderDetailPage() {
                           {receipt.received_by_user_id && (
                             <button
                               onClick={() => setSelectedReceiverId("")}
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] text-slate-500 hover:bg-slate-50"
+                              className="rounded-lg border border-border px-3 py-2 text-[12px] text-muted-foreground hover:bg-muted"
                             >
                               Hủy
                             </button>
@@ -499,7 +501,7 @@ export function OrderDetailPage() {
                   onClick={() => void handleUpdateStatus("CANCELLED")}
                   className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
                     showManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
-                      ? "border border-red-200 bg-red-50 text-red-700"
+                      ? "border border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                       : "cursor-not-allowed border border-input bg-muted text-muted-foreground"
                   }`}
                 >
@@ -518,7 +520,7 @@ export function OrderDetailPage() {
               <>
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1">
-                    <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input
                       ref={scanInputRef}
                       type="text"
@@ -526,11 +528,11 @@ export function OrderDetailPage() {
                       onChange={(e) => setScanInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
                       placeholder="Scan hoặc nhập mã vạch để đếm..."
-                      className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
+                      className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-border focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
                     />
                   </div>
                   <button type="button" onClick={() => setShowScannerModal(true)}
-                    className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
+                    className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
                     <ScanBarcode className="h-4 w-4" /> Camera
                   </button>
                   <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
@@ -540,12 +542,12 @@ export function OrderDetailPage() {
                   </button>
                 </div>
                 {/* Per-item quantity inputs — allows manual entry without barcode scanner */}
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
+                      <tr className="bg-muted border-b border-border">
                         {["Tên sách", "Mã vạch", "SL kế hoạch", "SL thực đếm"].map((h) => (
-                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -555,10 +557,10 @@ export function OrderDetailPage() {
                         const diff = counted - item.quantity;
                         const isHighlighted = item.id === highlightedItemId;
                         return (
-                          <tr key={item.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50" : "hover:bg-slate-50/40"}`}>
+                          <tr key={item.id} className={`border-b border-border last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50 dark:bg-indigo-500/10" : "hover:bg-muted/40"}`}>
                             <td className="px-4 py-3 text-[13px] font-medium">{item.book_title}</td>
-                            <td className="px-4 py-3 font-mono text-[12px] text-slate-500">{item.barcode || "-"}</td>
-                            <td className="px-4 py-3 text-[13px] font-semibold text-indigo-700">{item.quantity}</td>
+                            <td className="px-4 py-3 font-mono text-[12px] text-muted-foreground">{item.barcode || "-"}</td>
+                            <td className="px-4 py-3 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{item.quantity}</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <input
@@ -566,10 +568,10 @@ export function OrderDetailPage() {
                                   min={0}
                                   value={counted}
                                   onChange={(e) => setCountedQty((prev) => ({ ...prev, [item.id]: Math.max(0, Number(e.target.value) || 0) }))}
-                                  className="w-20 rounded-[6px] border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
+                                  className="w-20 rounded-[6px] border border-border px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
                                 />
                                 {diff !== 0 && (
-                                  <span className={`text-[11px] font-semibold ${diff > 0 ? "text-rose-600" : "text-amber-600"}`}>
+                                  <span className={`text-[11px] font-semibold ${diff > 0 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
                                     {diff > 0 ? `+${diff}` : diff}
                                   </span>
                                 )}
@@ -583,9 +585,9 @@ export function OrderDetailPage() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
-                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                <p className="text-[13px] text-emerald-800 font-medium">Đã kiểm đếm xong — chờ manager duyệt phiếu nhập</p>
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="text-[13px] text-emerald-800 dark:text-emerald-300 font-medium">Đã kiểm đếm xong — chờ manager duyệt phiếu nhập</p>
               </div>
             )}
           </SectionCard>
@@ -600,9 +602,9 @@ export function OrderDetailPage() {
             subtitle={`${receipt.invoice.po_number || ""} · ${receipt.invoice.supplier_name || ""} · Hóa đơn ${receipt.invoice.invoice_number}`}
           >
             {/* Invoice info banner */}
-            <div className="flex flex-wrap gap-4 mb-4 p-3 rounded-lg bg-sky-50 border border-sky-100">
+            <div className="flex flex-wrap gap-4 mb-4 p-3 rounded-lg bg-sky-50 border border-sky-100 dark:bg-sky-500/10 dark:border-sky-500/20">
               <div className="flex items-center gap-2 text-[12px]">
-                <Truck className="h-3.5 w-3.5 text-sky-600" />
+                <Truck className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                 <span className="text-muted-foreground">NCC:</span>
                 <span className="font-semibold">{receipt.invoice.supplier_name || "-"}</span>
               </div>
@@ -624,7 +626,7 @@ export function OrderDetailPage() {
             {receipt.status === "DRAFT" && !isVerified && (
               <div className="flex gap-2 mb-4">
                 <div className="relative flex-1">
-                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     ref={scanInputRef}
                     type="text"
@@ -632,11 +634,11 @@ export function OrderDetailPage() {
                     onChange={(e) => setScanInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
                     placeholder="Scan hoặc nhập mã vạch để đếm..."
-                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
+                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-border focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
                 <button type="button" onClick={() => setShowScannerModal(true)}
-                  className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[13px] font-medium flex items-center gap-1.5">
+                  className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
                   <ScanBarcode className="h-4 w-4" /> Camera
                 </button>
                 <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
@@ -648,21 +650,21 @@ export function OrderDetailPage() {
             )}
             {/* Locked banner — shown after verification is saved */}
             {receipt.status === "DRAFT" && isVerified && (
-              <div className="flex items-center gap-2 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5">
-                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
-                <p className="text-[13px] text-emerald-800 font-medium">
+              <div className="flex items-center gap-2 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="text-[13px] text-emerald-800 dark:text-emerald-300 font-medium">
                   Đã kiểm đếm xong — chờ manager duyệt phiếu nhập
                 </p>
               </div>
             )}
 
             {/* Comparison table */}
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full min-w-[640px]">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
+                  <tr className="bg-muted border-b border-border">
                     {["Tên sách", "ISBN/Mã vạch", "NCC xuất", "Thực đếm", "Lệch", "Trạng thái"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -676,24 +678,24 @@ export function OrderDetailPage() {
                     const diff = counted - expected;
                     const isHighlighted = receiptItem?.id === highlightedItemId;
                     const statusLabel = diff === 0 ? "Đủ" : diff > 0 ? "Thừa" : "Thiếu";
-                    const statusColor = diff === 0 ? "bg-emerald-50 text-emerald-700" : diff > 0 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700";
+                    const statusColor = diff === 0 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : diff > 0 ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400";
                     return (
-                      <tr key={invItem.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50" : "hover:bg-slate-50/60"}`}>
+                      <tr key={invItem.id} className={`border-b border-border last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50 dark:bg-indigo-500/10" : "hover:bg-muted/60"}`}>
                         <td className="px-4 py-3 text-[13px] font-medium">{invItem.title || "-"}</td>
-                        <td className="px-4 py-2.5 font-mono text-[12px] text-slate-500">{invItem.isbn13 || invItem.sku || "-"}</td>
-                        <td className="px-4 py-2.5 text-[13px] font-semibold text-indigo-700">{expected}</td>
+                        <td className="px-4 py-2.5 font-mono text-[12px] text-muted-foreground">{invItem.isbn13 || invItem.sku || "-"}</td>
+                        <td className="px-4 py-2.5 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{expected}</td>
                         <td className="px-4 py-2.5">
                           {receiptItem && receipt.status === "DRAFT" && !isVerified ? (
                             <input type="number" min={0}
                               value={countedQty[receiptItem.id] ?? receiptItem.quantity}
                               onChange={(e) => setCountedQty((prev) => ({ ...prev, [receiptItem.id]: Math.max(0, Number(e.target.value) || 0) }))}
-                              className="w-20 rounded-[6px] border border-slate-200 px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
+                              className="w-20 rounded-[6px] border border-border px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
                             />
                           ) : (
                             <span className="text-[13px]">{counted}</span>
                           )}
                         </td>
-                        <td className={`px-4 py-2.5 text-[13px] font-semibold ${diff > 0 ? "text-rose-600" : diff < 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                        <td className={`px-4 py-2.5 text-[13px] font-semibold ${diff > 0 ? "text-rose-600 dark:text-rose-400" : diff < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                           {diff > 0 ? `+${diff}` : diff}
                         </td>
                         <td className="px-4 py-2.5">

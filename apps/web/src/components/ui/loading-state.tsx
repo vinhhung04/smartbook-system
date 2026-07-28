@@ -74,7 +74,7 @@ export function SkeletonTableRow({
 /** Skeleton card for grid layouts */
 export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-card p-5 space-y-3">
+    <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-3">
         <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
         <div className="flex-1 space-y-2">
@@ -111,7 +111,7 @@ export function SkeletonStatCards({ count = 4 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-black/5 bg-card p-5 space-y-3"
+          className="rounded-xl border border-border bg-card p-5 space-y-3"
         >
           <div className="flex items-center justify-between">
             <Skeleton className="h-3 w-20" />

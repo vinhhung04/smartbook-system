@@ -50,7 +50,7 @@ export function PageHeader({
         {Icon && (
           <div
             className={cn(
-              "flex shrink-0 items-center justify-center rounded-xl border border-black/5",
+              "flex shrink-0 items-center justify-center rounded-xl border border-border",
               iconSizeClasses[iconSize],
               iconBg,
             )}

@@ -12,6 +12,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 
@@ -88,27 +90,25 @@ export function PurchaseOrdersPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-600 shadow-lg shadow-indigo-500/20">
-            <ClipboardList className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Đơn đặt hàng</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Lập đơn đặt hàng, phê duyệt và đối soát nhập hàng</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
-          {canCreatePurchaseOrder ? <NavLink to="/purchase-orders/new" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground shadow-sm">
-            <Plus className="h-3.5 w-3.5" />
-            Tạo PO mới
-          </NavLink> : null}
-        </div>
-      </div>
+      <PageHeader
+        icon={ClipboardList}
+        title="Đơn đặt hàng"
+        description="Lập đơn đặt hàng, phê duyệt và đối soát nhập hàng"
+        iconBg="bg-gradient-to-br from-indigo-600 to-sky-600 shadow-lg shadow-indigo-500/20"
+        iconColor="text-white"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
+            {canCreatePurchaseOrder ? <NavLink to="/purchase-orders/new" className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-[13px] font-medium text-primary-foreground shadow-sm">
+              <Plus className="h-3.5 w-3.5" />
+              Tạo PO mới
+            </NavLink> : null}
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Nháp" value={counts.draft} variant="default" />
@@ -152,12 +152,12 @@ export function PurchaseOrdersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải đơn đặt hàng...</td></tr>
+                <SkeletonTableRow columns={11} rows={5} />
               ) : rows.length === 0 ? (
                 <tr><td colSpan={11}><EmptyState variant="no-data" title="Chưa có đơn đặt hàng" description="Tạo PO để bắt đầu quy trình phê duyệt và đối soát nhập hàng" className="py-12" /></td></tr>
               ) : rows.map((row, index) => (
                 <motion.tr key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.02 }} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-5 py-3.5"><NavLink to={`/purchase-orders/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800">{row.po_number}</NavLink></td>
+                  <td className="px-5 py-3.5"><NavLink to={`/purchase-orders/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.po_number}</NavLink></td>
                   <td className="px-5 py-3.5 text-[13px]">{row.supplier_name || "-"}</td>
                   <td className="px-5 py-3.5 text-[13px]">{row.warehouse_code || row.warehouse_name || "-"}</td>
                   <td className="px-5 py-3.5"><StatusBadge label={row.status} variant={statusVariant(row.status)} dot /></td>

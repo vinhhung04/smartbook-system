@@ -9,6 +9,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingOverlay } from "@/components/ui/loading-state";
 
 interface FormLine extends PurchaseOrderLinePayload {
   key: string;
@@ -166,7 +167,7 @@ export function PurchaseOrderFormPage() {
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto text-[13px] text-muted-foreground">Loading form...</div>;
+    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><LoadingOverlay /></div>;
   }
 
   return (
@@ -226,7 +227,7 @@ export function PurchaseOrderFormPage() {
           {results.length > 0 && (
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {results.map((variant) => (
-                <button key={variant.variant_id} type="button" onClick={() => selectVariant(variant)} className="rounded-lg border border-input bg-white p-3 text-left text-[13px] hover:border-indigo-200 hover:bg-indigo-50">
+                <button key={variant.variant_id} type="button" onClick={() => selectVariant(variant)} className="rounded-lg border border-input bg-card p-3 text-left text-[13px] hover:border-indigo-200 hover:bg-indigo-50 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10">
                   <div className="font-medium">{variant.title}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground">{variant.isbn13 || variant.sku || variant.barcode || variant.variant_id}</div>
                 </button>
@@ -241,14 +242,14 @@ export function PurchaseOrderFormPage() {
           <div className="space-y-3">
             {lines.map((line, index) => (
               <div key={line.key} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1.5fr_110px_130px_1fr_40px]">
-                <button type="button" onClick={() => setActiveLineKey(line.key)} className={`rounded-lg border px-3 py-2 text-left text-[13px] ${activeLineKey === line.key ? "border-indigo-300 bg-indigo-50" : "border-input bg-background"}`}>
+                <button type="button" onClick={() => setActiveLineKey(line.key)} className={`rounded-lg border px-3 py-2 text-left text-[13px] ${activeLineKey === line.key ? "border-indigo-300 bg-indigo-50 dark:border-indigo-500/30 dark:bg-indigo-500/10" : "border-input bg-background"}`}>
                   <div className="font-medium">{line.title || `Line ${index + 1}: select variant`}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground">{line.isbn13 || line.sku || line.variant_id || "Click then search above"}</div>
                 </button>
                 <input type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Qty" />
                 <input type="number" min={0} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(e.target.value) })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Unit cost" />
                 <input value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Line note" />
-                <button type="button" onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))} className="inline-flex h-10 items-center justify-center rounded-lg border border-red-100 text-red-600 hover:bg-red-50" aria-label="Remove line">
+                <button type="button" onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))} className="inline-flex h-10 items-center justify-center rounded-lg border border-red-100 text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10" aria-label="Remove line">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>

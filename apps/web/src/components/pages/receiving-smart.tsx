@@ -24,6 +24,7 @@ import { authService } from "@/services/auth";
 import { receivingSmartService, MatchResult, SmartReceivingDraft } from "@/services/receiving-smart";
 import { getApiErrorMessage } from "@/services/api";
 import { PageHeader } from "../ui/page-header";
+import { StatusBadge } from "@/components/status-badge";
 
 interface WarehouseOption {
   id: string;
@@ -34,10 +35,10 @@ interface WarehouseOption {
 type MatchStatus = "MATCHED" | "LOW_CONFIDENCE" | "UNMATCHED" | "MANUAL_CORRECTED";
 
 const statusConfig: Record<MatchStatus, { label: string; color: string; bg: string }> = {
-  MATCHED: { label: "Khớp", color: "text-emerald-600", bg: "bg-emerald-50" },
-  LOW_CONFIDENCE: { label: "Khớp thấp", color: "text-amber-600", bg: "bg-amber-50" },
-  UNMATCHED: { label: "Không khớp", color: "text-red-600", bg: "bg-red-50" },
-  MANUAL_CORRECTED: { label: "Đã sửa", color: "text-blue-600", bg: "bg-blue-50" },
+  MATCHED: { label: "Khớp", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+  LOW_CONFIDENCE: { label: "Khớp thấp", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
+  UNMATCHED: { label: "Không khớp", color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-500/10" },
+  MANUAL_CORRECTED: { label: "Đã sửa", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
 };
 
 function formatCurrency(value: number): string {
@@ -297,12 +298,12 @@ export function SmartReceivingPage() {
   const renderUploadStep = () => (
     <div className="space-y-6">
       {/* Warehouse selection */}
-      <div className="bg-white rounded-lg border p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Kho nhập hàng</label>
+      <div className="bg-card rounded-lg border border-border p-4">
+        <label className="block text-sm font-medium text-foreground mb-2">Kho nhập hàng</label>
         <select
           value={selectedWarehouse}
           onChange={(e) => setSelectedWarehouse(e.target.value)}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           disabled={isLoading}
         >
           <option value="">-- Chọn kho --</option>
@@ -317,7 +318,7 @@ export function SmartReceivingPage() {
 
       {/* Upload area */}
       <div
-        className="border-2 border-dashed rounded-xl p-8 text-center transition-colors hover:border-blue-400 bg-gray-50"
+        className="border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors hover:border-blue-400 dark:hover:border-blue-500 bg-muted/40"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
@@ -330,13 +331,13 @@ export function SmartReceivingPage() {
                 className="max-h-64 mx-auto rounded-lg shadow-md"
               />
             ) : (
-              <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 rounded-full">
-                <FileText className="w-8 h-8 text-blue-600" />
+              <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-500/15 rounded-full">
+                <FileText className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               </div>
             )}
             <div>
-              <p className="font-medium text-gray-900">{selectedFile.name}</p>
-              <p className="text-sm text-gray-500">
+              <p className="font-medium text-foreground">{selectedFile.name}</p>
+              <p className="text-sm text-muted-foreground">
                 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
               </p>
             </div>
@@ -345,20 +346,20 @@ export function SmartReceivingPage() {
                 setSelectedFile(null);
                 setFilePreview(null);
               }}
-              className="text-red-600 hover:text-red-700 text-sm"
+              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-400 text-sm"
             >
               Xóa file
             </button>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 rounded-full mb-4">
-              <Upload className="w-8 h-8 text-blue-600" />
+            <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-500/15 rounded-full mb-4">
+              <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <p className="text-lg font-medium text-gray-700 mb-2">
+            <p className="text-lg font-medium text-foreground mb-2">
               Tải lên hình ảnh hóa đơn / phiếu giao hàng
             </p>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Hỗ trợ JPG, PNG, WebP, PDF (tối đa 10MB)
             </p>
             <button
@@ -407,20 +408,20 @@ export function SmartReceivingPage() {
     <div className="space-y-6">
       {/* Invoice info */}
       {extractedData && (
-        <div className="bg-white rounded-lg border p-4">
-          <h3 className="font-medium text-gray-900 mb-3">Thông tin hóa đơn</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="bg-card rounded-lg border border-border p-4">
+          <h3 className="font-medium text-foreground mb-3">Thông tin hóa đơn</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-gray-500">Nhà cung cấp:</span>
-              <p className="font-medium">{extractedData.supplier_name || "-"}</p>
+              <span className="text-muted-foreground">Nhà cung cấp:</span>
+              <p className="font-medium text-foreground">{extractedData.supplier_name || "-"}</p>
             </div>
             <div>
-              <span className="text-gray-500">Số hóa đơn:</span>
-              <p className="font-medium">{extractedData.invoice_number || "-"}</p>
+              <span className="text-muted-foreground">Số hóa đơn:</span>
+              <p className="font-medium text-foreground">{extractedData.invoice_number || "-"}</p>
             </div>
             <div>
-              <span className="text-gray-500">Ngày:</span>
-              <p className="font-medium">{formatDate(extractedData.invoice_date)}</p>
+              <span className="text-muted-foreground">Ngày:</span>
+              <p className="font-medium text-foreground">{formatDate(extractedData.invoice_date)}</p>
             </div>
           </div>
         </div>
@@ -429,85 +430,82 @@ export function SmartReceivingPage() {
       {/* Summary badges */}
       {matchSummary && (
         <div className="flex gap-3 flex-wrap">
-          <div className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-sm font-medium">
-            {matchSummary.matched} khớp chính xác
-          </div>
+          <StatusBadge label={`${matchSummary.matched} khớp chính xác`} variant="success" />
           {matchSummary.low_confidence > 0 && (
-            <div className="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-sm font-medium">
-              {matchSummary.low_confidence} khớp thấp
-            </div>
+            <StatusBadge label={`${matchSummary.low_confidence} khớp thấp`} variant="warning" />
           )}
           {matchSummary.unmatched > 0 && (
-            <div className="px-3 py-1.5 bg-red-50 text-red-700 rounded-full text-sm font-medium">
-              {matchSummary.unmatched} không khớp
-            </div>
+            <StatusBadge label={`${matchSummary.unmatched} không khớp`} variant="danger" />
           )}
         </div>
       )}
 
       {/* Items table */}
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">#</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Tên sách</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">ISBN</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">SL</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">Đơn giá</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-600">Trạng thái</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Khớp với</th>
-              <th className="px-4 py-3 text-center font-medium text-gray-600"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {matchResults.map((result, index) => {
-              const status = statusConfig[result.match_status as MatchStatus] || statusConfig.UNMATCHED;
-              return (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-500">{index + 1}</td>
-                  <td className="px-4 py-3 font-medium text-gray-900 max-w-[200px] truncate">
-                    {result.title || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 font-mono text-xs">{result.isbn || "-"}</td>
-                  <td className="px-4 py-3 text-right">{result.quantity}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">
-                    {result.unit_price > 0 ? formatCurrency(result.unit_price) : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.color}`}
-                    >
-                      {result.match_status === "MATCHED" && <Check className="w-3 h-3" />}
-                      {result.match_status === "LOW_CONFIDENCE" && <AlertTriangle className="w-3 h-3" />}
-                      {result.match_status === "UNMATCHED" && <X className="w-3 h-3" />}
-                      {result.match_status === "MANUAL_CORRECTED" && <Edit3 className="w-3 h-3" />}
-                      {status.label}
-                      {result.match_confidence > 0 && (
-                        <span className="text-xs opacity-75">
-                          ({Math.round(result.match_confidence * 100)}%)
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[150px] truncate">
-                    {result.matched_variant ? result.matched_variant.book_title || result.matched_variant.sku : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => handleEditItem(index, result)}
-                      disabled={!result.matched_variant_id}
-                      className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
-                      title={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="bg-card rounded-lg border border-border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">#</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tên sách</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">ISBN</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">SL</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Đơn giá</th>
+                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Trạng thái</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Khớp với</th>
+                <th className="px-4 py-3 text-center font-medium text-muted-foreground"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {matchResults.map((result, index) => {
+                const status = statusConfig[result.match_status as MatchStatus] || statusConfig.UNMATCHED;
+                return (
+                  <tr key={index} className="hover:bg-muted/50">
+                    <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
+                    <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
+                      {result.title || "-"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{result.isbn || "-"}</td>
+                    <td className="px-4 py-3 text-right">{result.quantity}</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">
+                      {result.unit_price > 0 ? formatCurrency(result.unit_price) : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.color}`}
+                      >
+                        {result.match_status === "MATCHED" && <Check className="w-3 h-3" />}
+                        {result.match_status === "LOW_CONFIDENCE" && <AlertTriangle className="w-3 h-3" />}
+                        {result.match_status === "UNMATCHED" && <X className="w-3 h-3" />}
+                        {result.match_status === "MANUAL_CORRECTED" && <Edit3 className="w-3 h-3" />}
+                        {status.label}
+                        {result.match_confidence > 0 && (
+                          <span className="text-xs opacity-75">
+                            ({Math.round(result.match_confidence * 100)}%)
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground max-w-[150px] truncate">
+                      {result.matched_variant ? result.matched_variant.book_title || result.matched_variant.sku : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleEditItem(index, result)}
+                        disabled={!result.matched_variant_id}
+                        aria-label={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
+                        className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
+                        title={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Actions */}
@@ -519,7 +517,7 @@ export function SmartReceivingPage() {
             setMatchSummary(null);
             setExtractedData(null);
           }}
-          className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+          className="flex-1 py-3 px-4 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
           Quay lại
@@ -545,19 +543,19 @@ export function SmartReceivingPage() {
 
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-gray-900">Xác nhận item đã sửa</h3>
-            <p className="mt-2 text-sm text-gray-600">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-foreground">Xác nhận item đã sửa</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
               Đánh dấu dòng "{editingItem.result.title || "-"}" là đã được kiểm tra thủ công.
               Dòng này sẽ được tính là hợp lệ khi tạo phiếu nháp.
             </p>
-            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
+            <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
               <div className="flex justify-between gap-3">
-                <span className="text-gray-500">ISBN</span>
+                <span className="text-muted-foreground">ISBN</span>
                 <span className="font-mono">{editingItem.result.isbn || "-"}</span>
               </div>
               <div className="mt-1 flex justify-between gap-3">
-                <span className="text-gray-500">Số lượng</span>
+                <span className="text-muted-foreground">Số lượng</span>
                 <span>{editingItem.result.quantity}</span>
               </div>
             </div>
@@ -565,7 +563,7 @@ export function SmartReceivingPage() {
               <button
                 type="button"
                 onClick={() => setEditingItem(null)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"
               >
                 Hủy
               </button>
@@ -586,29 +584,29 @@ export function SmartReceivingPage() {
   // Render draft step
   const renderDraftStep = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg border p-6 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 rounded-full flex items-center justify-center">
-          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+      <div className="bg-card rounded-lg border border-border p-6 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 dark:bg-emerald-500/15 rounded-full flex items-center justify-center">
+          <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">
+        <h2 className="text-xl font-bold text-foreground mb-2">
           Đã tạo phiếu nhập thông minh!
         </h2>
-        <p className="text-gray-600 mb-4">
-          Phiếu đang ở trạng thái <span className="font-medium text-blue-600">DRAFT</span>. Vui lòng
+        <p className="text-muted-foreground mb-4">
+          Phiếu đang ở trạng thái <span className="font-medium text-blue-600 dark:text-blue-400">DRAFT</span>. Vui lòng
           xem lại và xác nhận để hoàn tất.
         </p>
         {createdDraft && (
-          <div className="bg-gray-50 rounded-lg p-4 text-left space-y-2 mb-4">
+          <div className="bg-muted rounded-lg p-4 text-left space-y-2 mb-4">
             <div className="flex justify-between">
-              <span className="text-gray-500">Mã phiếu:</span>
+              <span className="text-muted-foreground">Mã phiếu:</span>
               <span className="font-mono font-medium">{createdDraft.id.slice(0, 8)}...</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Số items:</span>
+              <span className="text-muted-foreground">Số items:</span>
               <span className="font-medium">{createdDraft.smart_receiving_items?.length || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">Ngày tạo:</span>
+              <span className="text-muted-foreground">Ngày tạo:</span>
               <span className="font-medium">{formatDate(createdDraft.created_at)}</span>
             </div>
           </div>
@@ -618,7 +616,7 @@ export function SmartReceivingPage() {
       <div className="flex gap-3">
         <NavLink
           to="/goods-receipt"
-          className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors text-center"
+          className="flex-1 py-3 px-4 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors text-center"
         >
           Xem danh sách phiếu nhập
         </NavLink>
@@ -662,7 +660,7 @@ export function SmartReceivingPage() {
                   ? "bg-blue-600 text-white"
                   : ["upload", "review", "draft"].indexOf(step) > i
                     ? "bg-emerald-600 text-white"
-                    : "bg-gray-200 text-gray-500"
+                    : "bg-muted text-muted-foreground"
               }`}
             >
               {["upload", "review", "draft"].indexOf(step) > i ? (
@@ -672,7 +670,7 @@ export function SmartReceivingPage() {
               )}
             </div>
             {i < 2 && (
-              <ChevronRight className="w-4 h-4 mx-2 text-gray-400" />
+              <ChevronRight className="w-4 h-4 mx-2 text-muted-foreground" />
             )}
           </div>
         ))}

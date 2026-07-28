@@ -80,7 +80,7 @@ export function EmptyState({
     >
       {/* Icon container */}
       <div className="relative">
-        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center border border-black/5">
+        <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center border border-border">
           <Icon className="w-6 h-6 text-muted-foreground/60" />
         </div>
       </div>

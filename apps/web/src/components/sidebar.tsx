@@ -1,8 +1,9 @@
-import { NavLink } from "react-router";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, BookOpen, Package, FileText, Warehouse,
-  Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft,
+  Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft, ChevronDown,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
   ShoppingCart, AlertTriangle, PackageCheck,
@@ -92,9 +93,13 @@ const navGroups = [
   },
 ];
 
+const SIDEBAR_EXPANDED_STORAGE_KEY = "smartbook-sidebar-expanded";
+const ALWAYS_OPEN_GROUP = "sidebar.group.today";
+
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const user = authService.getCurrentUser();
   const { t } = useI18n();
+  const location = useLocation();
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
@@ -102,6 +107,36 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     }))
     .filter((group) => group.items.length > 0);
   const canReceiveStock = canAccess(user, ROUTE_ACCESS.staffTaskProgress);
+
+  const activeGroupKey = visibleGroups.find((group) =>
+    group.items.some((item) => item.to === location.pathname)
+  )?.labelKey;
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    let saved: Record<string, boolean> = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY) || "{}");
+    } catch {
+      saved = {};
+    }
+    if (activeGroupKey) saved[activeGroupKey] = true;
+    return saved;
+  });
+
+  useEffect(() => {
+    if (activeGroupKey && !expanded[activeGroupKey]) {
+      setExpanded((prev) => ({ ...prev, [activeGroupKey]: true }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupKey]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_EXPANDED_STORAGE_KEY, JSON.stringify(expanded));
+  }, [expanded]);
+
+  const toggleGroup = (labelKey: string) => {
+    setExpanded((prev) => ({ ...prev, [labelKey]: !prev[labelKey] }));
+  };
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)
@@ -159,56 +194,81 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
-        {visibleGroups.map((group) => (
-          <div key={group.labelKey} className="pt-4 first:pt-1">
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="flex items-center gap-1.5 px-3 pb-2">
-                  <div className={`w-1 h-1 rounded-full ${group.dotColor}`} />
-                  <span className={`text-[10px] uppercase tracking-[0.08em] ${group.color}`} style={{ fontWeight: 600 }}>{t(group.labelKey)}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={({ isActive }) =>
-                  `group flex items-center gap-2.5 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-160 relative overflow-hidden ${
-                    isActive ? item.textColor : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                  } ${collapsed ? "justify-center" : ""}`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <motion.div
-                        layoutId="sidebar-active-pill"
-                        className={`absolute inset-0 rounded-[9px] bg-gradient-to-r ${item.activeColor} border border-white/50 dark:border-white/10`}
-                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                      />
+        {visibleGroups.map((group) => {
+          const isAlwaysOpen = group.labelKey === ALWAYS_OPEN_GROUP;
+          const isGroupOpen = collapsed || isAlwaysOpen || !!expanded[group.labelKey] || group.items.some((item) => item.to === location.pathname);
+          return (
+            <div key={group.labelKey} className="pt-4 first:pt-1">
+              <AnimatePresence>
+                {!collapsed && (
+                  <motion.button
+                    type="button"
+                    onClick={() => !isAlwaysOpen && toggleGroup(group.labelKey)}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className={`flex w-full items-center gap-1.5 px-3 pb-2 ${isAlwaysOpen ? "cursor-default" : "cursor-pointer"}`}
+                  >
+                    <div className={`w-1 h-1 rounded-full ${group.dotColor}`} />
+                    <span className={`flex-1 text-left text-[10px] uppercase tracking-[0.08em] ${group.color}`} style={{ fontWeight: 600 }}>{t(group.labelKey)}</span>
+                    {!isAlwaysOpen && (
+                      <motion.div animate={{ rotate: isGroupOpen ? 0 : -90 }} transition={{ duration: 0.2 }}>
+                        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                      </motion.div>
                     )}
-                    <div className={`w-[22px] h-[22px] rounded-[6px] flex items-center justify-center shrink-0 relative z-10 transition-colors duration-160 ${
-                      isActive ? item.iconBg : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"
-                    }`}>
-                      <item.icon className="w-[14px] h-[14px]" />
-                    </div>
-                    <AnimatePresence>
-                      {!collapsed && (
-                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-                          className="relative z-10" style={{ fontWeight: isActive ? 550 : 400 }}>
-                          {t(item.labelKey)}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </>
+                  </motion.button>
                 )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
+              </AnimatePresence>
+              <AnimatePresence initial={false}>
+                {isGroupOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.to === "/"}
+                        className={({ isActive }) =>
+                          `group flex items-center gap-2.5 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-160 relative overflow-hidden ${
+                            isActive ? item.textColor : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                          } ${collapsed ? "justify-center" : ""}`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <motion.div
+                                layoutId="sidebar-active-pill"
+                                className={`absolute inset-0 rounded-[9px] bg-gradient-to-r ${item.activeColor} border border-white/50 dark:border-white/10`}
+                                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                              />
+                            )}
+                            <div className={`w-[22px] h-[22px] rounded-[6px] flex items-center justify-center shrink-0 relative z-10 transition-colors duration-160 ${
+                              isActive ? item.iconBg : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"
+                            }`}>
+                              <item.icon className="w-[14px] h-[14px]" />
+                            </div>
+                            <AnimatePresence>
+                              {!collapsed && (
+                                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+                                  className="relative z-10" style={{ fontWeight: isActive ? 550 : 400 }}>
+                                  {t(item.labelKey)}
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
       </nav>
 
       {/* User */}

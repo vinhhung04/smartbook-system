@@ -10,6 +10,9 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { StatusBadge } from "@/components/status-badge";
 
 interface RoleItem {
   id: string;
@@ -55,11 +58,11 @@ function formatDate(value: string) {
   return date.toLocaleDateString("vi-VN");
 }
 
-function statusBadge(status: UserRow["status"]) {
-  if (status === "ACTIVE") return "bg-emerald-100 text-emerald-700";
-  if (status === "LOCKED") return "bg-red-100 text-red-700";
-  if (status === "PENDING") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+function statusBadgeVariant(status: UserRow["status"]): "success" | "danger" | "warning" | "neutral" {
+  if (status === "ACTIVE") return "success";
+  if (status === "LOCKED") return "danger";
+  if (status === "PENDING") return "warning";
+  return "neutral";
 }
 
 export function UsersPage() {
@@ -252,20 +255,18 @@ export function UsersPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Người dùng</h1>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">Quản lý tài khoản người dùng trong hệ thống</p>
-            </div>
-          </div>
-          <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }}>
-            <Plus className="h-3.5 w-3.5" /> Tạo người dùng mới
-          </Button>
-        </div>
+        <PageHeader
+          icon={Users}
+          title="Người dùng"
+          description="Quản lý tài khoản người dùng trong hệ thống"
+          iconBg="bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25"
+          iconColor="text-white"
+          actions={
+            <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }}>
+              <Plus className="h-3.5 w-3.5" /> Tạo người dùng mới
+            </Button>
+          }
+        />
       </FadeItem>
 
       <FadeItem>
@@ -300,9 +301,7 @@ export function UsersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-muted-foreground">Đang tải dữ liệu...</td>
-                </tr>
+                <SkeletonTableRow columns={7} rows={5} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={7}><EmptyState variant="no-data" title="Không có người dùng nào" description="Tạo người dùng mới để bắt đầu" className="py-12" /></td>
@@ -316,23 +315,21 @@ export function UsersPage() {
                     <td className="px-5 py-3.5">
                       <div className="flex flex-wrap gap-1.5">
                         {(user.roles || []).map((role) => (
-                          <span key={role.id} className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
+                          <span key={role.id} className="rounded-full bg-blue-100 dark:bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
                             {role.code}
                           </span>
                         ))}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge(user.status)}`}>
-                        {user.status}
-                      </span>
+                      <StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} />
                     </td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(user.created_at)}</td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEditUser(user)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-indigo-700 hover:bg-indigo-100"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                         >
                           <Edit className="h-3.5 w-3.5" />
                           Sửa
@@ -347,7 +344,7 @@ export function UsersPage() {
                         <button
                           onClick={() => void handleDeleteUser(user)}
                           disabled={deletingUserId === user.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 disabled:opacity-60"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 disabled:opacity-60"
                         >
                           <X className="h-3.5 w-3.5" />
                           {deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
@@ -368,25 +365,25 @@ export function UsersPage() {
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
-              <button onClick={closeUserModal} className="text-muted-foreground hover:text-foreground">
+              <button onClick={closeUserModal} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
+                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
-                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" className="rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
+                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
                   <option value="LOCKED">LOCKED</option>

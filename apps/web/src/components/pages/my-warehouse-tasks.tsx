@@ -4,6 +4,8 @@ import { AlertTriangle, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPi
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingSpinner, SkeletonTableRow } from "@/components/ui/loading-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
@@ -151,14 +153,14 @@ export function MyWarehouseTasksPage() {
   };
 
   const summaryCards = [
-    { label: "Tiếp nhận", value: counts.receiving, icon: Inbox, tone: "text-sky-700 bg-sky-50 border-sky-100", tab: "RECEIVING" },
-    { label: "Cất hàng", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "PUTAWAY" },
-    { label: "Lấy hàng", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100", tab: "PICKING" },
-    { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100", tab: "OUTBOUND" },
-    { label: "Nhận hàng chuyển kho", value: counts.transferReceiving, icon: PackageCheck, tone: "text-teal-700 bg-teal-50 border-teal-100", tab: "TRANSFER_RECEIVING" },
-    { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100", tab: "PURCHASE_REQUEST" },
-    { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100", tab: "EXCEPTION_REPORT" },
-    { label: "Task được giao", value: counts.staffTask, icon: ClipboardCheck, tone: "text-violet-700 bg-violet-50 border-violet-100", tab: "STAFF_TASK" },
+    { label: "Tiếp nhận", value: counts.receiving, icon: Inbox, tone: "text-sky-700 bg-sky-50 border-sky-100 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20", tab: "RECEIVING" },
+    { label: "Cất hàng", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20", tab: "PUTAWAY" },
+    { label: "Lấy hàng", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20", tab: "PICKING" },
+    { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", tab: "OUTBOUND" },
+    { label: "Nhận hàng chuyển kho", value: counts.transferReceiving, icon: PackageCheck, tone: "text-teal-700 bg-teal-50 border-teal-100 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20", tab: "TRANSFER_RECEIVING" },
+    { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20", tab: "PURCHASE_REQUEST" },
+    { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", tab: "EXCEPTION_REPORT" },
+    { label: "Task được giao", value: counts.staffTask, icon: ClipboardCheck, tone: "text-violet-700 bg-violet-50 border-violet-100 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20", tab: "STAFF_TASK" },
   ];
 
   return (
@@ -167,24 +169,23 @@ export function MyWarehouseTasksPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50">
-            <ClipboardList className="h-5 w-5 text-emerald-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Công việc kho của tôi</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Theo dõi các task nhận hàng, cất hàng, lấy hàng và xuất kho được giao</p>
-          </div>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || loadingAvailable}>
-          <RefreshCw className={`h-3.5 w-3.5 ${(loading || loadingAvailable) ? "animate-spin" : ""}`} />
-          Làm mới
-        </Button>
+        <PageHeader
+          icon={ClipboardList}
+          title="Công việc kho của tôi"
+          description="Theo dõi các task nhận hàng, cất hàng, lấy hàng và xuất kho được giao"
+          iconBg="bg-emerald-100 dark:bg-emerald-500/15"
+          iconColor="text-emerald-700 dark:text-emerald-400"
+          actions={
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || loadingAvailable}>
+              <RefreshCw className={`h-3.5 w-3.5 ${(loading || loadingAvailable) ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
+          }
+        />
       </motion.div>
 
-      <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800">
+      <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
         <span className="font-medium">Task của tôi:</span> các công việc bạn đã nhận hoặc được quản lý giao.{" "}
         <span className="font-medium">Có thể nhận:</span> các công việc thường chưa phân công, bạn có thể tự nhận để xử lý.
         Tạo đơn hàng, điều chỉnh tồn kho và các quyền quản trị thuộc về quản lý.
@@ -225,13 +226,13 @@ export function MyWarehouseTasksPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`shrink-0 px-3 py-2 text-[12px] font-medium rounded-t-lg border-b-2 transition-colors ${
                   activeTab === tab.key
-                    ? "border-indigo-500 text-indigo-700 bg-indigo-50/60"
+                    ? "border-indigo-500 text-indigo-700 bg-indigo-50/60 dark:text-indigo-400 dark:bg-indigo-500/10"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 }`}
               >
                 {tab.label}
                 {tab.key !== "ALL" && (
-                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? "bg-indigo-100 text-indigo-700" : "bg-muted text-muted-foreground"}`}>
+                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" : "bg-muted text-muted-foreground"}`}>
                     {tasks.filter((t) => t.type === tab.key).length}
                   </span>
                 )}
@@ -253,9 +254,7 @@ export function MyWarehouseTasksPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải công việc...</td>
-                </tr>
+                <SkeletonTableRow columns={7} rows={4} />
               ) : filteredTasks.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-10">
@@ -283,7 +282,7 @@ export function MyWarehouseTasksPage() {
                           {actionPath ? (
                             <NavLink
                               to={actionPath}
-                              className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                              className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
                             >
                               {taskActionLabel(task.type)}
                             </NavLink>
@@ -294,7 +293,7 @@ export function MyWarehouseTasksPage() {
                             <button
                               type="button"
                               onClick={() => handleReportException(task)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
                               title="Báo cáo sự cố cho task này"
                             >
                               <AlertTriangle className="h-3 w-3" />
@@ -307,8 +306,8 @@ export function MyWarehouseTasksPage() {
                           const ed = (task as MyWarehouseTask & { related_entity_display?: { ref_number: string; details?: string } | null }).related_entity_display;
                           if (!ed) return null;
                           return (
-                            <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1">
-                              <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700">
+                            <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                              <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
                                 <Link2 className="h-2.5 w-2.5 shrink-0" />
                                 {ed.ref_number}
                               </p>
@@ -342,7 +341,9 @@ export function MyWarehouseTasksPage() {
 
         {/* Mobile card layout */}
         {loadingAvailable ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">Đang tải...</div>
+          <div className="px-5 py-8 flex justify-center">
+            <LoadingSpinner message="Đang tải..." />
+          </div>
         ) : availableTasks.length === 0 ? (
           <div className="px-5 py-8">
             <EmptyState
@@ -362,7 +363,7 @@ export function MyWarehouseTasksPage() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
                         {task.is_repick && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">Bổ sung</span>
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">Bổ sung</span>
                         )}
                       </div>
                       {task.type === "PICKING" && !task.is_repick && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
@@ -390,7 +391,7 @@ export function MyWarehouseTasksPage() {
                     variant="outline"
                     onClick={() => void handleClaimTask(task)}
                     disabled={claimingId === task.id}
-                    className="w-full text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[12px]"
+                    className="w-full text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[12px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
                   >
                     {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
                   </Button>
@@ -416,7 +417,7 @@ export function MyWarehouseTasksPage() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
                           {task.is_repick && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
                               Bổ sung
                             </span>
                           )}
@@ -451,7 +452,7 @@ export function MyWarehouseTasksPage() {
                           variant="outline"
                           onClick={() => void handleClaimTask(task)}
                           disabled={claimingId === task.id}
-                          className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px]"
+                          className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
                         >
                           {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
                         </Button>

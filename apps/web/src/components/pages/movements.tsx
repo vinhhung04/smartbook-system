@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
+import { PageHeader } from "@/components/ui/page-header";
+import { LoadingOverlay } from "@/components/ui/loading-state";
 
 const movementTypes = {
   inbound: { label: "Nhập kho", color: "emerald", icon: ArrowDown, gradient: "from-emerald-500 to-teal-500" },
@@ -19,9 +21,9 @@ const movementTypes = {
 };
 
 const REASON_CONFIG: Record<string, { label: string; icon: React.ElementType; className: string }> = {
-  LOST:           { label: "Mất sách",    icon: AlertTriangle, className: "bg-red-50 text-red-700 border-red-200" },
-  DAMAGED_RETURN: { label: "Trả hư hỏng", icon: Wrench,        className: "bg-orange-50 text-orange-700 border-orange-200" },
-  RETURNED:       { label: "Trả bình thường", icon: RotateCcw,  className: "bg-sky-50 text-sky-700 border-sky-200" },
+  LOST:           { label: "Mất sách",    icon: AlertTriangle, className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20" },
+  DAMAGED_RETURN: { label: "Trả hư hỏng", icon: Wrench,        className: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20" },
+  RETURNED:       { label: "Trả bình thường", icon: RotateCcw,  className: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20" },
 };
 
 function ReasonBadge({ reasonCode }: { reasonCode: string | null }) {
@@ -48,15 +50,15 @@ function formatDeltaLabel(m: StockMovement): { text: string; className: string }
   const fn = DELTA_LABEL[code];
   if (fn) {
     const colorClass =
-      code === 'LOST'           ? 'text-red-600' :
-      code === 'DAMAGED_RETURN' ? 'text-orange-600' :
-      'text-emerald-600';
+      code === 'LOST'           ? 'text-red-600 dark:text-red-400' :
+      code === 'DAMAGED_RETURN' ? 'text-orange-600 dark:text-orange-400' :
+      'text-emerald-600 dark:text-emerald-400';
     return { text: fn(Math.abs(m.delta)), className: colorClass };
   }
-  if (m.type === 'transfer') return { text: `${Math.abs(m.delta)} cuốn`, className: 'text-blue-600' };
+  if (m.type === 'transfer') return { text: `${Math.abs(m.delta)} cuốn`, className: 'text-blue-600 dark:text-blue-400' };
   return {
     text: `${m.delta >= 0 ? '+' : ''}${m.delta} cuốn`,
-    className: m.delta >= 0 ? 'text-emerald-600' : 'text-rose-600',
+    className: m.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
   };
 }
 
@@ -114,15 +116,14 @@ export function MovementsPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex items-center gap-3"
       >
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-100 to-blue-50 flex items-center justify-center border border-cyan-200/40">
-          <ArrowRightLeft className="w-5 h-5 text-cyan-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Biến động tồn kho</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{movements.length} biến động</p>
-        </div>
+        <PageHeader
+          icon={ArrowRightLeft}
+          title="Biến động tồn kho"
+          description={`${movements.length} biến động`}
+          iconBg="bg-gradient-to-br from-cyan-100 to-blue-50 dark:from-cyan-500/20 dark:to-blue-500/10"
+          iconColor="text-cyan-600 dark:text-cyan-400"
+        />
       </motion.div>
 
       <motion.div
@@ -156,7 +157,7 @@ export function MovementsPage() {
         transition={{ duration: 0.3, delay: 0.1 }}
       >
         {loading ? (
-          <SectionCard><p className="text-center py-12 text-[13px] text-muted-foreground">Đang tải lịch sử tồn kho...</p></SectionCard>
+          <SectionCard><LoadingOverlay /></SectionCard>
         ) : filtered.length === 0 ? (
           <SectionCard><EmptyState variant="no-results" title="Không tìm thấy biến động" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></SectionCard>
         ) : (
@@ -167,7 +168,7 @@ export function MovementsPage() {
                 const Icon = typeConfig.icon;
                 return (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="bg-card rounded-xl border border-black/5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all duration-200 overflow-hidden">
+                    className="bg-card rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:hover:shadow-none transition-all duration-200 overflow-hidden">
                     <button onClick={() => setExpandedId(expandedId === m.id ? null : m.id)} className="w-full p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors text-left">
                       <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center text-white`}>
                         <Icon className="w-5 h-5" />
@@ -206,7 +207,7 @@ export function MovementsPage() {
                                 <div key={f.label}>
                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">{f.label}</p>
                                   <p
-                                    className={`text-[12px] ${(f as any).mono ? "font-mono text-muted-foreground" : ""} ${(f as any).colored ? ((f as any).positive ? "text-emerald-600" : "text-rose-600") : "text-muted-foreground"}`}
+                                    className={`text-[12px] ${(f as any).mono ? "font-mono text-muted-foreground" : ""} ${(f as any).colored ? ((f as any).positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400") : "text-muted-foreground"}`}
                                     style={{ fontWeight: (f as any).bold ? 600 : 500 }}
                                   >
                                     {f.value}

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   BookOpen, Users, HandCoins, AlertTriangle, FileSpreadsheet,
-  FileText, Calendar, TrendingUp, RefreshCw,
+  FileText, Calendar, TrendingUp, RefreshCw, BarChart3,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -12,6 +12,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeader } from '@/components/ui/page-header';
 import { borrowService, type Loan, type Fine } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { stockMovementService } from '@/services/stock-movement';
@@ -68,9 +69,14 @@ export function ReportsPage() {
 
       if (loanResp.status === 'fulfilled') {
         setLoans(Array.isArray(loanResp.value?.data) ? loanResp.value.data : []);
+      } else {
+        console.error('[Reports] Loans failed:', loanResp.reason);
+        toast.error('Không tải được dữ liệu mượn/trả: ' + (loanResp.reason?.response?.data?.message || loanResp.reason?.message || 'Lỗi không xác định'));
       }
       if (fineResp.status === 'fulfilled') {
         setFines(Array.isArray(fineResp.value?.data) ? fineResp.value.data : []);
+      } else {
+        console.error('[Reports] Fines failed:', fineResp.reason);
       }
       if (bookResp.status === 'fulfilled') {
         setBooks(Array.isArray(bookResp.value) ? bookResp.value : []);
@@ -281,49 +287,49 @@ export function ReportsPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
-            Báo cáo & Thống kê
-          </h1>
-          <p className="text-[13px] text-muted-foreground mt-1">
-            Tổng hợp dữ liệu hoạt động thư viện
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Date range selector */}
-          <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 border border-border">
-            {DATE_RANGE_OPTIONS.map((opt) => (
+        <PageHeader
+          icon={BarChart3}
+          title="Báo cáo & Thống kê"
+          description="Tổng hợp dữ liệu hoạt động thư viện"
+          iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          actions={
+            <div className="flex items-center gap-2">
+              {/* Date range selector */}
+              <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 border border-border">
+                {DATE_RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setRange(opt.value)}
+                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                      range === opt.value
+                        ? 'bg-card text-indigo-700 dark:text-indigo-400 shadow-sm border border-indigo-100 dark:border-indigo-500/20'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <button
-                key={opt.value}
-                onClick={() => setRange(opt.value)}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                  range === opt.value
-                    ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                onClick={handleExportSummaryReport}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[12px] hover:shadow-md transition-all font-medium"
               >
-                {opt.label}
+                <FileText className="w-3.5 h-3.5" />
+                Báo cáo tổng hợp
               </button>
-            ))}
-          </div>
-          <button
-            onClick={handleExportSummaryReport}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[12px] hover:shadow-md transition-all font-medium"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            Báo cáo tổng hợp
-          </button>
-          <button
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors font-medium"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Tải lại
-          </button>
-        </div>
+              <button
+                onClick={() => void loadData()}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors font-medium"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                Tải lại
+              </button>
+            </div>
+          }
+        />
       </motion.div>
 
       {/* KPI Cards */}
@@ -479,10 +485,10 @@ export function ReportsPage() {
           subtitle={`${filteredLoans.length} phiếu mượn`}
           actions={
             <div className="flex items-center gap-2">
-              <button onClick={handleExportLoansExcel} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 transition-colors font-medium">
+              <button onClick={handleExportLoansExcel} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition-colors font-medium">
                 <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
               </button>
-              <button onClick={handleExportLoansPdf} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-rose-700 hover:bg-rose-50 transition-colors font-medium">
+              <button onClick={handleExportLoansPdf} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 transition-colors font-medium">
                 <FileText className="w-3.5 h-3.5" /> PDF
               </button>
             </div>

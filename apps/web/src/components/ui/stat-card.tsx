@@ -1,6 +1,7 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import { cn } from "./utils";
+import { AnimatedCounter } from "../motion-utils";
 
 type StatCardVariant = "default" | "success" | "warning" | "danger" | "info" | "primary";
 
@@ -25,6 +26,8 @@ interface StatCardProps {
   accentBorder?: string;
   /** Card variant for automatic styling */
   variant?: StatCardVariant;
+  /** Animate numeric value with a count-up effect */
+  animateValue?: boolean;
   /** Custom className */
   className?: string;
 }
@@ -34,46 +37,46 @@ const variantConfigs: Record<
   { iconBg: string; iconColor: string; accentBorder: string; tintFrom: string; tintTo: string }
 > = {
   default: {
-    iconBg: "bg-indigo-100",
-    iconColor: "text-indigo-600",
+    iconBg: "bg-indigo-100 dark:bg-indigo-500/15",
+    iconColor: "text-indigo-600 dark:text-indigo-400",
     accentBorder: "from-indigo-500 to-blue-500",
-    tintFrom: "from-indigo-50/60",
-    tintTo: "to-indigo-50/20",
+    tintFrom: "from-indigo-50/60 dark:from-indigo-500/10",
+    tintTo: "to-indigo-50/20 dark:to-indigo-500/0",
   },
   success: {
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
+    iconBg: "bg-emerald-100 dark:bg-emerald-500/15",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
     accentBorder: "from-emerald-500 to-teal-500",
-    tintFrom: "from-emerald-50/60",
-    tintTo: "to-emerald-50/20",
+    tintFrom: "from-emerald-50/60 dark:from-emerald-500/10",
+    tintTo: "to-emerald-50/20 dark:to-emerald-500/0",
   },
   warning: {
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
+    iconBg: "bg-amber-100 dark:bg-amber-500/15",
+    iconColor: "text-amber-600 dark:text-amber-400",
     accentBorder: "from-amber-500 to-orange-500",
-    tintFrom: "from-amber-50/60",
-    tintTo: "to-amber-50/20",
+    tintFrom: "from-amber-50/60 dark:from-amber-500/10",
+    tintTo: "to-amber-50/20 dark:to-amber-500/0",
   },
   danger: {
-    iconBg: "bg-rose-100",
-    iconColor: "text-rose-600",
+    iconBg: "bg-rose-100 dark:bg-rose-500/15",
+    iconColor: "text-rose-600 dark:text-rose-400",
     accentBorder: "from-rose-500 to-red-500",
-    tintFrom: "from-rose-50/60",
-    tintTo: "to-rose-50/20",
+    tintFrom: "from-rose-50/60 dark:from-rose-500/10",
+    tintTo: "to-rose-50/20 dark:to-rose-500/0",
   },
   info: {
-    iconBg: "bg-sky-100",
-    iconColor: "text-sky-600",
+    iconBg: "bg-sky-100 dark:bg-sky-500/15",
+    iconColor: "text-sky-600 dark:text-sky-400",
     accentBorder: "from-sky-500 to-cyan-500",
-    tintFrom: "from-sky-50/60",
-    tintTo: "to-sky-50/20",
+    tintFrom: "from-sky-50/60 dark:from-sky-500/10",
+    tintTo: "to-sky-50/20 dark:to-sky-500/0",
   },
   primary: {
-    iconBg: "bg-indigo-100",
-    iconColor: "text-indigo-600",
+    iconBg: "bg-indigo-100 dark:bg-indigo-500/15",
+    iconColor: "text-indigo-600 dark:text-indigo-400",
     accentBorder: "from-violet-500 to-purple-500",
-    tintFrom: "from-violet-50/60",
-    tintTo: "to-violet-50/20",
+    tintFrom: "from-violet-50/60 dark:from-violet-500/10",
+    tintTo: "to-violet-50/20 dark:to-violet-500/0",
   },
 };
 
@@ -88,6 +91,7 @@ export function StatCard({
   iconColor,
   accentBorder,
   variant = "default",
+  animateValue = false,
   className,
 }: StatCardProps) {
   const config = variantConfigs[variant];
@@ -97,7 +101,7 @@ export function StatCard({
       whileHover={{ y: -2, boxShadow: "0 8px 24px -4px rgba(0,0,0,0.08)" }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       className={cn(
-        "relative overflow-hidden rounded-xl border border-black/5 bg-card p-5 flex flex-col gap-3 cursor-default",
+        "relative overflow-hidden rounded-xl border border-border bg-card p-5 flex flex-col gap-3 cursor-default shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-none",
         className,
       )}
     >
@@ -132,17 +136,21 @@ export function StatCard({
 
       {/* Value + trend */}
       <div className="flex items-end gap-2 relative">
-        <span className="text-[30px] font-bold tracking-tight text-foreground" style={{ lineHeight: 1 }}>
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </span>
+        {animateValue && typeof value === "number" ? (
+          <AnimatedCounter value={value} className="text-[30px] font-bold tracking-tight text-foreground leading-none" />
+        ) : (
+          <span className="text-[30px] font-bold tracking-tight text-foreground" style={{ lineHeight: 1 }}>
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </span>
+        )}
         {change && (
           <span
             className={cn(
               "mb-[4px] rounded-full px-2 py-0.5 text-[11px] font-medium",
-              trend === "up" && "bg-emerald-50 text-emerald-700",
-              trend === "down" && "bg-red-50 text-red-600",
-              trend === "neutral" && "bg-slate-50 text-slate-500",
-              !trend && "bg-slate-50 text-slate-500",
+              trend === "up" && "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+              trend === "down" && "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400",
+              trend === "neutral" && "bg-slate-50 text-slate-500 dark:bg-slate-500/10 dark:text-slate-400",
+              !trend && "bg-slate-50 text-slate-500 dark:bg-slate-500/10 dark:text-slate-400",
             )}
           >
             {change}

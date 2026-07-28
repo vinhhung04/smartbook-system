@@ -6,6 +6,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest, type PurchaseRequestCreateInput } from "@/services/purchase-requests";
 import { warehouseService } from "@/services/warehouse";
@@ -37,26 +39,26 @@ function ResponseCell({ req }: { req: PurchaseRequest }) {
   const s = req.status.toUpperCase();
   if (s === "REJECTED" && req.rejection_reason) {
     return (
-      <span className="text-[11px] text-red-700 italic block max-w-[160px] truncate" title={req.rejection_reason}>
+      <span className="text-[11px] text-red-700 dark:text-red-400 italic block max-w-[160px] truncate" title={req.rejection_reason}>
         {req.rejection_reason}
       </span>
     );
   }
   if (s === "REJECTED") {
-    return <span className="text-[11px] text-red-500 italic">Đã từ chối</span>;
+    return <span className="text-[11px] text-red-500 dark:text-red-400 italic">Đã từ chối</span>;
   }
   if (s === "CONVERTED" && req.purchase_order_id) {
     return (
-      <span className="text-[11px] font-mono text-emerald-700" title={req.purchase_order_id}>
+      <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400" title={req.purchase_order_id}>
         PO #{req.purchase_order_id.slice(-8).toUpperCase()}
       </span>
     );
   }
   if (s === "CONVERTED") {
-    return <span className="text-[11px] text-emerald-600">Đã chuyển PO</span>;
+    return <span className="text-[11px] text-emerald-600 dark:text-emerald-400">Đã chuyển PO</span>;
   }
   if (s === "APPROVED") {
-    return <span className="text-[11px] text-sky-600">Đã duyệt, chờ tạo PO</span>;
+    return <span className="text-[11px] text-sky-600 dark:text-sky-400">Đã duyệt, chờ tạo PO</span>;
   }
   return null;
 }
@@ -131,32 +133,29 @@ export function MyPurchaseRequestsPage() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.24 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-orange-100 bg-orange-50">
-            <ShoppingCart className="h-5 w-5 text-orange-700" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Yêu cầu mua hàng của tôi</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Gửi yêu cầu bổ sung hàng cho quản lý xem xét và điều phối
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
-          <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
-            <Plus className="h-3.5 w-3.5" />
-            Tạo yêu cầu
-          </Button>
-        </div>
+        <PageHeader
+          icon={ShoppingCart}
+          title="Yêu cầu mua hàng của tôi"
+          description="Gửi yêu cầu bổ sung hàng cho quản lý xem xét và điều phối"
+          iconBg="bg-orange-100 dark:bg-orange-500/15"
+          iconColor="text-orange-700 dark:text-orange-400"
+          actions={
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                Làm mới
+              </Button>
+              <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
+                <Plus className="h-3.5 w-3.5" />
+                Tạo yêu cầu
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
         Yêu cầu mua hàng là để báo cáo nhu cầu bổ sung kho cho quản lý. Quản lý sẽ xem xét và tạo đơn đặt hàng chính thức (PO) nếu phê duyệt.
       </div>
 
@@ -165,7 +164,7 @@ export function MyPurchaseRequestsPage() {
         <SectionCard>
           <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
             <h2 className="text-[14px] font-semibold">Tạo yêu cầu mua hàng mới</h2>
-            <button type="button" onClick={() => { setShowForm(false); setForm(emptyForm); }} className="text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => { setShowForm(false); setForm(emptyForm); }} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -255,7 +254,7 @@ export function MyPurchaseRequestsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">Đang tải...</td></tr>
+                <SkeletonTableRow columns={8} rows={4} />
               ) : requests.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-10">

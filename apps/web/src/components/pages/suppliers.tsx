@@ -8,6 +8,9 @@ import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
+import { PageHeader } from '@/components/ui/page-header';
+import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { StatusBadge } from '@/components/status-badge';
 import { authService } from '@/services/auth';
 import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
 
@@ -31,11 +34,11 @@ const EMPTY_FORM: SupplierFormState = {
   tax_code: '',
 };
 
-function supplierStatusBadge(status: string) {
+function supplierStatusVariant(status: string): 'success' | 'neutral' | 'warning' {
   const u = String(status || '').toUpperCase();
-  if (u === 'ACTIVE') return 'bg-emerald-100 text-emerald-700';
-  if (u === 'INACTIVE') return 'bg-slate-100 text-slate-600';
-  return 'bg-amber-100 text-amber-800';
+  if (u === 'ACTIVE') return 'success';
+  if (u === 'INACTIVE') return 'neutral';
+  return 'warning';
 }
 
 function isActiveStatus(status: string) {
@@ -149,27 +152,25 @@ export function SuppliersPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-cyan-600 shadow-lg shadow-sky-500/25">
-            <Truck className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Nhà cung cấp</h1>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Quản lý danh sách và thông tin nhà cung cấp</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => void loadSuppliers()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
-          </Button>
-          {canManageSuppliers ? <Button type="button" size="sm" onClick={openCreate}>
-            <Plus className="h-3.5 w-3.5" />
-            Nhà cung cấp mới
-          </Button> : null}
-        </div>
-      </div>
+      <PageHeader
+        icon={Truck}
+        title="Nhà cung cấp"
+        description="Quản lý danh sách và thông tin nhà cung cấp"
+        iconBg="bg-gradient-to-br from-sky-500 to-cyan-600 shadow-lg shadow-sky-500/25"
+        iconColor="text-white"
+        actions={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadSuppliers()} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Làm mới
+            </Button>
+            {canManageSuppliers ? <Button type="button" size="sm" onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5" />
+              Nhà cung cấp mới
+            </Button> : null}
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <StatCard label="Tổng nhà cung cấp" value={totalCount} icon={Truck} variant="info" />
@@ -193,11 +194,7 @@ export function SuppliersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-muted-foreground">
-                    Đang tải dữ liệu...
-                  </td>
-                </tr>
+                <SkeletonTableRow columns={8} rows={5} />
               ) : suppliers.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
@@ -225,11 +222,7 @@ export function SuppliersPage() {
                       <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{row.phone || '—'}</td>
                       <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{row.email || '—'}</td>
                       <td className="px-5 py-3.5">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${supplierStatusBadge(row.status)}`}
-                        >
-                          {row.status || '—'}
-                        </span>
+                        <StatusBadge label={row.status || '—'} variant={supplierStatusVariant(row.status)} />
                       </td>
                       <td className="px-5 py-3.5 text-[13px] tabular-nums">{poCount}</td>
                       <td className="px-5 py-3.5">
@@ -246,7 +239,7 @@ export function SuppliersPage() {
                             type="button"
                             onClick={() => void handleDelete(row.id, row.name)}
                             disabled={deletingId === row.id}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 disabled:opacity-60"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             {deletingId === row.id ? 'Đang xóa...' : 'Xóa'}

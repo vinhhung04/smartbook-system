@@ -35,7 +35,7 @@ export function SectionCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+        "rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none transition-shadow duration-200 hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.06)] dark:hover:shadow-none",
         className,
       )}
     >

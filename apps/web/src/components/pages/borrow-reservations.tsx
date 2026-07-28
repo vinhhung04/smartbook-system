@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { StatusBadge } from '@/components/status-badge';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import {
   borrowService,
@@ -15,6 +17,7 @@ import {
   type WarehouseLookupItem,
 } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { bookService } from '@/services/book';
 import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
 
 const statuses: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'];
@@ -57,12 +60,12 @@ const initialFormState: ReservationFormState = {
   notes: '',
 };
 
-function getBadgeVariant(status: ReservationStatus) {
-  if (status === 'PENDING') return 'destructive';
-  if (status === 'CONFIRMED' || status === 'READY_FOR_PICKUP') return 'secondary';
-  if (status === 'CONVERTED_TO_LOAN') return 'default';
-  if (status === 'CANCELLED' || status === 'EXPIRED') return 'outline';
-  return 'secondary';
+function getStatusVariant(status: ReservationStatus) {
+  if (status === 'PENDING') return 'warning';
+  if (status === 'CONFIRMED' || status === 'READY_FOR_PICKUP') return 'info';
+  if (status === 'CONVERTED_TO_LOAN') return 'success';
+  if (status === 'CANCELLED' || status === 'EXPIRED') return 'neutral';
+  return 'neutral';
 }
 
 function isUuid(value: string) {
@@ -71,6 +74,7 @@ function isUuid(value: string) {
 
 export function BorrowReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
@@ -97,14 +101,21 @@ export function BorrowReservationsPage() {
   const loadReservations = async () => {
     try {
       setLoading(true);
-      const response = await borrowService.getReservations();
-      setReservations(response.data ?? []);
+      const [resResp, booksResp] = await Promise.allSettled([
+        borrowService.getReservations(),
+        bookService.getAll(),
+      ]);
+      if (resResp.status === 'fulfilled') setReservations(resResp.value.data ?? []);
+      if (booksResp.status === 'fulfilled' && Array.isArray(booksResp.value)) setBooks(booksResp.value);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Không tải được danh sách đặt trước'));
     } finally {
       setLoading(false);
     }
   };
+
+  const getBookTitle = (variantId: string) =>
+    books.find((b) => b.variant_id === variantId)?.title ?? variantId.slice(0, 8) + '...';
 
   useEffect(() => {
     void loadReservations();
@@ -432,33 +443,30 @@ export function BorrowReservationsPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-50 flex items-center justify-center border border-indigo-200/40 shadow-sm">
-            <svg className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Đặt trước sách</h1>
-            <p className="text-sm text-muted-foreground">{reservations.length} đặt trước</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2">
-            <RefreshCw className="w-4 h-4" />
-            Giải phóng hết hạn
-          </Button>
-          <Button size="sm" onClick={openReservationForm} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Đặt trước mới
-          </Button>
-          <Button size="sm" variant="outline" onClick={openDirectLoanForm} className="gap-2">
-            <Plus className="w-4 h-4" />
-            Mượn trực tiếp
-          </Button>
-        </div>
+        <PageHeader
+          icon={CalendarClock}
+          title="Đặt trước sách"
+          description={`${reservations.length} đặt trước`}
+          iconBg="bg-gradient-to-br from-indigo-100 to-purple-50 border border-indigo-200/40 shadow-sm dark:from-indigo-500/15 dark:to-purple-500/10 dark:border-indigo-500/20"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          actions={
+            <>
+              <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Giải phóng hết hạn
+              </Button>
+              <Button size="sm" onClick={openReservationForm} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Đặt trước mới
+              </Button>
+              <Button size="sm" variant="outline" onClick={openDirectLoanForm} className="gap-2">
+                <Plus className="w-4 h-4" />
+                Mượn trực tiếp
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -554,7 +562,7 @@ export function BorrowReservationsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Số đặt trước', 'Khách hàng', 'Biến thể', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
+                  {['Số đặt trước', 'Khách hàng', 'Tên sách', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
                     <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
                     </th>
@@ -563,14 +571,7 @@ export function BorrowReservationsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-14">
-                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">Đang tải đặt trước...</span>
-                      </div>
-                    </td>
-                  </tr>
+                  <SkeletonTableRow columns={8} rows={5} />
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={8}>
@@ -593,12 +594,12 @@ export function BorrowReservationsPage() {
                     >
                       <td className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.variant_id}>{reservation.variant_id?.slice(0, 8)}...</td>
+                      <td className="px-5 py-3.5 text-sm" title={reservation.variant_id}>{getBookTitle(reservation.variant_id)}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</td>
                       <td className="px-5 py-3.5 text-sm">{reservation.quantity}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
                       <td className="px-5 py-3.5">
-                        <Badge variant={getBadgeVariant(reservation.status)}>{reservation.status}</Badge>
+                        <StatusBadge label={reservation.status} variant={getStatusVariant(reservation.status)} dot />
                       </td>
                       <td className="px-5 py-3.5">
                         {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
@@ -607,7 +608,7 @@ export function BorrowReservationsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-sky-200 text-sky-700 hover:bg-sky-50"
+                                className="border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/20 dark:text-sky-400 dark:hover:bg-sky-500/10"
                                 onClick={() => void confirmReservation(reservation.id)}
                               >
                                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
@@ -615,16 +616,16 @@ export function BorrowReservationsPage() {
                               </Button>
                             ) : null}
                             {reservation.status === 'READY_FOR_PICKUP' ? (
-                              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5">
-                                <p className="text-[10px] font-medium uppercase text-cyan-600">Mã nhận sách</p>
-                                <p className="font-mono text-xs font-semibold text-cyan-900">{reservation.pickup_code || '-'}</p>
+                              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5 dark:border-cyan-500/20 dark:bg-cyan-500/10">
+                                <p className="text-[10px] font-medium uppercase text-cyan-600 dark:text-cyan-400">Mã nhận sách</p>
+                                <p className="font-mono text-xs font-semibold text-cyan-900 dark:text-cyan-300">{reservation.pickup_code || '-'}</p>
                               </div>
                             ) : null}
                             {reservation.status === 'CONFIRMED' && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-cyan-200 text-cyan-700 hover:bg-cyan-50"
+                                className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
                                 onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
                               >
                                 Sẵn sàng
@@ -633,7 +634,7 @@ export function BorrowReservationsPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
                               onClick={() => void cancelReservation(reservation.id)}
                             >
                               Hủy
