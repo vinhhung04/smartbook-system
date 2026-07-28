@@ -48,7 +48,7 @@ services:
   inventory-service:
     build: ./services/inventory-service
     container_name: inventory-service
-    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && node src/index.js"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && node src/index.js"
     ports:
       - "3003:3001"
     environment:
@@ -59,6 +59,8 @@ services:
       - AI_SERVICE_URL=http://ai-service:8000
       - GATEWAY_URL=http://api-gateway:3000
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
+      - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
     volumes:
       - packing_evidence_data:/app/evidence/packing
     depends_on:
@@ -71,7 +73,7 @@ services:
   auth-service:
     build: ./services/auth-service
     container_name: auth-service
-    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && npm run start"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start"
     ports:
       - "3004:3002"
     environment:
@@ -80,6 +82,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
       - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.vn>}
     depends_on:
       db:
         condition: service_healthy
@@ -90,7 +98,7 @@ services:
   borrow-service:
     build: ./services/borrow-service
     container_name: borrow-service
-    command: sh -c "npx prisma db push --accept-data-loss && npx prisma db seed && npm run start"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start"
     ports:
       - "3005:3005"
     environment:
@@ -121,6 +129,7 @@ services:
       - BORROW_DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
       - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
     depends_on:
       db:
         condition: service_healthy
