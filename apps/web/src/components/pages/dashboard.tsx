@@ -38,6 +38,7 @@ import { LoadingOverlay } from '@/components/ui/loading-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
+import { PageWrapper, FadeItem } from '@/components/motion-utils';
 import {
   analyticsService,
   type BorrowTrendItem,
@@ -54,7 +55,7 @@ import { authService } from '@/services/auth';
 import { purchaseRequestService } from '@/services/purchase-requests';
 import { exceptionReportService } from '@/services/exception-reports';
 
-const CHART_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+const CHART_COLORS = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-1)'];
 const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
 
 type DashboardState = {
@@ -237,7 +238,7 @@ export function DashboardPage() {
   const stockRisk = dashboard?.stockRisk || [];
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <PageWrapper className="space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -306,17 +307,19 @@ export function DashboardPage() {
       ) : (
         <>
           {!hasRealData(dashboard) && (
-            <SectionCard>
-              <EmptyState
-                variant="no-data"
-                title="Chưa có dữ liệu phân tích"
-                description="Khi sách, tồn kho, đặt trước, mượn trả và tiền phạt có dữ liệu, bảng phân tích sẽ tự động cập nhật."
-              />
-            </SectionCard>
+            <FadeItem>
+              <SectionCard>
+                <EmptyState
+                  variant="no-data"
+                  title="Chưa có dữ liệu phân tích"
+                  description="Khi sách, tồn kho, đặt trước, mượn trả và tiền phạt có dữ liệu, bảng phân tích sẽ tự động cập nhật."
+                />
+              </SectionCard>
+            </FadeItem>
           )}
 
           {/* Manager Decision Center */}
-          <div>
+          <FadeItem>
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-[15px] font-semibold text-foreground">Việc cần xử lý hôm nay</h2>
@@ -380,126 +383,130 @@ export function DashboardPage() {
                 </div>
               </NavLink>
             </div>
-          </div>
+          </FadeItem>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-            <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" />
-            <StatCard label="Bản sao" value={kpis.total_copies} icon={Package} variant="success" />
-            <StatCard label="Đang mượn" value={kpis.active_loans} icon={BookMarked} variant="info" />
-            <StatCard label="Quá hạn" value={kpis.overdue_loans} icon={Clock} variant="danger" />
-            <StatCard label="Tồn kho thấp" value={kpis.low_stock_variants} icon={AlertTriangle} variant="warning" />
-            <StatCard label="Tiền phạt chưa trả" value={formatMoney(kpis.unpaid_fine_amount)} icon={Receipt} variant="warning" />
-            <StatCard label="Đặt trước" value={kpis.pending_reservations} icon={FileText} variant="primary" />
-            <StatCard label="Đã xác nhận" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" />
-            <StatCard label="Sẵn lấy" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" />
-            <StatCard label="Sắp hết hạn lấy" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" />
-            <StatCard label="Tỷ lệ nhận sách" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
-            <StatCard label="Mục quá hạn" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" />
-          </div>
+          <FadeItem>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+              <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" animateValue />
+              <StatCard label="Bản sao" value={kpis.total_copies} icon={Package} variant="success" animateValue />
+              <StatCard label="Đang mượn" value={kpis.active_loans} icon={BookMarked} variant="info" animateValue />
+              <StatCard label="Đặt trước" value={kpis.pending_reservations} icon={FileText} variant="primary" animateValue />
+              <StatCard label="Đã xác nhận" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" animateValue />
+              <StatCard label="Sẵn lấy" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" animateValue />
+              <StatCard label="Sắp hết hạn lấy" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" animateValue />
+              <StatCard label="Tỷ lệ nhận sách" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
+              <StatCard label="Mục quá hạn" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" animateValue />
+            </div>
+          </FadeItem>
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-            <section className="xl:col-span-2">
-              <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
-                {trendData.length ? (
+          <FadeItem>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+              <section className="xl:col-span-2">
+                <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
+                  {trendData.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+                        <defs>
+                          <linearGradient id="loansGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={CHART_COLORS[0]} stopOpacity={0.28} />
+                            <stop offset="100%" stopColor={CHART_COLORS[0]} stopOpacity={0.03} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={32} />
+                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Area type="monotone" dataKey="loans" stroke={CHART_COLORS[0]} fill="url(#loansGrad)" strokeWidth={2} name="Mượn" />
+                        <Area type="monotone" dataKey="returns" stroke={CHART_COLORS[1]} fill={CHART_COLORS[1]} fillOpacity={0.15} strokeWidth={2} name="Trả" />
+                        <Area type="monotone" dataKey="reservations" stroke={CHART_COLORS[2]} fill={CHART_COLORS[2]} fillOpacity={0.15} strokeWidth={2} name="Đặt trước" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyState variant="no-data" title="Chưa có dữ liệu xu hướng" description="Chưa có hoạt động mượn/đặt trong khoảng thời gian đã chọn." />
+                  )}
+                </SectionCard>
+              </section>
+
+              <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
+                {funnelData.some((item) => item.value > 0) ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-                      <defs>
-                        <linearGradient id="loansGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#2563eb" stopOpacity={0.28} />
-                          <stop offset="100%" stopColor="#2563eb" stopOpacity={0.03} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" vertical={false} />
-                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={32} />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Area type="monotone" dataKey="loans" stroke="#2563eb" fill="url(#loansGrad)" strokeWidth={2} name="Mượn" />
-                      <Area type="monotone" dataKey="returns" stroke="#10b981" fill="#10b98122" strokeWidth={2} name="Trả" />
-                      <Area type="monotone" dataKey="reservations" stroke="#f59e0b" fill="#f59e0b22" strokeWidth={2} name="Đặt trước" />
-                    </AreaChart>
+                    <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
+                      <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Đặt trước">
+                        {funnelData.map((_, index) => (
+                          <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <EmptyState variant="no-data" title="Chưa có dữ liệu xu hướng" description="Chưa có hoạt động mượn/đặt trong khoảng thời gian đã chọn." />
+                  <EmptyState variant="no-data" title="Chưa có đặt trước" description="Phễu đặt trước sẽ hiển thị sau khi khách hàng tạo đặt trước." />
                 )}
               </SectionCard>
-            </section>
+            </div>
+          </FadeItem>
 
-            <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
-              {funnelData.some((item) => item.value > 0) ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} width={28} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Đặt trước">
-                      {funnelData.map((_, index) => (
-                        <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyState variant="no-data" title="Chưa có đặt trước" description="Phễu đặt trước sẽ hiển thị sau khi khách hàng tạo đặt trước." />
-              )}
-            </SectionCard>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
-              {topBookData.length ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#edf0f5" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                    <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: '#334155' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                    <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Số lượt mượn">
-                      {topBookData.map((_, index) => (
-                        <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
-              )}
-            </SectionCard>
-
-            <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Chưa trả</p>
-                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Đã trả</p>
-                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_paid)}</p>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-[11px] uppercase text-muted-foreground">Miễn giảm</p>
-                  <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_waived)}</p>
-                </div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {fines.by_type.length ? (
-                  fines.by_type.map((item) => (
-                    <div key={item.fine_type} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                      <div>
-                        <p className="text-[13px] font-medium">{item.fine_type}</p>
-                        <p className="text-[12px] text-muted-foreground">{item.count} khoản phạt</p>
-                      </div>
-                      <p className="text-[13px] font-semibold">{formatMoney(item.amount)}</p>
-                    </div>
-                  ))
+          <FadeItem>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
+                {topBookData.length ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+                      <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: 'var(--color-foreground)' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
+                      <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Số lượt mượn">
+                        {topBookData.map((_, index) => (
+                          <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
+                  <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
                 )}
-              </div>
-            </SectionCard>
-          </div>
+              </SectionCard>
 
+              <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-[11px] uppercase text-muted-foreground">Chưa trả</p>
+                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-[11px] uppercase text-muted-foreground">Đã trả</p>
+                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_paid)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="text-[11px] uppercase text-muted-foreground">Miễn giảm</p>
+                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_waived)}</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {fines.by_type.length ? (
+                    fines.by_type.map((item) => (
+                      <div key={item.fine_type} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                        <div>
+                          <p className="text-[13px] font-medium">{item.fine_type}</p>
+                          <p className="text-[12px] text-muted-foreground">{item.count} khoản phạt</p>
+                        </div>
+                        <p className="text-[13px] font-semibold">{formatMoney(item.amount)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
+                  )}
+                </div>
+              </SectionCard>
+            </div>
+          </FadeItem>
+
+          <FadeItem>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse}>
               {stockRisk.length ? (
@@ -555,8 +562,9 @@ export function DashboardPage() {
               )}
             </SectionCard>
           </div>
+          </FadeItem>
         </>
       )}
-    </div>
+    </PageWrapper>
   );
 }

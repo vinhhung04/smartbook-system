@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Package, AlertTriangle, Leaf, Download, ArrowRightLeft } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { motion } from "motion/react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { bookService } from "@/services/book";
@@ -13,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Button } from "@/components/ui/button";
 
 interface InventoryLocation {
   warehouse_id?: string;
@@ -122,6 +122,7 @@ export function InventoryPage() {
   const [whFilterId, setWhFilterId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const loadInventory = async () => {
     try {
@@ -138,6 +139,16 @@ export function InventoryPage() {
   useEffect(() => {
     void loadInventory();
   }, []);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      toast.success("Export started", { description: `${filtered.length} rows` });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const expandedRows = useMemo(() => expandBooksByWarehouse(data), [data]);
 
@@ -175,12 +186,6 @@ export function InventoryPage() {
   const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "low-stock").length;
   const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "out-of-stock").length;
 
-  const healthData = [
-    { name: "Tốt", value: healthyCount, color: "#10b981" },
-    { name: "Sắp hết", value: lowCount, color: "#f59e0b" },
-    { name: "Hết hàng", value: outCount, color: "#ef4444" },
-  ];
-
   const uniqueTitles = new Set(whScopedRows.map((r) => r.id)).size;
   const selectedWhLabel = warehouseOptions.find((o) => o.value === whFilterId)?.label ?? "Tất cả kho";
   const whSubtitle =
@@ -205,9 +210,14 @@ export function InventoryPage() {
           iconColor="text-emerald-600 dark:text-emerald-400"
           actions={
             <>
-              <button onClick={() => toast.success("Export started", { description: `${filtered.length} rows` })} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 bg-card text-emerald-700 text-[13px] hover:bg-emerald-50 transition-all shadow-sm font-medium dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10">
-                <Download className="w-3.5 h-3.5" /> Xuất
-              </button>
+              <Button
+                variant="outline"
+                loading={exporting}
+                onClick={() => void handleExport()}
+                className="rounded-xl border-emerald-100 bg-card text-emerald-700 hover:bg-emerald-50 shadow-sm dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+              >
+                {!exporting && <Download className="w-3.5 h-3.5" />} Xuất
+              </Button>
               <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
                 <ArrowRightLeft className="w-3.5 h-3.5" /> Biến động
               </NavLink>
@@ -257,32 +267,12 @@ export function InventoryPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4"
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Tổng bản sao" value={totalUnits} icon={Package} variant="default" />
-          <StatCard label="Tình trạng tốt" value={healthyCount} icon={Leaf} variant="success" />
-          <StatCard label="Sắp hết" value={lowCount} icon={AlertTriangle} variant="warning" />
-          <StatCard label="Hết hàng" value={outCount} icon={Package} variant="danger" />
-        </div>
-        <div className="bg-card rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none p-3 flex flex-col items-center justify-center">
-          <div className="text-[11px] text-muted-foreground mb-1 font-medium">Sức khỏe kho</div>
-          <ResponsiveContainer width="100%" height={100} key={`pie-${whFilterId}-${healthyCount}-${lowCount}-${outCount}`}>
-            <PieChart>
-              <Pie data={healthData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                {healthData.map((entry, index) => <Cell key={`cell-${whFilterId}-${index}`} fill={entry.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e4ed" }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex items-center gap-3 mt-1">
-            {healthData.map(d => (
-              <span key={d.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />{d.value}
-              </span>
-            ))}
-          </div>
-        </div>
+        <StatCard label="Tổng bản sao" value={totalUnits} icon={Package} variant="default" />
+        <StatCard label="Tình trạng tốt" value={healthyCount} icon={Leaf} variant="success" />
+        <StatCard label="Sắp hết" value={lowCount} icon={AlertTriangle} variant="warning" />
+        <StatCard label="Hết hàng" value={outCount} icon={Package} variant="danger" />
       </motion.div>
 
       <motion.div
@@ -313,7 +303,7 @@ export function InventoryPage() {
                 const healthPct = Math.min(Math.max((availQty / 5) * 100, 0), 100);
                 return (
                   <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer">
+                    className="border-b border-border last:border-0 hover:bg-muted/40 hover:shadow-[inset_0_0_0_1px_var(--color-border)] transition-all duration-150 cursor-pointer">
                     <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{row.isbn || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] font-medium">{row.title}</td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{row.category || "-"}</td>

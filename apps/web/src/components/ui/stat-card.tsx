@@ -1,6 +1,7 @@
 import * as React from "react";
 import { motion } from "motion/react";
 import { cn } from "./utils";
+import { AnimatedCounter } from "../motion-utils";
 
 type StatCardVariant = "default" | "success" | "warning" | "danger" | "info" | "primary";
 
@@ -25,6 +26,8 @@ interface StatCardProps {
   accentBorder?: string;
   /** Card variant for automatic styling */
   variant?: StatCardVariant;
+  /** Animate numeric value with a count-up effect */
+  animateValue?: boolean;
   /** Custom className */
   className?: string;
 }
@@ -88,6 +91,7 @@ export function StatCard({
   iconColor,
   accentBorder,
   variant = "default",
+  animateValue = false,
   className,
 }: StatCardProps) {
   const config = variantConfigs[variant];
@@ -97,7 +101,7 @@ export function StatCard({
       whileHover={{ y: -2, boxShadow: "0 8px 24px -4px rgba(0,0,0,0.08)" }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       className={cn(
-        "relative overflow-hidden rounded-xl border border-border bg-card p-5 flex flex-col gap-3 cursor-default",
+        "relative overflow-hidden rounded-xl border border-border bg-card p-5 flex flex-col gap-3 cursor-default shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-none",
         className,
       )}
     >
@@ -132,9 +136,13 @@ export function StatCard({
 
       {/* Value + trend */}
       <div className="flex items-end gap-2 relative">
-        <span className="text-[30px] font-bold tracking-tight text-foreground" style={{ lineHeight: 1 }}>
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </span>
+        {animateValue && typeof value === "number" ? (
+          <AnimatedCounter value={value} className="text-[30px] font-bold tracking-tight text-foreground leading-none" />
+        ) : (
+          <span className="text-[30px] font-bold tracking-tight text-foreground" style={{ lineHeight: 1 }}>
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </span>
+        )}
         {change && (
           <span
             className={cn(
