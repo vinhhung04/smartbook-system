@@ -10,6 +10,7 @@ const {
   markPackingTaskCompleted,
 } = require("../services/packing.service");
 const { toStorageRef } = require("../services/packing-video-storage.service");
+const { verifyPackingPhoto } = require("../services/packing-evidence-ai.service");
 
 const ORDER_READY_FOR_PACKING_STATUS = ["READY_FOR_OUTBOUND", "READY_TO_SHIP"];
 
@@ -176,7 +177,14 @@ async function getPackingTaskDetail(req, res) {
           include: { book_variants: { select: { id: true, sku: true, isbn13: true, books: { select: { title: true } } } } },
         },
         packing_camera_evidence: {
-          select: { id: true, evidence_type: true, captured_at: true, captured_by_user_id: true },
+          select: {
+            id: true,
+            evidence_type: true,
+            captured_at: true,
+            captured_by_user_id: true,
+            ai_verification_status: true,
+            ai_verification_result: true,
+          },
         },
       },
     });
@@ -331,7 +339,7 @@ async function uploadPackingEvidence(req, res) {
       return res.status(404).json({ message: "Packing task not found" });
     }
 
-    const evidence = await prisma.packing_camera_evidence.create({
+    let evidence = await prisma.packing_camera_evidence.create({
       data: {
         packing_task_id: taskId,
         evidence_type: evidenceType,
@@ -340,6 +348,16 @@ async function uploadPackingEvidence(req, res) {
         metadata: req.body?.metadata || undefined,
       },
     });
+
+    if (evidenceType === "PHOTO" || evidenceType === "LIVE_SNAPSHOT") {
+      const items = await prisma.packing_task_items.findMany({ where: { packing_task_id: taskId } });
+      const expectedCount = items.reduce((sum, item) => sum + item.expected_qty, 0);
+      const { status, result } = await verifyPackingPhoto(ref, expectedCount);
+      evidence = await prisma.packing_camera_evidence.update({
+        where: { id: evidence.id },
+        data: { ai_verification_status: status, ai_verification_result: result || undefined },
+      });
+    }
 
     return res.status(201).json({ evidence });
   } catch (error) {

@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ClipboardList, PackageCheck, QrCode, ScanLine } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Camera as CameraIcon, ClipboardList, PackageCheck, QrCode, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { PackingCameraPanel } from "@/components/packing-camera-panel";
 import { getApiErrorMessage } from "@/services/api.ts";
-import { packingService, type PackingTask } from "@/services/packing";
+import { packingService, type PackingEvidence, type PackingTask } from "@/services/packing";
 import { usePackingCamera } from "@/hooks/usePackingCamera";
 import { usePackingRecordingSession } from "@/hooks/usePackingRecordingSession";
 
-type ActivePackingTask = PackingTask & { id: string; task_number: string };
+type ActivePackingTask = PackingTask & { id: string; task_number: string; packing_camera_evidence?: PackingEvidence[] };
 
 // Keyboard-wedge USB/Bluetooth barcode scanners "type" a code very fast (a few ms
 // between keystrokes) and terminate with Enter — much faster than a human typing.
@@ -49,6 +49,47 @@ export function PackingPage() {
 
   const items = useMemo(() => task?.packing_task_items || [], [task]);
   const allVerified = items.length > 0 && items.every((item) => item.status === "VERIFIED");
+
+  const [photoEvidence, setPhotoEvidence] = useState<PackingEvidence[]>([]);
+  const [capturingPhoto, setCapturingPhoto] = useState(false);
+
+  useEffect(() => {
+    setPhotoEvidence((task?.packing_camera_evidence || []).filter((e) => e.evidence_type !== "VIDEO"));
+    // Reset only when switching to a different task, not on every task detail refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id]);
+
+  const handleCapturePhotoEvidence = useCallback(async () => {
+    if (!task?.id || !camera.videoRef.current || !camera.isLive) return;
+    setCapturingPhoto(true);
+    try {
+      const video = camera.videoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Không thể xử lý ảnh từ camera");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+      const { evidence } = await packingService.uploadEvidence(task.id, "PHOTO", dataUrl);
+      setPhotoEvidence((current) => [...current, evidence]);
+
+      if (evidence.ai_verification_status === "MISMATCH") {
+        toast.warning(
+          `AI phát hiện lệch số lượng: đếm được ${evidence.ai_verification_result?.item_count ?? "?"} / mong đợi ${evidence.ai_verification_result?.expected_count ?? "?"}`,
+        );
+      } else if (evidence.ai_verification_status === "MATCH") {
+        toast.success("AI xác minh: số lượng khớp với đơn đóng gói.");
+      } else {
+        toast.info("Đã lưu ảnh xác minh (AI hiện không khả dụng).");
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể chụp/tải ảnh xác minh"));
+    } finally {
+      setCapturingPhoto(false);
+    }
+  }, [task?.id, camera.videoRef, camera.isLive]);
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true);
@@ -435,16 +476,56 @@ export function PackingPage() {
                           <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
                         </span>
                       )}
-                      <button
-                        disabled={allVerified || completingCurrentTask || task.status === "COMPLETED"}
-                        onClick={() => setIsManualScanOpen(true)}
-                        title="Nhập/paste barcode thủ công khi máy quét hoặc camera không đọc được"
-                        className="rounded-[10px] border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40"
-                      >
-                        Scan sách
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={!camera.isLive || capturingPhoto || task.status === "COMPLETED"}
+                          onClick={() => void handleCapturePhotoEvidence()}
+                          title="Chụp ảnh sách đã đóng gói để AI xác minh số lượng"
+                          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40"
+                        >
+                          <CameraIcon className="h-3.5 w-3.5" />
+                          {capturingPhoto ? "Đang xử lý..." : "Chụp ảnh xác minh"}
+                        </button>
+                        <button
+                          disabled={allVerified || completingCurrentTask || task.status === "COMPLETED"}
+                          onClick={() => setIsManualScanOpen(true)}
+                          title="Nhập/paste barcode thủ công khi máy quét hoặc camera không đọc được"
+                          className="rounded-[10px] border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40"
+                        >
+                          Scan sách
+                        </button>
+                      </div>
                     </div>
                   </div>
+
+                  {photoEvidence.length > 0 ? (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {photoEvidence.map((evidence) => (
+                        <span
+                          key={evidence.id}
+                          title={
+                            evidence.ai_verification_result
+                              ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
+                              : undefined
+                          }
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                            evidence.ai_verification_status === "MATCH"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                              : evidence.ai_verification_status === "MISMATCH"
+                                ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                                : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          <CameraIcon className="h-3 w-3" />
+                          {evidence.ai_verification_status === "MATCH"
+                            ? "AI: Khớp"
+                            : evidence.ai_verification_status === "MISMATCH"
+                              ? "AI: Lệch số lượng"
+                              : "AI: Chưa xác minh"}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
 
                   <div className="divide-y divide-border">
                     {items.map((item) => (
