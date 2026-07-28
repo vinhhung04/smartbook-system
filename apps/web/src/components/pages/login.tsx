@@ -137,9 +137,9 @@ export function LoginPage() {
             </NavLink>
           </div>
 
-          <button type="button" onClick={() => toast.info("Password reset feature is coming soon")} className="w-full mt-6 py-2.5 rounded-[10px] border border-input text-muted-foreground text-[12px] hover:bg-muted/50 transition-all">
+          <NavLink to="/forgot-password" className="block w-full mt-6 py-2.5 rounded-[10px] border border-input text-muted-foreground text-[12px] text-center hover:bg-muted/50 transition-all">
             Forgot password?
-          </button>
+          </NavLink>
         </motion.div>
       </div>
     </div>

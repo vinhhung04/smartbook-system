@@ -44,6 +44,8 @@ import { StaffTasksPage } from "@/components/pages/staff-tasks";
 import { TransferReceivingPage } from "@/components/pages/transfer-receiving";
 import { LoginPage } from "@/components/pages/login";
 import { RegisterPage } from "@/components/pages/register";
+import { ForgotPasswordPage } from "@/components/pages/forgot-password";
+import { ResetPasswordPage } from "@/components/pages/reset-password";
 import { CustomerLayout } from "@/components/pages/customer/layout";
 import { CustomerDashboardPage } from "@/components/pages/customer/dashboard";
 import { CustomerProfilePage } from "@/components/pages/customer/profile";
@@ -162,6 +164,16 @@ export const router = createBrowserRouter([
     path: "/register",
     loader: publicOnlyLoader,
     Component: RegisterPage,
+  },
+  {
+    path: "/forgot-password",
+    loader: publicOnlyLoader,
+    Component: ForgotPasswordPage,
+  },
+  {
+    path: "/reset-password",
+    loader: publicOnlyLoader,
+    Component: ResetPasswordPage,
   },
   {
     path: '/customer/login',
