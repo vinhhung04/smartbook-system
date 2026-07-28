@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, BrainCircuit, Copy, PackagePlus, RefreshCw, TrendingUp } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Copy, PackagePlus, RefreshCw, TrendingUp, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SectionCard } from '@/components/ui/section-card';
@@ -8,7 +8,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
-import { analyticsService, type ReorderSuggestionItem, type ReorderSuggestionsData } from '@/services/analytics';
+import { analyticsService, type AgingInventoryItem, type ReorderSuggestionItem, type ReorderSuggestionsData } from '@/services/analytics';
 import { getApiErrorMessage } from '@/services/api';
 
 type PriorityFilter = 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -35,6 +35,10 @@ export function ReorderSuggestionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [agingItems, setAgingItems] = useState<AgingInventoryItem[]>([]);
+  const [agingLoading, setAgingLoading] = useState(true);
+  const [agingError, setAgingError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -50,9 +54,26 @@ export function ReorderSuggestionsPage() {
     }
   }, [days, priority, limit]);
 
+  const loadAgingInventory = useCallback(async () => {
+    try {
+      setAgingLoading(true);
+      setAgingError(null);
+      const response = await analyticsService.getAgingInventory({ days: 90, limit: 50 });
+      setAgingItems(response.items.filter((item) => item.days_since_last_activity !== null));
+    } catch (err) {
+      setAgingError(getApiErrorMessage(err, 'Không thể tải danh sách tồn kho lâu không hoạt động'));
+    } finally {
+      setAgingLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    void loadAgingInventory();
+  }, [loadAgingInventory]);
 
   const summary = data?.summary;
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
@@ -199,6 +220,7 @@ export function ReorderSuggestionsPage() {
                   <th className="px-3 py-3 font-semibold">Borrow</th>
                   <th className="px-3 py-3 font-semibold">Reservation</th>
                   <th className="px-3 py-3 font-semibold">Forecast 30d</th>
+                  <th className="px-3 py-3 font-semibold">Mùa vụ</th>
                   <th className="px-3 py-3 font-semibold">Stockout</th>
                   <th className="px-3 py-3 font-semibold">Priority</th>
                   <th className="px-3 py-3 font-semibold">Suggested</th>
@@ -220,6 +242,15 @@ export function ReorderSuggestionsPage() {
                     <td className="px-3 py-4">{item.borrow_count}</td>
                     <td className="px-3 py-4">{item.reservation_count}</td>
                     <td className="px-3 py-4">{item.forecast_30d}</td>
+                    <td className="px-3 py-4">
+                      {item.seasonal_event ? (
+                        <StatusBadge label={`${item.seasonal_event} · ${item.seasonal_index}x`} variant="info" dot />
+                      ) : item.seasonal_index !== 1 ? (
+                        <span className="text-[12px] text-muted-foreground">{item.seasonal_index}x</span>
+                      ) : (
+                        <span className="text-[12px] text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-4">{formatStockoutDays(item.estimated_days_until_stockout)}</td>
                     <td className="px-3 py-4">
                       <StatusBadge label={item.priority} variant={priorityVariant(item.priority)} dot />
@@ -227,6 +258,65 @@ export function ReorderSuggestionsPage() {
                     <td className="px-3 py-4 font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty}</td>
                     <td className="px-5 py-4">
                       <p className="max-w-[420px] text-[12px] leading-relaxed text-muted-foreground">{item.reason}</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Tồn kho lâu không hoạt động"
+        subtitle="Sách còn tồn kho nhưng không có lượt mượn hoặc di chuyển kho trong 90 ngày gần đây"
+        icon={Archive}
+        noPadding
+      >
+        {agingLoading ? (
+          <div className="flex min-h-[160px] items-center justify-center">
+            <LoadingSpinner message="Đang kiểm tra tồn kho lâu..." />
+          </div>
+        ) : agingError ? (
+          <EmptyState
+            variant="error"
+            title="Không thể tải dữ liệu"
+            description={agingError}
+            action={(
+              <button
+                type="button"
+                onClick={() => void loadAgingInventory()}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white"
+              >
+                Thử lại
+              </button>
+            )}
+          />
+        ) : agingItems.length === 0 ? (
+          <EmptyState
+            title="Không có sách nào tồn kho lâu"
+            description="Tất cả sách còn tồn kho đều có hoạt động mượn/di chuyển trong 90 ngày gần đây."
+            icon={Archive}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
+              <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Title</th>
+                  <th className="px-3 py-3 font-semibold">Kho</th>
+                  <th className="px-3 py-3 font-semibold">Tồn kho</th>
+                  <th className="px-3 py-3 font-semibold">Không hoạt động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {agingItems.map((item) => (
+                  <tr key={`${item.variant_id}-${item.warehouse_id}`} className="align-top transition hover:bg-muted/40">
+                    <td className="px-5 py-4 font-semibold text-foreground">{item.title}</td>
+                    <td className="px-3 py-4">{item.warehouse_name}</td>
+                    <td className="px-3 py-4">{item.on_hand_qty}</td>
+                    <td className="px-3 py-4">
+                      <StatusBadge label={`${item.days_since_last_activity} ngày`} variant={item.days_since_last_activity! >= 180 ? 'danger' : 'warning'} dot />
                     </td>
                   </tr>
                 ))}

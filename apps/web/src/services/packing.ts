@@ -36,11 +36,22 @@ export interface PackingTask {
   packing_task_items?: PackingTaskItem[];
 }
 
+export type PackingEvidenceAiStatus = 'MATCH' | 'MISMATCH' | 'UNAVAILABLE';
+
+export interface PackingEvidenceAiResult {
+  item_count: number;
+  expected_count: number;
+  detected_titles: string[];
+  checked_at: string;
+}
+
 export interface PackingEvidence {
   id: string;
   evidence_type: PackingEvidenceType;
   captured_at: string;
   captured_by_user_id: string;
+  ai_verification_status?: PackingEvidenceAiStatus | null;
+  ai_verification_result?: PackingEvidenceAiResult | null;
 }
 
 export const packingService = {

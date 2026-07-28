@@ -161,6 +161,16 @@ export const authService = {
     return response.data;
   },
 
+  requestPasswordReset: async (identifier: string): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/password-reset/request', { identifier });
+    return response.data;
+  },
+
+  confirmPasswordReset: async (token: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/password-reset/confirm', { token, new_password: newPassword });
+    return response.data;
+  },
+
   hydrateCurrentUser: async (): Promise<AuthUser | null> => {
     if (!authService.isAuthenticated()) {
       return null;

@@ -59,7 +59,7 @@ export function PackingCameraPanel({
 
       <p className="mt-2 text-[11px] text-slate-400">
         Camera luôn bật khi ở màn hình Packing để giám sát và hỗ trợ quét — chỉ ghi hình khi có đơn đang xử lý,
-        mỗi đơn một video riêng. Đây cũng là điểm tích hợp cho AI nhận diện trong tương lai — hiện chưa xử lý ảnh tự động.
+        mỗi đơn một video riêng. Dùng nút "Chụp ảnh xác minh" để AI đếm số lượng sách trong ảnh và so khớp với đơn đóng gói.
       </p>
     </div>
   );

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Layers3, Warehouse } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRightLeft, BookOpen, Layers3, Warehouse } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -10,6 +10,7 @@ import {
   type ShelfDetailResponse,
   type ShelfCompartmentItem,
 } from "@/services/shelf";
+import { reslottingSuggestionsService, type ReslottingSuggestionItem } from "@/services/reslotting-suggestions";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
@@ -114,6 +115,8 @@ export function ShelvesPage() {
   const [shelves, setShelves] = useState<ShelfOverviewItem[]>([]);
   const [selectedShelfId, setSelectedShelfId] = useState("");
   const [detail, setDetail] = useState<ShelfDetailResponse | null>(null);
+  const [reslottingItems, setReslottingItems] = useState<ReslottingSuggestionItem[]>([]);
+  const [loadingReslotting, setLoadingReslotting] = useState(false);
 
   const selectedShelf = useMemo(
     () => shelves.find((item) => item.id === selectedShelfId) || null,
@@ -186,6 +189,27 @@ export function ShelvesPage() {
 
     void loadDetail();
   }, [selectedShelfId]);
+
+  const loadReslotting = useCallback(async () => {
+    if (!warehouseId) {
+      setReslottingItems([]);
+      return;
+    }
+    try {
+      setLoadingReslotting(true);
+      const data = await reslottingSuggestionsService.getSuggestions(warehouseId);
+      setReslottingItems(data.items);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không tải được gợi ý tối ưu vị trí"));
+      setReslottingItems([]);
+    } finally {
+      setLoadingReslotting(false);
+    }
+  }, [warehouseId]);
+
+  useEffect(() => {
+    void loadReslotting();
+  }, [loadReslotting]);
 
   const totals = useMemo(() => {
     return shelves.reduce(
@@ -345,6 +369,43 @@ export function ShelvesPage() {
             <div className="grid grid-cols-1 gap-3">
               {detail.compartments.map((compartment) => (
                 <CompartmentCard key={compartment.id} compartment={compartment} />
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+      >
+        <SectionCard
+          title="Đề xuất tối ưu vị trí"
+          subtitle="Sách được mượn nhiều nhưng đang ở vị trí khó lấy — đề xuất hoán đổi với vị trí dễ tiếp cận hơn"
+        >
+          {!warehouseId ? (
+            <EmptyState variant="no-data" title="Chọn kho để xem đề xuất" description="Chọn một kho ở bộ lọc phía trên để xem gợi ý tối ưu vị trí" />
+          ) : loadingReslotting ? (
+            <LoadingOverlay />
+          ) : reslottingItems.length === 0 ? (
+            <EmptyState variant="no-data" title="Chưa có đề xuất" description="Vị trí sách trong kho này hiện đã hợp lý theo tần suất mượn" />
+          ) : (
+            <div className="divide-y divide-border">
+              {reslottingItems.map((item) => (
+                <div key={`${item.variant_id}-${item.current_location_id}`} className="flex items-start justify-between gap-4 py-3.5">
+                  <div className="min-w-0">
+                    <p className="text-[13px] text-foreground font-semibold">{item.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{item.reason}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-[12px] font-semibold">
+                    <span className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-muted-foreground">{item.current_location_code}</span>
+                    <ArrowRightLeft className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      {item.suggested_location_code}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
           )}

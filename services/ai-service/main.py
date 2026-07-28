@@ -221,6 +221,46 @@ async def scan_back_cover(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+PROMPT_PACKING_VERIFY = (
+    "Hãy đóng vai một nhân viên kiểm tra đóng gói tại kho sách. "
+    "Nhìn vào ảnh chụp các cuốn sách chuẩn bị được đóng gói. "
+    "Hãy đếm số lượng cuốn sách (vật thể giống sách/tài liệu) có thể nhìn thấy trong ảnh, "
+    "và đọc tên sách nếu nhìn rõ trên bìa/gáy sách. "
+    "Trả về kết quả CHỈ gồm định dạng JSON chuẩn, không thêm chú thích hay markdown: "
+    '{"item_count": số_nguyên, "detected_titles": ["...", "..."]}. '
+    "Nếu không đếm được, đặt item_count là 0 và detected_titles là mảng rỗng."
+)
+
+
+def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
+    client = ollama.Client(host=OLLAMA_HOST)
+    response = client.generate(
+        model=OLLAMA_MODEL,
+        prompt=PROMPT_PACKING_VERIFY,
+        images=[image_bytes],
+        options={"temperature": 0},
+    )
+    raw_text: str = response.get("response", "")
+    data = _extract_json(raw_text)
+    detected_titles = data.get("detected_titles")
+    return {
+        "item_count": int(data.get("item_count") or 0),
+        "detected_titles": detected_titles if isinstance(detected_titles, list) else [],
+    }
+
+
+@app.post("/verify-packing-photo")
+async def verify_packing_photo(file: UploadFile = File(...)):
+    image_bytes = _validate_and_read_image(file)
+
+    try:
+        return _verify_packing_photo_from_bytes(image_bytes)
+    except ollama.ResponseError as e:
+        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ────────────────────────────────────────────────────────────────────────────────
 # Smart Receiving AI — Receipt/Invoice OCR Scanning
 # ────────────────────────────────────────────────────────────────────────────────

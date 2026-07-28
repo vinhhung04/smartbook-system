@@ -1,6 +1,11 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const prisma = require('../lib/prisma');
+const { sendEmail } = require('../lib/email-sender');
+
+const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const BORROW_SERVICE_INTERNAL_URL = String(
   process.env.BORROW_SERVICE_INTERNAL_URL || process.env.BORROW_SERVICE_URL || 'http://borrow-service:3005'
@@ -422,6 +427,91 @@ async function changePassword(req, res) {
   }
 }
 
+async function requestPasswordReset(req, res) {
+  try {
+    const identifier = normalizeIdentifier(req.body?.identifier || req.body?.email || req.body?.username);
+    const genericResponse = { message: 'If the account exists, a reset link has been sent' };
+
+    if (!identifier) {
+      return res.status(400).json({ message: 'identifier is required' });
+    }
+
+    const users = await prisma.$queryRawUnsafe(
+      `
+      SELECT id, email, full_name
+      FROM users
+      WHERE deleted_at IS NULL
+        AND status = 'ACTIVE'
+        AND (
+          lower(username::text) = lower($1)
+          OR lower(email::text) = lower($1)
+        )
+      LIMIT 1
+      `,
+      identifier
+    );
+
+    const user = users[0];
+    if (!user) {
+      return res.json(genericResponse);
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    await prisma.passwordResetToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: tokenHash,
+        expires_at: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+      },
+    });
+
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}`;
+    sendEmail(user.email, 'PASSWORD_RESET_REQUESTED', { full_name: user.full_name, reset_url: resetUrl }).catch((err) => {
+      console.error('requestPasswordReset email error:', err);
+    });
+
+    return res.json(genericResponse);
+  } catch (error) {
+    console.error('requestPasswordReset error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function confirmPasswordReset(req, res) {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const newPassword = String(req.body?.new_password || '');
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'token and new_password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token_hash: tokenHash } });
+
+    if (!resetToken || resetToken.used_at || resetToken.expires_at < new Date()) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: resetToken.user_id }, data: { password_hash: newHash } }),
+      prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { used_at: new Date() } }),
+    ]);
+
+    return res.json({ message: 'Password reset successful' });
+  } catch (error) {
+    console.error('confirmPasswordReset error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -430,4 +520,6 @@ module.exports = {
   updateMe,
   logout,
   changePassword,
+  requestPasswordReset,
+  confirmPasswordReset,
 };
