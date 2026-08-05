@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { customerCatalogService, CustomerCatalogBook } from '@/services/customer-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SectionCard } from '@/components/ui/section-card';
 import { FilterBar } from '@/components/ui/filter-bar';

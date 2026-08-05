@@ -149,12 +149,8 @@ export function DashboardPage() {
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
   const isWarehouseStaff = roles.includes('WAREHOUSE_STAFF');
 
-  if (isWarehouseStaff) {
-    return <Navigate to="/my-warehouse-tasks" replace />;
-  }
-
   const loadDashboard = useCallback(async () => {
-    if (!canViewAnalytics) {
+    if (!canViewAnalytics || isWarehouseStaff) {
       setLoading(false);
       return;
     }
@@ -196,7 +192,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [canViewAnalytics]);
+  }, [canViewAnalytics, isWarehouseStaff]);
 
   useEffect(() => {
     void loadDashboard();
@@ -236,6 +232,10 @@ export function DashboardPage() {
   const overdue = dashboard?.overdue || emptyOverdue;
   const fines = dashboard?.fines || emptyFines;
   const stockRisk = dashboard?.stockRisk || [];
+
+  if (isWarehouseStaff) {
+    return <Navigate to="/my-warehouse-tasks" replace />;
+  }
 
   return (
     <PageWrapper className="space-y-6">
