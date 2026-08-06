@@ -1,4 +1,4 @@
-import { aiAPI } from './http-clients';
+import { aiAPI, getToken } from './http-clients';
 
 export interface AIAnalysisRequest {
   imageUrl?: string;
@@ -296,6 +296,70 @@ export const aiService = {
       system_context: systemContext || null,
     });
     return response.data;
+  },
+
+  // Streams the reply token-by-token via SSE instead of waiting for the whole
+  // response. Uses fetch() rather than EventSource because the request needs
+  // a POST body and an Authorization header, neither of which EventSource supports.
+  chatStream: async (
+    message: string,
+    conversationHistory: ChatMessage[] = [],
+    systemContext: SystemContext | undefined,
+    handlers: {
+      onToken: (text: string) => void;
+      onDone: (data: ChatResponse) => void;
+      onError: (error: unknown) => void;
+    },
+  ): Promise<void> => {
+    try {
+      const token = getToken();
+      const baseURL = aiAPI.defaults.baseURL || '';
+      const response = await fetch(`${baseURL}/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message,
+          conversation_history: conversationHistory,
+          system_context: systemContext || null,
+        }),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Chat stream request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+
+        for (const rawEvent of events) {
+          let eventName = 'message';
+          let data = '';
+          for (const line of rawEvent.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) data = line.slice(5).trim();
+          }
+          if (!data) continue;
+          const parsed = JSON.parse(data);
+          if (eventName === 'token') {
+            handlers.onToken(parsed.text ?? '');
+          } else if (eventName === 'done') {
+            handlers.onDone(parsed as ChatResponse);
+          }
+        }
+      }
+    } catch (error) {
+      handlers.onError(error);
+    }
   },
 
   getRecommendationsAI: async (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 
 RAG_SYSTEM_RULES = """
@@ -99,6 +100,49 @@ def ensure_source_line(reply: str, sources: list[dict]) -> str:
     if ("Nguon du lieu:" in reply or "Nguồn dữ liệu:" in reply) and all(name in reply for name in names):
         return reply
     return f"{reply.rstrip()}\n\nNguồn dữ liệu: {', '.join(names)}"
+
+
+_NUMBER_RE = re.compile(r"\d[\d.,]*\d|\d")
+
+
+def _extract_numbers(text: str) -> set[str]:
+    numbers = set()
+    for match in _NUMBER_RE.findall(text or ""):
+        digits = re.sub(r"[^\d]", "", match)
+        if len(digits) >= 2:
+            numbers.add(digits)
+    return numbers
+
+
+def verify_numeric_grounding(reply: str, retrieval: dict) -> str | None:
+    """Heuristic anti-hallucination check: flag numbers in the reply that don't
+    appear anywhere in the retrieved context (summary text or raw JSON).
+
+    This is a best-effort signal, not proof of fabrication — dates, percentages,
+    and coincidental digit runs can trigger false positives. It exists because
+    RAG_SYSTEM_RULES only tells the LLM not to invent numbers via prompt
+    instruction; nothing upstream actually checks the model kept that promise.
+    Returns a Vietnamese caution string to surface to the user, or None if the
+    reply's numbers all show up in the retrieved data (or there was no real
+    data to check against in the first place).
+    """
+    sources = retrieval.get("sources") or []
+    if not any(source.get("status") == "ok" for source in sources):
+        return None
+
+    context_text = " ".join([
+        str(retrieval.get("summary") or ""),
+        _safe_json(retrieval.get("raw") or {}),
+    ])
+    unverified = _extract_numbers(reply) - _extract_numbers(context_text)
+    if not unverified:
+        return None
+
+    sample = ", ".join(sorted(unverified)[:5])
+    return (
+        f"Một số con số trong câu trả lời ({sample}) không khớp trực tiếp với dữ liệu đã truy xuất — "
+        "vui lòng đối chiếu lại trước khi dùng để ra quyết định."
+    )
 
 
 def build_fallback_reply(intent_info: dict, retrieval: dict, used_legacy: bool = False) -> str:

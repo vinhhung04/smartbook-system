@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import ollama
 import httpx
@@ -14,13 +15,15 @@ import html as _html_module
 import time
 from html.parser import HTMLParser
 from cache import response_cache, rate_limiter, summary_cache
-from intent import detect_intent, normalize_text
+from intent import normalize_text
+from nlu import classify_user_message
 from rag import (
     RAG_SYSTEM_RULES,
     build_fallback_reply,
     build_no_data_context,
     build_rag_context,
     ensure_source_line,
+    verify_numeric_grounding,
 )
 from retrieval import retrieve_context
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
@@ -2781,6 +2784,51 @@ async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
         return None, False
 
 
+async def _stream_chat_with_anthropic(messages: list[dict]):
+    """Yield text deltas from Anthropic's streaming Messages API as they arrive.
+    Raises on any failure (missing key, HTTP error, malformed stream) so the
+    caller can tell "failed before any token" apart from "failed mid-stream".
+    """
+    if not ANTHROPIC_API_KEY:
+        raise RuntimeError("Anthropic API key not configured")
+    system_prompt, filtered = _split_anthropic_messages(messages)
+    payload: dict = {
+        "model": ANTHROPIC_MODEL,
+        "messages": filtered,
+        "temperature": 0.4,
+        "max_tokens": 800,
+        "stream": True,
+    }
+    if system_prompt:
+        payload["system"] = system_prompt
+    async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
+        async with http_client.stream(
+            "POST",
+            f"{ANTHROPIC_BASE_URL}/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            json=payload,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[len("data:"):].strip()
+                if not data:
+                    continue
+                try:
+                    event = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") == "content_block_delta":
+                    delta = event.get("delta") or {}
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        yield delta["text"]
+
+
 async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
     try:
         client = ollama.Client(host=OLLAMA_HOST)
@@ -2901,7 +2949,7 @@ async def chat(request: Request, req: ChatRequest):
         except Exception:
             pass
 
-    intent_info = detect_intent(req.message.strip())
+    intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
 
     # Build personal context (role-aware data) in parallel with system analytics.
     personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
@@ -3025,10 +3073,13 @@ async def chat(request: Request, req: ChatRequest):
     reply, anthropic_ok = await _chat_with_anthropic(messages)
     if anthropic_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
+        grounding_warning = verify_numeric_grounding(reply_with_sources, retrieval)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
         result = {"reply": reply_with_sources, "ai_provider": "anthropic", **metadata}
+        if grounding_warning:
+            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
         if pending_action_data:
             result["pending_action"] = pending_action_data
         return result
@@ -3036,10 +3087,13 @@ async def chat(request: Request, req: ChatRequest):
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
+        grounding_warning = verify_numeric_grounding(reply_with_sources, retrieval)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
         result = {"reply": reply_with_sources, "ai_provider": "ollama", **metadata}
+        if grounding_warning:
+            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
         if pending_action_data:
             result["pending_action"] = pending_action_data
         return result
@@ -3050,6 +3104,184 @@ async def chat(request: Request, req: ChatRequest):
     if pending_action_data:
         result["pending_action"] = pending_action_data
     return result
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: Request, req: ChatRequest):
+    """Streaming twin of /chat: same prep (auth, intent, retrieval, cache,
+    agent-action layer), but the LLM reply is sent to the client as it's
+    generated instead of after the whole thing is ready. Only the Anthropic
+    path streams token-by-token; the rare Ollama/static fallback paths send
+    their whole reply as a single `token` event (not worth bridging Ollama's
+    sync generator through asyncio for a fallback that almost never runs).
+    The final `done` event's `reply` is the source of truth (it has the
+    source-line / agent-confirmation sentences appended, which streamed tokens
+    don't include yet) — the client should replace, not just append, on done.
+    """
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, reason = await rate_limiter.acquire(key=client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    auth_header = request.headers.get("authorization")
+    user_ctx = None
+    if auth_header:
+        try:
+            user_ctx = await get_user_context(auth_header)
+        except Exception:
+            pass
+
+    intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
+    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
+
+    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
+    _is_book_search = intent_info.get("intent") == _BOOK_SEARCH_INTENT
+    if _blocked and not _is_book_search:
+        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
+    else:
+        retrieval = await retrieve_context(intent_info, auth_header)
+    warnings = list(retrieval.get("warnings") or [])
+    sources = list(retrieval.get("sources") or [])
+    ok_sources = any(source.get("status") == "ok" for source in sources)
+    missing_auth = any("Missing Authorization" in warning for warning in warnings)
+    used_legacy_context = False
+
+    if not ok_sources and warnings and req.system_context and not missing_auth:
+        legacy_context = _build_context_block(req.system_context)
+        retrieval = {
+            **retrieval,
+            "summary": legacy_context,
+            "raw": {"legacy_system_context": req.system_context},
+            "sources": [
+                {"name": "Legacy Frontend System Context", "endpoint": "system_context", "status": "ok"}
+            ],
+            "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
+        }
+        used_legacy_context = True
+
+    if retrieval.get("summary") or retrieval.get("raw") or retrieval.get("sources"):
+        context_block = build_rag_context(intent_info, retrieval)
+    else:
+        context_block = build_no_data_context(intent_info)
+
+    metadata = {
+        "intent": intent_info.get("intent"),
+        "context_sources": retrieval.get("sources") or [],
+        "retrieval_warnings": retrieval.get("warnings") or [],
+    }
+
+    history_hash = ""
+    if req.conversation_history:
+        hist_text = "|".join(m.content[:100] for m in req.conversation_history[-3:])
+        history_hash = hashlib.md5(hist_text.encode()).hexdigest()[:8]
+    auth_hash = hashlib.md5((auth_header or "anonymous").encode()).hexdigest()[:8]
+    history_hash = f"{history_hash}:{auth_hash}:{intent_info.get('intent') or 'unknown'}"
+
+    is_action_request = _wants_agent_action(req.message)
+    is_personal_query = _is_personal_query(req.message)
+    skip_cache = is_action_request or is_personal_query
+    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
+
+    persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
+    if personal.get("summary"):
+        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
+    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
+    messages = [{"role": "system", "content": system_content}]
+    for msg in req.conversation_history[-10:]:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": req.message.strip()})
+
+    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
+        pending_action_data = None
+        if is_action_request and user_ctx is None:
+            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
+            return reply_text, None
+        if user_ctx is not None:
+            try:
+                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
+                if planned is not None:
+                    temp_action = _make_temp_action_for_check(planned)
+                    if not can_confirm_action(user_ctx, temp_action):
+                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
+                    else:
+                        action = create_pending_action(
+                            action_type=planned["type"],
+                            summary=planned["summary"],
+                            payload=planned["payload"],
+                            risk=planned["risk"],
+                            sources=planned.get("sources", []),
+                            intent=planned.get("intent"),
+                            created_from_message=req.message,
+                            warnings=planned.get("warnings", []),
+                            requires_review=planned.get("requires_review", False),
+                            user_context=user_ctx,
+                        )
+                        pending_action_data = action.model_dump()
+                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                        asyncio.ensure_future(push_ai_action_event(
+                            "ai_action:created",
+                            action.action_id,
+                            action.type,
+                            user_ctx.user_id if user_ctx else None,
+                            {"summary": action.summary, "risk": action.risk},
+                        ))
+            except Exception as exc:
+                logger.warning("Agent planning failed (non-fatal): %s", exc)
+        return reply_text, pending_action_data
+
+    async def event_generator():
+        if cached_reply:
+            yield _sse("token", {"text": cached_reply})
+            yield _sse("done", {"reply": cached_reply, "ai_provider": "cached", **metadata})
+            return
+
+        full_text = ""
+        provider = "fallback"
+        try:
+            async for chunk in _stream_chat_with_anthropic(messages):
+                full_text += chunk
+                provider = "anthropic"
+                yield _sse("token", {"text": chunk})
+        except Exception as exc:
+            logger.warning("Anthropic streaming failed: %s", exc)
+
+        if not full_text:
+            reply, ollama_ok = await _chat_with_ollama(messages)
+            if ollama_ok and reply:
+                full_text = reply
+                provider = "ollama"
+                yield _sse("token", {"text": full_text})
+
+        if not full_text:
+            full_text = build_fallback_reply(intent_info, retrieval, used_legacy_context)
+            provider = "fallback"
+            yield _sse("token", {"text": full_text})
+
+        reply_with_sources = ensure_source_line(full_text, retrieval.get("sources") or [])
+        grounding_warning = (
+            verify_numeric_grounding(reply_with_sources, retrieval) if provider != "fallback" else None
+        )
+        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
+
+        if not pending_action_data and not skip_cache and provider != "fallback":
+            response_cache.set(req.message, reply_with_sources, history_hash)
+
+        final_meta = dict(metadata)
+        if grounding_warning:
+            final_meta["retrieval_warnings"] = [*final_meta["retrieval_warnings"], grounding_warning]
+        if pending_action_data:
+            final_meta["pending_action"] = pending_action_data
+
+        yield _sse("done", {"reply": reply_with_sources, "ai_provider": provider, **final_meta})
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ── Agent Action Endpoints ────────────────────────────────────────────────────
