@@ -4,8 +4,10 @@ import { motion } from 'motion/react';
 import {
   AlertTriangle,
   ArrowRight,
+  Ban,
   BookMarked,
   BookOpen,
+  CheckCircle2,
   Clock,
   Crown,
   FileText,
@@ -35,10 +37,10 @@ import {
 } from 'recharts';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
-import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
-import { PageWrapper, FadeItem } from '@/components/motion-utils';
+import { Button } from '@/components/ui/button';
+import { PageWrapper, FadeItem, AnimatedCounter } from '@/components/motion-utils';
 import {
   analyticsService,
   type BorrowTrendItem,
@@ -125,6 +127,45 @@ function formatPercent(value: number) {
 function compactTitle(title: string, length = 22) {
   return title.length > length ? `${title.slice(0, length)}...` : title;
 }
+
+function getGreeting(hour: number) {
+  if (hour < 12) return 'Chào buổi sáng';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
+}
+
+const DECISION_COLORS = {
+  orange: {
+    active: 'border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:hover:bg-orange-500/15',
+    iconActive: 'bg-orange-100 border-orange-200 dark:bg-orange-500/15 dark:border-orange-500/20',
+    iconColorActive: 'text-orange-600 dark:text-orange-400',
+    textActive: 'text-orange-700 dark:text-orange-400',
+  },
+  red: {
+    active: 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:hover:bg-red-500/15',
+    iconActive: 'bg-red-100 border-red-200 dark:bg-red-500/15 dark:border-red-500/20',
+    iconColorActive: 'text-red-600 dark:text-red-400',
+    textActive: 'text-red-700 dark:text-red-400',
+  },
+  amber: {
+    active: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/15',
+    iconActive: 'bg-amber-100 border-amber-200 dark:bg-amber-500/15 dark:border-amber-500/20',
+    iconColorActive: 'text-amber-600 dark:text-amber-400',
+    textActive: 'text-amber-700 dark:text-amber-400',
+  },
+  rose: {
+    active: 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:hover:bg-rose-500/15',
+    iconActive: 'bg-rose-100 border-rose-200 dark:bg-rose-500/15 dark:border-rose-500/20',
+    iconColorActive: 'text-rose-600 dark:text-rose-400',
+    textActive: 'text-rose-700 dark:text-rose-400',
+  },
+  violet: {
+    active: 'border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:hover:bg-violet-500/15',
+    iconActive: 'bg-violet-100 border-violet-200 dark:bg-violet-500/15 dark:border-violet-500/20',
+    iconColorActive: 'text-violet-600 dark:text-violet-400',
+    textActive: 'text-violet-700 dark:text-violet-400',
+  },
+} as const;
 
 function hasRealData(state: DashboardState | null) {
   if (!state) return false;
@@ -233,47 +274,77 @@ export function DashboardPage() {
   const fines = dashboard?.fines || emptyFines;
   const stockRisk = dashboard?.stockRisk || [];
 
+  const greeting = getGreeting(new Date().getHours());
+  const todayLabel = new Date().toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const totalActionable = pendingPR + openER + kpis.low_stock_variants + kpis.overdue_loans + fines.unpaid_count;
+
   if (isWarehouseStaff) {
     return <Navigate to="/my-warehouse-tasks" replace />;
   }
 
   return (
-    <PageWrapper className="space-y-6">
+    <>
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none"
+        transition={{ duration: 0.3 }}
+        className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900"
       >
-        <PageHeader
-          icon={LayoutDashboard}
-          title="Bảng phân tích"
-          description="Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt."
-          actions={
-            <>
-              <button
+        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-500/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
+
+        <div className="relative max-w-7xl mx-auto px-6 py-8 lg:px-8 lg:py-10">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/15 backdrop-blur">
+                <LayoutDashboard className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-[13px] font-medium capitalize text-white/80">{todayLabel}</p>
+                <h1 className="mt-0.5 text-2xl font-bold text-white">
+                  {greeting}{currentUser?.full_name ? `, ${currentUser.full_name}` : ''}
+                </h1>
+                <p className="mt-1.5 text-[13px] text-white/85">
+                  {canViewAnalytics && !loading && !error
+                    ? totalActionable > 0
+                      ? `Bạn có ${totalActionable} việc cần xử lý hôm nay.`
+                      : 'Không có việc gì khẩn cấp hôm nay — mọi thứ đang ổn định.'
+                    : 'Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => void loadDashboard()}
-                disabled={loading || !canViewAnalytics}
+                disabled={!canViewAnalytics}
+                loading={loading}
                 aria-label="Làm mới dữ liệu"
-                className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-[13px] font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
               >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className="h-4 w-4" />
                 Làm mới
-              </button>
+              </Button>
               {canViewAnalytics ? (
-                <NavLink
-                  to="/reports"
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:opacity-90"
-                >
-                  Báo cáo <ArrowRight className="h-4 w-4" />
-                </NavLink>
+                <Button type="button" asChild className="bg-white text-indigo-700 hover:bg-white/90">
+                  <NavLink to="/reports">
+                    Báo cáo <ArrowRight className="h-4 w-4" />
+                  </NavLink>
+                </Button>
               ) : null}
-            </>
-          }
-        />
+            </div>
+          </div>
+        </div>
       </motion.div>
 
+      <PageWrapper className="space-y-6">
       {!canViewAnalytics ? (
         <SectionCard>
           <EmptyState
@@ -327,69 +398,53 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
-              <NavLink to="/purchase-requests?status=PENDING" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${pendingPR > 0 ? 'border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:hover:bg-orange-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${pendingPR > 0 ? 'bg-orange-100 border border-orange-200 dark:bg-orange-500/15 dark:border-orange-500/20' : 'bg-muted border border-border'}`}>
-                    <ShoppingCart className={`h-4 w-4 ${pendingPR > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${pendingPR > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-foreground'}`}>{pendingPR}</div>
-                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Yêu cầu mua hàng<br />chờ duyệt</div>
-                  </div>
-                </div>
-              </NavLink>
-              <NavLink to="/exception-reports?status=OPEN" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${openER > 0 ? 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:hover:bg-red-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${openER > 0 ? 'bg-red-100 border border-red-200 dark:bg-red-500/15 dark:border-red-500/20' : 'bg-muted border border-border'}`}>
-                    <AlertTriangle className={`h-4 w-4 ${openER > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${openER > 0 ? 'text-red-700 dark:text-red-400' : 'text-foreground'}`}>{openER}</div>
-                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Báo cáo sự cố<br />chưa xử lý</div>
-                  </div>
-                </div>
-              </NavLink>
-              <NavLink to="/inventory" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.low_stock_variants > 0 ? 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.low_stock_variants > 0 ? 'bg-amber-100 border border-amber-200 dark:bg-amber-500/15 dark:border-amber-500/20' : 'bg-muted border border-border'}`}>
-                    <Warehouse className={`h-4 w-4 ${kpis.low_stock_variants > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${kpis.low_stock_variants > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>{kpis.low_stock_variants}</div>
-                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Đầu sách<br />tồn kho thấp</div>
-                  </div>
-                </div>
-              </NavLink>
-              <NavLink to="/borrow/loans?status=OVERDUE" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${kpis.overdue_loans > 0 ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:hover:bg-rose-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpis.overdue_loans > 0 ? 'bg-rose-100 border border-rose-200 dark:bg-rose-500/15 dark:border-rose-500/20' : 'bg-muted border border-border'}`}>
-                    <Clock className={`h-4 w-4 ${kpis.overdue_loans > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${kpis.overdue_loans > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-foreground'}`}>{kpis.overdue_loans}</div>
-                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Phiếu mượn<br />quá hạn</div>
-                  </div>
-                </div>
-              </NavLink>
-              <NavLink to="/borrow/fines?status=UNPAID" className="group">
-                <div className={`flex items-center gap-3 rounded-xl border p-4 transition-all hover:shadow-sm ${fines.unpaid_count > 0 ? 'border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:hover:bg-violet-500/15' : 'border-border bg-card hover:bg-muted/40'}`}>
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${fines.unpaid_count > 0 ? 'bg-violet-100 border border-violet-200 dark:bg-violet-500/15 dark:border-violet-500/20' : 'bg-muted border border-border'}`}>
-                    <Receipt className={`h-4 w-4 ${fines.unpaid_count > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className={`text-xl font-bold leading-none ${fines.unpaid_count > 0 ? 'text-violet-700 dark:text-violet-400' : 'text-foreground'}`}>{fines.unpaid_count}</div>
-                    <div className="text-[11px] mt-1 leading-tight text-muted-foreground">Tiền phạt<br />chưa thu</div>
-                  </div>
-                </div>
-              </NavLink>
+              {([
+                { to: '/purchase-requests?status=PENDING', icon: ShoppingCart, count: pendingPR, label: ['Yêu cầu mua hàng', 'chờ duyệt'], color: 'orange' },
+                { to: '/exception-reports?status=OPEN', icon: AlertTriangle, count: openER, label: ['Báo cáo sự cố', 'chưa xử lý'], color: 'red' },
+                { to: '/inventory', icon: Warehouse, count: kpis.low_stock_variants, label: ['Đầu sách', 'tồn kho thấp'], color: 'amber' },
+                { to: '/borrow/loans?status=OVERDUE', icon: Clock, count: kpis.overdue_loans, label: ['Phiếu mượn', 'quá hạn'], color: 'rose' },
+                { to: '/borrow/fines?status=UNPAID', icon: Receipt, count: fines.unpaid_count, label: ['Tiền phạt', 'chưa thu'], color: 'violet' },
+              ] as const).map((item, index) => {
+                const active = item.count > 0;
+                const colors = DECISION_COLORS[item.color];
+                const Icon = item.icon;
+                return (
+                  <NavLink key={item.to} to={item.to} className="group">
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: index * 0.04 }}
+                      whileHover={{ y: -2 }}
+                      className={`flex items-center gap-3 rounded-xl border p-4 transition-colors hover:shadow-sm cursor-pointer ${active ? colors.active : 'border-border bg-card hover:bg-muted/40'}`}
+                    >
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${active ? colors.iconActive : 'bg-muted border-border'}`}>
+                        <Icon className={`h-4 w-4 ${active ? colors.iconColorActive : 'text-muted-foreground'}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`text-xl font-bold leading-none ${active ? colors.textActive : 'text-foreground'}`}>{item.count}</div>
+                        <div className="text-[11px] mt-1 leading-tight text-muted-foreground">{item.label[0]}<br />{item.label[1]}</div>
+                      </div>
+                    </motion.div>
+                  </NavLink>
+                );
+              })}
             </div>
           </FadeItem>
 
           <FadeItem>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:auto-rows-[minmax(120px,1fr)] md:grid-flow-dense lg:grid-cols-6">
+              <div className="relative col-span-2 overflow-hidden rounded-xl border border-indigo-700/20 bg-gradient-to-br from-indigo-600 to-blue-600 p-5 flex flex-col justify-between text-white shadow-[0_4px_20px_-6px_rgba(79,70,229,0.5)] md:row-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-white/70">Đang mượn</span>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+                    <BookMarked className="h-[18px] w-[18px] text-white" />
+                  </div>
+                </div>
+                <AnimatedCounter value={kpis.active_loans} className="text-[42px] font-bold tracking-tight text-white leading-none" />
+                <p className="text-[12px] text-white/75">Tổng số bản sao đang được mượn</p>
+              </div>
               <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" animateValue />
               <StatCard label="Bản sao" value={kpis.total_copies} icon={Package} variant="success" animateValue />
-              <StatCard label="Đang mượn" value={kpis.active_loans} icon={BookMarked} variant="info" animateValue />
               <StatCard label="Đặt trước" value={kpis.pending_reservations} icon={FileText} variant="primary" animateValue />
               <StatCard label="Đã xác nhận" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" animateValue />
               <StatCard label="Sẵn lấy" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" animateValue />
@@ -402,7 +457,8 @@ export function DashboardPage() {
           <FadeItem>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <section className="xl:col-span-2">
-                <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
+                <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp} className="relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-cyan-500" />
                   {trendData.length ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
@@ -428,7 +484,8 @@ export function DashboardPage() {
                 </SectionCard>
               </section>
 
-              <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
+              <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck} className="relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-violet-500 to-purple-500" />
                 {funnelData.some((item) => item.value > 0) ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
@@ -452,7 +509,8 @@ export function DashboardPage() {
 
           <FadeItem>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
+              <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown} className="relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 to-orange-500" />
                 {topBookData.length ? (
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
@@ -472,19 +530,26 @@ export function DashboardPage() {
                 )}
               </SectionCard>
 
-              <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
+              <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt} className="relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-rose-500 to-pink-500" />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="rounded-lg border border-border p-3">
-                    <p className="text-[11px] uppercase text-muted-foreground">Chưa trả</p>
-                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_unpaid)}</p>
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-500/20 dark:bg-rose-500/10">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase text-rose-700 dark:text-rose-400">
+                      <Receipt className="w-3 h-3" /> Chưa trả
+                    </div>
+                    <p className="mt-1 text-[18px] font-semibold text-rose-900 dark:text-rose-300">{formatMoney(fines.total_unpaid)}</p>
                   </div>
-                  <div className="rounded-lg border border-border p-3">
-                    <p className="text-[11px] uppercase text-muted-foreground">Đã trả</p>
-                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_paid)}</p>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-3 h-3" /> Đã trả
+                    </div>
+                    <p className="mt-1 text-[18px] font-semibold text-emerald-900 dark:text-emerald-300">{formatMoney(fines.total_paid)}</p>
                   </div>
-                  <div className="rounded-lg border border-border p-3">
-                    <p className="text-[11px] uppercase text-muted-foreground">Miễn giảm</p>
-                    <p className="mt-1 text-[18px] font-semibold">{formatMoney(fines.total_waived)}</p>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-500/20 dark:bg-slate-500/10">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase text-slate-600 dark:text-slate-400">
+                      <Ban className="w-3 h-3" /> Miễn giảm
+                    </div>
+                    <p className="mt-1 text-[18px] font-semibold text-slate-800 dark:text-slate-300">{formatMoney(fines.total_waived)}</p>
                   </div>
                 </div>
                 <div className="mt-4 space-y-2">
@@ -508,7 +573,8 @@ export function DashboardPage() {
 
           <FadeItem>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse}>
+            <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse} className="relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 to-red-500" />
               {stockRisk.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[560px] text-left text-[13px]">
@@ -524,10 +590,10 @@ export function DashboardPage() {
                     </thead>
                     <tbody>
                       {stockRisk.map((item) => (
-                        <tr key={item.warehouse_id} className="border-b border-border/60 last:border-0">
+                        <tr key={item.warehouse_id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                           <td className="py-3 pr-3 font-medium">{item.warehouse_name}</td>
-                          <td className="py-3 pr-3 text-amber-700 dark:text-amber-400">{item.low_stock_variants}</td>
-                          <td className="py-3 pr-3 text-rose-700 dark:text-rose-400">{item.out_of_stock_variants}</td>
+                          <td className="py-3 pr-3 text-amber-700 dark:text-amber-400 font-semibold">{item.low_stock_variants}</td>
+                          <td className="py-3 pr-3 text-rose-700 dark:text-rose-400 font-semibold">{item.out_of_stock_variants}</td>
                           <td className="py-3 pr-3">{item.total_available_qty}</td>
                           <td className="py-3 pr-3">{item.total_reserved_qty}</td>
                           <td className="py-3 pr-3">{item.total_borrowed_qty}</td>
@@ -541,16 +607,17 @@ export function DashboardPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Mượn quá hạn" subtitle={`Trung bình ${overdue.average_overdue_days} ngày quá hạn`} icon={Clock}>
+            <SectionCard title="Mượn quá hạn" subtitle={`Trung bình ${overdue.average_overdue_days} ngày quá hạn`} icon={Clock} className="relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-rose-500 to-red-500" />
               {overdue.items.length ? (
                 <div className="space-y-2">
                   {overdue.items.slice(0, 6).map((item) => (
-                    <div key={item.loan_id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                    <div key={item.loan_id} className="flex items-center justify-between rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2 dark:border-rose-500/15 dark:bg-rose-500/5 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors">
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium">{item.loan_number}</p>
                         <p className="truncate text-[12px] text-muted-foreground">{item.customer_name}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0 ml-2">
                         <p className="text-[13px] font-semibold text-rose-700 dark:text-rose-400">{item.overdue_days} ngày</p>
                         <p className="text-[12px] text-muted-foreground">{item.due_date ? item.due_date.slice(0, 10) : 'Không có hạn'}</p>
                       </div>
@@ -565,6 +632,7 @@ export function DashboardPage() {
           </FadeItem>
         </>
       )}
-    </PageWrapper>
+      </PageWrapper>
+    </>
   );
 }

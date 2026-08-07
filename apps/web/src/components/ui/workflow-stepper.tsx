@@ -21,16 +21,16 @@ interface WorkflowStepperProps {
 
 const stepIconClasses: Record<StepStatus, string> = {
   completed: "bg-emerald-500 border-emerald-500 text-white",
-  active: "bg-indigo-600 border-indigo-600 text-white ring-2 ring-indigo-200",
-  pending: "bg-white border-slate-300 text-slate-400",
-  error: "bg-red-50 border-red-400 text-red-600",
+  active: "bg-primary border-primary text-primary-foreground ring-2 ring-primary/20",
+  pending: "bg-card border-border text-muted-foreground",
+  error: "bg-red-50 border-red-400 text-red-600 dark:bg-red-500/10 dark:border-red-500/40 dark:text-red-400",
 };
 
 const stepLabelClasses: Record<StepStatus, string> = {
-  completed: "text-emerald-700 font-medium",
-  active: "text-indigo-700 font-semibold",
+  completed: "text-emerald-700 dark:text-emerald-400 font-medium",
+  active: "text-primary font-semibold",
   pending: "text-muted-foreground",
-  error: "text-red-600 font-medium",
+  error: "text-red-600 dark:text-red-400 font-medium",
 };
 
 function StepIcon({ step, compact }: { step: WorkflowStep; compact: boolean }) {
@@ -67,7 +67,7 @@ function HorizontalStepper({ steps, compact }: { steps: WorkflowStep[]; compact:
           {idx < steps.length - 1 && (
             <div className={cn(
               "h-[2px] flex-1 mx-2 rounded transition-colors",
-              steps[idx + 1].status === "pending" ? "bg-slate-200" : "bg-emerald-400",
+              steps[idx + 1].status === "pending" ? "bg-border" : "bg-emerald-400",
             )} />
           )}
         </div>
@@ -87,7 +87,7 @@ function VerticalStepper({ steps, compact }: { steps: WorkflowStep[]; compact: b
               <div className={cn(
                 "w-[2px] flex-1 my-1 rounded",
                 compact ? "min-h-[16px]" : "min-h-[24px]",
-                step.status === "completed" ? "bg-emerald-400" : "bg-slate-200",
+                step.status === "completed" ? "bg-emerald-400" : "bg-border",
               )} />
             )}
           </div>

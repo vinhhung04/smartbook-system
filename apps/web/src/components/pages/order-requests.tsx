@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ListOrdered, Plus, Search, Send, X } from "lucide-react";
+import { motion } from "motion/react";
+import {
+  ArrowRightLeft, Book, Check, CheckCircle2, Clock, ListOrdered, Loader2,
+  Package, Plus, Search, Send, Truck, X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -19,6 +23,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
+import { PriorityBadge } from "@/components/ui/priority-badge";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatCard } from "@/components/ui/stat-card";
 
 type RequestType = "outbound" | "transfer";
 
@@ -26,19 +36,19 @@ const OUTBOUND_REFERENCE_OPTIONS: Array<{
   value: OutboundReferenceType;
   label: string;
 }> = [
-  { value: "TRANSFER_TO_STORE", label: "Xuat hang toi cua hang ban le" },
-  { value: "WAREHOUSE_TRANSFER", label: "Dieu chuyen giua kho" },
-  { value: "RETURN_TO_SUPPLIER", label: "Tra hang nha cung cap" },
-  { value: "SALES_ORDER", label: "Xuat theo don ban hang" },
-  { value: "INTERNAL_REQUEST", label: "Xuat theo yeu cau noi bo" },
-  { value: "ISSUE_REQUEST", label: "Xuat theo phieu cap phat" },
-  { value: "RESERVATION", label: "Xuat cho don dat truoc" },
-  { value: "LOAN_REQUEST", label: "Xuat cho phieu muon thu vien" },
-  { value: "MAINTENANCE", label: "Xuat de bao tri/kiem ke" },
-  { value: "INVENTORY_ADJUSTMENT", label: "Xuat do dieu chinh ton kho" },
-  { value: "DAMAGED_RETURN", label: "Xuat hang loi/hong" },
-  { value: "PROMOTION", label: "Xuat theo khuyen mai/tang" },
-  { value: "OTHER", label: "Khac" },
+  { value: "TRANSFER_TO_STORE", label: "Xuất hàng tới cửa hàng bán lẻ" },
+  { value: "WAREHOUSE_TRANSFER", label: "Điều chuyển giữa kho" },
+  { value: "RETURN_TO_SUPPLIER", label: "Trả hàng nhà cung cấp" },
+  { value: "SALES_ORDER", label: "Xuất theo đơn bán hàng" },
+  { value: "INTERNAL_REQUEST", label: "Xuất theo yêu cầu nội bộ" },
+  { value: "ISSUE_REQUEST", label: "Xuất theo phiếu cấp phát" },
+  { value: "RESERVATION", label: "Xuất cho đơn đặt trước" },
+  { value: "LOAN_REQUEST", label: "Xuất cho phiếu mượn thư viện" },
+  { value: "MAINTENANCE", label: "Xuất để bảo trì/kiểm kê" },
+  { value: "INVENTORY_ADJUSTMENT", label: "Xuất do điều chỉnh tồn kho" },
+  { value: "DAMAGED_RETURN", label: "Xuất hàng lỗi/hỏng" },
+  { value: "PROMOTION", label: "Xuất theo khuyến mãi/tặng" },
+  { value: "OTHER", label: "Khác" },
 ];
 
 type DraftLine = {
@@ -106,6 +116,16 @@ function getTransferInsufficientStockDescription(error: unknown): string | null 
     .join(" | ");
 }
 
+function requestAgingPriority(requestedAt: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  const requestedDate = new Date(requestedAt);
+  if (Number.isNaN(requestedDate.getTime())) return "LOW";
+  const hoursWaited = (Date.now() - requestedDate.getTime()) / (1000 * 60 * 60);
+  if (hoursWaited >= 72) return "URGENT";
+  if (hoursWaited >= 24) return "HIGH";
+  if (hoursWaited >= 4) return "MEDIUM";
+  return "LOW";
+}
+
 function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
   const upper = String(status || "").toUpperCase();
   if (upper.includes("APPROVED") || upper.includes("COMPLETED") || upper.includes("READY")) return "success";
@@ -113,6 +133,22 @@ function statusBadgeVariant(status: string): "success" | "warning" | "danger" | 
   if (upper.includes("PENDING") || upper.includes("REQUESTED")) return "warning";
   if (upper.includes("PICK")) return "info";
   return "neutral";
+}
+
+function isPendingStatus(status: string): boolean {
+  const upper = String(status || "").toUpperCase();
+  return upper.includes("PENDING") || upper.includes("REQUESTED");
+}
+
+function isApprovedStatus(status: string): boolean {
+  const upper = String(status || "").toUpperCase();
+  return upper.includes("APPROVED") || upper.includes("COMPLETED") || upper.includes("READY");
+}
+
+function orderTypeMeta(type: string): { label: string; variant: "info" | "violet" } {
+  const upper = String(type || "").toUpperCase();
+  if (upper.includes("TRANSFER")) return { label: "Điều chuyển", variant: "violet" };
+  return { label: "Xuất kho", variant: "info" };
 }
 
 export function OrderRequestsPage() {
@@ -148,6 +184,19 @@ export function OrderRequestsPage() {
     if (!selectedWarehouseId || requestType !== "transfer") return warehouses;
     return warehouses.filter((warehouse) => warehouse.id !== selectedWarehouseId);
   }, [warehouses, requestType, selectedWarehouseId]);
+
+  const requestStats = useMemo(() => {
+    const total = requests.length;
+    const pending = requests.filter((row) => isPendingStatus(row.status)).length;
+    const approved = requests.filter((row) => isApprovedStatus(row.status)).length;
+    const totalQuantity = requests.reduce((sum, row) => sum + (row.total_quantity || 0), 0);
+    return { total, pending, approved, totalQuantity };
+  }, [requests]);
+
+  const draftTotalQuantity = useMemo(
+    () => draftLines.reduce((sum, line) => sum + (line.quantity || 0), 0),
+    [draftLines],
+  );
 
   const loadRequests = async (view: "my" | "approval", warehouseId?: string) => {
     const response = await orderRequestService.listRequests(view, warehouseId);
@@ -405,75 +454,106 @@ export function OrderRequestsPage() {
         />
       </FadeItem>
 
+      {requests.length > 0 && (
+        <FadeItem>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Tổng request" value={requestStats.total} icon={ListOrdered} variant="primary" animateValue />
+            <StatCard label="Chờ duyệt" value={requestStats.pending} icon={Clock} variant="warning" animateValue />
+            <StatCard label="Đã duyệt" value={requestStats.approved} icon={CheckCircle2} variant="success" animateValue />
+            <StatCard label="Tổng số lượng" value={requestStats.totalQuantity} icon={Package} variant="info" animateValue />
+          </div>
+        </FadeItem>
+      )}
+
       <FadeItem>
         <SectionCard
-          title="Thong tin request"
-          subtitle="Chon loai, kho nguon va ghi chu truoc khi them dong hang."
+          title="Thông tin request"
+          subtitle="Chọn loại, kho nguồn và ghi chú trước khi thêm dòng hàng."
           icon={Send}
         >
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loai request</p>
-              <select
-                value={requestType}
-                onChange={(event) => setRequestType(event.target.value as RequestType)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <option value="outbound">Outbound Request</option>
-                <option value="transfer">Warehouse Transfer Request</option>
-              </select>
+            <div className="md:col-span-3">
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại request</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <SegmentedControl
+                  options={[
+                    { value: "outbound", label: "Xuất kho" },
+                    { value: "transfer", label: "Điều chuyển kho" },
+                  ]}
+                  value={requestType}
+                  onChange={(v) => setRequestType(v as RequestType)}
+                  layoutId="order-request-type"
+                  gradientClassName={requestType === "transfer" ? "from-violet-600 to-purple-600" : "from-cyan-600 to-sky-600"}
+                />
+                <div
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                    requestType === "transfer"
+                      ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400"
+                      : "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400"
+                  }`}
+                >
+                  {requestType === "transfer" ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
+                  {requestType === "transfer" ? "Chuyển hàng giữa 2 kho" : "Xuất hàng ra khỏi kho"}
+                </div>
+              </div>
             </div>
 
             <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguon</p>
-              <select
-                value={selectedWarehouseId}
-                onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <option value="">Chon warehouse</option>
-                {warehouses.map((warehouse) => (
-                  <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
-                ))}
-              </select>
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguồn</p>
+              <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {requestType === "transfer" ? (
               <div>
-                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse dich</p>
-                <select
-                  value={targetWarehouseId}
-                  onChange={(event) => setTargetWarehouseId(event.target.value)}
-                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <option value="">Chon warehouse dich</option>
-                  {filteredWarehouses.map((warehouse) => (
-                    <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
-                  ))}
-                </select>
+                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse đích</p>
+                <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn warehouse đích" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredWarehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Type</p>
-                  <select
-                    value={referenceType}
-                    onChange={(event) => setReferenceType(event.target.value as OutboundReferenceType)}
-                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                  >
-                    {OUTBOUND_REFERENCE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OUTBOUND_REFERENCE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Code</p>
-                  <input
-                    value={externalReference}
-                    readOnly
-                    placeholder={loadingReferenceCode ? "Dang sinh ma..." : "Auto generated"}
-                    className="h-9 w-full rounded-lg border border-input bg-muted/50 px-3 text-[12px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                  />
+                  <div className="relative">
+                    <Input
+                      value={externalReference}
+                      readOnly
+                      placeholder={loadingReferenceCode ? "Đang sinh mã..." : "Tự động tạo"}
+                      className="bg-muted/50 pr-8 text-muted-foreground"
+                    />
+                    {loadingReferenceCode && (
+                      <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -481,29 +561,30 @@ export function OrderRequestsPage() {
             {canApprove && warehouseStaff.length > 0 && (
               <div className="md:col-span-3">
                 <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Giao nhân viên phụ trách (tùy chọn)</p>
-                <select
-                  value={assignedPickerUserId}
-                  onChange={(e) => setAssignedPickerUserId(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <option value="">Chưa giao (giao sau ở Picking)</option>
-                  {warehouseStaff.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.full_name} ({staff.username})
-                    </option>
-                  ))}
-                </select>
+                <Select value={assignedPickerUserId || "none"} onValueChange={(v) => setAssignedPickerUserId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Chưa giao (giao sau ở Picking)</SelectItem>
+                    {warehouseStaff.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.id}>
+                        {staff.full_name} ({staff.username})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
             <div className="md:col-span-3">
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Note</p>
-              <textarea
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Ghi chú</p>
+              <Textarea
                 value={requestNote}
                 onChange={(event) => setRequestNote(event.target.value)}
                 rows={2}
-                className="min-h-[72px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
-                placeholder="Ly do tao request..."
+                className="resize-y"
+                placeholder="Lý do tạo request..."
               />
             </div>
           </div>
@@ -512,14 +593,14 @@ export function OrderRequestsPage() {
 
       <FadeItem>
         <SectionCard
-          title="Them lines"
-          subtitle="Tim variant theo ISBN13, SKU hoac ten sach, sau do them vao bang duoi."
+          title="Thêm lines"
+          subtitle="Tìm variant theo ISBN13, SKU hoặc tên sách, sau đó thêm vào bảng dưới."
           icon={Plus}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
+              <Input
                 value={variantQuery}
                 onChange={(event) => setVariantQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -528,8 +609,8 @@ export function OrderRequestsPage() {
                     void handleSearchVariant();
                   }
                 }}
-                placeholder="Nhap ISBN13, SKU hoac ten sach"
-                className="h-9 w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40"
+                placeholder="Nhập ISBN13, SKU hoặc tên sách"
+                className="pl-9"
               />
             </div>
             <Button
@@ -545,16 +626,24 @@ export function OrderRequestsPage() {
 
           {variantResults.length > 0 && (
             <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
-              {variantResults.map((variant) => (
-                <div
+              {variantResults.map((variant, index) => (
+                <motion.div
                   key={variant.variant_id}
-                  className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.24) }}
+                  className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/40 transition-colors"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
+                      <Book className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
+                      </p>
+                    </div>
                   </div>
                   <Button
                     type="button"
@@ -564,9 +653,9 @@ export function OrderRequestsPage() {
                     className="shrink-0"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Them
+                    Thêm
                   </Button>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
@@ -575,7 +664,7 @@ export function OrderRequestsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  {["San pham", "So luong", "Action"].map((head) => (
+                  {["Sản phẩm", "Số lượng", "Thao tác"].map((head) => (
                     <th
                       key={head}
                       className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
@@ -591,8 +680,8 @@ export function OrderRequestsPage() {
                     <td colSpan={3} className="py-10 text-center">
                       <EmptyState
                         variant="no-data"
-                        title="Chua co line nao"
-                        description="Tim san pham va nhan Them de bat dau."
+                        title="Chưa có line nào"
+                        description="Tìm sản phẩm và nhấn Thêm để bắt đầu."
                         className="py-0"
                       />
                     </td>
@@ -600,18 +689,26 @@ export function OrderRequestsPage() {
                 ) : draftLines.map((line) => (
                   <tr key={line.isbn13} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3 text-[12px]">
-                      <p className="font-semibold text-foreground">{line.title}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
+                          <Book className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground">{line.title}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-[12px]">
-                      <input
+                      <Input
                         type="number"
                         min={1}
                         value={line.quantity}
                         onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
-                        className="h-9 w-full max-w-[120px] rounded-lg border border-input bg-background px-2 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                        aria-label={`Số lượng cho ${line.title}`}
+                        className="max-w-[120px]"
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -632,52 +729,53 @@ export function OrderRequestsPage() {
             </table>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-5">
-            <Button type="button" variant="outline" onClick={resetForm}>
-              Reset
-            </Button>
-            <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
-              <Send className="h-3.5 w-3.5" />
-              Tao request
-            </Button>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+            <div className="text-[12px] text-muted-foreground">
+              {draftLines.length > 0 ? (
+                <span>
+                  <span className="font-semibold text-foreground">{draftLines.length}</span> dòng ·{" "}
+                  <span className="font-semibold text-foreground">{draftTotalQuantity}</span> cuốn
+                </span>
+              ) : (
+                <span>Chưa có dòng nào</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={resetForm}>
+                Reset
+              </Button>
+              <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
+                <Send className="h-3.5 w-3.5" />
+                Tạo request
+              </Button>
+            </div>
           </div>
         </SectionCard>
       </FadeItem>
 
       <FadeItem>
         <SectionCard
-          title="Danh sach requests"
-          subtitle={listView === "my" ? "Cac don ban da tao theo kho nguon." : "Hang cho duyet (can quyen phu hop)."}
+          title="Danh sách requests"
+          subtitle={listView === "my" ? "Các đơn bạn đã tạo theo kho nguồn." : "Hàng chờ duyệt (cần quyền phù hợp)."}
           actions={(
-            <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
-              <Button
-                type="button"
-                variant={listView === "my" ? "default" : "ghost"}
-                size="sm"
-                className={listView === "my" ? "" : "text-muted-foreground"}
-                onClick={() => setListView("my")}
-              >
-                Don cua toi
-              </Button>
-              {canApprove && (
-                <Button
-                  type="button"
-                  variant={listView === "approval" ? "default" : "ghost"}
-                  size="sm"
-                  className={listView === "approval" ? "bg-emerald-600 hover:bg-emerald-600/90" : "text-muted-foreground"}
-                  onClick={() => setListView("approval")}
-                >
-                  Approval queue
-                </Button>
-              )}
-            </div>
+            <SegmentedControl
+              options={
+                canApprove
+                  ? [{ value: "my", label: "Đơn của tôi" }, { value: "approval", label: "Hàng chờ duyệt" }]
+                  : [{ value: "my", label: "Đơn của tôi" }]
+              }
+              value={listView}
+              onChange={(v) => setListView(v as "my" | "approval")}
+              layoutId="order-requests-list-view"
+              gradientClassName="from-cyan-600 to-sky-600"
+            />
           )}
         >
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  {["Order", "Loai", "Nguon", "Dich", "Trang thai", "So luong", "Requested at", "Action"].map((head) => (
+                  {["Order", "Loại", "Nguồn", "Đích", "Trạng thái", "Ưu tiên", "Số lượng", "Yêu cầu lúc", "Thao tác"].map((head) => (
                     <th
                       key={head}
                       className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
@@ -690,11 +788,11 @@ export function OrderRequestsPage() {
               <tbody>
                 {requests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center">
+                    <td colSpan={9} className="py-10 text-center">
                       <EmptyState
                         variant="no-data"
-                        title="Khong co request nao"
-                        description={listView === "approval" ? "Khong co don cho duyet." : "Hay tao request moi o phan tren."}
+                        title="Không có request nào"
+                        description={listView === "approval" ? "Không có đơn chờ duyệt." : "Hãy tạo request mới ở phần trên."}
                         className="py-0"
                       />
                     </td>
@@ -712,11 +810,16 @@ export function OrderRequestsPage() {
                         <p className="font-semibold text-foreground">{row.order_number}</p>
                         <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
                       </td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{row.order_type}</td>
+                      <td className="px-4 py-3 text-[12px]">
+                        {(() => { const meta = orderTypeMeta(row.order_type); return <StatusBadge label={meta.label} variant={meta.variant} />; })()}
+                      </td>
                       <td className="px-4 py-3 text-[12px]">{row.source_warehouse_code || "-"}</td>
                       <td className="px-4 py-3 text-[12px]">{row.target_warehouse_code || "-"}</td>
                       <td className="px-4 py-3 text-[12px]">
                         <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
+                      </td>
+                      <td className="px-4 py-3 text-[12px]">
+                        {listView === "approval" ? <PriorityBadge priority={requestAgingPriority(row.requested_at)} /> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-3 text-[12px] font-medium">{row.total_quantity}</td>
                       <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</td>
@@ -731,7 +834,7 @@ export function OrderRequestsPage() {
                               disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
                             >
                               <Check className="h-3 w-3" />
-                              Duyet
+                              Duyệt
                             </Button>
                             <Button
                               type="button"
@@ -740,7 +843,7 @@ export function OrderRequestsPage() {
                               onClick={() => void handleApproveOrReject(row.task_type, row.task_id, "reject")}
                               disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
                             >
-                              Tu choi
+                              Từ chối
                             </Button>
                           </div>
                         ) : (

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPinned, PackageCheck, RefreshCw, ShoppingCart, Truck } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPinned, PackageCheck, RefreshCw, Search, ShoppingCart, Truck, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { LoadingSpinner, SkeletonTableRow } from "@/components/ui/loading-state";
+import { Input } from "@/components/ui/input";
+import { LoadingSpinner, SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -23,17 +24,29 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   STAFF_TASK: "Task được giao",
 };
 
-const TABS = [
-  { key: "ALL", label: "Tất cả" },
-  { key: "RECEIVING", label: "Tiếp nhận" },
-  { key: "PUTAWAY", label: "Cất hàng" },
-  { key: "PICKING", label: "Lấy hàng" },
-  { key: "OUTBOUND", label: "Xuất kho" },
-  { key: "TRANSFER_RECEIVING", label: "Nhận chuyển kho" },
-  { key: "PURCHASE_REQUEST", label: "Yêu cầu mua" },
-  { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
-  { key: "STAFF_TASK", label: "Task được giao" },
+const FILTER_CHIPS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { key: "ALL", label: "Tất cả", icon: ClipboardList },
+  { key: "RECEIVING", label: "Tiếp nhận", icon: Inbox },
+  { key: "PUTAWAY", label: "Cất hàng", icon: MapPinned },
+  { key: "PICKING", label: "Lấy hàng", icon: PackageCheck },
+  { key: "OUTBOUND", label: "Xuất kho", icon: Truck },
+  { key: "TRANSFER_RECEIVING", label: "Nhận chuyển kho", icon: ArrowLeftRight },
+  { key: "PURCHASE_REQUEST", label: "Yêu cầu mua", icon: ShoppingCart },
+  { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố", icon: AlertTriangle },
+  { key: "STAFF_TASK", label: "Task được giao", icon: ClipboardCheck },
 ];
+
+const CHIP_TONE: Record<string, { bg: string; text: string; border: string }> = {
+  ALL: { bg: "bg-indigo-50 dark:bg-indigo-500/10", text: "text-indigo-700 dark:text-indigo-400", border: "border-indigo-200 dark:border-indigo-500/20" },
+  RECEIVING: { bg: "bg-sky-50 dark:bg-sky-500/10", text: "text-sky-700 dark:text-sky-400", border: "border-sky-200 dark:border-sky-500/20" },
+  PUTAWAY: { bg: "bg-violet-50 dark:bg-violet-500/10", text: "text-violet-700 dark:text-violet-400", border: "border-violet-200 dark:border-violet-500/20" },
+  PICKING: { bg: "bg-emerald-50 dark:bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-500/20" },
+  OUTBOUND: { bg: "bg-amber-50 dark:bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", border: "border-amber-200 dark:border-amber-500/20" },
+  TRANSFER_RECEIVING: { bg: "bg-teal-50 dark:bg-teal-500/10", text: "text-teal-700 dark:text-teal-400", border: "border-teal-200 dark:border-teal-500/20" },
+  PURCHASE_REQUEST: { bg: "bg-orange-50 dark:bg-orange-500/10", text: "text-orange-700 dark:text-orange-400", border: "border-orange-200 dark:border-orange-500/20" },
+  EXCEPTION_REPORT: { bg: "bg-red-50 dark:bg-red-500/10", text: "text-red-700 dark:text-red-400", border: "border-red-200 dark:border-red-500/20" },
+  STAFF_TASK: { bg: "bg-fuchsia-50 dark:bg-fuchsia-500/10", text: "text-fuchsia-700 dark:text-fuchsia-400", border: "border-fuchsia-200 dark:border-fuchsia-500/20" },
+};
 
 const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND", "TRANSFER_RECEIVING"];
 
@@ -83,30 +96,39 @@ function getTaskActionPath(task: MyWarehouseTask) {
   return null;
 }
 
+function getRelatedEntityDisplay(task: MyWarehouseTask) {
+  return (
+    (task as MyWarehouseTask & { related_entity_display?: { ref_number: string; details?: string } | null })
+      .related_entity_display ?? null
+  );
+}
+
 export function MyWarehouseTasksPage() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<MyWarehouseTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [availableTasks, setAvailableTasks] = useState<AvailableWarehouseTask[]>([]);
   const [loadingAvailable, setLoadingAvailable] = useState(true);
   const [claimingId, setClaimingId] = useState<string | null>(null);
 
-  const counts = useMemo(() => ({
-    receiving: tasks.filter((t) => t.type === "RECEIVING").length,
-    putaway: tasks.filter((t) => t.type === "PUTAWAY").length,
-    picking: tasks.filter((t) => t.type === "PICKING").length,
-    outbound: tasks.filter((t) => t.type === "OUTBOUND").length,
-    transferReceiving: tasks.filter((t) => t.type === "TRANSFER_RECEIVING").length,
-    purchaseRequest: tasks.filter((t) => t.type === "PURCHASE_REQUEST").length,
-    exceptionReport: tasks.filter((t) => t.type === "EXCEPTION_REPORT").length,
-    staffTask: tasks.filter((t) => t.type === "STAFF_TASK").length,
-  }), [tasks]);
+  const countsByType = useMemo(() => {
+    const map: Record<string, number> = { ALL: tasks.length };
+    for (const task of tasks) map[task.type] = (map[task.type] ?? 0) + 1;
+    return map;
+  }, [tasks]);
 
-  const filteredTasks = useMemo(() =>
-    activeTab === "ALL" ? tasks : tasks.filter((t) => t.type === activeTab),
-    [tasks, activeTab]
-  );
+  const filteredTasks = useMemo(() => {
+    const base = activeTab === "ALL" ? tasks : tasks.filter((t) => t.type === activeTab);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return base;
+    return base.filter(
+      (t) => t.title.toLowerCase().includes(query) || (t.warehouse ?? "").toLowerCase().includes(query),
+    );
+  }, [tasks, activeTab, searchQuery]);
+
+  const isFiltering = activeTab !== "ALL" || searchQuery.trim() !== "";
 
   const loadTasks = async () => {
     try {
@@ -152,17 +174,6 @@ export function MyWarehouseTasksPage() {
     }
   };
 
-  const summaryCards = [
-    { label: "Tiếp nhận", value: counts.receiving, icon: Inbox, tone: "text-sky-700 bg-sky-50 border-sky-100 dark:text-sky-400 dark:bg-sky-500/10 dark:border-sky-500/20", tab: "RECEIVING" },
-    { label: "Cất hàng", value: counts.putaway, icon: MapPinned, tone: "text-violet-700 bg-violet-50 border-violet-100 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20", tab: "PUTAWAY" },
-    { label: "Lấy hàng", value: counts.picking, icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50 border-emerald-100 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/20", tab: "PICKING" },
-    { label: "Xuất kho", value: counts.outbound, icon: Truck, tone: "text-amber-700 bg-amber-50 border-amber-100 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20", tab: "OUTBOUND" },
-    { label: "Nhận hàng chuyển kho", value: counts.transferReceiving, icon: PackageCheck, tone: "text-teal-700 bg-teal-50 border-teal-100 dark:text-teal-400 dark:bg-teal-500/10 dark:border-teal-500/20", tab: "TRANSFER_RECEIVING" },
-    { label: "Yêu cầu mua hàng", value: counts.purchaseRequest, icon: ShoppingCart, tone: "text-orange-700 bg-orange-50 border-orange-100 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/20", tab: "PURCHASE_REQUEST" },
-    { label: "Báo cáo sự cố", value: counts.exceptionReport, icon: AlertTriangle, tone: "text-red-700 bg-red-50 border-red-100 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20", tab: "EXCEPTION_REPORT" },
-    { label: "Task được giao", value: counts.staffTask, icon: ClipboardCheck, tone: "text-violet-700 bg-violet-50 border-violet-100 dark:text-violet-400 dark:bg-violet-500/10 dark:border-violet-500/20", tab: "STAFF_TASK" },
-  ];
-
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
@@ -185,66 +196,150 @@ export function MyWarehouseTasksPage() {
         />
       </motion.div>
 
-      <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
-        <span className="font-medium">Task của tôi:</span> các công việc bạn đã nhận hoặc được quản lý giao.{" "}
-        <span className="font-medium">Có thể nhận:</span> các công việc thường chưa phân công, bạn có thể tự nhận để xử lý.
-        Tạo đơn hàng, điều chỉnh tồn kho và các quyền quản trị thuộc về quản lý.
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+        <span><span className="font-semibold">Task của tôi</span> — đã nhận hoặc được quản lý giao.</span>
+        <span><span className="font-semibold">Có thể nhận</span> — công việc chưa phân công, bạn tự nhận để xử lý.</span>
       </div>
 
-      {/* Summary cards — clickable to filter */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {summaryCards.map((card) => (
-          <SectionCard key={card.label}>
+      {/* Filter chips — doubles as summary counts, single source of truth for the table below */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {FILTER_CHIPS.map((chip) => {
+          const isActive = activeTab === chip.key;
+          const tone = CHIP_TONE[chip.key];
+          const count = countsByType[chip.key] ?? 0;
+          return (
             <button
+              key={chip.key}
               type="button"
-              className="w-full text-left"
-              onClick={() => setActiveTab(activeTab === card.tab ? "ALL" : card.tab)}
+              onClick={() => setActiveTab(chip.key)}
+              className={`shrink-0 flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-medium cursor-pointer transition-colors ${
+                isActive
+                  ? `${tone.bg} ${tone.text} ${tone.border} shadow-sm`
+                  : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${card.tone} ${activeTab === card.tab ? "ring-2 ring-offset-1 ring-indigo-400" : ""}`}>
-                  <card.icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-[12px] text-muted-foreground">{card.label}</p>
-                  <p className="mt-1 text-2xl font-semibold">{card.value}</p>
-                </div>
-              </div>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
+                <chip.icon className="h-3.5 w-3.5" />
+              </span>
+              {chip.label}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
+                {count}
+              </span>
             </button>
-          </SectionCard>
-        ))}
+          );
+        })}
       </div>
 
       {/* Task của tôi */}
-      <SectionCard noPadding>
-        {/* Tab bar */}
-        <div className="border-b border-border">
-          <div className="flex items-center gap-1 overflow-x-auto px-4 pt-3 pb-0">
-            {TABS.map((tab) => (
+      <SectionCard
+        noPadding
+        icon={ClipboardList}
+        title="Task của tôi"
+        subtitle={`${filteredTasks.length}/${tasks.length} task${activeTab !== "ALL" ? ` · ${TASK_TYPE_LABELS[activeTab] ?? activeTab}` : ""}`}
+        actions={
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm mã task, kho..."
+              className="h-8 w-40 sm:w-56 pl-8 pr-7 text-[12px]"
+            />
+            {searchQuery && (
               <button
-                key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 px-3 py-2 text-[12px] font-medium rounded-t-lg border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "border-indigo-500 text-indigo-700 bg-indigo-50/60 dark:text-indigo-400 dark:bg-indigo-500/10"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                }`}
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Xóa tìm kiếm"
               >
-                {tab.label}
-                {tab.key !== "ALL" && (
-                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${activeTab === tab.key ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" : "bg-muted text-muted-foreground"}`}>
-                    {tasks.filter((t) => t.type === tab.key).length}
-                  </span>
-                )}
+                <X className="h-3.5 w-3.5" />
               </button>
-            ))}
+            )}
           </div>
-        </div>
+        }
+      >
+        {/* Mobile cards (< md) */}
+        {loading ? (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
+          </div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="px-5 py-10 md:hidden">
+            <EmptyState
+              icon={isFiltering ? Search : ClipboardList}
+              title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
+              description={
+                isFiltering
+                  ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
+                  : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao."
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+            {filteredTasks.map((task) => {
+              const actionPath = getTaskActionPath(task);
+              const canReport = OPERATIONAL_TYPES.includes(task.type);
+              const relatedEntity = getRelatedEntityDisplay(task);
+              return (
+                <div key={`card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                      <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
+                    </div>
+                    <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                  </div>
+                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span className="truncate">{task.warehouse || "-"}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{formatDate(task.created_at)}</span>
+                  </div>
+                  {relatedEntity && (
+                    <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                      <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
+                        <Link2 className="h-2.5 w-2.5 shrink-0" />
+                        {relatedEntity.ref_number}
+                      </p>
+                      {relatedEntity.details && (
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {actionPath ? (
+                      <NavLink
+                        to={actionPath}
+                        className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
+                      >
+                        {taskActionLabel(task.type)}
+                      </NavLink>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">Không có thao tác</span>
+                    )}
+                    {canReport && (
+                      <button
+                        type="button"
+                        onClick={() => handleReportException(task)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
+                        title="Báo cáo sự cố cho task này"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        Báo cáo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-        <div className="overflow-x-auto">
+        {/* Desktop table (>= md) */}
+        <div className="hidden md:block overflow-auto max-h-[560px]">
           <table className="w-full min-w-[800px]">
             <thead>
-              <tr className="border-b border-border bg-muted/30">
+              <tr className="sticky top-0 z-10 border-b border-border bg-muted">
                 {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Hoàn tất", "Thao tác"].map((header) => (
                   <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {header}
@@ -259,15 +354,20 @@ export function MyWarehouseTasksPage() {
                 <tr>
                   <td colSpan={7} className="px-5 py-10">
                     <EmptyState
-                      icon={ClipboardList}
-                      title="Chưa có task được giao"
-                      description="Nhân viên kho chỉ thao tác trên task đã được quản lý giao. Các nghiệp vụ tạo đơn, điều chuyển và điều chỉnh tồn kho không hiển thị tại đây."
+                      icon={isFiltering ? Search : ClipboardList}
+                      title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
+                      description={
+                        isFiltering
+                          ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
+                          : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao. Các nghiệp vụ tạo đơn, điều chuyển và điều chỉnh tồn kho không hiển thị tại đây."
+                      }
                     />
                   </td>
                 </tr>
               ) : filteredTasks.map((task) => {
                 const actionPath = getTaskActionPath(task);
                 const canReport = OPERATIONAL_TYPES.includes(task.type);
+                const relatedEntity = getRelatedEntityDisplay(task);
                 return (
                   <tr key={`${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
@@ -301,22 +401,17 @@ export function MyWarehouseTasksPage() {
                             </button>
                           )}
                         </div>
-                        {/* Entity inline block for STAFF_TASK */}
-                        {task.type === "STAFF_TASK" && (() => {
-                          const ed = (task as MyWarehouseTask & { related_entity_display?: { ref_number: string; details?: string } | null }).related_entity_display;
-                          if (!ed) return null;
-                          return (
-                            <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                              <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
-                                <Link2 className="h-2.5 w-2.5 shrink-0" />
-                                {ed.ref_number}
-                              </p>
-                              {ed.details && (
-                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{ed.details}</p>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        {relatedEntity && (
+                          <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                            <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
+                              <Link2 className="h-2.5 w-2.5 shrink-0" />
+                              {relatedEntity.ref_number}
+                            </p>
+                            {relatedEntity.details && (
+                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
