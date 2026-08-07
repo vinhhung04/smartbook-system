@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router";
 import { motion } from "motion/react";
-import { ClipboardCheck, ArrowRight } from "lucide-react";
+import { ClipboardCheck, ArrowRight, Package, UserCheck, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
@@ -12,8 +12,33 @@ import { canManageReceiving } from "@/lib/rbac";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { PriorityBadge } from "@/components/ui/priority-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { StatCard } from "@/components/ui/stat-card";
+import { SectionCard } from "@/components/ui/section-card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+  const upper = String(status || "").toUpperCase();
+  if (upper.includes("POSTED") || upper.includes("APPROVED") || upper.includes("READY")) return "success";
+  if (upper.includes("PENDING")) return "warning";
+  if (upper.includes("CANCEL") || upper.includes("REJECT")) return "danger";
+  return "neutral";
+}
+
+function receiptAgingPriority(receivedAt: string | null): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  if (!receivedAt) return "LOW";
+  const receivedDate = new Date(receivedAt);
+  if (Number.isNaN(receivedDate.getTime())) return "LOW";
+  const hoursWaited = (Date.now() - receivedDate.getTime()) / (1000 * 60 * 60);
+  if (hoursWaited >= 72) return "URGENT";
+  if (hoursWaited >= 24) return "HIGH";
+  if (hoursWaited >= 4) return "MEDIUM";
+  return "LOW";
+}
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -52,7 +77,7 @@ export function PutawayPage() {
         setReceipts(Array.isArray(data) ? data : []);
         setWarehouseStaff(Array.isArray(staffRes.data) ? staffRes.data : []);
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach phieu nhap da duyet"));
+        toast.error(getApiErrorMessage(error, "Không tải được danh sách phiếu nhập đã duyệt"));
       } finally {
         setLoading(false);
       }
@@ -73,7 +98,9 @@ export function PutawayPage() {
   }, [receipts, query]);
 
   const totalRemaining = receipts.reduce((sum, row) => sum + row.remaining_quantity, 0);
-  const colSpan = showAssign ? 9 : 8;
+  const unassignedCount = receipts.filter((r) => !r.putaway_assignee_user_id).length;
+  const assignedToMeCount = receipts.filter((r) => r.putaway_assignee_user_id === currentUserId).length;
+  const colSpan = showAssign ? 10 : 9;
 
   const handleClaimSelf = async (receiptId: string) => {
     setClaimingId(receiptId);
@@ -115,7 +142,7 @@ export function PutawayPage() {
           to="/orders"
           className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
         >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lai danh sach
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại danh sách
         </NavLink>
       </FadeItem>
 
@@ -123,30 +150,37 @@ export function PutawayPage() {
         <PageHeader
           icon={ClipboardCheck}
           title="Putaway"
-          description={`${receipts.length} phieu da duyet · ${totalRemaining} quyen chua nhap ke`}
+          description={`${receipts.length} phiếu đã duyệt · ${totalRemaining} quyển chưa nhập kệ`}
           iconBg="bg-blue-100 dark:bg-blue-500/15"
           iconColor="text-blue-600 dark:text-blue-400"
         />
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tim theo ma phieu / kho"
-            className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
-          />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <StatCard label="Phiếu chờ putaway" value={receipts.length} icon={Package} variant="default" />
+          <StatCard label="Chưa nhận" value={unassignedCount} icon={Clock} variant="warning" />
+          <StatCard label="Của bạn" value={assignedToMeCount} icon={UserCheck} variant="success" />
+          <StatCard label="Quyển chưa nhập kệ" value={totalRemaining} icon={Package} variant="info" />
         </div>
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <FilterBar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Tìm theo mã phiếu / kho"
+          showSearchClear
+        />
+      </FadeItem>
+
+      <FadeItem>
+        <SectionCard noPadding>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-gradient-to-r from-blue-50/30 to-transparent dark:from-blue-500/10">
-                  {["Ma phieu", "Kho", "Ngay", "Trang thai", "Nguoi duyet", "Tong dong", "Con lai", ...(showAssign ? ["Giao putaway"] : []), "Action"].map((header) => (
+                  {["Mã phiếu", "Kho", "Ngày", "Trạng thái", "Ưu tiên", "Người duyệt", "Tổng dòng", "Còn lại", ...(showAssign ? ["Giao putaway"] : []), "Thao tác"].map((header) => (
                     <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{header}</th>
                   ))}
                 </tr>
@@ -159,8 +193,8 @@ export function PutawayPage() {
                     <td colSpan={colSpan} className="py-12 text-center">
                       <EmptyState
                         variant="no-data"
-                        title="Khong co phieu nhap nao san sang putaway"
-                        description="Cac phieu nhap da duyet se hien o day"
+                        title="Không có phiếu nhập nào sẵn sàng putaway"
+                        description="Các phiếu nhập đã duyệt sẽ hiện ở đây"
                       />
                     </td>
                   </tr>
@@ -176,31 +210,42 @@ export function PutawayPage() {
                       <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.receipt_number}</td>
                       <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.warehouse_code || receipt.warehouse_name || "-"}</td>
                       <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{formatDate(receipt.received_at || receipt.created_at)}</td>
-                      <td className="px-4 py-3.5 text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{receipt.status}</td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <PriorityBadge priority={receiptAgingPriority(receipt.received_at || receipt.created_at)} />
+                      </td>
                       <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{receipt.approved_by_user_id ? receipt.approved_by_user_id.slice(0, 8) : "-"}</td>
                       <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.line_count}</td>
                       <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.remaining_quantity}</td>
                       {showAssign && (
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <select
-                              value={assignState[receipt.id] || ""}
-                              onChange={(e) => setAssignState((prev) => ({ ...prev, [receipt.id]: e.target.value }))}
-                              className="h-8 rounded-md border border-border bg-background px-2 text-[12px]"
+                            <Select
+                              value={assignState[receipt.id] || "none"}
+                              onValueChange={(v) => setAssignState((prev) => ({ ...prev, [receipt.id]: v === "none" ? "" : v }))}
                             >
-                              <option value="">Chọn nhân viên</option>
-                              {warehouseStaff.map((s) => (
-                                <option key={s.id} value={s.id}>{s.full_name}</option>
-                              ))}
-                            </select>
-                            <button
+                              <SelectTrigger size="sm" className="h-8 min-w-[140px] text-[12px]">
+                                <SelectValue placeholder="Chọn nhân viên" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Chọn nhân viên</SelectItem>
+                                {warehouseStaff.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
                               type="button"
+                              size="sm"
                               disabled={assigningId === receipt.id}
+                              loading={assigningId === receipt.id}
                               onClick={() => void handleAssign(receipt.id)}
-                              className="h-8 rounded-md bg-violet-600 px-2.5 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                              className="shrink-0"
                             >
-                              {assigningId === receipt.id ? "..." : "Giao"}
-                            </button>
+                              Giao
+                            </Button>
                           </div>
                         </td>
                       )}
@@ -233,7 +278,7 @@ export function PutawayPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
     </PageWrapper>
   );

@@ -19,6 +19,10 @@ import { canManageReceiving } from "@/lib/rbac";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button, IconButton } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DraftAllocationLine {
   id: string;
@@ -591,22 +595,22 @@ export function ReceivingPutawayPage() {
           iconColor="text-violet-600 dark:text-violet-400"
         />
         {isVariantLocked ? (
-          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-4 py-3">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-            <p className="text-[12px] text-violet-800 dark:text-violet-300">
+          <Alert className="mt-3 border-violet-200 bg-violet-50 dark:border-violet-500/20 dark:bg-violet-500/10">
+            <Lock className="text-violet-600 dark:text-violet-400" />
+            <AlertDescription className="text-violet-800 dark:text-violet-300">
               Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
               <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
               Kho và SKU đã được khoá theo phiếu nhập.
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <div className="mt-3 flex items-start gap-2 rounded-[12px] border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-4 py-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <p className="text-[12px] text-amber-800 dark:text-amber-300">
+          <Alert className="mt-3 border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+            <AlertDescription className="text-amber-800 dark:text-amber-300">
               Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
               <a href="/putaway" className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200">Putaway queue (/putaway)</a>.
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
       </FadeItem>
 
@@ -616,38 +620,38 @@ export function ReceivingPutawayPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}</p>
-              <select
-                value={selectedWarehouseId}
-                onChange={(event) => setSelectedWarehouseId(event.target.value)}
+              <Select
+                value={selectedWarehouseId || "none"}
+                onValueChange={(value) => setSelectedWarehouseId(value === "none" ? "" : value)}
                 disabled={isWarehouseLocked}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] disabled:bg-muted disabled:cursor-not-allowed"
               >
-                <option value="">Chọn kho</option>
-                {warehouses.map((warehouse) => (
-                  <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn kho" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Nguồn RECEIVING</p>
-              <select
-                value={selectedReceivingId}
-                onChange={(event) => setSelectedReceivingId(event.target.value)}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
-              >
-                <option value="">Chọn khu RECEIVING/STAGING</option>
-                {receivings.map((location) => (
-                  <option key={location.id} value={location.id}>{location.location_code} ({location.location_type})</option>
-                ))}
-              </select>
+              <Select value={selectedReceivingId || "none"} onValueChange={(value) => setSelectedReceivingId(value === "none" ? "" : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn khu RECEIVING/STAGING" />
+                </SelectTrigger>
+                <SelectContent>
+                  {receivings.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>{location.location_code} ({location.location_type})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-end justify-end">
-              <button
-                onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-border px-4 py-2.5 text-[13px] hover:bg-muted transition-colors"
-              >
+              <Button variant="outline" onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}>
                 <RefreshCw className="w-3.5 h-3.5" /> Tải lại
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -664,34 +668,37 @@ export function ReceivingPutawayPage() {
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
                 SKU trong RECEIVING {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}
               </p>
-              <select
-                value={selectedVariantId}
-                onChange={(event) => setSelectedVariantId(event.target.value)}
+              <Select
+                value={selectedVariantId || "none"}
+                onValueChange={(value) => setSelectedVariantId(value === "none" ? "" : value)}
                 disabled={isVariantLocked}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] disabled:bg-muted disabled:cursor-not-allowed"
               >
-                <option value="">Chọn SKU</option>
-                {receivingItems.map((item) => (
-                  <option key={item.variant_id} value={item.variant_id}>
-                    {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn SKU" />
+                </SelectTrigger>
+                <SelectContent>
+                  {receivingItems.map((item) => (
+                    <SelectItem key={item.variant_id} value={item.variant_id}>
+                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {!isVariantLocked && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét ISBN13</p>
                 <div className="flex gap-2">
-                  <input
+                  <Input
                     value={scanSkuInput}
                     onChange={(event) => setScanSkuInput(event.target.value)}
                     placeholder="Nhập ISBN13"
-                    className="flex-1 rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                    className="flex-1 h-auto py-2.5"
                   />
-                  <button onClick={handleScanSku} aria-label="Quét ISBN13" className="rounded-[10px] border border-border px-3 py-2.5 hover:bg-muted transition-colors">
+                  <IconButton variant="outline" onClick={handleScanSku} label="Quét ISBN13">
                     <ScanLine className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )}
@@ -699,15 +706,15 @@ export function ReceivingPutawayPage() {
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét vị trí đích</p>
               <div className="flex gap-2">
-                <input
+                <Input
                   value={scanTargetBarcodeInput}
                   onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
                   placeholder="locations.barcode"
-                  className="flex-1 rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                  className="flex-1 h-auto py-2.5"
                 />
-                <button onClick={handleScanTargetLocation} aria-label="Quét vị trí đích" className="rounded-[10px] border border-border px-3 py-2.5 hover:bg-muted transition-colors">
+                <IconButton variant="outline" onClick={handleScanTargetLocation} label="Quét vị trí đích">
                   <ScanLine className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           </div>
@@ -715,23 +722,23 @@ export function ReceivingPutawayPage() {
           {ambiguousVariantMatches.length > 0 ? (
             <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/10">
               <p className="text-[12px] text-amber-800 dark:text-amber-300 font-semibold">ISBN13 trùng nhiều SKU, vui lòng chọn thủ công:</p>
-              <select
-                className="mt-2 w-full rounded-[10px] border border-amber-200 dark:border-amber-500/20 bg-background px-3 py-2.5 text-[12px]"
-                onChange={(event) => {
-                  const variantId = event.target.value;
-                  if (!variantId) return;
+              <Select
+                onValueChange={(variantId) => {
                   setSelectedVariantId(variantId);
                   setAmbiguousVariantMatches([]);
                 }}
-                value=""
               >
-                <option value="">Chọn SKU đúng</option>
-                {ambiguousVariantMatches.map((item) => (
-                  <option key={item.variant_id} value={item.variant_id}>
-                    {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} | {item.book_title} | {item.matched_by}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="mt-2 w-full border-amber-200 dark:border-amber-500/20">
+                  <SelectValue placeholder="Chọn SKU đúng" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ambiguousVariantMatches.map((item) => (
+                    <SelectItem key={item.variant_id} value={item.variant_id}>
+                      {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} | {item.book_title} | {item.matched_by}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
 
@@ -777,13 +784,15 @@ export function ReceivingPutawayPage() {
               )}
             </p>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
-                className="rounded-[10px] border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 px-3 py-2 text-[13px] text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors"
+                className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
               >
                 {showStorageSuggestion ? "Ẩn gợi ý" : "Gợi ý vị trí (AI)"}
-              </button>
-              <button onClick={addDraftLine} className="rounded-[10px] border border-border px-3 py-2 text-[13px] hover:bg-muted transition-colors">Thêm dòng allocation</button>
+              </Button>
+              <Button variant="outline" size="sm" onClick={addDraftLine}>Thêm dòng allocation</Button>
             </div>
           </div>
 
@@ -823,20 +832,23 @@ export function ReceivingPutawayPage() {
                 <div key={line.id} className="rounded-[12px] border border-border p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                   <div>
                     <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn đích</p>
-                    <select
-                      value={line.target_location_id}
-                      onChange={(event) => updateLine(line.id, { target_location_id: event.target.value })}
-                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                    <Select
+                      value={line.target_location_id || "none"}
+                      onValueChange={(value) => updateLine(line.id, { target_location_id: value === "none" ? "" : value })}
                     >
-                      <option value="">Chọn vị trí đích</option>
-                      {candidates.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>{candidate.location_code} (còn {candidate.remaining_capacity})</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chọn vị trí đích" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {candidates.map((candidate) => (
+                          <SelectItem key={candidate.id} value={candidate.id}>{candidate.location_code} (còn {candidate.remaining_capacity})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
-                    <input
+                    <Input
                       type="number"
                       min={1}
                       max={Math.min(
@@ -845,25 +857,22 @@ export function ReceivingPutawayPage() {
                       )}
                       value={line.quantity}
                       onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
-                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                      className="h-auto py-2.5"
                     />
                   </div>
                   <div className="md:col-span-2">
                     <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do (bắt buộc)</p>
-                    <input
+                    <Input
                       value={line.reason}
                       onChange={(event) => updateLine(line.id, { reason: event.target.value })}
                       placeholder="Ví dụ: sắp xếp lại"
-                      className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                      className="h-auto py-2.5"
                     />
                   </div>
                   <div>
-                    <button
-                      onClick={() => removeLine(line.id)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-2.5 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/15 transition-colors"
-                    >
+                    <Button variant="danger-outline" className="w-full" onClick={() => removeLine(line.id)}>
                       <Trash2 className="w-3.5 h-3.5" /> Xóa
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -871,13 +880,14 @@ export function ReceivingPutawayPage() {
           </div>
 
           <div className="flex justify-end mt-4">
-            <button
+            <Button
               onClick={handleConfirmTransfer}
-              disabled={savingTransfer || draftLines.length === 0}
-              className="rounded-[10px] bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
+              disabled={draftLines.length === 0}
+              loading={savingTransfer}
+              className="bg-gradient-to-r from-violet-600 to-purple-600 hover:opacity-90"
             >
-              {savingTransfer ? 'Đang chuyển...' : 'Xác nhận chuyển lên kệ'}
-            </button>
+              Xác nhận chuyển lên kệ
+            </Button>
           </div>
         </div>
       </FadeItem>
@@ -891,80 +901,89 @@ export function ReceivingPutawayPage() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn nguồn</p>
-              <select
-                value={selectedReverseCompartmentId}
-                onChange={(event) => setSelectedReverseCompartmentId(event.target.value)}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+              <Select
+                value={selectedReverseCompartmentId || "none"}
+                onValueChange={(value) => setSelectedReverseCompartmentId(value === "none" ? "" : value)}
               >
-                <option value="">Chọn ngăn</option>
-                {occupiedCompartments.map((compartment) => (
-                  <option key={compartment.id} value={compartment.id}>{compartment.location_code} (on_hand {compartment.on_hand_qty})</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn ngăn" />
+                </SelectTrigger>
+                <SelectContent>
+                  {occupiedCompartments.map((compartment) => (
+                    <SelectItem key={compartment.id} value={compartment.id}>{compartment.location_code} (on_hand {compartment.on_hand_qty})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">SKU trong ngăn</p>
-              <select
-                value={reverseVariantId}
-                onChange={(event) => setReverseVariantId(event.target.value)}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+              <Select
+                value={reverseVariantId || "none"}
+                onValueChange={(value) => setReverseVariantId(value === "none" ? "" : value)}
                 disabled={loadingReverseItems}
               >
-                <option value="">Chọn SKU</option>
-                {reverseItems.map((item) => (
-                  <option key={item.variant_id} value={item.variant_id}>
-                    {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn SKU" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reverseItems.map((item) => (
+                    <SelectItem key={item.variant_id} value={item.variant_id}>
+                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu RECEIVING đích</p>
-              <select
-                value={reverseReceivingId}
-                onChange={(event) => setReverseReceivingId(event.target.value)}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+              <Select
+                value={reverseReceivingId || "none"}
+                onValueChange={(value) => setReverseReceivingId(value === "none" ? "" : value)}
               >
-                <option value="">Chọn khu RECEIVING</option>
-                {receivings.map((receiving) => (
-                  <option key={receiving.id} value={receiving.id}>{receiving.location_code}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Chọn khu RECEIVING" />
+                </SelectTrigger>
+                <SelectContent>
+                  {receivings.map((receiving) => (
+                    <SelectItem key={receiving.id} value={receiving.id}>{receiving.location_code}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
-              <input
+              <Input
                 type="number"
                 min={1}
                 max={reverseItem?.on_hand_qty || 1}
                 value={reverseQuantity}
                 onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(event.target.value || 0))))}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                className="h-auto py-2.5"
               />
             </div>
 
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do</p>
-              <input
+              <Input
                 value={reverseReason}
                 onChange={(event) => setReverseReason(event.target.value)}
                 placeholder="Lý do (bắt buộc)"
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
+                className="h-auto py-2.5"
               />
             </div>
           </div>
 
           <div className="flex justify-end mt-4">
-            <button
+            <Button
               onClick={handleReverse}
-              disabled={savingReverse}
-              className="rounded-[10px] bg-gradient-to-r from-amber-600 to-orange-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
+              loading={savingReverse}
+              className="bg-gradient-to-r from-amber-600 to-orange-600 hover:opacity-90"
             >
-              {savingReverse ? 'Đang hoàn trả...' : 'Hoàn trả về RECEIVING'}
-            </button>
+              Hoàn trả về RECEIVING
+            </Button>
           </div>
         </div>
       </FadeItem>}

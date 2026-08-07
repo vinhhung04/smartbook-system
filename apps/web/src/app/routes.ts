@@ -5,6 +5,7 @@ import { DashboardPage } from "@/components/pages/dashboard";
 import { CatalogPage } from "@/components/pages/catalog";
 import { BookDetailPage } from "@/components/pages/book-detail";
 import { InventoryPage } from "@/components/pages/inventory";
+import { StockAuditsPage } from "@/components/pages/stock-audits";
 import { OrdersPage } from "@/components/pages/orders";
 import { OrderDetailPage } from "@/components/pages/order-detail";
 import { GoodsReceiptPage } from "@/components/pages/goods-receipt";
@@ -248,6 +249,8 @@ export const router = createBrowserRouter([
       { path: "packing", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PackingPage },
       { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },
       { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: MovementsPage },
+      { path: "stock-audits", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), Component: StockAuditsPage },
+      { path: "stock-audits/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), Component: StockAuditsPage },
       { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: OutboundPage },
       { path: "transfer-receiving", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: TransferReceivingPage },
       { path: "warehouses", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehouseWrite), Component: WarehousesPage },

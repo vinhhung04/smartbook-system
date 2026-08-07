@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from intent import (
+    AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
     BORROW_TREND_QUERY,
     DASHBOARD_SUMMARY_QUERY,
@@ -36,6 +37,7 @@ SOURCE_NAMES = {
     "/analytics/borrow-trends": "Borrow Trends",
     "/analytics/reservation-funnel": "Reservation Funnel",
     "/analytics/reorder-suggestions": "Reorder Suggestions",
+    "/analytics/aging-inventory": "Aging Inventory",
     "/api/books": "Catalog Books",
     "/api/stock-balances/low-stock": "Low Stock By Warehouse",
 }
@@ -204,8 +206,29 @@ def _filter_books(books: list[dict], query: str, limit: int = 10) -> list[dict]:
     return [item[1] for item in scored[:limit]]
 
 
+def _filter_by_warehouse_hint(wh_groups: dict, warehouse_hint: str | None) -> tuple[dict, str | None]:
+    """Scope a warehouse-grouped dict down to the warehouse a follow-up question
+    mentioned (e.g. "con kho Ha Noi thi sao?"). Falls back to all warehouses
+    (with a warning) if the hint doesn't match anything in the data, rather than
+    silently dropping data or guessing.
+    """
+    if not warehouse_hint:
+        return wh_groups, None
+    hint = normalize_text(str(warehouse_hint))
+    matched = {}
+    for wh_code, wh_items in wh_groups.items():
+        wh_name = wh_items[0].get("warehouse_name") if wh_items else None
+        haystack = normalize_text(f"{wh_name or ''} {wh_code}")
+        if hint in haystack:
+            matched[wh_code] = wh_items
+    if matched:
+        return matched, None
+    return wh_groups, f"Khong tim thay kho khop voi '{warehouse_hint}' trong du lieu; hien thi tat ca cac kho."
+
+
 async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
     intent = intent_info.get("intent") or GENERAL_QUERY
+    warehouse_hint = (intent_info.get("entities") or {}).get("warehouse_hint")
     sources: list[dict] = []
     warnings: list[str] = []
     raw: dict[str, Any] = {}
@@ -287,9 +310,12 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             for it in low_stock_by_wh:
                 key = it.get("warehouse_code") or it.get("warehouse_id") or "UNKNOWN"
                 wh_groups.setdefault(key, []).append(it)
+            wh_groups, hint_warning = _filter_by_warehouse_hint(wh_groups, warehouse_hint)
+            if hint_warning:
+                warnings.append(hint_warning)
 
             wh_section_lines: list[str] = []
-            total_low_items = len(low_stock_by_wh)
+            total_low_items = sum(len(items) for items in wh_groups.values())
             for wh_code, wh_items in list(wh_groups.items())[:5]:
                 wh_name = wh_items[0].get("warehouse_name") or wh_code
                 wh_section_lines.append(f"\n🏭 **{wh_name}** ({wh_code}) — {len(wh_items)} sách:")
@@ -463,6 +489,9 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             for it in low_stock_by_wh:
                 key = it.get("warehouse_code") or it.get("warehouse_id") or "UNKNOWN"
                 wh_groups.setdefault(key, []).append(it)
+            wh_groups, hint_warning = _filter_by_warehouse_hint(wh_groups, warehouse_hint)
+            if hint_warning:
+                warnings.append(hint_warning)
 
             wh_section_lines: list[str] = []
             for wh_code, wh_items in list(wh_groups.items())[:5]:
@@ -487,8 +516,9 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                     wh_section_lines.append(f"  ...và {extra} sách khác")
 
             if wh_section_lines:
+                filtered_low_items = sum(len(items) for items in wh_groups.values())
                 summary = "\n".join([
-                    f"📦 **Gợi ý nhập thêm theo từng kho** ({len(low_stock_by_wh)} dòng, {len(wh_groups)} kho):",
+                    f"📦 **Gợi ý nhập thêm theo từng kho** ({filtered_low_items} dòng, {len(wh_groups)} kho):",
                     *wh_section_lines,
                     f"\n📊 Tổng analytics: {total} đầu sách (🔴 {high} HIGH, 🟡 {med} MEDIUM) — {total_qty} bản.",
                     "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
@@ -518,6 +548,29 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                     "Top sách cần ưu tiên:",
                     _limit_lines(lines, 5),
                 ])
+
+        elif intent == AGING_INVENTORY_QUERY:
+            params = {"days": 90, "limit": 20}
+            source, payload, warning = await _fetch(client, "/analytics/aging-inventory", auth_header, params)
+            sources.append(source)
+            if warning:
+                warnings.append(warning)
+            data = _data(payload) or {}
+            items = data.get("items") if isinstance(data, dict) else []
+            if not isinstance(items, list):
+                items = []
+            raw["Aging Inventory"] = items
+
+            lines = [
+                f"- **{it.get('title', 'Khong ro ten')}** — kho {it.get('warehouse_name', '?')}, "
+                f"tồn {_int(it.get('on_hand_qty'))} bản, {_int(it.get('days_since_last_activity'))} ngày không hoạt động."
+                for it in items[:10]
+                if isinstance(it, dict)
+            ]
+            summary = "\n".join([
+                f"📦 **{len(items)} dòng tồn kho** không có hoạt động mượn/di chuyển trong 90 ngày gần đây:",
+                _limit_lines(lines, 10),
+            ])
 
         else:
             summary = ""

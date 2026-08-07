@@ -31,6 +31,7 @@ from intent import (
     RESERVATION_QUERY,
     BOOK_SEARCH_QUERY,
     REORDER_SUGGESTION_QUERY,
+    AGING_INVENTORY_QUERY,
     GENERAL_QUERY,
 )
 from agent_actions import (
@@ -64,6 +65,7 @@ INTENT_ALLOWLIST: frozenset[str] = frozenset([
     RESERVATION_QUERY,
     BOOK_SEARCH_QUERY,
     REORDER_SUGGESTION_QUERY,
+    AGING_INVENTORY_QUERY,
     GENERAL_QUERY,
 ])
 
@@ -108,6 +110,7 @@ DANH SÁCH INTENT (chọn đúng tên hằng số, không thay đổi):
 - RESERVATION_QUERY: đặt chỗ, giữ sách, đăng ký mượn (kể cả hỏi trạng thái reservation).
 - BOOK_SEARCH_QUERY: tìm sách theo tên/tác giả/ISBN.
 - REORDER_SUGGESTION_QUERY: nhập thêm, bổ sung, đề xuất nhập (kể cả chỉ hỏi nên nhập gì).
+- AGING_INVENTORY_QUERY: tồn kho lâu không hoạt động, sách không bán/không ai mượn, hàng chết, ế tồn.
 - GENERAL_QUERY: câu hỏi chung không thuộc nhóm trên.
 
 DANH SÁCH ACTION_TYPE — chỉ set khi người dùng có ý định hành động rõ ràng (tạo, lập, đặt, giao, xuất...):
@@ -123,6 +126,7 @@ QUY TẮC PHÂN LOẠI (ưu tiên cao — làm theo đúng các ví dụ):
 - "Báo cáo tồn kho tháng này" → LOW_STOCK_QUERY, wants_action=false, action_type=null.
 - "Báo cáo sách quá hạn" → OVERDUE_LOAN_QUERY, wants_action=false, action_type=null.
 - "Nên nhập thêm sách nào?" → REORDER_SUGGESTION_QUERY, wants_action=false, action_type=null.
+- "Sách nào tồn kho lâu không ai mượn?" → AGING_INVENTORY_QUERY, wants_action=false, action_type=null.
 - "Tạo phiếu nhập cho sách cần bổ sung" → REORDER_SUGGESTION_QUERY, wants_action=true, action_type=CREATE_REORDER_DRAFT.
 - "Đặt mua sách cho kho HCM" → REORDER_SUGGESTION_QUERY, wants_action=true, action_type=CREATE_REORDER_DRAFT, warehouse_hint="HCM".
 - "Tình trạng đặt sách của tôi?" → RESERVATION_QUERY, wants_action=false, action_type=null.

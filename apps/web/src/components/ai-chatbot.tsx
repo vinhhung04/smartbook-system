@@ -24,6 +24,32 @@ interface UIMessage {
   suggestions?: string[];
 }
 
+// ── Chat history persistence (localStorage, per-user, survives page reload) ───
+
+const CHAT_HISTORY_KEY_PREFIX = 'smartbook_ai_chat_history:';
+const CHAT_HISTORY_MAX_MESSAGES = 40;
+
+function loadStoredMessages(userId: string): UIMessage[] {
+  try {
+    const raw = localStorage.getItem(`${CHAT_HISTORY_KEY_PREFIX}${userId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredMessages(userId: string, messages: UIMessage[]): void {
+  try {
+    localStorage.setItem(
+      `${CHAT_HISTORY_KEY_PREFIX}${userId}`,
+      JSON.stringify(messages.slice(-CHAT_HISTORY_MAX_MESSAGES)),
+    );
+  } catch {
+    // localStorage full/unavailable — chat still works, just without persistence.
+  }
+}
+
 function getRoleSuggestions(user: AuthUser | null): string[] {
   if (!user) {
     return [
@@ -733,9 +759,9 @@ function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
 
 function ReportResult({ markdown }: { markdown: string }) {
   return (
-    <pre className="mt-2 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-2 whitespace-pre-wrap max-h-48 overflow-y-auto">
-      {markdown}
-    </pre>
+    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">
+      <MessageText text={markdown} />
+    </div>
   );
 }
 
@@ -960,10 +986,28 @@ export function AIChatbot() {
   const systemContextRef = useRef<SystemContext | undefined>(undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The persist effect below fires on this same mount render too, with the
+  // still-empty initial `messages` state — skip that one run so it doesn't
+  // clobber the just-loaded history before React re-renders with it.
+  const skipNextPersistRef = useRef(true);
 
   useEffect(() => {
-    setCurrentUser(authService.getCurrentUser());
+    const user = authService.getCurrentUser();
+    setCurrentUser(user);
+    const stored = loadStoredMessages(user?.id || 'anon');
+    if (stored.length > 0) {
+      setMessages(stored);
+      setShowSuggestions(false);
+    }
   }, []);
+
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    saveStoredMessages(currentUser?.id || 'anon', messages);
+  }, [messages, currentUser?.id]);
 
   const refreshContext = useCallback(async () => {
     try {
@@ -1004,34 +1048,54 @@ export function AIChatbot() {
     setInput('');
     setLoading(true);
 
-    try {
-      const history = buildHistory();
-      const resp = await aiService.chat(
-        trimmed,
-        history,
-        systemContextRef.current,
-      );
-      const botMsg: UIMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        text: resp.reply,
-        pending_action: resp.pending_action ?? null,
-        intent: resp.intent,
-        context_sources: resp.context_sources,
-        retrieval_warnings: resp.retrieval_warnings,
-      };
-      setMessages((prev) => [...prev, botMsg]);
-    } catch {
-      const errorMsg: UIMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        text: 'Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏',
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-      toast.error('Không thể kết nối tới AI service');
-    } finally {
-      setLoading(false);
-    }
+    const history = buildHistory();
+    const botMsgId = Date.now() + 1;
+    // The assistant bubble is only added to `messages` once the first chunk
+    // arrives, so the typing indicator (shown while `loading`) isn't doubled
+    // up with an empty message bubble in the meantime.
+    let started = false;
+
+    await aiService.chatStream(trimmed, history, systemContextRef.current, {
+      onToken: (chunk) => {
+        if (!started) {
+          started = true;
+          setLoading(false);
+          setMessages((prev) => [...prev, { id: botMsgId, role: 'assistant', text: chunk }]);
+        } else {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === botMsgId ? { ...m, text: m.text + chunk } : m)),
+          );
+        }
+      },
+      onDone: (resp) => {
+        setLoading(false);
+        // `resp.reply` is authoritative — it includes the source-line/agent
+        // -confirmation sentences appended after streaming finished, which
+        // the raw token chunks don't have yet.
+        const finalFields = {
+          text: resp.reply,
+          pending_action: resp.pending_action ?? null,
+          intent: resp.intent,
+          context_sources: resp.context_sources,
+          retrieval_warnings: resp.retrieval_warnings,
+        };
+        setMessages((prev) =>
+          started
+            ? prev.map((m) => (m.id === botMsgId ? { ...m, ...finalFields } : m))
+            : [...prev, { id: botMsgId, role: 'assistant', ...finalFields }],
+        );
+      },
+      onError: () => {
+        setLoading(false);
+        const errorText = 'Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏';
+        setMessages((prev) =>
+          started
+            ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText } : m))
+            : [...prev, { id: botMsgId, role: 'assistant', text: errorText }],
+        );
+        toast.error('Không thể kết nối tới AI service');
+      },
+    });
   };
 
   const ACTION_FOLLOWUP_SUGGESTIONS: Record<string, string[]> = {

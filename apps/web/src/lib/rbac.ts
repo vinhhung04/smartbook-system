@@ -56,6 +56,7 @@ export const ROUTE_ACCESS = {
   exceptionReportManage: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.exception.report"] },
   purchaseRequestSelf: { roles: STAFF_TRACKING_ROLES, permissions: ["inventory.purchase.request"] },
   exceptionReportSelf: { roles: STAFF_TRACKING_ROLES, permissions: ["inventory.exception.report"] },
+  inventoryAuditRead: { roles: [...MANAGER_OPERATION_ROLES, ...STAFF_TRACKING_ROLES], permissions: ["inventory.audit.read"] },
   warehousePutawayExecute: {
     roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES],
     permissions: ["inventory.task.progress", "inventory.operation.decide"],

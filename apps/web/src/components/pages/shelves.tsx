@@ -17,6 +17,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatusBadge } from "@/components/status-badge";
 
 function formatQty(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -38,14 +40,20 @@ function formatDate(value: string | null): string {
 
 function UtilizationBar({ value }: { value: number | null }) {
   const width = value == null ? 0 : Math.min(Math.max(value, 0), 100);
+  const severity = width >= 90 ? "Đầy" : width >= 70 ? "Gần đầy" : "Còn chỗ";
   return (
-    <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-      <motion.div
-        initial={{ width: 0 }}
-        animate={{ width: `${width}%` }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className={`h-full rounded-full ${width >= 90 ? "bg-red-500" : width >= 70 ? "bg-amber-500" : "bg-emerald-500"}`}
-      />
+    <div className="space-y-1">
+      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${width}%` }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          className={`h-full rounded-full ${width >= 90 ? "bg-red-500" : width >= 70 ? "bg-amber-500" : "bg-emerald-500"}`}
+        />
+      </div>
+      <p className={`text-[10px] font-medium ${width >= 90 ? "text-red-600 dark:text-red-400" : width >= 70 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+        {value == null ? "-" : `${value.toFixed(2)}%`} · {severity}
+      </p>
     </div>
   );
 }
@@ -78,7 +86,7 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
                 "On Hand",
                 "Inbound At",
               ].map((header) => (
-                <th key={header} className="text-left text-[10px] text-muted-foreground px-3 py-2 uppercase tracking-[0.06em] font-semibold">{header}</th>
+                <th key={header} className="text-left text-[11px] text-muted-foreground px-3 py-2 uppercase tracking-wider font-medium">{header}</th>
               ))}
             </tr>
           </thead>
@@ -257,20 +265,26 @@ export function ShelvesPage() {
           searchPlaceholder="Tìm kệ theo mã, khu vực, kho"
           showSearchClear
           filters={
-            <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2">
-              <Warehouse className="w-3.5 h-3.5 text-muted-foreground" />
-              <select
-                value={warehouseId}
-                onChange={(event) => setWarehouseId(event.target.value)}
-                className="text-[13px] outline-none bg-transparent cursor-pointer"
-              >
-                <option value="">Tất cả kho</option>
-                {warehouses.map((warehouse) => (
-                  <option key={warehouse.id} value={warehouse.id}>
-                    {warehouse.code} - {warehouse.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-2">
+                <Warehouse className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                <Select value={warehouseId || "all"} onValueChange={(v) => setWarehouseId(v === "all" ? "" : v)}>
+                  <SelectTrigger className="min-w-[220px] border-0 bg-transparent shadow-none">
+                    <SelectValue placeholder="Tất cả kho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả kho</SelectItem>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.code} - {warehouse.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {!warehouseId && (
+                <p className="text-[10px] text-muted-foreground">Chọn kho để xem đề xuất tối ưu vị trí bên dưới</p>
+              )}
             </div>
           }
         />
@@ -302,8 +316,16 @@ export function ShelvesPage() {
                 shelves.map((shelf) => (
                   <tr
                     key={shelf.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedShelfId(shelf.id)}
-                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${selectedShelfId === shelf.id ? "bg-cyan-50/30 dark:bg-cyan-500/10" : "hover:bg-muted/60"}`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedShelfId(shelf.id);
+                      }
+                    }}
+                    className={`border-b border-border last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 ${selectedShelfId === shelf.id ? "bg-cyan-50/30 dark:bg-cyan-500/10" : "hover:bg-muted/60"}`}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
@@ -320,10 +342,7 @@ export function ShelvesPage() {
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatQty(shelf.capacityQty)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(shelf.availableQty)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground min-w-[160px]">
-                      <div className="space-y-1">
-                        <UtilizationBar value={shelf.utilizationPct} />
-                        <p>{shelf.utilizationPct == null ? "-" : `${shelf.utilizationPct.toFixed(2)}%`}</p>
-                      </div>
+                      <UtilizationBar value={shelf.utilizationPct} />
                     </td>
                   </tr>
                 ))
@@ -398,12 +417,10 @@ export function ShelvesPage() {
                     <p className="text-[13px] text-foreground font-semibold">{item.title}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">{item.reason}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2 text-[12px] font-semibold">
-                    <span className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-muted-foreground">{item.current_location_code}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StatusBadge label={item.current_location_code} variant="neutral" />
                     <ArrowRightLeft className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
-                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
-                      {item.suggested_location_code}
-                    </span>
+                    <StatusBadge label={item.suggested_location_code} variant="success" />
                   </div>
                 </div>
               ))}

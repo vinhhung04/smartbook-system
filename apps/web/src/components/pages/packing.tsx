@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Camera as CameraIcon, ClipboardList, PackageCheck, QrCode, ScanLine } from "lucide-react";
 import { toast } from "sonner";
-import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
+import { Button, EmptyState, LoadingSpinner, StatusBadge, WorkflowStepper, type WorkflowStep } from "@/components/ui";
+import { PageHeader } from "@/components/ui/page-header";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { PackingCameraPanel } from "@/components/packing-camera-panel";
@@ -9,13 +10,9 @@ import { getApiErrorMessage } from "@/services/api.ts";
 import { packingService, type PackingEvidence, type PackingTask } from "@/services/packing";
 import { usePackingCamera } from "@/hooks/usePackingCamera";
 import { usePackingRecordingSession } from "@/hooks/usePackingRecordingSession";
+import { useHardwareScanner } from "@/hooks/useHardwareScanner";
 
 type ActivePackingTask = PackingTask & { id: string; task_number: string; packing_camera_evidence?: PackingEvidence[] };
-
-// Keyboard-wedge USB/Bluetooth barcode scanners "type" a code very fast (a few ms
-// between keystrokes) and terminate with Enter — much faster than a human typing.
-const SCANNER_KEY_GAP_MS = 100;
-const SCANNER_MIN_CODE_LENGTH = 3;
 
 // Configurable, not hardcoded — override per deployment via VITE_PACKING_RECORD_DELAY_SECONDS.
 const RECORD_DELAY_SECONDS = Number(import.meta.env.VITE_PACKING_RECORD_DELAY_SECONDS) || 15;
@@ -49,6 +46,7 @@ export function PackingPage() {
 
   const items = useMemo(() => task?.packing_task_items || [], [task]);
   const allVerified = items.length > 0 && items.every((item) => item.status === "VERIFIED");
+  const verifiedItemsCount = items.filter((item) => item.status === "VERIFIED").length;
 
   const [photoEvidence, setPhotoEvidence] = useState<PackingEvidence[]>([]);
   const [capturingPhoto, setCapturingPhoto] = useState(false);
@@ -301,36 +299,7 @@ export function PackingPage() {
 
   // Hardware keyboard-wedge scanner — listens for the whole time the Packing page is open, not
   // just while an order is selected, so an invoice barcode scans exactly like a book barcode.
-  useEffect(() => {
-    let buffer = "";
-    let lastKeyTime = 0;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
-
-      const now = Date.now();
-      if (now - lastKeyTime > SCANNER_KEY_GAP_MS) {
-        buffer = "";
-      }
-      lastKeyTime = now;
-
-      if (event.key === "Enter") {
-        if (buffer.length >= SCANNER_MIN_CODE_LENGTH) {
-          handleAnyScannedCode(buffer);
-        }
-        buffer = "";
-        return;
-      }
-
-      if (event.key.length === 1) {
-        buffer += event.key;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleAnyScannedCode]);
+  useHardwareScanner(handleAnyScannedCode);
 
   // Manual override: skip whatever is left of the grace-period countdown and finish right away.
   const handleCompletePackingNow = useCallback(() => {
@@ -358,15 +327,17 @@ export function PackingPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Packing Station</h1>
-        <p className="text-[12px] text-muted-foreground mt-1">
-          Camera luôn bật để giám sát và hỗ trợ quét — chọn một đơn bên phải để bắt đầu đóng gói.
-        </p>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-          <WorkflowStepper steps={steps} />
+        <div className="rounded-xl border border-border bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+          <PageHeader
+            icon={PackageCheck}
+            title="Packing Station"
+            description="Camera luôn bật để giám sát và hỗ trợ quét — chọn một đơn bên phải để bắt đầu đóng gói."
+            iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+            iconColor="text-indigo-700 dark:text-indigo-400"
+          />
+          <div className="mt-5 pt-5 border-t border-border/70">
+            <WorkflowStepper steps={steps} />
+          </div>
         </div>
       </FadeItem>
 
@@ -386,60 +357,69 @@ export function PackingPage() {
           {!task ? (
             <>
               <FadeItem>
-                <div className="rounded-xl border border-border bg-card p-6 shadow-[0_1px_4px_rgba(0,0,0,0.03)] text-center">
-                  <QrCode className="h-8 w-8 text-indigo-400 mx-auto mb-2" />
-                  <p className="text-[13px] text-muted-foreground mb-3">Quét hoá đơn / mã đơn xuất kho để bắt đầu đóng gói</p>
-                  <button
-                    disabled={loadingInvoice}
-                    onClick={() => setIsManualScanOpen(true)}
-                    className="rounded-[10px] bg-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    {loadingInvoice ? "Đang tải..." : "Scan hoá đơn"}
-                  </button>
-                </div>
-              </FadeItem>
-
-              <FadeItem>
-                <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-                  <div className="border-b border-border px-5 py-3">
-                    <p className="text-[13px] font-semibold text-foreground">Đơn đang chờ đóng gói</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Đơn đã Picking xong, chưa hoàn tất Gói hàng</p>
+                <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+                  <div className="flex flex-col items-center gap-3 bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] px-6 py-7 text-center border-b border-border">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <QrCode className="h-6 w-6" />
+                    </div>
+                    <p className="text-[13px] text-muted-foreground max-w-xs">Quét hoá đơn / mã đơn xuất kho để bắt đầu đóng gói</p>
+                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)}>
+                      Scan hoá đơn
+                    </Button>
                   </div>
+
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <div>
+                      <p className="text-[13px] font-semibold text-foreground">Đơn đang chờ đóng gói</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Đơn đã Picking xong, chưa hoàn tất Gói hàng</p>
+                    </div>
+                    {pendingTasks.length > 0 && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        {pendingTasks.length}
+                      </span>
+                    )}
+                  </div>
+
                   {loadingQueue ? (
-                    <p className="px-5 py-6 text-[13px] text-muted-foreground">Đang tải...</p>
+                    <div className="px-5 py-8 flex justify-center border-t border-border">
+                      <LoadingSpinner message="Đang tải..." />
+                    </div>
                   ) : pendingTasks.length === 0 ? (
-                    <p className="px-5 py-6 text-[13px] text-muted-foreground">Không có đơn nào đang chờ đóng gói.</p>
+                    <div className="px-5 py-8 border-t border-border">
+                      <EmptyState
+                        icon={PackageCheck}
+                        title="Không có đơn nào đang chờ"
+                        description="Tất cả đơn đã Picking xong đều đã được đóng gói."
+                      />
+                    </div>
                   ) : (
-                    <div className="divide-y divide-border">
-                      {pendingTasks.map((entry) => (
-                        <button
-                          key={entry.id || entry.root_order_id}
-                          onClick={() => void openPendingTask(entry)}
-                          className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-muted"
-                        >
-                          <div>
-                            <p className="text-[13px] font-medium text-foreground">
-                              {entry.outbound_orders?.outbound_number || entry.root_order_id}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">{entry.warehouses?.name}</p>
-                          </div>
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                              entry.status === "NOT_STARTED"
-                                ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
-                                : entry.id === activeSessionId
-                                  ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                                  : "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                            }`}
+                    <div className="divide-y divide-border border-t border-border">
+                      {pendingTasks.map((entry) => {
+                        const status =
+                          entry.status === "NOT_STARTED"
+                            ? { label: "Chờ bắt đầu", variant: "warning" as const }
+                            : entry.id === activeSessionId
+                              ? { label: "Đang ghi hình", variant: "danger" as const }
+                              : { label: "Đang đóng gói", variant: "primary" as const };
+                        return (
+                          <button
+                            key={entry.id || entry.root_order_id}
+                            onClick={() => void openPendingTask(entry)}
+                            className="group flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted/50 transition-colors cursor-pointer"
                           >
-                            {entry.status === "NOT_STARTED"
-                              ? "Chờ bắt đầu"
-                              : entry.id === activeSessionId
-                                ? "Đang ghi hình"
-                                : "Đang đóng gói"}
-                          </span>
-                        </button>
-                      ))}
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                              <PackageCheck className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[13px] font-medium text-foreground truncate">
+                                {entry.outbound_orders?.outbound_number || entry.root_order_id}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground truncate">{entry.warehouses?.name}</p>
+                            </div>
+                            <StatusBadge label={status.label} variant={status.variant} dot />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -448,19 +428,27 @@ export function PackingPage() {
           ) : (
             <>
               <FadeItem>
-                <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+                <div
+                  className={`rounded-xl border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4 ${
+                    task.status === "COMPLETED"
+                      ? "border-l-muted-foreground/30"
+                      : recordCountdown !== null && countdownTaskIdRef.current === task.id
+                        ? "border-l-amber-500"
+                        : "border-l-emerald-500"
+                  }`}
+                >
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <button
                         onClick={backToQueue}
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-indigo-600 mb-1"
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary cursor-pointer mb-1.5"
                       >
                         <ArrowLeft className="h-3 w-3" /> Quay lại danh sách
                       </button>
-                      <p className="text-[13px] font-semibold text-foreground">
-                        Đơn {task.outbound_orders?.outbound_number} — Packing {task.task_number}
+                      <p className="text-[15px] font-semibold text-foreground">
+                        Đơn {task.outbound_orders?.outbound_number}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">Trạng thái: {task.status}</p>
+                      <p className="text-[11px] text-muted-foreground">Packing {task.task_number}</p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       {task.status === "COMPLETED" ? (
@@ -477,23 +465,26 @@ export function PackingPage() {
                         </span>
                       )}
                       <div className="flex items-center gap-2">
-                        <button
-                          disabled={!camera.isLive || capturingPhoto || task.status === "COMPLETED"}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          loading={capturingPhoto}
+                          disabled={!camera.isLive || task.status === "COMPLETED"}
                           onClick={() => void handleCapturePhotoEvidence()}
                           title="Chụp ảnh sách đã đóng gói để AI xác minh số lượng"
-                          className="inline-flex items-center gap-1.5 rounded-[10px] border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40"
                         >
                           <CameraIcon className="h-3.5 w-3.5" />
-                          {capturingPhoto ? "Đang xử lý..." : "Chụp ảnh xác minh"}
-                        </button>
-                        <button
+                          Chụp ảnh xác minh
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           disabled={allVerified || completingCurrentTask || task.status === "COMPLETED"}
                           onClick={() => setIsManualScanOpen(true)}
                           title="Nhập/paste barcode thủ công khi máy quét hoặc camera không đọc được"
-                          className="rounded-[10px] border border-border px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-40"
                         >
                           Scan sách
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -527,21 +518,45 @@ export function PackingPage() {
                     </div>
                   ) : null}
 
+                  {items.length > 0 && (
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                          style={{ width: `${Math.round((verifiedItemsCount / items.length) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+                        {verifiedItemsCount}/{items.length} đầu sách
+                      </span>
+                    </div>
+                  )}
+
                   <div className="divide-y divide-border">
                     {items.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-[13px] text-foreground truncate">
-                            {item.book_variants?.books.title || item.book_variants?.sku}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">SKU {item.book_variants?.sku}</p>
+                      <div key={item.id} className="py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] text-foreground truncate">
+                              {item.book_variants?.books.title || item.book_variants?.sku}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">SKU {item.book_variants?.sku}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="text-[12px] text-muted-foreground">
+                              {item.scanned_qty}/{item.expected_qty}
+                            </span>
+                            {item.status === "VERIFIED" ? <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" /> : null}
+                          </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-[12px] text-muted-foreground">
-                            {item.scanned_qty}/{item.expected_qty}
-                          </span>
-                          {item.status === "VERIFIED" ? <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" /> : null}
-                        </div>
+                        {item.expected_qty > 1 && (
+                          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${item.status === "VERIFIED" ? "bg-emerald-500" : "bg-primary"}`}
+                              style={{ width: `${Math.min(100, Math.round((item.scanned_qty / item.expected_qty) * 100))}%` }}
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -555,7 +570,7 @@ export function PackingPage() {
               </FadeItem>
 
               <FadeItem>
-                <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] flex items-center justify-between">
+                <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none flex items-center justify-between gap-3">
                   <p className="text-[12px] text-muted-foreground">
                     {recordCountdown !== null && countdownTaskIdRef.current === task.id
                       ? `Đã scan đủ — camera ghi thêm ${recordCountdown}s trước khi hoàn tất.`
@@ -566,15 +581,16 @@ export function PackingPage() {
                   <button
                     disabled={!allVerified || task.status === "COMPLETED" || (completingCurrentTask && recordCountdown === null)}
                     onClick={handleCompletePackingNow}
-                    className="rounded-[10px] bg-emerald-600 px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   >
+                    {task.status !== "COMPLETED" && !completingCurrentTask && <CheckCircle2 className="h-4 w-4" />}
                     {task.status === "COMPLETED"
                       ? "Đã hoàn tất"
                       : recordCountdown !== null && countdownTaskIdRef.current === task.id
                         ? `Hoàn tất ngay (bỏ qua ${recordCountdown}s)`
                         : completingCurrentTask
                           ? "Đang xử lý..."
-                          : "Complete Packing"}
+                          : "Hoàn tất đóng gói"}
                   </button>
                 </div>
               </FadeItem>

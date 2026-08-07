@@ -14,6 +14,7 @@ BORROW_TREND_QUERY = "BORROW_TREND_QUERY"
 RESERVATION_QUERY = "RESERVATION_QUERY"
 BOOK_SEARCH_QUERY = "BOOK_SEARCH_QUERY"
 REORDER_SUGGESTION_QUERY = "REORDER_SUGGESTION_QUERY"
+AGING_INVENTORY_QUERY = "AGING_INVENTORY_QUERY"
 GENERAL_QUERY = "GENERAL_QUERY"
 
 
@@ -181,6 +182,24 @@ def detect_intent(message: str) -> dict:
             "intent": LOW_STOCK_QUERY,
             "confidence": 0.9,
             "time_range": time_range,
+            "query": message.strip(),
+        }
+
+    if _contains_any(normalized, [
+        "ton kho lau",       # tồn kho lâu
+        "khong hoat dong",   # không hoạt động
+        "khong ban duoc",    # không bán được
+        "khong ai muon",     # không ai mượn
+        "e ton",              # ế tồn
+        "hang chet",          # hàng chết / tồn kho chết
+        "dead stock",
+        "sach cu khong ai",
+        "lau khong ai muon",
+    ]):
+        return {
+            "intent": AGING_INVENTORY_QUERY,
+            "confidence": 0.88,
+            "time_range": time_range or _detect_time_range("90 ngay"),
             "query": message.strip(),
         }
 

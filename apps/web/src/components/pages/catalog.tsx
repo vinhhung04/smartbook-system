@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, MoreHorizontal, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, AlertOctagon } from "lucide-react";
+import { Plus, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, AlertOctagon } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
@@ -12,8 +12,19 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button, IconButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
-const filters = ["All", "Complete", "Incomplete", "Low Stock", "Out of Stock"];
+const FILTERS = [
+  { value: "All", label: "Tất cả" },
+  { value: "Complete", label: "Hoàn chỉnh" },
+  { value: "Incomplete", label: "Chưa hoàn chỉnh" },
+  { value: "Low Stock", label: "Sắp hết hàng" },
+  { value: "Out of Stock", label: "Hết hàng" },
+];
 
 interface CatalogBook {
   id: string;
@@ -62,7 +73,7 @@ export function CatalogPage() {
         isbn: row.isbn || "",
         title: row.title,
         author: row.author || "-",
-        category: row.category || "Uncategorized",
+        category: row.category || "Chưa phân loại",
         quantity: Number(row.quantity || 0),
         location: row.location || "-",
         is_incomplete: Boolean(row.is_incomplete),
@@ -82,7 +93,7 @@ export function CatalogPage() {
 
   const categories = useMemo(() => {
     const set = new Set<string>();
-    books.forEach((book) => set.add(book.category || "Uncategorized"));
+    books.forEach((book) => set.add(book.category || "Chưa phân loại"));
     return ["All", ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [books]);
 
@@ -186,56 +197,37 @@ export function CatalogPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Hero Header */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 p-6 shadow-xl shadow-blue-500/15"
+        transition={{ duration: 0.3 }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.12)_0%,transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-60 h-60 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3" />
-        <div className="relative flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-sm">
-              <BookOpen className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-white tracking-tight" style={{ fontWeight: 700, fontSize: 20 }}>
-                Book Catalog
-              </h1>
-              <p className="text-white/60 text-[12px] mt-0.5">
-                {books.length} titles — {completeCount} complete, {incompleteCount} incomplete
-              </p>
-            </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-2.5">
-            <button
-              onClick={handleExport}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 border border-white/20 backdrop-blur-sm text-white text-[13px] hover:bg-white/25 active:scale-[0.98] transition-all"
-              style={{ fontWeight: 600 }}
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            <NavLink
-              to="/ai-import"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-indigo-700 text-[13px] shadow-md hover:shadow-lg hover:bg-indigo-50 active:scale-[0.98] transition-all"
-              style={{ fontWeight: 600 }}
-            >
-              <Sparkles className="w-4 h-4" />
-              AI Import
-            </NavLink>
-            <button
-              onClick={() => setShowDrawer(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-blue-700 text-[13px] shadow-lg hover:shadow-xl hover:bg-blue-50 active:scale-[0.98] transition-all"
-              style={{ fontWeight: 600 }}
-            >
-              <Plus className="w-4 h-4" />
-              Add Book
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          icon={BookOpen}
+          title="Danh mục sách"
+          description={`${books.length} đầu sách — ${completeCount} hoàn chỉnh, ${incompleteCount} chưa hoàn chỉnh`}
+          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10"
+          iconColor="text-blue-600 dark:text-blue-400"
+          actions={
+            <>
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="w-4 h-4" />
+                Xuất file
+              </Button>
+              <Button variant="outline" asChild>
+                <NavLink to="/ai-import">
+                  <Sparkles className="w-4 h-4" />
+                  Nhập bằng AI
+                </NavLink>
+              </Button>
+              <Button onClick={() => setShowDrawer(true)}>
+                <Plus className="w-4 h-4" />
+                Thêm sách
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
       {/* Stat Cards */}
@@ -246,10 +238,11 @@ export function CatalogPage() {
           transition={{ delay: 0.05, duration: 0.3 }}
         >
           <StatCard
-            label="Total Titles"
+            label="Tổng đầu sách"
             value={books.length}
             icon={BookOpen}
             variant="default"
+            animateValue
           />
         </motion.div>
         <motion.div
@@ -258,10 +251,11 @@ export function CatalogPage() {
           transition={{ delay: 0.1, duration: 0.3 }}
         >
           <StatCard
-            label="Complete"
+            label="Hoàn chỉnh"
             value={completeCount}
             icon={Package}
             variant="success"
+            animateValue
           />
         </motion.div>
         <motion.div
@@ -270,10 +264,11 @@ export function CatalogPage() {
           transition={{ delay: 0.15, duration: 0.3 }}
         >
           <StatCard
-            label="Low Stock"
+            label="Sắp hết hàng"
             value={lowStockCount}
             icon={AlertTriangle}
             variant="warning"
+            animateValue
           />
         </motion.div>
         <motion.div
@@ -282,10 +277,11 @@ export function CatalogPage() {
           transition={{ delay: 0.2, duration: 0.3 }}
         >
           <StatCard
-            label="Out of Stock"
+            label="Hết hàng"
             value={outOfStockCount}
             icon={AlertTriangle}
             variant="danger"
+            animateValue
           />
         </motion.div>
       </div>
@@ -300,52 +296,36 @@ export function CatalogPage() {
           <FilterBar
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
-            searchPlaceholder="Search by title, barcode, author..."
+            searchPlaceholder="Tìm theo tên sách, mã vạch, tác giả..."
             filters={
               <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  value={selectedCategory}
-                  onChange={(event) => setSelectedCategory(event.target.value)}
-                  className="px-3 py-2 rounded-lg border border-input bg-background text-[13px] outline-none cursor-pointer focus:ring-2 focus:ring-primary/10 transition-all"
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1 bg-muted/60 rounded-lg p-[3px]">
-                  {filters.map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setActiveFilter(filter)}
-                      className="relative px-3.5 py-1.5 rounded-md text-[12px] transition-all duration-160"
-                      style={{ fontWeight: 550 }}
-                    >
-                      {activeFilter === filter && (
-                        <motion.div
-                          layoutId="catalog-filter"
-                          className="absolute inset-0 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 shadow-sm"
-                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                        />
-                      )}
-                      <span className={`relative z-10 ${activeFilter === filter ? "text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                        {filter}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category === "All" ? "Tất cả danh mục" : category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <SegmentedControl
+                  options={FILTERS}
+                  value={activeFilter}
+                  onChange={setActiveFilter}
+                  layoutId="catalog-filter"
+                  gradientClassName="from-blue-600 to-indigo-600"
+                  className="overflow-x-auto"
+                />
               </div>
             }
             actions={
-              <button
-                onClick={() => void loadBooks()}
-                className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-input bg-background px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                style={{ fontWeight: 500 }}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-                Refresh
-              </button>
+              <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Làm mới
+              </Button>
             }
           />
         </div>
@@ -366,7 +346,7 @@ export function CatalogPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Barcode
+                      Mã vạch
                     </th>
                     <th
                       className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
@@ -374,17 +354,17 @@ export function CatalogPage() {
                       onClick={() => toggleSort("title")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Title {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Tên sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Author
+                      Tác giả
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Category
+                      Danh mục
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Status
+                      Trạng thái
                     </th>
                     <th
                       className="text-right text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
@@ -392,7 +372,7 @@ export function CatalogPage() {
                       onClick={() => toggleSort("stock")}
                     >
                       <span className="inline-flex items-center gap-1 justify-end">
-                        Stock {sortField === "stock" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Tồn kho {sortField === "stock" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </th>
                     <th
@@ -401,11 +381,11 @@ export function CatalogPage() {
                       onClick={() => toggleSort("updatedAt")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Updated {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Location
+                      Vị trí
                     </th>
                     <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
                     </th>
@@ -417,8 +397,8 @@ export function CatalogPage() {
                       <td colSpan={9}>
                         <EmptyState
                           variant="no-results"
-                          title="No books found"
-                          description="Try adjusting your search or filters."
+                          title="Không tìm thấy sách"
+                          description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
                           action={
                             <button
                               onClick={() => {
@@ -428,7 +408,7 @@ export function CatalogPage() {
                               }}
                               className="mt-2 text-[12px] text-primary hover:underline font-medium"
                             >
-                              Clear all filters
+                              Xóa tất cả bộ lọc
                             </button>
                           }
                         />
@@ -450,11 +430,11 @@ export function CatalogPage() {
                       </td>
                       <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.author || "-"}</td>
                       <td className="px-5 py-3.5">
-                        <StatusBadge label={book.category || "Uncategorized"} variant="teal" />
+                        <StatusBadge label={book.category || "Chưa phân loại"} variant="teal" />
                       </td>
                       <td className="px-5 py-3.5">
                         <StatusBadge
-                          label={book.is_incomplete ? "Incomplete" : "Complete"}
+                          label={book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh"}
                           variant={book.is_incomplete ? "warning" : "success"}
                           dot
                         />
@@ -472,23 +452,23 @@ export function CatalogPage() {
                       <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.location || "-"}</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-140">
-                          <NavLink
-                            to={`/book/${book.id}`}
-                            aria-label="Xem chi tiết sách"
-                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-primary/10 transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-primary" />
-                          </NavLink>
-                          <button
+                          <IconButton asChild variant="ghost" size="sm-icon" label="Xem chi tiết sách">
+                            <NavLink to={`/book/${book.id}`}>
+                              <Eye className="w-3.5 h-3.5 text-primary" />
+                            </NavLink>
+                          </IconButton>
+                          <IconButton
+                            variant="ghost"
+                            size="sm-icon"
+                            label="Xóa sách"
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteBook(book);
                             }}
-                            aria-label="Xóa sách"
-                            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                            className="hover:bg-red-50 dark:hover:bg-red-500/10"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
-                          </button>
+                          </IconButton>
                         </div>
                       </td>
                     </motion.tr>
@@ -496,7 +476,7 @@ export function CatalogPage() {
                 </tbody>
               </table>
               <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
-                <span>Showing {filtered.length} of {books.length} books</span>
+                <span>Hiển thị {filtered.length} / {books.length} sách</span>
               </div>
             </div>
           )}
@@ -527,17 +507,13 @@ export function CatalogPage() {
                     <Plus className="w-4 h-4 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-[15px]" style={{ fontWeight: 650 }}>Add New Book</h3>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Create an incomplete book record</p>
+                    <h3 className="text-[15px]" style={{ fontWeight: 650 }}>Thêm sách mới</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Tạo bản ghi sách chưa hoàn chỉnh</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowDrawer(false)}
-                  aria-label="Đóng"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
-                >
+                <IconButton variant="ghost" size="sm-icon" label="Đóng" onClick={() => setShowDrawer(false)}>
                   <X className="w-4 h-4 text-muted-foreground" />
-                </button>
+                </IconButton>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -545,35 +521,34 @@ export function CatalogPage() {
                   <div className="flex items-center gap-2 text-[12px] text-blue-700">
                     <ScanBarcode className="w-4 h-4" />
                     <span style={{ fontWeight: 550 }}>
-                      Enter barcode and title to create a new book record
+                      Nhập mã vạch và tên sách để tạo bản ghi sách mới
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-[12px] text-muted-foreground block" style={{ fontWeight: 550 }}>
-                    Barcode / ISBN *
+                    Mã vạch / ISBN *
                   </label>
                   <div className="mb-2 flex items-center gap-2">
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setShowBarcodeModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[12px] font-semibold text-cyan-700 hover:bg-cyan-100 transition-colors"
+                      className="border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/15"
                     >
                       <ScanBarcode className="h-3.5 w-3.5" />
-                      Scan Barcode
-                    </button>
-                    <button
-                      onClick={handleOpenManualInput}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      Manual Input
-                    </button>
+                      Quét mã vạch
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleOpenManualInput}>
+                      Nhập thủ công
+                    </Button>
                   </div>
                   <input
                     ref={barcodeInputRef}
                     value={newBook.barcode}
                     onChange={(event) => setNewBook({ ...newBook, barcode: event.target.value })}
-                    placeholder="Scan or type barcode..."
+                    placeholder="Quét hoặc nhập mã vạch..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-[14px] font-mono outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
                     autoFocus
                   />
@@ -581,34 +556,28 @@ export function CatalogPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-[12px] text-muted-foreground block" style={{ fontWeight: 550 }}>
-                    Title *
+                    Tên sách *
                   </label>
-                  <input
+                  <Input
                     value={newBook.title}
                     onChange={(event) => setNewBook({ ...newBook, title: event.target.value })}
-                    placeholder="Book title..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-[14px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
+                    placeholder="Tên sách..."
+                    className="h-auto py-2.5"
                   />
                 </div>
               </div>
 
               <div className="p-6 border-t border-border space-y-2">
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
+                <Button
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                   onClick={() => void handleAddBook()}
-                  disabled={saving}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all disabled:opacity-60"
-                  style={{ fontWeight: 600 }}
+                  loading={saving}
                 >
-                  {saving ? "Đang lưu..." : "Thêm vào danh mục"}
-                </motion.button>
-                <button
-                  onClick={() => setShowDrawer(false)}
-                  className="w-full py-2.5 rounded-xl border border-input bg-background text-[13px] hover:bg-muted transition-colors"
-                  style={{ fontWeight: 500 }}
-                >
+                  Thêm vào danh mục
+                </Button>
+                <Button variant="outline" className="w-full" onClick={() => setShowDrawer(false)}>
                   Hủy
-                </button>
+                </Button>
               </div>
             </motion.div>
           </>
@@ -668,19 +637,17 @@ export function CatalogPage() {
                   Bạn có chắc muốn xóa sách này? Sách sẽ bị xóa vĩnh viễn khỏi danh mục.
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
                     onClick={() => void handleDeleteBook()}
-                    disabled={deleting === deleteBook.id}
-                    className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[13px] font-medium hover:bg-red-600 transition-colors disabled:opacity-60"
+                    loading={deleting === deleteBook.id}
                   >
-                    {deleting === deleteBook.id ? "Đang xóa..." : "Xóa"}
-                  </button>
-                  <button
-                    onClick={() => setDeleteBook(null)}
-                    className="flex-1 py-2.5 rounded-xl border border-border bg-background text-[13px] font-medium hover:bg-muted transition-colors"
-                  >
+                    Xóa
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => setDeleteBook(null)}>
                     Hủy
-                  </button>
+                  </Button>
                 </div>
               </div>
             </motion.div>

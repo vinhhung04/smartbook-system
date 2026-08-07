@@ -21,16 +21,16 @@ interface WorkflowStepperProps {
 
 const stepIconClasses: Record<StepStatus, string> = {
   completed: "bg-emerald-500 border-emerald-500 text-white",
-  active: "bg-indigo-600 border-indigo-600 text-white ring-2 ring-indigo-200",
-  pending: "bg-white border-slate-300 text-slate-400",
-  error: "bg-red-50 border-red-400 text-red-600",
+  active: "bg-primary border-primary text-primary-foreground ring-2 ring-primary/20",
+  pending: "bg-card border-border text-muted-foreground",
+  error: "bg-red-50 border-red-400 text-red-600 dark:bg-red-500/10 dark:border-red-500/40 dark:text-red-400",
 };
 
 const stepLabelClasses: Record<StepStatus, string> = {
-  completed: "text-emerald-700 font-medium",
-  active: "text-indigo-700 font-semibold",
+  completed: "text-emerald-700 dark:text-emerald-400 font-medium",
+  active: "text-primary font-semibold",
   pending: "text-muted-foreground",
-  error: "text-red-600 font-medium",
+  error: "text-red-600 dark:text-red-400 font-medium",
 };
 
 function StepIcon({ step, compact }: { step: WorkflowStep; compact: boolean }) {
@@ -51,27 +51,39 @@ function StepIcon({ step, compact }: { step: WorkflowStep; compact: boolean }) {
 }
 
 function HorizontalStepper({ steps, compact }: { steps: WorkflowStep[]; compact: boolean }) {
+  const n = steps.length;
+  // Track spans center-to-center between the first and last circle. Each circle sits at the
+  // center of its own 1/n grid column, so that center is at (i + 0.5) / n — symmetric offsets.
+  const edgeOffsetPct = n > 1 ? 50 / n : 50;
+  const trackSpanPct = n > 1 ? ((n - 1) / n) * 100 : 0;
+  const doneCount = steps.filter((s) => s.status === "completed" || s.status === "active").length;
+  const progressIdx = Math.max(0, doneCount - 1);
+  const filledPct = n > 1 ? trackSpanPct * (progressIdx / (n - 1)) : 0;
+  const circleCenterPx = compact ? 12 : 16;
+
   return (
-    <div className="flex items-center w-full overflow-x-auto">
-      {steps.map((step, idx) => (
-        <div key={step.id} className="flex items-center min-w-0 flex-1">
-          <div className="flex flex-col items-center gap-1 shrink-0">
+    <div className="relative w-full">
+      <div
+        className="absolute h-[2px] rounded bg-border"
+        style={{ top: circleCenterPx, left: `${edgeOffsetPct}%`, right: `${edgeOffsetPct}%` }}
+      />
+      <div
+        className="absolute h-[2px] rounded bg-emerald-400 transition-all duration-300"
+        style={{ top: circleCenterPx, left: `${edgeOffsetPct}%`, width: `${filledPct}%` }}
+      />
+      <div className="relative grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+        {steps.map((step) => (
+          <div key={step.id} className="flex flex-col items-center gap-1">
             <StepIcon step={step} compact={compact} />
-            <div className={cn("text-center max-w-[80px]", compact ? "text-[10px]" : "text-[11px]", stepLabelClasses[step.status])}>
+            <div className={cn("text-center px-1", compact ? "text-[10px]" : "text-[11px]", stepLabelClasses[step.status])}>
               <span className="leading-tight">{step.label}</span>
               {!compact && step.description && step.status === "active" && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">{step.description}</p>
               )}
             </div>
           </div>
-          {idx < steps.length - 1 && (
-            <div className={cn(
-              "h-[2px] flex-1 mx-2 rounded transition-colors",
-              steps[idx + 1].status === "pending" ? "bg-slate-200" : "bg-emerald-400",
-            )} />
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -87,7 +99,7 @@ function VerticalStepper({ steps, compact }: { steps: WorkflowStep[]; compact: b
               <div className={cn(
                 "w-[2px] flex-1 my-1 rounded",
                 compact ? "min-h-[16px]" : "min-h-[24px]",
-                step.status === "completed" ? "bg-emerald-400" : "bg-slate-200",
+                step.status === "completed" ? "bg-emerald-400" : "bg-border",
               )} />
             )}
           </div>

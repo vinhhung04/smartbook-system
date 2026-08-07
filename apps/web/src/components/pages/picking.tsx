@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { ArrowRight, CheckCircle2, ChevronDown, ChevronRight, MapPin, Package, QrCode, ScanLine, UserCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown, ChevronRight, Clock, ListChecks, MapPin, Package, QrCode, RotateCcw, ScanLine, Search, UserCheck } from "lucide-react";
 import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
@@ -10,6 +10,13 @@ import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button, IconButton } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { StatCard } from "@/components/ui/stat-card";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { authService } from "@/services/auth";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
@@ -39,15 +46,24 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function taskTypeLabel(orderType: string): string {
-  if (orderType === "OUTBOUND_REPICK") return "Outbound / Repick";
-  if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Warehouse Transfer / Repick";
-  if (orderType === "WAREHOUSE_TRANSFER") return "Warehouse Transfer";
-  if (orderType.startsWith("OUTBOUND_")) return "Outbound / Store";
+  if (orderType === "OUTBOUND_REPICK") return "Xuất kho / Lấy bù";
+  if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Chuyển kho / Lấy bù";
+  if (orderType === "WAREHOUSE_TRANSFER") return "Chuyển kho";
+  if (orderType.startsWith("OUTBOUND_")) return "Xuất kho / Cửa hàng";
   return orderType;
 }
 
 function taskClassLabel(taskClass?: string): string {
   return taskClass === "REPICK" ? "REPICK" : "PICK";
+}
+
+function taskStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+  const upper = String(status || "").toUpperCase();
+  if (upper.includes("COMPLETED") || upper.includes("DONE")) return "success";
+  if (upper.includes("PICKING") || upper.includes("IN_PROGRESS")) return "info";
+  if (upper.includes("SHORT") || upper.includes("CANCEL")) return "danger";
+  if (upper.includes("PENDING") || upper.includes("READY")) return "warning";
+  return "neutral";
 }
 
 type PickingScanTarget = "presence" | "location" | "product";
@@ -101,7 +117,7 @@ export function PickingPage() {
   const currentUserLabel = String((currentUser as { full_name?: string; username?: string; email?: string } | null)?.full_name
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.username
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.email
-    || "Toi");
+    || "Tôi");
   const staffNameById = useMemo(() => {
     return new Map(warehouseStaff.map((user) => [
       user.id,
@@ -124,6 +140,13 @@ export function PickingPage() {
       || taskTypeLabel(task.order_type).toLowerCase().includes(keyword)
     ));
   }, [tasks, query, taskClassFilter]);
+
+  const taskStats = useMemo(() => {
+    const pick = tasks.filter((task) => taskClassLabel(task.task_class) === "PICK").length;
+    const repick = tasks.filter((task) => taskClassLabel(task.task_class) === "REPICK").length;
+    const unassigned = tasks.filter((task) => !task.assigned_picker_user_id).length;
+    return { total: tasks.length, pick, repick, unassigned };
+  }, [tasks]);
 
   const currentLine = detail?.current_line || null;
   const completedLineCount = useMemo(
@@ -254,7 +277,7 @@ export function PickingPage() {
       await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
       toast.success(`Đã giao task ${task.order_number}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Giao task that bai"));
+      toast.error(getApiErrorMessage(error, "Giao task thất bại"));
     } finally {
       setClaimingTaskKey("");
     }
@@ -279,7 +302,7 @@ export function PickingPage() {
     }
 
     if (!input) {
-      toast.error("Nhap hoac scan vi tri hien tai");
+      toast.error("Nhập hoặc scan vị trí hiện tại");
       return;
     }
 
@@ -307,7 +330,7 @@ export function PickingPage() {
 
   const handleLookupProduct = async (barcodeOverride?: string) => {
     if (!locationVerified) {
-      toast.error("Can scan dung location dich truoc");
+      toast.error("Cần scan đúng vị trí đích trước");
       return;
     }
 
@@ -324,7 +347,7 @@ export function PickingPage() {
     }
 
     if (!barcode) {
-      toast.error("Nhap barcode san pham");
+      toast.error("Nhập barcode sản phẩm");
       return;
     }
 
@@ -336,7 +359,7 @@ export function PickingPage() {
         setAmbiguousMatches(res.matches || []);
         setSelectedScannedVariantId("");
         setProductVerified(false);
-        toast.error("Barcode trung nhieu SKU, vui long chon dung item");
+        toast.error("Barcode trùng nhiều SKU, vui lòng chọn đúng item");
         return;
       }
 
@@ -345,7 +368,7 @@ export function PickingPage() {
         if (res.selected.variant_id !== currentLine.variant_id) {
           setProductVerified(false);
           setSelectedScannedVariantId("");
-          toast.error("Sai san pham cho line hien tai");
+          toast.error("Sai sản phẩm cho dòng hiện tại");
           return;
         }
 
@@ -369,12 +392,12 @@ export function PickingPage() {
     const quantity = Math.trunc(Number(quantityInput || 0));
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      toast.error("So luong phai > 0");
+      toast.error("Số lượng phải > 0");
       return;
     }
 
     if (quantity > Number(currentLine.remaining_qty || 0)) {
-      toast.error("So luong vuot qua so luong con phai pick cua line");
+      toast.error("Số lượng vượt quá số lượng còn phải pick của dòng");
       return;
     }
 
@@ -420,7 +443,7 @@ export function PickingPage() {
         toast.success("Đã xác nhận lấy dòng thành công");
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Confirm pick line that bai"));
+      toast.error(getApiErrorMessage(error, "Xác nhận lấy dòng thất bại"));
     } finally {
       setConfirmingLine(false);
     }
@@ -476,7 +499,7 @@ export function PickingPage() {
     }
 
     if (!input) {
-      toast.error("Nhap hoac scan location dich");
+      toast.error("Nhập hoặc scan vị trí đích");
       return;
     }
 
@@ -501,7 +524,7 @@ export function PickingPage() {
 
     setLocationVerified(false);
     setProductVerified(false);
-    toast.error(`Sai location. Can den ${currentLine.source_location_code || "vi tri duoc chi dinh"}`);
+    toast.error(`Sai vị trí. Cần đến ${currentLine.source_location_code || "vị trí được chỉ định"}`);
   };
 
   const handleDetectedScan = (code: string) => {
@@ -545,31 +568,42 @@ export function PickingPage() {
       <FadeItem>
         <PageHeader
           icon={Package}
-          title="Picking"
-          description={canManageAssignment ? "Quan ly giao picking task cho nhan vien kho va theo doi tien do pick" : "Thuc hien picking task da duoc giao"}
+          title="Lấy hàng (Picking)"
+          description={canManageAssignment ? "Quản lý giao task lấy hàng cho nhân viên kho và theo dõi tiến độ pick" : "Thực hiện task lấy hàng đã được giao"}
+          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10"
+          iconColor="text-blue-600 dark:text-blue-400"
         />
       </FadeItem>
 
       {!detail ? (
         <>
           <FadeItem>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard label="Tổng đơn" value={taskStats.total} icon={Boxes} variant="primary" animateValue />
+              <StatCard label="Đơn PICK" value={taskStats.pick} icon={ListChecks} variant="info" animateValue />
+              <StatCard label="Đơn REPICK" value={taskStats.repick} icon={RotateCcw} variant="warning" animateValue />
+              <StatCard label="Chưa giao" value={taskStats.unassigned} icon={Clock} variant={taskStats.unassigned > 0 ? "danger" : "default"} animateValue />
+            </div>
+          </FadeItem>
+
+          <FadeItem>
             <SectionCard>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {canManageAssignment ? (
                 <div>
-                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Warehouse</p>
-                  <select
-                    value={selectedWarehouseId}
-                    onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                    className="w-full rounded-[10px] border border-border px-3 py-2.5 text-[13px]"
-                  >
-                    <option value="">Chọn kho</option>
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id} value={warehouse.id}>
-                        {warehouse.code} - {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
+                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho</p>
+                  <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Chọn kho" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                          {warehouse.code} - {warehouse.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-[11px] text-muted-foreground mt-1.5">
                     Đơn chuyển kho sẽ hiện ở kho nguồn, không hiện ở kho đích.
                   </p>
@@ -579,27 +613,26 @@ export function PickingPage() {
                 <div className={canManageAssignment ? "md:col-span-2" : "md:col-span-3"}>
                   <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Tìm đơn</p>
                   <div className="flex items-center gap-2">
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Mã đơn / kho / loại đơn"
-                      className="flex-1 rounded-[10px] border border-border px-3 py-2.5 text-[13px]"
-                    />
-                    <div className="inline-flex items-center gap-1 rounded-[10px] border border-border p-1 bg-card">
-                      {[
-                        { key: "ALL", label: "Tat ca" },
-                        { key: "PICK", label: "PICK" },
-                        { key: "REPICK", label: "REPICK" },
-                      ].map((item) => (
-                        <button
-                          key={item.key}
-                          onClick={() => setTaskClassFilter(item.key as "ALL" | "PICK" | "REPICK")}
-                          className={`rounded-[8px] px-2.5 py-1.5 text-[11px] ${taskClassFilter === item.key ? "bg-blue-100 text-blue-700 font-semibold dark:bg-blue-500/15 dark:text-blue-400" : "text-muted-foreground hover:bg-muted"}`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Mã đơn / kho / loại đơn"
+                        className="h-auto py-2.5 pl-9"
+                      />
                     </div>
+                    <SegmentedControl
+                      options={[
+                        { value: "ALL", label: "Tất cả" },
+                        { value: "PICK", label: "PICK" },
+                        { value: "REPICK", label: "REPICK" },
+                      ]}
+                      value={taskClassFilter}
+                      onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
+                      layoutId="picking-class-filter"
+                      gradientClassName="from-blue-600 to-indigo-600"
+                    />
                   </div>
                 </div>
               </div>
@@ -611,7 +644,7 @@ export function PickingPage() {
               <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border bg-gradient-to-r from-emerald-50/30 to-transparent">
+                  <tr className="border-b border-border bg-muted/40">
                     {[
                       "Mã đơn",
                       "Loại",
@@ -634,8 +667,8 @@ export function PickingPage() {
                 <tbody>
                   {filteredTasks.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-10 text-center text-[13px] text-muted-foreground">
-                        Không có đơn nào sẵn sàng lấy
+                      <td colSpan={11} className="py-10 text-center">
+                        <EmptyState variant="no-data" title="Không có đơn nào sẵn sàng lấy" description="Các đơn được giao picking sẽ hiện ở đây" />
                       </td>
                     </tr>
                   ) : filteredTasks.map((task) => {
@@ -678,6 +711,8 @@ export function PickingPage() {
                                 }}
                                 className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-amber-100 transition-colors dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/15"
                                 title="Xem REPICK tasks"
+                                aria-label={`Xem ${task.repick_count} REPICK task của đơn ${task.order_number}`}
+                                aria-expanded={expandedRepickTaskId === task.picking_task_id}
                               >
                                 {task.repick_count} RPK
                                 {expandedRepickTaskId === task.picking_task_id
@@ -689,7 +724,9 @@ export function PickingPage() {
                         </td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.source_warehouse_code || task.source_warehouse_name || "-"}</td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.target_warehouse_code || task.target_warehouse_name || "-"}</td>
-                        <td className="px-4 py-3 text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{task.status}</td>
+                        <td className="px-4 py-3">
+                          <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                        </td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.line_count}</td>
                         <td className="px-4 py-3 text-[12px] font-semibold">{task.remaining_quantity}</td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">
@@ -700,37 +737,39 @@ export function PickingPage() {
                           <div className="flex items-center gap-2">
                             {!isAssigned && canManageAssignment ? (
                               <div className="flex items-center gap-2">
-                                <select
-                                  value={selectedPickerId}
-                                  onChange={(event) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: event.target.value }))}
-                                  className="h-8 min-w-[150px] rounded-[8px] border border-border bg-card px-2 text-[11px] text-foreground"
-                                  aria-label={`Chọn nhân viên kho cho ${task.order_number}`}
+                                <Select
+                                  value={selectedPickerId || "none"}
+                                  onValueChange={(v) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: v === "none" ? "" : v }))}
                                 >
-                                  <option value="">Chọn nhân viên</option>
-                                  {warehouseStaff.map((staff) => (
-                                    <option key={staff.id} value={staff.id}>
-                                      {staff.full_name || staff.username}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
+                                  <SelectTrigger size="sm" aria-label={`Chọn nhân viên kho cho ${task.order_number}`} className="h-8 min-w-[150px] text-[11px]">
+                                    <SelectValue placeholder="Chọn nhân viên" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Chọn nhân viên</SelectItem>
+                                    {warehouseStaff.map((staff) => (
+                                      <SelectItem key={staff.id} value={staff.id}>
+                                        {staff.full_name || staff.username}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  variant="success-outline"
                                   onClick={() => void handleAssignTask(task)}
-                                  disabled={claimingTaskKey === key || !selectedPickerId}
-                                  className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60 transition-colors dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
+                                  disabled={!selectedPickerId}
+                                  loading={claimingTaskKey === key}
                                 >
                                   <UserCheck className="h-3.5 w-3.5" />
-                                  {claimingTaskKey === key ? "Đang giao..." : "Giao task"}
-                                </button>
+                                  Giao task
+                                </Button>
                               </div>
                             ) : null}
 
                             {(canManageAssignment || assignedToMe) ? (
-                              <button
-                                onClick={() => void handleOpenTask(task)}
-                                className="inline-flex items-center gap-1 rounded-[8px] border border-border bg-card px-2.5 py-1.5 text-[11px] hover:bg-muted transition-colors"
-                              >
-                                Xem chi tiet <ArrowRight className="w-3 h-3" />
-                              </button>
+                              <Button size="sm" variant="outline" onClick={() => void handleOpenTask(task)}>
+                                Xem chi tiết <ArrowRight className="w-3 h-3" />
+                              </Button>
                             ) : null}
                           </div>
                         </td>
@@ -774,32 +813,34 @@ export function PickingPage() {
       ) : (
         <>
           <FadeItem>
-            <SectionCard
-              actions={
-                <button
-                  onClick={handleBackToList}
-                  className="rounded-[10px] border border-border bg-card px-4 py-2.5 text-[13px] font-semibold text-foreground hover:bg-muted transition-colors"
-                >
-                  Quay lại danh sách
-                </button>
-              }
-            >
-              <div>
-                <p className="text-[11px] text-muted-foreground font-semibold">Đơn đang thao tác</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
-                  <StatusBadge
-                    label={`${taskClassLabel(detail.task_class)}${taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}`}
-                    variant={taskClassLabel(detail.task_class) === "REPICK" ? "warning" : "info"}
-                  />
+            <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-indigo-500" />
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10 items-center justify-center">
+                    <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-muted-foreground font-semibold">Đơn đang thao tác</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
+                      <StatusBadge
+                        label={`${taskClassLabel(detail.task_class)}${taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}`}
+                        variant={taskClassLabel(detail.task_class) === "REPICK" ? "warning" : "info"}
+                      />
+                    </div>
+                    <p className="text-[12px] text-muted-foreground mt-1">
+                      Nguồn: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
+                      {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Đích: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
+                      {` | Còn ${detail.remaining_line_count} dòng / ${detail.remaining_quantity} sản phẩm`}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[12px] text-muted-foreground mt-1">
-                  Nguon: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
-                  {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Dich: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
-                  {` | Con ${detail.remaining_line_count} line / ${detail.remaining_quantity} qty`}
-                </p>
+                <Button variant="outline" onClick={handleBackToList}>
+                  Quay lại danh sách
+                </Button>
               </div>
-            </SectionCard>
+            </div>
           </FadeItem>
 
           {loadingDetail ? (
@@ -812,19 +853,17 @@ export function PickingPage() {
 
           {!loadingDetail && detail.remaining_line_count === 0 ? (
             <FadeItem>
-              <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <p className="text-[13px] text-emerald-800 dark:text-emerald-300 font-semibold">Đã hoàn tất lấy hàng, chờ xuất kho</p>
-                    <p className="text-[12px] text-emerald-700 dark:text-emerald-400 mt-0.5">Hang da duoc chuyen vao SHIPPING va dang cho xac nhan outbound.</p>
-                    <p className="text-[12px] text-emerald-700 dark:text-emerald-400 mt-1">
-                      Don: {detail.order_number} | Line da pick: {completedLineCount}/{detail.lines.length} | Tong qty da pick: {totalPickedQty}
-                      {detail.completed_at ? ` | Hoan tat: ${formatDate(detail.completed_at)}` : ""}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <Alert className="border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
+                <AlertTitle className="text-emerald-800 dark:text-emerald-300">Đã hoàn tất lấy hàng, chờ xuất kho</AlertTitle>
+                <AlertDescription className="text-emerald-700 dark:text-emerald-400">
+                  <p>Hàng đã được chuyển vào SHIPPING và đang chờ xác nhận outbound.</p>
+                  <p>
+                    Đơn: {detail.order_number} | Line đã pick: {completedLineCount}/{detail.lines.length} | Tổng qty đã pick: {totalPickedQty}
+                    {detail.completed_at ? ` | Hoàn tất: ${formatDate(detail.completed_at)}` : ""}
+                  </p>
+                </AlertDescription>
+              </Alert>
             </FadeItem>
           ) : null}
 
@@ -878,25 +917,30 @@ export function PickingPage() {
 
               {taskClassLabel(detail.task_class) === "REPICK" ? (
                 <FadeItem>
-                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
-                    <p className="text-[12px] text-amber-900 dark:text-amber-300 font-semibold">
+                  <Alert className="border-amber-200/60 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/10">
+                    <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+                    <AlertTitle className="text-amber-900 dark:text-amber-300">
                       {detail.repick_sequence ? `Lấy bù lần #${detail.repick_sequence}` : 'Đơn lấy bù bổ sung phần thiếu'}
-                    </p>
-                    <p className="text-[12px] text-amber-800 dark:text-amber-400 mt-1">
-                      Đơn gốc: {detail.root_order_number || detail.root_task_id || "-"}
-                      {detail.parent_order_number || detail.parent_task_id ? ` | Sinh từ: ${detail.parent_order_number || detail.parent_task_id}` : ""}
-                    </p>
-                    <p className="text-[12px] text-amber-800 dark:text-amber-400 mt-1">Đơn này chỉ chứa phần còn thiếu cần lấy lại.</p>
-                  </div>
+                    </AlertTitle>
+                    <AlertDescription className="text-amber-800 dark:text-amber-400">
+                      <p>
+                        Đơn gốc: {detail.root_order_number || detail.root_task_id || "-"}
+                        {detail.parent_order_number || detail.parent_task_id ? ` | Sinh từ: ${detail.parent_order_number || detail.parent_task_id}` : ""}
+                      </p>
+                      <p>Đơn này chỉ chứa phần còn thiếu cần lấy lại.</p>
+                    </AlertDescription>
+                  </Alert>
                 </FadeItem>
               ) : null}
 
               <FadeItem>
-                <SectionCard>
-                  <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-3">Xác nhận hiện diện nhân viên</p>
-                  <p className="text-[11px] text-muted-foreground mb-3">Scan/nhap vi tri hien tai trong kho nguon truoc khi pick.</p>
+                <SectionCard
+                  title="Xác nhận hiện diện nhân viên"
+                  subtitle="Scan/nhập vị trí hiện tại trong kho nguồn trước khi pick."
+                  icon={UserCheck}
+                >
                   <div className="flex gap-2 flex-wrap">
-                    <input
+                    <Input
                       value={presenceInput}
                       onChange={(event) => setPresenceInput(event.target.value)}
                       onKeyDown={(event) => {
@@ -905,50 +949,51 @@ export function PickingPage() {
                           void handleConfirmPresence();
                         }
                       }}
-                      placeholder="Barcode hoac ma vi tri hien tai"
-                      className="flex-1 min-w-[200px] h-12 rounded-[10px] border border-border px-3 py-3.5 text-[15px]"
+                      placeholder="Barcode hoặc mã vị trí hiện tại"
+                      className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
                       disabled={presenceConfirmed}
                     />
-                    <button
+                    <IconButton
+                      variant="outline"
                       onClick={() => setActiveScanTarget("presence")}
                       disabled={confirmingPresence || presenceConfirmed}
-                      aria-label="Quét mã vị trí hiện tại"
-                      className="h-12 w-12 shrink-0 flex items-center justify-center rounded-[10px] border border-border hover:bg-muted disabled:opacity-60 transition-colors"
+                      label="Quét mã vị trí hiện tại"
+                      className="h-12 w-12 shrink-0"
                     >
                       <ScanLine className="w-4 h-4" />
-                    </button>
-                    <button
+                    </IconButton>
+                    <Button
                       onClick={() => void handleConfirmPresence()}
-                      disabled={confirmingPresence || presenceConfirmed}
-                      className={`rounded-[10px] px-4 py-3.5 text-[15px] font-semibold transition-colors ${
+                      disabled={presenceConfirmed}
+                      loading={confirmingPresence}
+                      className={`h-12 px-4 text-[15px] ${
                         presenceConfirmed
-                          ? "bg-emerald-100 text-emerald-700 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400"
-                          : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90"
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400"
+                          : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                       }`}
                     >
-                      {presenceConfirmed ? "Đã xác nhận" : confirmingPresence ? "Đang xác nhận..." : "Xác nhận"}
-                    </button>
+                      {presenceConfirmed ? "Đã xác nhận" : "Xác nhận"}
+                    </Button>
                   </div>
                 </SectionCard>
               </FadeItem>
 
               <FadeItem>
-                <SectionCard>
-                  <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-3">Scan location can den</p>
+                <SectionCard title="Scan vị trí cần đến" icon={MapPin}>
                   {!presenceConfirmed ? (
-                    <p className="text-[12px] text-muted-foreground">Can hoan thanh buoc 1 truoc khi hien vi tri can pick.</p>
+                    <p className="text-[12px] text-muted-foreground">Cần hoàn thành bước 1 trước khi hiện vị trí cần pick.</p>
                   ) : currentLine ? (
                     <div className="space-y-4">
                       <div className="rounded-[12px] border border-border bg-muted/50 p-4">
-                        <p className="text-[11px] text-muted-foreground font-semibold">Vi tri can den</p>
+                        <p className="text-[11px] text-muted-foreground font-semibold">Vị trí cần đến</p>
                         <p className="text-[15px] text-foreground font-bold mt-1">
-                          {currentLine.source_location_code || "(He thong dang xac dinh vi tri phu hop)"}
+                          {currentLine.source_location_code || "(Hệ thống đang xác định vị trí phù hợp)"}
                         </p>
-                        <p className="text-[11px] text-muted-foreground mt-1">Chi scan location nay moi duoc sang buoc tiep theo.</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">Chỉ scan đúng vị trí này mới được sang bước tiếp theo.</p>
                       </div>
 
                       <div className="flex gap-2 flex-wrap">
-                        <input
+                        <Input
                           value={locationInput}
                           onChange={(event) => {
                             setLocationInput(event.target.value);
@@ -961,50 +1006,51 @@ export function PickingPage() {
                               handleVerifyLocation();
                             }
                           }}
-                          placeholder="Barcode hoac ma location dich"
-                          className="flex-1 min-w-[200px] h-12 rounded-[10px] border border-border px-3 py-3.5 text-[15px]"
+                          placeholder="Barcode hoặc mã vị trí đích"
+                          className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
                         />
-                        <button
+                        <IconButton
+                          variant="outline"
                           onClick={() => setActiveScanTarget("location")}
                           disabled={!presenceConfirmed || !currentLine}
-                          aria-label="Quét mã vị trí cần đến"
-                          className="h-12 w-12 shrink-0 flex items-center justify-center rounded-[10px] border border-border hover:bg-muted disabled:opacity-60 transition-colors"
+                          label="Quét mã vị trí cần đến"
+                          className="h-12 w-12 shrink-0"
                         >
                           <ScanLine className="w-4 h-4" />
-                        </button>
-                        <button
+                        </IconButton>
+                        <Button
                           onClick={() => handleVerifyLocation()}
-                          className={`rounded-[10px] px-4 py-3.5 text-[15px] font-semibold transition-colors ${
+                          className={`h-12 px-4 text-[15px] ${
                             locationVerified
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
-                              : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:opacity-90"
+                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400"
+                              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                           }`}
                         >
                           {locationVerified ? "Đúng vị trí" : "Xác nhận vị trí"}
-                        </button>
+                        </Button>
                       </div>
 
                       {locationVerified ? (
                         <>
-                          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Scan san pham can lay</p>
+                          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Scan sản phẩm cần lấy</p>
                           <div className="rounded-[12px] border border-border bg-muted/50 p-4">
-                            <p className="text-[11px] text-muted-foreground font-semibold">San pham can pick</p>
+                            <p className="text-[11px] text-muted-foreground font-semibold">Sản phẩm cần pick</p>
                             <p className="text-[13px] text-foreground font-semibold mt-1">{currentLine.book_title}</p>
                             <p className="text-[11px] text-muted-foreground mt-1">
                               SKU: {currentLine.sku || "-"} | Barcode: {currentLine.barcode || "-"}
                             </p>
                             <p className="text-[12px] text-foreground mt-1 font-medium">
-                              Can pick: {currentLine.remaining_qty} (da pick {currentLine.picked_qty}/{currentLine.requested_qty})
+                              Cần pick: {currentLine.remaining_qty} (đã pick {currentLine.picked_qty}/{currentLine.requested_qty})
                             </p>
                             {taskClassLabel(detail.task_class) === "REPICK" && currentLine.repick_line?.original_line_id ? (
                               <p className="text-[11px] text-muted-foreground mt-1">
-                                Truy vet line goc: {currentLine.repick_line.original_line_id} | Thieu ban dau: {currentLine.repick_line.missing_qty}
+                                Truy vết dòng gốc: {currentLine.repick_line.original_line_id} | Thiếu ban đầu: {currentLine.repick_line.missing_qty}
                               </p>
                             ) : null}
                           </div>
 
                           <div className="flex gap-2 flex-wrap">
-                            <input
+                            <Input
                               value={productBarcodeInput}
                               onChange={(event) => {
                                 setProductBarcodeInput(event.target.value);
@@ -1017,89 +1063,91 @@ export function PickingPage() {
                                   void handleLookupProduct();
                                 }
                               }}
-                              placeholder="unit barcode / internal / isbn / sku"
-                              className="flex-1 min-w-[200px] h-12 rounded-[10px] border border-border px-3 py-3.5 text-[15px]"
+                              placeholder="Barcode / mã nội bộ / ISBN / SKU"
+                              className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
                             />
-                            <button
+                            <IconButton
+                              variant="outline"
                               onClick={() => setActiveScanTarget("product")}
                               disabled={loadingLookup || !locationVerified}
-                              aria-label="Quét mã vạch sản phẩm"
-                              className="h-12 w-12 shrink-0 flex items-center justify-center rounded-[10px] border border-border hover:bg-muted disabled:opacity-60 transition-colors"
+                              label="Quét mã vạch sản phẩm"
+                              className="h-12 w-12 shrink-0"
                             >
                               <ScanLine className="w-4 h-4" />
-                            </button>
-                            <button
+                            </IconButton>
+                            <Button
                               onClick={() => void handleLookupProduct()}
-                              disabled={loadingLookup}
-                              className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3.5 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
+                              loading={loadingLookup}
+                              className="h-12 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                             >
-                              {loadingLookup ? "Đang quét..." : "Xác nhận mã"}
-                            </button>
+                              Xác nhận mã
+                            </Button>
                           </div>
 
                           {ambiguousMatches.length > 0 ? (
                             <div className="rounded-[12px] border border-amber-200/60 bg-amber-50/50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
-                              <p className="text-[12px] text-amber-800 dark:text-amber-400 font-semibold">Barcode trung nhieu item, chon dung item:</p>
-                              <select
-                                value={selectedScannedVariantId}
-                                onChange={(event) => {
-                                  const selected = event.target.value;
+                              <p className="text-[12px] text-amber-800 dark:text-amber-400 font-semibold">Barcode trùng nhiều item, chọn đúng item:</p>
+                              <Select
+                                value={selectedScannedVariantId || undefined}
+                                onValueChange={(selected) => {
                                   setSelectedScannedVariantId(selected);
 
-                                  if (selected && selected === currentLine.variant_id) {
+                                  if (selected === currentLine.variant_id) {
                                     setProductVerified(true);
                                     toast.success("Đã chọn đúng sản phẩm cho dòng hiện tại");
                                   } else {
                                     setProductVerified(false);
-                                    if (selected) {
-                                      toast.error("Sai san pham cho line hien tai");
-                                    }
+                                    toast.error("Sai sản phẩm cho dòng hiện tại");
                                   }
                                 }}
-                                className="mt-2 w-full rounded-[10px] border border-amber-200 px-3 py-2.5 text-[12px] dark:border-amber-500/20 dark:bg-card"
                               >
-                                <option value="">Chọn biến thể đúng</option>
-                                {ambiguousMatches.map((match) => (
-                                  <option key={match.variant_id} value={match.variant_id}>
-                                    {match.sku || match.internal_barcode || match.isbn13 || match.isbn10} | {match.book_title} | {match.matched_by}
-                                  </option>
-                                ))}
-                              </select>
+                                <SelectTrigger className="mt-2 w-full text-[12px] border-amber-200 dark:border-amber-500/20">
+                                  <SelectValue placeholder="Chọn biến thể đúng" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {ambiguousMatches.map((match) => (
+                                    <SelectItem key={match.variant_id} value={match.variant_id}>
+                                      {match.sku || match.internal_barcode || match.isbn13 || match.isbn10} | {match.book_title} | {match.matched_by}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           ) : null}
 
                           {productVerified ? (
                             <>
-                              <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Nhap so luong va confirm</p>
+                              <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Nhập số lượng và xác nhận</p>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">So luong</p>
-                                  <input
+                                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
+                                  <Input
                                     type="number"
                                     min={1}
                                     max={currentLine?.remaining_qty || 1}
                                     value={quantityInput}
                                     onChange={(event) => setQuantityInput(Math.max(1, Math.trunc(Number(event.target.value || 1))))}
-                                    className="w-full h-12 rounded-[10px] border border-border px-3 py-3.5 text-[15px]"
+                                    className="w-full h-12 py-3.5 text-[15px]"
                                   />
                                 </div>
                                 <div className="flex items-end justify-end">
-                                  <button
+                                  <Button
                                     onClick={handleConfirmLine}
-                                    disabled={!canConfirmLine || confirmingLine}
-                                    className="rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3.5 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
+                                    disabled={!canConfirmLine}
+                                    loading={confirmingLine}
+                                    className="h-12 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
                                   >
-                                    {confirmingLine ? "Đang xác nhận..." : "Xác nhận lấy dòng"}
-                                  </button>
+                                    Xác nhận lấy dòng
+                                  </Button>
                                 </div>
                               </div>
                             </>
                           ) : (
-                            <p className="text-[12px] text-muted-foreground">Can scan dung san pham truoc khi nhap so luong.</p>
+                            <p className="text-[12px] text-muted-foreground">Cần scan đúng sản phẩm trước khi nhập số lượng.</p>
                           )}
                         </>
                       ) : (
-                        <p className="text-[12px] text-muted-foreground">Can scan dung location dich truoc khi hien san pham can lay.</p>
+                        <p className="text-[12px] text-muted-foreground">Cần scan đúng vị trí đích trước khi hiện sản phẩm cần lấy.</p>
                       )}
                     </div>
                   ) : (
@@ -1110,39 +1158,49 @@ export function PickingPage() {
 
               {canDeclareShortage ? (
                 <FadeItem>
-                  <div className="rounded-xl border border-orange-200/70 bg-orange-50/60 p-4 dark:border-orange-500/20 dark:bg-orange-500/10">
-                    <p className="text-[13px] font-semibold text-orange-900 dark:text-orange-300 mb-1">Không đủ hàng để pick?</p>
-                    <p className="text-[12px] text-orange-800 dark:text-orange-400 mb-3">
-                      Nếu bạn đã pick tối đa có thể nhưng vẫn thiếu, hãy khai báo thiếu hàng.
-                      Hệ thống sẽ tạo đơn REPICK để nhân viên khác có thể nhận và lấy bù phần còn thiếu.
-                    </p>
-                    {showShortageConfirm ? (
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <p className="text-[12px] text-orange-900 dark:text-orange-300 font-semibold">Xác nhận khai báo thiếu hàng?</p>
-                        <button
-                          onClick={() => void handleDeclareShortage()}
-                          disabled={declaringShortage}
-                          className="rounded-[9px] bg-orange-600 px-4 py-2 text-[12px] font-semibold text-white hover:bg-orange-700 disabled:opacity-60 transition-colors"
-                        >
-                          {declaringShortage ? "Đang tạo REPICK..." : "Xác nhận, tạo REPICK"}
-                        </button>
-                        <button
-                          onClick={() => setShowShortageConfirm(false)}
-                          disabled={declaringShortage}
-                          className="rounded-[9px] border border-orange-200 px-4 py-2 text-[12px] text-orange-700 hover:bg-orange-100 transition-colors dark:border-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/15"
-                        >
-                          Huỷ
-                        </button>
+                  <Alert className="border-orange-200/70 bg-orange-50/60 dark:border-orange-500/20 dark:bg-orange-500/10">
+                    <AlertTriangle className="text-orange-600 dark:text-orange-400" />
+                    <AlertTitle className="text-orange-900 dark:text-orange-300">Không đủ hàng để pick?</AlertTitle>
+                    <AlertDescription className="text-orange-800 dark:text-orange-400">
+                      <p>
+                        Nếu bạn đã pick tối đa có thể nhưng vẫn thiếu, hãy khai báo thiếu hàng.
+                        Hệ thống sẽ tạo đơn REPICK để nhân viên khác có thể nhận và lấy bù phần còn thiếu.
+                      </p>
+                      <div className="mt-3">
+                        {showShortageConfirm ? (
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <p className="text-[12px] text-orange-900 dark:text-orange-300 font-semibold">Xác nhận khai báo thiếu hàng?</p>
+                            <Button
+                              onClick={() => void handleDeclareShortage()}
+                              loading={declaringShortage}
+                              size="sm"
+                              className="bg-orange-600 hover:bg-orange-700 text-white"
+                            >
+                              Xác nhận, tạo REPICK
+                            </Button>
+                            <Button
+                              onClick={() => setShowShortageConfirm(false)}
+                              disabled={declaringShortage}
+                              variant="outline"
+                              size="sm"
+                              className="border-orange-200 text-orange-700 hover:bg-orange-100 dark:border-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/15"
+                            >
+                              Huỷ
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            onClick={() => setShowShortageConfirm(true)}
+                            variant="outline"
+                            size="sm"
+                            className="border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-500/30 dark:text-orange-400 dark:hover:bg-orange-500/15"
+                          >
+                            Khai báo thiếu hàng &amp; tạo REPICK
+                          </Button>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowShortageConfirm(true)}
-                        className="rounded-[9px] border border-orange-300 bg-card px-4 py-2 text-[12px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors dark:border-orange-500/30 dark:text-orange-400 dark:hover:bg-orange-500/15"
-                      >
-                        Khai báo thiếu hàng &amp; tạo REPICK
-                      </button>
-                    )}
-                  </div>
+                    </AlertDescription>
+                  </Alert>
                 </FadeItem>
               ) : null}
             </>

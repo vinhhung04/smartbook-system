@@ -10,6 +10,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { LoadingOverlay } from "@/components/ui/loading-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 const movementTypes = {
   inbound: { label: "Nhập kho", color: "emerald", icon: ArrowDown, gradient: "from-emerald-500 to-teal-500" },
@@ -62,6 +64,15 @@ function formatDeltaLabel(m: StockMovement): { text: string; className: string }
   };
 }
 
+interface MovementDetailField {
+  label: string;
+  value: string;
+  mono?: boolean;
+  bold?: boolean;
+  colored?: boolean;
+  positive?: boolean;
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
@@ -110,6 +121,22 @@ export function MovementsPage() {
     };
   }, [movements]);
 
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    movements.forEach((m) => {
+      counts[m.type] = (counts[m.type] || 0) + 1;
+    });
+    return counts;
+  }, [movements]);
+
+  const distribution = useMemo(() => {
+    const total = movements.length;
+    if (total === 0) return [];
+    return Object.entries(movementTypes)
+      .map(([key, cfg]) => ({ key, cfg, count: typeCounts[key] || 0, pct: ((typeCounts[key] || 0) / total) * 100 }))
+      .filter((d) => d.count > 0);
+  }, [movements.length, typeCounts]);
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
@@ -126,29 +153,70 @@ export function MovementsPage() {
         />
       </motion.div>
 
+      {movements.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.03 }}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          <StatCard label="Tổng nhập" value={summary.inbound} icon={movementTypes.inbound.icon} accentBorder={movementTypes.inbound.gradient} variant="success" animateValue />
+          <StatCard label="Tổng xuất" value={summary.outbound} icon={movementTypes.outbound.icon} accentBorder={movementTypes.outbound.gradient} variant="danger" animateValue />
+          <StatCard label="Chuyển kho" value={summary.transfer} icon={movementTypes.transfer.icon} accentBorder={movementTypes.transfer.gradient} variant="info" animateValue />
+          <StatCard label="Records" value={movements.length} variant="default" animateValue />
+        </motion.div>
+      )}
+
+      {distribution.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="rounded-xl border border-border bg-card p-4"
+        >
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-3">Phân bố loại biến động</p>
+          <div className="flex w-full h-2.5 rounded-full overflow-hidden bg-muted">
+            {distribution.map((d) => (
+              <div
+                key={d.key}
+                style={{ width: `${d.pct}%` }}
+                className={`h-full bg-gradient-to-r ${d.cfg.gradient} first:rounded-l-full last:rounded-r-full`}
+                title={`${d.cfg.label}: ${d.count}`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
+            {distribution.map((d) => (
+              <div key={d.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className={`w-2 h-2 rounded-full bg-gradient-to-br ${d.cfg.gradient}`} />
+                {d.cfg.label} <span className="font-semibold text-foreground">{d.count}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="flex items-center gap-3 flex-wrap"
+        transition={{ duration: 0.3, delay: 0.07 }}
       >
-        <div className="relative flex-1 max-w-sm">
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Tìm biến động..."
-            className="w-full pl-9 pr-4 py-2.5 bg-card border border-input rounded-xl text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
-          />
-          <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        </div>
-        <div className="flex items-center gap-1 bg-card border border-input rounded-lg p-[3px] shadow-sm overflow-x-auto">
-          {[{ id: "all", label: "Tất cả" }, ...Object.entries(movementTypes).map(([k, v]) => ({ id: k, label: v.label }))].map(f => (
-            <button key={f.id} onClick={() => setTypeFilter(f.id)} className={`relative px-3.5 py-1.5 rounded-lg text-[12px] whitespace-nowrap transition-all duration-160 font-medium ${typeFilter === f.id ? "text-white" : "text-muted-foreground hover:text-foreground"}`}>
-              {typeFilter === f.id && <motion.div layoutId="move-filter" className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 shadow-sm" transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} />}
-              <span className="relative z-10">{f.label}</span>
-            </button>
-          ))}
-        </div>
+        <FilterBar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Tìm biến động..."
+          showSearchClear
+          filters={
+            <SegmentedControl
+              options={[{ value: "all", label: "Tất cả" }, ...Object.entries(movementTypes).map(([k, v]) => ({ value: k, label: v.label }))]}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              layoutId="move-filter"
+              gradientClassName="from-cyan-600 to-blue-600"
+              className="overflow-x-auto"
+            />
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -168,9 +236,14 @@ export function MovementsPage() {
                 const Icon = typeConfig.icon;
                 return (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="bg-card rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:hover:shadow-none transition-all duration-200 overflow-hidden">
-                    <button onClick={() => setExpandedId(expandedId === m.id ? null : m.id)} className="w-full p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors text-left">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center text-white`}>
+                    whileHover={{ y: -2 }}
+                    className="bg-card rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.02)] dark:shadow-none hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:hover:shadow-none transition-shadow duration-200 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}
+                      aria-expanded={expandedId === m.id}
+                      className="w-full p-4 flex items-center gap-4 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center text-white shadow-sm`}>
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -197,18 +270,20 @@ export function MovementsPage() {
                           className="border-t border-border">
                           <div className="p-4 space-y-3">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                              {[
-                                { label: "FROM/TO", value: m.transfer_note || `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` },
-                                { label: "WAREHOUSE", value: m.warehouse_name || m.warehouse_code || "-" },
-                                { label: "LOCATION", value: m.to_location_code || m.from_location_code || "-", mono: true },
-                                { label: "USER", value: m.created_by_user_id || "-" },
-                                { label: "QTY", value: formatDeltaLabel(m).text, bold: true, colored: true, positive: m.delta >= 0 },
-                              ].map(f => (
+                              {(
+                                [
+                                  { label: "FROM/TO", value: m.transfer_note || `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` },
+                                  { label: "WAREHOUSE", value: m.warehouse_name || m.warehouse_code || "-" },
+                                  { label: "LOCATION", value: m.to_location_code || m.from_location_code || "-", mono: true },
+                                  { label: "USER", value: m.created_by_user_id || "-" },
+                                  { label: "QTY", value: formatDeltaLabel(m).text, bold: true, colored: true, positive: m.delta >= 0 },
+                                ] as MovementDetailField[]
+                              ).map(f => (
                                 <div key={f.label}>
                                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">{f.label}</p>
                                   <p
-                                    className={`text-[12px] ${(f as any).mono ? "font-mono text-muted-foreground" : ""} ${(f as any).colored ? ((f as any).positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400") : "text-muted-foreground"}`}
-                                    style={{ fontWeight: (f as any).bold ? 600 : 500 }}
+                                    className={`text-[12px] ${f.mono ? "font-mono text-muted-foreground" : ""} ${f.colored ? (f.positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400") : "text-muted-foreground"}`}
+                                    style={{ fontWeight: f.bold ? 600 : 500 }}
                                   >
                                     {f.value}
                                   </p>
@@ -237,18 +312,6 @@ export function MovementsPage() {
             </AnimatePresence>
           </div>
         )}
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.15 }}
-        className="grid grid-cols-2 md:grid-cols-4 gap-4"
-      >
-        <StatCard label="Tổng nhập" value={summary.inbound} variant="success" />
-        <StatCard label="Tổng xuất" value={summary.outbound} variant="danger" />
-        <StatCard label="Chuyển kho" value={summary.transfer} variant="info" />
-        <StatCard label="Records" value={movements.length} variant="default" />
       </motion.div>
     </div>
   );

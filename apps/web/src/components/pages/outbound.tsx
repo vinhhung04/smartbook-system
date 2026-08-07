@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CheckCircle2, ScanLine, UserCheck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, PackageCheck, ScanLine, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
@@ -11,22 +11,31 @@ import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
 import { userService, type WarehouseStaffOption } from '@/services/user';
 import { canManageReceiving } from '@/lib/rbac';
+import { PageHeader } from '@/components/ui/page-header';
+import { SectionCard } from '@/components/ui/section-card';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { StatusBadge } from '@/components/status-badge';
+import { Button, IconButton } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 
 function taskLabel(taskType: 'outbound' | 'transfer'): string {
   return taskType === 'transfer' ? 'Chuyển kho' : 'Xuất kho';
 }
 
-function outboundStatusBadge(status: string): { label: string; className: string } {
+function outboundStatusBadge(status: string): { label: string; variant: string } {
   switch (status) {
-    case 'APPROVED':     return { label: 'Đã duyệt', className: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400' };
-    case 'PICKING':      return { label: 'Đang lấy', className: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400' };
-    case 'PARTIAL_PICKED': return { label: 'Lấy một phần', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400' };
-    case 'REPICKING':    return { label: 'Đang re-pick', className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-400' };
+    case 'APPROVED':     return { label: 'Đã duyệt', variant: 'info' };
+    case 'PICKING':      return { label: 'Đang lấy', variant: 'info' };
+    case 'PARTIAL_PICKED': return { label: 'Lấy một phần', variant: 'amber' };
+    case 'REPICKING':    return { label: 'Đang re-pick', variant: 'warning' };
     case 'READY_FOR_OUTBOUND':
-    case 'READY_TO_SHIP': return { label: 'Sẵn xuất kho', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' };
-    case 'COMPLETED':    return { label: 'Hoàn tất', className: 'bg-muted text-muted-foreground' };
-    case 'CANCELLED':    return { label: 'Đã hủy', className: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' };
-    default:             return { label: status, className: 'bg-muted text-muted-foreground' };
+    case 'READY_TO_SHIP': return { label: 'Sẵn xuất kho', variant: 'success' };
+    case 'COMPLETED':    return { label: 'Hoàn tất', variant: 'neutral' };
+    case 'CANCELLED':    return { label: 'Đã hủy', variant: 'danger' };
+    default:             return { label: status, variant: 'neutral' };
   }
 }
 
@@ -221,48 +230,41 @@ export function OutboundPage() {
       </FadeItem>
 
       <FadeItem>
-        <h1 className="tracking-[-0.02em]">Xuất kho</h1>
-        <p className="text-[12px] text-muted-foreground mt-1">
-          {canManageQueue ? 'Giao task và xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
-        </p>
+        <PageHeader
+          icon={PackageCheck}
+          title="Xuất kho"
+          description={canManageQueue ? 'Giao task và xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
+          iconBg="bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10"
+          iconColor="text-sky-600 dark:text-sky-400"
+        />
       </FadeItem>
 
       {!detail ? (
         <>
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {canManageQueue ? (
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho</p>
-                  <select
-                    value={selectedWarehouseId}
-                    onChange={(event) => setSelectedWarehouseId(event.target.value)}
-                    className="w-full rounded-[10px] border border-border px-3 py-2.5 text-[13px]"
-                  >
-                    <option value="">Chọn kho</option>
+            <FilterBar
+              searchValue={query}
+              onSearchChange={setQuery}
+              searchPlaceholder="Mã đơn / kho / loại đơn"
+              filters={canManageQueue ? (
+                <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Chọn kho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Chọn kho</SelectItem>
                     {warehouses.map((warehouse) => (
-                      <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>
+                      <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
                     ))}
-                  </select>
-                </div>
-                ) : null}
-
-                <div className={canManageQueue ? 'md:col-span-2' : 'md:col-span-3'}>
-                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Tìm đơn xuất kho</p>
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Mã đơn / kho / loại đơn"
-                    className="w-full rounded-[10px] border border-border px-3 py-2.5 text-[13px]"
-                  />
-                </div>
-              </div>
-            </div>
+                  </SelectContent>
+                </Select>
+              ) : undefined}
+            />
           </FadeItem>
 
           <FadeItem>
-            <div className="overflow-x-auto overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+            <SectionCard noPadding>
+            <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-gradient-to-r from-sky-50/30 to-transparent">
@@ -276,8 +278,8 @@ export function OutboundPage() {
                 <tbody>
                   {filteredQueue.length === 0 ? (
                     <tr>
-                      <td colSpan={tableHeads.length} className="py-10 text-center text-[13px] text-muted-foreground">
-                        Không có đơn nào cần xuất kho
+                      <td colSpan={tableHeads.length}>
+                        <EmptyState variant="no-data" title="Không có đơn nào cần xuất kho" className="py-10" />
                       </td>
                     </tr>
                   ) : filteredQueue.map((task) => {
@@ -301,7 +303,7 @@ export function OutboundPage() {
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.target_warehouse_code || '-'}</td>
                         <td className="px-4 py-3 text-[12px]">
                           {(() => { const b = outboundStatusBadge(task.status); return (
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${b.className}`}>{b.label}</span>
+                            <StatusBadge label={b.label} variant={b.variant} dot />
                           ); })()}
                         </td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.total_quantity}</td>
@@ -322,36 +324,37 @@ export function OutboundPage() {
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <select
-                                  value={selectedStaffId === 'PICK' ? '' : selectedStaffId}
-                                  onChange={(e) => setAssigningStaffByTask((prev) => ({ ...prev, [key]: e.target.value }))}
-                                  className="h-8 min-w-[140px] rounded-[8px] border border-border bg-card px-2 text-[11px] text-foreground"
+                                <Select
+                                  value={selectedStaffId === 'PICK' ? 'none' : (selectedStaffId || 'none')}
+                                  onValueChange={(value) => setAssigningStaffByTask((prev) => ({ ...prev, [key]: value === 'none' ? '' : value }))}
                                 >
-                                  <option value="">Chọn nhân viên</option>
-                                  {warehouseStaff.map((staff) => (
-                                    <option key={staff.id} value={staff.id}>
-                                      {staff.full_name || staff.username}
-                                    </option>
-                                  ))}
-                                </select>
-                                <button
+                                  <SelectTrigger className="h-8 min-w-[140px] text-[11px]">
+                                    <SelectValue placeholder="Chọn nhân viên" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {warehouseStaff.map((staff) => (
+                                      <SelectItem key={staff.id} value={staff.id}>
+                                        {staff.full_name || staff.username}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
                                   onClick={() => void handleAssignOutbound(task)}
-                                  disabled={isAssigning || !selectedStaffId || selectedStaffId === 'PICK'}
-                                  className="h-8 rounded-[8px] bg-blue-600 px-3 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                  disabled={!selectedStaffId || selectedStaffId === 'PICK'}
+                                  loading={isAssigning}
                                 >
-                                  {isAssigning ? '...' : 'Giao'}
-                                </button>
+                                  Giao
+                                </Button>
                               </div>
                             )}
                           </td>
                         ) : null}
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => void handleOpen(task)}
-                            className="inline-flex items-center gap-1 rounded-[8px] border border-border bg-card px-2.5 py-1.5 text-[11px] hover:bg-muted transition-colors"
-                          >
+                          <Button size="sm" variant="outline" onClick={() => void handleOpen(task)}>
                             Xem & xuất <ArrowRight className="w-3 h-3" />
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -359,6 +362,7 @@ export function OutboundPage() {
                 </tbody>
               </table>
             </div>
+            </SectionCard>
           </FadeItem>
         </>
       ) : (
@@ -371,7 +375,7 @@ export function OutboundPage() {
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
                     {(() => { const b = outboundStatusBadge(detail.status); return (
-                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${b.className}`}>{b.label}</span>
+                      <StatusBadge label={b.label} variant={b.variant} dot />
                     ); })()}
                   </div>
                   <p className="text-[12px] text-muted-foreground mt-1">
@@ -393,17 +397,17 @@ export function OutboundPage() {
                     </p>
                   ) : null}
                 </div>
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setDetail(null);
                     setSelectedTaskId('');
                     setSelectedTaskType(null);
                     setScanCode('');
                   }}
-                  className="rounded-[10px] border border-border bg-card px-4 py-2.5 text-[13px] font-semibold text-foreground hover:bg-muted transition-colors"
                 >
                   Quay lại hàng đợi
-                </button>
+                </Button>
               </div>
             </div>
           </FadeItem>
@@ -413,7 +417,7 @@ export function OutboundPage() {
               <h3 className="text-[14px] font-semibold mb-3">Quét mã và xác nhận xuất kho</h3>
               <p className="text-[11px] text-muted-foreground mb-3">Nhập tay hoặc quét mã đơn để xác nhận xuất kho.</p>
               <div className="flex gap-2 flex-wrap">
-                <input
+                <Input
                   value={scanCode}
                   onChange={(event) => setScanCode(event.target.value)}
                   onKeyDown={(event) => {
@@ -423,24 +427,25 @@ export function OutboundPage() {
                     }
                   }}
                   placeholder="Mã đơn / mã quét"
-                  className="flex-1 min-w-[200px] rounded-[10px] border border-border px-3 py-2.5 text-[13px]"
+                  className="flex-1 min-w-[200px] h-auto py-2.5"
                 />
-                <button
+                <IconButton
+                  variant="outline"
                   onClick={() => setShowScanModal(true)}
                   disabled={confirming}
-                  aria-label="Quét mã đơn"
-                  className="rounded-[10px] border border-border px-3 py-2.5 text-[13px] hover:bg-muted disabled:opacity-60 transition-colors"
+                  label="Quét mã đơn"
                 >
                   <ScanLine className="w-4 h-4" />
-                </button>
-                <button
+                </IconButton>
+                <Button
                   onClick={() => void handleConfirm()}
-                  disabled={confirming || !canConfirmOutbound(detail.status, detail.aggregate_remaining_qty)}
+                  disabled={!canConfirmOutbound(detail.status, detail.aggregate_remaining_qty)}
+                  loading={confirming}
                   title={!canConfirmOutbound(detail.status, detail.aggregate_remaining_qty) ? `Đơn đang ở trạng thái ${detail.status} — chưa thể xuất kho` : undefined}
-                  className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-60 transition-colors"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                 >
-                  {confirming ? 'Đang xuất...' : 'Xác nhận xuất kho'}
-                </button>
+                  Xác nhận xuất kho
+                </Button>
               </div>
 
               {loadingDetail ? <p className="text-[12px] text-muted-foreground mt-3">Đang tải chi tiết...</p> : null}
@@ -545,16 +550,14 @@ export function OutboundPage() {
           )}
 
           <FadeItem>
-            <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-[12px] text-emerald-800 dark:text-emerald-300">
-                  {detail.task_type === 'transfer'
-                    ? 'Sau khi xác nhận xuất kho chuyển kho, hàng chuyển sang trạng thái IN_TRANSIT. Manager kho đích cần giao task nhận hàng cho nhân viên.'
-                    : 'Sau khi xác nhận xuất kho, đơn sẽ chuyển sang trạng thái COMPLETED.'}
-                </p>
-              </div>
-            </div>
+            <Alert className="border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+              <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
+              <AlertDescription className="text-emerald-800 dark:text-emerald-300">
+                {detail.task_type === 'transfer'
+                  ? 'Sau khi xác nhận xuất kho chuyển kho, hàng chuyển sang trạng thái IN_TRANSIT. Manager kho đích cần giao task nhận hàng cho nhân viên.'
+                  : 'Sau khi xác nhận xuất kho, đơn sẽ chuyển sang trạng thái COMPLETED.'}
+              </AlertDescription>
+            </Alert>
           </FadeItem>
 
           <BarcodeScanModal

@@ -150,15 +150,15 @@ export function BarcodeScanModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => void closeModal()} />
 
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
-            <Camera size={18} className="text-indigo-600" />
-            <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+            <Camera size={18} className="text-primary" />
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
           </div>
           <button
             onClick={() => void closeModal()}
-            className="text-gray-400 transition-colors hover:text-gray-600"
+            className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -174,7 +174,7 @@ export function BarcodeScanModal({
                   setSelectedCameraId(cameraId);
                   void startScanner(cameraId);
                 }}
-                className="flex-1 rounded-lg border border-gray-200 bg-slate-50 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 rounded-lg border border-border bg-input-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {cameras.map((camera) => (
                   <option key={camera.id} value={camera.id}>
@@ -184,7 +184,7 @@ export function BarcodeScanModal({
               </select>
               <button
                 title="Thu lai"
-                className="rounded-lg border border-gray-200 p-1.5 text-gray-500 transition-colors hover:border-indigo-300 hover:text-indigo-600"
+                className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary cursor-pointer"
                 onClick={() => {
                   if (selectedCameraId) {
                     void startScanner(selectedCameraId);
@@ -196,25 +196,25 @@ export function BarcodeScanModal({
             </div>
           )}
 
-          <div className="relative overflow-hidden rounded-xl border border-indigo-200 bg-slate-50 p-2">
+          <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-muted p-2">
             <div id={SCANNER_ELEMENT_ID} className="min-h-[240px] w-full overflow-hidden rounded-lg" />
 
             {loading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/80">
-                <Loader2 size={26} className="animate-spin text-indigo-600" />
+              <div className="absolute inset-0 flex items-center justify-center bg-card/80">
+                <Loader2 size={26} className="animate-spin text-primary" />
               </div>
             )}
           </div>
 
           {cameraError ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
               {cameraError}
             </p>
           ) : null}
         </div>
 
-        <div className="border-t border-gray-100 px-4 py-4">
-          <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+        <div className="border-t border-border px-4 py-4">
+          <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">
             <Keyboard size={12} className="mr-1 inline" />
             Nhap barcode thu cong
           </label>
@@ -229,11 +229,11 @@ export function BarcodeScanModal({
                 }
               }}
               placeholder="Nhap ma barcode/ISBN..."
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 rounded-lg border border-border bg-input-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
               onClick={() => void handleFoundCode(manualCode)}
-              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
             >
               Xac nhan
             </button>

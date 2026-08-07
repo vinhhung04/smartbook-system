@@ -8,6 +8,7 @@ const {
   round,
 } = require('../utils/date-range');
 const { findSeasonalEvent } = require('../config/seasonal-events');
+const { ewma, linearTrendSlope, stdDev, projectedDemand } = require('../utils/forecast');
 
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -16,6 +17,9 @@ const SEASONAL_INDEX_MIN = 0.5;
 const SEASONAL_INDEX_MAX = 2.0;
 const SEASONAL_MIN_SAMPLE_SIZE = 5;
 const REORDER_PRIORITIES = new Set(['ALL', 'HIGH', 'MEDIUM', 'LOW']);
+const EWMA_ALPHA = 0.35;
+// Z-score for a ~95% service level, used to size safety stock from demand volatility.
+const SAFETY_STOCK_Z_SCORE = 1.645;
 
 function number(value) {
   return Number(value || 0);
@@ -494,6 +498,54 @@ async function getYearlyBorrowCountByVariant(to) {
   return getBorrowDemandByVariant(from, to);
 }
 
+// Daily borrow-count series per variant (oldest -> newest, zero-filled) for the
+// window [from, to]. Only variants with at least one borrow in the window are
+// included; variants with no activity simply have no entry, and callers treat
+// that as an empty series (forecast helpers already return 0 for []).
+async function getDailyBorrowSeriesByVariant(from, to) {
+  const rows = await query(
+    borrowPool,
+    `
+    WITH buckets AS (
+      SELECT generate_series(
+        date_trunc('day', $1::timestamptz),
+        date_trunc('day', $2::timestamptz),
+        '1 day'::interval
+      ) AS bucket
+    ),
+    variant_days AS (
+      SELECT li.variant_id::text AS variant_id, date_trunc('day', lt.borrow_date) AS bucket, COUNT(*) AS count
+      FROM loan_items li
+      JOIN loan_transactions lt ON lt.id = li.loan_id
+      WHERE lt.borrow_date >= $1::timestamptz AND lt.borrow_date <= $2::timestamptz
+      GROUP BY 1, 2
+    ),
+    active_variants AS (
+      SELECT DISTINCT variant_id FROM variant_days
+    )
+    SELECT
+      active_variants.variant_id,
+      buckets.bucket,
+      COALESCE(variant_days.count, 0) AS count
+    FROM active_variants
+    CROSS JOIN buckets
+    LEFT JOIN variant_days
+      ON variant_days.variant_id = active_variants.variant_id
+      AND variant_days.bucket = buckets.bucket
+    ORDER BY active_variants.variant_id, buckets.bucket ASC
+    `,
+    [from, to],
+  );
+
+  const series = new Map();
+  for (const row of rows) {
+    const list = series.get(row.variant_id) || [];
+    list.push(number(row.count));
+    series.set(row.variant_id, list);
+  }
+  return series;
+}
+
 // Seasonal index per variant = (borrow count in the same calendar window last
 // year) / (expected count for a window this size, based on the trailing-year
 // average). Clamped to avoid wild swings on thin history, and left at neutral
@@ -666,10 +718,18 @@ function buildReason(item, days, leadTimeDays) {
   if (item.wishlist_count > 0 || item.availability_alert_count > 0) {
     parts.push(`Có thêm ${item.wishlist_count} wishlist và ${item.availability_alert_count} cảnh báo chờ hàng.`);
   }
+  if (item.daily_trend > 0.03) {
+    parts.push(`Xu hướng mượn đang tăng khoảng ${item.daily_trend} bản/ngày (hồi quy tuyến tính trên chuỗi mượn ${days} ngày gần nhất).`);
+  } else if (item.daily_trend < -0.03) {
+    parts.push(`Xu hướng mượn đang giảm khoảng ${Math.abs(item.daily_trend)} bản/ngày.`);
+  }
   if (item.suggested_reorder_qty > 0) {
     parts.push(`Đề xuất nhập thêm ${item.suggested_reorder_qty} bản để đáp ứng nhu cầu trong thời gian chờ nhập hàng ${leadTimeDays} ngày.`);
   } else {
     parts.push('Chưa cần nhập thêm ngay, nhưng nên tiếp tục theo dõi nhu cầu.');
+  }
+  if (item.demand_volatility > 0) {
+    parts.push(`Mức dự phòng an toàn được tính theo độ biến động nhu cầu thực tế (độ lệch chuẩn ${item.demand_volatility} bản/ngày, mức phục vụ ~95%).`);
   }
   if (item.seasonal_event && item.seasonal_index !== 1) {
     parts.push(`Dự báo đã điều chỉnh theo mùa vụ "${item.seasonal_event}" (hệ số ${item.seasonal_index}x dựa trên cùng kỳ năm trước).`);
@@ -678,7 +738,7 @@ function buildReason(item, days, leadTimeDays) {
   return parts.join(' ');
 }
 
-function calculateSuggestion(row, demand, ranges, seasonal = {}) {
+function calculateSuggestion(row, demand, ranges, seasonal = {}, series = []) {
   const availableQty = number(row.available_qty);
   const onHandQty = number(row.on_hand_qty);
   const reservedQty = number(row.reserved_qty);
@@ -692,15 +752,25 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}) {
   const seasonalIndex = seasonal.index ?? 1;
   const seasonalEvent = seasonal.event ?? null;
   const avgDailyDemand = borrowCount / ranges.days;
-  const forecast7d = Math.ceil(avgDailyDemand * 7 * seasonalIndex);
-  const forecast30d = Math.ceil(avgDailyDemand * 30 * seasonalIndex);
+  // Recency-weighted current pace (EWMA), linear trend (bản/ngày) and demand
+  // volatility (std dev) estimated from the daily borrow series, replacing the
+  // flat-average heuristic for forecasting and safety stock.
+  const demandPace = ewma(series, EWMA_ALPHA);
+  const dailyTrend = linearTrendSlope(series);
+  const demandVolatility = stdDev(series);
+  const forecast7d = projectedDemand(series, 7, seasonalIndex);
+  const forecast30d = projectedDemand(series, 30, seasonalIndex);
   const demandTrendPct = previousBorrowCount > 0
     ? round(((borrowCount - previousBorrowCount) / previousBorrowCount) * 100, 1)
     : (borrowCount > 0 ? 100 : 0);
-  const estimatedDaysUntilStockout = avgDailyDemand > 0 ? round(availableQty / avgDailyDemand, 1) : null;
+  const estimatedDaysUntilStockout = demandPace > 0 ? round(availableQty / demandPace, 1) : null;
   const hasDemandSignal = borrowCount > 0 || reservationCount > 0;
-  const safetyStock = Math.max(reorderPoint, Math.ceil(avgDailyDemand * 7), hasDemandSignal ? 2 : 0);
-  const expectedDemandDuringLeadTime = Math.ceil(avgDailyDemand * ranges.leadTimeDays);
+  const safetyStock = Math.max(
+    reorderPoint,
+    Math.ceil(SAFETY_STOCK_Z_SCORE * demandVolatility * Math.sqrt(ranges.leadTimeDays)),
+    hasDemandSignal ? 2 : 0,
+  );
+  const expectedDemandDuringLeadTime = projectedDemand(series, ranges.leadTimeDays, seasonalIndex);
   let suggestedReorderQty = Math.max(0, expectedDemandDuringLeadTime + safetyStock - availableQty);
   const demandScore = round(
     borrowCount * 2
@@ -745,6 +815,9 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}) {
     wishlist_count: wishlistCount,
     availability_alert_count: availabilityAlertCount,
     avg_daily_demand: round(avgDailyDemand, 2),
+    demand_pace: round(demandPace, 2),
+    daily_trend: round(dailyTrend, 3),
+    demand_volatility: round(demandVolatility, 2),
     forecast_7d: forecast7d,
     forecast_30d: forecast30d,
     estimated_days_until_stockout: estimatedDaysUntilStockout,
@@ -780,6 +853,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     wishlistByBook,
     alertsByBook,
     seasonalIndexByVariant,
+    dailySeriesByVariant,
   ] = await Promise.all([
     getInventorySnapshot(),
     getBorrowDemandByVariant(ranges.from, ranges.to),
@@ -788,6 +862,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     getWishlistDemandByBook(),
     getAvailabilityAlertDemandByBook(),
     getSeasonalIndexByVariant(ranges),
+    getDailyBorrowSeriesByVariant(ranges.from, ranges.to),
   ]);
 
   const seasonalEvent = findSeasonalEvent(ranges.to);
@@ -802,7 +877,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     }, ranges, {
       index: seasonalIndexByVariant.get(row.variant_id) ?? 1,
       event: seasonalEvent,
-    }))
+    }, dailySeriesByVariant.get(row.variant_id) || []))
     .filter((item) => {
       if (priority !== 'ALL' && item.priority !== priority) return false;
       if (includeLowDemand) return true;

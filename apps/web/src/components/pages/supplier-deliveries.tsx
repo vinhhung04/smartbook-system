@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, ClipboardCheck, FileText, RefreshCw, Search, Truck, UserCheck } from "lucide-react";
+import { AlertCircle, ArrowLeft, Boxes, ClipboardCheck, Clock, DollarSign, Info, PackageCheck, RefreshCw, Truck, UserCheck, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
 import { goodsReceiptService } from "@/services/goods-receipt";
@@ -11,7 +11,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
+import { LoadingOverlay, SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
+import { StatCard } from "@/components/ui/stat-card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -31,7 +37,14 @@ function statusVariant(status: string) {
   return "neutral";
 }
 
-const statuses = ["ALL", "SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED", "CANCELLED"];
+const STATUS_OPTIONS = [
+  { value: "ALL", label: "Tất cả" },
+  { value: "SUBMITTED", label: "Đã gửi" },
+  { value: "PARTIALLY_RECEIVED", label: "Nhận một phần" },
+  { value: "SHORTAGE_REPORTED", label: "Báo thiếu hàng" },
+  { value: "RECEIVED", label: "Đã nhận" },
+  { value: "CANCELLED", label: "Đã hủy" },
+];
 
 export function SupplierDeliveriesPage() {
   const { id } = useParams();
@@ -72,73 +85,139 @@ function SupplierDeliveryListView() {
     );
   }, [rows, search]);
 
+  const summary = useMemo(() => {
+    const canReceiveCount = rows.filter((row) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status)).length;
+    const receivedCount = rows.filter((row) => row.status === "RECEIVED").length;
+    const shortageCount = rows.filter((row) => row.status === "SHORTAGE_REPORTED").length;
+    return { total: rows.length, canReceiveCount, receivedCount, shortageCount };
+  }, [rows]);
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <PageHeader
         icon={Truck}
         title="Giao hàng nhà cung cấp"
         description="Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp"
-        iconBg="bg-sky-50 dark:bg-sky-500/10"
-        iconColor="text-sky-700 dark:text-sky-400"
+        iconBg="bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10"
+        iconColor="text-sky-600 dark:text-sky-400"
         actions={
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới
+          <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
+            <RefreshCw className="h-3.5 w-3.5" /> Làm mới
           </Button>
         }
       />
 
-      <SectionCard>
-        <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tìm hóa đơn, PO, nhà cung cấp, kho..."
-              className="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-[13px]"
-            />
-          </div>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
-            {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
+      {!loading && rows.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Tổng hóa đơn" value={summary.total} icon={Boxes} variant="primary" animateValue />
+          <StatCard label="Chờ nhận hàng" value={summary.canReceiveCount} icon={Clock} variant="warning" animateValue />
+          <StatCard label="Đã nhận" value={summary.receivedCount} icon={PackageCheck} variant="success" animateValue />
+          <StatCard label="Báo thiếu hàng" value={summary.shortageCount} icon={AlertCircle} variant="danger" animateValue />
         </div>
+      )}
+
+      <SectionCard>
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Tìm hóa đơn, PO, nhà cung cấp, kho..."
+          filters={
+            <SegmentedControl
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={setStatus}
+              layoutId="supplier-delivery-status"
+              gradientClassName="from-sky-600 to-blue-600"
+              className="overflow-x-auto"
+            />
+          }
+        />
       </SectionCard>
 
       <SectionCard noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px]">
+        {/* Mobile cards (< md) */}
+        {loading ? (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="md:hidden">
+            <EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" />
+          </div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+            {filteredRows.map((row) => {
+              const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
+              const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
+              const canReceive = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status);
+              return (
+                <div key={row.id} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <NavLink to={`/supplier-deliveries/${row.id}`} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                        {row.invoice_number}
+                      </NavLink>
+                      <p className="truncate text-[11px] text-muted-foreground">{row.delivery_number || "-"}</p>
+                    </div>
+                    <StatusBadge label={row.status} variant={statusVariant(row.status)} dot />
+                  </div>
+                  <p className="truncate text-[12px] text-muted-foreground">
+                    {row.supplier_name || "-"} · {row.warehouse_code || row.warehouse_name || "-"}
+                  </p>
+                  {row.purchase_order_id && (
+                    <p className="truncate text-[12px] text-muted-foreground">
+                      PO: <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink>
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-muted-foreground">Dự kiến {formatDate(row.expected_delivery_date)}</span>
+                    <span><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></span>
+                  </div>
+                  <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)} className="w-full">
+                    <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Desktop table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Hóa đơn", "PO", "Nhà cung cấp", "Kho", "Dự kiến", "SL", "Đã nhận", "Trạng thái", "Thao tác"].map((heading) => (
-                  <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
+                {["Hóa đơn", "PO", "NCC / Kho", "Dự kiến", "SL / Đã nhận", "Trạng thái", "Thao tác"].map((heading) => (
+                  <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonTableRow columns={9} rows={5} />
+                <SkeletonTableRow columns={7} rows={5} />
               ) : filteredRows.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" /></td></tr>
+                <tr><td colSpan={7}><EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" /></td></tr>
               ) : filteredRows.map((row) => {
                 const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
                 const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
                 const canReceive = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status);
                 return (
                   <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-5 py-3.5">
-                      <NavLink to={`/supplier-deliveries/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.invoice_number}</NavLink>
-                      <div className="text-[11px] text-muted-foreground">{row.delivery_number || "-"}</div>
+                    <td className="px-4 py-3.5 max-w-[170px]">
+                      <NavLink to={`/supplier-deliveries/${row.id}`} title={row.invoice_number} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.invoice_number}</NavLink>
+                      <div className="truncate text-[11px] text-muted-foreground" title={row.delivery_number || undefined}>{row.delivery_number || "-"}</div>
                     </td>
-                    <td className="px-5 py-3.5">
-                      {row.purchase_order_id ? <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-[13px] text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink> : "-"}
+                    <td className="px-4 py-3.5 max-w-[150px]">
+                      {row.purchase_order_id ? <NavLink to={`/purchase-orders/${row.purchase_order_id}`} title={row.po_number || row.purchase_order_id || undefined} className="block truncate text-[13px] text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink> : "-"}
                     </td>
-                    <td className="px-5 py-3.5 text-[13px]">{row.supplier_name || "-"}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{row.warehouse_code || row.warehouse_name || "-"}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(row.expected_delivery_date)}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{totalQty}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{acceptedQty}</td>
-                    <td className="px-5 py-3.5"><StatusBadge label={row.status} variant={statusVariant(row.status)} dot /></td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-4 py-3.5 max-w-[170px]">
+                      <p className="truncate text-[13px] font-medium text-foreground" title={row.supplier_name || undefined}>{row.supplier_name || "-"}</p>
+                      <p className="truncate text-[11px] text-muted-foreground" title={row.warehouse_name || undefined}>{row.warehouse_code || row.warehouse_name || "-"}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-[12px] text-muted-foreground whitespace-nowrap">{formatDate(row.expected_delivery_date)}</td>
+                    <td className="px-4 py-3.5 text-[13px] whitespace-nowrap"><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></td>
+                    <td className="px-4 py-3.5"><StatusBadge label={row.status} variant={statusVariant(row.status)} dot /></td>
+                    <td className="px-4 py-3.5">
                       <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)}>
                         <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
                       </Button>
@@ -256,40 +335,49 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <NavLink to="/supplier-deliveries" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách
-      </NavLink>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">Phiếu xuất nhà cung cấp</h1>
-            <StatusBadge label={invoice.status} variant={statusVariant(invoice.status)} dot />
+      <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-sky-500 to-blue-500" />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3 min-w-0">
+            <Button variant="outline" size="sm" asChild>
+              <NavLink to="/supplier-deliveries">
+                <ArrowLeft className="h-3.5 w-3.5" /> Quay lại
+              </NavLink>
+            </Button>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10`}>
+              <Truck className="w-[18px] h-[18px] text-sky-600 dark:text-sky-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[15px] font-semibold tracking-tight">Phiếu xuất nhà cung cấp</h1>
+                <StatusBadge label={invoice.status} variant={statusVariant(invoice.status)} dot />
+              </div>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                {invoice.po_number || "-"} · {invoice.supplier_name || "-"} · Hóa đơn {invoice.invoice_number}
+              </p>
+            </div>
           </div>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            {invoice.po_number || "-"} · {invoice.supplier_name || "-"} · Hóa đơn {invoice.invoice_number}
-          </p>
+          <Button variant="outline" size="sm" onClick={() => void load()} loading={saving}>
+            <RefreshCw className="h-3.5 w-3.5" /> Làm mới
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={saving}>
-          <RefreshCw className={`h-3.5 w-3.5 ${saving ? "animate-spin" : ""}`} /> Làm mới
-        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <SectionCard title="Kho nhận"><p className="text-[13px] font-medium">{invoice.warehouse_code || "-"} · {invoice.warehouse_name || ""}</p></SectionCard>
-        <SectionCard title="Ngày giao dự kiến"><p className="text-[13px] font-medium">{formatDate(invoice.expected_delivery_date)}</p></SectionCard>
-        <SectionCard title="Số lượng sẽ nhận"><p className="text-lg font-semibold">{totals.planned}</p></SectionCard>
-        <SectionCard title="Giá trị ước tính"><p className="font-mono text-[13px] font-semibold">{formatCurrency(totals.amount)}</p></SectionCard>
+        <StatCard label="Kho nhận" value={invoice.warehouse_code || invoice.warehouse_name || "-"} icon={Warehouse} variant="primary" />
+        <StatCard label="Ngày giao dự kiến" value={formatDate(invoice.expected_delivery_date)} icon={Clock} variant="info" />
+        <StatCard label="Số lượng sẽ nhận" value={totals.planned} icon={Boxes} variant="success" animateValue />
+        <StatCard label="Giá trị ước tính" value={formatCurrency(totals.amount)} icon={DollarSign} variant="default" />
       </div>
 
       {/* Items from invoice — quantities auto-filled, staff will verify physically */}
       <SectionCard title="Danh sách hàng theo phiếu NCC" noPadding>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Tên sách", "ISBN/SKU", "SL đặt (PO)", "Đã nhận trước", "PO còn lại", "NCC xuất", "Sẽ nhận", "Trạng thái"].map((heading) => (
-                  <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
+                {["Sách", "Lịch sử PO (đặt · đã nhận · còn lại)", "NCC xuất", "Sẽ nhận", "Trạng thái"].map((heading) => (
+                  <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{heading}</th>
                 ))}
               </tr>
             </thead>
@@ -302,13 +390,15 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                 const rowVariant = overPo ? "danger" : hasShortage ? "warning" : "success";
                 return (
                   <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-5 py-3.5 text-[13px] font-semibold">{item.title || "-"}</td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || item.variant_id}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{item.ordered_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{item.previously_received_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px] font-medium">{item.remaining_qty}</td>
-                    <td className="px-5 py-3.5 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{item.invoiced_qty}</td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5 max-w-[220px]">
+                      <p className="truncate text-[13px] font-semibold" title={item.title || undefined}>{item.title || "-"}</p>
+                      <p className="truncate font-mono text-[11px] text-muted-foreground">{item.isbn13 || item.sku || item.variant_id}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground whitespace-nowrap">
+                      {item.ordered_qty} · {item.previously_received_qty} · <span className="font-medium text-foreground">{item.remaining_qty}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400 whitespace-nowrap">{item.invoiced_qty}</td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
                       <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[12px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">{willReceive}</span>
                     </td>
                     <td className="px-5 py-3.5"><StatusBadge label={rowStatus} variant={rowVariant} /></td>
@@ -321,15 +411,20 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       </SectionCard>
 
       {totals.shortage > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          Một số mục NCC xuất ít hơn PO còn lại. Hệ thống sẽ tự tạo báo cáo thiếu hàng.
-        </div>
+        <Alert className="border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
+          <AlertCircle className="text-amber-600 dark:text-amber-400" />
+          <AlertDescription className="text-amber-800 dark:text-amber-300">
+            Một số mục NCC xuất ít hơn PO còn lại. Hệ thống sẽ tự tạo báo cáo thiếu hàng.
+          </AlertDescription>
+        </Alert>
       )}
 
-      <div className="rounded-lg border border-sky-100 bg-sky-50 p-4 text-[13px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
-        Tồn kho chỉ tăng sau khi manager <strong>duyệt phiếu</strong>. Phiếu tạo ra sẽ ở trạng thái DRAFT để nhân viên kho kiểm đếm thực tế trước khi duyệt.
-      </div>
+      <Alert className="border-sky-100 bg-sky-50 dark:border-sky-500/20 dark:bg-sky-500/10">
+        <Info className="text-sky-600 dark:text-sky-400" />
+        <AlertDescription className="text-sky-800 dark:text-sky-300">
+          Tồn kho chỉ tăng sau khi manager <strong>duyệt phiếu</strong>. Phiếu tạo ra sẽ ở trạng thái DRAFT để nhân viên kho kiểm đếm thực tế trước khi duyệt.
+        </AlertDescription>
+      </Alert>
 
       {canReceive && (
         <SectionCard title="Giao phiếu kiểm đếm cho nhân viên kho" icon={UserCheck}>
@@ -337,26 +432,26 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Nhân viên kho thực hiện kiểm đếm</label>
-                <select
-                  value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px]"
-                >
-                  <option value="">-- Chọn nhân viên kho --</option>
-                  {warehouseStaff.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.full_name || staff.username || staff.email}
-                    </option>
-                  ))}
-                </select>
+                <Select value={selectedStaffId || "none"} onValueChange={(v) => setSelectedStaffId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn nhân viên kho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouseStaff.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.id}>
+                        {staff.full_name || staff.username || staff.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex-1">
                 <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ghi chú phiếu nhập</label>
-                <input
+                <Input
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-[13px]"
+                  className="h-auto py-2"
                 />
               </div>
             </div>
@@ -364,11 +459,11 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
             <div className="flex justify-end">
               <Button
                 onClick={() => void createAndAssign()}
-                disabled={saving || !selectedStaffId || totals.planned <= 0}
-                className="gap-2"
+                disabled={!selectedStaffId || totals.planned <= 0}
+                loading={saving}
               >
                 <ClipboardCheck className="h-4 w-4" />
-                {saving ? "Đang tạo và giao..." : "Tạo phiếu và giao cho nhân viên"}
+                Tạo phiếu và giao cho nhân viên
               </Button>
             </div>
           </div>
