@@ -42,6 +42,7 @@ const navGroups = [
       { to: "/movements", icon: Activity, labelKey: "sidebar.movements", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-blue-500/12 to-emerald-500/8", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/warehouses", icon: Warehouse, labelKey: "sidebar.warehouses", access: ROUTE_ACCESS.warehouseWrite, activeColor: "from-emerald-500/12 to-green-500/8", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/shelves", icon: Layers3, labelKey: "sidebar.shelves", access: ROUTE_ACCESS.managerInventoryRead, activeColor: "from-cyan-500/12 to-blue-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
+      { to: "/stock-audits", icon: ClipboardList, labelKey: "sidebar.stock_audits", access: ROUTE_ACCESS.inventoryAuditRead, activeColor: "from-violet-500/12 to-purple-500/8", textColor: "text-violet-700", iconBg: "bg-violet-500/10" },
       { to: "/exception-reports", icon: AlertTriangle, labelKey: "sidebar.exception_reports", access: ROUTE_ACCESS.exceptionReportManage, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
     ],
   },

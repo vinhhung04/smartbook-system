@@ -247,6 +247,7 @@ async function main() {
     'inventory.supplier.write',
     'inventory.audit.read',
     'inventory.audit.approve',
+    'inventory.stock.audit',
     'inventory.transfer.read',
     'inventory.transfer.write',
     'analytics.reports.view',
@@ -269,6 +270,8 @@ async function main() {
     'inventory.task.progress',
     'inventory.purchase.request',
     'inventory.exception.report',
+    'inventory.audit.read',
+    'inventory.stock.audit',
   ];
   await setRolePermissions(warehouseStaffRole, warehousePermCodes);
   console.log(`✅ Assigned ${warehousePermCodes.length} permissions to WAREHOUSE_STAFF`);

@@ -39,6 +39,7 @@ const transferReceivingRoutes = require('./routes/transfer-receiving.routes');
 const myWarehouseTasksRoutes = require('./routes/my-warehouse-tasks.routes');
 const stockAlertRoutes = require('./routes/stock-alert.routes');
 const stockBalanceRoutes = require('./routes/stock-balance.routes');
+const stockAuditRoutes = require('./routes/stock-audit.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
 
 const app = express();
@@ -361,6 +362,7 @@ app.use('/api/supplier-account', supplierAccountRoutes);
 app.use('/api/purchase-requests', purchaseRequestRoutes);
 app.use('/api/stock-alerts', stockAlertRoutes);
 app.use('/api/stock-balances', stockBalanceRoutes);
+app.use('/api/stock-audits', stockAuditRoutes);
 app.use('/api/exception-reports', exceptionReportRoutes);
 app.use('/api/staff-tasks', staffTaskRoutes);
 app.use('/api/transfer-receiving', transferReceivingRoutes);

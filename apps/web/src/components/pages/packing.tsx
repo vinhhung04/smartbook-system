@@ -10,13 +10,9 @@ import { getApiErrorMessage } from "@/services/api.ts";
 import { packingService, type PackingEvidence, type PackingTask } from "@/services/packing";
 import { usePackingCamera } from "@/hooks/usePackingCamera";
 import { usePackingRecordingSession } from "@/hooks/usePackingRecordingSession";
+import { useHardwareScanner } from "@/hooks/useHardwareScanner";
 
 type ActivePackingTask = PackingTask & { id: string; task_number: string; packing_camera_evidence?: PackingEvidence[] };
-
-// Keyboard-wedge USB/Bluetooth barcode scanners "type" a code very fast (a few ms
-// between keystrokes) and terminate with Enter — much faster than a human typing.
-const SCANNER_KEY_GAP_MS = 100;
-const SCANNER_MIN_CODE_LENGTH = 3;
 
 // Configurable, not hardcoded — override per deployment via VITE_PACKING_RECORD_DELAY_SECONDS.
 const RECORD_DELAY_SECONDS = Number(import.meta.env.VITE_PACKING_RECORD_DELAY_SECONDS) || 15;
@@ -303,36 +299,7 @@ export function PackingPage() {
 
   // Hardware keyboard-wedge scanner — listens for the whole time the Packing page is open, not
   // just while an order is selected, so an invoice barcode scans exactly like a book barcode.
-  useEffect(() => {
-    let buffer = "";
-    let lastKeyTime = 0;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
-
-      const now = Date.now();
-      if (now - lastKeyTime > SCANNER_KEY_GAP_MS) {
-        buffer = "";
-      }
-      lastKeyTime = now;
-
-      if (event.key === "Enter") {
-        if (buffer.length >= SCANNER_MIN_CODE_LENGTH) {
-          handleAnyScannedCode(buffer);
-        }
-        buffer = "";
-        return;
-      }
-
-      if (event.key.length === 1) {
-        buffer += event.key;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleAnyScannedCode]);
+  useHardwareScanner(handleAnyScannedCode);
 
   // Manual override: skip whatever is left of the grace-period countdown and finish right away.
   const handleCompletePackingNow = useCallback(() => {
