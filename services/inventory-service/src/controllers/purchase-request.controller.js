@@ -249,6 +249,46 @@ async function rejectPurchaseRequest(req, res) {
   }
 }
 
+async function withdrawPurchaseRequest(req, res) {
+  const userId = req.user?.id || req.user?.sub;
+  if (!userId) {
+    return res.status(401).json({ message: 'Invalid current user context' });
+  }
+
+  try {
+    const request = await prisma.purchase_requests.findUnique({ where: { id: req.params.id } });
+    if (!request) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    if (request.created_by_user_id !== userId) {
+      return res.status(403).json({ message: 'You can only withdraw your own purchase request' });
+    }
+    if (request.status !== 'PENDING') {
+      return res.status(400).json({ message: `Cannot withdraw a request with status ${request.status}` });
+    }
+
+    const updated = await prisma.purchase_requests.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'WITHDRAWN',
+        updated_at: new Date(),
+      },
+    });
+
+    setImmediate(() => void pushToRooms(PR_STAFF_ROOMS, 'purchase_request:status_changed', {
+      id: updated.id,
+      request_number: updated.request_number,
+      status: updated.status,
+      warehouse_id: updated.warehouse_id,
+    }));
+
+    return res.json({ data: updated });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 async function convertPurchaseRequestToPO(req, res) {
   const userId = req.user?.id || req.user?.sub;
   if (!userId) {
@@ -360,5 +400,6 @@ module.exports = {
   getPurchaseRequestById,
   approvePurchaseRequest,
   rejectPurchaseRequest,
+  withdrawPurchaseRequest,
   convertPurchaseRequestToPO,
 };

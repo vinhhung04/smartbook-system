@@ -293,7 +293,16 @@ export function PackingPage() {
       try {
         const result = await packingService.scanItem(task.id, code);
         setLastScanFeedback({ ok: true, message: "Đúng sách" });
-        toast.success("✓ Đúng sách");
+        if (result.all_items_verified) {
+          toast.success("✓ Đúng sách — đã scan đủ số lượng!");
+        } else {
+          const currentItems = task.packing_task_items || [];
+          const remaining = currentItems.reduce((sum, item) => {
+            const scannedQty = item.id === result.item.id ? result.item.scanned_qty : item.scanned_qty;
+            return sum + Math.max(0, item.expected_qty - scannedQty);
+          }, 0);
+          toast.warning(`✓ Đúng sách — còn thiếu ${remaining} cuốn`);
+        }
         await refreshTask(task.id);
         if (result.all_items_verified) {
           startRecordCountdown(task.id);
@@ -383,6 +392,7 @@ export function PackingPage() {
             isRecording={isRecording}
             autoScanSupported={camera.autoScanSupported}
             savedCount={savedCount}
+            scanStatus={!task ? undefined : allVerified ? "complete" : "incomplete"}
           />
         </FadeItem>
 
