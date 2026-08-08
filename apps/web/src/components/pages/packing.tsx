@@ -17,6 +17,25 @@ type ActivePackingTask = PackingTask & { id: string; task_number: string; packin
 // Configurable, not hardcoded — override per deployment via VITE_PACKING_RECORD_DELAY_SECONDS.
 const RECORD_DELAY_SECONDS = Number(import.meta.env.VITE_PACKING_RECORD_DELAY_SECONDS) || 15;
 
+function normalizeTitleForCompare(value: string): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Book titles the AI read off the evidence photo that don't match any item expected in this order — a possible sign of a mixed-up order. */
+function findUnexpectedTitles(detectedTitles: string[], expectedTitles: string[]): string[] {
+  const normalizedExpected = expectedTitles.map(normalizeTitleForCompare).filter(Boolean);
+  return detectedTitles.filter((detected) => {
+    const normalizedDetected = normalizeTitleForCompare(detected);
+    if (normalizedDetected.length < 3) return false;
+    return !normalizedExpected.some((exp) => exp.includes(normalizedDetected) || normalizedDetected.includes(exp));
+  });
+}
+
 export function PackingPage() {
   // Camera is owned at the page level and persists for as long as /packing is open — it must
   // never mount/unmount per order. Recording is a separate, per-order "Packing Session".
@@ -47,6 +66,10 @@ export function PackingPage() {
   const items = useMemo(() => task?.packing_task_items || [], [task]);
   const allVerified = items.length > 0 && items.every((item) => item.status === "VERIFIED");
   const verifiedItemsCount = items.filter((item) => item.status === "VERIFIED").length;
+  const expectedTitles = useMemo(
+    () => items.map((item) => item.book_variants?.books?.title).filter((title): title is string => Boolean(title)),
+    [items],
+  );
 
   const [photoEvidence, setPhotoEvidence] = useState<PackingEvidence[]>([]);
   const [capturingPhoto, setCapturingPhoto] = useState(false);
@@ -82,12 +105,22 @@ export function PackingPage() {
       } else {
         toast.info("Đã lưu ảnh xác minh (AI hiện không khả dụng).");
       }
+
+      const unexpectedTitles = findUnexpectedTitles(
+        evidence.ai_verification_result?.detected_titles || [],
+        expectedTitles,
+      );
+      if (unexpectedTitles.length > 0) {
+        toast.warning(
+          `⚠️ AI phát hiện tên sách không có trong đơn này: ${unexpectedTitles.join(", ")} — kiểm tra có bị lẫn đơn khác không.`,
+        );
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể chụp/tải ảnh xác minh"));
     } finally {
       setCapturingPhoto(false);
     }
-  }, [task?.id, camera.videoRef, camera.isLive]);
+  }, [task?.id, camera.videoRef, camera.isLive, expectedTitles]);
 
   const loadQueue = useCallback(async () => {
     setLoadingQueue(true);
@@ -491,30 +524,45 @@ export function PackingPage() {
 
                   {photoEvidence.length > 0 ? (
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {photoEvidence.map((evidence) => (
-                        <span
-                          key={evidence.id}
-                          title={
-                            evidence.ai_verification_result
-                              ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
-                              : undefined
-                          }
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            evidence.ai_verification_status === "MATCH"
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                              : evidence.ai_verification_status === "MISMATCH"
-                                ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                                : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          <CameraIcon className="h-3 w-3" />
-                          {evidence.ai_verification_status === "MATCH"
-                            ? "AI: Khớp"
-                            : evidence.ai_verification_status === "MISMATCH"
-                              ? "AI: Lệch số lượng"
-                              : "AI: Chưa xác minh"}
-                        </span>
-                      ))}
+                      {photoEvidence.map((evidence) => {
+                        const unexpectedTitles = findUnexpectedTitles(
+                          evidence.ai_verification_result?.detected_titles || [],
+                          expectedTitles,
+                        );
+                        return (
+                          <span key={evidence.id} className="inline-flex flex-wrap items-center gap-1.5">
+                            <span
+                              title={
+                                evidence.ai_verification_result
+                                  ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
+                                  : undefined
+                              }
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                evidence.ai_verification_status === "MATCH"
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                                  : evidence.ai_verification_status === "MISMATCH"
+                                    ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                                    : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              <CameraIcon className="h-3 w-3" />
+                              {evidence.ai_verification_status === "MATCH"
+                                ? "AI: Khớp"
+                                : evidence.ai_verification_status === "MISMATCH"
+                                  ? "AI: Lệch số lượng"
+                                  : "AI: Chưa xác minh"}
+                            </span>
+                            {unexpectedTitles.length > 0 && (
+                              <span
+                                title={`AI phát hiện: ${unexpectedTitles.join(", ")}`}
+                                className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400"
+                              >
+                                ⚠️ Nghi lẫn đơn
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
                     </div>
                   ) : null}
 

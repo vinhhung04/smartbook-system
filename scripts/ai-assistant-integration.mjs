@@ -70,7 +70,7 @@ function assertArray(value, field) {
 async function run() {
   const managerToken = await login();
   let passed = 0;
-  const total = 4;
+  const total = 8;
 
   // 1. Reorder-suggestions style question — expect a grounded answer plus at least
   //    one analytics tool call, and no error surfaced by the tool that was used.
@@ -86,8 +86,8 @@ async function run() {
     if (body.tools_used.length === 0) {
       throw new Error('expected at least one tool call for a reorder/stock-risk question');
     }
-    if (!body.tools_used.every((call) => typeof call.name === 'string' && call.name.startsWith('get_'))) {
-      throw new Error('every tool call must have a name starting with get_');
+    if (!body.tools_used.every((call) => typeof call.name === 'string' && (call.name.startsWith('get_') || call.name === 'search_books'))) {
+      throw new Error('every tool call must have a name starting with get_ or be search_books');
     }
     for (const call of body.tools_used) {
       const result = body.data?.[call.name];
@@ -117,6 +117,27 @@ async function run() {
     }
     passed += 1;
     console.log('PASS assistant/overdue-fine-question');
+  }
+
+  // 2b. Cache hit — same question sent again immediately must come back near-instantly
+  //     (short-TTL response cache), unlike the ~seconds-to-tens-of-seconds a fresh
+  //     tool-calling round takes even on GPU. Must run right after case 2 (same
+  //     message, same TTL window) — do not reorder or separate from it.
+  {
+    const start = Date.now();
+    const { response, body } = await request('/ai/assistant', managerToken, {
+      body: { message: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
+    });
+    const elapsedMs = Date.now() - start;
+    if (!response.ok) {
+      throw new Error(`cache-hit question failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+    assertString(body.answer, 'answer');
+    if (elapsedMs >= 1000) {
+      throw new Error(`expected cache hit under 1000ms, took ${elapsedMs}ms`);
+    }
+    passed += 1;
+    console.log(`PASS assistant/cache-hit (${elapsedMs}ms)`);
   }
 
   // 3. Customer token must be denied before any LLM call is made.
@@ -165,6 +186,77 @@ async function run() {
       console.log('PASS assistant/out-of-scope-refusal');
     }
     passed += 1;
+  }
+
+  // 5. Fast-path rule-based tool routing — a confidently-classified fine-summary
+  //    question (distinct from case 2's combined question, to avoid the cache) should
+  //    still resolve to the right tool even when the LLM's own tool-selection round is
+  //    skipped. Logs timing rather than asserting a threshold (CPU vs GPU varies too
+  //    much across machines for a hardcoded ms assertion to be reliable).
+  {
+    const start = Date.now();
+    const { response, body } = await request('/ai/assistant', managerToken, {
+      body: { message: 'Tổng tiền phạt chưa thu hiện tại là bao nhiêu?' },
+    });
+    const elapsedMs = Date.now() - start;
+    if (!response.ok) {
+      throw new Error(`fast-path question failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+    assertString(body.answer, 'answer');
+    assertArray(body.tools_used, 'tools_used');
+    const usedFineTool = body.tools_used.some((call) => call.name.includes('fine'));
+    if (!usedFineTool) {
+      throw new Error(`expected a fine-related tool call, got: ${JSON.stringify(body.tools_used)}`);
+    }
+    passed += 1;
+    console.log(`PASS assistant/fast-path-tool-routing (${elapsedMs}ms)`);
+  }
+
+  // 6. search_books (book-content RAG) — the keyword only appears in the book's
+  //    description, not its title, so this only passes if content (not just
+  //    title/author) is actually searched. Soft assertion (WARN not FAIL) since tool
+  //    choice for a natural-language question is LLM-dependent, same convention as
+  //    case 4's out-of-scope check.
+  {
+    const { response, body } = await request('/ai/assistant', managerToken, {
+      body: { message: 'Có cuốn sách nào nói về một con mèo biết nói chuyện không?' },
+    });
+    if (!response.ok) {
+      throw new Error(`search_books question failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+    assertString(body.answer, 'answer');
+    assertArray(body.tools_used, 'tools_used');
+    const usedSearchBooks = body.tools_used.some((call) => call.name === 'search_books');
+    const foundKafka = body.answer.toLowerCase().includes('kafka');
+    if (usedSearchBooks && foundKafka) {
+      console.log('PASS assistant/search-books-content');
+    } else {
+      console.warn(
+        `WARN assistant/search-books-content: expected search_books tool + "Kafka on the Shore" in answer (best-effort check, LLM-dependent): tools_used=${JSON.stringify(
+          body.tools_used,
+        )} answer=${JSON.stringify(body.answer)}`,
+      );
+    }
+    passed += 1;
+  }
+
+  // 7. get_aging_inventory — rule-based keyword match ("tồn kho lâu", "không ai mượn")
+  //    is deterministic enough for a harder assertion than case 6.
+  {
+    const { response, body } = await request('/ai/assistant', managerToken, {
+      body: { message: 'Có sách nào tồn kho lâu không ai mượn không?' },
+    });
+    if (!response.ok) {
+      throw new Error(`aging-inventory question failed (${response.status}): ${JSON.stringify(body)}`);
+    }
+    assertString(body.answer, 'answer');
+    assertArray(body.tools_used, 'tools_used');
+    const usedAgingTool = body.tools_used.some((call) => call.name === 'get_aging_inventory');
+    if (!usedAgingTool) {
+      throw new Error(`expected get_aging_inventory tool call, got: ${JSON.stringify(body.tools_used)}`);
+    }
+    passed += 1;
+    console.log('PASS assistant/aging-inventory-question');
   }
 
   console.log(`PASS=${passed} TOTAL=${total}`);

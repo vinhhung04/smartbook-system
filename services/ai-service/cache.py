@@ -122,3 +122,8 @@ class SummaryCache:
 
 summary_cache = SummaryCache(max_size=200, ttl_seconds=3600)
 
+# Short TTL — dedupe rapid repeat/near-simultaneous questions to /assistant without
+# risking stale operational numbers (overdue/fine counts change throughout the day,
+# unlike book summaries which summary_cache's 1h TTL is fine for).
+assistant_response_cache = SummaryCache(max_size=200, ttl_seconds=60)
+

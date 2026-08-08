@@ -244,6 +244,68 @@ export const aiService = {
     return response.data;
   },
 
+  // Streams the assistant's answer token-by-token via SSE instead of waiting for the
+  // whole 60-120s+ tool-calling loop to finish. Same fetch()-over-EventSource rationale
+  // as chatStream: needs a POST body and Authorization header.
+  askAssistantStream: async (
+    message: string,
+    conversationId: string | undefined,
+    handlers: {
+      onToken: (text: string) => void;
+      onDone: (data: AssistantResponse) => void;
+      onError: (error: unknown) => void;
+    },
+  ): Promise<void> => {
+    try {
+      const token = getToken();
+      const baseURL = aiAPI.defaults.baseURL || '';
+      const response = await fetch(`${baseURL}/assistant/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message,
+          conversation_id: conversationId || null,
+        }),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Assistant stream request failed with status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+
+        for (const rawEvent of events) {
+          let eventName = 'message';
+          let data = '';
+          for (const line of rawEvent.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) data = line.slice(5).trim();
+          }
+          if (!data) continue;
+          const parsed = JSON.parse(data);
+          if (eventName === 'token') {
+            handlers.onToken(parsed.text ?? '');
+          } else if (eventName === 'done') {
+            handlers.onDone(parsed as AssistantResponse);
+          }
+        }
+      }
+    } catch (error) {
+      handlers.onError(error);
+    }
+  },
+
   chat: async (
     message: string,
     conversationHistory: ChatMessage[] = [],
