@@ -2,10 +2,35 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
+const redis = require('../lib/redis');
 const { sendEmail } = require('../lib/email-sender');
 
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_FAILED_LOGIN_ATTEMPTS = Number(process.env.MAX_FAILED_LOGIN_ATTEMPTS || 5);
+
+async function sendVerificationEmail(user) {
+  try {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: tokenHash,
+        expires_at: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
+      },
+    });
+
+    const verifyUrl = `${FRONTEND_URL}/verify-email?token=${rawToken}`;
+    sendEmail(user.email, 'EMAIL_VERIFICATION_REQUESTED', { full_name: user.full_name, verify_url: verifyUrl }).catch((err) => {
+      console.error('sendVerificationEmail email error:', err);
+    });
+  } catch (err) {
+    console.error('sendVerificationEmail error:', err);
+  }
+}
 
 const BORROW_SERVICE_INTERNAL_URL = String(
   process.env.BORROW_SERVICE_INTERNAL_URL || process.env.BORROW_SERVICE_URL || 'http://borrow-service:3005'
@@ -205,6 +230,8 @@ async function register(req, res) {
       return res.status(502).json({ message: 'Unable to create customer profile. Please try again.' });
     }
 
+    await sendVerificationEmail(createdUser);
+
     return res.status(201).json({
       message: 'Register successful',
       user: sanitizeUser(createdUser),
@@ -323,7 +350,18 @@ async function updateMe(req, res) {
   }
 }
 
-function logout(_req, res) {
+async function logout(req, res) {
+  try {
+    const auth = req.auth;
+    if (auth?.jti && auth?.exp) {
+      const expiresInSeconds = auth.exp - Math.floor(Date.now() / 1000);
+      if (expiresInSeconds > 0) {
+        await redis.set(`blacklist:token:${auth.jti}`, '1', expiresInSeconds);
+      }
+    }
+  } catch (error) {
+    console.error('logout revoke error:', error);
+  }
   return res.json({ message: 'Logout successful' });
 }
 
@@ -360,6 +398,17 @@ async function login(req, res) {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
+      const { failed_login_attempts } = await prisma.user.update({
+        where: { id: user.id },
+        data: { failed_login_attempts: { increment: 1 } },
+        select: { failed_login_attempts: true },
+      });
+
+      if (failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS && user.status === 'ACTIVE') {
+        await prisma.user.update({ where: { id: user.id }, data: { status: 'LOCKED' } });
+        return res.status(403).json({ message: 'Account locked due to too many failed login attempts. Contact an administrator.' });
+      }
+
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -369,6 +418,10 @@ async function login(req, res) {
 
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+    }
+
+    if (user.failed_login_attempts > 0) {
+      await prisma.user.update({ where: { id: user.id }, data: { failed_login_attempts: 0 } });
     }
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
@@ -382,6 +435,7 @@ async function login(req, res) {
         is_superuser: user.is_superuser,
         roles,
         permissions,
+        jti: crypto.randomUUID(),
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
@@ -512,6 +566,32 @@ async function confirmPasswordReset(req, res) {
   }
 }
 
+async function verifyEmail(req, res) {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'token is required' });
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const verificationToken = await prisma.emailVerificationToken.findUnique({ where: { token_hash: tokenHash } });
+
+    if (!verificationToken || verificationToken.used_at || verificationToken.expires_at < new Date()) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: verificationToken.user_id }, data: { email_verified_at: new Date() } }),
+      prisma.emailVerificationToken.update({ where: { id: verificationToken.id }, data: { used_at: new Date() } }),
+    ]);
+
+    return res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('verifyEmail error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -522,4 +602,5 @@ module.exports = {
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,
+  verifyEmail,
 };

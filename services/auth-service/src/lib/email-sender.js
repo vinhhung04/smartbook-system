@@ -45,6 +45,16 @@ const EMAIL_TEMPLATES = {
       </p>
       <p style="color:#64748b;font-size:13px;">Liên kết này có hiệu lực trong 1 giờ. Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>`),
   }),
+  EMAIL_VERIFICATION_REQUESTED: (data) => ({
+    subject: `[SmartBook] Xác thực địa chỉ email`,
+    html: _emailWrapper('#0ea5e9,#22c55e', '✉️', `
+      <p>Xin chào <strong>${data.full_name || 'bạn'}</strong>,</p>
+      <p>Vui lòng xác thực địa chỉ email để hoàn tất đăng ký tài khoản SmartBook.</p>
+      <p style="text-align:center;margin:24px 0;">
+        <a href="${data.verify_url}" style="display:inline-block;background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Xác thực email</a>
+      </p>
+      <p style="color:#64748b;font-size:13px;">Liên kết này có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản này, vui lòng bỏ qua email này.</p>`),
+  }),
 };
 
 async function sendEmail(to, templateCode, data) {
