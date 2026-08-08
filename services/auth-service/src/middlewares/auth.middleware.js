@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const redis = require('../lib/redis');
 
 function getBearerToken(req) {
   const header = req.headers.authorization || req.headers.Authorization;
@@ -8,7 +9,7 @@ function getBearerToken(req) {
   return token;
 }
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   try {
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ message: 'JWT_SECRET is not configured' });
@@ -20,6 +21,14 @@ function authenticateToken(req, res, next) {
     }
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (payload.jti) {
+      const blacklisted = await redis.get(`blacklist:token:${payload.jti}`);
+      if (blacklisted !== null) {
+        return res.status(401).json({ message: 'Token has been revoked' });
+      }
+    }
+
     req.auth = payload;
     return next();
   } catch (error) {

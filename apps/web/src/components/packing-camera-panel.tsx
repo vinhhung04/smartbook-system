@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { Camera, ScanLine } from "lucide-react";
+import { Camera, ScanLine, CircleX, CircleCheck } from "lucide-react";
 
 interface PackingCameraPanelProps {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -8,6 +8,8 @@ interface PackingCameraPanelProps {
   isRecording: boolean;
   autoScanSupported: boolean;
   savedCount: number;
+  /** Undefined when no order is open. "incomplete" until the last item is scanned, then "complete". */
+  scanStatus?: "incomplete" | "complete";
 }
 
 /**
@@ -23,6 +25,7 @@ export function PackingCameraPanel({
   isRecording,
   autoScanSupported,
   savedCount,
+  scanStatus,
 }: PackingCameraPanelProps) {
   const ringClass = isRecording
     ? "ring-2 ring-offset-2 ring-offset-card ring-red-500/70"
@@ -46,6 +49,16 @@ export function PackingCameraPanel({
         <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
 
         <div className="absolute left-2.5 top-2.5 flex flex-wrap items-center gap-1.5">
+          {scanStatus === "incomplete" ? (
+            <span className="inline-flex animate-pulse items-center gap-1 rounded-full bg-red-600/90 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
+              <CircleX className="h-3 w-3" /> Chưa scan đủ hàng
+            </span>
+          ) : null}
+          {scanStatus === "complete" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/90 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
+              <CircleCheck className="h-3 w-3" /> Đã scan đủ hàng
+            </span>
+          ) : null}
           {isRecording ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-600/90 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Đang ghi hình

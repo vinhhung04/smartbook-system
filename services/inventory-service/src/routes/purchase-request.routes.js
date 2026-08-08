@@ -7,6 +7,7 @@ const {
   getPurchaseRequestById,
   approvePurchaseRequest,
   rejectPurchaseRequest,
+  withdrawPurchaseRequest,
   convertPurchaseRequestToPO,
 } = require('../controllers/purchase-request.controller');
 const {
@@ -29,6 +30,7 @@ router.get('/', canManagerDecide, getAllPurchaseRequests);
 router.get('/:id', canStaffRequest, getPurchaseRequestById);
 router.post('/:id/approve', canManagerDecide, approvePurchaseRequest);
 router.post('/:id/reject', canManagerDecide, rejectPurchaseRequest);
+router.post('/:id/withdraw', canStaffRequest, withdrawPurchaseRequest);
 router.post('/:id/convert-to-po', canManagerConvert, convertPurchaseRequestToPO);
 
 module.exports = router;

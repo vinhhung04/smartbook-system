@@ -9,6 +9,7 @@ const {
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,
+  verifyEmail,
 } = require('../controllers/auth.controller');
 const { authenticateToken } = require('../middlewares/auth.middleware');
 
@@ -24,5 +25,6 @@ router.patch('/me', authenticateToken, updateMe);
 router.post('/change-password', authenticateToken, changePassword);
 router.post('/password-reset/request', requestPasswordReset);
 router.post('/password-reset/confirm', confirmPasswordReset);
+router.post('/verify-email', verifyEmail);
 
 module.exports = router;

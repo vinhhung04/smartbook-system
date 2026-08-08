@@ -61,6 +61,7 @@ model User {
   is_superuser      Boolean  @default(false)
   failed_login_attempts Int   @default(0)
   last_login_at     DateTime? @db.Timestamptz(6)
+  email_verified_at DateTime? @db.Timestamptz(6)
   created_at        DateTime @default(now()) @db.Timestamptz(6)
   updated_at        DateTime @updatedAt @db.Timestamptz(6)
   deleted_at        DateTime? @db.Timestamptz(6)
@@ -69,6 +70,7 @@ model User {
   user_warehouse_scopes UserWarehouseScope[]
   refresh_tokens RefreshToken[]
   password_reset_tokens PasswordResetToken[]
+  email_verification_tokens EmailVerificationToken[]
 
   @@index([email], map: "idx_auth_users_email")
   @@index([username], map: "idx_auth_users_username")
@@ -130,6 +132,19 @@ model PasswordResetToken {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String    @db.Uuid
+  token_hash   String    @unique @db.VarChar(255)
+  expires_at   DateTime  @db.Timestamptz(6)
+  used_at      DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
 }
 
 model AuthAuditLog {
