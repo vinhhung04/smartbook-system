@@ -33,7 +33,7 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 | 📦 **Service lớn nhất** | Inventory Service — ~28 route file (mua hàng, nhập/xuất kho) |
 | 🗄️ **Cơ sở dữ liệu** | PostgreSQL (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
 | 🐳 **Triển khai** | Docker Compose — 11 container |
-| 🤖 **AI** | Ollama (local LLM, `llama3`) + fallback Anthropic Claude |
+| 🤖 **AI** | Ollama (local LLM, `llama3.1:8b-instruct-q4_0`) + fallback Anthropic Claude |
 | 🔔 **Real-time** | Socket.IO qua API Gateway, theo phòng user/role |
 | 🌐 **Ngôn ngữ** | Tiếng Việt (giao diện & tài liệu) |
 
@@ -138,7 +138,7 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 
 ### 🧰 Nền Tảng Dùng Chung
 
-- 🤖 AI Service: nhận diện/tra cứu thông tin sách, hỗ trợ OCR và metadata enrichment, chat/agent hỗ trợ nghiệp vụ.
+- 🤖 AI Service: tra cứu thông tin sách theo ISBN, OCR hóa đơn nhập kho, metadata enrichment, chat/agent và trợ lý ra quyết định hỗ trợ nghiệp vụ.
 - 📊 Analytics Service: tổng hợp KPI/báo cáo thật từ dữ liệu thư viện lẫn kho vận.
 - 🔔 Real-time: API Gateway phát sự kiện qua WebSocket (Socket.IO) cho cả hai phía thư viện và kho vận.
 - 🖥️ Web UI: giao diện quản trị, kho vận và customer portal trên React/Vite.
@@ -275,9 +275,10 @@ Cả hai kênh chỉ cho phép: xác nhận đơn hàng, nộp hóa đơn/phiế
 
 AI Service hỗ trợ tự động hóa nhập liệu:
 
-- OCR/recognition từ ảnh bìa hoặc ảnh sách, lookup metadata theo ISBN (Google Books, Open Library, marketplace Fahasa/Tiki/Vinabook).
+- OCR hóa đơn/phiếu giao hàng khi nhập kho (`/scan-receipt`), lookup metadata theo ISBN (Google Books, Open Library, marketplace Fahasa/Tiki/Vinabook).
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
-- Chạy local qua Ollama (model mặc định `llama3`) để phù hợp môi trường demo và kiểm soát dữ liệu; có thể fallback sang Anthropic Claude nếu cấu hình `ANTHROPIC_API_KEY`.
+- Chạy local qua Ollama (model mặc định `llama3.1:8b-instruct-q4_0`, dùng chung cho `/chat` và `/assistant`) để phù hợp môi trường demo và kiểm soát dữ liệu; có thể fallback sang Anthropic Claude nếu cấu hình `ANTHROPIC_API_KEY`.
+- `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng Ollama tool-calling thật (model `ASSISTANT_MODEL`, mặc định `llama3.1:8b-instruct-q4_0`) để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể, thay vì chỉ đọc lại số liệu thô. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
 
 ### 📊 Analytics
 
@@ -456,7 +457,7 @@ Quy tắc nghiệp vụ:
 | 🔐 Auth Service | 3004 → 3002 | Xác thực và phân quyền | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
 | 📦 Inventory Service | 3003 → 3001 | Catalog, tồn kho, mua hàng, kho vận | `/api/books`, `/api/warehouses`, `/api/purchase-orders`, `/api/picking`, `/api/packing`, `/api/borrow-integration/*` |
 | 📖 Borrow Service | 3005 | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
-| 🤖 AI Service | 8000 | OCR/metadata enrichment | `/health`, `/recognize-book`, `/lookup-book-by-isbn` |
+| 🤖 AI Service | 8000 | OCR/metadata enrichment | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant` |
 | 📊 Analytics Service | 3006 | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
 | 🐘 PostgreSQL | 5432 | Lưu dữ liệu | `auth_db`, `inventory_db`, `borrow_db` |
 | ⚡ Redis | 6379 | Cache cho Auth/Inventory Service | Không có UI |
@@ -486,7 +487,7 @@ Quy tắc nghiệp vụ:
 **🤖 AI**
 
 - FastAPI.
-- Ollama (mặc định `llama3`), fallback Anthropic Claude.
+- Ollama (mặc định `llama3.1:8b-instruct-q4_0` cho text, `llava` cho ảnh), fallback Anthropic Claude.
 - OCR/metadata lookup (Google Books, Open Library, marketplace scraping).
 
 **🐳 DevOps**
@@ -683,6 +684,33 @@ PASS analytics/customer-denied
 PASS=7 TOTAL=7
 ACCESS=1 TOTAL=1
 ```
+
+</details>
+
+### ✅ AI Assistant (chatbot hỗ trợ ra quyết định) integration
+
+<details>
+<summary>Xem lệnh chạy &amp; kết quả</summary>
+
+Script này đăng nhập bằng tài khoản manager demo, gọi `POST /ai/assistant` qua API Gateway với các câu hỏi tiếng Việt, kiểm tra tool-calling thật sự được gọi (không hard-code intent), kiểm tra customer token bị chặn 403, và kiểm tra hành vi từ chối với câu hỏi ngoài phạm vi. Yêu cầu model `ASSISTANT_MODEL` đã được pull trong Ollama trước:
+
+```powershell
+docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
+node scripts\ai-assistant-integration.mjs
+```
+
+Kết quả mong đợi:
+
+```text
+PASS assistant/reorder-suggestions-question
+PASS assistant/overdue-fine-question
+PASS assistant/customer-denied
+PASS assistant/out-of-scope-refusal
+PASS=4 TOTAL=4
+```
+
+> [!NOTE]
+> Case cuối (`out-of-scope-refusal`) phụ thuộc hành vi của LLM nên có thể in `WARN` thay vì `PASS` nếu model vẫn gọi tool cho câu hỏi ngoài phạm vi — script vẫn tính là pass ở mức "endpoint hoạt động đúng", đây là kiểm tra best-effort.
 
 </details>
 

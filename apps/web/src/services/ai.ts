@@ -1,17 +1,5 @@
 import { aiAPI, getToken } from './http-clients';
 
-export interface AIAnalysisRequest {
-  imageUrl?: string;
-  imageFile?: File;
-  type: 'OCR' | 'METADATA_EXTRACTION' | 'BARCODE_DETECTION';
-}
-
-export interface AIAnalysisResponse {
-  data: any;
-  confidence: number;
-  type: string;
-}
-
 export interface RecommendationResponse {
   recommendations: Array<{
     title: string;
@@ -24,14 +12,6 @@ export interface RecommendationResponse {
 export interface BookSummaryResponse {
   description: string;
   web_context_used: boolean;
-}
-
-export interface RecognizeBookResponse {
-  title: string | null;
-  author: string | null;
-  isbn: string | null;
-  publisher: string | null;
-  raw?: string;
 }
 
 export interface SummaryViRequest {
@@ -98,6 +78,18 @@ export interface LookupBookByIsbnResponse {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface AssistantToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface AssistantResponse {
+  answer: string;
+  tools_used: AssistantToolCall[];
+  data: Record<string, unknown>;
+  conversation_id?: string | null;
 }
 
 export interface PendingAction {
@@ -199,6 +191,7 @@ export interface EnrichBookMetadataRequest {
   publisher?: string;
   description?: string;
   categories: string[];
+  existingCategories?: string[];
   mode: EnrichMode;
 }
 
@@ -215,50 +208,8 @@ export interface EnrichBookMetadataResponse {
 }
 
 export const aiService = {
-  analyzeImage: async (data: AIAnalysisRequest): Promise<AIAnalysisResponse> => {
-    const formData = new FormData();
-    if (data.imageFile) {
-      formData.append('file', data.imageFile);
-    }
-    if (data.imageUrl) {
-      formData.append('imageUrl', data.imageUrl);
-    }
-    formData.append('type', data.type);
-
-    const response = await aiAPI.post('/analyze', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
-
   getRecommendations: async (): Promise<RecommendationResponse> => {
     const response = await aiAPI.get('/recommendations');
-    return response.data;
-  },
-
-  extractMetadata: async (imageFile: File) => {
-    const formData = new FormData();
-    formData.append('file', imageFile);
-
-    const response = await aiAPI.post('/extract-metadata', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
-
-  recognizeBook: async (imageFile: File | Blob): Promise<RecognizeBookResponse> => {
-    const formData = new FormData();
-    formData.append('file', imageFile, 'cover.jpg');
-
-    const response = await aiAPI.post('/recognize-book', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
     return response.data;
   },
 
@@ -282,6 +233,14 @@ export const aiService = {
 
   generateSummaryVi: async (payload: SummaryViRequest): Promise<SummaryViResponse> => {
     const response = await aiAPI.post('/generate-summary-vi', payload);
+    return response.data;
+  },
+
+  askAssistant: async (message: string, conversationId?: string): Promise<AssistantResponse> => {
+    const response = await aiAPI.post('/assistant', {
+      message,
+      conversation_id: conversationId || null,
+    });
     return response.data;
   },
 

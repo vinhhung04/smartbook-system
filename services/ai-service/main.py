@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import json
 import re
 import logging
 import asyncio
+import inspect
 import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
@@ -26,6 +27,7 @@ from rag import (
     verify_numeric_grounding,
 )
 from retrieval import retrieve_context
+from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
 from agent_planner import plan_agent_action
 from socket_emitter import push_ai_action_event
@@ -105,20 +107,23 @@ ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
-PROMPT = (
-    "Bạn là chuyên gia biên mục và giới thiệu sách cho thư viện. "
-    "Dựa trên 2 thông tin đầu vào gồm Tên sách và Nhà xuất bản, hãy viết một đoạn mô tả ngắn về nội dung chính, chủ đề hoặc giá trị nổi bật của cuốn sách. "
-    "Chỉ được suy luận từ chính các thông tin đã cung cấp. "
-    "Không bịa thêm các chi tiết cụ thể như tên nhân vật, cốt truyện chi tiết, chương sách, giải thưởng hoặc nội dung chuyên sâu nếu không đủ căn cứ. "
-    "Nếu thông tin không đủ để mô tả một cách đáng tin cậy, hãy trả về null. "
-    "Nếu có thể suy luận hợp lý, hãy viết mô tả dài từ 3 đến 4 câu, văn phong trang trọng, lôi cuốn, phù hợp để hiển thị trong hệ thống thư viện. "
-    "Nội dung mô tả nên tập trung vào chủ đề của sách, giá trị dành cho người đọc và ý nghĩa hoặc tính ứng dụng nổi bật của cuốn sách. "
-    "Chỉ trả về DUY NHẤT một JSON hợp lệ, không có lời dẫn, không có giải thích, không có markdown, theo đúng định dạng: "
-    '{"description": "..."}'
-    " hoặc "
-    '{"description": null}'
-)
-
+# ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
+# Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
+# needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
+ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
+# CPU-only Ollama (no GPU in docker-compose) re-processes the full system prompt +
+# 8 tool schemas on every round (Ollama's chat API is stateless per call), measured
+# at 25-70s+ per round directly against /api/chat during verification.
+ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
+ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
+ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
+ASSISTANT_ALLOWED_PERMISSIONS = {
+    "analytics.reports.view",
+    "analytics.dashboard.read",
+    "analytics.forecast.view",
+    "analytics.read",
+    "reports.read",
+}
 
 def _extract_json(raw: str) -> dict:
     """Trích xuất JSON từ response text của Ollama (có thể lẫn markdown/text thừa)."""
@@ -158,70 +163,9 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
     return image_bytes
 
 
-def _normalize_book_payload(book_data: dict, raw_text: str) -> dict:
-    return {
-        "title": book_data.get("title") or None,
-        "author": book_data.get("author") or None,
-        "isbn": book_data.get("isbn") or None,
-        "publisher": book_data.get("publisher") or None,
-        "raw": raw_text,
-    }
-
-
-def _recognize_book_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT,
-        images=[image_bytes],
-        options={"temperature": 0},
-    )
-    raw_text: str = response.get("response", "")
-    return _normalize_book_payload(_extract_json(raw_text), raw_text)
-
-
-def _scan_back_cover_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_BACK,
-        images=[image_bytes],
-        options={"temperature": 0},
-    )
-    raw_text: str = response.get("response", "")
-    data = _extract_json(raw_text)
-    return {
-        "isbn": data.get("isbn") or None,
-        "price": data.get("price") or None,
-        "raw": raw_text,
-    }
-
-
-PROMPT_BACK = (
-    "Hãy đóng vai một quản lý kho sách. "
-    "Nhìn vào ảnh mặt sau của cuốn sách này. "
-    "Hãy tìm và trích xuất: Mã vạch/ISBN (dãy số dưới barcode), Giá bán (thường định dạng như 85.000đ hoặc 120,000 VND). "
-    "Trả về kết quả CHỈ gồm định dạng JSON chuẩn, không thêm bất kỳ chú thích hay markdown nào: "
-    '{"isbn": "...", "price": "..."}. '
-    "Nếu không tìm thấy thông tin nào hãy để giá trị là null."
-)
-
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": OLLAMA_MODEL, "ollama_host": OLLAMA_HOST}
-
-
-@app.post("/scan-back-cover")
-async def scan_back_cover(file: UploadFile = File(...)):
-    image_bytes = _validate_and_read_image(file)
-
-    try:
-        return _scan_back_cover_from_bytes(image_bytes)
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 PROMPT_PACKING_VERIFY = (
@@ -388,82 +332,6 @@ async def scan_receipt(file: UploadFile = File(...)):
             "total_items": len(normalized_items),
         }
 
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/recognize-book")
-async def recognize_book(file: UploadFile = File(...)):
-    image_bytes = _validate_and_read_image(file)
-
-    try:
-        return _recognize_book_from_bytes(image_bytes)
-
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/analyze")
-async def analyze(
-    file: UploadFile | None = File(default=None),
-    imageUrl: str | None = Form(default=None),
-    type: str = Form(default="METADATA_EXTRACTION"),
-):
-    """
-    Contract cho frontend legacy AI page.
-    Trả về shape ổn định: { data, confidence, type }.
-    """
-    if file is None and imageUrl:
-        raise HTTPException(
-            status_code=400,
-            detail="imageUrl hiện chưa được hỗ trợ, vui lòng gửi file ảnh.",
-        )
-    if file is None:
-        raise HTTPException(status_code=400, detail="Thiếu file ảnh đầu vào.")
-
-    image_bytes = _validate_and_read_image(file)
-    try:
-        book = _recognize_book_from_bytes(image_bytes)
-        return {
-            "data": {
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "isbn": book.get("isbn"),
-                "publisher": book.get("publisher"),
-            },
-            "confidence": 0.8,
-            "type": type,
-        }
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/extract-metadata")
-async def extract_metadata(file: UploadFile = File(...)):
-    """
-    Kết hợp nhận diện bìa và quét mặt sau để trả metadata tối thiểu.
-    """
-    image_bytes = _validate_and_read_image(file)
-    try:
-        book = _recognize_book_from_bytes(image_bytes)
-        back = _scan_back_cover_from_bytes(image_bytes)
-        return {
-            "title": book.get("title"),
-            "author": book.get("author"),
-            "isbn": back.get("isbn") or book.get("isbn"),
-            "publisher": book.get("publisher"),
-            "price": back.get("price"),
-            "raw": {
-                "recognize_book": book.get("raw"),
-                "scan_back_cover": back.get("raw"),
-            },
-        }
     except ollama.ResponseError as e:
         raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
     except Exception as e:
@@ -2443,6 +2311,7 @@ class EnrichBookMetadataRequest(BaseModel):
     publisher: str | None = None
     description: str | None = None
     categories: list[str] = []
+    existingCategories: list[str] = []  # distinct categories already in the catalog, for suggest_categories mode
     mode: str = "keywords"  # keywords | short_summary | normalize_description | suggest_categories | quality_check
 
 
@@ -2527,8 +2396,19 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
             'Trả về: {"normalizedDescription": "..."}'
         )
     elif mode == "suggest_categories":
+        existing = [c.strip() for c in req.existingCategories if c.strip()][:100]
+        if existing:
+            existing_block = (
+                f"Danh sách thể loại ĐANG CÓ trong hệ thống:\n{', '.join(existing)}\n\n"
+                "Ưu tiên chọn 1-3 thể loại PHÙ HỢP NHẤT từ danh sách trên (dùng đúng chính tả/viết hoa như trong "
+                "danh sách để tránh tạo thể loại trùng lặp gần giống). Chỉ đề xuất thể loại MỚI (không có trong "
+                "danh sách) nếu thực sự không có thể loại nào trong danh sách phù hợp.\n\n"
+            )
+        else:
+            existing_block = ""
         user_prompt = (
             f"Sách: {title}\nTác giả: {authors_str}\nMô tả: {desc[:600] or 'Không có'}\n\n"
+            f"{existing_block}"
             "Đề xuất 1-3 thể loại sách phù hợp, chỉ dựa vào thông tin trên. Không đoán mò.\n"
             'Trả về: {"suggestedCategories": ["..."]}'
         )
@@ -2672,6 +2552,42 @@ ROLE_BASED_RULES = (
 )
 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# AI Assistant — Trợ lý hỗ trợ ra quyết định (tool-calling)
+# ────────────────────────────────────────────────────────────────────────────────
+
+ASSISTANT_SYSTEM_PROMPT = (
+    "Bạn là **SmartBook Decision Assistant** — trợ lý hỗ trợ ra quyết định cho quản lý thư viện và kho vận. "
+    "Người dùng của bạn luôn là quản lý (WAREHOUSE_MANAGER) hoặc quản trị viên (ADMIN).\n\n"
+
+    "## Cách làm việc\n"
+    "- Bạn có một bộ công cụ (tools) để tra cứu dữ liệu thật từ Analytics Service: KPI tổng quan, xu hướng mượn/trả, "
+    "sách mượn nhiều nhất, tổng hợp quá hạn, tổng hợp tiền phạt, rủi ro tồn kho theo từng kho, gợi ý nhập thêm sách, "
+    "và phễu chuyển đổi reservation.\n"
+    "- Khi câu hỏi cần dữ liệu, LUÔN gọi tool phù hợp trước khi trả lời. Có thể gọi nhiều tool liên tiếp cho một câu hỏi.\n"
+    "- CHỈ đưa ra khuyến nghị/số liệu dựa trên kết quả tool đã gọi. TUYỆT ĐỐI không tự phỏng đoán hoặc bịa số liệu.\n"
+    "- Khi đưa khuyến nghị (ví dụ nên nhập thêm sách, nên ưu tiên kho nào), PHẢI trích số liệu cụ thể từ kết quả tool "
+    "(tên sách, số lượng tồn, forecast, priority, reason...). Không nói chung chung kiểu \"nên nhập thêm sách\" mà không "
+    "kèm số liệu.\n\n"
+
+    "## Kiến thức nghiệp vụ (dùng để diễn giải dữ liệu, không phải để suy đoán số liệu)\n"
+    "- Vòng đời reservation: PENDING → CONFIRMED → READY_FOR_PICKUP → CONVERTED_TO_LOAN / CANCELLED / EXPIRED.\n"
+    "- Các loại phạt (fine_type): OVERDUE (quá hạn), LOST (mất sách), DAMAGE (hư/hỏng sách).\n"
+    "- stock_balances của mỗi biến thể sách có 3 trường: available_qty (khả dụng để đặt/mượn), "
+    "reserved_qty (đang giữ cho reservation), borrowed_qty (đang cho mượn).\n\n"
+
+    "## Giới hạn phạm vi\n"
+    "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (ví dụ hỏi thông tin cá nhân/nhạy cảm của một khách hàng cụ "
+    "thể, hoặc chủ đề hoàn toàn không liên quan như thời tiết, chứng khoán, tin tức...), hãy từ chối lịch sự, giải "
+    "thích ngắn gọn đây không phải phạm vi dữ liệu bạn có thể truy cập, KHÔNG tự bịa câu trả lời và KHÔNG gọi tool nào.\n"
+    "- Nếu một tool trả lỗi (error), nói rõ dữ liệu đó hiện chưa lấy được, không suy diễn thay.\n\n"
+
+    "## Cách trình bày\n"
+    "- Luôn trả lời bằng tiếng Việt, ngắn gọn, chuyên nghiệp, đi thẳng vào khuyến nghị.\n"
+    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n"
+)
+
+
 def _build_context_block(system_context: dict | None) -> str:
     """Chuyển dữ liệu hệ thống thành đoạn text để inject vào prompt."""
     if not system_context:
@@ -2751,6 +2667,23 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: list[ChatMessage] = []
     system_context: dict | None = None
+
+
+class AssistantRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+
+
+class AssistantToolCall(BaseModel):
+    name: str
+    arguments: dict
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    tools_used: list[AssistantToolCall]
+    data: dict
+    conversation_id: str | None = None
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3104,6 +3037,113 @@ async def chat(request: Request, req: ChatRequest):
     if pending_action_data:
         result["pending_action"] = pending_action_data
     return result
+
+
+def _filter_tool_args(tool_fn, args: dict) -> dict:
+    """Drop arguments the model hallucinated that aren't in the tool's real signature.
+
+    Smaller quantized models sometimes pass kwargs not present in the declared
+    JSON schema (e.g. calling get_warehouse_stock_risk with a stray `priority`
+    arg). Silently drop unknown keys instead of letting the call raise TypeError.
+    """
+    try:
+        valid_params = set(inspect.signature(tool_fn).parameters.keys())
+    except (TypeError, ValueError):
+        return args
+    return {key: value for key, value in args.items() if key in valid_params}
+
+
+def _assistant_can_access(user_ctx) -> bool:
+    if user_ctx is None:
+        return False
+    if user_ctx.is_superuser:
+        return True
+    if set(user_ctx.roles or []) & ASSISTANT_ALLOWED_ROLES:
+        return True
+    if set(user_ctx.permissions or []) & ASSISTANT_ALLOWED_PERMISSIONS:
+        return True
+    return False
+
+
+@app.post("/assistant", response_model=AssistantResponse)
+async def assistant(request: Request, req: AssistantRequest):
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, reason = await rate_limiter.acquire(key=client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    auth_header = request.headers.get("authorization")
+    user_ctx = await get_user_context(auth_header)
+
+    if not _assistant_can_access(user_ctx):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
+
+    messages: list[dict] = [
+        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        {"role": "user", "content": req.message.strip()},
+    ]
+
+    tools_used: list[dict] = []
+    collected_data: dict = {}
+    answer = ""
+
+    try:
+        for _round in range(ASSISTANT_MAX_TOOL_ROUNDS):
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    ollama.Client(host=OLLAMA_HOST).chat,
+                    model=ASSISTANT_MODEL,
+                    messages=messages,
+                    tools=ANALYTICS_TOOLS,
+                    options={"temperature": 0.2},
+                ),
+                timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+            )
+            message = response["message"]
+            messages.append(message)
+            tool_calls = message.get("tool_calls") or []
+
+            if not tool_calls:
+                answer = (message.get("content") or "").strip()
+                break
+
+            for call in tool_calls:
+                name = call["function"]["name"]
+                args = dict(call["function"]["arguments"] or {})
+                tools_used.append({"name": name, "arguments": args})
+
+                tool_fn = TOOL_FUNCTIONS.get(name)
+                if tool_fn is None:
+                    tool_result = {"error": f"Unknown tool: {name}"}
+                else:
+                    tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+                collected_data[name] = tool_result
+                messages.append({
+                    "role": "tool",
+                    "tool_name": name,
+                    "content": json.dumps(tool_result, ensure_ascii=False),
+                })
+        else:
+            answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+    except Exception:
+        logger.exception("Assistant tool-calling failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi).",
+        )
+
+    if not answer:
+        answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
+
+    return AssistantResponse(
+        answer=answer,
+        tools_used=[AssistantToolCall(**call) for call in tools_used],
+        data=collected_data,
+        conversation_id=req.conversation_id,
+    )
 
 
 def _sse(event: str, data: dict) -> str:

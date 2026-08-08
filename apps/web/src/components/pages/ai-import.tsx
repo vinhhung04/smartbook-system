@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { BookCheck, BookOpen, Loader2, ScanBarcode, Search, Sparkles } from "lucide-react";
+import { AlertTriangle, BookCheck, BookOpen, Loader2, ScanBarcode, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
@@ -66,6 +66,58 @@ function parsePublishYear(publishedDate: string): number | undefined {
   const year = Number(matched[1]);
   if (!Number.isInteger(year) || year < 1000 || year > 2100) return undefined;
   return year;
+}
+
+interface CatalogBookLite {
+  id: string;
+  title: string;
+  author: string;
+  isbn: string;
+  category: string;
+}
+
+/** Lowercase, strip diacritics/punctuation — for loose duplicate/category comparisons. */
+function normalizeForCompare(value: string): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+interface DuplicateMatch {
+  book: CatalogBookLite;
+  reason: "isbn" | "title";
+}
+
+/** Flags catalog books that look like the same title being entered again. */
+function findDuplicateMatches(form: EditableBookForm, catalogBooks: CatalogBookLite[]): DuplicateMatch[] {
+  const candidateIsbns = new Set(
+    [form.isbn, form.isbn13, form.isbn10].map((v) => normalizeIsbnInput(v)).filter(Boolean),
+  );
+  const normalizedTitle = normalizeForCompare(form.title);
+  const firstAuthor = normalizeForCompare(form.authorsText.split(",")[0] || "");
+
+  if (!candidateIsbns.size && normalizedTitle.length < 3) return [];
+
+  const matches: DuplicateMatch[] = [];
+  for (const book of catalogBooks) {
+    const bookIsbn = normalizeIsbnInput(book.isbn || "");
+    if (bookIsbn && candidateIsbns.has(bookIsbn)) {
+      matches.push({ book, reason: "isbn" });
+      continue;
+    }
+    if (normalizedTitle.length < 3) continue;
+    const bookTitle = normalizeForCompare(book.title);
+    if (!bookTitle) continue;
+    const titleMatches = bookTitle === normalizedTitle;
+    const authorMatches = !firstAuthor || normalizeForCompare(book.author).includes(firstAuthor);
+    if (titleMatches && authorMatches) {
+      matches.push({ book, reason: "title" });
+    }
+  }
+  return matches;
 }
 
 function mapLookupToForm(data: LookupBookByIsbnResponse): EditableBookForm {
@@ -184,6 +236,51 @@ export function AIImportPage() {
   const [enrichLoading, setEnrichLoading] = useState<EnrichMode | null>(null);
   const [enrichResult, setEnrichResult] = useState<EnrichBookMetadataResponse | null>(null);
 
+  const [catalogBooks, setCatalogBooks] = useState<CatalogBookLite[]>([]);
+  const [confirmDuplicateSave, setConfirmDuplicateSave] = useState(false);
+
+  // Loaded once for two AI-assist features: matching category suggestions against the
+  // real catalog, and warning about likely duplicate books before save.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await bookService.getAll();
+        const rows = (Array.isArray(response) ? response : []).map((row: any) => ({
+          id: row.id,
+          title: row.title || "",
+          author: row.author || "",
+          isbn: row.isbn || "",
+          category: row.category || "",
+        }));
+        if (!cancelled) setCatalogBooks(rows);
+      } catch {
+        // Non-critical: category suggestions and duplicate check just degrade gracefully.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const existingCategories = useMemo(() => {
+    const set = new Set<string>();
+    catalogBooks.forEach((book) => {
+      const trimmed = book.category.trim();
+      if (trimmed) set.add(trimmed);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [catalogBooks]);
+
+  const duplicateMatches = useMemo(
+    () => findDuplicateMatches(form, catalogBooks),
+    [form.title, form.authorsText, form.isbn, form.isbn13, form.isbn10, catalogBooks],
+  );
+
+  useEffect(() => {
+    setConfirmDuplicateSave(false);
+  }, [duplicateMatches.length]);
+
   const manualMode = Boolean(lookupData && !lookupData.found);
 
   const confidenceValue = lookupData?.confidence?.overall;
@@ -286,6 +383,7 @@ export function AIImportPage() {
         publisher: form.publisher || undefined,
         description: form.description || undefined,
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
+        existingCategories: mode === "suggest_categories" ? existingCategories : undefined,
         mode,
       });
       setEnrichResult(result);
@@ -338,6 +436,10 @@ export function AIImportPage() {
     }
     if (!title) {
       toast.error("Tên sách là bắt buộc");
+      return;
+    }
+    if (duplicateMatches.length > 0 && !confirmDuplicateSave) {
+      toast.error("Sách này có thể đã tồn tại trong catalog. Vui lòng xác nhận ở cảnh báo bên dưới trước khi lưu.");
       return;
     }
 
@@ -404,9 +506,17 @@ export function AIImportPage() {
       await bookService.update(String(payload.book_id), updatePayload);
       toast.success("Đã lưu sách với metadata ISBN");
 
+      // Keep the local catalog snapshot in sync so the duplicate check catches
+      // this book if the user immediately tries to import it again this session.
+      setCatalogBooks((prev) => [
+        ...prev,
+        { id: String(payload.book_id), title, author: authors[0] || "", isbn: normalizedIsbn, category: categories[0] || "" },
+      ]);
+
       setLookupData(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
+      setConfirmDuplicateSave(false);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Lưu thông tin sách thất bại"));
     } finally {
@@ -674,6 +784,43 @@ export function AIImportPage() {
                 )}
               </div>
 
+              {duplicateMatches.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="mt-4 rounded-[10px] border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <div className="flex-1">
+                      <p className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
+                        Có thể sách này đã tồn tại trong catalog
+                      </p>
+                      <ul className="mt-1 space-y-0.5 text-[12px] text-amber-700 dark:text-amber-400">
+                        {duplicateMatches.slice(0, 5).map((match) => (
+                          <li key={match.book.id}>
+                            <span className="font-medium">{match.book.title}</span>
+                            {match.book.author ? ` — ${match.book.author}` : ""}
+                            {match.book.isbn ? ` (ISBN ${match.book.isbn})` : ""}
+                            {match.reason === "isbn" ? " · trùng ISBN" : " · trùng tên sách"}
+                          </li>
+                        ))}
+                      </ul>
+                      <label className="mt-2 flex cursor-pointer items-center gap-2 text-[12px] text-amber-800 dark:text-amber-300">
+                        <input
+                          type="checkbox"
+                          checked={confirmDuplicateSave}
+                          onChange={(event) => setConfirmDuplicateSave(event.target.checked)}
+                          className="h-3.5 w-3.5 cursor-pointer accent-amber-600"
+                        />
+                        Tôi xác nhận đây vẫn là bản sách cần lưu (vd bản khác, đợt nhập khác)
+                      </label>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
                   onClick={() => {
@@ -688,7 +835,7 @@ export function AIImportPage() {
                 </button>
                 <button
                   onClick={() => void handleSave()}
-                  disabled={saving}
+                  disabled={saving || (duplicateMatches.length > 0 && !confirmDuplicateSave)}
                   className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-[13px] font-semibold text-white transition-transform duration-150 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookCheck className="h-4 w-4" />}
