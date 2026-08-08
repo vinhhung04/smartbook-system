@@ -90,6 +90,8 @@ export interface AssistantResponse {
   tools_used: AssistantToolCall[];
   data: Record<string, unknown>;
   conversation_id?: string | null;
+  grounding_warning?: string | null;
+  pending_action?: PendingAction | null;
 }
 
 export interface PendingAction {

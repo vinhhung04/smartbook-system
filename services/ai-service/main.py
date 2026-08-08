@@ -42,7 +42,7 @@ from rag import (
 from retrieval import retrieve_context
 from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
-from agent_planner import plan_agent_action
+from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
 from agent_store import (
     create_pending_action,
@@ -2691,6 +2691,7 @@ class AssistantResponse(BaseModel):
     data: dict
     conversation_id: str | None = None
     grounding_warning: str | None = None
+    pending_action: dict | None = None
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3151,6 +3152,76 @@ def _grounding_check(answer: str, collected_data: dict) -> str | None:
     return verify_numeric_grounding(answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]})
 
 
+async def _build_assistant_pending_action(
+    message: str,
+    collected_data: dict,
+    user_ctx,
+    auth_header: str | None,
+) -> dict | None:
+    """Best-effort: propose a CREATE_REORDER_DRAFT action when the message asks to
+    create a purchase request and the tool loop already fetched reorder suggestions.
+
+    Scoped to reorder only, unlike /chat's plan_agent_action (which also builds
+    report/reservation/stock-alert/staff-task drafts from RAG retrieval). /assistant's
+    collected_data only ever carries per-book reorder data with the shape
+    _build_reorder_draft() expects — the other action builders would silently produce
+    an empty/placeholder action if fed through the generic dispatcher here, since their
+    required raw keys (low_stock_by_warehouse, low_stock_books, Catalog Books) are never
+    populated by ANALYTICS_TOOLS. Never fails the request — errors are logged and
+    treated as "no action to propose".
+    """
+    normalized = normalize_text(message)
+    rule_result = detect_intent(message)
+    wants_reorder = rule_result.get("intent") == REORDER_SUGGESTION_QUERY or _contains_any(normalized, _REORDER_KEYWORDS)
+    if not (_wants_action(normalized) and wants_reorder):
+        return None
+
+    reorder_data = collected_data.get("get_reorder_suggestions")
+    if not reorder_data or (isinstance(reorder_data, dict) and reorder_data.get("error")):
+        return None
+
+    try:
+        planned = await _build_reorder_draft(
+            message,
+            {"intent": REORDER_SUGGESTION_QUERY},
+            {"Reorder Suggestions": reorder_data},
+            sources=[],
+            warnings=[],
+            user_context=user_ctx,
+            auth_header=auth_header,
+        )
+        if planned is None:
+            return None
+
+        temp_action = _make_temp_action_for_check(planned)
+        if not can_confirm_action(user_ctx, temp_action):
+            return None
+
+        action = create_pending_action(
+            action_type=planned["type"],
+            summary=planned["summary"],
+            payload=planned["payload"],
+            risk=planned["risk"],
+            sources=planned.get("sources", []),
+            intent=planned.get("intent"),
+            created_from_message=message,
+            warnings=planned.get("warnings", []),
+            requires_review=planned.get("requires_review", False),
+            user_context=user_ctx,
+        )
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:created",
+            action.id,
+            action.type,
+            user_ctx.user_id if user_ctx else None,
+            {"summary": action.summary, "risk": action.risk},
+        ))
+        return action.model_dump()
+    except Exception:
+        logger.warning("Assistant reorder-draft planning failed (non-fatal)", exc_info=True)
+        return None
+
+
 def _assistant_can_access(user_ctx) -> bool:
     if user_ctx is None:
         return False
@@ -3262,7 +3333,13 @@ async def assistant(request: Request, req: AssistantRequest):
 
     grounding_warning = _grounding_check(answer, collected_data)
 
+    pending_action_data = None
     if answered_normally:
+        pending_action_data = await _build_assistant_pending_action(
+            message_text, collected_data, user_ctx, auth_header,
+        )
+
+    if answered_normally and not pending_action_data:
         assistant_response_cache.set(cache_key, {
             "answer": answer,
             "tools_used": [AssistantToolCall(**call) for call in tools_used],
@@ -3276,6 +3353,7 @@ async def assistant(request: Request, req: AssistantRequest):
         data=collected_data,
         conversation_id=req.conversation_id,
         grounding_warning=grounding_warning,
+        pending_action=pending_action_data,
     )
 
 
@@ -3330,6 +3408,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 "data": cached["data"],
                 "conversation_id": req.conversation_id,
                 "grounding_warning": cached.get("grounding_warning"),
+                "pending_action": None,
             })
         return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
 
@@ -3427,6 +3506,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 "data": collected_data,
                 "conversation_id": req.conversation_id,
                 "grounding_warning": None,
+                "pending_action": None,
             })
             return
 
@@ -3435,7 +3515,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
         grounding_warning = _grounding_check(answer, collected_data)
 
+        pending_action_data = None
         if answered_normally:
+            pending_action_data = await _build_assistant_pending_action(
+                message_text, collected_data, user_ctx, auth_header,
+            )
+
+        if answered_normally and not pending_action_data:
             assistant_response_cache.set(cache_key, {
                 "answer": answer,
                 "tools_used": [AssistantToolCall(name=call["name"], arguments=call["arguments"]) for call in tools_used],
@@ -3449,6 +3535,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             "data": collected_data,
             "conversation_id": req.conversation_id,
             "grounding_warning": grounding_warning,
+            "pending_action": pending_action_data,
         })
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -20,15 +20,17 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { PriorityBadge } from '@/components/ui/priority-badge';
-import { aiService, type AssistantToolCall } from '@/services/ai';
+import { aiService, type AssistantToolCall, type PendingAction } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
+import { ActionCard } from '@/components/ai-action-card';
 
 interface AssistantMessage {
   role: 'user' | 'assistant';
   content: string;
   toolsUsed?: AssistantToolCall[];
   data?: Record<string, unknown>;
+  pendingAction?: PendingAction;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -262,6 +264,7 @@ export function AIAssistantPage() {
             content: response.answer,
             toolsUsed: response.tools_used,
             data: response.data,
+            pendingAction: response.pending_action ?? undefined,
           }));
         },
         onError: (error) => {
@@ -275,6 +278,34 @@ export function AIAssistantPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleActionConfirmed = (_actionId: string, result: any) => {
+    const createdReqs: any[] = result?.created_requests ?? [];
+    const skippedItems: string[] = result?.skipped_items ?? [];
+    const noWhItems: string[] = result?.no_warehouse_items ?? [];
+
+    let requestLine = '';
+    if (createdReqs.length > 0) {
+      const byWh: Record<string, { wh: string; prs: string[] }> = {};
+      for (const r of createdReqs) {
+        const key = r.warehouse_name || 'Chưa rõ kho';
+        if (!byWh[key]) byWh[key] = { wh: key, prs: [] };
+        if (r.request_number) byWh[key].prs.push(r.request_number);
+      }
+      requestLine = Object.values(byWh)
+        .map((g) => `${g.wh}: ${g.prs.join(', ')}`)
+        .join('\n');
+    }
+    const skippedLine = skippedItems.length > 0 ? `Bỏ qua (thiếu variant_id): ${skippedItems.join(', ')}` : '';
+    const noWhLine = noWhItems.length > 0 ? `Bỏ qua (thiếu kho): ${noWhItems.join(', ')}` : '';
+
+    const content = ['✅ Đã xác nhận hành động.', requestLine, skippedLine, noWhLine].filter(Boolean).join('\n');
+    setMessages((prev) => [...prev, { role: 'assistant', content: content || '✅ Đã xác nhận hành động.' }]);
+  };
+
+  const handleActionCancelled = () => {
+    setMessages((prev) => [...prev, { role: 'assistant', content: 'Đã hủy hành động.' }]);
   };
 
   const startNewConversation = () => {
@@ -393,6 +424,13 @@ export function AIAssistantPage() {
                               </span>
                             ))}
                           </div>
+                        )}
+                        {message.pendingAction && (
+                          <ActionCard
+                            action={message.pendingAction}
+                            onConfirmed={handleActionConfirmed}
+                            onCancelled={handleActionCancelled}
+                          />
                         )}
                         {message.data && Object.keys(message.data).length > 0 && (
                           <div className="space-y-3">
