@@ -148,8 +148,10 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
-      # Mặc định là llama3 (LLM text) thay vì llava — llava là vision model, không phù hợp cho tóm tắt văn bản
-      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3}
+      # Dùng chung 1 model text (llama3.1, hỗ trợ tool-calling) cho cả tóm tắt/chat và /assistant —
+      # llava là vision model riêng, không phù hợp cho tóm tắt văn bản
+      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
+      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-8}
@@ -216,6 +218,13 @@ services:
       - ./ollama_data:/root/.ollama
     stdin_open: true
     tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 volumes:
   postgres_data:

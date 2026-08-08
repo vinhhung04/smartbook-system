@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -9,14 +9,28 @@ import json
 import re
 import logging
 import asyncio
+import inspect
 import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
 from html.parser import HTMLParser
-from cache import response_cache, rate_limiter, summary_cache
-from intent import normalize_text
-from nlu import classify_user_message
+from cache import assistant_response_cache, response_cache, rate_limiter, summary_cache
+from intent import (
+    AGING_INVENTORY_QUERY,
+    BOOK_SEARCH_QUERY,
+    BORROW_TREND_QUERY,
+    DASHBOARD_SUMMARY_QUERY,
+    FINE_SUMMARY_QUERY,
+    LOW_STOCK_QUERY,
+    OVERDUE_LOAN_QUERY,
+    REORDER_SUGGESTION_QUERY,
+    RESERVATION_QUERY,
+    TOP_BORROWED_BOOKS_QUERY,
+    detect_intent,
+    normalize_text,
+)
+from nlu import _has_action_surface, _is_complex_message, classify_user_message
 from rag import (
     RAG_SYSTEM_RULES,
     build_fallback_reply,
@@ -26,8 +40,9 @@ from rag import (
     verify_numeric_grounding,
 )
 from retrieval import retrieve_context
+from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
-from agent_planner import plan_agent_action
+from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
 from agent_store import (
     create_pending_action,
@@ -105,20 +120,23 @@ ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
-PROMPT = (
-    "Bạn là chuyên gia biên mục và giới thiệu sách cho thư viện. "
-    "Dựa trên 2 thông tin đầu vào gồm Tên sách và Nhà xuất bản, hãy viết một đoạn mô tả ngắn về nội dung chính, chủ đề hoặc giá trị nổi bật của cuốn sách. "
-    "Chỉ được suy luận từ chính các thông tin đã cung cấp. "
-    "Không bịa thêm các chi tiết cụ thể như tên nhân vật, cốt truyện chi tiết, chương sách, giải thưởng hoặc nội dung chuyên sâu nếu không đủ căn cứ. "
-    "Nếu thông tin không đủ để mô tả một cách đáng tin cậy, hãy trả về null. "
-    "Nếu có thể suy luận hợp lý, hãy viết mô tả dài từ 3 đến 4 câu, văn phong trang trọng, lôi cuốn, phù hợp để hiển thị trong hệ thống thư viện. "
-    "Nội dung mô tả nên tập trung vào chủ đề của sách, giá trị dành cho người đọc và ý nghĩa hoặc tính ứng dụng nổi bật của cuốn sách. "
-    "Chỉ trả về DUY NHẤT một JSON hợp lệ, không có lời dẫn, không có giải thích, không có markdown, theo đúng định dạng: "
-    '{"description": "..."}'
-    " hoặc "
-    '{"description": null}'
-)
-
+# ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
+# Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
+# needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
+ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
+# CPU-only Ollama (no GPU in docker-compose) re-processes the full system prompt +
+# 8 tool schemas on every round (Ollama's chat API is stateless per call), measured
+# at 25-70s+ per round directly against /api/chat during verification.
+ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
+ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
+ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
+ASSISTANT_ALLOWED_PERMISSIONS = {
+    "analytics.reports.view",
+    "analytics.dashboard.read",
+    "analytics.forecast.view",
+    "analytics.read",
+    "reports.read",
+}
 
 def _extract_json(raw: str) -> dict:
     """Trích xuất JSON từ response text của Ollama (có thể lẫn markdown/text thừa)."""
@@ -158,70 +176,9 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
     return image_bytes
 
 
-def _normalize_book_payload(book_data: dict, raw_text: str) -> dict:
-    return {
-        "title": book_data.get("title") or None,
-        "author": book_data.get("author") or None,
-        "isbn": book_data.get("isbn") or None,
-        "publisher": book_data.get("publisher") or None,
-        "raw": raw_text,
-    }
-
-
-def _recognize_book_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT,
-        images=[image_bytes],
-        options={"temperature": 0},
-    )
-    raw_text: str = response.get("response", "")
-    return _normalize_book_payload(_extract_json(raw_text), raw_text)
-
-
-def _scan_back_cover_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_BACK,
-        images=[image_bytes],
-        options={"temperature": 0},
-    )
-    raw_text: str = response.get("response", "")
-    data = _extract_json(raw_text)
-    return {
-        "isbn": data.get("isbn") or None,
-        "price": data.get("price") or None,
-        "raw": raw_text,
-    }
-
-
-PROMPT_BACK = (
-    "Hãy đóng vai một quản lý kho sách. "
-    "Nhìn vào ảnh mặt sau của cuốn sách này. "
-    "Hãy tìm và trích xuất: Mã vạch/ISBN (dãy số dưới barcode), Giá bán (thường định dạng như 85.000đ hoặc 120,000 VND). "
-    "Trả về kết quả CHỈ gồm định dạng JSON chuẩn, không thêm bất kỳ chú thích hay markdown nào: "
-    '{"isbn": "...", "price": "..."}. '
-    "Nếu không tìm thấy thông tin nào hãy để giá trị là null."
-)
-
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": OLLAMA_MODEL, "ollama_host": OLLAMA_HOST}
-
-
-@app.post("/scan-back-cover")
-async def scan_back_cover(file: UploadFile = File(...)):
-    image_bytes = _validate_and_read_image(file)
-
-    try:
-        return _scan_back_cover_from_bytes(image_bytes)
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 PROMPT_PACKING_VERIFY = (
@@ -388,82 +345,6 @@ async def scan_receipt(file: UploadFile = File(...)):
             "total_items": len(normalized_items),
         }
 
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/recognize-book")
-async def recognize_book(file: UploadFile = File(...)):
-    image_bytes = _validate_and_read_image(file)
-
-    try:
-        return _recognize_book_from_bytes(image_bytes)
-
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/analyze")
-async def analyze(
-    file: UploadFile | None = File(default=None),
-    imageUrl: str | None = Form(default=None),
-    type: str = Form(default="METADATA_EXTRACTION"),
-):
-    """
-    Contract cho frontend legacy AI page.
-    Trả về shape ổn định: { data, confidence, type }.
-    """
-    if file is None and imageUrl:
-        raise HTTPException(
-            status_code=400,
-            detail="imageUrl hiện chưa được hỗ trợ, vui lòng gửi file ảnh.",
-        )
-    if file is None:
-        raise HTTPException(status_code=400, detail="Thiếu file ảnh đầu vào.")
-
-    image_bytes = _validate_and_read_image(file)
-    try:
-        book = _recognize_book_from_bytes(image_bytes)
-        return {
-            "data": {
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "isbn": book.get("isbn"),
-                "publisher": book.get("publisher"),
-            },
-            "confidence": 0.8,
-            "type": type,
-        }
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/extract-metadata")
-async def extract_metadata(file: UploadFile = File(...)):
-    """
-    Kết hợp nhận diện bìa và quét mặt sau để trả metadata tối thiểu.
-    """
-    image_bytes = _validate_and_read_image(file)
-    try:
-        book = _recognize_book_from_bytes(image_bytes)
-        back = _scan_back_cover_from_bytes(image_bytes)
-        return {
-            "title": book.get("title"),
-            "author": book.get("author"),
-            "isbn": back.get("isbn") or book.get("isbn"),
-            "publisher": book.get("publisher"),
-            "price": back.get("price"),
-            "raw": {
-                "recognize_book": book.get("raw"),
-                "scan_back_cover": back.get("raw"),
-            },
-        }
     except ollama.ResponseError as e:
         raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
     except Exception as e:
@@ -2443,6 +2324,7 @@ class EnrichBookMetadataRequest(BaseModel):
     publisher: str | None = None
     description: str | None = None
     categories: list[str] = []
+    existingCategories: list[str] = []  # distinct categories already in the catalog, for suggest_categories mode
     mode: str = "keywords"  # keywords | short_summary | normalize_description | suggest_categories | quality_check
 
 
@@ -2527,8 +2409,19 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
             'Trả về: {"normalizedDescription": "..."}'
         )
     elif mode == "suggest_categories":
+        existing = [c.strip() for c in req.existingCategories if c.strip()][:100]
+        if existing:
+            existing_block = (
+                f"Danh sách thể loại ĐANG CÓ trong hệ thống:\n{', '.join(existing)}\n\n"
+                "Ưu tiên chọn 1-3 thể loại PHÙ HỢP NHẤT từ danh sách trên (dùng đúng chính tả/viết hoa như trong "
+                "danh sách để tránh tạo thể loại trùng lặp gần giống). Chỉ đề xuất thể loại MỚI (không có trong "
+                "danh sách) nếu thực sự không có thể loại nào trong danh sách phù hợp.\n\n"
+            )
+        else:
+            existing_block = ""
         user_prompt = (
             f"Sách: {title}\nTác giả: {authors_str}\nMô tả: {desc[:600] or 'Không có'}\n\n"
+            f"{existing_block}"
             "Đề xuất 1-3 thể loại sách phù hợp, chỉ dựa vào thông tin trên. Không đoán mò.\n"
             'Trả về: {"suggestedCategories": ["..."]}'
         )
@@ -2672,6 +2565,35 @@ ROLE_BASED_RULES = (
 )
 
 
+# ────────────────────────────────────────────────────────────────────────────────
+# AI Assistant — Trợ lý hỗ trợ ra quyết định (tool-calling)
+# ────────────────────────────────────────────────────────────────────────────────
+
+ASSISTANT_SYSTEM_PROMPT = (
+    "Bạn là **SmartBook Decision Assistant** — trợ lý ra quyết định cho quản lý thư viện/kho vận "
+    "(WAREHOUSE_MANAGER, ADMIN).\n\n"
+
+    "## Quy tắc bắt buộc\n"
+    "- Khi câu hỏi cần dữ liệu, LUÔN gọi tool phù hợp trước khi trả lời; có thể gọi nhiều tool liên tiếp.\n"
+    "- CHỈ trả lời/khuyến nghị dựa trên kết quả tool đã gọi. TUYỆT ĐỐI không tự phỏng đoán hoặc bịa số liệu.\n"
+    "- Khi khuyến nghị (nên nhập sách, ưu tiên kho nào...), PHẢI trích số liệu cụ thể từ tool (tên sách, tồn, "
+    "forecast, priority, reason...), không nói chung chung.\n"
+    "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (thông tin cá nhân khách hàng, thời tiết, chứng khoán, "
+    "tin tức...), từ chối lịch sự, ngắn gọn, KHÔNG bịa câu trả lời và KHÔNG gọi tool nào.\n"
+    "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n\n"
+
+    "## Kiến thức nghiệp vụ\n"
+    "- Reservation: PENDING → CONFIRMED → READY_FOR_PICKUP → CONVERTED_TO_LOAN / CANCELLED / EXPIRED.\n"
+    "- fine_type: OVERDUE (quá hạn), LOST (mất sách), DAMAGE (hư/hỏng).\n"
+    "- stock_balances: available_qty (khả dụng để đặt/mượn), reserved_qty (đang giữ cho reservation), "
+    "borrowed_qty (đang cho mượn).\n\n"
+
+    "## Trình bày\n"
+    "- Luôn trả lời tiếng Việt, ngắn gọn, chuyên nghiệp, đi thẳng khuyến nghị.\n"
+    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n"
+)
+
+
 def _build_context_block(system_context: dict | None) -> str:
     """Chuyển dữ liệu hệ thống thành đoạn text để inject vào prompt."""
     if not system_context:
@@ -2751,6 +2673,25 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: list[ChatMessage] = []
     system_context: dict | None = None
+
+
+class AssistantRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+
+
+class AssistantToolCall(BaseModel):
+    name: str
+    arguments: dict
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    tools_used: list[AssistantToolCall]
+    data: dict
+    conversation_id: str | None = None
+    grounding_warning: str | None = None
+    pending_action: dict | None = None
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3106,8 +3047,498 @@ async def chat(request: Request, req: ChatRequest):
     return result
 
 
+def _filter_tool_args(tool_fn, args: dict) -> dict:
+    """Drop arguments the model hallucinated that aren't in the tool's real signature.
+
+    Smaller quantized models sometimes pass kwargs not present in the declared
+    JSON schema (e.g. calling get_warehouse_stock_risk with a stray `priority`
+    arg). Silently drop unknown keys instead of letting the call raise TypeError.
+    """
+    try:
+        valid_params = set(inspect.signature(tool_fn).parameters.keys())
+    except (TypeError, ValueError):
+        return args
+    return {key: value for key, value in args.items() if key in valid_params}
+
+
+_FAST_PATH_INTENT_TOOL = {
+    DASHBOARD_SUMMARY_QUERY: "get_dashboard_kpis",
+    TOP_BORROWED_BOOKS_QUERY: "get_top_books",
+    OVERDUE_LOAN_QUERY: "get_overdue_summary",
+    FINE_SUMMARY_QUERY: "get_fine_summary",
+    BORROW_TREND_QUERY: "get_borrow_trends",
+    REORDER_SUGGESTION_QUERY: "get_reorder_suggestions",
+    LOW_STOCK_QUERY: "get_warehouse_stock_risk",
+    RESERVATION_QUERY: "get_reservation_funnel",
+    BOOK_SEARCH_QUERY: "search_books",
+    AGING_INVENTORY_QUERY: "get_aging_inventory",
+}
+
+
+def _fast_path_tool(message: str) -> tuple[str, dict] | None:
+    """Rule-based shortcut for /assistant's first tool-selection round. Reuses the SAME
+    confidence/complexity/action-surface gate nlu.classify_user_message() already uses
+    for its own fast path, so this never fires on anything that gate wouldn't also trust.
+    Returns (tool_name, tool_args) or None (fall through to normal LLM tool selection).
+
+    Note: DASHBOARD_SUMMARY_QUERY (0.84) and BOOK_SEARCH_QUERY (0.82) never clear the
+    0.85 bar in practice — included here anyway so they benefit automatically if intent.py's
+    confidence values are ever tuned up; today only ~7 of the 10 intents actually fast-path.
+    """
+    rule_result = detect_intent(message)
+    tool_name = _FAST_PATH_INTENT_TOOL.get(rule_result.get("intent"))
+    if tool_name is None:
+        return None
+
+    normalized = normalize_text(message)
+    if (
+        rule_result.get("confidence", 0.35) < 0.85
+        or _is_complex_message(message)
+        or _has_action_surface(normalized)
+    ):
+        return None
+
+    return tool_name, _fast_path_tool_args(tool_name, rule_result)
+
+
+def _fast_path_tool_args(tool_name: str, rule_result: dict) -> dict:
+    """Only use fields detect_intent() already extracted — never invent limit/priority/
+    days, so the tool call behaves exactly like an LLM-driven call with no arguments."""
+    time_range = rule_result.get("time_range") or {}
+    from_date, to_date = time_range.get("from"), time_range.get("to")
+
+    if tool_name == "get_borrow_trends":
+        args = {}
+        if from_date: args["from_date"] = from_date
+        if to_date: args["to_date"] = to_date
+        if rule_result.get("granularity"): args["granularity"] = rule_result["granularity"]
+        return args
+    if tool_name == "get_top_books":
+        args = {}
+        if from_date: args["from_date"] = from_date
+        if to_date: args["to_date"] = to_date
+        return args
+    if tool_name == "search_books":
+        return {"query": rule_result.get("query") or ""}
+    return {}
+
+
+async def _run_fast_path_tool(message: str, auth_header: str | None) -> dict | None:
+    """If the rule classifier is confident, execute that tool right away — returns the
+    pieces needed to seed the tool-calling loop as if round 1 already happened, or None
+    to fall through to the unchanged LLM-driven tool selection."""
+    fast_pick = _fast_path_tool(message)
+    if fast_pick is None:
+        return None
+    tool_name, tool_args = fast_pick
+    tool_fn = TOOL_FUNCTIONS.get(tool_name)
+    if tool_fn is None:
+        return None
+    tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, tool_args))
+    return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
+
+
+def _assistant_cache_key(message: str) -> str:
+    return f"assistant:{normalize_text(message.strip())[:200]}"
+
+
+def _grounding_check(answer: str, collected_data: dict) -> str | None:
+    """Adapt /assistant's flat collected_data (tool-name -> raw result) into the
+    {summary, raw, sources} envelope rag.verify_numeric_grounding() expects. A single
+    sources=[{"status": "ok"}] sentinel satisfies its "was there any real data at all"
+    gate — that function never reads source name/endpoint, only status."""
+    if not collected_data:
+        return None
+    return verify_numeric_grounding(answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]})
+
+
+async def _build_assistant_pending_action(
+    message: str,
+    collected_data: dict,
+    user_ctx,
+    auth_header: str | None,
+) -> dict | None:
+    """Best-effort: propose a CREATE_REORDER_DRAFT action when the message asks to
+    create a purchase request and the tool loop already fetched reorder suggestions.
+
+    Scoped to reorder only, unlike /chat's plan_agent_action (which also builds
+    report/reservation/stock-alert/staff-task drafts from RAG retrieval). /assistant's
+    collected_data only ever carries per-book reorder data with the shape
+    _build_reorder_draft() expects — the other action builders would silently produce
+    an empty/placeholder action if fed through the generic dispatcher here, since their
+    required raw keys (low_stock_by_warehouse, low_stock_books, Catalog Books) are never
+    populated by ANALYTICS_TOOLS. Never fails the request — errors are logged and
+    treated as "no action to propose".
+    """
+    normalized = normalize_text(message)
+    rule_result = detect_intent(message)
+    wants_reorder = rule_result.get("intent") == REORDER_SUGGESTION_QUERY or _contains_any(normalized, _REORDER_KEYWORDS)
+    if not (_wants_action(normalized) and wants_reorder):
+        return None
+
+    reorder_data = collected_data.get("get_reorder_suggestions")
+    if not reorder_data or (isinstance(reorder_data, dict) and reorder_data.get("error")):
+        return None
+
+    try:
+        planned = await _build_reorder_draft(
+            message,
+            {"intent": REORDER_SUGGESTION_QUERY},
+            {"Reorder Suggestions": reorder_data},
+            sources=[],
+            warnings=[],
+            user_context=user_ctx,
+            auth_header=auth_header,
+        )
+        if planned is None:
+            return None
+
+        temp_action = _make_temp_action_for_check(planned)
+        if not can_confirm_action(user_ctx, temp_action):
+            return None
+
+        action = create_pending_action(
+            action_type=planned["type"],
+            summary=planned["summary"],
+            payload=planned["payload"],
+            risk=planned["risk"],
+            sources=planned.get("sources", []),
+            intent=planned.get("intent"),
+            created_from_message=message,
+            warnings=planned.get("warnings", []),
+            requires_review=planned.get("requires_review", False),
+            user_context=user_ctx,
+        )
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:created",
+            action.id,
+            action.type,
+            user_ctx.user_id if user_ctx else None,
+            {"summary": action.summary, "risk": action.risk},
+        ))
+        return action.model_dump()
+    except Exception:
+        logger.warning("Assistant reorder-draft planning failed (non-fatal)", exc_info=True)
+        return None
+
+
+def _assistant_can_access(user_ctx) -> bool:
+    if user_ctx is None:
+        return False
+    if user_ctx.is_superuser:
+        return True
+    if set(user_ctx.roles or []) & ASSISTANT_ALLOWED_ROLES:
+        return True
+    if set(user_ctx.permissions or []) & ASSISTANT_ALLOWED_PERMISSIONS:
+        return True
+    return False
+
+
+@app.post("/assistant", response_model=AssistantResponse)
+async def assistant(request: Request, req: AssistantRequest):
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, reason = await rate_limiter.acquire(key=client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    auth_header = request.headers.get("authorization")
+    user_ctx = await get_user_context(auth_header)
+
+    if not _assistant_can_access(user_ctx):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
+
+    message_text = req.message.strip()
+    cache_key = _assistant_cache_key(message_text)
+    cached = assistant_response_cache.get(cache_key)
+    if cached is not None:
+        return AssistantResponse(**{**cached, "conversation_id": req.conversation_id})
+
+    messages: list[dict] = [
+        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        {"role": "user", "content": message_text},
+    ]
+
+    tools_used: list[dict] = []
+    collected_data: dict = {}
+    answer = ""
+    answered_normally = False
+
+    fast = await _run_fast_path_tool(message_text, auth_header)
+    start_round = 0
+    if fast is not None:
+        tools_used.append({"name": fast["tool_name"], "arguments": fast["tool_args"]})
+        collected_data[fast["tool_name"]] = fast["tool_result"]
+        messages.append({
+            "role": "assistant", "content": "",
+            "tool_calls": [{"function": {"name": fast["tool_name"], "arguments": fast["tool_args"]}}],
+        })
+        messages.append({
+            "role": "tool", "tool_name": fast["tool_name"],
+            "content": json.dumps(fast["tool_result"], ensure_ascii=False),
+        })
+        start_round = 1
+
+    try:
+        for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
+            predict_cap = 200 if (_round == start_round and start_round == 0) else 700
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    ollama.Client(host=OLLAMA_HOST).chat,
+                    model=ASSISTANT_MODEL,
+                    messages=messages,
+                    tools=ANALYTICS_TOOLS,
+                    options={"temperature": 0.2, "num_predict": predict_cap},
+                ),
+                timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+            )
+            message = response["message"]
+            messages.append(message)
+            tool_calls = message.get("tool_calls") or []
+
+            if not tool_calls:
+                answer = (message.get("content") or "").strip()
+                answered_normally = True
+                break
+
+            for call in tool_calls:
+                name = call["function"]["name"]
+                args = dict(call["function"]["arguments"] or {})
+                tools_used.append({"name": name, "arguments": args})
+
+                tool_fn = TOOL_FUNCTIONS.get(name)
+                if tool_fn is None:
+                    tool_result = {"error": f"Unknown tool: {name}"}
+                else:
+                    tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+                collected_data[name] = tool_result
+                messages.append({
+                    "role": "tool",
+                    "tool_name": name,
+                    "content": json.dumps(tool_result, ensure_ascii=False),
+                })
+        else:
+            answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+    except Exception:
+        logger.exception("Assistant tool-calling failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi).",
+        )
+
+    if not answer:
+        answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
+
+    grounding_warning = _grounding_check(answer, collected_data)
+
+    pending_action_data = None
+    if answered_normally:
+        pending_action_data = await _build_assistant_pending_action(
+            message_text, collected_data, user_ctx, auth_header,
+        )
+
+    if answered_normally and not pending_action_data:
+        assistant_response_cache.set(cache_key, {
+            "answer": answer,
+            "tools_used": [AssistantToolCall(**call) for call in tools_used],
+            "data": collected_data,
+            "grounding_warning": grounding_warning,
+        })
+
+    return AssistantResponse(
+        answer=answer,
+        tools_used=[AssistantToolCall(**call) for call in tools_used],
+        data=collected_data,
+        conversation_id=req.conversation_id,
+        grounding_warning=grounding_warning,
+        pending_action=pending_action_data,
+    )
+
+
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+async def _iter_with_timeout(async_iterable, timeout: float):
+    """Wrap an async iterator so each individual `__anext__()` call is time-bounded,
+    rather than the whole stream. Long-running-but-progressing generation (normal for
+    this CPU-only model) keeps going; a genuine stall between chunks still raises."""
+    iterator = async_iterable.__aiter__()
+    while True:
+        try:
+            item = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
+        except StopAsyncIteration:
+            return
+        yield item
+
+
+@app.post("/assistant/stream")
+async def assistant_stream(request: Request, req: AssistantRequest):
+    """Streaming twin of /assistant: same permission gate and tool-calling loop, but
+    each round's Ollama response is consumed with `stream=True` so the final answer's
+    tokens reach the client as they're generated, instead of only after the whole
+    tool-calling loop (which takes 60-120s+ on this CPU-only deployment) completes.
+    Tool-selection rounds normally produce no content deltas (the model emits only
+    tool_calls for those), so in practice only the final round streams visible text.
+    """
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, reason = await rate_limiter.acquire(key=client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    auth_header = request.headers.get("authorization")
+    user_ctx = await get_user_context(auth_header)
+    if not _assistant_can_access(user_ctx):
+        raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
+
+    message_text = req.message.strip()
+    cache_key = _assistant_cache_key(message_text)
+    cached = assistant_response_cache.get(cache_key)
+    if cached is not None:
+        async def cached_event_generator():
+            yield _sse("token", {"text": cached["answer"]})
+            yield _sse("done", {
+                "answer": cached["answer"],
+                "tools_used": [dict(call) for call in cached["tools_used"]],
+                "data": cached["data"],
+                "conversation_id": req.conversation_id,
+                "grounding_warning": cached.get("grounding_warning"),
+                "pending_action": None,
+            })
+        return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
+
+    messages: list[dict] = [
+        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        {"role": "user", "content": message_text},
+    ]
+
+    async def event_generator():
+        tools_used: list[dict] = []
+        collected_data: dict = {}
+        answer = ""
+        answered_normally = False
+        client = ollama.AsyncClient(host=OLLAMA_HOST)
+
+        fast = await _run_fast_path_tool(message_text, auth_header)
+        start_round = 0
+        if fast is not None:
+            tools_used.append({"name": fast["tool_name"], "arguments": fast["tool_args"]})
+            collected_data[fast["tool_name"]] = fast["tool_result"]
+            messages.append({
+                "role": "assistant", "content": "",
+                "tool_calls": [{"function": {"name": fast["tool_name"], "arguments": fast["tool_args"]}}],
+            })
+            messages.append({
+                "role": "tool", "tool_name": fast["tool_name"],
+                "content": json.dumps(fast["tool_result"], ensure_ascii=False),
+            })
+            start_round = 1
+
+        try:
+            for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
+                predict_cap = 200 if (_round == start_round and start_round == 0) else 700
+                stream = await client.chat(
+                    model=ASSISTANT_MODEL,
+                    messages=messages,
+                    tools=ANALYTICS_TOOLS,
+                    stream=True,
+                    options={"temperature": 0.2, "num_predict": predict_cap},
+                )
+
+                last_message = None
+                # Ollama sends the parsed tool call on the chunk that decides it, then a
+                # separate final "done" sentinel chunk whose own tool_calls is always None —
+                # naively keeping only the *last* chunk's tool_calls silently drops the call.
+                accumulated_tool_calls = None
+                async for chunk in _iter_with_timeout(stream, ASSISTANT_LLM_TIMEOUT_SECONDS):
+                    last_message = chunk.message
+                    if chunk.message.tool_calls:
+                        accumulated_tool_calls = chunk.message.tool_calls
+                    delta = chunk.message.content or ""
+                    if delta:
+                        answer += delta
+                        yield _sse("token", {"text": delta})
+
+                if last_message is None:
+                    break
+
+                tool_calls = accumulated_tool_calls or []
+                messages.append(
+                    {"role": "assistant", "content": "", "tool_calls": tool_calls} if tool_calls else last_message
+                )
+
+                if not tool_calls:
+                    answered_normally = True
+                    break
+
+                for call in tool_calls:
+                    name = call["function"]["name"]
+                    args = dict(call["function"]["arguments"] or {})
+                    tools_used.append({"name": name, "arguments": args})
+
+                    tool_fn = TOOL_FUNCTIONS.get(name)
+                    if tool_fn is None:
+                        tool_result = {"error": f"Unknown tool: {name}"}
+                    else:
+                        tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+                    collected_data[name] = tool_result
+                    messages.append({
+                        "role": "tool",
+                        "tool_name": name,
+                        "content": json.dumps(tool_result, ensure_ascii=False),
+                    })
+            else:
+                if not answer:
+                    answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+                    yield _sse("token", {"text": answer})
+        except Exception:
+            logger.exception("Assistant streaming failed")
+            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi)."
+            yield _sse("token", {"text": answer})
+            yield _sse("done", {
+                "answer": answer,
+                "tools_used": tools_used,
+                "data": collected_data,
+                "conversation_id": req.conversation_id,
+                "grounding_warning": None,
+                "pending_action": None,
+            })
+            return
+
+        if not answer:
+            answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
+
+        grounding_warning = _grounding_check(answer, collected_data)
+
+        pending_action_data = None
+        if answered_normally:
+            pending_action_data = await _build_assistant_pending_action(
+                message_text, collected_data, user_ctx, auth_header,
+            )
+
+        if answered_normally and not pending_action_data:
+            assistant_response_cache.set(cache_key, {
+                "answer": answer,
+                "tools_used": [AssistantToolCall(name=call["name"], arguments=call["arguments"]) for call in tools_used],
+                "data": collected_data,
+                "grounding_warning": grounding_warning,
+            })
+
+        yield _sse("done", {
+            "answer": answer,
+            "tools_used": tools_used,
+            "data": collected_data,
+            "conversation_id": req.conversation_id,
+            "grounding_warning": grounding_warning,
+            "pending_action": pending_action_data,
+        })
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/chat/stream")

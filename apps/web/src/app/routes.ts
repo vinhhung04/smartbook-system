@@ -27,6 +27,7 @@ import { BorrowFinesPage } from "@/components/pages/borrow-fines";
 import { UsersPage } from "@/components/pages/users";
 import { RolesPage } from "@/components/pages/roles";
 import { ReportsPage } from "@/components/pages/reports";
+import { AIAssistantPage } from "@/components/pages/ai-assistant";
 import { PutawayPage } from "@/components/pages/putaway";
 import { PutawayDetailPage } from "@/components/pages/putaway-detail";
 import { PutawayExecutePage } from "@/components/pages/putaway-execute";
@@ -265,6 +266,7 @@ export const router = createBrowserRouter([
       { path: "borrow/loans/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowLoanDetailPage },
       { path: "borrow/fines", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowFinesPage },
       { path: "reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReportsPage },
+      { path: "ai-assistant", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.aiAssistant), Component: AIAssistantPage },
       { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AuditTrailPage },
       { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: MembershipPlansPage },
       { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), Component: SuppliersPage },

@@ -47,6 +47,7 @@ export const ROUTE_ACCESS = {
   borrowRead: { roles: LIBRARY_ROLES, permissions: ["borrow.read", "borrow.customers.read", "borrow.loans.read"] },
   borrowWrite: { roles: ["ADMIN", "LIBRARIAN"], permissions: ["borrow.write", "borrow.loans.write", "borrow.customers.write"] },
   reports: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
+  aiAssistant: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
   admin: { roles: ADMIN_ROLES, permissions: ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"] },
   customer: { roles: ["CUSTOMER"], permissions: ["customer.self.read", "inventory.catalog.read"] },
   supplier: { roles: ["SUPPLIER"], permissions: ["supplier.portal.read", "supplier.portal.write"] },

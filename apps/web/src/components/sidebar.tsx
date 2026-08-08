@@ -6,7 +6,7 @@ import {
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft, ChevronDown,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
-  ShoppingCart, AlertTriangle, PackageCheck,
+  ShoppingCart, AlertTriangle, PackageCheck, MessageCircle,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
@@ -80,6 +80,7 @@ const navGroups = [
       { to: "/reports", icon: BarChart3, labelKey: "sidebar.reports", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/recommendations", icon: ThumbsUp, labelKey: "sidebar.recommendations", access: ROUTE_ACCESS.catalog, activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
       { to: "/reorder-suggestions", icon: Package, labelKey: "sidebar.ai_reorder", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+      { to: "/ai-assistant", icon: MessageCircle, labelKey: "sidebar.ai_assistant", access: ROUTE_ACCESS.aiAssistant, activeColor: "from-violet-500/15 to-indigo-500/10", textColor: "text-violet-700", iconBg: "bg-violet-500/10" },
     ],
   },
   {

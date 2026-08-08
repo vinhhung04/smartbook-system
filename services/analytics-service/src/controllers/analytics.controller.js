@@ -442,6 +442,16 @@ const getFineSummary = asyncHandler(async (_req, res) => {
   });
 });
 
+function buildWarehouseRiskReasoning(row) {
+  if (row.out_of_stock_variants > 0) {
+    return `Có ${row.out_of_stock_variants} đầu sách đã hết hàng (available_qty ≤ 0) và ${row.low_stock_variants} đầu sách dưới ngưỡng tồn kho tối thiểu tại kho này; tồn khả dụng còn ${row.total_available_qty} bản trong khi đang giữ ${row.total_reserved_qty} bản cho đặt trước và ${row.total_borrowed_qty} bản đang cho mượn.`;
+  }
+  if (row.low_stock_variants > 0) {
+    return `Có ${row.low_stock_variants} đầu sách dưới ngưỡng tồn kho tối thiểu (reorder point); chưa có đầu sách nào hết hàng hoàn toàn.`;
+  }
+  return 'Không có đầu sách nào dưới ngưỡng tồn kho tối thiểu tại kho này.';
+}
+
 const getWarehouseStockRisk = asyncHandler(async (_req, res) => {
   const rows = await query(
     inventoryPool,
@@ -466,15 +476,18 @@ const getWarehouseStockRisk = asyncHandler(async (_req, res) => {
   );
 
   res.json({
-    data: rows.map((row) => ({
-      warehouse_id: row.warehouse_id,
-      warehouse_name: row.warehouse_name,
-      low_stock_variants: number(row.low_stock_variants),
-      out_of_stock_variants: number(row.out_of_stock_variants),
-      total_available_qty: number(row.total_available_qty),
-      total_reserved_qty: number(row.total_reserved_qty),
-      total_borrowed_qty: number(row.total_borrowed_qty),
-    })),
+    data: rows.map((row) => {
+      const normalized = {
+        warehouse_id: row.warehouse_id,
+        warehouse_name: row.warehouse_name,
+        low_stock_variants: number(row.low_stock_variants),
+        out_of_stock_variants: number(row.out_of_stock_variants),
+        total_available_qty: number(row.total_available_qty),
+        total_reserved_qty: number(row.total_reserved_qty),
+        total_borrowed_qty: number(row.total_borrowed_qty),
+      };
+      return { ...normalized, reasoning: buildWarehouseRiskReasoning(normalized) };
+    }),
   });
 });
 

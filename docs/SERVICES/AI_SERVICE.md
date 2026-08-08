@@ -7,17 +7,13 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 - Runtime: Python + FastAPI
 - Entrypoint: services/ai-service/main.py
 - Model runtime: Ollama local
-- Vai trò: nhận diện sách, tra cứu ISBN, tạo tóm tắt tiếng Việt
+- Vai trò: tra cứu ISBN, tạo tóm tắt tiếng Việt, OCR hóa đơn nhập kho, trợ lý ra quyết định
 
 ## Endpoint chính
 
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | GET | /health | Kiểm tra trạng thái service |
-| POST | /scan-back-cover | OCR thông tin từ ảnh bìa sau |
-| POST | /recognize-book | Nhận diện thông tin sách từ ảnh |
-| POST | /analyze | Phân tích nội dung ảnh |
-| POST | /extract-metadata | Trích xuất metadata từ input |
 | GET | /recommendations | Gợi ý đọc sách |
 | POST | /recommendations | Gợi ý đọc sách theo payload |
 | POST | /lookup-book-by-isbn | Tra cứu metadata theo ISBN |
@@ -25,6 +21,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /generate-summary-vi | Tạo tóm tắt tiếng Việt phong cách nhà sách (Fahasa/Tiki style) |
 | POST | /chat | Hỏi đáp AI |
 | POST | /reading-stats | Tổng hợp thống kê đọc |
+| POST | /assistant | Trợ lý hỗ trợ ra quyết định (Ollama tool-calling qua Analytics Service) |
 
 Ghi chú quan trọng:
 
@@ -33,14 +30,18 @@ Ghi chú quan trọng:
 - /lookup-book-by-isbn hỗ trợ normalize ISBN-10/ISBN-13 và trả payload ổn định cho frontend.
 - Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
+- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng Ollama tool-calling thật (`ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer": "string", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id" }`. Endpoint không nhận `conversation_history` — stateless theo từng request, `conversation_id` chỉ được echo lại để client tự quản lý lịch sử hiển thị. Không có fallback Anthropic cho endpoint này.
 
 ## Biến môi trường đặc thù
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
 | OLLAMA_HOST | http://ollama:11434 | Địa chỉ Ollama trong Docker network |
-| OLLAMA_MODEL | llava | Model xử lý ảnh |
-| SUMMARY_MODEL | llama3 | Model tóm tắt văn bản |
+| OLLAMA_MODEL | llava | Model xử lý ảnh (OCR hóa đơn, xác minh ảnh đóng gói) |
+| SUMMARY_MODEL | llama3.1:8b-instruct-q4_0 | Model tóm tắt văn bản / `/chat` |
+| ASSISTANT_MODEL | llama3.1:8b-instruct-q4_0 | Model dùng cho `/assistant` (cần hỗ trợ Ollama tool-calling) |
+
+> `SUMMARY_MODEL` và `ASSISTANT_MODEL` mặc định trỏ chung 1 model (`llama3.1:8b-instruct-q4_0`) để chỉ cần pull/giữ 1 model text thay vì 2 (`llama3` cũ đã bỏ vì không hỗ trợ tool-calling). Vẫn giữ 2 biến env riêng để có thể tách lại sau này nếu cần.
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
 | OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
