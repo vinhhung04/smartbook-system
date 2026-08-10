@@ -75,6 +75,27 @@ export interface LookupBookByIsbnResponse {
   reason?: string;
 }
 
+export interface PostIsbnAiSuggestions {
+  description: string | null;
+  summaryVi: string | null;
+  keywords: string[];
+  categories: string[];
+  qualityWarnings: string[];
+  provider: string;
+  confidence: number;
+}
+
+export interface EnrichBookAfterIsbnRequest {
+  isbn: string;
+  existingCategories?: string[];
+}
+
+export interface EnrichBookAfterIsbnResponse {
+  success: boolean;
+  lookup: LookupBookByIsbnResponse;
+  aiSuggestions: PostIsbnAiSuggestions;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -229,6 +250,16 @@ export const aiService = {
     const response = await aiAPI.post('/lookup-book-by-isbn', {
       isbn: payload.isbn,
       generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
+    });
+    return response.data;
+  },
+
+  enrichBookAfterIsbn: async (
+    payload: EnrichBookAfterIsbnRequest,
+  ): Promise<EnrichBookAfterIsbnResponse> => {
+    const response = await aiAPI.post('/enrich-book-after-isbn', {
+      isbn: payload.isbn,
+      existingCategories: payload.existingCategories || [],
     });
     return response.data;
   },

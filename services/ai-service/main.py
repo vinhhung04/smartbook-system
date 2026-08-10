@@ -2188,6 +2188,139 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     }
 
 
+class EnrichBookAfterIsbnRequest(BaseModel):
+    isbn: str
+    existingCategories: list[str] = []
+
+
+def _empty_post_isbn_ai_suggestions(
+    quality_warnings: list[str] | None = None,
+    description: str | None = None,
+) -> dict:
+    return {
+        "description": description,
+        "summaryVi": None,
+        "keywords": [],
+        "categories": [],
+        "qualityWarnings": quality_warnings or [],
+        "provider": "none",
+        "confidence": 0.0,
+    }
+
+
+def _merge_provider(current: str, candidate: str | None) -> str:
+    if current and current != "none":
+        return current
+    return candidate or "none"
+
+
+async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: list[str]) -> dict:
+    title = (lookup.get("title") or "").strip()
+    authors = [str(author).strip() for author in (lookup.get("authors") or []) if str(author).strip()]
+    publisher = lookup.get("publisher")
+    description = (lookup.get("description") or "").strip()
+    categories = [str(category).strip() for category in (lookup.get("categories") or []) if str(category).strip()]
+
+    if not lookup.get("found") or not title:
+        return _empty_post_isbn_ai_suggestions(
+            ["Không có metadata đủ tin cậy sau khi tra cứu ISBN, vui lòng nhập tay."]
+        )
+
+    quality_warnings = _check_book_quality(title, authors, publisher, description, categories)
+    summary_vi = lookup.get("summaryVi")
+    keywords = [str(keyword).strip() for keyword in (lookup.get("keywords") or []) if str(keyword).strip()]
+    suggested_categories: list[str] = []
+    provider = "none"
+    confidence_scores: list[float] = []
+
+    metadata = {
+        "title": title,
+        "authors": authors,
+        "publisher": publisher,
+        "description": description,
+        "categories": categories,
+    }
+
+    try:
+        if not summary_vi or not keywords:
+            generated_summary, generated_keywords, anthropic_ok = await _call_anthropic(metadata)
+            if anthropic_ok:
+                provider = "anthropic"
+                confidence_scores.append(0.85)
+            else:
+                generated_summary, generated_keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
+                if ollama_ok:
+                    provider = "ollama"
+                    confidence_scores.append(0.75)
+
+            summary_vi = summary_vi or generated_summary
+            if not keywords:
+                keywords = generated_keywords or []
+
+        if description:
+            normalized_result = await enrich_book_metadata(EnrichBookMetadataRequest(
+                title=title,
+                authors=authors,
+                publisher=publisher,
+                description=description,
+                categories=categories,
+                existingCategories=existing_categories,
+                mode="normalize_description",
+            ))
+            if normalized_result.success and normalized_result.normalizedDescription:
+                description = normalized_result.normalizedDescription
+                provider = _merge_provider(provider, normalized_result.ai_provider)
+                confidence_scores.append(normalized_result.confidence)
+
+        category_result = await enrich_book_metadata(EnrichBookMetadataRequest(
+            title=title,
+            authors=authors,
+            publisher=publisher,
+            description=description,
+            categories=categories,
+            existingCategories=existing_categories,
+            mode="suggest_categories",
+        ))
+        if category_result.success and category_result.suggestedCategories:
+            suggested_categories = category_result.suggestedCategories
+            provider = _merge_provider(provider, category_result.ai_provider)
+            confidence_scores.append(category_result.confidence)
+
+    except Exception as exc:
+        logger.warning("Post-ISBN AI enrichment failed for %s: %s", lookup.get("isbn"), exc)
+        quality_warnings.append("AI không khả dụng, chỉ trả metadata tra cứu ISBN để admin nhập/chỉnh tay.")
+        return _empty_post_isbn_ai_suggestions(quality_warnings, description or None)
+
+    confidence = round(sum(confidence_scores) / len(confidence_scores), 3) if confidence_scores else 0.0
+    return {
+        "description": description or None,
+        "summaryVi": _safe_text(summary_vi),
+        "keywords": _safe_list(keywords)[:15],
+        "categories": _safe_list(suggested_categories)[:5],
+        "qualityWarnings": quality_warnings,
+        "provider": provider,
+        "confidence": confidence,
+    }
+
+
+@app.post("/enrich-book-after-isbn")
+async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
+    """
+    ISBN-first orchestration endpoint: lookup metadata, then generate optional
+    AI suggestions for librarian review. Suggestions never overwrite saved data.
+    """
+    lookup = await lookup_book_by_isbn(IsbnLookupRequest(
+        isbn=req.isbn,
+        generateVietnameseSummary=False,
+    ))
+    suggestions = await _build_post_isbn_ai_suggestions(lookup, req.existingCategories or [])
+    return {
+        "success": bool(lookup.get("success") or lookup.get("found")),
+        "lookup": lookup,
+        "aiSuggestions": suggestions,
+    }
+
+
 # ────────────────────────────────────────────────────────────────────────────────
 # AI Generate Book Summary (Vietnamese description)
 # ────────────────────────────────────────────────────────────────────────────────
