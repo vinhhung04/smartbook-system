@@ -298,18 +298,6 @@ export function WarehousesPage() {
     return drillPath[drillPath.length - 1].children || [];
   }, [drillPath, locationTree]);
 
-  const buildAncestorPath = (locationId: string): LocationNode[] => {
-    const path: LocationNode[] = [];
-    let current = flatLocations.find((item) => item.id === locationId) || null;
-    while (current?.parent_location_id) {
-      const parent = flatLocations.find((item) => item.id === current!.parent_location_id) || null;
-      if (!parent) break;
-      path.unshift(parent);
-      current = parent;
-    }
-    return path;
-  };
-
   const handleDrillIn = (node: LocationNode) => {
     setDrillPath((prev) => [...prev, node]);
   };

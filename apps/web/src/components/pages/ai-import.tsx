@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, BookCheck, BookOpen, Loader2, ScanBarcode, Search, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  BookCheck,
+  BookOpen,
+  CheckCircle2,
+  ClipboardCheck,
+  FileText,
+  Hash,
+  Loader2,
+  ScanBarcode,
+  Search,
+  Sparkles,
+  Tags,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
@@ -12,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode } from "@/services/ai";
+import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 
@@ -140,6 +154,14 @@ function mapLookupToForm(data: LookupBookByIsbnResponse): EditableBookForm {
   };
 }
 
+function mergeCommaText(current: string, additions: string[]): string {
+  const merged = [
+    ...current.split(",").map((value) => value.trim()).filter(Boolean),
+    ...additions.map((value) => value.trim()).filter(Boolean),
+  ];
+  return [...new Set(merged)].join(", ");
+}
+
 // ── Small presentational helpers ────────────────────────────────────────────
 
 function Field({
@@ -150,6 +172,7 @@ function Field({
   mono,
   placeholder,
   className,
+  required,
 }: {
   id: string;
   label: string;
@@ -158,18 +181,21 @@ function Field({
   mono?: boolean;
   placeholder?: string;
   className?: string;
+  required?: boolean;
 }) {
   return (
     <div className={className}>
-      <Label htmlFor={id} className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <Label htmlFor={id} className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
         {label}
+        {required ? <span className="text-rose-500">*</span> : null}
       </Label>
       <Input
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={mono ? "font-mono" : undefined}
+        aria-required={required || undefined}
+        className={mono ? "font-mono tabular-nums" : undefined}
       />
     </div>
   );
@@ -214,6 +240,87 @@ function LookupSkeleton() {
   );
 }
 
+function ReviewSignal({
+  label,
+  detail,
+  complete,
+}: {
+  label: string;
+  detail: string;
+  complete: boolean;
+}) {
+  const Icon = complete ? CheckCircle2 : AlertTriangle;
+  return (
+    <div className="flex min-h-[58px] items-start gap-2 rounded-[10px] border border-border bg-muted/35 px-3 py-2">
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${complete ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`} />
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-foreground">{label}</div>
+        <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function AiToolButton({
+  label,
+  loading,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  loading?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] border border-violet-200 bg-card px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors duration-150 hover:border-violet-300 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 disabled:cursor-not-allowed disabled:opacity-45 dark:border-violet-500/20 dark:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
+    >
+      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+      <span>{loading ? "Đang xử lý..." : label}</span>
+    </button>
+  );
+}
+
+function AiSuggestionRow({
+  title,
+  value,
+  onApply,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  onApply: () => void;
+  icon: LucideIcon;
+}) {
+  if (!value.trim()) return null;
+  return (
+    <div className="rounded-[10px] border border-border bg-card p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-1 gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold text-foreground">{title}</div>
+            <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[12px] leading-5 text-muted-foreground">{value}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onApply}
+          className="inline-flex min-h-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-violet-200 bg-violet-50 px-3 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20"
+        >
+          Áp dụng
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const SOURCE_BADGES: Array<{ key: keyof LookupBookByIsbnResponse["source"]; label: string; variant: string }> = [
   { key: "googleBooks", label: "Google", variant: "cyan" },
   { key: "openLibrary", label: "OpenLibrary", variant: "violet" },
@@ -227,9 +334,11 @@ const SOURCE_BADGES: Array<{ key: keyof LookupBookByIsbnResponse["source"]; labe
 export function AIImportPage() {
   const [isbnInput, setIsbnInput] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupStage, setLookupStage] = useState<"lookup" | "ai" | null>(null);
   const [saving, setSaving] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [lookupData, setLookupData] = useState<LookupBookByIsbnResponse | null>(null);
+  const [postIsbnSuggestions, setPostIsbnSuggestions] = useState<PostIsbnAiSuggestions | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -246,13 +355,16 @@ export function AIImportPage() {
     (async () => {
       try {
         const response = await bookService.getAll();
-        const rows = (Array.isArray(response) ? response : []).map((row: any) => ({
-          id: row.id,
-          title: row.title || "",
-          author: row.author || "",
-          isbn: row.isbn || "",
-          category: row.category || "",
-        }));
+        const rows = (Array.isArray(response) ? response : []).map((row: unknown) => {
+          const book = row as Partial<Record<"id" | "title" | "author" | "isbn" | "category", unknown>>;
+          return {
+            id: String(book.id || ""),
+            title: String(book.title || ""),
+            author: String(book.author || ""),
+            isbn: String(book.isbn || ""),
+            category: String(book.category || ""),
+          };
+        });
         if (!cancelled) setCatalogBooks(rows);
       } catch {
         // Non-critical: category suggestions and duplicate check just degrade gracefully.
@@ -274,7 +386,7 @@ export function AIImportPage() {
 
   const duplicateMatches = useMemo(
     () => findDuplicateMatches(form, catalogBooks),
-    [form.title, form.authorsText, form.isbn, form.isbn13, form.isbn10, catalogBooks],
+    [form, catalogBooks],
   );
 
   useEffect(() => {
@@ -300,9 +412,65 @@ export function AIImportPage() {
     return SOURCE_BADGES.filter((s) => lookupData.source[s.key]);
   }, [lookupData]);
 
+  const lookupLoadingLabel = lookupStage === "ai" ? "AI đang hoàn thiện metadata" : "Đang tra cứu ISBN";
+  const hasPostIsbnSuggestions = Boolean(
+    postIsbnSuggestions
+      && (
+        postIsbnSuggestions.description
+        || postIsbnSuggestions.summaryVi
+        || postIsbnSuggestions.keywords.length > 0
+        || postIsbnSuggestions.categories.length > 0
+        || postIsbnSuggestions.qualityWarnings.length > 0
+      ),
+  );
+  const aiSuggestionCount = useMemo(() => {
+    if (!postIsbnSuggestions) return 0;
+    return [
+      postIsbnSuggestions.description,
+      postIsbnSuggestions.summaryVi,
+      postIsbnSuggestions.keywords.length > 0,
+      postIsbnSuggestions.categories.length > 0,
+    ].filter(Boolean).length;
+  }, [postIsbnSuggestions]);
+  const reviewSignals = useMemo(() => {
+    const isbn = normalizeIsbnInput(form.isbn || form.isbn13 || form.isbn10);
+    const hasTitle = Boolean(form.title.trim());
+    const hasAuthor = Boolean(form.authorsText.trim());
+    const hasDescription = Boolean(form.description.trim() || postIsbnSuggestions?.description);
+    return [
+      {
+        label: "ISBN",
+        detail: isbn ? `Sẵn sàng kiểm duplicate: ${isbn}` : "Thiếu ISBN, chưa thể lưu",
+        complete: Boolean(isbn),
+      },
+      {
+        label: "Nhan đề",
+        detail: hasTitle ? "Đã có tên sách để catalog" : "Cần tên sách trước khi lưu",
+        complete: hasTitle,
+      },
+      {
+        label: "Tác giả",
+        detail: hasAuthor ? "Có dữ liệu tác giả để tìm kiếm" : "Nên bổ sung tác giả nếu lookup thiếu",
+        complete: hasAuthor,
+      },
+      {
+        label: "Mô tả",
+        detail: hasDescription ? "Có mô tả hoặc đề xuất AI chờ duyệt" : "Có thể dùng AI để tạo mô tả",
+        complete: hasDescription,
+      },
+    ];
+  }, [form.authorsText, form.description, form.isbn, form.isbn10, form.isbn13, form.title, postIsbnSuggestions?.description]);
+  const completeSignalCount = reviewSignals.filter((signal) => signal.complete).length;
+
   const steps: WorkflowStep[] = [
     { id: "lookup", label: "Tra cứu ISBN", icon: Search, status: lookupData ? "completed" : "active" },
-    { id: "edit", label: "Xem & chỉnh sửa", icon: BookCheck, status: lookupData ? "active" : "pending" },
+    {
+      id: "ai",
+      label: "AI đề xuất",
+      icon: Sparkles,
+      status: hasPostIsbnSuggestions ? "completed" : lookupStage === "ai" ? "active" : "pending",
+    },
+    { id: "edit", label: "Admin duyệt", icon: ClipboardCheck, status: lookupData ? "active" : "pending" },
   ];
 
   async function handleLookup(rawInput?: string) {
@@ -313,32 +481,42 @@ export function AIImportPage() {
     }
 
     setLookupLoading(true);
+    setLookupStage("lookup");
+    setPostIsbnSuggestions(null);
+    const stageTimer = window.setTimeout(() => setLookupStage("ai"), 700);
     try {
-      // Lookup nhanh: không chờ Ollama/Anthropic sinh summary
-      const result = await aiService.lookupBookByIsbn({
+      const result = await aiService.enrichBookAfterIsbn({
         isbn: normalized,
-        generateVietnameseSummary: false,
+        existingCategories,
       });
+      const lookup = result.lookup;
 
       setIsbnInput(normalized);
-      setLookupData(result);
+      setLookupData(lookup);
+      setPostIsbnSuggestions(result.aiSuggestions);
 
-      if (result.found) {
-        setForm(mapLookupToForm(result));
-        toast.success("Đã tìm thấy metadata sách");
+      if (lookup.found) {
+        setForm(mapLookupToForm(lookup));
+        if (result.aiSuggestions.provider && result.aiSuggestions.provider !== "none") {
+          toast.success("Đã tìm thấy metadata và AI đã tạo đề xuất hậu xử lý");
+        } else {
+          toast.success("Đã tìm thấy metadata sách");
+        }
       } else {
         setForm({
           ...EMPTY_FORM,
-          isbn: result.isbn || normalized,
-          isbn13: result.isbn13 || (normalized.length === 13 ? normalized : ""),
-          isbn10: result.isbn10 || (normalized.length === 10 ? normalized : ""),
+          isbn: lookup.isbn || normalized,
+          isbn13: lookup.isbn13 || (normalized.length === 13 ? normalized : ""),
+          isbn10: lookup.isbn10 || (normalized.length === 10 ? normalized : ""),
         });
         toast.info("Không tìm thấy metadata. Chuyển sang nhập tay.");
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tra cứu ISBN thất bại"));
     } finally {
+      window.clearTimeout(stageTimer);
       setLookupLoading(false);
+      setLookupStage(null);
     }
   }
 
@@ -425,6 +603,40 @@ export function AIImportPage() {
     }
 
     setEnrichResult(null);
+  }
+
+  function applyPostIsbnSuggestion(field: "description" | "summaryVi" | "keywords" | "categories") {
+    if (!postIsbnSuggestions) return;
+
+    if (field === "description" && postIsbnSuggestions.description) {
+      setForm((prev) => ({ ...prev, description: postIsbnSuggestions.description! }));
+      toast.success("Đã áp dụng mô tả AI");
+    } else if (field === "summaryVi" && postIsbnSuggestions.summaryVi) {
+      setForm((prev) => ({ ...prev, summaryVi: postIsbnSuggestions.summaryVi! }));
+      toast.success("Đã áp dụng tóm tắt AI");
+    } else if (field === "keywords" && postIsbnSuggestions.keywords.length > 0) {
+      setForm((prev) => ({ ...prev, keywordsText: mergeCommaText(prev.keywordsText, postIsbnSuggestions.keywords) }));
+      toast.success("Đã thêm từ khóa AI");
+    } else if (field === "categories" && postIsbnSuggestions.categories.length > 0) {
+      setForm((prev) => ({ ...prev, categoriesText: mergeCommaText(prev.categoriesText, postIsbnSuggestions.categories) }));
+      toast.success("Đã thêm thể loại AI");
+    }
+  }
+
+  function applyAllPostIsbnSuggestions() {
+    if (!postIsbnSuggestions) return;
+    setForm((prev) => ({
+      ...prev,
+      description: postIsbnSuggestions.description || prev.description,
+      summaryVi: postIsbnSuggestions.summaryVi || prev.summaryVi,
+      keywordsText: postIsbnSuggestions.keywords.length > 0
+        ? mergeCommaText(prev.keywordsText, postIsbnSuggestions.keywords)
+        : prev.keywordsText,
+      categoriesText: postIsbnSuggestions.categories.length > 0
+        ? mergeCommaText(prev.categoriesText, postIsbnSuggestions.categories)
+        : prev.categoriesText,
+    }));
+    toast.success("Đã áp dụng tất cả đề xuất AI sau ISBN");
   }
 
   async function handleSave() {
@@ -514,6 +726,7 @@ export function AIImportPage() {
       ]);
 
       setLookupData(null);
+      setPostIsbnSuggestions(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
       setConfirmDuplicateSave(false);
@@ -527,14 +740,14 @@ export function AIImportPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-400">
+        <p className="text-[12px] font-medium uppercase text-cyan-600 dark:text-cyan-400">
           AI-assisted cataloging
         </p>
         <div className="mt-2">
           <PageHeader
             icon={Sparkles}
             title="Nhập sách qua AI"
-            description="Quét mã vạch hoặc nhập ISBN để tự động điền metadata, sau đó dùng công cụ AI để hoàn thiện mô tả."
+            description="Quét mã vạch hoặc nhập ISBN để tra cứu metadata, sau đó AI tự tạo đề xuất mô tả, tóm tắt, từ khóa và thể loại cho admin duyệt."
             iconBg="bg-gradient-to-br from-cyan-100 to-violet-100 dark:from-cyan-500/15 dark:to-violet-500/15"
             iconColor="text-cyan-600 dark:text-cyan-400"
           />
@@ -542,53 +755,91 @@ export function AIImportPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <WorkflowStepper steps={steps} compact />
-        </div>
-      </FadeItem>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <SectionCard
+            icon={Search}
+            title="Tra cứu ISBN"
+            subtitle="Sau lookup, AI hoàn thiện metadata ở dạng đề xuất để admin chọn áp dụng"
+          >
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div>
+                <Label htmlFor="isbnLookup" className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                  ISBN hoặc barcode sách
+                  <span className="text-rose-500">*</span>
+                </Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500" />
+                  <Input
+                    id="isbnLookup"
+                    value={isbnInput}
+                    onChange={(event) => setIsbnInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleLookup();
+                      }
+                    }}
+                    placeholder="Nhập hoặc quét ISBN-10 / ISBN-13"
+                    aria-required
+                    className="min-h-11 border-cyan-200 bg-card pl-10 pr-4 text-[13px] font-mono tabular-nums focus-visible:border-cyan-400/70 focus-visible:ring-cyan-500/20 dark:border-cyan-500/20"
+                  />
+                </div>
+              </div>
 
-      <FadeItem>
-        <SectionCard
-          icon={Search}
-          title="Tra cứu ISBN"
-          subtitle="Hỗ trợ scanner có khoảng trắng/dấu gạch ngang — hệ thống sẽ tự động chuẩn hóa"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[260px] flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500" />
-              <Input
-                value={isbnInput}
-                onChange={(event) => setIsbnInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void handleLookup();
-                  }
-                }}
-                placeholder="Nhập hoặc quét ISBN-10 / ISBN-13"
-                className="h-11 border-2 border-cyan-300/40 bg-gradient-to-r from-cyan-50/30 to-blue-50/30 pl-10 pr-4 text-[13px] focus-visible:border-cyan-400/60 focus-visible:ring-cyan-500/10 dark:border-cyan-500/20"
-              />
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => void handleLookup()}
+                  disabled={lookupLoading}
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[10px] bg-cyan-600 px-4 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-cyan-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-500 dark:hover:bg-cyan-600"
+                >
+                  {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  <span>{lookupLoading ? lookupLoadingLabel : "Tra cứu"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowScanner(true)}
+                  disabled={lookupLoading}
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-indigo-200 bg-indigo-50 px-4 text-[13px] font-semibold text-indigo-700 transition-colors duration-150 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                >
+                  <ScanBarcode className="h-4 w-4" />
+                  <span>Quét camera</span>
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={() => void handleLookup()}
-              disabled={lookupLoading}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] bg-gradient-to-r from-cyan-600 to-violet-600 px-4 py-2.5 text-[13px] font-semibold text-white transition-transform duration-150 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
-            >
-              {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {lookupLoading ? "Đang tra cứu" : "Tra cứu"}
-            </button>
+            <div className="mt-3 grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-3">
+              <div className="flex items-center gap-2 rounded-[8px] bg-muted/45 px-3 py-2">
+                <Search className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+                Lookup metadata hiện có
+              </div>
+              <div className="flex items-center gap-2 rounded-[8px] bg-muted/45 px-3 py-2">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                AI tạo đề xuất hậu xử lý
+              </div>
+              <div className="flex items-center gap-2 rounded-[8px] bg-muted/45 px-3 py-2">
+                <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                Admin duyệt trước khi lưu
+              </div>
+            </div>
+          </SectionCard>
 
-            <button
-              onClick={() => setShowScanner(true)}
-              disabled={lookupLoading}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-[12px] border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] font-semibold text-indigo-700 transition-colors duration-150 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
-            >
-              <ScanBarcode className="h-4 w-4" />
-              Quét camera
-            </button>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-semibold text-foreground">Luồng nhập hiện tại</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">ISBN-first, AI hỗ trợ sau lookup</p>
+              </div>
+              <StatusBadge
+                label={lookupLoading ? lookupLoadingLabel : lookupData ? "Đang review" : "Sẵn sàng"}
+                variant={lookupLoading ? "info" : lookupData ? "success" : "neutral"}
+                dot
+              />
+            </div>
+            <WorkflowStepper steps={steps} orientation="vertical" compact />
           </div>
-        </SectionCard>
+        </div>
       </FadeItem>
 
       {lookupLoading ? (
@@ -607,6 +858,7 @@ export function AIImportPage() {
               subtitle="Kiểm tra và chỉnh sửa thông tin trước khi lưu vào kho"
               actions={
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <StatusBadge label={`Đủ ${completeSignalCount}/4 mục`} variant={completeSignalCount === 4 ? "success" : "warning"} />
                   <StatusBadge label={`Tin cậy ${confidenceText}`} variant={confidenceVariant} dot />
                   {sourceBadges.length > 0
                     ? sourceBadges.map((s) => <StatusBadge key={s.key} label={s.label} variant={s.variant} />)
@@ -626,15 +878,21 @@ export function AIImportPage() {
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_1fr]">
+              <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">
+                {reviewSignals.map((signal) => (
+                  <ReviewSignal key={signal.label} {...signal} />
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
                 {/* Cover preview + live caption */}
-                <div className="mx-auto w-full max-w-[200px] space-y-3 lg:mx-0">
+                <div className="mx-auto w-full max-w-[220px] space-y-3 lg:mx-0">
                   <motion.div
                     key={form.thumbnail}
                     initial={{ opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.2 }}
-                    className="aspect-[3/4] overflow-hidden rounded-xl border border-border shadow-sm"
+                    className="aspect-[3/4] overflow-hidden rounded-[10px] border border-border shadow-sm"
                   >
                     <CoverPreview key={form.thumbnail} src={form.thumbnail} alt={form.title ? `Bìa sách ${form.title}` : "Ảnh bìa sách"} />
                   </motion.div>
@@ -642,12 +900,24 @@ export function AIImportPage() {
                     <p className="line-clamp-2 text-[13px] font-semibold text-foreground">{form.title || "Chưa có tên sách"}</p>
                     {form.authorsText && <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{form.authorsText}</p>}
                   </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="rounded-[8px] bg-muted/45 px-2.5 py-2">
+                      <span className="text-muted-foreground">Đề xuất AI</span>
+                      <p className="mt-0.5 font-semibold text-foreground">{aiSuggestionCount}</p>
+                    </div>
+                    <div className="rounded-[8px] bg-muted/45 px-2.5 py-2">
+                      <span className="text-muted-foreground">Duplicate</span>
+                      <p className={`mt-0.5 font-semibold ${duplicateMatches.length ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                        {duplicateMatches.length ? `${duplicateMatches.length} cảnh báo` : "Chưa thấy"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Editable short fields */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field id="isbn" label="ISBN" mono value={form.isbn} onChange={(v) => setForm((prev) => ({ ...prev, isbn: v }))} />
-                  <Field id="title" label="Tên sách" value={form.title} onChange={(v) => setForm((prev) => ({ ...prev, title: v }))} />
+                  <Field id="isbn" label="ISBN" mono required value={form.isbn} onChange={(v) => setForm((prev) => ({ ...prev, isbn: v }))} />
+                  <Field id="title" label="Tên sách" required value={form.title} onChange={(v) => setForm((prev) => ({ ...prev, title: v }))} />
                   <Field id="subtitle" label="Tựa phụ" value={form.subtitle} onChange={(v) => setForm((prev) => ({ ...prev, subtitle: v }))} />
                   <Field id="authors" label="Tác giả (cách nhau dấu phẩy)" value={form.authorsText} onChange={(v) => setForm((prev) => ({ ...prev, authorsText: v }))} />
                   <Field id="publisher" label="Nhà xuất bản" value={form.publisher} onChange={(v) => setForm((prev) => ({ ...prev, publisher: v }))} />
@@ -663,11 +933,11 @@ export function AIImportPage() {
 
               <div className="mt-4 grid grid-cols-1 gap-3">
                 <div>
-                  <Label htmlFor="description" className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mô tả</Label>
+                  <Label htmlFor="description" className="mb-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Mô tả</Label>
                   <Textarea id="description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} />
                 </div>
                 <div>
-                  <Label htmlFor="summaryVi" className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tóm tắt ngắn (summary_vi)</Label>
+                  <Label htmlFor="summaryVi" className="mb-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Tóm tắt ngắn (summary_vi)</Label>
                   <Textarea
                     id="summaryVi"
                     value={form.summaryVi}
@@ -678,25 +948,44 @@ export function AIImportPage() {
                 </div>
                 <Field id="keywords" label="Từ khóa (cách nhau dấu phẩy)" value={form.keywordsText} onChange={(v) => setForm((prev) => ({ ...prev, keywordsText: v }))} />
 
-                {/* AI Tools section */}
                 {form.title.trim() && (
-                  <div className="rounded-[12px] border border-violet-100 bg-violet-50/40 p-4 dark:border-violet-500/20 dark:bg-violet-500/5">
-                    <div className="mb-2.5 flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-500/15">
-                        <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                  <div
+                    role="region"
+                    aria-labelledby="ai-tools-title"
+                    className="rounded-[12px] border border-violet-200/80 bg-violet-50/35 p-4 dark:border-violet-500/20 dark:bg-violet-500/5"
+                  >
+                    <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-violet-100 dark:bg-violet-500/15">
+                          <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 id="ai-tools-title" className="text-[12px] font-semibold uppercase text-violet-700 dark:text-violet-300">
+                            Công cụ AI
+                          </h3>
+                          <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
+                            Các nút bên dưới chỉ tạo đề xuất. Form chỉ thay đổi khi bạn bấm áp dụng.
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-violet-600 dark:text-violet-400">Công cụ AI</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge label={`${aiSuggestionCount} đề xuất chờ duyệt`} variant={aiSuggestionCount ? "violet" : "neutral"} />
+                        {hasPostIsbnSuggestions && postIsbnSuggestions ? (
+                          <>
+                            <StatusBadge label={postIsbnSuggestions.provider === "none" ? "AI không khả dụng" : postIsbnSuggestions.provider} variant={postIsbnSuggestions.provider === "none" ? "neutral" : "violet"} dot />
+                            <StatusBadge label={`Tin cậy ${Math.round((postIsbnSuggestions.confidence || 0) * 100)}%`} variant={postIsbnSuggestions.confidence >= 0.7 ? "success" : postIsbnSuggestions.confidence > 0 ? "warning" : "neutral"} />
+                          </>
+                        ) : null}
+                      </div>
                     </div>
 
                     {!form.description.trim() ? (
-                      <button
-                        onClick={() => void handleGenerateDescription()}
+                      <AiToolButton
+                        label="Tạo mô tả AI"
+                        loading={summaryLoading}
                         disabled={summaryLoading}
-                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-[8px] border border-violet-200 bg-card px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-violet-500/20 dark:text-violet-400 dark:hover:bg-violet-500/10"
-                      >
-                        {summaryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                        {summaryLoading ? "Đang tạo mô tả..." : "Tạo mô tả AI"}
-                      </button>
+                        onClick={() => void handleGenerateDescription()}
+                      />
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {(
@@ -708,20 +997,80 @@ export function AIImportPage() {
                             { mode: "quality_check" as const, label: "Kiểm tra chất lượng" },
                           ] as const
                         ).map(({ mode, label }) => (
-                          <button
+                          <AiToolButton
                             key={mode}
-                            onClick={() => void handleEnrichMetadata(mode)}
+                            label={label}
+                            loading={enrichLoading === mode}
                             disabled={!!enrichLoading || summaryLoading}
-                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[8px] border border-violet-200 bg-card px-3 py-1.5 text-[11px] font-semibold text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-violet-500/20 dark:text-violet-400 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
-                          >
-                            {enrichLoading === mode
-                              ? <Loader2 className="h-3 w-3 animate-spin" />
-                              : <Sparkles className="h-3 w-3" />}
-                            {enrichLoading === mode ? "Đang xử lý..." : label}
-                          </button>
+                            onClick={() => void handleEnrichMetadata(mode)}
+                          />
                         ))}
                       </div>
                     )}
+
+                    {hasPostIsbnSuggestions && postIsbnSuggestions ? (
+                      <div className="mt-4 border-t border-violet-200/70 pt-4 dark:border-violet-500/20">
+                        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-[12px] font-semibold text-foreground">Đề xuất AI sau ISBN</p>
+                            <p className="mt-0.5 text-[12px] text-muted-foreground">
+                              Chọn từng mục hoặc áp dụng tất cả nếu nội dung phù hợp với sách.
+                            </p>
+                          </div>
+                          {(postIsbnSuggestions.description || postIsbnSuggestions.summaryVi || postIsbnSuggestions.keywords.length > 0 || postIsbnSuggestions.categories.length > 0) ? (
+                            <button
+                              type="button"
+                              onClick={applyAllPostIsbnSuggestions}
+                              className="inline-flex min-h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-[8px] bg-violet-600 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:bg-violet-500 dark:hover:bg-violet-600"
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Áp dụng tất cả
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {postIsbnSuggestions.qualityWarnings.length > 0 ? (
+                          <div className="mb-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                            <div className="mb-1 flex items-center gap-2 font-semibold">
+                              <AlertTriangle className="h-4 w-4" />
+                              Cảnh báo chất lượng metadata
+                            </div>
+                            <ul className="list-disc space-y-0.5 pl-5">
+                              {postIsbnSuggestions.qualityWarnings.map((warning, index) => (
+                                <li key={`${warning}-${index}`}>{warning}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                          <AiSuggestionRow
+                            title="Mô tả đã chuẩn hóa"
+                            value={postIsbnSuggestions.description || ""}
+                            onApply={() => applyPostIsbnSuggestion("description")}
+                            icon={FileText}
+                          />
+                          <AiSuggestionRow
+                            title="Tóm tắt ngắn cho chatbot"
+                            value={postIsbnSuggestions.summaryVi || ""}
+                            onApply={() => applyPostIsbnSuggestion("summaryVi")}
+                            icon={ClipboardCheck}
+                          />
+                          <AiSuggestionRow
+                            title="Từ khóa tìm kiếm"
+                            value={postIsbnSuggestions.keywords.join(", ")}
+                            onApply={() => applyPostIsbnSuggestion("keywords")}
+                            icon={Hash}
+                          />
+                          <AiSuggestionRow
+                            title="Thể loại phù hợp"
+                            value={postIsbnSuggestions.categories.join(", ")}
+                            onApply={() => applyPostIsbnSuggestion("categories")}
+                            icon={Tags}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
 
                     {enrichResult && (
                       <motion.div
@@ -751,7 +1100,12 @@ export function AIImportPage() {
                         )}
                         {enrichResult.mode === "quality_check" && (
                           enrichResult.qualityWarnings.length === 0
-                            ? <p className="mb-2 font-medium text-emerald-600 dark:text-emerald-400">Metadata đạt chất lượng tốt ✓</p>
+                            ? (
+                              <p className="mb-2 flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Metadata đạt chất lượng tốt
+                              </p>
+                            )
                             : (
                               <ul className="mb-2 list-disc space-y-0.5 pl-4 text-amber-700 dark:text-amber-400">
                                 {enrichResult.qualityWarnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -765,15 +1119,17 @@ export function AIImportPage() {
                         <div className="flex gap-2">
                           {enrichResult.mode !== "quality_check" && enrichResult.success && (
                             <button
+                              type="button"
                               onClick={applyEnrichResult}
-                              className="cursor-pointer rounded-[8px] bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+                              className="inline-flex min-h-8 cursor-pointer items-center justify-center rounded-[8px] bg-violet-600 px-3 text-[11px] font-semibold text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:bg-violet-500 dark:hover:bg-violet-600"
                             >
                               Áp dụng
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => setEnrichResult(null)}
-                            className="cursor-pointer rounded-[8px] border border-border px-3 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted dark:text-slate-400"
+                            className="inline-flex min-h-8 cursor-pointer items-center justify-center rounded-[8px] border border-border px-3 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:text-slate-400"
                           >
                             Đóng
                           </button>
@@ -825,6 +1181,7 @@ export function AIImportPage() {
                 <button
                   onClick={() => {
                     setLookupData(null);
+                    setPostIsbnSuggestions(null);
                     setForm(EMPTY_FORM);
                     setIsbnInput("");
                   }}
@@ -856,7 +1213,7 @@ export function AIImportPage() {
             </div>
             <h3 className="text-[15px] font-semibold text-foreground">Sẵn sàng nhập sách mới</h3>
             <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted-foreground">
-              Quét mã vạch hoặc nhập ISBN ở trên — AI sẽ tự động tra cứu và điền đầy đủ metadata cho bạn.
+              Quét mã vạch hoặc nhập ISBN ở trên — hệ thống sẽ tra cứu metadata và AI sẽ tạo đề xuất để bạn duyệt.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               {[

@@ -6,7 +6,7 @@ import {
   Sparkles, ThumbsUp, BookMarked, Users, Shield, ScanBarcode, ChevronLeft, ChevronDown,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
-  ShoppingCart, AlertTriangle, PackageCheck, MessageCircle,
+  ShoppingCart, AlertTriangle, PackageCheck, MessageCircle, Gauge,
 } from "lucide-react";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
@@ -90,6 +90,7 @@ const navGroups = [
     items: [
       { to: "/users", icon: Users, labelKey: "sidebar.users", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-indigo-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
       { to: "/roles", icon: Shield, labelKey: "sidebar.roles", access: ROUTE_ACCESS.admin, activeColor: "from-indigo-500/12 to-purple-500/8", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/admin/monitor", icon: Gauge, labelKey: "sidebar.system_monitor", access: ROUTE_ACCESS.admin, activeColor: "from-cyan-500/12 to-sky-500/8", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
       { to: "/audit-trail", icon: ScrollText, labelKey: "sidebar.audit_trail", access: ROUTE_ACCESS.admin, activeColor: "from-slate-500/12 to-zinc-500/8", textColor: "text-slate-600", iconBg: "bg-slate-500/10" },
     ],
   },
