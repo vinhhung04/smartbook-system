@@ -64,6 +64,7 @@ import { CustomerNotificationsPage } from "@/components/pages/customer/notificat
 import { CustomerReadingAnalyticsPage } from "@/components/pages/customer/reading-analytics";
 import { CustomerWishlistPage } from "@/components/pages/customer/wishlist";
 import { AuditTrailPage } from "@/components/pages/audit-trail";
+import { AdminMonitorPage } from "@/components/pages/admin-monitor";
 import { MembershipPlansPage } from "@/components/pages/membership-plans";
 import { SuppliersPage } from "@/components/pages/suppliers";
 import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
@@ -268,6 +269,7 @@ export const router = createBrowserRouter([
       { path: "reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReportsPage },
       { path: "ai-assistant", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.aiAssistant), Component: AIAssistantPage },
       { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AuditTrailPage },
+      { path: "admin/monitor", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AdminMonitorPage },
       { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: MembershipPlansPage },
       { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), Component: SuppliersPage },
       { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: UsersPage },

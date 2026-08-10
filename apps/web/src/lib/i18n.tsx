@@ -51,6 +51,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'sidebar.membership_plans': 'Gói thành viên',
     'sidebar.users': 'Người dùng',
     'sidebar.roles': 'Vai trò',
+    'sidebar.system_monitor': 'Giám sát hệ thống',
     'sidebar.audit_trail': 'Nhật ký hệ thống',
     'sidebar.scan_receive_cta': 'Ghi nhận hàng nhận',
     // Topbar
@@ -193,6 +194,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'sidebar.membership_plans': 'Membership Plans',
     'sidebar.users': 'Users',
     'sidebar.roles': 'Roles',
+    'sidebar.system_monitor': 'System Monitor',
     'sidebar.audit_trail': 'Audit Trail',
     'sidebar.scan_receive_cta': 'Scan & Receive',
     'topbar.search_placeholder': 'Search books, orders, barcodes...',
