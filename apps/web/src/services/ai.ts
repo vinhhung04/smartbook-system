@@ -116,12 +116,19 @@ export interface PostIsbnAiSuggestions {
 export interface EnrichBookAfterIsbnRequest {
   isbn: string;
   existingCategories?: string[];
+  verifiedMetadata?: Record<string, unknown>;
 }
 
 export interface EnrichBookAfterIsbnResponse {
   success: boolean;
   lookup: LookupBookByIsbnResponse;
   aiSuggestions: PostIsbnAiSuggestions;
+  authorNormalization?: unknown[];
+  publisherNormalization?: unknown;
+  categoryNormalization?: unknown[];
+  authorityMatches?: Record<string, unknown>;
+  qualityWarnings?: string[];
+  explanation?: Record<string, unknown>;
 }
 
 export interface ChatMessage {
@@ -298,6 +305,7 @@ export const aiService = {
     const response = await aiAPI.post('/enrich-book-after-isbn', {
       isbn: payload.isbn,
       existingCategories: payload.existingCategories || [],
+      verifiedMetadata: payload.verifiedMetadata,
     });
     return response.data;
   },

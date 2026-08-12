@@ -113,6 +113,9 @@ BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
+INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
+AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
 # Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -2341,6 +2344,7 @@ async def isbn_intelligence_lookup(req: IsbnLookupRequest):
 class EnrichBookAfterIsbnRequest(BaseModel):
     isbn: str
     existingCategories: list[str] = []
+    verifiedMetadata: dict | None = None
 
 
 def _empty_post_isbn_ai_suggestions(
@@ -2450,6 +2454,37 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
     }
 
 
+async def _normalize_with_catalog_authority(lookup: dict) -> tuple[dict | None, str | None]:
+    """Ask Inventory Service to apply deterministic catalog authority rules.
+
+    Failure is intentionally non-fatal: ISBN evidence remains available and the
+    caller gets an explicit warning instead of fabricated authority metadata.
+    """
+    if not lookup.get("found"):
+        return None, None
+    metadata = {
+        "isbn": lookup.get("isbn"), "title": lookup.get("title"),
+        "authors": lookup.get("authors") or [], "publisher": lookup.get("publisher"),
+        "categories": lookup.get("categories") or [], "language": lookup.get("language"),
+        "publishedDate": lookup.get("publishedDate"), "pageCount": lookup.get("pageCount"),
+        "coverFormat": lookup.get("coverFormat"), "description": lookup.get("description"),
+        "conflicts": lookup.get("conflicts") or [],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS)) as client:
+            response = await client.post(
+                f"{INVENTORY_SERVICE_URL}/internal/authority/normalize",
+                headers={"x-internal-service-key": INTERNAL_SERVICE_KEY},
+                json={"metadata": metadata},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None, None
+    except Exception as exc:
+        logger.warning("Authority normalization unavailable for %s: %s", lookup.get("isbn"), exc)
+        return None, "Authority normalization unavailable; staff review is required before catalog changes."
+
+
 @app.post("/enrich-book-after-isbn")
 async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
     """
@@ -2460,11 +2495,31 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         isbn=req.isbn,
         generateVietnameseSummary=False,
     ))
-    suggestions = await _build_post_isbn_ai_suggestions(lookup, req.existingCategories or [])
+    authority, authority_warning = await _normalize_with_catalog_authority(lookup)
+    verified = req.verifiedMetadata if isinstance(req.verifiedMetadata, dict) else (authority or {}).get("normalized")
+    ai_lookup = {**lookup, **({
+        "title": verified.get("title", lookup.get("title")),
+        "authors": verified.get("authors", lookup.get("authors")),
+        "publisher": verified.get("publisher", lookup.get("publisher")),
+        "categories": verified.get("categories", lookup.get("categories")),
+        "language": verified.get("language", lookup.get("language")),
+        "publishedDate": verified.get("publishedDate", lookup.get("publishedDate")),
+        "pageCount": verified.get("pageCount", lookup.get("pageCount")),
+        "description": verified.get("description", lookup.get("description")),
+    } if isinstance(verified, dict) else {})}
+    suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
+    if authority_warning:
+        suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
     return {
         "success": bool(lookup.get("success") or lookup.get("found")),
         "lookup": lookup,
         "aiSuggestions": suggestions,
+        "authorNormalization": (authority or {}).get("authorNormalization", []),
+        "publisherNormalization": (authority or {}).get("publisherNormalization"),
+        "categoryNormalization": (authority or {}).get("categoryNormalization", []),
+        "authorityMatches": (authority or {}).get("authorityMatches", {}),
+        "qualityWarnings": (authority or {}).get("qualityWarnings", [authority_warning] if authority_warning else []),
+        "explanation": {"authority": "Inventory Service deterministic authority normalization", "aiInput": "verified metadata only"},
     }
 
 

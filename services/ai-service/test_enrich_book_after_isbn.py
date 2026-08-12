@@ -109,6 +109,10 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=({
+                 "normalized": {"title": "Clean Code", "authors": ["Robert C. Martin"], "publisher": "Prentice Hall", "categories": ["Programming"], "description": "A handbook of agile software craftsmanship."},
+                 "authorNormalization": [{"status": "AUTO_MATCH"}], "publisherNormalization": {"status": "AUTO_MATCH"}, "categoryNormalization": [{"status": "AUTO_MATCH"}], "authorityMatches": {}, "qualityWarnings": [],
+             }, None))), \
              patch("main._call_anthropic", new=AsyncMock(return_value=("Tóm tắt tiếng Việt", ["clean code", "lập trình"], True))), \
              patch("main._call_anthropic_json", new=AsyncMock(side_effect=[
                  ({"normalizedDescription": "Mô tả đã chuẩn hóa"}, True),
@@ -125,11 +129,13 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["aiSuggestions"]["categories"], ["Công nghệ"])
         self.assertEqual(result["aiSuggestions"]["provider"], "anthropic")
         self.assertGreater(result["aiSuggestions"]["confidence"], 0)
+        self.assertEqual(result["authorNormalization"][0]["status"], "AUTO_MATCH")
 
     async def test_invalid_isbn_returns_manual_lookup_without_crashing_ai(self):
         lookup = _manual_entry_response("123", None, "isbn must be ISBN-10 or ISBN-13")
 
-        with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)):
+        with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, "Authority normalization unavailable; staff review is required before catalog changes."))):
             result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn="123"))
 
         self.assertEqual(result["lookup"], lookup)
@@ -162,6 +168,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, "Authority normalization unavailable; staff review is required before catalog changes."))), \
              patch("main._call_anthropic", new=AsyncMock(side_effect=RuntimeError("AI down"))):
             result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn="9780132350884"))
 
@@ -169,6 +176,14 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["aiSuggestions"]["description"], "Original description")
         self.assertEqual(result["aiSuggestions"]["provider"], "none")
         self.assertTrue(any("AI không khả dụng" in warning for warning in result["aiSuggestions"]["qualityWarnings"]))
+
+    async def test_authority_unavailable_keeps_lookup_without_fabricated_matches(self):
+        lookup = _manual_entry_response("9780132350884", "9780132350884", "metadata not found")
+        with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, "Authority normalization unavailable; staff review is required before catalog changes."))):
+            result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn="9780132350884"))
+        self.assertEqual(result["authorNormalization"], [])
+        self.assertIn("Authority normalization unavailable", result["qualityWarnings"][0])
 
 
 if __name__ == "__main__":
