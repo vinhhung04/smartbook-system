@@ -426,7 +426,7 @@ function AuthorityReviewPanel({
   );
 }
 
-function DuplicateReviewPanel({ review, onDismiss }: { review: DuplicateReview; onDismiss: () => void }) {
+function DuplicateReviewPanel({ review, onAction }: { review: DuplicateReview; onAction: (action: string, candidate?: DuplicateReview["candidates"][number]) => void }) {
   const { t } = useI18n();
   const isNew = review.classification === "NEW_TITLE";
   return (
@@ -436,7 +436,12 @@ function DuplicateReviewPanel({ review, onDismiss }: { review: DuplicateReview; 
           <h3 className="text-[12px] font-semibold text-foreground">{t("duplicate_intelligence.title")}</h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">{review.classification} · {Math.round(review.similarityScore * 100)}%</p>
         </div>
-        {!isNew ? <button type="button" onClick={onDismiss} className="min-h-8 rounded-[7px] border border-border bg-card px-2.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30">{t("duplicate_intelligence.dismiss")}</button> : <StatusBadge label={t("duplicate_intelligence.new_title")} variant="success" />}
+        <div className="flex flex-wrap gap-1.5">
+          {review.classification === "EXACT_DUPLICATE" && review.candidates[0] ? <button type="button" onClick={() => onAction("LINK_EXISTING_VARIANT", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.link_variant")}</button> : null}
+          {review.classification === "SAME_EDITION" && review.candidates[0] ? <button type="button" onClick={() => onAction("CREATE_VARIANT_FOR_EDITION", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.create_variant")}</button> : null}
+          {review.classification === "SAME_WORK_DIFFERENT_EDITION" && review.candidates[0] ? <button type="button" onClick={() => onAction("CREATE_NEW_EDITION", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.create_edition")}</button> : null}
+          {isNew ? <button type="button" onClick={() => onAction("CREATE_NEW_TITLE")} className="min-h-8 rounded-[7px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">{t("duplicate_intelligence.create_title")}</button> : <button type="button" onClick={() => onAction("DISMISS_WARNING")} className="min-h-8 rounded-[7px] border border-border bg-card px-2.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30">{t("duplicate_intelligence.dismiss")}</button>}
+        </div>
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">{review.explanation.join(" ")}</p>
       {review.candidates.length ? <ul className="mt-2 space-y-1.5" role="list">{review.candidates.slice(0, 3).map((candidate) => <li key={candidate.bookId} className="rounded-[7px] border border-border bg-card px-2.5 py-2 text-[11px]"><span className="font-semibold text-foreground">{candidate.title}</span> · {candidate.classification} · {Math.round(candidate.score * 100)}%</li>)}</ul> : null}
@@ -670,11 +675,16 @@ export function AIImportPage() {
     }
   }
 
-  async function handleDismissDuplicate() {
+  async function handleDuplicateAction(action: string, candidate?: DuplicateReview["candidates"][number]) {
     if (!duplicateReview) return;
+    if (["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION", "CREATE_NEW_TITLE"].includes(action) && !window.confirm("Thao tác này sẽ tạo catalog/edition mới. Bạn có muốn tiếp tục?")) return;
     try {
-      await metadataIntelligenceService.decideDuplicate(duplicateReview.id, "DISMISS_WARNING");
-      toast.success("Đã ghi nhận quyết định bỏ qua cảnh báo duplicate");
+      const variantId = candidate?.variantIds[0];
+      await metadataIntelligenceService.decideDuplicate(duplicateReview.id, action, {
+        ...(action === "LINK_EXISTING_VARIANT" && variantId ? { selectedVariantId: variantId } : {}),
+        ...(["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION"].includes(action) && candidate ? { selectedBookId: candidate.bookId } : {}),
+      });
+      toast.success(action === "DISMISS_WARNING" ? "Đã ghi nhận quyết định bỏ qua cảnh báo duplicate" : "Đã lưu quyết định duplicate; chỉ metadata được duyệt mới được áp dụng.");
       setDuplicateReview(null);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể lưu quyết định duplicate"));
@@ -1047,7 +1057,7 @@ export function AIImportPage() {
 
               <IsbnIntelligencePanel lookup={lookupData} />
               {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} /> : null}
-              {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onDismiss={() => void handleDismissDuplicate()} /> : null}
+              {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onAction={(action, candidate) => void handleDuplicateAction(action, candidate)} /> : null}
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">
                 {reviewSignals.map((signal) => (
