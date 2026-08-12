@@ -41,6 +41,7 @@ const stockAlertRoutes = require('./routes/stock-alert.routes');
 const stockBalanceRoutes = require('./routes/stock-balance.routes');
 const stockAuditRoutes = require('./routes/stock-audit.routes');
 const metadataReconciliationRoutes = require('./routes/metadata-reconciliation.routes');
+const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
 
 const app = express();
@@ -365,6 +366,7 @@ app.use('/api/stock-alerts', stockAlertRoutes);
 app.use('/api/stock-balances', stockBalanceRoutes);
 app.use('/api/stock-audits', stockAuditRoutes);
 app.use('/api/metadata-reconciliations', metadataReconciliationRoutes);
+app.use('/api/duplicate-intelligence', duplicateIntelligenceRoutes);
 app.use('/api/exception-reports', exceptionReportRoutes);
 app.use('/api/staff-tasks', staffTaskRoutes);
 app.use('/api/transfer-receiving', transferReceivingRoutes);
