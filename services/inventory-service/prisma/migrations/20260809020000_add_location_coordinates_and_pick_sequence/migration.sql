@@ -1,0 +1,7 @@
+-- Recovery migration for the development migration history.
+--
+-- The original SQL file was absent from source control, while the current
+-- Prisma datamodel contains no location-coordinate or pick-sequence columns.
+-- Keeping this migration intentionally empty lets a freshly reset development
+-- database retain a complete, reproducible migration chain. Do not use this
+-- recovery file to repair an existing production migration history.
