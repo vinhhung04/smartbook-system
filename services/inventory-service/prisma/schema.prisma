@@ -15,8 +15,24 @@ model authors {
   created_at   DateTime       @default(now()) @db.Timestamptz(6)
   updated_at   DateTime       @default(now()) @db.Timestamptz(6)
   book_authors book_authors[]
+  author_aliases author_aliases[]
 
   @@index([full_name(ops: raw("gin_trgm_ops"))], map: "idx_authors_full_name_trgm", type: Gin)
+}
+
+model author_aliases {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author_id String @db.Uuid
+  alias String @db.VarChar(150)
+  normalized_alias String @db.VarChar(150)
+  confidence Decimal @default(0) @db.Decimal(4,3)
+  status String @default("PENDING") @db.VarChar(20)
+  reviewed_by_user_id String? @db.Uuid
+  reviewed_at DateTime? @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  authors authors @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  @@unique([author_id, normalized_alias])
+  @@index([normalized_alias, status])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -118,11 +134,13 @@ model books {
   metadata          Json              @default("{}")
   created_at        DateTime          @default(now()) @db.Timestamptz(6)
   updated_at        DateTime          @default(now()) @db.Timestamptz(6)
+  work_group_id     String?           @db.Uuid
   book_authors      book_authors[]
   book_categories   book_categories[]
   book_images       book_images[]
   book_variants     book_variants[]
   publishers        publishers?       @relation(fields: [publisher_id], references: [id], onUpdate: NoAction)
+  book_work_groups  book_work_groups? @relation(fields: [work_group_id], references: [id], onUpdate: NoAction)
 
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
 }
@@ -507,6 +525,80 @@ model publishers {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   books      books[]
+  publisher_aliases publisher_aliases[]
+}
+
+model book_work_groups {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  canonical_title String @db.VarChar(255)
+  normalized_title String @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  books books[]
+  @@index([normalized_title])
+}
+
+model duplicate_review_drafts {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  input_metadata Json @default("{}")
+  candidates Json @default("[]")
+  classification String @db.VarChar(40)
+  similarity_score Decimal @default(0) @db.Decimal(4,3)
+  explanation Json @default("{}")
+  decision String? @db.VarChar(40)
+  selected_book_id String? @db.Uuid
+  selected_variant_id String? @db.Uuid
+  reviewed_by_user_id String? @db.Uuid
+  reviewed_at DateTime? @db.Timestamptz(6)
+  created_by_user_id String @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model publisher_aliases {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publisher_id String @db.Uuid
+  alias String @db.VarChar(150)
+  normalized_alias String @db.VarChar(150)
+  confidence Decimal @default(0) @db.Decimal(4,3)
+  status String @default("PENDING") @db.VarChar(20)
+  reviewed_by_user_id String? @db.Uuid
+  reviewed_at DateTime? @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  publishers publishers @relation(fields: [publisher_id], references: [id], onDelete: Cascade)
+  @@unique([publisher_id, normalized_alias])
+  @@index([normalized_alias, status])
+}
+
+model metadata_reconciliation_drafts {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  isbn String @db.VarChar(20)
+  book_id String? @db.Uuid
+  raw_metadata Json @default("{}")
+  normalized_metadata Json @default("{}")
+  ai_suggestions Json @default("{}")
+  quality_warnings Json @default("[]")
+  authority_matches Json @default("{}")
+  explanation Json @default("{}")
+  status String @default("DRAFT") @db.VarChar(20)
+  created_by_user_id String @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  decisions metadata_reconciliation_field_decisions[]
+  @@index([isbn, created_at])
+}
+
+model metadata_reconciliation_field_decisions {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  draft_id String @db.Uuid
+  field String @db.VarChar(50)
+  value Json
+  provenance String @db.VarChar(20)
+  status String @default("PENDING") @db.VarChar(20)
+  reviewed_by_user_id String? @db.Uuid
+  reviewed_at DateTime? @db.Timestamptz(6)
+  draft metadata_reconciliation_drafts @relation(fields: [draft_id], references: [id], onDelete: Cascade)
+  @@unique([draft_id, field])
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
