@@ -1572,6 +1572,102 @@ def _metadata_completeness_score(data: dict) -> float:
     return round(score / total_weight, 3) if total_weight else 0.0
 
 
+# Smart ISBN Intelligence is deliberately deterministic.  These weights describe
+# source reliability, while agreement is calculated from the responses received
+# for this ISBN; no model-generated score is used for catalog metadata.
+ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook"]
+ISBN_SOURCE_RELIABILITY = {
+    "googleBooks": 1.0,
+    "openLibrary": 0.9,
+    "worldCat": 0.85,
+    "fahasa": 0.8,
+    "tiki": 0.8,
+    "vinabook": 0.75,
+}
+ISBN_INTELLIGENCE_FIELDS = (
+    "title", "subtitle", "authors", "publisher", "publishedDate", "description",
+    "categories", "language", "pageCount", "thumbnail",
+)
+ISBN_QUALITY_WEIGHTS = {
+    "title": 2.0, "authors": 2.0, "publisher": 1.0, "publishedDate": 1.0,
+    "description": 1.5, "categories": 0.5, "language": 0.5, "pageCount": 1.0,
+    "thumbnail": 0.5,
+}
+
+
+def _normalize_evidence_value(value):
+    if isinstance(value, list):
+        values = [str(item).strip() for item in value if str(item).strip()]
+        return tuple(sorted(re.sub(r"\s+", " ", item).casefold() for item in values))
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value).strip().casefold()
+    return value
+
+
+def _has_evidence_value(value) -> bool:
+    return bool(value) if isinstance(value, list) else value not in (None, "")
+
+
+def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_statuses: dict[str, dict]) -> dict:
+    """Select metadata and attach explainable, deterministic evidence."""
+    metadata: dict = {}
+    field_evidence: dict = {}
+    field_confidence: dict = {}
+    conflicts: list[dict] = []
+
+    for field in ISBN_INTELLIGENCE_FIELDS:
+        confirmations = []
+        for source in ISBN_SOURCE_ORDER:
+            value = (provider_metadata.get(source) or {}).get(field)
+            if _has_evidence_value(value):
+                item = {"source": source, "value": value}
+                source_url = (provider_metadata.get(source) or {}).get("sourceUrl")
+                if source_url:
+                    item["sourceUrl"] = source_url
+                confirmations.append(item)
+
+        selected = confirmations[0] if confirmations else None
+        metadata[field] = selected["value"] if selected else ([] if field in {"authors", "categories"} else None)
+        field_evidence[field] = {
+            "selectedValue": metadata[field],
+            "selectedSource": selected["source"] if selected else None,
+            "confirmations": confirmations,
+        }
+        if not selected:
+            field_confidence[field] = 0.0
+            continue
+
+        selected_normalized = _normalize_evidence_value(selected["value"])
+        responding = [item for item in confirmations]
+        agreement = sum(
+            ISBN_SOURCE_RELIABILITY[item["source"]]
+            for item in responding if _normalize_evidence_value(item["value"]) == selected_normalized
+        ) / sum(ISBN_SOURCE_RELIABILITY[item["source"]] for item in responding)
+        # A single provider is useful but cannot be as strong as corroborated data.
+        corroboration = 0.7 + (0.3 * agreement)
+        field_confidence[field] = round(min(1.0, ISBN_SOURCE_RELIABILITY[selected["source"]] * corroboration), 3)
+
+        alternatives = [
+            {"source": item["source"], "value": item["value"]}
+            for item in confirmations[1:]
+            if _normalize_evidence_value(item["value"]) != selected_normalized
+        ]
+        if alternatives:
+            conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})
+
+    quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
+    quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
+    sources = [{"name": source, **source_statuses[source]} for source in ISBN_SOURCE_ORDER]
+    return {
+        "metadata": metadata,
+        "fieldEvidence": field_evidence,
+        "fieldConfidence": field_confidence,
+        "sources": sources,
+        "conflicts": conflicts,
+        "metadataQualityScore": round(quality / quality_total, 3) if quality_total else 0.0,
+    }
+
+
 def _parse_google_books_item(item: dict) -> dict:
     volume_info = item.get("volumeInfo") or {}
     image_links = volume_info.get("imageLinks") or {}
@@ -1984,8 +2080,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
         return None, [], False
 
 
-@app.post("/lookup-book-by-isbn")
-async def lookup_book_by_isbn(req: IsbnLookupRequest):
+async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
 
@@ -2118,6 +2213,10 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
                            worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
                            fahasa_score, tiki_score, vinabook_score),
         })
+        result["_providerMetadata"] = {
+            "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
+            "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+        }
         return result
 
     # ── Generate Vietnamese summary ───────────────────────────────────────────
@@ -2144,7 +2243,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         avg_score = sum(active_scores) / len(active_scores)
         overall_confidence = round(max(overall_confidence, min(1.0, avg_score + 0.1)), 3)
 
-    return {
+    result = {
         "success": True,
         "found": True,
         "isbn": isbn13,
@@ -2186,6 +2285,57 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         "sourceUrl": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceUrl"),
         "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceFetchMode"),
     }
+    result["_providerMetadata"] = {
+        "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
+        "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+    }
+    return result
+
+
+def _build_source_statuses(result: dict, started_at: float) -> dict:
+    source_flags = result.get("source") or {}
+    enabled = {
+        "googleBooks": True,
+        "openLibrary": True,
+        "worldCat": ENABLE_WORLDCAT_LOOKUP,
+        "fahasa": ENABLE_MARKETPLACE_LOOKUP,
+        "tiki": ENABLE_MARKETPLACE_LOOKUP,
+        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
+    }
+    elapsed = int((time.perf_counter() - started_at) * 1000)
+    return {
+        source: {
+            "enabled": enabled[source],
+            "status": "DISABLED" if not enabled[source] else ("SUCCESS" if source_flags.get(source) else "NOT_FOUND"),
+            "durationMs": elapsed,
+        }
+        for source in ISBN_SOURCE_ORDER
+    }
+
+
+async def lookup_book_by_isbn(req: IsbnLookupRequest):
+    """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    started_at = time.perf_counter()
+    result = await _lookup_book_by_isbn_legacy(req)
+    provider_metadata = result.pop("_providerMetadata", {})
+    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at))
+    for source in intelligence["sources"]:
+        source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
+        if source_url:
+            source["sourceUrl"] = source_url
+    if result.get("found"):
+        result.update(intelligence["metadata"])
+        result["authors"] = result["authors"] or []
+        result["categories"] = result["categories"] or []
+    result.update({key: value for key, value in intelligence.items() if key != "metadata"})
+    result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+    return result
+
+
+@app.post("/lookup-book-by-isbn")
+@app.post("/isbn-intelligence")
+async def isbn_intelligence_lookup(req: IsbnLookupRequest):
+    return await lookup_book_by_isbn(req)
 
 
 class EnrichBookAfterIsbnRequest(BaseModel):
@@ -2231,7 +2381,6 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
     keywords = [str(keyword).strip() for keyword in (lookup.get("keywords") or []) if str(keyword).strip()]
     suggested_categories: list[str] = []
     provider = "none"
-    confidence_scores: list[float] = []
 
     metadata = {
         "title": title,
@@ -2246,12 +2395,10 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             generated_summary, generated_keywords, anthropic_ok = await _call_anthropic(metadata)
             if anthropic_ok:
                 provider = "anthropic"
-                confidence_scores.append(0.85)
             else:
                 generated_summary, generated_keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
                 if ollama_ok:
                     provider = "ollama"
-                    confidence_scores.append(0.75)
 
             summary_vi = summary_vi or generated_summary
             if not keywords:
@@ -2270,7 +2417,6 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             if normalized_result.success and normalized_result.normalizedDescription:
                 description = normalized_result.normalizedDescription
                 provider = _merge_provider(provider, normalized_result.ai_provider)
-                confidence_scores.append(normalized_result.confidence)
 
         category_result = await enrich_book_metadata(EnrichBookMetadataRequest(
             title=title,
@@ -2284,14 +2430,15 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
         if category_result.success and category_result.suggestedCategories:
             suggested_categories = category_result.suggestedCategories
             provider = _merge_provider(provider, category_result.ai_provider)
-            confidence_scores.append(category_result.confidence)
 
     except Exception as exc:
         logger.warning("Post-ISBN AI enrichment failed for %s: %s", lookup.get("isbn"), exc)
         quality_warnings.append("AI không khả dụng, chỉ trả metadata tra cứu ISBN để admin nhập/chỉnh tay.")
         return _empty_post_isbn_ai_suggestions(quality_warnings, description or None)
 
-    confidence = round(sum(confidence_scores) / len(confidence_scores), 3) if confidence_scores else 0.0
+    # This reflects the reliability of the ISBN metadata grounding, never an LLM's
+    # self-assessment of generated copy.
+    confidence = float(lookup.get("metadataQualityScore") or (lookup.get("confidence") or {}).get("overall") or 0.0)
     return {
         "description": description or None,
         "summaryVi": _safe_text(summary_vi),

@@ -1,10 +1,89 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from main import _manual_entry_response, enrich_book_after_isbn, EnrichBookAfterIsbnRequest
+from main import (
+    _build_isbn_intelligence,
+    _manual_entry_response,
+    enrich_book_after_isbn,
+    EnrichBookAfterIsbnRequest,
+)
 
 
 class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
+    def test_intelligence_prefers_google_and_reports_conflicts(self):
+        result = _build_isbn_intelligence({
+            "googleBooks": {"title": "Clean Code", "authors": ["Robert C. Martin"]},
+            "openLibrary": {"title": "Clean Code (2nd edition)", "authors": ["Robert C. Martin"]},
+            "worldCat": None,
+            "fahasa": None,
+            "tiki": None,
+            "vinabook": None,
+        }, {
+            "googleBooks": {"enabled": True, "status": "SUCCESS", "durationMs": 12},
+            "openLibrary": {"enabled": True, "status": "SUCCESS", "durationMs": 10},
+            "worldCat": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "fahasa": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "tiki": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "vinabook": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+        })
+
+        self.assertEqual(result["metadata"]["title"], "Clean Code")
+        self.assertEqual(result["fieldEvidence"]["title"]["selectedSource"], "googleBooks")
+        self.assertGreater(result["fieldConfidence"]["authors"], 0)
+        self.assertEqual(result["conflicts"][0]["field"], "title")
+        self.assertGreater(result["metadataQualityScore"], 0)
+
+    def test_intelligence_keeps_timeout_status_and_returns_remaining_metadata(self):
+        result = _build_isbn_intelligence({
+            "googleBooks": None,
+            "openLibrary": {"title": "Available from Open Library"},
+            "worldCat": None,
+            "fahasa": None,
+            "tiki": None,
+            "vinabook": None,
+        }, {
+            "googleBooks": {"enabled": True, "status": "TIMEOUT", "durationMs": 8000},
+            "openLibrary": {"enabled": True, "status": "SUCCESS", "durationMs": 10},
+            "worldCat": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "fahasa": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "tiki": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+            "vinabook": {"enabled": False, "status": "DISABLED", "durationMs": 0},
+        })
+
+        self.assertEqual(result["metadata"]["title"], "Available from Open Library")
+        self.assertEqual(result["sources"][0]["status"], "TIMEOUT")
+        self.assertGreater(result["fieldConfidence"]["title"], 0)
+
+    async def test_invalid_isbn_returns_intelligence_fields_without_lookup(self):
+        from main import lookup_book_by_isbn, IsbnLookupRequest
+
+        result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="not-an-isbn"))
+
+        self.assertFalse(result["found"])
+        self.assertEqual(result["metadataQualityScore"], 0.0)
+        self.assertEqual(len(result["sources"]), 6)
+        self.assertIn("processingTimeMs", result)
+
+    async def test_lookup_keeps_metadata_when_one_provider_times_out(self):
+        from main import lookup_book_by_isbn, IsbnLookupRequest
+        legacy = _manual_entry_response("9780132350884", "9780132350884", "metadata not found")
+        legacy.update({
+            "success": True,
+            "found": True,
+            "title": "Open Library result",
+            "source": {"googleBooks": False, "openLibrary": True},
+            "_providerMetadata": {
+                "googleBooks": None,
+                "openLibrary": {"title": "Open Library result"},
+                "worldCat": None, "fahasa": None, "tiki": None, "vinabook": None,
+            },
+        })
+        with patch("main._lookup_book_by_isbn_legacy", new=AsyncMock(return_value=legacy)):
+            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="9780132350884"))
+
+        self.assertEqual(result["title"], "Open Library result")
+        self.assertEqual(result["sources"][1]["status"], "SUCCESS")
+        self.assertGreater(result["fieldConfidence"]["title"], 0)
     async def test_returns_lookup_and_ai_suggestions_for_found_isbn(self):
         lookup = {
             "success": True,

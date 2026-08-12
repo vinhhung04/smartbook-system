@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
+import { useI18n } from "@/lib/i18n";
 
 interface EditableBookForm {
   isbn: string;
@@ -318,6 +319,61 @@ function AiSuggestionRow({
         </button>
       </div>
     </div>
+  );
+}
+
+function displayEvidenceValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(", ");
+  if (value === null || value === undefined || value === "") return "–";
+  return String(value);
+}
+
+function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse }) {
+  const { t } = useI18n();
+  const evidence = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource);
+  const conflicts = lookup.conflicts || [];
+  const sources = lookup.sources || [];
+  if (!evidence.length && !sources.length) return null;
+
+  return (
+    <section className="mb-4 rounded-[10px] border border-cyan-200/80 bg-cyan-50/35 p-3 dark:border-cyan-500/20 dark:bg-cyan-500/5" aria-label={t("isbn_intelligence.title")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[12px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.title")}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {t("isbn_intelligence.quality")} {Math.round((lookup.metadataQualityScore || 0) * 100)}% · {t("isbn_intelligence.processing")} {lookup.processingTimeMs ?? 0} ms
+          </p>
+        </div>
+        {conflicts.length > 0 ? <StatusBadge label={`${conflicts.length} ${t("isbn_intelligence.conflicts")}`} variant="warning" /> : null}
+      </div>
+
+      {conflicts.length > 0 ? (
+        <div className="mt-3 rounded-[8px] border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{t("isbn_intelligence.conflict_warning")}</div>
+          {conflicts.map((conflict) => <p key={conflict.field} className="mt-1">{conflict.field}: {displayEvidenceValue(conflict.selectedValue)} · {conflict.alternatives.map((item) => `${item.source}: ${displayEvidenceValue(item.value)}`).join(" | ")}</p>)}
+        </div>
+      ) : null}
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.evidence")}</summary>
+        <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {evidence.map(([field, item]) => (
+            <div key={field} className="rounded-[8px] border border-border bg-card px-2.5 py-2 text-[11px]">
+              <p className="font-semibold text-foreground">{field} <span className="font-normal text-muted-foreground">· {Math.round((lookup.fieldConfidence?.[field] || 0) * 100)}%</span></p>
+              <p className="mt-0.5 text-muted-foreground">{displayEvidenceValue(item.selectedValue)}</p>
+              <p className="mt-1 text-cyan-700 dark:text-cyan-300">{t("isbn_intelligence.confirmed_by")}: {item.confirmations.map((confirmation) => confirmation.source).join(", ")}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.sources")}</summary>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" ? "neutral" : "warning"} />)}
+        </div>
+      </details>
+    </section>
   );
 }
 
@@ -877,6 +933,8 @@ export function AIImportPage() {
                   Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
                 </div>
               ) : null}
+
+              <IsbnIntelligencePanel lookup={lookupData} />
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">
                 {reviewSignals.map((signal) => (

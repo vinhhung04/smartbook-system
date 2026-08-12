@@ -33,6 +33,28 @@ export interface LookupBookByIsbnRequest {
   generateVietnameseSummary?: boolean;
 }
 
+export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook';
+
+export interface IsbnFieldEvidence {
+  selectedValue: string | string[] | number | null;
+  selectedSource: IsbnSourceName | null;
+  confirmations: Array<{ source: IsbnSourceName; value: unknown; sourceUrl?: string }>;
+}
+
+export interface IsbnLookupSource {
+  name: IsbnSourceName;
+  enabled: boolean;
+  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED';
+  durationMs: number;
+  sourceUrl?: string;
+}
+
+export interface IsbnConflict {
+  field: string;
+  selectedValue: unknown;
+  alternatives: Array<{ source: IsbnSourceName; value: unknown }>;
+}
+
 export interface LookupBookByIsbnResponse {
   success: boolean;
   found: boolean;
@@ -73,6 +95,12 @@ export interface LookupBookByIsbnResponse {
   keywords: string[];
   manualEntryRequired: boolean;
   reason?: string;
+  fieldEvidence?: Record<string, IsbnFieldEvidence>;
+  fieldConfidence?: Record<string, number>;
+  sources?: IsbnLookupSource[];
+  conflicts?: IsbnConflict[];
+  metadataQualityScore?: number;
+  processingTimeMs?: number;
 }
 
 export interface PostIsbnAiSuggestions {
@@ -248,6 +276,16 @@ export const aiService = {
     payload: LookupBookByIsbnRequest,
   ): Promise<LookupBookByIsbnResponse> => {
     const response = await aiAPI.post('/lookup-book-by-isbn', {
+      isbn: payload.isbn,
+      generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
+    });
+    return response.data;
+  },
+
+  isbnIntelligence: async (
+    payload: LookupBookByIsbnRequest,
+  ): Promise<LookupBookByIsbnResponse> => {
+    const response = await aiAPI.post('/isbn-intelligence', {
       isbn: payload.isbn,
       generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
     });
