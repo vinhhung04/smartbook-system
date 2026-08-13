@@ -102,12 +102,12 @@ WORLDCAT_CLASSIFY_API_BASE_URL = os.getenv(
     "https://classify.oclc.org/classify2/Classify",
 )
 GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY", "").strip()
-BOOK_LOOKUP_TIMEOUT_SECONDS = float(os.getenv("BOOK_LOOKUP_TIMEOUT_SECONDS", "8"))
+BOOK_LOOKUP_TIMEOUT_SECONDS = float(os.getenv("BOOK_LOOKUP_TIMEOUT_SECONDS", "15"))
 ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() == "true"
 
 # ── Marketplace lookup (Fahasa / Tiki / Vinabook) ─────────────────────────────
 ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lower() == "true"
-BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "6"))
+BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "20"))
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
