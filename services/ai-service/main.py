@@ -682,7 +682,7 @@ async def _fetch_and_parse_product_page(
         html_text = response.text
     except Exception as exc:
         logger.warning("Marketplace fetch failed [%s] %s: %s", source_name, url, exc)
-        return None, 0.0
+        raise
 
     # Verify the searched code actually appears in the page HTML before trusting metadata
     if search_code and search_code not in html_text:
@@ -710,8 +710,13 @@ async def _fetch_first_valid(
     """Try each URL in order; for Fahasa, fall back to CloakBrowser when httpx fails.
     If all DDGS URLs are exhausted with no result, do a final browser-based Fahasa
     search to discover the real product URL via the internal Elastic search API."""
+    last_error: Exception | None = None
     for url in urls[:2]:
-        metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
+        try:
+            metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
+        except Exception as exc:
+            last_error = exc
+            continue
         if metadata:
             metadata["sourceUrl"] = url
             metadata["sourceProvider"] = source_name
@@ -783,6 +788,8 @@ async def _fetch_first_valid(
             if metadata:
                 return metadata, score
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1213,6 +1220,7 @@ async def _fetch_tiki_by_isbn_api(
             return metadata, score
     except Exception as exc:
         logger.warning("Tiki API lookup failed for %s: %s", isbn, exc)
+        raise
     return None, 0.0
 
 
@@ -1780,6 +1788,7 @@ def _parse_open_library_item(item: dict) -> dict:
 
 
 async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, _isbn13_to_isbn10(isbn13)]:
         if not isbn:
             continue
@@ -1798,7 +1807,10 @@ async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) ->
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("Google Books lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1841,6 +1853,7 @@ async def _fetch_worldcat_by_isbn(
     isbn13: str,
     isbn10: str | None,
 ) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, isbn10]:
         if not isbn:
             continue
@@ -1860,7 +1873,10 @@ async def _fetch_worldcat_by_isbn(
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("WorldCat lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1869,6 +1885,7 @@ async def _fetch_open_library_by_isbn(
     isbn13: str,
     isbn10: str | None,
 ) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, isbn10]:
         if not isbn:
             continue
@@ -1894,7 +1911,10 @@ async def _fetch_open_library_by_isbn(
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("Open Library lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -2176,11 +2196,20 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False)
 
     # Unpack standard results
-    google_data, google_score = std_results[0] if len(std_results) > 0 and not isinstance(std_results[0], Exception) else (None, 0.0)
-    open_data, open_score = std_results[1] if len(std_results) > 1 and not isinstance(std_results[1], Exception) else (None, 0.0)
+    provider_outcomes: dict[str, str] = {}
+    def _unpack_standard(index: int, source: str) -> tuple[dict | None, float]:
+        if len(std_results) <= index:
+            return None, 0.0
+        value = std_results[index]
+        if isinstance(value, Exception):
+            provider_outcomes[source] = "TIMEOUT" if isinstance(value, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+            return None, 0.0
+        return value
+    google_data, google_score = _unpack_standard(0, "googleBooks")
+    open_data, open_score = _unpack_standard(1, "openLibrary")
     worldcat_data, worldcat_score = None, 0.0
-    if ENABLE_WORLDCAT_LOOKUP and len(std_results) > 2 and not isinstance(std_results[2], Exception):
-        worldcat_data, worldcat_score = std_results[2]
+    if ENABLE_WORLDCAT_LOOKUP:
+        worldcat_data, worldcat_score = _unpack_standard(2, "worldCat")
 
     # Unpack marketplace results
     fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched = mp_tuple
@@ -2220,6 +2249,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
             "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
         }
+        result["_providerOutcomes"] = provider_outcomes
         return result
 
     # ── Generate Vietnamese summary ───────────────────────────────────────────
@@ -2292,6 +2322,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
         "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
     }
+    result["_providerOutcomes"] = provider_outcomes
     return result
 
 
@@ -2306,10 +2337,11 @@ def _build_source_statuses(result: dict, started_at: float) -> dict:
         "vinabook": ENABLE_MARKETPLACE_LOOKUP,
     }
     elapsed = int((time.perf_counter() - started_at) * 1000)
+    outcomes = result.get("_providerOutcomes") or {}
     return {
         source: {
             "enabled": enabled[source],
-            "status": "DISABLED" if not enabled[source] else ("SUCCESS" if source_flags.get(source) else "NOT_FOUND"),
+            "status": "DISABLED" if not enabled[source] else ("SUCCESS" if source_flags.get(source) else outcomes.get(source, "NOT_FOUND")),
             "durationMs": elapsed,
         }
         for source in ISBN_SOURCE_ORDER
@@ -2322,6 +2354,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
     intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at))
+    result.pop("_providerOutcomes", None)
     for source in intelligence["sources"]:
         source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
         if source_url:

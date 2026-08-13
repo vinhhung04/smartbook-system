@@ -4,12 +4,21 @@ from unittest.mock import AsyncMock, patch
 from main import (
     _build_isbn_intelligence,
     _manual_entry_response,
+    _build_source_statuses,
     enrich_book_after_isbn,
     EnrichBookAfterIsbnRequest,
 )
 
 
 class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
+    def test_provider_error_outcome_is_not_reported_as_not_found(self):
+        statuses = _build_source_statuses({
+            "source": {"googleBooks": False, "openLibrary": False},
+            "_providerOutcomes": {"googleBooks": "TIMEOUT", "openLibrary": "ERROR"},
+        }, 0)
+        self.assertEqual(statuses["googleBooks"]["status"], "TIMEOUT")
+        self.assertEqual(statuses["openLibrary"]["status"], "ERROR")
+
     def test_intelligence_prefers_google_and_reports_conflicts(self):
         result = _build_isbn_intelligence({
             "googleBooks": {"title": "Clean Code", "authors": ["Robert C. Martin"]},
