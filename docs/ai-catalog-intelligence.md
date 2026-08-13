@@ -47,7 +47,7 @@ Do not run this recovery path against an existing production database that alrea
 ```powershell
 pnpm --dir services/inventory-service exec prisma migrate status --schema prisma/schema.prisma
 node --test services/inventory-service/test/authority-normalization.test.js services/inventory-service/test/duplicate-intelligence.test.js
-python -m unittest test_enrich_book_after_isbn.py # from services/ai-service
+python -m unittest discover # from services/ai-service
 pnpm --dir apps/web lint
 pnpm --dir apps/web build
 ```
