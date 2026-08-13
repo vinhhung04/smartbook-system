@@ -2,12 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
+  BadgeCheck,
   BookCheck,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
+  Database,
   FileText,
+  Gauge,
   Hash,
+  Languages,
+  Layers3,
   Loader2,
   ScanBarcode,
   Search,
@@ -329,6 +335,94 @@ function displayEvidenceValue(value: unknown): string {
   return String(value);
 }
 
+function MetadataFoundHero({
+  lookup,
+  form,
+  completeSignalCount,
+}: {
+  lookup: LookupBookByIsbnResponse;
+  form: EditableBookForm;
+  completeSignalCount: number;
+}) {
+  const quality = Math.round((lookup.metadataQualityScore || 0) * 100);
+  const successfulSources = (lookup.sources || []).filter((source) => source.status === "SUCCESS");
+  const facts = [
+    { icon: Hash, label: "ISBN", value: form.isbn13 || form.isbn || "Chưa có" },
+    { icon: Languages, label: "Ngôn ngữ", value: form.language || "Chưa có" },
+    { icon: Layers3, label: "Thể loại", value: form.categoriesText || "Chưa phân loại" },
+  ];
+
+  return (
+    <section
+      className="relative mb-5 overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 via-card to-cyan-50/70 p-4 shadow-[0_12px_32px_rgba(124,58,237,0.08)] dark:border-violet-500/20 dark:from-violet-500/10 dark:via-card dark:to-cyan-500/5 sm:p-5"
+      aria-labelledby="metadata-found-title"
+    >
+      <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-500/10" />
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-stretch">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Metadata đã tìm thấy
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground">Sẵn sàng để đối chiếu trước khi lưu</span>
+          </div>
+          <h3 id="metadata-found-title" className="max-w-3xl text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {form.title || "Chưa có tên sách"}
+          </h3>
+          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+            {[form.authorsText, form.publisher, form.publishedDate].filter(Boolean).join(" · ") || "Kiểm tra các trường thông tin trước khi xác nhận."}
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {facts.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="min-w-0 rounded-xl border border-border/80 bg-card/80 px-3 py-2.5 backdrop-blur-sm">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+                  {label}
+                </div>
+                <p className="mt-1 truncate text-[12px] font-semibold text-foreground" title={value}>{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside className="rounded-2xl border border-violet-200/80 bg-card/90 p-4 shadow-sm dark:border-violet-500/20 dark:bg-card/70">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Chất lượng</span>
+            <Gauge className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+          </div>
+          <div className="mt-2 flex items-end gap-1">
+            <strong className="text-4xl font-bold tracking-tight text-foreground tabular-nums">{quality}</strong>
+            <span className="mb-1 text-sm font-semibold text-muted-foreground">%</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-violet-100 dark:bg-violet-500/15">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${quality}%` }} />
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3 text-[11px] text-muted-foreground">
+            <span>{completeSignalCount}/4 mục cốt lõi</span>
+            <span className="inline-flex items-center gap-1 tabular-nums"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{Math.round((lookup.processingTimeMs || 0) / 1000)}s</span>
+          </div>
+        </aside>
+      </div>
+
+      <div className="relative mt-4 flex flex-col gap-2 border-t border-violet-200/70 pt-3 dark:border-violet-500/15 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Database className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
+          <span className="font-medium">Nguồn xác nhận</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {successfulSources.length ? successfulSources.map((source) => (
+            <span key={source.name} className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] font-bold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
+              {source.name}
+            </span>
+          )) : <span className="text-[11px] text-muted-foreground">Đang chờ xác nhận nguồn</span>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse }) {
   const { t } = useI18n();
   const evidence = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource);
@@ -337,7 +431,7 @@ function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse })
   if (!evidence.length && !sources.length) return null;
 
   return (
-    <section className="mb-4 rounded-[10px] border border-cyan-200/80 bg-cyan-50/35 p-3 dark:border-cyan-500/20 dark:bg-cyan-500/5" aria-label={t("isbn_intelligence.title")}>
+    <section className="rounded-2xl border border-cyan-200/80 bg-gradient-to-br from-cyan-50/75 via-card to-card p-3.5 shadow-[0_1px_3px_rgba(8,145,178,0.05)] dark:border-cyan-500/20 dark:from-cyan-500/10 dark:via-card dark:to-card dark:shadow-none" aria-label={t("isbn_intelligence.title")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-[12px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.title")}</h3>
@@ -355,8 +449,8 @@ function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse })
         </div>
       ) : null}
 
-      <details className="mt-3">
-        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.evidence")}</summary>
+      <details className="mt-3 rounded-xl border border-cyan-100 bg-card/80 px-3 py-2.5 dark:border-cyan-500/15 dark:bg-card/50">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 marker:text-cyan-500 dark:text-cyan-300">{t("isbn_intelligence.evidence")}</summary>
         <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
           {evidence.map(([field, item]) => (
             <div key={field} className="rounded-[8px] border border-border bg-card px-2.5 py-2 text-[11px]">
@@ -368,8 +462,8 @@ function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse })
         </div>
       </details>
 
-      <details className="mt-2">
-        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.sources")}</summary>
+      <details className="mt-2 rounded-xl border border-cyan-100 bg-card/80 px-3 py-2.5 dark:border-cyan-500/15 dark:bg-card/50">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 marker:text-cyan-500 dark:text-cyan-300">{t("isbn_intelligence.sources")}</summary>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" ? "neutral" : "warning"} />)}
         </div>
@@ -395,7 +489,7 @@ function AuthorityReviewPanel({
   ].filter((row) => row.items.length > 0);
   if (!rows.length) return null;
   return (
-    <section className="mb-4 rounded-[10px] border border-violet-200/80 bg-violet-50/35 p-3 dark:border-violet-500/20 dark:bg-violet-500/5" aria-label={t("metadata_reconciliation.title")}>
+    <section className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50/70 via-card to-card p-3.5 shadow-[0_1px_3px_rgba(124,58,237,0.05)] dark:border-violet-500/20 dark:from-violet-500/10 dark:via-card dark:to-card dark:shadow-none" aria-label={t("metadata_reconciliation.title")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-[12px] font-semibold text-violet-800 dark:text-violet-300">{t("metadata_reconciliation.title")}</h3>
@@ -407,7 +501,7 @@ function AuthorityReviewPanel({
         {rows.map((row) => {
           const decision = draft.decisions.find((item) => item.field === row.field)?.status || "PENDING";
           return (
-            <div key={row.field} className="rounded-[8px] border border-border bg-card p-2.5">
+            <div key={row.field} className="rounded-xl border border-border bg-card/90 p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 text-[11px]">
                   <p className="font-semibold text-foreground">{row.label} <span className="font-normal text-muted-foreground">· {decision}</span></p>
@@ -433,7 +527,7 @@ function DuplicateReviewPanel({ review, onAction }: { review: DuplicateReview; o
   const { t } = useI18n();
   const isNew = review.classification === "NEW_TITLE";
   return (
-    <section className={`mb-4 rounded-[10px] border p-3 ${isNew ? "border-emerald-200 bg-emerald-50/35 dark:border-emerald-500/20 dark:bg-emerald-500/5" : "border-amber-200 bg-amber-50/35 dark:border-amber-500/20 dark:bg-amber-500/5"}`} aria-label={t("duplicate_intelligence.title")}>
+    <section className={`rounded-2xl border p-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] dark:shadow-none ${isNew ? "border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-card to-card dark:border-emerald-500/20 dark:from-emerald-500/10 dark:via-card dark:to-card" : "border-amber-200 bg-gradient-to-br from-amber-50/70 via-card to-card dark:border-amber-500/20 dark:from-amber-500/10 dark:via-card dark:to-card"}`} aria-label={t("duplicate_intelligence.title")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-[12px] font-semibold text-foreground">{t("duplicate_intelligence.title")}</h3>
@@ -1055,6 +1149,8 @@ export function AIImportPage() {
                 </div>
               }
             >
+              {lookupData.found ? <MetadataFoundHero lookup={lookupData} form={form} completeSignalCount={completeSignalCount} /> : null}
+
               {manualMode ? (
                 <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
                   Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
@@ -1067,15 +1163,39 @@ export function AIImportPage() {
                 </div>
               ) : null}
 
-              <IsbnIntelligencePanel lookup={lookupData} />
-              {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} onCreateEntity={handleCreateAuthorityEntity} /> : null}
-              {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onAction={(action, candidate) => void handleDuplicateAction(action, candidate)} /> : null}
+              <div className="grid gap-5 2xl:grid-cols-[320px_minmax(0,1fr)]">
+                <aside className="space-y-3 2xl:sticky 2xl:top-5 2xl:self-start" aria-label="Trung tâm kiểm duyệt metadata">
+                  <div className="rounded-2xl border border-border bg-muted/25 p-3.5 dark:bg-muted/10">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Trung tâm duyệt</p>
+                        <h3 className="mt-0.5 text-[14px] font-semibold text-foreground">Trạng thái trước khi lưu</h3>
+                      </div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                        <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                      </div>
+                    </div>
+                    <div className="grid gap-2" aria-label="Tình trạng metadata trước khi lưu">
+                      {reviewSignals.map((signal) => (
+                        <ReviewSignal key={signal.label} {...signal} />
+                      ))}
+                    </div>
+                  </div>
+                  <IsbnIntelligencePanel lookup={lookupData} />
+                  {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} onCreateEntity={handleCreateAuthorityEntity} /> : null}
+                  {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onAction={(action, candidate) => void handleDuplicateAction(action, candidate)} /> : null}
+                </aside>
 
-              <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">
-                {reviewSignals.map((signal) => (
-                  <ReviewSignal key={signal.label} {...signal} />
-                ))}
-              </div>
+                <div className="min-w-0 space-y-5">
+                  <section className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-5 dark:shadow-none" aria-labelledby="catalog-record-title">
+                    <div className="mb-4 flex flex-col gap-2 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Hồ sơ catalog</p>
+                        <h3 id="catalog-record-title" className="mt-0.5 text-[16px] font-semibold text-foreground">Thông tin ấn bản</h3>
+                        <p className="mt-1 text-[12px] text-muted-foreground">Chỉnh sửa metadata trước khi áp dụng vào catalog.</p>
+                      </div>
+                      <StatusBadge label={`${completeSignalCount}/4 trường cốt lõi`} variant={completeSignalCount === 4 ? "success" : "warning"} />
+                    </div>
 
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
                 {/* Cover preview + live caption */}
@@ -1124,10 +1244,10 @@ export function AIImportPage() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-3">
-                <div>
+              <div className="mt-5 grid grid-cols-1 gap-3 border-t border-border pt-5 md:grid-cols-2">
+                <div className="md:col-span-2">
                   <Label htmlFor="description" className="mb-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Mô tả</Label>
-                  <Textarea id="description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={4} />
+                  <Textarea id="description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} rows={5} className="resize-y leading-6" />
                 </div>
                 <div>
                   <Label htmlFor="summaryVi" className="mb-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Tóm tắt ngắn (summary_vi)</Label>
@@ -1141,11 +1261,14 @@ export function AIImportPage() {
                 </div>
                 <Field id="keywords" label="Từ khóa (cách nhau dấu phẩy)" value={form.keywordsText} onChange={(v) => setForm((prev) => ({ ...prev, keywordsText: v }))} />
 
+              </div>
+                  </section>
+
                 {form.title.trim() && (
                   <div
                     role="region"
                     aria-labelledby="ai-tools-title"
-                    className="rounded-[12px] border border-violet-200/80 bg-violet-50/35 p-4 dark:border-violet-500/20 dark:bg-violet-500/5"
+                    className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50/75 via-card to-fuchsia-50/45 p-4 shadow-[0_1px_3px_rgba(124,58,237,0.05)] dark:border-violet-500/20 dark:from-violet-500/10 dark:via-card dark:to-fuchsia-500/5 dark:shadow-none"
                   >
                     <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex min-w-0 items-start gap-2">
@@ -1331,6 +1454,7 @@ export function AIImportPage() {
                     )}
                   </div>
                 )}
+                </div>
               </div>
 
               {duplicateMatches.length > 0 && (
@@ -1370,8 +1494,16 @@ export function AIImportPage() {
                 </motion.div>
               )}
 
-              <div className="mt-4 flex items-center justify-end gap-2">
+              <div className="sticky bottom-4 z-10 mt-5 flex flex-col gap-3 rounded-2xl border border-border bg-card/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.12)] backdrop-blur supports-[backdrop-filter]:bg-card/85 sm:flex-row sm:items-center sm:justify-between dark:shadow-black/20">
+                <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${completeSignalCount === 4 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"}`}>
+                    {completeSignalCount === 4 ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+                  </div>
+                  <span>{completeSignalCount === 4 ? "Metadata đã sẵn sàng để lưu" : `Còn thiếu ${4 - completeSignalCount} trường cốt lõi trước khi lưu`}</span>
+                </div>
+                <div className="flex items-center justify-end gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setLookupData(null);
                     setPostIsbnSuggestions(null);
@@ -1384,6 +1516,7 @@ export function AIImportPage() {
                   Đặt lại
                 </button>
                 <button
+                  type="button"
                   onClick={() => void handleSave()}
                   disabled={saving || (duplicateMatches.length > 0 && !confirmDuplicateSave)}
                   className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-[13px] font-semibold text-white transition-transform duration-150 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
@@ -1391,6 +1524,7 @@ export function AIImportPage() {
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookCheck className="h-4 w-4" />}
                   {saving ? "Đang lưu" : "Lưu sách"}
                 </button>
+                </div>
               </div>
             </SectionCard>
           </motion.div>

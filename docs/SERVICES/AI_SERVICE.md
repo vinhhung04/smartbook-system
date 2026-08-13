@@ -51,8 +51,8 @@ Ghi chú quan trọng:
 | ANTHROPIC_MODEL | claude-sonnet-4-6 | Model Anthropic dùng cho text |
 | ENABLE_WORLDCAT_LOOKUP | false | Bật/tắt tra cứu WorldCat |
 | ENABLE_MARKETPLACE_LOOKUP | false | Bật tra cứu Fahasa/Tiki/Vinabook |
-| BOOK_MARKETPLACE_TIMEOUT_SECONDS | 6 | Timeout (giây) cho marketplace lookup |
-| BOOK_LOOKUP_TIMEOUT_SECONDS | 8 | Timeout (giây) cho Google Books/Open Library/WorldCat |
+| BOOK_MARKETPLACE_TIMEOUT_SECONDS | 20 | Timeout (giây) cho từng marketplace lookup |
+| BOOK_LOOKUP_TIMEOUT_SECONDS | 15 | Timeout (giây) cho Google Books/Open Library/WorldCat |
 | BOOK_LOOKUP_MAX_WEB_RESULTS | 5 | Số kết quả DuckDuckGo tối đa mỗi query |
 | BOOK_LOOKUP_USER_AGENT | SmartBookBot/1.0 | User-Agent khi fetch trang nhà sách |
 
