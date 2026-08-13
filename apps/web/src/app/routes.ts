@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { createBrowserRouter, type LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { AppLayout } from "@/components/layout";
@@ -157,6 +158,16 @@ async function requireSupplierAuthLoader() {
   return null;
 }
 
+function RouterHydrateFallback() {
+  return createElement("div", {
+    className: "min-h-screen bg-gray-50",
+    role: "status",
+    "aria-label": "Loading",
+  });
+}
+
+const hydrateFallbackElement = createElement(RouterHydrateFallback);
+
 export const router = createBrowserRouter([
   {
     path: "/login",
@@ -219,6 +230,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     loader: requireAuthLoader,
+    hydrateFallbackElement,
     Component: AppLayout,
     children: [
       { index: true, Component: DashboardPage },
