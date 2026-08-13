@@ -106,20 +106,22 @@ async function resolveRelationIds(tx, draft, accepted, createEntities) {
     for (let index = 0; index < accepted.authors.length; index += 1) {
       const value = accepted.authors[index];
       const matchedId = safeMatchId(authorMatches[index]);
-      if (matchedId) authors.push({ id: matchedId, raw: authorMatches[index].rawValue });
+      if (matchedId) authors.push({ id: matchedId, raw: authorMatches[index].rawValue, canonicalName: authorMatches[index].matchedEntity?.name || null });
       else if (createEntities.authors) {
         const existing = await tx.authors.findUnique({ where: { full_name: value } });
         const entity = existing || await tx.authors.create({ data: { full_name: value, sort_name: value } });
-        authors.push({ id: entity.id, raw: value });
+        authors.push({ id: entity.id, raw: value, canonicalName: entity.full_name });
       }
     }
   }
-  let publisherId = null;
+  let publisher = null;
   if (accepted.publisher) {
-    publisherId = safeMatchId(authority.publisher);
-    if (!publisherId && createEntities.publisher) {
+    const matchedId = safeMatchId(authority.publisher);
+    if (matchedId) publisher = { id: matchedId, raw: authority.publisher?.rawValue, canonicalName: authority.publisher?.matchedEntity?.name || null };
+    if (!publisher && createEntities.publisher) {
       const existing = await tx.publishers.findUnique({ where: { name: accepted.publisher } });
-      publisherId = (existing || await tx.publishers.create({ data: { name: accepted.publisher, code: `PUB-${Date.now()}` } })).id;
+      const entity = existing || await tx.publishers.create({ data: { name: accepted.publisher, code: `PUB-${Date.now()}` } });
+      publisher = { id: entity.id, raw: accepted.publisher, canonicalName: entity.name };
     }
   }
   const categories = [];
@@ -135,7 +137,7 @@ async function resolveRelationIds(tx, draft, accepted, createEntities) {
       }
     }
   }
-  return { authors, publisherId, categories };
+  return { authors, publisher, categories };
 }
 
 async function applyDraft(req, res) {
@@ -161,14 +163,17 @@ async function applyDraft(req, res) {
         ...(Object.prototype.hasOwnProperty.call(accepted, 'language') ? { default_language: accepted.language } : {}),
         ...(Object.prototype.hasOwnProperty.call(accepted, 'pageCount') ? { page_count: accepted.pageCount } : {}),
         ...(Object.prototype.hasOwnProperty.call(accepted, 'publishedDate') ? { published_date: accepted.publishedDate ? new Date(`${accepted.publishedDate}T00:00:00.000Z`) : null } : {}),
-        ...(accepted.publisher && relations.publisherId ? { publisher_id: relations.publisherId } : {}),
+        ...(accepted.publisher && relations.publisher ? { publisher_id: relations.publisher.id } : {}),
         metadata: { ...(book.metadata || {}), metadataProvenance: { ...(book.metadata?.metadataProvenance || {}), ...Object.fromEntries(Object.keys(accepted).map((field) => [field, 'STAFF_APPROVED'])) } },
       };
       const updatedBook = await tx.books.update({ where: { id: bookId }, data });
       if (accepted.authors && relations.authors.length) {
         await tx.book_authors.deleteMany({ where: { book_id: bookId } });
         await tx.book_authors.createMany({ data: relations.authors.map((author, index) => ({ book_id: bookId, author_id: author.id, author_order: index + 1 })) });
-        await tx.author_aliases.createMany({ data: relations.authors.filter((author) => author.raw && canonicalKey(author.raw) !== canonicalKey(accepted.authors[relations.authors.indexOf(author)])).map((author) => ({ author_id: author.id, alias: author.raw, normalized_alias: canonicalKey(author.raw), confidence: 1, status: 'PENDING' })), skipDuplicates: true });
+        await tx.author_aliases.createMany({ data: relations.authors.filter((author) => author.raw && author.canonicalName && author.raw.trim() !== author.canonicalName.trim()).map((author) => ({ author_id: author.id, alias: author.raw, normalized_alias: canonicalKey(author.raw), confidence: 1, status: 'PENDING' })), skipDuplicates: true });
+      }
+      if (accepted.publisher && relations.publisher?.raw && relations.publisher.canonicalName && relations.publisher.raw.trim() !== relations.publisher.canonicalName.trim()) {
+        await tx.publisher_aliases.createMany({ data: [{ publisher_id: relations.publisher.id, alias: relations.publisher.raw, normalized_alias: canonicalKey(relations.publisher.raw), confidence: 1, status: 'PENDING' }], skipDuplicates: true });
       }
       if (accepted.categories && relations.categories.length) {
         await tx.book_categories.deleteMany({ where: { book_id: bookId } });

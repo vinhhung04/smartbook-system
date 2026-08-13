@@ -381,9 +381,11 @@ function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse })
 function AuthorityReviewPanel({
   draft,
   onDecision,
+  onCreateEntity,
 }: {
   draft: ReconciliationDraft;
   onDecision: (field: string, status: "ACCEPTED" | "REJECTED") => void;
+  onCreateEntity: (field: string) => void;
 }) {
   const { t } = useI18n();
   const rows = [
@@ -415,6 +417,7 @@ function AuthorityReviewPanel({
                 {decision === "PENDING" ? <div className="flex shrink-0 gap-1.5">
                   <button type="button" onClick={() => onDecision(row.field, "ACCEPTED")} className="min-h-8 rounded-[7px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">{t("metadata_reconciliation.accept")}</button>
                   <button type="button" onClick={() => onDecision(row.field, "REJECTED")} className="min-h-8 rounded-[7px] border border-border bg-card px-2.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30">{t("metadata_reconciliation.reject")}</button>
+                  {row.items.some((item) => item.status === "NEW_ENTITY") ? <button type="button" onClick={() => onCreateEntity(row.field)} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("metadata_reconciliation.create_entity")}</button> : null}
                 </div> : null}
               </div>
             </div>
@@ -468,6 +471,7 @@ export function AIImportPage() {
   const [lookupData, setLookupData] = useState<LookupBookByIsbnResponse | null>(null);
   const [postIsbnSuggestions, setPostIsbnSuggestions] = useState<PostIsbnAiSuggestions | null>(null);
   const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft | null>(null);
+  const [createAuthorityEntities, setCreateAuthorityEntities] = useState<Record<string, boolean>>({});
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReview | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
@@ -614,6 +618,7 @@ export function AIImportPage() {
     setLookupStage("lookup");
     setPostIsbnSuggestions(null);
     setReconciliationDraft(null);
+    setCreateAuthorityEntities({});
     setDuplicateReview(null);
     const stageTimer = window.setTimeout(() => setLookupStage("ai"), 700);
     try {
@@ -673,6 +678,12 @@ export function AIImportPage() {
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể lưu quyết định metadata"));
     }
+  }
+
+  function handleCreateAuthorityEntity(field: string) {
+    if (!window.confirm("Entity mới chỉ được tạo khi bạn chấp nhận field này. Bạn có muốn tiếp tục?")) return;
+    setCreateAuthorityEntities((current) => ({ ...current, [field]: true }));
+    void handleAuthorityDecision(field, "ACCEPTED");
   }
 
   async function handleDuplicateAction(action: string, candidate?: DuplicateReview["candidates"][number]) {
@@ -887,7 +898,7 @@ export function AIImportPage() {
       }
 
       if (reconciliationDraft) {
-        await metadataIntelligenceService.applyReconciliationDraft(reconciliationDraft.id, String(payload.book_id));
+        await metadataIntelligenceService.applyReconciliationDraft(reconciliationDraft.id, String(payload.book_id), createAuthorityEntities);
       } else {
         await bookService.update(String(payload.book_id), updatePayload);
       }
@@ -903,6 +914,7 @@ export function AIImportPage() {
       setLookupData(null);
       setPostIsbnSuggestions(null);
       setReconciliationDraft(null);
+      setCreateAuthorityEntities({});
       setDuplicateReview(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
@@ -1056,7 +1068,7 @@ export function AIImportPage() {
               ) : null}
 
               <IsbnIntelligencePanel lookup={lookupData} />
-              {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} /> : null}
+              {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} onCreateEntity={handleCreateAuthorityEntity} /> : null}
               {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onAction={(action, candidate) => void handleDuplicateAction(action, candidate)} /> : null}
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">

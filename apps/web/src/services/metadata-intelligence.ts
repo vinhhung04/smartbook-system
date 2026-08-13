@@ -43,8 +43,8 @@ export const metadataIntelligenceService = {
   decideField: async (draftId: string, field: string, status: 'ACCEPTED' | 'REJECTED'): Promise<void> => {
     await inventoryAPI.patch(`/api/metadata-reconciliations/${draftId}/fields/${encodeURIComponent(field)}`, { status });
   },
-  applyReconciliationDraft: async (draftId: string, bookId: string): Promise<void> => {
-    await inventoryAPI.post(`/api/metadata-reconciliations/${draftId}/apply`, { bookId });
+  applyReconciliationDraft: async (draftId: string, bookId: string, createEntities: Record<string, boolean> = {}): Promise<void> => {
+    await inventoryAPI.post(`/api/metadata-reconciliations/${draftId}/apply`, { bookId, createEntities });
   },
   checkDuplicate: async (normalizedMetadata: Record<string, unknown>): Promise<DuplicateReview> => {
     const response = await inventoryAPI.post('/api/duplicate-intelligence/check', { normalizedMetadata });
