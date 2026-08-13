@@ -2,12 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
+  BadgeCheck,
   BookCheck,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  Clock3,
+  Database,
   FileText,
+  Gauge,
   Hash,
+  Languages,
+  Layers3,
   Loader2,
   ScanBarcode,
   Search,
@@ -327,6 +333,94 @@ function displayEvidenceValue(value: unknown): string {
   if (Array.isArray(value)) return value.join(", ");
   if (value === null || value === undefined || value === "") return "–";
   return String(value);
+}
+
+function MetadataFoundHero({
+  lookup,
+  form,
+  completeSignalCount,
+}: {
+  lookup: LookupBookByIsbnResponse;
+  form: EditableBookForm;
+  completeSignalCount: number;
+}) {
+  const quality = Math.round((lookup.metadataQualityScore || 0) * 100);
+  const successfulSources = (lookup.sources || []).filter((source) => source.status === "SUCCESS");
+  const facts = [
+    { icon: Hash, label: "ISBN", value: form.isbn13 || form.isbn || "Chưa có" },
+    { icon: Languages, label: "Ngôn ngữ", value: form.language || "Chưa có" },
+    { icon: Layers3, label: "Thể loại", value: form.categoriesText || "Chưa phân loại" },
+  ];
+
+  return (
+    <section
+      className="relative mb-5 overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 via-card to-cyan-50/70 p-4 shadow-[0_12px_32px_rgba(124,58,237,0.08)] dark:border-violet-500/20 dark:from-violet-500/10 dark:via-card dark:to-cyan-500/5 sm:p-5"
+      aria-labelledby="metadata-found-title"
+    >
+      <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-violet-300/20 blur-3xl dark:bg-violet-500/10" />
+      <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-stretch">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-bold text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Metadata đã tìm thấy
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground">Sẵn sàng để đối chiếu trước khi lưu</span>
+          </div>
+          <h3 id="metadata-found-title" className="max-w-3xl text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {form.title || "Chưa có tên sách"}
+          </h3>
+          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+            {[form.authorsText, form.publisher, form.publishedDate].filter(Boolean).join(" · ") || "Kiểm tra các trường thông tin trước khi xác nhận."}
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {facts.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="min-w-0 rounded-xl border border-border/80 bg-card/80 px-3 py-2.5 backdrop-blur-sm">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+                  {label}
+                </div>
+                <p className="mt-1 truncate text-[12px] font-semibold text-foreground" title={value}>{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <aside className="rounded-2xl border border-violet-200/80 bg-card/90 p-4 shadow-sm dark:border-violet-500/20 dark:bg-card/70">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Chất lượng</span>
+            <Gauge className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+          </div>
+          <div className="mt-2 flex items-end gap-1">
+            <strong className="text-4xl font-bold tracking-tight text-foreground tabular-nums">{quality}</strong>
+            <span className="mb-1 text-sm font-semibold text-muted-foreground">%</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-violet-100 dark:bg-violet-500/15">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${quality}%` }} />
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3 text-[11px] text-muted-foreground">
+            <span>{completeSignalCount}/4 mục cốt lõi</span>
+            <span className="inline-flex items-center gap-1 tabular-nums"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{Math.round((lookup.processingTimeMs || 0) / 1000)}s</span>
+          </div>
+        </aside>
+      </div>
+
+      <div className="relative mt-4 flex flex-col gap-2 border-t border-violet-200/70 pt-3 dark:border-violet-500/15 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Database className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" aria-hidden="true" />
+          <span className="font-medium">Nguồn xác nhận</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {successfulSources.length ? successfulSources.map((source) => (
+            <span key={source.name} className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-[10px] font-bold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">
+              {source.name}
+            </span>
+          )) : <span className="text-[11px] text-muted-foreground">Đang chờ xác nhận nguồn</span>}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse }) {
@@ -1055,6 +1149,8 @@ export function AIImportPage() {
                 </div>
               }
             >
+              {lookupData.found ? <MetadataFoundHero lookup={lookupData} form={form} completeSignalCount={completeSignalCount} /> : null}
+
               {manualMode ? (
                 <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
                   Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
