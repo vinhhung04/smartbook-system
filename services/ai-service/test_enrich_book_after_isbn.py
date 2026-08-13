@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 from main import (
@@ -93,6 +94,25 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["title"], "Open Library result")
         self.assertEqual(result["sources"][1]["status"], "SUCCESS")
         self.assertGreater(result["fieldConfidence"]["title"], 0)
+
+    async def test_marketplace_provider_timeout_does_not_block_other_sources(self):
+        from main import _fetch_all_marketplace
+
+        async def slow_provider(*_args, **_kwargs):
+            await asyncio.sleep(0.08)
+            return None, 0.0
+
+        with patch("main._ddgs_search_one_domain", return_value=[]), \
+             patch("main._fetch_first_valid", new=AsyncMock(side_effect=slow_provider)), \
+             patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(side_effect=slow_provider)), \
+             patch("main.BOOK_MARKETPLACE_TIMEOUT_SECONDS", 0.01):
+            result = await _fetch_all_marketplace("9780132350884", None)
+
+        self.assertEqual(result[-1], {
+            "fahasa": "TIMEOUT",
+            "tiki": "TIMEOUT",
+            "vinabook": "TIMEOUT",
+        })
     async def test_returns_lookup_and_ai_suggestions_for_found_isbn(self):
         lookup = {
             "success": True,

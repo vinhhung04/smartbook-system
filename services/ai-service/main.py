@@ -1247,7 +1247,7 @@ async def _fetch_all_marketplace(
                 asyncio.to_thread(_ddgs_search_one_domain, isbn13, "vinabook.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
                 return_exceptions=True,
             ),
-            timeout=9.0,
+            timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
         )
         if not isinstance(ddgs_results[0], Exception):
             fahasa_urls = ddgs_results[0]
@@ -1267,9 +1267,18 @@ async def _fetch_all_marketplace(
     async with httpx.AsyncClient(timeout=mp_timeout) as client:
         logger.info("Calling marketplace providers for ISBN %s", isbn13)
         results = await asyncio.gather(
-            _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
-            _fetch_tiki_by_isbn_api(client, isbn13),
-            _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+            asyncio.wait_for(
+                _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
+            asyncio.wait_for(
+                _fetch_tiki_by_isbn_api(client, isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
+            asyncio.wait_for(
+                _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
             return_exceptions=True,
         )
 
