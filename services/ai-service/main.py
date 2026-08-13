@@ -1229,16 +1229,17 @@ async def _fetch_tiki_by_isbn_api(
 async def _fetch_all_marketplace(
     isbn13: str,
     isbn10: str | None,
-) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool]:
+) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool, dict[str, str]]:
     """
     Run Fahasa (DDGS+scrape), Tiki (API), Vinabook (DDGS+scrape) in parallel.
-    Returns: (fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched)
+    Returns metadata plus per-provider TIMEOUT/ERROR outcomes when a provider fails.
     """
     # Step 1: DuckDuckGo search for Fahasa + Vinabook URLs (Tiki handled via API)
     # Run both DDGS queries in parallel threads — each in its own thread so total
     # time = max(fahasa_query, vinabook_query) instead of sum.
     fahasa_urls: list[str] = []
     vinabook_urls: list[str] = []
+    search_outcomes: dict[str, str] = {}
     try:
         ddgs_results = await asyncio.wait_for(
             asyncio.gather(
@@ -1254,8 +1255,10 @@ async def _fetch_all_marketplace(
             vinabook_urls = ddgs_results[1]
     except asyncio.TimeoutError:
         logger.warning("DuckDuckGo marketplace search timed out for ISBN %s", isbn13)
+        search_outcomes = {"fahasa": "TIMEOUT", "vinabook": "TIMEOUT"}
     except Exception as exc:
         logger.warning("DuckDuckGo marketplace search error for ISBN %s: %s", isbn13, exc)
+        search_outcomes = {"fahasa": "ERROR", "vinabook": "ERROR"}
 
     web_searched = bool(fahasa_urls or vinabook_urls)
 
@@ -1270,14 +1273,17 @@ async def _fetch_all_marketplace(
             return_exceptions=True,
         )
 
-    def _safe_unpack(r):
-        return r if not isinstance(r, Exception) else (None, 0.0)
+    def _safe_unpack(r, source):
+        if not isinstance(r, Exception):
+            return r
+        search_outcomes[source] = "TIMEOUT" if isinstance(r, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+        return None, 0.0
 
-    fahasa_data, fahasa_score = _safe_unpack(results[0])
-    tiki_data, tiki_score = _safe_unpack(results[1])
-    vinabook_data, vinabook_score = _safe_unpack(results[2])
+    fahasa_data, fahasa_score = _safe_unpack(results[0], "fahasa")
+    tiki_data, tiki_score = _safe_unpack(results[1], "tiki")
+    vinabook_data, vinabook_score = _safe_unpack(results[2], "vinabook")
 
-    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched
+    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, search_outcomes
 
 
 # ── 7. Merge marketplace data into base metadata ─────────────────────────────
@@ -2115,7 +2121,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     if validation_error and is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP:
         logger.info("ISBN validation failed (%s), trying marketplace barcode lookup for %s", validation_error, raw_barcode)
         mp_results = await _fetch_all_marketplace(raw_barcode, None)
-        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b = mp_results
+        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b, _ = mp_results
         mp_merged = _merge_with_marketplace({}, fahasa_b, tiki_b, vinabook_b)
         mp_found = bool(mp_merged.get("title") or mp_merged.get("description"))
 
@@ -2190,10 +2196,10 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             return_exceptions=True,
         )
         std_results: list = std_gather if not isinstance(std_gather, Exception) else []
-        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False)
+        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False, {"fahasa": "ERROR", "tiki": "ERROR", "vinabook": "ERROR"})
     else:
         std_results = await _run_standard_lookups(isbn13, isbn10)
-        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False)
+        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False, {})
 
     # Unpack standard results
     provider_outcomes: dict[str, str] = {}
@@ -2212,7 +2218,8 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         worldcat_data, worldcat_score = _unpack_standard(2, "worldCat")
 
     # Unpack marketplace results
-    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched = mp_tuple
+    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, marketplace_outcomes = mp_tuple
+    provider_outcomes.update(marketplace_outcomes)
 
     # ── Merge all sources ─────────────────────────────────────────────────────
     merged = _merge_lookup_metadata_with_fallbacks(google_data, open_data, worldcat_data)
