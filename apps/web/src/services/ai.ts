@@ -33,6 +33,28 @@ export interface LookupBookByIsbnRequest {
   generateVietnameseSummary?: boolean;
 }
 
+export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook';
+
+export interface IsbnFieldEvidence {
+  selectedValue: string | string[] | number | null;
+  selectedSource: IsbnSourceName | null;
+  confirmations: Array<{ source: IsbnSourceName; value: unknown; sourceUrl?: string }>;
+}
+
+export interface IsbnLookupSource {
+  name: IsbnSourceName;
+  enabled: boolean;
+  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED';
+  durationMs: number;
+  sourceUrl?: string;
+}
+
+export interface IsbnConflict {
+  field: string;
+  selectedValue: unknown;
+  alternatives: Array<{ source: IsbnSourceName; value: unknown }>;
+}
+
 export interface LookupBookByIsbnResponse {
   success: boolean;
   found: boolean;
@@ -73,6 +95,12 @@ export interface LookupBookByIsbnResponse {
   keywords: string[];
   manualEntryRequired: boolean;
   reason?: string;
+  fieldEvidence?: Record<string, IsbnFieldEvidence>;
+  fieldConfidence?: Record<string, number>;
+  sources?: IsbnLookupSource[];
+  conflicts?: IsbnConflict[];
+  metadataQualityScore?: number;
+  processingTimeMs?: number;
 }
 
 export interface PostIsbnAiSuggestions {
@@ -88,12 +116,19 @@ export interface PostIsbnAiSuggestions {
 export interface EnrichBookAfterIsbnRequest {
   isbn: string;
   existingCategories?: string[];
+  verifiedMetadata?: Record<string, unknown>;
 }
 
 export interface EnrichBookAfterIsbnResponse {
   success: boolean;
   lookup: LookupBookByIsbnResponse;
   aiSuggestions: PostIsbnAiSuggestions;
+  authorNormalization?: unknown[];
+  publisherNormalization?: unknown;
+  categoryNormalization?: unknown[];
+  authorityMatches?: Record<string, unknown>;
+  qualityWarnings?: string[];
+  explanation?: Record<string, unknown>;
 }
 
 export interface ChatMessage {
@@ -254,12 +289,23 @@ export const aiService = {
     return response.data;
   },
 
+  isbnIntelligence: async (
+    payload: LookupBookByIsbnRequest,
+  ): Promise<LookupBookByIsbnResponse> => {
+    const response = await aiAPI.post('/isbn-intelligence', {
+      isbn: payload.isbn,
+      generateVietnameseSummary: Boolean(payload.generateVietnameseSummary),
+    });
+    return response.data;
+  },
+
   enrichBookAfterIsbn: async (
     payload: EnrichBookAfterIsbnRequest,
   ): Promise<EnrichBookAfterIsbnResponse> => {
     const response = await aiAPI.post('/enrich-book-after-isbn', {
       isbn: payload.isbn,
       existingCategories: payload.existingCategories || [],
+      verifiedMetadata: payload.verifiedMetadata,
     });
     return response.data;
   },

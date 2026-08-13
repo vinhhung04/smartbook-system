@@ -36,7 +36,8 @@ from agent_actions import (
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # Python 3.14 no longer creates an implicit event loop for the main thread.
+    return asyncio.run(coro)
 
 
 def _llm(

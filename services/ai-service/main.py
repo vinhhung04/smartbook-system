@@ -113,6 +113,9 @@ BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
+INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
+AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
 # Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -679,7 +682,7 @@ async def _fetch_and_parse_product_page(
         html_text = response.text
     except Exception as exc:
         logger.warning("Marketplace fetch failed [%s] %s: %s", source_name, url, exc)
-        return None, 0.0
+        raise
 
     # Verify the searched code actually appears in the page HTML before trusting metadata
     if search_code and search_code not in html_text:
@@ -707,8 +710,13 @@ async def _fetch_first_valid(
     """Try each URL in order; for Fahasa, fall back to CloakBrowser when httpx fails.
     If all DDGS URLs are exhausted with no result, do a final browser-based Fahasa
     search to discover the real product URL via the internal Elastic search API."""
+    last_error: Exception | None = None
     for url in urls[:2]:
-        metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
+        try:
+            metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
+        except Exception as exc:
+            last_error = exc
+            continue
         if metadata:
             metadata["sourceUrl"] = url
             metadata["sourceProvider"] = source_name
@@ -780,6 +788,8 @@ async def _fetch_first_valid(
             if metadata:
                 return metadata, score
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1210,6 +1220,7 @@ async def _fetch_tiki_by_isbn_api(
             return metadata, score
     except Exception as exc:
         logger.warning("Tiki API lookup failed for %s: %s", isbn, exc)
+        raise
     return None, 0.0
 
 
@@ -1218,16 +1229,17 @@ async def _fetch_tiki_by_isbn_api(
 async def _fetch_all_marketplace(
     isbn13: str,
     isbn10: str | None,
-) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool]:
+) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool, dict[str, str]]:
     """
     Run Fahasa (DDGS+scrape), Tiki (API), Vinabook (DDGS+scrape) in parallel.
-    Returns: (fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched)
+    Returns metadata plus per-provider TIMEOUT/ERROR outcomes when a provider fails.
     """
     # Step 1: DuckDuckGo search for Fahasa + Vinabook URLs (Tiki handled via API)
     # Run both DDGS queries in parallel threads — each in its own thread so total
     # time = max(fahasa_query, vinabook_query) instead of sum.
     fahasa_urls: list[str] = []
     vinabook_urls: list[str] = []
+    search_outcomes: dict[str, str] = {}
     try:
         ddgs_results = await asyncio.wait_for(
             asyncio.gather(
@@ -1235,7 +1247,7 @@ async def _fetch_all_marketplace(
                 asyncio.to_thread(_ddgs_search_one_domain, isbn13, "vinabook.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
                 return_exceptions=True,
             ),
-            timeout=9.0,
+            timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
         )
         if not isinstance(ddgs_results[0], Exception):
             fahasa_urls = ddgs_results[0]
@@ -1243,8 +1255,10 @@ async def _fetch_all_marketplace(
             vinabook_urls = ddgs_results[1]
     except asyncio.TimeoutError:
         logger.warning("DuckDuckGo marketplace search timed out for ISBN %s", isbn13)
+        search_outcomes = {"fahasa": "TIMEOUT", "vinabook": "TIMEOUT"}
     except Exception as exc:
         logger.warning("DuckDuckGo marketplace search error for ISBN %s: %s", isbn13, exc)
+        search_outcomes = {"fahasa": "ERROR", "vinabook": "ERROR"}
 
     web_searched = bool(fahasa_urls or vinabook_urls)
 
@@ -1253,20 +1267,32 @@ async def _fetch_all_marketplace(
     async with httpx.AsyncClient(timeout=mp_timeout) as client:
         logger.info("Calling marketplace providers for ISBN %s", isbn13)
         results = await asyncio.gather(
-            _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
-            _fetch_tiki_by_isbn_api(client, isbn13),
-            _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+            asyncio.wait_for(
+                _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
+            asyncio.wait_for(
+                _fetch_tiki_by_isbn_api(client, isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
+            asyncio.wait_for(
+                _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+            ),
             return_exceptions=True,
         )
 
-    def _safe_unpack(r):
-        return r if not isinstance(r, Exception) else (None, 0.0)
+    def _safe_unpack(r, source):
+        if not isinstance(r, Exception):
+            return r
+        search_outcomes[source] = "TIMEOUT" if isinstance(r, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+        return None, 0.0
 
-    fahasa_data, fahasa_score = _safe_unpack(results[0])
-    tiki_data, tiki_score = _safe_unpack(results[1])
-    vinabook_data, vinabook_score = _safe_unpack(results[2])
+    fahasa_data, fahasa_score = _safe_unpack(results[0], "fahasa")
+    tiki_data, tiki_score = _safe_unpack(results[1], "tiki")
+    vinabook_data, vinabook_score = _safe_unpack(results[2], "vinabook")
 
-    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched
+    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, search_outcomes
 
 
 # ── 7. Merge marketplace data into base metadata ─────────────────────────────
@@ -1572,6 +1598,102 @@ def _metadata_completeness_score(data: dict) -> float:
     return round(score / total_weight, 3) if total_weight else 0.0
 
 
+# Smart ISBN Intelligence is deliberately deterministic.  These weights describe
+# source reliability, while agreement is calculated from the responses received
+# for this ISBN; no model-generated score is used for catalog metadata.
+ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook"]
+ISBN_SOURCE_RELIABILITY = {
+    "googleBooks": 1.0,
+    "openLibrary": 0.9,
+    "worldCat": 0.85,
+    "fahasa": 0.8,
+    "tiki": 0.8,
+    "vinabook": 0.75,
+}
+ISBN_INTELLIGENCE_FIELDS = (
+    "title", "subtitle", "authors", "publisher", "publishedDate", "description",
+    "categories", "language", "pageCount", "thumbnail",
+)
+ISBN_QUALITY_WEIGHTS = {
+    "title": 2.0, "authors": 2.0, "publisher": 1.0, "publishedDate": 1.0,
+    "description": 1.5, "categories": 0.5, "language": 0.5, "pageCount": 1.0,
+    "thumbnail": 0.5,
+}
+
+
+def _normalize_evidence_value(value):
+    if isinstance(value, list):
+        values = [str(item).strip() for item in value if str(item).strip()]
+        return tuple(sorted(re.sub(r"\s+", " ", item).casefold() for item in values))
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value).strip().casefold()
+    return value
+
+
+def _has_evidence_value(value) -> bool:
+    return bool(value) if isinstance(value, list) else value not in (None, "")
+
+
+def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_statuses: dict[str, dict]) -> dict:
+    """Select metadata and attach explainable, deterministic evidence."""
+    metadata: dict = {}
+    field_evidence: dict = {}
+    field_confidence: dict = {}
+    conflicts: list[dict] = []
+
+    for field in ISBN_INTELLIGENCE_FIELDS:
+        confirmations = []
+        for source in ISBN_SOURCE_ORDER:
+            value = (provider_metadata.get(source) or {}).get(field)
+            if _has_evidence_value(value):
+                item = {"source": source, "value": value}
+                source_url = (provider_metadata.get(source) or {}).get("sourceUrl")
+                if source_url:
+                    item["sourceUrl"] = source_url
+                confirmations.append(item)
+
+        selected = confirmations[0] if confirmations else None
+        metadata[field] = selected["value"] if selected else ([] if field in {"authors", "categories"} else None)
+        field_evidence[field] = {
+            "selectedValue": metadata[field],
+            "selectedSource": selected["source"] if selected else None,
+            "confirmations": confirmations,
+        }
+        if not selected:
+            field_confidence[field] = 0.0
+            continue
+
+        selected_normalized = _normalize_evidence_value(selected["value"])
+        responding = [item for item in confirmations]
+        agreement = sum(
+            ISBN_SOURCE_RELIABILITY[item["source"]]
+            for item in responding if _normalize_evidence_value(item["value"]) == selected_normalized
+        ) / sum(ISBN_SOURCE_RELIABILITY[item["source"]] for item in responding)
+        # A single provider is useful but cannot be as strong as corroborated data.
+        corroboration = 0.7 + (0.3 * agreement)
+        field_confidence[field] = round(min(1.0, ISBN_SOURCE_RELIABILITY[selected["source"]] * corroboration), 3)
+
+        alternatives = [
+            {"source": item["source"], "value": item["value"]}
+            for item in confirmations[1:]
+            if _normalize_evidence_value(item["value"]) != selected_normalized
+        ]
+        if alternatives:
+            conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})
+
+    quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
+    quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
+    sources = [{"name": source, **source_statuses[source]} for source in ISBN_SOURCE_ORDER]
+    return {
+        "metadata": metadata,
+        "fieldEvidence": field_evidence,
+        "fieldConfidence": field_confidence,
+        "sources": sources,
+        "conflicts": conflicts,
+        "metadataQualityScore": round(quality / quality_total, 3) if quality_total else 0.0,
+    }
+
+
 def _parse_google_books_item(item: dict) -> dict:
     volume_info = item.get("volumeInfo") or {}
     image_links = volume_info.get("imageLinks") or {}
@@ -1681,6 +1803,7 @@ def _parse_open_library_item(item: dict) -> dict:
 
 
 async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, _isbn13_to_isbn10(isbn13)]:
         if not isbn:
             continue
@@ -1699,7 +1822,10 @@ async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) ->
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("Google Books lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1742,6 +1868,7 @@ async def _fetch_worldcat_by_isbn(
     isbn13: str,
     isbn10: str | None,
 ) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, isbn10]:
         if not isbn:
             continue
@@ -1761,7 +1888,10 @@ async def _fetch_worldcat_by_isbn(
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("WorldCat lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1770,6 +1900,7 @@ async def _fetch_open_library_by_isbn(
     isbn13: str,
     isbn10: str | None,
 ) -> tuple[dict | None, float]:
+    last_error: Exception | None = None
     for isbn in [isbn13, isbn10]:
         if not isbn:
             continue
@@ -1795,7 +1926,10 @@ async def _fetch_open_library_by_isbn(
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
             logger.warning("Open Library lookup failed for ISBN %s: %s", isbn, exc)
+            last_error = exc
 
+    if last_error:
+        raise last_error
     return None, 0.0
 
 
@@ -1984,8 +2118,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
         return None, [], False
 
 
-@app.post("/lookup-book-by-isbn")
-async def lookup_book_by_isbn(req: IsbnLookupRequest):
+async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
 
@@ -1997,7 +2130,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     if validation_error and is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP:
         logger.info("ISBN validation failed (%s), trying marketplace barcode lookup for %s", validation_error, raw_barcode)
         mp_results = await _fetch_all_marketplace(raw_barcode, None)
-        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b = mp_results
+        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b, _ = mp_results
         mp_merged = _merge_with_marketplace({}, fahasa_b, tiki_b, vinabook_b)
         mp_found = bool(mp_merged.get("title") or mp_merged.get("description"))
 
@@ -2072,20 +2205,30 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
             return_exceptions=True,
         )
         std_results: list = std_gather if not isinstance(std_gather, Exception) else []
-        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False)
+        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False, {"fahasa": "ERROR", "tiki": "ERROR", "vinabook": "ERROR"})
     else:
         std_results = await _run_standard_lookups(isbn13, isbn10)
-        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False)
+        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False, {})
 
     # Unpack standard results
-    google_data, google_score = std_results[0] if len(std_results) > 0 and not isinstance(std_results[0], Exception) else (None, 0.0)
-    open_data, open_score = std_results[1] if len(std_results) > 1 and not isinstance(std_results[1], Exception) else (None, 0.0)
+    provider_outcomes: dict[str, str] = {}
+    def _unpack_standard(index: int, source: str) -> tuple[dict | None, float]:
+        if len(std_results) <= index:
+            return None, 0.0
+        value = std_results[index]
+        if isinstance(value, Exception):
+            provider_outcomes[source] = "TIMEOUT" if isinstance(value, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+            return None, 0.0
+        return value
+    google_data, google_score = _unpack_standard(0, "googleBooks")
+    open_data, open_score = _unpack_standard(1, "openLibrary")
     worldcat_data, worldcat_score = None, 0.0
-    if ENABLE_WORLDCAT_LOOKUP and len(std_results) > 2 and not isinstance(std_results[2], Exception):
-        worldcat_data, worldcat_score = std_results[2]
+    if ENABLE_WORLDCAT_LOOKUP:
+        worldcat_data, worldcat_score = _unpack_standard(2, "worldCat")
 
     # Unpack marketplace results
-    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched = mp_tuple
+    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, marketplace_outcomes = mp_tuple
+    provider_outcomes.update(marketplace_outcomes)
 
     # ── Merge all sources ─────────────────────────────────────────────────────
     merged = _merge_lookup_metadata_with_fallbacks(google_data, open_data, worldcat_data)
@@ -2118,6 +2261,11 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
                            worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
                            fahasa_score, tiki_score, vinabook_score),
         })
+        result["_providerMetadata"] = {
+            "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
+            "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+        }
+        result["_providerOutcomes"] = provider_outcomes
         return result
 
     # ── Generate Vietnamese summary ───────────────────────────────────────────
@@ -2144,7 +2292,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         avg_score = sum(active_scores) / len(active_scores)
         overall_confidence = round(max(overall_confidence, min(1.0, avg_score + 0.1)), 3)
 
-    return {
+    result = {
         "success": True,
         "found": True,
         "isbn": isbn13,
@@ -2186,11 +2334,66 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         "sourceUrl": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceUrl"),
         "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceFetchMode"),
     }
+    result["_providerMetadata"] = {
+        "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
+        "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+    }
+    result["_providerOutcomes"] = provider_outcomes
+    return result
+
+
+def _build_source_statuses(result: dict, started_at: float) -> dict:
+    source_flags = result.get("source") or {}
+    enabled = {
+        "googleBooks": True,
+        "openLibrary": True,
+        "worldCat": ENABLE_WORLDCAT_LOOKUP,
+        "fahasa": ENABLE_MARKETPLACE_LOOKUP,
+        "tiki": ENABLE_MARKETPLACE_LOOKUP,
+        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
+    }
+    elapsed = int((time.perf_counter() - started_at) * 1000)
+    outcomes = result.get("_providerOutcomes") or {}
+    return {
+        source: {
+            "enabled": enabled[source],
+            "status": "DISABLED" if not enabled[source] else ("SUCCESS" if source_flags.get(source) else outcomes.get(source, "NOT_FOUND")),
+            "durationMs": elapsed,
+        }
+        for source in ISBN_SOURCE_ORDER
+    }
+
+
+async def lookup_book_by_isbn(req: IsbnLookupRequest):
+    """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    started_at = time.perf_counter()
+    result = await _lookup_book_by_isbn_legacy(req)
+    provider_metadata = result.pop("_providerMetadata", {})
+    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at))
+    result.pop("_providerOutcomes", None)
+    for source in intelligence["sources"]:
+        source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
+        if source_url:
+            source["sourceUrl"] = source_url
+    if result.get("found"):
+        result.update(intelligence["metadata"])
+        result["authors"] = result["authors"] or []
+        result["categories"] = result["categories"] or []
+    result.update({key: value for key, value in intelligence.items() if key != "metadata"})
+    result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+    return result
+
+
+@app.post("/lookup-book-by-isbn")
+@app.post("/isbn-intelligence")
+async def isbn_intelligence_lookup(req: IsbnLookupRequest):
+    return await lookup_book_by_isbn(req)
 
 
 class EnrichBookAfterIsbnRequest(BaseModel):
     isbn: str
     existingCategories: list[str] = []
+    verifiedMetadata: dict | None = None
 
 
 def _empty_post_isbn_ai_suggestions(
@@ -2231,7 +2434,6 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
     keywords = [str(keyword).strip() for keyword in (lookup.get("keywords") or []) if str(keyword).strip()]
     suggested_categories: list[str] = []
     provider = "none"
-    confidence_scores: list[float] = []
 
     metadata = {
         "title": title,
@@ -2246,12 +2448,10 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             generated_summary, generated_keywords, anthropic_ok = await _call_anthropic(metadata)
             if anthropic_ok:
                 provider = "anthropic"
-                confidence_scores.append(0.85)
             else:
                 generated_summary, generated_keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
                 if ollama_ok:
                     provider = "ollama"
-                    confidence_scores.append(0.75)
 
             summary_vi = summary_vi or generated_summary
             if not keywords:
@@ -2270,7 +2470,6 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             if normalized_result.success and normalized_result.normalizedDescription:
                 description = normalized_result.normalizedDescription
                 provider = _merge_provider(provider, normalized_result.ai_provider)
-                confidence_scores.append(normalized_result.confidence)
 
         category_result = await enrich_book_metadata(EnrichBookMetadataRequest(
             title=title,
@@ -2284,14 +2483,15 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
         if category_result.success and category_result.suggestedCategories:
             suggested_categories = category_result.suggestedCategories
             provider = _merge_provider(provider, category_result.ai_provider)
-            confidence_scores.append(category_result.confidence)
 
     except Exception as exc:
         logger.warning("Post-ISBN AI enrichment failed for %s: %s", lookup.get("isbn"), exc)
         quality_warnings.append("AI không khả dụng, chỉ trả metadata tra cứu ISBN để admin nhập/chỉnh tay.")
         return _empty_post_isbn_ai_suggestions(quality_warnings, description or None)
 
-    confidence = round(sum(confidence_scores) / len(confidence_scores), 3) if confidence_scores else 0.0
+    # This reflects the reliability of the ISBN metadata grounding, never an LLM's
+    # self-assessment of generated copy.
+    confidence = float(lookup.get("metadataQualityScore") or (lookup.get("confidence") or {}).get("overall") or 0.0)
     return {
         "description": description or None,
         "summaryVi": _safe_text(summary_vi),
@@ -2301,6 +2501,37 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
         "provider": provider,
         "confidence": confidence,
     }
+
+
+async def _normalize_with_catalog_authority(lookup: dict) -> tuple[dict | None, str | None]:
+    """Ask Inventory Service to apply deterministic catalog authority rules.
+
+    Failure is intentionally non-fatal: ISBN evidence remains available and the
+    caller gets an explicit warning instead of fabricated authority metadata.
+    """
+    if not lookup.get("found"):
+        return None, None
+    metadata = {
+        "isbn": lookup.get("isbn"), "title": lookup.get("title"),
+        "authors": lookup.get("authors") or [], "publisher": lookup.get("publisher"),
+        "categories": lookup.get("categories") or [], "language": lookup.get("language"),
+        "publishedDate": lookup.get("publishedDate"), "pageCount": lookup.get("pageCount"),
+        "coverFormat": lookup.get("coverFormat"), "description": lookup.get("description"),
+        "conflicts": lookup.get("conflicts") or [],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS)) as client:
+            response = await client.post(
+                f"{INVENTORY_SERVICE_URL}/internal/authority/normalize",
+                headers={"x-internal-service-key": INTERNAL_SERVICE_KEY},
+                json={"metadata": metadata},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None, None
+    except Exception as exc:
+        logger.warning("Authority normalization unavailable for %s: %s", lookup.get("isbn"), exc)
+        return None, "Authority normalization unavailable; staff review is required before catalog changes."
 
 
 @app.post("/enrich-book-after-isbn")
@@ -2313,11 +2544,31 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         isbn=req.isbn,
         generateVietnameseSummary=False,
     ))
-    suggestions = await _build_post_isbn_ai_suggestions(lookup, req.existingCategories or [])
+    authority, authority_warning = await _normalize_with_catalog_authority(lookup)
+    verified = req.verifiedMetadata if isinstance(req.verifiedMetadata, dict) else (authority or {}).get("normalized")
+    ai_lookup = {**lookup, **({
+        "title": verified.get("title", lookup.get("title")),
+        "authors": verified.get("authors", lookup.get("authors")),
+        "publisher": verified.get("publisher", lookup.get("publisher")),
+        "categories": verified.get("categories", lookup.get("categories")),
+        "language": verified.get("language", lookup.get("language")),
+        "publishedDate": verified.get("publishedDate", lookup.get("publishedDate")),
+        "pageCount": verified.get("pageCount", lookup.get("pageCount")),
+        "description": verified.get("description", lookup.get("description")),
+    } if isinstance(verified, dict) else {})}
+    suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
+    if authority_warning:
+        suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
     return {
         "success": bool(lookup.get("success") or lookup.get("found")),
         "lookup": lookup,
         "aiSuggestions": suggestions,
+        "authorNormalization": (authority or {}).get("authorNormalization", []),
+        "publisherNormalization": (authority or {}).get("publisherNormalization"),
+        "categoryNormalization": (authority or {}).get("categoryNormalization", []),
+        "authorityMatches": (authority or {}).get("authorityMatches", {}),
+        "qualityWarnings": (authority or {}).get("qualityWarnings", [authority_warning] if authority_warning else []),
+        "explanation": {"authority": "Inventory Service deterministic authority normalization", "aiInput": "verified metadata only"},
     }
 
 

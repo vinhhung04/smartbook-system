@@ -28,7 +28,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
+import { metadataIntelligenceService, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
 import { getApiErrorMessage } from "@/services/api";
+import { useI18n } from "@/lib/i18n";
 
 interface EditableBookForm {
   isbn: string;
@@ -321,6 +323,135 @@ function AiSuggestionRow({
   );
 }
 
+function displayEvidenceValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(", ");
+  if (value === null || value === undefined || value === "") return "–";
+  return String(value);
+}
+
+function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResponse }) {
+  const { t } = useI18n();
+  const evidence = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource);
+  const conflicts = lookup.conflicts || [];
+  const sources = lookup.sources || [];
+  if (!evidence.length && !sources.length) return null;
+
+  return (
+    <section className="mb-4 rounded-[10px] border border-cyan-200/80 bg-cyan-50/35 p-3 dark:border-cyan-500/20 dark:bg-cyan-500/5" aria-label={t("isbn_intelligence.title")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[12px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.title")}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {t("isbn_intelligence.quality")} {Math.round((lookup.metadataQualityScore || 0) * 100)}% · {t("isbn_intelligence.processing")} {lookup.processingTimeMs ?? 0} ms
+          </p>
+        </div>
+        {conflicts.length > 0 ? <StatusBadge label={`${conflicts.length} ${t("isbn_intelligence.conflicts")}`} variant="warning" /> : null}
+      </div>
+
+      {conflicts.length > 0 ? (
+        <div className="mt-3 rounded-[8px] border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{t("isbn_intelligence.conflict_warning")}</div>
+          {conflicts.map((conflict) => <p key={conflict.field} className="mt-1">{conflict.field}: {displayEvidenceValue(conflict.selectedValue)} · {conflict.alternatives.map((item) => `${item.source}: ${displayEvidenceValue(item.value)}`).join(" | ")}</p>)}
+        </div>
+      ) : null}
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.evidence")}</summary>
+        <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+          {evidence.map(([field, item]) => (
+            <div key={field} className="rounded-[8px] border border-border bg-card px-2.5 py-2 text-[11px]">
+              <p className="font-semibold text-foreground">{field} <span className="font-normal text-muted-foreground">· {Math.round((lookup.fieldConfidence?.[field] || 0) * 100)}%</span></p>
+              <p className="mt-0.5 text-muted-foreground">{displayEvidenceValue(item.selectedValue)}</p>
+              <p className="mt-1 text-cyan-700 dark:text-cyan-300">{t("isbn_intelligence.confirmed_by")}: {item.confirmations.map((confirmation) => confirmation.source).join(", ")}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-cyan-800 dark:text-cyan-300">{t("isbn_intelligence.sources")}</summary>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" ? "neutral" : "warning"} />)}
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function AuthorityReviewPanel({
+  draft,
+  onDecision,
+  onCreateEntity,
+}: {
+  draft: ReconciliationDraft;
+  onDecision: (field: string, status: "ACCEPTED" | "REJECTED") => void;
+  onCreateEntity: (field: string) => void;
+}) {
+  const { t } = useI18n();
+  const rows = [
+    { field: "authors", label: t("metadata_reconciliation.authors"), items: draft.normalizationSuggestions.authorNormalization },
+    { field: "publisher", label: t("metadata_reconciliation.publisher"), items: [draft.normalizationSuggestions.publisherNormalization] },
+    { field: "categories", label: t("metadata_reconciliation.categories"), items: draft.normalizationSuggestions.categoryNormalization },
+  ].filter((row) => row.items.length > 0);
+  if (!rows.length) return null;
+  return (
+    <section className="mb-4 rounded-[10px] border border-violet-200/80 bg-violet-50/35 p-3 dark:border-violet-500/20 dark:bg-violet-500/5" aria-label={t("metadata_reconciliation.title")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[12px] font-semibold text-violet-800 dark:text-violet-300">{t("metadata_reconciliation.title")}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("metadata_reconciliation.hint")}</p>
+        </div>
+        {draft.qualityWarnings.length ? <StatusBadge label={`${draft.qualityWarnings.length} ${t("metadata_reconciliation.warnings")}`} variant="warning" /> : <StatusBadge label={t("metadata_reconciliation.no_warnings")} variant="success" />}
+      </div>
+      <div className="mt-3 space-y-2">
+        {rows.map((row) => {
+          const decision = draft.decisions.find((item) => item.field === row.field)?.status || "PENDING";
+          return (
+            <div key={row.field} className="rounded-[8px] border border-border bg-card p-2.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 text-[11px]">
+                  <p className="font-semibold text-foreground">{row.label} <span className="font-normal text-muted-foreground">· {decision}</span></p>
+                  {row.items.map((item) => <p key={`${item.rawValue}-${item.normalizedValue}`} className="mt-1 text-muted-foreground"><span className="font-medium text-foreground">{item.rawValue}</span> → {item.normalizedValue} · {item.matchedEntity?.name || t("metadata_reconciliation.new_entity")} · {Math.round(item.confidence * 100)}% · {item.status}</p>)}
+                  <p className="mt-1 text-violet-700 dark:text-violet-300">{row.items.map((item) => item.reason).join(" ")}</p>
+                </div>
+                {decision === "PENDING" ? <div className="flex shrink-0 gap-1.5">
+                  <button type="button" onClick={() => onDecision(row.field, "ACCEPTED")} className="min-h-8 rounded-[7px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">{t("metadata_reconciliation.accept")}</button>
+                  <button type="button" onClick={() => onDecision(row.field, "REJECTED")} className="min-h-8 rounded-[7px] border border-border bg-card px-2.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30">{t("metadata_reconciliation.reject")}</button>
+                  {row.items.some((item) => item.status === "NEW_ENTITY") ? <button type="button" onClick={() => onCreateEntity(row.field)} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("metadata_reconciliation.create_entity")}</button> : null}
+                </div> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {draft.qualityWarnings.length ? <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">{draft.qualityWarnings.join(" · ")}</p> : null}
+    </section>
+  );
+}
+
+function DuplicateReviewPanel({ review, onAction }: { review: DuplicateReview; onAction: (action: string, candidate?: DuplicateReview["candidates"][number]) => void }) {
+  const { t } = useI18n();
+  const isNew = review.classification === "NEW_TITLE";
+  return (
+    <section className={`mb-4 rounded-[10px] border p-3 ${isNew ? "border-emerald-200 bg-emerald-50/35 dark:border-emerald-500/20 dark:bg-emerald-500/5" : "border-amber-200 bg-amber-50/35 dark:border-amber-500/20 dark:bg-amber-500/5"}`} aria-label={t("duplicate_intelligence.title")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[12px] font-semibold text-foreground">{t("duplicate_intelligence.title")}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{review.classification} · {Math.round(review.similarityScore * 100)}%</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {review.classification === "EXACT_DUPLICATE" && review.candidates[0] ? <button type="button" onClick={() => onAction("LINK_EXISTING_VARIANT", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.link_variant")}</button> : null}
+          {review.classification === "SAME_EDITION" && review.candidates[0] ? <button type="button" onClick={() => onAction("CREATE_VARIANT_FOR_EDITION", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.create_variant")}</button> : null}
+          {review.classification === "SAME_WORK_DIFFERENT_EDITION" && review.candidates[0] ? <button type="button" onClick={() => onAction("CREATE_NEW_EDITION", review.candidates[0])} className="min-h-8 rounded-[7px] border border-cyan-200 bg-cyan-50 px-2.5 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("duplicate_intelligence.create_edition")}</button> : null}
+          {isNew ? <button type="button" onClick={() => onAction("CREATE_NEW_TITLE")} className="min-h-8 rounded-[7px] border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">{t("duplicate_intelligence.create_title")}</button> : <button type="button" onClick={() => onAction("DISMISS_WARNING")} className="min-h-8 rounded-[7px] border border-border bg-card px-2.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30">{t("duplicate_intelligence.dismiss")}</button>}
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">{review.explanation.join(" ")}</p>
+      {review.candidates.length ? <ul className="mt-2 space-y-1.5" role="list">{review.candidates.slice(0, 3).map((candidate) => <li key={candidate.bookId} className="rounded-[7px] border border-border bg-card px-2.5 py-2 text-[11px]"><span className="font-semibold text-foreground">{candidate.title}</span> · {candidate.classification} · {Math.round(candidate.score * 100)}%</li>)}</ul> : null}
+    </section>
+  );
+}
+
 const SOURCE_BADGES: Array<{ key: keyof LookupBookByIsbnResponse["source"]; label: string; variant: string }> = [
   { key: "googleBooks", label: "Google", variant: "cyan" },
   { key: "openLibrary", label: "OpenLibrary", variant: "violet" },
@@ -339,6 +470,9 @@ export function AIImportPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [lookupData, setLookupData] = useState<LookupBookByIsbnResponse | null>(null);
   const [postIsbnSuggestions, setPostIsbnSuggestions] = useState<PostIsbnAiSuggestions | null>(null);
+  const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft | null>(null);
+  const [createAuthorityEntities, setCreateAuthorityEntities] = useState<Record<string, boolean>>({});
+  const [duplicateReview, setDuplicateReview] = useState<DuplicateReview | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -483,6 +617,9 @@ export function AIImportPage() {
     setLookupLoading(true);
     setLookupStage("lookup");
     setPostIsbnSuggestions(null);
+    setReconciliationDraft(null);
+    setCreateAuthorityEntities({});
+    setDuplicateReview(null);
     const stageTimer = window.setTimeout(() => setLookupStage("ai"), 700);
     try {
       const result = await aiService.enrichBookAfterIsbn({
@@ -497,6 +634,15 @@ export function AIImportPage() {
 
       if (lookup.found) {
         setForm(mapLookupToForm(lookup));
+        try {
+          const draft = await metadataIntelligenceService.createReconciliationDraft(lookup, result.aiSuggestions);
+          setReconciliationDraft(draft);
+          const duplicate = await metadataIntelligenceService.checkDuplicate(draft.normalized_metadata);
+          setDuplicateReview(duplicate);
+        } catch {
+          // Catalog intelligence is additive: ISBN lookup remains usable when its review APIs are unavailable.
+          toast.info("Không thể tải review catalog lúc này; bạn vẫn có thể kiểm tra metadata thủ công.");
+        }
         if (result.aiSuggestions.provider && result.aiSuggestions.provider !== "none") {
           toast.success("Đã tìm thấy metadata và AI đã tạo đề xuất hậu xử lý");
         } else {
@@ -517,6 +663,42 @@ export function AIImportPage() {
       window.clearTimeout(stageTimer);
       setLookupLoading(false);
       setLookupStage(null);
+    }
+  }
+
+  async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED") {
+    if (!reconciliationDraft) return;
+    try {
+      await metadataIntelligenceService.decideField(reconciliationDraft.id, field, status);
+      setReconciliationDraft((current) => current ? {
+        ...current,
+        decisions: current.decisions.map((item) => item.field === field ? { ...item, status } : item),
+      } : current);
+      toast.success(status === "ACCEPTED" ? "Đã chấp nhận đề xuất" : "Đã từ chối đề xuất");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể lưu quyết định metadata"));
+    }
+  }
+
+  function handleCreateAuthorityEntity(field: string) {
+    if (!window.confirm("Entity mới chỉ được tạo khi bạn chấp nhận field này. Bạn có muốn tiếp tục?")) return;
+    setCreateAuthorityEntities((current) => ({ ...current, [field]: true }));
+    void handleAuthorityDecision(field, "ACCEPTED");
+  }
+
+  async function handleDuplicateAction(action: string, candidate?: DuplicateReview["candidates"][number]) {
+    if (!duplicateReview) return;
+    if (["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION", "CREATE_NEW_TITLE"].includes(action) && !window.confirm("Thao tác này sẽ tạo catalog/edition mới. Bạn có muốn tiếp tục?")) return;
+    try {
+      const variantId = candidate?.variantIds[0];
+      await metadataIntelligenceService.decideDuplicate(duplicateReview.id, action, {
+        ...(action === "LINK_EXISTING_VARIANT" && variantId ? { selectedVariantId: variantId } : {}),
+        ...(["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION"].includes(action) && candidate ? { selectedBookId: candidate.bookId } : {}),
+      });
+      toast.success(action === "DISMISS_WARNING" ? "Đã ghi nhận quyết định bỏ qua cảnh báo duplicate" : "Đã lưu quyết định duplicate; chỉ metadata được duyệt mới được áp dụng.");
+      setDuplicateReview(null);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể lưu quyết định duplicate"));
     }
   }
 
@@ -715,7 +897,11 @@ export function AIImportPage() {
         updatePayload.keywords = uniqueKeywords;
       }
 
-      await bookService.update(String(payload.book_id), updatePayload);
+      if (reconciliationDraft) {
+        await metadataIntelligenceService.applyReconciliationDraft(reconciliationDraft.id, String(payload.book_id), createAuthorityEntities);
+      } else {
+        await bookService.update(String(payload.book_id), updatePayload);
+      }
       toast.success("Đã lưu sách với metadata ISBN");
 
       // Keep the local catalog snapshot in sync so the duplicate check catches
@@ -727,6 +913,9 @@ export function AIImportPage() {
 
       setLookupData(null);
       setPostIsbnSuggestions(null);
+      setReconciliationDraft(null);
+      setCreateAuthorityEntities({});
+      setDuplicateReview(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
       setConfirmDuplicateSave(false);
@@ -877,6 +1066,10 @@ export function AIImportPage() {
                   Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
                 </div>
               ) : null}
+
+              <IsbnIntelligencePanel lookup={lookupData} />
+              {reconciliationDraft ? <AuthorityReviewPanel draft={reconciliationDraft} onDecision={(field, status) => void handleAuthorityDecision(field, status)} onCreateEntity={handleCreateAuthorityEntity} /> : null}
+              {duplicateReview ? <DuplicateReviewPanel review={duplicateReview} onAction={(action, candidate) => void handleDuplicateAction(action, candidate)} /> : null}
 
               <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tình trạng metadata trước khi lưu">
                 {reviewSignals.map((signal) => (
