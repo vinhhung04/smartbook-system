@@ -1,19 +1,21 @@
 FROM node:20 AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install -g pnpm && pnpm install
-COPY prisma ./prisma
-RUN npx prisma generate
-COPY src ./src
-COPY . .
-RUN pnpm prune --prod
+
+WORKDIR /workspace
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY services/inventory-service/package.json services/inventory-service/package.json
+RUN pnpm install --frozen-lockfile --filter inventory-service...
+
+COPY services/inventory-service services/inventory-service
+RUN pnpm --dir services/inventory-service exec prisma generate
+RUN pnpm --filter inventory-service deploy --legacy --prod /app
 
 FROM node:20
+
 WORKDIR /app
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/prisma ./prisma
-ENV SERVICE_NAME=inventory-service
+COPY --from=builder /app ./
+RUN node_modules/.bin/prisma generate
+
 EXPOSE 3001
 CMD ["node", "src/index.js"]

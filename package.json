@@ -7,6 +7,8 @@
     "dev": "pnpm -r --parallel --filter ./apps/* --filter ./services/* dev",
     "build": "pnpm -r --filter ./apps/* build",
     "lint": "pnpm -r --filter ./apps/* lint",
+    "typecheck": "pnpm --filter web exec tsc --noEmit",
+    "test:workspace-config": "node --test tests/workspace-config.test.mjs",
     "doctor:react": "npx -y react-doctor@latest .",
     "doctor:react:web": "pnpm --dir apps/web run doctor:react",
     "start": "pnpm -r --parallel --filter ./apps/* --filter ./services/* start",

@@ -27,8 +27,8 @@ export function CustomerPaymentResultPage() {
       try {
         const res = await customerBorrowService.getMomoPaymentStatus(orderId);
         const s = res.data.status;
-        setAmount(res.data.amount);
-        setMessage(res.data.message);
+        setAmount(res.data.amount ?? null);
+        setMessage(res.data.message ?? null);
         if (s === 'PAID') {
           setStatus('paid');
           return true;

@@ -1,8 +1,8 @@
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import { Camera, ScanLine, CircleX, CircleCheck } from "lucide-react";
 
 interface PackingCameraPanelProps {
-  videoRef: RefObject<HTMLVideoElement | null>;
+  videoRef: Ref<HTMLVideoElement>;
   isLive: boolean;
   cameraError: string;
   isRecording: boolean;

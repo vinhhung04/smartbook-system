@@ -1,19 +1,21 @@
 FROM node:20 AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install -g pnpm && pnpm install
-COPY prisma ./prisma
-RUN npx prisma generate
-COPY src ./src
-COPY . .
-RUN pnpm prune --prod
+
+WORKDIR /workspace
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY services/auth-service/package.json services/auth-service/package.json
+RUN pnpm install --frozen-lockfile --filter auth-service...
+
+COPY services/auth-service services/auth-service
+RUN pnpm --dir services/auth-service exec prisma generate
+RUN pnpm --filter auth-service deploy --legacy --prod /app
 
 FROM node:20
+
 WORKDIR /app
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/prisma ./prisma
-ENV SERVICE_NAME=auth-service
+COPY --from=builder /app ./
+RUN node_modules/.bin/prisma generate
+
 EXPOSE 3002
-CMD ["npm", "run", "start"]
+CMD ["node", "src/index.js"]
