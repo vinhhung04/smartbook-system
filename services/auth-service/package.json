@@ -22,7 +22,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "9.0.1",
     "prisma": "5.21.0",
     "redis": "^4.6.12"
   },

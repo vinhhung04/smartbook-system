@@ -87,3 +87,11 @@ test("web container serves the built single-page application", () => {
   const dockerfile = readFileSync(resolve(repositoryRoot, "apps/web/Dockerfile"), "utf8");
   assert.match(dockerfile, /CMD \["serve", "-s", "dist", "-l", "5173"\]/);
 });
+
+test("web pages are loaded on demand", () => {
+  const routes = readFileSync(resolve(repositoryRoot, "apps/web/src/app/routes.ts"), "utf8");
+  assert.doesNotMatch(routes, /from ["']@\/components\/pages\//);
+  for (const module of ["dashboard", "ai-import", "reports", "picking", "packing", "stock-audits"] ) {
+    assert.match(routes, new RegExp(`import\\(.*pages/${module}`), module);
+  }
+});

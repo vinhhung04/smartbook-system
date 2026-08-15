@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -8,28 +7,29 @@ export interface ExportColumn {
   width?: number;
 }
 
-export function exportToExcel(
+function escapeCsvCell(value: unknown): string {
+  let text = String(value ?? '');
+  // Prevent spreadsheet formula injection when a CSV is opened in Excel.
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+export function exportToCsv(
   data: Record<string, unknown>[],
   columns: ExportColumn[],
   filename: string,
 ) {
-  const rows = data.map((row) =>
-    columns.reduce<Record<string, unknown>>((acc, col) => {
-      acc[col.header] = row[col.key] ?? '';
-      return acc;
-    }, {}),
-  );
-
-  const ws = XLSX.utils.json_to_sheet(rows);
-
-  const colWidths = columns.map((col) => ({
-    wch: Math.max(col.header.length, col.width ?? 15),
-  }));
-  ws['!cols'] = colWidths;
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Report');
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+  const lines = [
+    columns.map((column) => escapeCsvCell(column.header)).join(','),
+    ...data.map((row) => columns.map((column) => escapeCsvCell(row[column.key])).join(',')),
+  ];
+  const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${filename}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function exportToPdf(

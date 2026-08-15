@@ -47,3 +47,9 @@ test('new and changed passwords use at least twelve bcrypt rounds', () => {
     assert.doesNotMatch(read(path), /bcrypt\.hash\([^\n]+,\s*(?:[0-9]|10|11)\)/, path);
   }
 });
+
+test('web export path does not ship the vulnerable SheetJS package', () => {
+  const manifest = JSON.parse(read('apps/web/package.json'));
+  assert.equal(manifest.dependencies.xlsx, undefined);
+  assert.doesNotMatch(read('apps/web/src/lib/export-utils.ts'), /from ['"]xlsx['"]/);
+});

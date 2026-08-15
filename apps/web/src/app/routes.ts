@@ -1,79 +1,6 @@
 import { createElement } from "react";
 import { createBrowserRouter, type LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
-import { AppLayout } from "@/components/layout";
-import { DashboardPage } from "@/components/pages/dashboard";
-import { CatalogPage } from "@/components/pages/catalog";
-import { BookDetailPage } from "@/components/pages/book-detail";
-import { InventoryPage } from "@/components/pages/inventory";
-import { StockAuditsPage } from "@/components/pages/stock-audits";
-import { OrdersPage } from "@/components/pages/orders";
-import { OrderDetailPage } from "@/components/pages/order-detail";
-import { GoodsReceiptPage } from "@/components/pages/goods-receipt";
-import { PurchaseOrdersPage } from "@/components/pages/purchase-orders";
-import { PurchaseOrderDetailPage } from "@/components/pages/purchase-order-detail";
-import { PurchaseOrderFormPage } from "@/components/pages/purchase-order-form";
-import { MovementsPage } from "@/components/pages/movements";
-import { WarehousesPage } from "@/components/pages/warehouses";
-import { ShelvesPage } from "@/components/pages/shelves";
-import { AIImportPage } from "@/components/pages/ai-import";
-import { RecommendationsPage } from "@/components/pages/recommendations";
-import { ReorderSuggestionsPage } from "@/components/pages/reorder-suggestions";
-import { BorrowPage } from "@/components/pages/borrow";
-import { BorrowCustomersPage } from "@/components/pages/borrow-customers";
-import { BorrowReservationsPage } from "@/components/pages/borrow-reservations";
-import { BorrowLoansPage } from "@/components/pages/borrow-loans";
-import { BorrowLoanDetailPage } from "@/components/pages/borrow-loan-detail";
-import { BorrowFinesPage } from "@/components/pages/borrow-fines";
-import { UsersPage } from "@/components/pages/users";
-import { RolesPage } from "@/components/pages/roles";
-import { ReportsPage } from "@/components/pages/reports";
-import { AIAssistantPage } from "@/components/pages/ai-assistant";
-import { PutawayPage } from "@/components/pages/putaway";
-import { PutawayDetailPage } from "@/components/pages/putaway-detail";
-import { PutawayExecutePage } from "@/components/pages/putaway-execute";
-import { ReceivingPutawayPage } from "@/components/pages/receiving-putaway";
-import { SmartReceivingPage } from "@/components/pages/receiving-smart";
-import { PickingPage } from "@/components/pages/picking";
-import { PackingPage } from "@/components/pages/packing";
-import { OrderRequestsPage } from "@/components/pages/order-requests";
-import { OutboundPage } from "@/components/pages/outbound";
-import { MyWarehouseTasksPage } from "@/components/pages/my-warehouse-tasks";
-import { MyPurchaseRequestsPage } from "@/components/pages/my-purchase-requests";
-import { MyExceptionReportsPage } from "@/components/pages/my-exception-reports";
-import { PurchaseRequestsPage } from "@/components/pages/purchase-requests";
-import { ExceptionReportsPage } from "@/components/pages/exception-reports";
-import { StaffTasksPage } from "@/components/pages/staff-tasks";
-import { TransferReceivingPage } from "@/components/pages/transfer-receiving";
-import { LoginPage } from "@/components/pages/login";
-import { RegisterPage } from "@/components/pages/register";
-import { ForgotPasswordPage } from "@/components/pages/forgot-password";
-import { ResetPasswordPage } from "@/components/pages/reset-password";
-import { CustomerLayout } from "@/components/pages/customer/layout";
-import { CustomerDashboardPage } from "@/components/pages/customer/dashboard";
-import { CustomerProfilePage } from "@/components/pages/customer/profile";
-import { CustomerMembershipPage } from "@/components/pages/customer/membership";
-import { CustomerLoginPage } from "@/components/pages/customer/login";
-import { CustomerRegisterPage } from "@/components/pages/customer/register";
-import { CustomerCatalogPage } from "@/components/pages/customer/catalog";
-import { CustomerBookDetailPage } from "@/components/pages/customer/book-detail";
-import { CustomerReservationsPage } from "@/components/pages/customer/reservations";
-import { CustomerLoansPage } from "@/components/pages/customer/loans";
-import { CustomerLoanDetailPage } from "@/components/pages/customer/loan-detail";
-import { CustomerFinesPage } from "@/components/pages/customer/fines";
-import { CustomerNotificationsPage } from "@/components/pages/customer/notifications";
-import { CustomerReadingAnalyticsPage } from "@/components/pages/customer/reading-analytics";
-import { CustomerWishlistPage } from "@/components/pages/customer/wishlist";
-import { AuditTrailPage } from "@/components/pages/audit-trail";
-import { AdminMonitorPage } from "@/components/pages/admin-monitor";
-import { MembershipPlansPage } from "@/components/pages/membership-plans";
-import { SuppliersPage } from "@/components/pages/suppliers";
-import { SupplierDeliveriesPage } from "@/components/pages/supplier-deliveries";
-import { SupplierAccountPage } from "@/components/pages/supplier/supplier-account";
-import { SupplierPortalPage } from "@/components/pages/supplier/supplier-portal";
-import { ReceivingCheckPage } from "@/components/pages/receiving-check";
-import { NotFoundPage } from "@/components/pages/not-found";
-import { ForbiddenPage } from "@/components/pages/forbidden";
 import { authService } from "@/services/auth";
 import { canAccess, getHomePathForUser, ROUTE_ACCESS, type RouteAccessMeta } from "@/lib/rbac";
 
@@ -172,121 +99,121 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     loader: publicOnlyLoader,
-    Component: LoginPage,
+    lazy: { Component: async () => (await import("@/components/pages/login")).LoginPage },
   },
   {
     path: "/register",
     loader: publicOnlyLoader,
-    Component: RegisterPage,
+    lazy: { Component: async () => (await import("@/components/pages/register")).RegisterPage },
   },
   {
     path: "/forgot-password",
     loader: publicOnlyLoader,
-    Component: ForgotPasswordPage,
+    lazy: { Component: async () => (await import("@/components/pages/forgot-password")).ForgotPasswordPage },
   },
   {
     path: "/reset-password",
     loader: publicOnlyLoader,
-    Component: ResetPasswordPage,
+    lazy: { Component: async () => (await import("@/components/pages/reset-password")).ResetPasswordPage },
   },
   {
     path: '/customer/login',
     loader: customerPublicOnlyLoader,
-    Component: CustomerLoginPage,
+    lazy: { Component: async () => (await import("@/components/pages/customer/login")).CustomerLoginPage },
   },
   {
     path: '/customer/register',
     loader: customerPublicOnlyLoader,
-    Component: CustomerRegisterPage,
+    lazy: { Component: async () => (await import("@/components/pages/customer/register")).CustomerRegisterPage },
   },
   {
     path: '/customer',
     loader: requireCustomerAuthLoader,
-    Component: CustomerLayout,
+    lazy: { Component: async () => (await import("@/components/pages/customer/layout")).CustomerLayout },
     children: [
-      { index: true, Component: CustomerDashboardPage },
-      { path: 'profile', Component: CustomerProfilePage },
-      { path: 'membership', Component: CustomerMembershipPage },
-      { path: 'books', Component: CustomerCatalogPage },
-      { path: 'books/:id', Component: CustomerBookDetailPage },
-      { path: 'reservations', Component: CustomerReservationsPage },
-      { path: 'loans', Component: CustomerLoansPage },
-      { path: 'loans/:id', Component: CustomerLoanDetailPage },
-      { path: 'fines', Component: CustomerFinesPage },
-      { path: 'notifications', Component: CustomerNotificationsPage },
-      { path: 'reading-analytics', Component: CustomerReadingAnalyticsPage },
-      { path: 'wishlist', Component: CustomerWishlistPage },
+      { index: true, lazy: { Component: async () => (await import("@/components/pages/customer/dashboard")).CustomerDashboardPage } },
+      { path: 'profile', lazy: { Component: async () => (await import("@/components/pages/customer/profile")).CustomerProfilePage } },
+      { path: 'membership', lazy: { Component: async () => (await import("@/components/pages/customer/membership")).CustomerMembershipPage } },
+      { path: 'books', lazy: { Component: async () => (await import("@/components/pages/customer/catalog")).CustomerCatalogPage } },
+      { path: 'books/:id', lazy: { Component: async () => (await import("@/components/pages/customer/book-detail")).CustomerBookDetailPage } },
+      { path: 'reservations', lazy: { Component: async () => (await import("@/components/pages/customer/reservations")).CustomerReservationsPage } },
+      { path: 'loans', lazy: { Component: async () => (await import("@/components/pages/customer/loans")).CustomerLoansPage } },
+      { path: 'loans/:id', lazy: { Component: async () => (await import("@/components/pages/customer/loan-detail")).CustomerLoanDetailPage } },
+      { path: 'fines', lazy: { Component: async () => (await import("@/components/pages/customer/fines")).CustomerFinesPage } },
+      { path: 'notifications', lazy: { Component: async () => (await import("@/components/pages/customer/notifications")).CustomerNotificationsPage } },
+      { path: 'reading-analytics', lazy: { Component: async () => (await import("@/components/pages/customer/reading-analytics")).CustomerReadingAnalyticsPage } },
+      { path: 'wishlist', lazy: { Component: async () => (await import("@/components/pages/customer/wishlist")).CustomerWishlistPage } },
     ],
   },
   {
     path: "/supplier/portal/:token",
-    Component: SupplierPortalPage,
+    lazy: { Component: async () => (await import("@/components/pages/supplier/supplier-portal")).SupplierPortalPage },
   },
   {
     path: "/supplier",
     loader: requireSupplierAuthLoader,
-    Component: SupplierAccountPage,
+    lazy: { Component: async () => (await import("@/components/pages/supplier/supplier-account")).SupplierAccountPage },
   },
   {
     path: "/",
     loader: requireAuthLoader,
     hydrateFallbackElement,
-    Component: AppLayout,
+    lazy: { Component: async () => (await import("@/components/layout")).AppLayout },
     children: [
-      { index: true, Component: DashboardPage },
-      { path: "forbidden", Component: ForbiddenPage },
-      { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), Component: MyWarehouseTasksPage },
-      { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestSelf), Component: MyPurchaseRequestsPage },
-      { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportSelf), Component: MyExceptionReportsPage },
-      { path: "purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestManage), Component: PurchaseRequestsPage },
-      { path: "exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportManage), Component: ExceptionReportsPage },
-      { path: "staff-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: StaffTasksPage },
-      { path: "catalog", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: CatalogPage },
-      { path: "book/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: BookDetailPage },
-      { path: "inventory", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: InventoryPage },
-      { path: "orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: OrdersPage },
-      { path: "orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: GoodsReceiptPage },
-      { path: "orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: OrderDetailPage },
-      { path: "purchase-orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), Component: PurchaseOrdersPage },
-      { path: "purchase-orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), Component: PurchaseOrderFormPage },
-      { path: "purchase-orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), Component: PurchaseOrderDetailPage },
-      { path: "purchase-orders/:id/edit", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), Component: PurchaseOrderFormPage },
-      { path: "supplier-deliveries", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
-      { path: "supplier-deliveries/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), Component: SupplierDeliveriesPage },
-      { path: "receiving-check", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: ReceivingCheckPage },
-      { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayPage },
-      { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayDetailPage },
-      { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PutawayExecutePage },
-      { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), Component: ReceivingPutawayPage },
-      { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: SmartReceivingPage },
-      { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PickingPage },
-      { path: "packing", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: PackingPage },
-      { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), Component: OrderRequestsPage },
-      { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: MovementsPage },
-      { path: "stock-audits", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), Component: StockAuditsPage },
-      { path: "stock-audits/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), Component: StockAuditsPage },
-      { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: OutboundPage },
-      { path: "transfer-receiving", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), Component: TransferReceivingPage },
-      { path: "warehouses", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehouseWrite), Component: WarehousesPage },
-      { path: "shelves", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), Component: ShelvesPage },
-      { path: "ai-import", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), Component: AIImportPage },
-      { path: "recommendations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), Component: RecommendationsPage },
-      { path: "reorder-suggestions", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReorderSuggestionsPage },
-      { path: "borrow", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowPage },
-      { path: "borrow/customers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowCustomersPage },
-      { path: "borrow/reservations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowReservationsPage },
-      { path: "borrow/loans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowLoansPage },
-      { path: "borrow/loans/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowLoanDetailPage },
-      { path: "borrow/fines", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: BorrowFinesPage },
-      { path: "reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), Component: ReportsPage },
-      { path: "ai-assistant", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.aiAssistant), Component: AIAssistantPage },
-      { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AuditTrailPage },
-      { path: "admin/monitor", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: AdminMonitorPage },
-      { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), Component: MembershipPlansPage },
-      { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), Component: SuppliersPage },
-      { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: UsersPage },
-      { path: "roles", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), Component: RolesPage },
-      { path: "*", Component: NotFoundPage },
+      { index: true, lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
+      { path: "forbidden", lazy: { Component: async () => (await import("@/components/pages/forbidden")).ForbiddenPage } },
+      { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), lazy: { Component: async () => (await import("@/components/pages/my-warehouse-tasks")).MyWarehouseTasksPage } },
+      { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestSelf), lazy: { Component: async () => (await import("@/components/pages/my-purchase-requests")).MyPurchaseRequestsPage } },
+      { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportSelf), lazy: { Component: async () => (await import("@/components/pages/my-exception-reports")).MyExceptionReportsPage } },
+      { path: "purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestManage), lazy: { Component: async () => (await import("@/components/pages/purchase-requests")).PurchaseRequestsPage } },
+      { path: "exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportManage), lazy: { Component: async () => (await import("@/components/pages/exception-reports")).ExceptionReportsPage } },
+      { path: "staff-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/staff-tasks")).StaffTasksPage } },
+      { path: "catalog", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), lazy: { Component: async () => (await import("@/components/pages/catalog")).CatalogPage } },
+      { path: "book/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), lazy: { Component: async () => (await import("@/components/pages/book-detail")).BookDetailPage } },
+      { path: "inventory", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), lazy: { Component: async () => (await import("@/components/pages/inventory")).InventoryPage } },
+      { path: "orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/orders")).OrdersPage } },
+      { path: "orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/goods-receipt")).GoodsReceiptPage } },
+      { path: "orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/order-detail")).OrderDetailPage } },
+      { path: "purchase-orders", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), lazy: { Component: async () => (await import("@/components/pages/purchase-orders")).PurchaseOrdersPage } },
+      { path: "purchase-orders/new", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), lazy: { Component: async () => (await import("@/components/pages/purchase-order-form")).PurchaseOrderFormPage } },
+      { path: "purchase-orders/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRead), lazy: { Component: async () => (await import("@/components/pages/purchase-order-detail")).PurchaseOrderDetailPage } },
+      { path: "purchase-orders/:id/edit", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseWrite), lazy: { Component: async () => (await import("@/components/pages/purchase-order-form")).PurchaseOrderFormPage } },
+      { path: "supplier-deliveries", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), lazy: { Component: async () => (await import("@/components/pages/supplier-deliveries")).SupplierDeliveriesPage } },
+      { path: "supplier-deliveries/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.supplierDeliveries), lazy: { Component: async () => (await import("@/components/pages/supplier-deliveries")).SupplierDeliveriesPage } },
+      { path: "receiving-check", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/receiving-check")).ReceivingCheckPage } },
+      { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway")).PutawayPage } },
+      { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-detail")).PutawayDetailPage } },
+      { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-execute")).PutawayExecutePage } },
+      { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), lazy: { Component: async () => (await import("@/components/pages/receiving-putaway")).ReceivingPutawayPage } },
+      { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/receiving-smart")).SmartReceivingPage } },
+      { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/picking")).PickingPage } },
+      { path: "packing", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/packing")).PackingPage } },
+      { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), lazy: { Component: async () => (await import("@/components/pages/order-requests")).OrderRequestsPage } },
+      { path: "movements", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), lazy: { Component: async () => (await import("@/components/pages/movements")).MovementsPage } },
+      { path: "stock-audits", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), lazy: { Component: async () => (await import("@/components/pages/stock-audits")).StockAuditsPage } },
+      { path: "stock-audits/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.inventoryAuditRead), lazy: { Component: async () => (await import("@/components/pages/stock-audits")).StockAuditsPage } },
+      { path: "outbound", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/outbound")).OutboundPage } },
+      { path: "transfer-receiving", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/transfer-receiving")).TransferReceivingPage } },
+      { path: "warehouses", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehouseWrite), lazy: { Component: async () => (await import("@/components/pages/warehouses")).WarehousesPage } },
+      { path: "shelves", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerInventoryRead), lazy: { Component: async () => (await import("@/components/pages/shelves")).ShelvesPage } },
+      { path: "ai-import", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/ai-import")).AIImportPage } },
+      { path: "recommendations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.catalog), lazy: { Component: async () => (await import("@/components/pages/recommendations")).RecommendationsPage } },
+      { path: "reorder-suggestions", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), lazy: { Component: async () => (await import("@/components/pages/reorder-suggestions")).ReorderSuggestionsPage } },
+      { path: "borrow", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow")).BorrowPage } },
+      { path: "borrow/customers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow-customers")).BorrowCustomersPage } },
+      { path: "borrow/reservations", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow-reservations")).BorrowReservationsPage } },
+      { path: "borrow/loans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow-loans")).BorrowLoansPage } },
+      { path: "borrow/loans/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow-loan-detail")).BorrowLoanDetailPage } },
+      { path: "borrow/fines", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/borrow-fines")).BorrowFinesPage } },
+      { path: "reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.reports), lazy: { Component: async () => (await import("@/components/pages/reports")).ReportsPage } },
+      { path: "ai-assistant", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.aiAssistant), lazy: { Component: async () => (await import("@/components/pages/ai-assistant")).AIAssistantPage } },
+      { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/audit-trail")).AuditTrailPage } },
+      { path: "admin/monitor", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/admin-monitor")).AdminMonitorPage } },
+      { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/membership-plans")).MembershipPlansPage } },
+      { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), lazy: { Component: async () => (await import("@/components/pages/suppliers")).SuppliersPage } },
+      { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/users")).UsersPage } },
+      { path: "roles", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/roles")).RolesPage } },
+      { path: "*", lazy: { Component: async () => (await import("@/components/pages/not-found")).NotFoundPage } },
     ],
   },
 ]);
