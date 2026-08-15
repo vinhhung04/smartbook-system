@@ -109,3 +109,11 @@ test("web pages are loaded on demand", () => {
     assert.match(routes, new RegExp(`import\\(.*pages/${module}`), module);
   }
 });
+
+test("admin monitor only calls public gateway health boundaries", () => {
+  const monitor = readFileSync(resolve(repositoryRoot, "apps/web/src/services/monitor.ts"), "utf8");
+  assert.match(monitor, /localhost:3000\/health/);
+  assert.match(monitor, /localhost:3000\/ready/);
+  assert.doesNotMatch(monitor, /localhost:300[1-9]/);
+  assert.match(monitor, /'ready'/);
+});

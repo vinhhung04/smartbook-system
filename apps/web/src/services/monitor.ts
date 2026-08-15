@@ -43,28 +43,10 @@ export const MONITOR_SERVICE_CONFIGS: MonitorServiceConfig[] = [
     url: env.VITE_GATEWAY_HEALTH_URL || 'http://localhost:3000/health',
   },
   {
-    id: 'auth-service',
-    name: 'Auth Service',
-    description: 'Authentication, IAM, Redis-backed sessions',
-    url: env.VITE_AUTH_HEALTH_URL || 'http://localhost:3004/health',
-  },
-  {
-    id: 'inventory-service',
-    name: 'Inventory Service',
-    description: 'Catalog, stock, warehouse operations',
-    url: env.VITE_INVENTORY_HEALTH_URL || 'http://localhost:3003/health',
-  },
-  {
-    id: 'borrow-service',
-    name: 'Borrow Service',
-    description: 'Customers, reservations, loans, fines',
-    url: env.VITE_BORROW_HEALTH_URL || 'http://localhost:3005/health',
-  },
-  {
-    id: 'analytics-service',
-    name: 'Analytics Service',
-    description: 'Reports, KPIs, cross-database analytics',
-    url: env.VITE_ANALYTICS_HEALTH_URL || 'http://localhost:3006/health',
+    id: 'core-services',
+    name: 'Core Services',
+    description: 'Auth, inventory, borrow and analytics readiness',
+    url: env.VITE_GATEWAY_READY_URL || 'http://localhost:3000/ready',
   },
   {
     id: 'ai-service',
@@ -97,7 +79,7 @@ function normalizeStatus(httpOk: boolean, response: Record<string, unknown> | nu
   if (!response) return 'degraded';
 
   const rawStatus = String(response.status || '').toLowerCase();
-  if (rawStatus && rawStatus !== 'ok' && rawStatus !== 'healthy') {
+  if (rawStatus && !['ok', 'healthy', 'ready'].includes(rawStatus)) {
     return rawStatus === 'down' ? 'down' : 'degraded';
   }
 
