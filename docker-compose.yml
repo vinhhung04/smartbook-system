@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: smartbook_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -22,7 +21,6 @@ services:
   pgadmin:
     profiles: ["tools"]
     image: dpage/pgadmin4
-    container_name: smartbook_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
@@ -34,7 +32,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: smartbook_redis
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -48,7 +45,6 @@ services:
     build:
       context: .
       dockerfile: services/inventory-service/Dockerfile
-    container_name: inventory-service
     command: sh -c "npx prisma migrate deploy && node src/index.js"
     environment:
       - PORT=3001
@@ -80,7 +76,6 @@ services:
     build:
       context: .
       dockerfile: services/auth-service/Dockerfile
-    container_name: auth-service
     command: sh -c "npx prisma migrate deploy && npm run start"
     environment:
       - PORT=3002
@@ -113,7 +108,6 @@ services:
     build:
       context: .
       dockerfile: services/borrow-service/Dockerfile
-    container_name: borrow-service
     command: sh -c "npx prisma migrate deploy && npm run start"
     environment:
       - PORT=3005
@@ -143,7 +137,6 @@ services:
     build:
       context: .
       dockerfile: services/analytics-service/Dockerfile
-    container_name: analytics-service
     environment:
       - PORT=3006
       - INVENTORY_DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
@@ -208,7 +201,6 @@ services:
   ai-service:
     profiles: ["ai"]
     build: ./services/ai-service
-    container_name: ai-service
     depends_on:
       - ollama
     environment:
@@ -242,7 +234,6 @@ services:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
-    container_name: api-gateway
     ports:
       - "3000:3000"
     environment:
@@ -276,7 +267,6 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    container_name: smartbook-ui
     ports:
       - "5173:80"
     environment:
@@ -300,7 +290,6 @@ services:
   ollama:
     profiles: ["ai"]
     image: ollama/ollama:latest
-    container_name: ollama
     volumes:
       - ./ollama_data:/root/.ollama
     stdin_open: true

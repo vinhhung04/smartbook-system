@@ -1,6 +1,7 @@
 node_modules/
 ollama_data/
 .env
+.env.smoke
 dist/
 build/
 coverage/

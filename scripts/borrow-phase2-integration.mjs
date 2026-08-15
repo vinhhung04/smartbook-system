@@ -59,22 +59,23 @@ async function request(method, path, body, extraHeaders = {}, tokenOverride = to
   return { ok: response.ok, status: response.status, data };
 }
 
-async function resolveStockTarget() {
-  if (variantId && warehouseId) return;
-
+async function findStockTarget(minimumQuantity = 1, excludedVariantIds = new Set()) {
   const response = await fetch(`${baseUrl}/api/books`, {
     headers: makeHeaders({}, token),
   });
   const books = await response.json().catch(() => []);
-  const candidate = (Array.isArray(books) ? books : []).find((book) =>
+  return (Array.isArray(books) ? books : []).find((book) =>
     book?.variant_id &&
     book?.default_warehouse_id &&
-    Number(book?.quantity || 0) >= 4
-  ) || (Array.isArray(books) ? books : []).find((book) =>
-    book?.variant_id &&
-    book?.default_warehouse_id &&
-    Number(book?.quantity || 0) > 0
+    !excludedVariantIds.has(book.variant_id) &&
+    Number(book?.quantity || 0) >= minimumQuantity
   );
+}
+
+async function resolveStockTarget() {
+  if (variantId && warehouseId) return;
+
+  const candidate = await findStockTarget(4) || await findStockTarget(1);
 
   if (!candidate) {
     throw new Error('No borrowable variant with available stock found via /api/books');
@@ -225,14 +226,15 @@ async function run() {
 
   const damagedProfile = await request('GET', '/borrow/my/profile', undefined, {}, damagedActorToken);
   const damagedCustomerId = damagedProfile.data?.data?.id;
+  const damagedTarget = await findStockTarget(1, new Set([variantId]));
 
   const damagedSeedLoan = await request(
     'POST',
     '/borrow/loans/direct',
     {
       customer_id: damagedCustomerId,
-      variant_id: variantId,
-      warehouse_id: warehouseId,
+      variant_id: damagedTarget?.variant_id || variantId,
+      warehouse_id: damagedTarget?.default_warehouse_id || warehouseId,
       quantity: 1,
       source_channel: 'COUNTER',
       notes: 'damaged flow integration test',
