@@ -11,11 +11,9 @@ COPY apps/web apps/web
 WORKDIR /workspace/apps/web
 RUN pnpm run build
 
-FROM node:20-alpine
+FROM nginx:1.27-alpine
 
-WORKDIR /app
-RUN npm install -g serve@14.2.4
-COPY --from=builder /workspace/apps/web/dist ./dist
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /workspace/apps/web/dist /usr/share/nginx/html
 
-EXPOSE 5173
-CMD ["serve", "-s", "dist", "-l", "5173"]
+EXPOSE 80

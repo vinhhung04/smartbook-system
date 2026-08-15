@@ -95,7 +95,11 @@ test("Node Docker images build from the workspace lockfile", () => {
 
 test("web container serves the built single-page application", () => {
   const dockerfile = readFileSync(resolve(repositoryRoot, "apps/web/Dockerfile"), "utf8");
-  assert.match(dockerfile, /CMD \["serve", "-s", "dist", "-l", "5173"\]/);
+  const nginx = readFileSync(resolve(repositoryRoot, "apps/web/nginx.conf"), "utf8");
+  assert.match(dockerfile, /FROM nginx:/);
+  assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html/);
+  assert.match(nginx, /Content-Security-Policy/);
+  assert.match(nginx, /Permissions-Policy/);
 });
 
 test("web pages are loaded on demand", () => {
