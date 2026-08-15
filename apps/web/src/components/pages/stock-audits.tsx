@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
 import { AlertTriangle, ArrowLeft, Boxes, Camera, Check, ClipboardCheck, ClipboardList, PackageCheck, RefreshCw, ScanLine, UserCheck, Warehouse } from "lucide-react";
 import { toast } from "sonner";
@@ -58,7 +58,7 @@ function StockAuditListView() {
   const [note, setNote] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await stockAuditService.getAll();
@@ -68,9 +68,9 @@ function StockAuditListView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     if (!isManager) return;
@@ -267,7 +267,7 @@ function StockAuditDetailView({ id }: { id: string }) {
   const [localCounts, setLocalCounts] = useState<Record<string, string>>({});
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await stockAuditService.getById(id);
@@ -280,9 +280,9 @@ function StockAuditDetailView({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { setSelectedLineId(null); void load(); }, [id]);
+  useEffect(() => { setSelectedLineId(null); void load(); }, [load]);
 
   useEffect(() => {
     if (!isManager) return;

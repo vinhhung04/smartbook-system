@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { motion } from 'motion/react';
 import { StatusBadge } from '../status-badge';
@@ -99,7 +99,7 @@ export function BookDetailPage() {
   const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "WAREHOUSE_MANAGER", "ADMIN"].includes(role));
   const canEditBook = Boolean(book && (canManageCatalog || (canCompleteIncompleteBook && book.is_incomplete)));
 
-  const loadBook = async () => {
+  const loadBook = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
@@ -113,9 +113,9 @@ export function BookDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { void loadBook(); }, [id]);
+  useEffect(() => { void loadBook(); }, [loadBook]);
 
   const totalStock = useMemo(() => {
     return (book?.locations || []).reduce((sum, location) => sum + Number(location.quantity || 0), 0);

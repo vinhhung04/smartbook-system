@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, Boxes, ClipboardCheck, Clock, DollarSign, Info, PackageCheck, RefreshCw, Truck, UserCheck, Warehouse } from "lucide-react";
 import { toast } from "sonner";
@@ -58,7 +58,7 @@ function SupplierDeliveryListView() {
   const [status, setStatus] = useState("ALL");
   const [search, setSearch] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await supplierDeliveryService.getAll(status === "ALL" ? undefined : { status });
@@ -68,12 +68,11 @@ function SupplierDeliveryListView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [status]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [load]);
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -242,7 +241,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await supplierDeliveryService.getById(id);
@@ -253,9 +252,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     userService.getWarehouseStaff()

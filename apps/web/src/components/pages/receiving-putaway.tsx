@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { AlertTriangle, ArrowRightLeft, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -145,7 +145,7 @@ export function ReceivingPutawayPage() {
     setDraftLines([]);
   };
 
-  const loadReceivingItems = async (receivingId: string) => {
+  const loadReceivingItems = useCallback(async (receivingId: string) => {
     if (!receivingId) {
       setReceivingItems([]);
       setSelectedVariantId("");
@@ -165,7 +165,7 @@ export function ReceivingPutawayPage() {
     setSelectedVariantId(preferredVariantId);
     setDraftLines([]);
     setCandidates([]);
-  };
+  }, [lockedCtx.variantId]);
 
   const loadCandidates = async (receivingId: string, variantId: string) => {
     if (!receivingId || !variantId) {
@@ -214,7 +214,7 @@ export function ReceivingPutawayPage() {
     };
 
     void run();
-  }, []);
+  }, [lockedCtx.warehouseId]);
 
   useEffect(() => {
     if (!selectedWarehouseId) return;
@@ -228,7 +228,7 @@ export function ReceivingPutawayPage() {
     void loadReceivingItems(selectedReceivingId).catch((error) => {
       toast.error(getApiErrorMessage(error, "Không tải được tồn kho RECEIVING"));
     });
-  }, [selectedReceivingId]);
+  }, [selectedReceivingId, loadReceivingItems]);
 
   useEffect(() => {
     if (!selectedReceivingId || !selectedVariantId) return;

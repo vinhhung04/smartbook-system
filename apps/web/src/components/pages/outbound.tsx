@@ -124,7 +124,7 @@ export function OutboundPage() {
     };
 
     void run();
-  }, []);
+  }, [canManageQueue]);
 
   useEffect(() => {
     if (!canManageQueue) {

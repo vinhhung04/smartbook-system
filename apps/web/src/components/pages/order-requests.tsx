@@ -232,7 +232,7 @@ export function OrderRequestsPage() {
     };
 
     void run();
-  }, []);
+  }, [canApprove]);
 
   useEffect(() => {
     if (!selectedWarehouseId) return;

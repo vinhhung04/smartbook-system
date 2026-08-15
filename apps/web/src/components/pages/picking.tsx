@@ -114,6 +114,7 @@ export function PickingPage() {
   const currentUser = authService.getCurrentUser();
   const canManageAssignment = canManageReceiving(currentUser);
   const currentUserId = String((currentUser as { id?: string } | null)?.id || "");
+  const currentUserPrimaryWarehouseId = String((currentUser as { primary_warehouse_id?: string } | null)?.primary_warehouse_id || "");
   const currentUserLabel = String((currentUser as { full_name?: string; username?: string; email?: string } | null)?.full_name
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.username
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.email
@@ -232,8 +233,7 @@ export function PickingPage() {
         setWarehouseStaff(Array.isArray(staffRows?.data) ? staffRows.data : []);
         setWarehouses(rows);
 
-        const preferredWarehouseFromUser = String((currentUser as { primary_warehouse_id?: string } | null)?.primary_warehouse_id || "");
-        const preferredWarehouse = rows.find((item) => item.id === preferredWarehouseFromUser)?.id || rows[0]?.id || "";
+        const preferredWarehouse = rows.find((item) => item.id === currentUserPrimaryWarehouseId)?.id || rows[0]?.id || "";
 
         setSelectedWarehouseId(preferredWarehouse);
         await loadTasks(canManageAssignment ? (preferredWarehouse || undefined) : undefined);
@@ -245,7 +245,7 @@ export function PickingPage() {
     };
 
     void run();
-  }, []);
+  }, [canManageAssignment, currentUserPrimaryWarehouseId]);
 
   useEffect(() => {
     if (!canManageAssignment) {

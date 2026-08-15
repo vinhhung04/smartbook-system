@@ -56,7 +56,6 @@ export function usePackingCamera() {
     };
     // Intentionally mount-once: this hook's lifetime IS the Packing page's lifetime, by design —
     // it must never re-run just because the selected order changed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

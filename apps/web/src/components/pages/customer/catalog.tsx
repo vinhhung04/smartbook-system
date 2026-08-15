@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { customerCatalogService, CustomerCatalogBook } from '@/services/customer-catalog';
@@ -30,7 +30,7 @@ export function CustomerCatalogPage() {
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [allAuthors, setAllAuthors] = useState<string[]>([]);
 
-  const loadBooks = async () => {
+  const loadBooks = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -61,11 +61,11 @@ export function CustomerCatalogPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, availability, categoryFilter, authorFilter]);
 
   useEffect(() => {
     void loadBooks();
-  }, [search, availability, categoryFilter, authorFilter]);
+  }, [loadBooks]);
 
   const stats = useMemo(() => ({
     total: books.length,

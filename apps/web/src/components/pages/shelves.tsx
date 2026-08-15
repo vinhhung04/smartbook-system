@@ -161,8 +161,9 @@ export function ShelvesPage() {
           return;
         }
 
-        const keep = rows.some((item) => item.id === selectedShelfId) ? selectedShelfId : rows[0].id;
-        setSelectedShelfId(keep);
+        setSelectedShelfId((currentShelfId) => (
+          rows.some((item) => item.id === currentShelfId) ? currentShelfId : rows[0].id
+        ));
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Không tải được danh sách kệ"));
         setShelves([]);

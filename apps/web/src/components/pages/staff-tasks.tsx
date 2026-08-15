@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ClipboardList, Link2, Plus, RefreshCw, X, CheckCircle, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -131,7 +131,7 @@ export function StaffTasksPage() {
   const [entityOptions, setEntityOptions] = useState<EntityOption[]>([]);
   const [loadingEntityOptions, setLoadingEntityOptions] = useState(false);
 
-  const load = async (status?: string) => {
+  const load = useCallback(async (status?: string) => {
     setLoading(true);
     try {
       if (isManager) {
@@ -146,9 +146,9 @@ export function StaffTasksPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isManager]);
 
-  useEffect(() => { void load(statusFilter); }, [statusFilter]);
+  useEffect(() => { void load(statusFilter); }, [load, statusFilter]);
 
   useEffect(() => {
     if (!isManager) return;
