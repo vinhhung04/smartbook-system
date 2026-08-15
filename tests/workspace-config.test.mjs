@@ -23,7 +23,33 @@ test("CI installs dependencies reproducibly", () => {
     "utf8",
   );
   assert.match(workflow, /pnpm install --frozen-lockfile/);
-  assert.match(workflow, /pnpm typecheck/);
+  assert.match(workflow, /pnpm verify/);
+  assert.doesNotMatch(workflow, /test_stock_request\.py is excluded/);
+});
+
+test("workspace exposes one complete verification command", () => {
+  const manifest = readJson("package.json");
+  assert.match(manifest.scripts.verify, /lint:ci/);
+  assert.match(manifest.scripts.verify, /typecheck/);
+  assert.match(manifest.scripts.verify, /build/);
+  assert.match(manifest.scripts.verify, /test:node/);
+  assert.match(manifest.scripts.verify, /test:ai/);
+});
+
+test("every Node service has a real test command", () => {
+  const manifests = [
+    "apps/api-gateway/package.json",
+    "services/analytics-service/package.json",
+    "services/auth-service/package.json",
+    "services/borrow-service/package.json",
+    "services/inventory-service/package.json",
+  ];
+
+  for (const manifestPath of manifests) {
+    const testCommand = readJson(manifestPath).scripts?.test || "";
+    assert.match(testCommand, /node --test/, `${manifestPath} must run Node tests`);
+    assert.doesNotMatch(testCommand, /no test specified/);
+  }
 });
 
 test("web build and lint commands use locally installed tools", () => {
