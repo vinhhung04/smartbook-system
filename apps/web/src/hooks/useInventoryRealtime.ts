@@ -16,7 +16,10 @@ const GOODS_RECEIPT_EVENTS = ['goods_receipt:created'];
 export function useInventoryRealtime(callbacks: InventoryRealtimeCallbacks = {}) {
   const { socket } = useSocket();
   const cbRef = useRef(callbacks);
-  cbRef.current = callbacks;
+
+  useEffect(() => {
+    cbRef.current = callbacks;
+  }, [callbacks]);
 
   useEffect(() => {
     if (!socket) return;

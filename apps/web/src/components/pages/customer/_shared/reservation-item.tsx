@@ -1,6 +1,7 @@
 import { formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
 import { QRCode } from '@/components/ui/qr-code';
+import { useState } from 'react';
 
 interface ReservationItemProps {
   item: any;
@@ -8,12 +9,13 @@ interface ReservationItemProps {
 }
 
 export function ReservationItem({ item, onCancel }: ReservationItemProps) {
+  const [mountedAt] = useState(() => Date.now());
   const status = String(item.status || '').toUpperCase();
   const canCancel = status === 'PENDING' || status === 'CONFIRMED' || status === 'READY_FOR_PICKUP';
   const isReady = status === 'READY_FOR_PICKUP';
   const pickupCode = String(item.pickup_code || '').trim();
   const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
-  const hoursToExpire = expiresAt ? Math.floor((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000)) : null;
+  const hoursToExpire = expiresAt ? Math.floor((expiresAt.getTime() - mountedAt) / (60 * 60 * 1000)) : null;
   const isExpiringSoon = status === 'PENDING' && hoursToExpire !== null && hoursToExpire >= 0 && hoursToExpire <= 72;
 
   return (

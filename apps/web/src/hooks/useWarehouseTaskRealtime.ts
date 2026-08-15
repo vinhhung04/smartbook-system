@@ -14,7 +14,10 @@ const EXCEPTION_REPORT_EVENTS = ['exception_report:created', 'exception_report:r
 export function useWarehouseTaskRealtime(callbacks: WarehouseTaskRealtimeCallbacks = {}) {
   const { socket } = useSocket();
   const cbRef = useRef(callbacks);
-  cbRef.current = callbacks;
+
+  useEffect(() => {
+    cbRef.current = callbacks;
+  }, [callbacks]);
 
   useEffect(() => {
     if (!socket) return;

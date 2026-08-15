@@ -25,7 +25,7 @@ const GATEWAY_URL =
 const isDev = import.meta.env.DEV;
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
 
@@ -41,13 +41,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Disconnect any previous socket before creating a new one
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
-      setConnected(false);
-    }
-
     if (!token) return;
 
     const socket = io(GATEWAY_URL, {
@@ -60,7 +53,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       reconnectionDelayMax: 10000,
     });
 
-    socketRef.current = socket;
+    const publishTimer = window.setTimeout(() => setSocket(socket), 0);
 
     socket.on('connect', () => {
       setConnected(true);
@@ -77,14 +70,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      window.clearTimeout(publishTimer);
       socket.disconnect();
-      socketRef.current = null;
+      setSocket(null);
       setConnected(false);
     };
   }, [token]);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
+    <SocketContext.Provider value={{ socket, connected }}>
       {children}
     </SocketContext.Provider>
   );
@@ -103,7 +97,10 @@ export function useSocketEvent<T = unknown>(
 ) {
   const { socket } = useSocket();
   const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     if (!socket) return;
