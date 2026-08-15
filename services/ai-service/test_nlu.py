@@ -256,19 +256,12 @@ class TestLLMPath(unittest.TestCase):
         self.assertFalse(result["wants_action"])
         self.assertIsNone(result["action_type"])
 
-    @unittest.skip(
-        "Rule-based detect_intent() now scores this exact phrase at "
-        "confidence 0.9 (TOP_BORROWED_BOOKS_QUERY), which clears the 0.85 "
-        "fast-path threshold and returns before classify_user_message ever "
-        "reaches the mocked LLM call this test targets. Needs a product "
-        "decision: lower the fast-path threshold for this phrasing, or "
-        "rewrite the test with a message that genuinely requires the LLM."
-    )
     def test_dual_intent_secondary(self):
         resp = _llm(LOW_STOCK_QUERY, secondary=[TOP_BORROWED_BOOKS_QUERY])
         with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
-            result = _run(classify_user_message("Sach hot ma ton it"))
+            result = _run(classify_user_message("Nhung dau sach noi bat nhung co ve sap thieu"))
+        mock.assert_awaited_once()
         self.assertIn(TOP_BORROWED_BOOKS_QUERY, result["secondary_intents"])
 
     def test_warehouse_entity_extracted(self):
