@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const { prisma } = require('./lib/prisma');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
@@ -28,6 +28,7 @@ function validateRequiredEnv() {
 validateRequiredEnv();
 
 app.use(createRequestContext('borrow-service'));
+app.use(createRequestLogger('borrow-service'));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));

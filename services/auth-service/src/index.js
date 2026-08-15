@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const authRoutes = require('./routes/auth.routes');
 const iamRoutes = require('./routes/iam.routes');
 const redis = require('./lib/redis');
@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3002;
 requireEnv(process.env, ['DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
 
 app.use(createRequestContext('auth-service'));
+app.use(createRequestLogger('auth-service'));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json());

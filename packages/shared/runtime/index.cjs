@@ -7,6 +7,8 @@ const UNSAFE_PLACEHOLDERS = new Set([
   'your-secret-key',
   'smartbook_shared_jwt_secret',
   'smartbook_internal_key',
+  'generate_jwt_secret',
+  'generate_internal_key',
 ]);
 
 function requireEnv(environment, names) {
@@ -59,6 +61,26 @@ function createRequestContext(serviceName) {
   };
 }
 
+function createRequestLogger(serviceName, { log = console.log, now = Date.now } = {}) {
+  return (req, res, next) => {
+    const startedAt = now();
+    res.once('finish', () => {
+      log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        service: serviceName,
+        request_id: req.requestId || null,
+        method: req.method,
+        path: req.originalUrl || req.url,
+        status: res.statusCode,
+        latency_ms: Math.max(0, now() - startedAt),
+        user_id: req.user?.id || req.user?.sub || null,
+      }));
+    });
+    next();
+  };
+}
+
 function createRateLimiter({ max = 100, windowMs = 60_000, key, now = Date.now } = {}) {
   const buckets = new Map();
   return (req, res, next) => {
@@ -104,6 +126,7 @@ module.exports = {
   createCorsOptions,
   createRateLimiter,
   createRequestContext,
+  createRequestLogger,
   requireEnv,
   securityHeaders,
 };

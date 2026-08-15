@@ -5,6 +5,12 @@ dist/
 build/
 coverage/
 *.log
+__pycache__/
+*.py[cod]
+*logs*.txt
+*_errors.txt
+scripts/reports/results/
+scripts/reports/integration-report.html
 *.zip
 *.tar
 *.gz

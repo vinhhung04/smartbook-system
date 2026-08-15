@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
-const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const {
   authenticateToken,
   authorizeAnyPermission,
@@ -53,6 +53,7 @@ const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '8mb';
 requireEnv(process.env, ['DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
 
 app.use(createRequestContext('inventory-service'));
+app.use(createRequestLogger('inventory-service'));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));

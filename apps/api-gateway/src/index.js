@@ -9,6 +9,7 @@ const {
   createCorsOptions,
   createRateLimiter,
   createRequestContext,
+  createRequestLogger,
   requireEnv,
   securityHeaders,
 } = require("@smartbook/shared/runtime");
@@ -27,6 +28,16 @@ const borrowTarget =
 const analyticsTarget =
   process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
+
+function handleAiProxyError(_error, req, res) {
+  if (res.headersSent) return;
+  res.writeHead(503, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({
+    message: "AI tạm thời không khả dụng",
+    code: "AI_UNAVAILABLE",
+    request_id: req.requestId || null,
+  }));
+}
 
 const { JWT_SECRET, INTERNAL_SERVICE_KEY } = requireEnv(process.env, [
   "JWT_SECRET",
@@ -239,6 +250,7 @@ app.post("/internal/push-events", express.json({ limit: "256kb" }), (req, res) =
 
 // --------------- Express middleware ---------------
 app.use(createRequestContext("api-gateway"));
+app.use(createRequestLogger("api-gateway"));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(createRateLimiter({ max: 600, windowMs: 15 * 60 * 1000 }));
@@ -300,6 +312,7 @@ app.use(
     target: aiTarget,
     changeOrigin: true,
     xfwd: true,
+    on: { error: handleAiProxyError },
   }),
 );
 
@@ -357,6 +370,7 @@ app.use(
     changeOrigin: true,
     xfwd: true,
     pathRewrite: { "^/ai": "" },
+    on: { error: handleAiProxyError },
   }),
 );
 

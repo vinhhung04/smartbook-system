@@ -36,6 +36,16 @@ test("workspace exposes one complete verification command", () => {
   assert.match(manifest.scripts.verify, /test:ai/);
 });
 
+test("workspace exposes repeatable demo seed and golden-flow commands", () => {
+  const manifest = readJson("package.json");
+  assert.match(manifest.scripts["demo:seed"], /--profile demo/);
+  assert.match(manifest.scripts["test:smoke"], /demo-smoke\.mjs/);
+  const smoke = readFileSync(resolve(repositoryRoot, "scripts/demo-smoke.mjs"), "utf8");
+  assert.match(smoke, /rbac-role-access-integration/);
+  assert.match(smoke, /purchase-supplier-receiving-integration/);
+  assert.match(smoke, /borrow-phase2-integration/);
+});
+
 test("every Node service has a real test command", () => {
   const manifests = [
     "apps/api-gateway/package.json",

@@ -479,13 +479,13 @@ export function AIChatbot() {
       },
       onError: () => {
         setLoading(false);
-        const errorText = 'Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏';
+        const errorText = 'AI tạm thời không khả dụng. Các nghiệp vụ thư viện và kho vẫn hoạt động bình thường.';
         setMessages((prev) =>
           started
             ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText } : m))
             : [...prev, { id: botMsgId, role: 'assistant', text: errorText }],
         );
-        toast.error('Không thể kết nối tới AI service');
+        toast.error('AI tạm thời không khả dụng');
       },
     });
   };

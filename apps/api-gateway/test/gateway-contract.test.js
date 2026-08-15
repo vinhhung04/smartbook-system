@@ -11,6 +11,12 @@ test('gateway keeps all public service proxy prefixes', () => {
   }
 });
 
+test('AI proxy fails in a documented degraded mode', () => {
+  assert.match(source, /AI_UNAVAILABLE/);
+  assert.match(source, /AI tạm thời không khả dụng/);
+  assert.match(source, /on: \{ error: handleAiProxyError \}/);
+});
+
 test('internal websocket pushes require a service key and allowlisted event', () => {
   assert.match(source, /x-internal-service-key/);
   assert.match(source, /ALLOWED_EVENTS/);

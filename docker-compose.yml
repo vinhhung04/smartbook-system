@@ -86,6 +86,7 @@ services:
       - PORT=3002
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - REDIS_URL=redis://redis:6379
@@ -161,6 +162,48 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  demo-seed-auth:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+
+  demo-seed-inventory:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+    depends_on:
+      inventory-service:
+        condition: service_healthy
+
+  demo-seed-borrow:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/borrow-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+    depends_on:
+      borrow-service:
+        condition: service_healthy
 
   ai-service:
     profiles: ["ai"]

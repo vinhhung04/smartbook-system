@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const analyticsRoutes = require('./routes/analytics.routes');
 const { closePools, pingDatabases } = require('./lib/db');
 
@@ -12,6 +12,7 @@ const port = Number(process.env.PORT || 3006);
 requireEnv(process.env, ['INVENTORY_DATABASE_URL', 'BORROW_DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
 
 app.use(createRequestContext('analytics-service'));
+app.use(createRequestLogger('analytics-service'));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json());

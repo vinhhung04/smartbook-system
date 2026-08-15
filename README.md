@@ -73,8 +73,11 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 ## 🚀 Bắt Đầu Nhanh
 
 ```powershell
-copy .env.example .env
+pnpm install --frozen-lockfile
+pnpm demo:env
 docker compose up -d --build
+pnpm demo:seed
+pnpm demo:status
 ```
 
 Mở **http://localhost:5173**, đăng nhập bằng tài khoản demo `hung` / `123456`.
@@ -498,11 +501,14 @@ Quy tắc nghiệp vụ:
 
 ## 🐳 Chạy Project Bằng Docker
 
-### 1️⃣ Chuẩn bị env
+### 1️⃣ Chuẩn bị env an toàn
 
 ```powershell
-copy .env.example .env
+pnpm install --frozen-lockfile
+pnpm demo:env
 ```
+
+Lệnh này sinh `.env` với password, JWT secret và internal key ngẫu nhiên. Không dùng trực tiếp các placeholder `GENERATE_*` trong `.env.example`; mọi service sẽ từ chối khởi động nếu secret thiếu hoặc là giá trị mẫu.
 
 Các biến quan trọng:
 
@@ -511,13 +517,37 @@ Các biến quan trọng:
 - `JWT_SECRET`, `INTERNAL_SERVICE_KEY`
 - `ANALYTICS_SERVICE_URL`, `LOW_STOCK_THRESHOLD`
 - `VITE_API_BASE_URL`, `VITE_AUTH_BASE_URL`, `VITE_AI_BASE_URL`
-- `OLLAMA_HOST`, `SUMMARY_MODEL`
+- `ALLOWED_ORIGINS`, `SOCKET_CORS_ORIGIN`
+- `OLLAMA_HOST`, `SUMMARY_MODEL` (chỉ cần khi bật profile AI)
 
 ### 2️⃣ Chạy toàn bộ stack
 
 ```powershell
 docker compose up -d --build
+pnpm demo:seed
+pnpm demo:status
 docker compose ps
+```
+
+Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Restart container không tự seed và không ghi đè dữ liệu. Để reset hoàn toàn dữ liệu demo:
+
+```powershell
+docker compose down -v
+docker compose up -d --build
+pnpm demo:seed
+```
+
+AI là tính năng tùy chọn. Stack thư viện/kho vận mặc định không chờ Ollama. Khi chưa bật AI, Gateway vẫn healthy/ready và giao diện báo AI tạm thời không khả dụng. Bật AI sau khi nghiệp vụ lõi đã sẵn sàng:
+
+```powershell
+docker compose --profile ai up -d --build ai-service ollama
+docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
+```
+
+pgAdmin chỉ bật khi cần quản trị DB:
+
+```powershell
+docker compose --profile tools up -d pgadmin
 ```
 
 Khi chỉ cần rebuild các service vừa chỉnh:
@@ -527,7 +557,7 @@ docker compose build borrow-service analytics-service api-gateway smartbook-ui
 docker compose up -d borrow-service analytics-service api-gateway smartbook-ui
 ```
 
-Các service tự chạy `prisma migrate deploy` và seed khi container khởi động theo `docker-compose.yml`.
+Ba database, Redis và các service nội bộ chỉ nằm trong Docker network; host chỉ truy cập Web UI, API Gateway và pgAdmin khi profile `tools` được bật.
 
 ### 3️⃣ URL local
 
@@ -535,14 +565,11 @@ Các service tự chạy `prisma migrate deploy` và seed khi container khởi �
 |---|---|
 | 🖥️ Web UI | http://localhost:5173 |
 | 🚪 API Gateway | http://localhost:3000 |
-| 📖 Borrow Service | http://localhost:3005 |
-| 📦 Inventory Service | http://localhost:3003 |
-| 🔐 Auth Service | http://localhost:3004 |
-| 📊 Analytics Service | http://localhost:3006 |
-| 🤖 AI Service | http://localhost:8000 |
-| 🛠️ pgAdmin | http://localhost:8080 |
-| 🦙 Ollama | http://localhost:11434 |
-| ⚡ Redis | redis://localhost:6379 (không có UI) |
+| ❤️ Liveness | http://localhost:3000/health |
+| ✅ Readiness nghiệp vụ lõi | http://localhost:3000/ready |
+| 🛠️ pgAdmin (profile `tools`) | http://localhost:8080 |
+
+`GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency và không công khai URL/topology nội bộ.
 
 ## 🔑 Tài Khoản Demo
 
@@ -576,6 +603,20 @@ Seed Auth Service tạo các user demo với mật khẩu chung:
 > Đây là mật khẩu demo dùng chung cho môi trường local/seed. Tài khoản nhà cung cấp chỉ có quyền `supplier.portal.*`, không truy cập được các endpoint nhận/sửa tồn kho; quyền truy cập được ràng buộc theo email đăng nhập khớp với email nhà cung cấp trong Inventory Service.
 
 ## 🧪 Kiểm Thử
+
+Quality gate duy nhất dùng ở local và CI:
+
+```powershell
+pnpm verify
+```
+
+Sau khi dựng và seed stack sạch, chạy ba golden flow theo đúng thứ tự RBAC, mua hàng/nhập kho và đặt/mượn/trả:
+
+```powershell
+pnpm test:smoke
+```
+
+Các file kết quả cũ không được commit; kết quả chỉ có giá trị khi được tái tạo từ lệnh kiểm thử hiện tại.
 
 ### ✅ Purchase Order → Supplier Fulfillment → Goods Receipt
 
