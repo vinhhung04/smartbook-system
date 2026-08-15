@@ -6,6 +6,9 @@ const { parseId, normalizeIsbn13 } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
 const { resolveOrCreateReceivingLocation } = require("../utils/locations");
 const { pushToRooms } = require("../lib/socket-emitter");
+const {
+  claimDraftReceiptForPosting,
+} = require("../services/goods-receipt-posting.service");
 
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
@@ -1154,6 +1157,21 @@ async function updateGoodsReceipt(req, res) {
         };
       }
 
+      let postingClaimed = false;
+      if (targetStatus === "POSTED" && existing.status === "DRAFT") {
+        postingClaimed = await claimDraftReceiptForPosting(tx, id);
+        if (!postingClaimed) {
+          const current = await tx.goods_receipts.findUnique({ where: { id } });
+          if (current?.status === "POSTED") {
+            return { data: current, idempotent: true };
+          }
+          return {
+            invalidTransition: true,
+            message: "Goods receipt status changed while it was being posted",
+          };
+        }
+      }
+
       // Allow assigned staff to verify item quantities on DRAFT receipts.
       // Saves to actual_quantity (không ghi đè quantity gốc từ PO/hóa đơn).
       const itemUpdates = req.body.items;
@@ -1188,7 +1206,7 @@ async function updateGoodsReceipt(req, res) {
         },
       });
 
-      if (targetStatus === "POSTED" && existing.status !== "POSTED") {
+      if (postingClaimed) {
         if (existing.source_type === "TRANSFER") {
           await postTransferReceiptToReceiving(tx, updated, userId);
         } else {
