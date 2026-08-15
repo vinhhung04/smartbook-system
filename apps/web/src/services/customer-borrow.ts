@@ -21,6 +21,12 @@ export interface AccountTopupPayload {
   note?: string;
 }
 
+export interface MomoPaymentStatus {
+  status: 'PAID' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'PENDING';
+  amount?: number;
+  message?: string;
+}
+
 export const customerBorrowService = {
   async getMyAccount() {
     const response = await gatewayAPI.get('/my/account');
@@ -90,6 +96,11 @@ export const customerBorrowService = {
   async payFine(payload: FinePaymentPayload) {
     const response = await gatewayAPI.post('/my/fines/payments', payload);
     return response.data;
+  },
+
+  async getMomoPaymentStatus(orderId: string) {
+    const response = await gatewayAPI.get(`/my/payments/momo/${orderId}`);
+    return response.data as { data: MomoPaymentStatus };
   },
 
   async getMyNotifications() {

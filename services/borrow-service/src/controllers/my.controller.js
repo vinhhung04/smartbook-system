@@ -457,6 +457,49 @@ async function payMyFine(req, res) {
   }
 }
 
+async function getMyMomoPaymentStatus(req, res) {
+  try {
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer profile not found' });
+    }
+
+    const orderId = String(req.params.orderId || '').trim();
+    if (!orderId || orderId.length > 255) {
+      return res.status(400).json({ message: 'orderId is required and must not exceed 255 characters' });
+    }
+
+    const payment = await prisma.fine_payments.findFirst({
+      where: {
+        transaction_reference: orderId,
+        payment_method: 'EWALLET',
+        fines: { customer_id: customer.id },
+      },
+      orderBy: { paid_at: 'desc' },
+    });
+
+    if (!payment) {
+      return res.json({
+        data: {
+          status: 'PENDING',
+          message: 'Payment has not been recorded yet',
+        },
+      });
+    }
+
+    return res.json({
+      data: {
+        status: 'PAID',
+        amount: toNumber(payment.amount),
+        message: 'Payment recorded',
+      },
+    });
+  } catch (error) {
+    console.error('getMyMomoPaymentStatus error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function topupMyAccount(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -563,5 +606,6 @@ module.exports = {
   getMyAccountLedger,
   getMyFines,
   payMyFine,
+  getMyMomoPaymentStatus,
   getMyNotifications,
 };

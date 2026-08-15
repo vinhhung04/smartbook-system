@@ -1,24 +1,21 @@
-# Build stage
 FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install -g pnpm && pnpm install
-COPY . .
+
+WORKDIR /workspace
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+RUN pnpm install --frozen-lockfile --filter web...
+
+COPY apps/web apps/web
+WORKDIR /workspace/apps/web
 RUN pnpm run build
 
-# Development stage
-FROM node:20-alpine AS development
-WORKDIR /app
-COPY package*.json ./
-RUN npm install -g pnpm && pnpm install
-COPY . .
-EXPOSE 5173
-CMD ["pnpm", "run", "dev", "--", "--host"]
+FROM node:20-alpine
 
-# Production stage
-FROM node:20-alpine AS production
 WORKDIR /app
-RUN npm install -g serve
-COPY --from=builder /app/dist /app/dist
+RUN npm install -g serve@14.2.4
+COPY --from=builder /workspace/apps/web/dist ./dist
+
 EXPOSE 5173
 CMD ["serve", "-s", "dist", "-l", "5173"]

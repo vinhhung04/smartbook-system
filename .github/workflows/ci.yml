@@ -37,6 +37,8 @@ jobs:
 
       - run: pnpm --filter web lint
 
+      - run: pnpm typecheck
+
       - run: pnpm --filter web build
 
   node-services:

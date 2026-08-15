@@ -14,6 +14,7 @@ export interface CustomerCatalogBook {
   summary_vi?: string | null;
   cover_image_url?: string | null;
   quantity: number;
+  available_quantity?: number;
   variant_id?: string | null;
   default_warehouse_id?: string | null;
   default_location_id?: string | null;
