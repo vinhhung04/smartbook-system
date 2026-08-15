@@ -2,29 +2,32 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const analyticsRoutes = require('./routes/analytics.routes');
 const { closePools, pingDatabases } = require('./lib/db');
 
 const app = express();
 const port = Number(process.env.PORT || 3006);
 
-app.use(cors());
+requireEnv(process.env, ['INVENTORY_DATABASE_URL', 'BORROW_DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
+
+app.use(createRequestContext('analytics-service'));
+app.use(securityHeaders);
+app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json());
 
-app.get('/health', async (_req, res) => {
+app.get('/health', (_req, res) => {
+  res.json({ service: 'analytics-service', status: 'ok', version: '1.0.0' });
+});
+
+app.get('/ready', async (_req, res) => {
   try {
-    const databases = await pingDatabases();
-    return res.json({
-      status: 'ok',
-      service: 'analytics-service',
-      databases,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
+    await pingDatabases();
+    return res.json({ service: 'analytics-service', status: 'ready' });
+  } catch (_error) {
     return res.status(503).json({
-      status: 'error',
       service: 'analytics-service',
-      message: 'Analytics databases are not ready',
+      status: 'not_ready',
     });
   }
 });

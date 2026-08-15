@@ -9,6 +9,7 @@ const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173')
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_FAILED_LOGIN_ATTEMPTS = Number(process.env.MAX_FAILED_LOGIN_ATTEMPTS || 5);
+const BCRYPT_ROUNDS = 12;
 
 async function sendVerificationEmail(user) {
   try {
@@ -35,7 +36,7 @@ async function sendVerificationEmail(user) {
 const BORROW_SERVICE_INTERNAL_URL = String(
   process.env.BORROW_SERVICE_INTERNAL_URL || process.env.BORROW_SERVICE_URL || 'http://borrow-service:3005'
 ).replace(/\/$/, '');
-const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook-internal-dev-key').trim();
+const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 
 async function rollbackUserCreation(userId) {
   if (!userId) return;
@@ -144,7 +145,7 @@ async function register(req, res) {
       return res.status(409).json({ message: 'Email or username already exists' });
     }
 
-    const password_hash = await bcrypt.hash(password, 10);
+    const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const createdUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -471,7 +472,7 @@ async function changePassword(req, res) {
     const valid = await bcrypt.compare(current_password, user.password_hash);
     if (!valid) return res.status(400).json({ message: 'Current password is incorrect' });
 
-    const newHash = await bcrypt.hash(new_password, 10);
+    const newHash = await bcrypt.hash(new_password, BCRYPT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { password_hash: newHash } });
 
     return res.json({ message: 'Password changed successfully' });
@@ -552,7 +553,7 @@ async function confirmPasswordReset(req, res) {
       return res.status(400).json({ message: 'Invalid or expired reset token' });
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
     await prisma.$transaction([
       prisma.user.update({ where: { id: resetToken.user_id }, data: { password_hash: newHash } }),

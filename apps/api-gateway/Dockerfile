@@ -5,9 +5,11 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api-gateway/package.json apps/api-gateway/package.json
+COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile --filter api-gateway...
 
 COPY apps/api-gateway apps/api-gateway
+COPY packages/shared packages/shared
 RUN pnpm --filter api-gateway deploy --legacy --prod /app
 
 FROM node:20-slim

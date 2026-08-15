@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { createCorsOptions, createRequestContext, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { prisma } = require('./lib/prisma');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
 const customerInternalRoutes = require('./routes/customer-internal.routes');
@@ -20,21 +22,18 @@ const PORT = process.env.PORT || 3005;
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '4mb';
 
 function validateRequiredEnv() {
-  const required = ['DATABASE_URL', 'JWT_SECRET'];
-  const missing = required.filter((name) => !String(process.env[name] || '').trim());
-  if (missing.length > 0) {
-    throw new Error(`Missing required env: ${missing.join(', ')}`);
-  }
+  requireEnv(process.env, ['DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
 }
 
 validateRequiredEnv();
 
-app.use(cors());
+app.use(createRequestContext('borrow-service'));
+app.use(securityHeaders);
+app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 app.use((req, _res, next) => {
-  req.requestId = req.headers['x-request-id'] || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   console.log('[borrow-service] request', {
     requestId: req.requestId,
     method: req.method,
@@ -48,7 +47,17 @@ app.get('/health', (_req, res) => {
   res.json({
     service: 'borrow-service',
     status: 'ok',
+    version: '1.0.0',
   });
+});
+
+app.get('/ready', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ service: 'borrow-service', status: 'ready' });
+  } catch (_error) {
+    return res.status(503).json({ service: 'borrow-service', status: 'not_ready' });
+  }
 });
 
 app.use('/internal/customers', customerInternalRoutes);

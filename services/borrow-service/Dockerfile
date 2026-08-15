@@ -5,9 +5,11 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY services/borrow-service/package.json services/borrow-service/package.json
+COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile --filter borrow-service...
 
 COPY services/borrow-service services/borrow-service
+COPY packages/shared packages/shared
 RUN pnpm --dir services/borrow-service exec prisma generate
 RUN pnpm --filter borrow-service deploy --legacy --prod /app
 

@@ -5,6 +5,13 @@ const dotenv = require("dotenv");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const {
+  createCorsOptions,
+  createRateLimiter,
+  createRequestContext,
+  requireEnv,
+  securityHeaders,
+} = require("@smartbook/shared/runtime");
 
 dotenv.config();
 
@@ -21,11 +28,13 @@ const analyticsTarget =
   process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
 
-const JWT_SECRET = process.env.JWT_SECRET || "smartbook_shared_jwt_secret";
-const INTERNAL_SERVICE_KEY =
-  process.env.INTERNAL_SERVICE_KEY || "smartbook_internal_key";
+const { JWT_SECRET, INTERNAL_SERVICE_KEY } = requireEnv(process.env, [
+  "JWT_SECRET",
+  "INTERNAL_SERVICE_KEY",
+]);
 const SOCKET_CORS_ORIGIN =
   process.env.SOCKET_CORS_ORIGIN || "http://localhost:5173";
+const socketOrigins = SOCKET_CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
 
 // --------------- Event & room allowlists ---------------
 const ALLOWED_EVENTS = new Set([
@@ -56,7 +65,7 @@ const MAX_PAYLOAD_BYTES = 65536; // 64 KB
 // --------------- Socket.io ---------------
 const io = new Server(server, {
   cors: {
-    origin: SOCKET_CORS_ORIGIN,
+    origin: socketOrigins,
     methods: ["GET", "POST"],
   },
   path: "/socket.io",
@@ -229,19 +238,42 @@ app.post("/internal/push-events", express.json({ limit: "256kb" }), (req, res) =
 });
 
 // --------------- Express middleware ---------------
-app.use(cors());
+app.use(createRequestContext("api-gateway"));
+app.use(securityHeaders);
+app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
+app.use(createRateLimiter({ max: 600, windowMs: 15 * 60 * 1000 }));
+app.use((req, res, next) => {
+  const maxBytes = Number(process.env.GATEWAY_MAX_REQUEST_BYTES || 8 * 1024 * 1024);
+  const contentLength = Number(req.headers["content-length"] || 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return res.status(413).json({
+      message: "Payload too large",
+      code: "PAYLOAD_TOO_LARGE",
+      request_id: req.requestId || null,
+    });
+  }
+  return next();
+});
 
 app.get("/health", (_req, res) => {
   res.json({
     service: "api-gateway",
     status: "ok",
-    authTarget,
-    inventoryTarget,
-    borrowTarget,
-    analyticsTarget,
-    aiTarget,
-    connectedSockets: io.engine?.clientsCount || 0,
+    version: "1.0.0",
   });
+});
+
+app.get("/ready", async (_req, res) => {
+  const targets = [authTarget, inventoryTarget, borrowTarget, analyticsTarget];
+  try {
+    const responses = await Promise.all(
+      targets.map((target) => fetch(`${target}/health`, { signal: AbortSignal.timeout(2000) })),
+    );
+    if (responses.some((response) => !response.ok)) throw new Error("dependency unavailable");
+    return res.json({ service: "api-gateway", status: "ready" });
+  } catch (_error) {
+    return res.status(503).json({ service: "api-gateway", status: "not_ready" });
+  }
 });
 
 app.use(
@@ -327,6 +359,15 @@ app.use(
     pathRewrite: { "^/ai": "" },
   }),
 );
+
+app.use((error, req, res, _next) => {
+  const status = error?.message?.startsWith("CORS origin not allowed") ? 403 : 502;
+  return res.status(status).json({
+    message: status === 403 ? "Origin not allowed" : "Gateway request failed",
+    code: status === 403 ? "CORS_ORIGIN_DENIED" : "GATEWAY_ERROR",
+    request_id: req.requestId || null,
+  });
+});
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`api-gateway running at http://0.0.0.0:${port} (HTTP + WebSocket)`);
