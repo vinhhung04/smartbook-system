@@ -1642,7 +1642,65 @@ await prisma.purchase_order_items.createMany({
   ], skipDuplicates: true,
 });
 
-console.log(`✅ Created ${extendedBooks.length} extended books, ${extendedVariants.length} variants, and ${extendedPurchaseOrders.length} purchase orders`);
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 14: RECEIVING, PUTAWAY, AND MOVEMENT DEMO DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const demoUserId = '00000000-0000-0000-0000-000000000001';
+const demoReceipts = await Promise.all([
+  prisma.goods_receipts.upsert({
+    where: { receipt_number: 'GR-EXT-001' }, update: {},
+    create: { id: '10000000-0000-0000-0000-000000000001', receipt_number: 'GR-EXT-001', purchase_order_id: extendedPurchaseOrders[0].id, warehouse_id: hcmWarehouse.id, source_type: 'PURCHASE_ORDER', status: 'POSTED', received_by_user_id: demoUserId, received_at: new Date('2026-08-14T09:15:00+07:00'), note: 'READY_FOR_PUTAWAY: Lô sách thiếu nhi và kỹ năng vừa nhận tại kho HCM.' },
+  }),
+  prisma.goods_receipts.upsert({
+    where: { receipt_number: 'GR-EXT-002' }, update: {},
+    create: { id: '10000000-0000-0000-0000-000000000002', receipt_number: 'GR-EXT-002', purchase_order_id: extendedPurchaseOrders[1].id, warehouse_id: hnWarehouse.id, source_type: 'PURCHASE_ORDER', status: 'DRAFT', received_by_user_id: demoUserId, note: 'Phiếu nhập nháp chờ xác nhận số lượng thực tế.' },
+  }),
+  prisma.goods_receipts.upsert({
+    where: { receipt_number: 'GR-EXT-003' }, update: {},
+    create: { id: '10000000-0000-0000-0000-000000000003', receipt_number: 'GR-EXT-003', warehouse_id: hcmWarehouse.id, source_type: 'MANUAL', status: 'CANCELLED', received_by_user_id: demoUserId, cancelled_by_user_id: demoUserId, cancelled_at: new Date('2026-08-08T15:40:00+07:00'), note: 'Hủy do nhà cung cấp giao sai ấn bản.' },
+  }),
+  prisma.goods_receipts.upsert({
+    where: { receipt_number: 'GR-EXT-004' }, update: {},
+    create: { id: '10000000-0000-0000-0000-000000000004', receipt_number: 'GR-EXT-004', warehouse_id: hcmWarehouse.id, source_type: 'MANUAL', status: 'POSTED', received_by_user_id: demoUserId, putaway_assignee_user_id: demoUserId, received_at: new Date('2026-08-15T13:30:00+07:00'), note: 'READY_FOR_PUTAWAY: Đã xếp một phần, còn 4 cuốn chờ chọn vị trí.' },
+  }),
+]);
+
+await prisma.goods_receipt_items.createMany({
+  data: [
+    { id: '10000000-0000-0000-0000-000000000011', goods_receipt_id: demoReceipts[0].id, variant_id: extendedVariants[0].id, quantity: 12, actual_quantity: 12, unit_cost: 68000, condition_grade: 'NEW' },
+    { id: '10000000-0000-0000-0000-000000000012', goods_receipt_id: demoReceipts[0].id, variant_id: extendedVariants[1].id, quantity: 8, actual_quantity: 8, unit_cost: 92000, condition_grade: 'NEW' },
+    { id: '10000000-0000-0000-0000-000000000013', goods_receipt_id: demoReceipts[1].id, variant_id: extendedVariants[2].id, quantity: 12, unit_cost: 210000, condition_grade: 'NEW' },
+    { id: '10000000-0000-0000-0000-000000000014', goods_receipt_id: demoReceipts[2].id, variant_id: extendedVariants[1].id, quantity: 5, actual_quantity: 0, unit_cost: 92000, condition_grade: 'NEW', note: 'Sai ấn bản.' },
+    { id: '10000000-0000-0000-0000-000000000015', goods_receipt_id: demoReceipts[3].id, variant_id: extendedVariants[2].id, location_id: compartments[1].id, quantity: 6, actual_quantity: 6, unit_cost: 210000, condition_grade: 'NEW' },
+    { id: '10000000-0000-0000-0000-000000000016', goods_receipt_id: demoReceipts[3].id, variant_id: extendedVariants[1].id, quantity: 4, actual_quantity: 4, unit_cost: 92000, condition_grade: 'NEW' },
+  ],
+  skipDuplicates: true,
+});
+
+await Promise.all([
+  prisma.stock_balances.upsert({ where: { variant_id_location_id: { variant_id: extendedVariants[0].id, location_id: hcmReceiving.id } }, update: {}, create: { warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[0].id, location_id: hcmReceiving.id, on_hand_qty: 12, available_qty: 0, reserved_qty: 0, safety_stock_qty: 5, reorder_point: 6, version: 1, last_movement_at: new Date('2026-08-14T09:15:00+07:00') } }),
+  prisma.stock_balances.upsert({ where: { variant_id_location_id: { variant_id: extendedVariants[1].id, location_id: hcmReceiving.id } }, update: {}, create: { warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[1].id, location_id: hcmReceiving.id, on_hand_qty: 12, available_qty: 0, reserved_qty: 0, safety_stock_qty: 5, reorder_point: 6, version: 1, last_movement_at: new Date('2026-08-15T13:30:00+07:00') } }),
+  prisma.stock_balances.upsert({ where: { variant_id_location_id: { variant_id: extendedVariants[2].id, location_id: hcmReceiving.id } }, update: {}, create: { warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[2].id, location_id: hcmReceiving.id, on_hand_qty: 0, available_qty: 0, reserved_qty: 0, safety_stock_qty: 5, reorder_point: 6, version: 1, last_movement_at: new Date('2026-08-15T13:30:00+07:00') } }),
+  prisma.stock_balances.upsert({ where: { variant_id_location_id: { variant_id: extendedVariants[2].id, location_id: compartments[1].id } }, update: {}, create: { warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[2].id, location_id: compartments[1].id, on_hand_qty: 6, available_qty: 6, reserved_qty: 0, safety_stock_qty: 5, reorder_point: 6, version: 1, last_movement_at: new Date('2026-08-15T14:10:00+07:00') } }),
+]);
+
+await prisma.stock_movements.createMany({
+  data: [
+    { movement_number: 'MOV-EXT-001', movement_type: 'INBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[0].id, to_location_id: hcmReceiving.id, quantity: 12, unit_cost: 68000, reason_code: 'PURCHASE_RECEIPT', source_service: 'inventory-service', reference_type: 'GOODS_RECEIPT', reference_id: demoReceipts[0].id, idempotency_key: 'seed-MOV-EXT-001', created_by_user_id: demoUserId, metadata: { movement_bucket: 'RECEIVING', goods_receipt_item_id: '10000000-0000-0000-0000-000000000011' }, created_at: new Date('2026-08-14T09:15:00+07:00') },
+    { movement_number: 'MOV-EXT-002', movement_type: 'INBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[1].id, to_location_id: hcmReceiving.id, quantity: 8, unit_cost: 92000, reason_code: 'PURCHASE_RECEIPT', source_service: 'inventory-service', reference_type: 'GOODS_RECEIPT', reference_id: demoReceipts[0].id, idempotency_key: 'seed-MOV-EXT-002', created_by_user_id: demoUserId, metadata: { movement_bucket: 'RECEIVING', goods_receipt_item_id: '10000000-0000-0000-0000-000000000012' }, created_at: new Date('2026-08-14T09:16:00+07:00') },
+    { movement_number: 'MOV-EXT-003', movement_type: 'INBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[2].id, to_location_id: hcmReceiving.id, quantity: 6, unit_cost: 210000, reason_code: 'MANUAL_RECEIPT', source_service: 'inventory-service', reference_type: 'GOODS_RECEIPT', reference_id: demoReceipts[3].id, idempotency_key: 'seed-MOV-EXT-003', created_by_user_id: demoUserId, metadata: { movement_bucket: 'RECEIVING', goods_receipt_item_id: '10000000-0000-0000-0000-000000000015' }, created_at: new Date('2026-08-15T13:30:00+07:00') },
+    { movement_number: 'MOV-EXT-004', movement_type: 'INBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[1].id, to_location_id: hcmReceiving.id, quantity: 4, unit_cost: 92000, reason_code: 'MANUAL_RECEIPT', source_service: 'inventory-service', reference_type: 'GOODS_RECEIPT', reference_id: demoReceipts[3].id, idempotency_key: 'seed-MOV-EXT-004', created_by_user_id: demoUserId, metadata: { movement_bucket: 'RECEIVING', goods_receipt_item_id: '10000000-0000-0000-0000-000000000016' }, created_at: new Date('2026-08-15T13:31:00+07:00') },
+    { movement_number: 'MOV-EXT-005', movement_type: 'INBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[2].id, from_location_id: hcmReceiving.id, to_location_id: compartments[1].id, quantity: 6, unit_cost: 210000, reason_code: 'PUTAWAY', source_service: 'inventory-service', reference_type: 'RECEIVING_SHELF_PUTAWAY', reference_id: demoReceipts[3].id, idempotency_key: 'seed-MOV-EXT-005', created_by_user_id: demoUserId, metadata: { movement_bucket: 'PUTAWAY', goods_receipt_item_id: '10000000-0000-0000-0000-000000000015' }, created_at: new Date('2026-08-15T14:10:00+07:00') },
+    { movement_number: 'MOV-EXT-006', movement_type: 'OUTBOUND', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[0].id, from_location_id: compartments[0].id, quantity: 2, unit_cost: 68000, reason_code: 'CUSTOMER_ORDER', source_service: 'inventory-service', reference_type: 'DEMO_ORDER', reference_id: demoReceipts[0].id, idempotency_key: 'seed-MOV-EXT-006', created_by_user_id: demoUserId, metadata: { channel: 'web', order_code: 'SO-DEMO-001' }, created_at: new Date('2026-08-16T09:05:00+07:00') },
+    { movement_number: 'MOV-EXT-007', movement_type: 'ADJUSTMENT', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[1].id, from_location_id: compartments[1].id, quantity: -1, unit_cost: 92000, reason_code: 'DAMAGE', source_service: 'inventory-service', reference_type: 'STOCKTAKE', reference_id: demoReceipts[3].id, idempotency_key: 'seed-MOV-EXT-007', created_by_user_id: demoUserId, metadata: { note: 'Bìa sách bị hư khi kiểm kho.' }, created_at: new Date('2026-08-16T11:20:00+07:00') },
+    { movement_number: 'MOV-EXT-008', movement_type: 'BORROW', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[0].id, from_location_id: compartments[0].id, quantity: 1, unit_cost: 68000, reason_code: 'LOAN_CREATED', source_service: 'borrow-service', reference_type: 'LOAN_TRANSACTION', reference_id: demoReceipts[0].id, idempotency_key: 'seed-MOV-EXT-008', created_by_user_id: demoUserId, metadata: { loan_code: 'LOAN-EXT-OVERDUE' }, created_at: new Date('2026-08-16T14:00:00+07:00') },
+    { movement_number: 'MOV-EXT-009', movement_type: 'RETURN', warehouse_id: hcmWarehouse.id, variant_id: extendedVariants[2].id, to_location_id: compartments[1].id, quantity: 1, unit_cost: 210000, reason_code: 'BOOK_RETURNED', source_service: 'borrow-service', reference_type: 'LOAN_TRANSACTION', reference_id: demoReceipts[3].id, idempotency_key: 'seed-MOV-EXT-009', created_by_user_id: demoUserId, metadata: { condition_grade: 'GOOD' }, created_at: new Date('2026-08-17T08:40:00+07:00') },
+  ],
+  skipDuplicates: true,
+});
+
+console.log(`✅ Created ${extendedBooks.length} extended books, ${demoReceipts.length} goods receipts, and movement history for receiving/putaway`);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FINAL SUMMARY
