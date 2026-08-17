@@ -1700,6 +1700,59 @@ await prisma.stock_movements.createMany({
   skipDuplicates: true,
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 15: OPERATIONAL QUEUES (AUDITED UI SEED COVERAGE)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const operationalIds = {
+  supplierInvoice: '20000000-0000-4000-8000-000000000001',
+  outboundPick: '20000000-0000-4000-8000-000000000002',
+  outboundPack: '20000000-0000-4000-8000-000000000003',
+  pickingTask: '20000000-0000-4000-8000-000000000004',
+  packingTask: '20000000-0000-4000-8000-000000000005',
+  transfer: '20000000-0000-4000-8000-000000000006',
+  stockAudit: '20000000-0000-4000-8000-000000000007',
+  purchaseRequest: '20000000-0000-4000-8000-000000000008',
+  exceptionReport: '20000000-0000-4000-8000-000000000009',
+  staffTask: '20000000-0000-4000-8000-000000000010',
+};
+
+await prisma.supplier_delivery_invoices.createMany({
+  data: [{ id: operationalIds.supplierInvoice, purchase_order_id: extendedPurchaseOrders[0].id, supplier_id: suppliers[0].id, invoice_number: 'SUP-DEL-EXT-001', delivery_number: 'DEL-EXT-001', invoice_date: new Date('2026-08-14'), expected_delivery_date: new Date('2026-08-14'), status: 'SUBMITTED', supplier_note: 'Đủ số lượng, chờ nhân viên kho đối chiếu.', created_by_user_id: demoUserId }],
+  skipDuplicates: true,
+});
+await prisma.supplier_delivery_invoice_items.createMany({
+  data: [{ id: '20000000-0000-4000-8000-000000000011', invoice_id: operationalIds.supplierInvoice, variant_id: extendedVariants[0].id, invoiced_qty: 12, delivered_qty: 12, accepted_qty: 0, unit_cost: 68000 }],
+  skipDuplicates: true,
+});
+
+await prisma.outbound_orders.createMany({
+  data: [
+    { id: operationalIds.outboundPick, outbound_number: 'OUT-EXT-001', warehouse_id: hcmWarehouse.id, outbound_type: 'SALES_ORDER', status: 'APPROVED', requested_by_user_id: demoUserId, approved_by_user_id: demoUserId, reference_type: 'SALES_ORDER', external_reference: 'SO-DEMO-001', requested_at: new Date('2026-08-16T08:30:00+07:00'), note: 'Đơn chờ picking.' },
+    { id: operationalIds.outboundPack, outbound_number: 'OUT-EXT-002', warehouse_id: hcmWarehouse.id, outbound_type: 'SALES_ORDER', status: 'READY_TO_SHIP', requested_by_user_id: demoUserId, approved_by_user_id: demoUserId, reference_type: 'SALES_ORDER', external_reference: 'SO-DEMO-002', requested_at: new Date('2026-08-16T10:00:00+07:00'), note: 'Đơn đã pick, chờ đóng gói.' },
+  ], skipDuplicates: true,
+});
+await prisma.outbound_order_items.createMany({
+  data: [
+    { id: '20000000-0000-4000-8000-000000000012', outbound_order_id: operationalIds.outboundPick, variant_id: extendedVariants[0].id, source_location_id: compartments[0].id, quantity: 3, processed_qty: 0 },
+    { id: '20000000-0000-4000-8000-000000000013', outbound_order_id: operationalIds.outboundPack, variant_id: extendedVariants[1].id, source_location_id: compartments[1].id, quantity: 2, processed_qty: 2 },
+  ], skipDuplicates: true,
+});
+await prisma.picking_tasks.createMany({ data: [{ id: operationalIds.pickingTask, task_number: 'PICK-EXT-001', root_order_id: operationalIds.outboundPick, warehouse_id: hcmWarehouse.id, status: 'PENDING' }], skipDuplicates: true });
+await prisma.picking_task_items.createMany({ data: [{ id: '20000000-0000-4000-8000-000000000014', picking_task_id: operationalIds.pickingTask, outbound_order_item_id: '20000000-0000-4000-8000-000000000012', variant_id: extendedVariants[0].id, source_location_id: compartments[0].id, requested_qty: 3 }], skipDuplicates: true });
+await prisma.packing_tasks.createMany({ data: [{ id: operationalIds.packingTask, task_number: 'PACK-EXT-001', root_order_id: operationalIds.outboundPack, warehouse_id: hcmWarehouse.id, status: 'PENDING', scan_invoice_code: 'OUT-EXT-002' }], skipDuplicates: true });
+await prisma.packing_task_items.createMany({ data: [{ id: '20000000-0000-4000-8000-000000000015', packing_task_id: operationalIds.packingTask, outbound_order_item_id: '20000000-0000-4000-8000-000000000013', variant_id: extendedVariants[1].id, expected_qty: 2 }], skipDuplicates: true });
+
+await prisma.transfer_orders.createMany({ data: [{ id: operationalIds.transfer, transfer_number: 'TR-EXT-001', from_warehouse_id: hcmWarehouse.id, to_warehouse_id: hnWarehouse.id, status: 'IN_TRANSIT', requested_by_user_id: demoUserId, approved_by_user_id: demoUserId, shipped_by_user_id: demoUserId, received_by_user_id: demoUserId, requested_at: new Date('2026-08-15T08:00:00+07:00'), shipped_at: new Date('2026-08-16T16:00:00+07:00'), note: 'Điều chuyển sách demo về kho Hà Nội.' }], skipDuplicates: true });
+await prisma.transfer_order_items.createMany({ data: [{ id: '20000000-0000-4000-8000-000000000016', transfer_order_id: operationalIds.transfer, variant_id: extendedVariants[2].id, from_location_id: compartments[1].id, to_location_id: hnReceiving.id, quantity: 4, shipped_qty: 4, unit_cost: 210000 }], skipDuplicates: true });
+
+await prisma.stock_audits.createMany({ data: [{ id: operationalIds.stockAudit, audit_number: 'AUD-EXT-001', warehouse_id: hcmWarehouse.id, status: 'IN_PROGRESS', created_by_user_id: demoUserId, assigned_to_user_id: demoUserId, assigned_at: new Date('2026-08-17T08:00:00+07:00'), started_at: new Date('2026-08-17T08:10:00+07:00'), note: 'Kiểm kê định kỳ khu A.' }], skipDuplicates: true });
+await prisma.stock_audit_lines.createMany({ data: [{ id: '20000000-0000-4000-8000-000000000017', stock_audit_id: operationalIds.stockAudit, variant_id: extendedVariants[0].id, location_id: compartments[0].id, expected_qty: 18, counted_qty: 17, variance_qty: -1, note: 'Thiếu một cuốn cần đối chiếu.' }], skipDuplicates: true });
+
+await prisma.purchase_requests.createMany({ data: [{ id: operationalIds.purchaseRequest, request_number: 'PUR-REQ-EXT-001', created_by_user_id: demoUserId, warehouse_id: hcmWarehouse.id, book_variant_id: extendedVariants[1].id, quantity_requested: 30, reason: 'LOW_STOCK', note: 'Bổ sung trước kỳ khai giảng.', status: 'PENDING' }], skipDuplicates: true });
+await prisma.warehouse_exception_reports.createMany({ data: [{ id: operationalIds.exceptionReport, report_number: 'EXC-EXT-001', created_by_user_id: demoUserId, warehouse_id: hcmWarehouse.id, task_type: 'RECEIVING', task_id: demoReceipts[0].id, goods_receipt_id: demoReceipts[0].id, exception_type: 'SHORTAGE', book_variant_id: extendedVariants[1].id, expected_qty: 10, actual_qty: 8, note: 'Nhà cung cấp giao thiếu hai cuốn, chờ quản lý xử lý.', status: 'OPEN' }], skipDuplicates: true });
+await prisma.staff_tasks.createMany({ data: [{ id: operationalIds.staffTask, title: 'Chuẩn bị khu vực xuất hàng', description: 'Dọn và kiểm tra khu đóng gói trước ca chiều.', task_type: 'OUTBOUND', priority: 'HIGH', status: 'OPEN', assignee_user_id: demoUserId, assigned_by_user_id: demoUserId, warehouse_id: hcmWarehouse.id, related_entity_type: 'OUTBOUND_ORDER', related_entity_id: operationalIds.outboundPick, due_date: new Date('2026-08-17T16:00:00+07:00') }], skipDuplicates: true });
+
 console.log(`✅ Created ${extendedBooks.length} extended books, ${demoReceipts.length} goods receipts, and movement history for receiving/putaway`);
 
 // ═══════════════════════════════════════════════════════════════════════════════
