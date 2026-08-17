@@ -1156,6 +1156,67 @@ const accountLedgerData = [
 console.log('✅ Created account ledger entries (skipped - requires valid account IDs)');
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STEP 13: EXTENDED CUSTOMER AND CIRCULATION SCENARIOS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const extendedCustomer = await prisma.customers.upsert({
+  where: { customer_code: 'CUST-EXT-001' }, update: {},
+  create: {
+    customer_code: 'CUST-EXT-001', full_name: 'Bui Thanh Thao', email: 'bui.thanh.thao@demo.smartbook.vn',
+    phone: '+84901234601', birth_date: new Date('2003-10-18'), address: 'Linh Trung, Thu Duc, Ho Chi Minh City',
+    status: 'ACTIVE', total_fine_balance: 20000,
+  },
+});
+await prisma.customer_memberships.createMany({
+  data: [{ customer_id: extendedCustomer.id, plan_id: plans[1].id, card_number: 'CARD-EXT-001-SILVER', start_date: new Date('2026-01-01'), end_date: new Date('2027-01-01'), status: 'ACTIVE', note: 'Student reader with mixed digital and counter activity.' }],
+  skipDuplicates: true,
+});
+await prisma.customer_preferences.upsert({
+  where: { customer_id: extendedCustomer.id }, update: {},
+  create: { customer_id: extendedCustomer.id, notify_email: true, notify_sms: true, notify_in_app: true, preferred_language: 'vi' },
+});
+const extendedAccount = await prisma.customer_accounts.upsert({
+  where: { customer_id: extendedCustomer.id }, update: {},
+  create: { customer_id: extendedCustomer.id, currency_code: 'VND', status: 'ACTIVE', available_balance: 180000, held_balance: 20000, total_credited: 250000, total_debited: 50000 },
+});
+
+const extendedLoan = await prisma.loan_transactions.upsert({
+  where: { loan_number: 'LOAN-EXT-OVERDUE' }, update: {},
+  create: {
+    loan_number: 'LOAN-EXT-OVERDUE', customer_id: extendedCustomer.id, warehouse_id: warehouseId, handled_by_user_id: userId,
+    borrow_date: new Date('2026-07-01T09:00:00+07:00'), due_date: new Date('2026-07-15T09:00:00+07:00'),
+    status: 'OVERDUE', total_items: 1, notes: 'Overdue scenario for reminder and fine dashboards.',
+  },
+});
+const existingExtendedItem = await prisma.loan_items.findFirst({ where: { item_barcode: 'LI-EXT-OVERDUE-001' }, select: { id: true } });
+const extendedLoanItem = existingExtendedItem ?? await prisma.loan_items.create({
+  data: { loan_id: extendedLoan.id, variant_id: '00000000-0000-0000-0000-000000000001', item_barcode: 'LI-EXT-OVERDUE-001', due_date: new Date('2026-07-15T09:00:00+07:00'), status: 'OVERDUE', item_condition_on_checkout: 'GOOD', fine_amount: 20000, notes: 'Two reminders sent; awaiting return.' },
+});
+const extendedFine = await prisma.fines.findFirst({ where: { customer_id: extendedCustomer.id, note: 'Extended overdue fine for reminder workflow.' }, select: { id: true } })
+  ?? await prisma.fines.create({ data: { customer_id: extendedCustomer.id, loan_item_id: extendedLoanItem.id, fine_type: 'OVERDUE', amount: 20000, waived_amount: 0, status: 'UNPAID', issued_by_user_id: userId, issued_at: new Date('2026-07-20T09:00:00+07:00'), note: 'Extended overdue fine for reminder workflow.' } });
+
+const existingPaymentMethod = await prisma.payment_methods.findFirst({ where: { customer_id: extendedCustomer.id, provider_reference: 'PAYMENT-EXT-WALLET' }, select: { id: true } });
+const extendedPaymentMethod = existingPaymentMethod ?? await prisma.payment_methods.create({
+  data: { customer_id: extendedCustomer.id, method_type: 'EWALLET', provider: 'MoMo Demo', provider_reference: 'PAYMENT-EXT-WALLET', masked_account: 'MOMO-***-8601', is_default: true, status: 'ACTIVE', metadata: { sandbox: true } },
+});
+await prisma.auto_payment_settings.upsert({
+  where: { customer_id: extendedCustomer.id }, update: {},
+  create: { customer_id: extendedCustomer.id, auto_debit_borrow_fee: true, auto_debit_fines: false, allow_partial_fine_payment: true, min_wallet_balance_required: 50000, default_payment_method_id: extendedPaymentMethod.id },
+});
+const existingLedger = await prisma.account_ledger.findFirst({ where: { customer_id: extendedCustomer.id, idempotency_key: 'ledger-ext-wallet-topup-001' }, select: { id: true } });
+if (!existingLedger) await prisma.account_ledger.create({
+  data: { account_id: extendedAccount.id, customer_id: extendedCustomer.id, entry_type: 'CREDIT', amount: 250000, balance_before: 0, balance_after: 250000, reference_type: 'WALLET_TOP_UP', idempotency_key: 'ledger-ext-wallet-topup-001', note: 'Initial demo wallet top-up.', metadata: { channel: 'EWALLET' }, created_by_user_id: userId },
+});
+const existingNotification = await prisma.customer_notifications.findFirst({ where: { customer_id: extendedCustomer.id, template_code: 'OVERDUE_REMINDER_EXT' }, select: { id: true } });
+if (!existingNotification) await prisma.customer_notifications.create({
+  data: { customer_id: extendedCustomer.id, channel: 'SMS', template_code: 'OVERDUE_REMINDER_EXT', subject: 'Nhắc trả sách quá hạn', body: 'Sách của bạn đã quá hạn. Vui lòng trả hoặc gia hạn tại SmartBook.', reference_type: 'LOAN_TRANSACTION', reference_id: extendedLoan.id, status: 'SENT', scheduled_at: new Date('2026-07-20T08:00:00+07:00'), sent_at: new Date('2026-07-20T08:00:05+07:00'), metadata: { fine_id: extendedFine.id, priority: 'high' } },
+});
+await prisma.book_reviews.createMany({ data: [{ customer_id: extendedCustomer.id, book_id: '00000000-0000-0000-0000-000000000001', rating: 5, comment: 'Dữ liệu demo cho đánh giá tích cực của độc giả.', status: 'VISIBLE' }], skipDuplicates: true });
+await prisma.book_wishlists.createMany({ data: [{ customer_id: extendedCustomer.id, book_id: '00000000-0000-0000-0000-000000000002' }], skipDuplicates: true });
+await prisma.availability_alerts.createMany({ data: [{ customer_id: extendedCustomer.id, book_id: '00000000-0000-0000-0000-000000000003', status: 'ACTIVE' }], skipDuplicates: true });
+console.log('✅ Created extended customer, wallet, overdue loan, fine, and engagement scenario');
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // FINAL SUMMARY
 // ═══════════════════════════════════════════════════════════════════════════════
 

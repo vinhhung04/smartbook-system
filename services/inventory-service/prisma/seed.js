@@ -1552,7 +1552,97 @@ await prisma.stock_alerts.createMany({
 
 console.log('✅ Created stock alerts');
 
-console.log('✅ Created stock movements (skipped - requires valid warehouse IDs)');
+// ═══════════════════════════════════════════════════════════════════════════════
+// STEP 13: EXTENDED DEMO CATALOG AND PROCUREMENT LIFECYCLE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const extendedBooks = await Promise.all([
+  prisma.books.upsert({
+    where: { book_code: 'BK-EXT-001' },
+    update: {},
+    create: {
+      book_code: 'BK-EXT-001', title: 'Dế Mèn Phiêu Lưu Ký', subtitle: 'Ấn bản minh họa',
+      description: 'Tác phẩm thiếu nhi kinh điển về hành trình trưởng thành, tình bạn và trách nhiệm.',
+      publisher_id: publishers[0].id, edition: 'Tái bản 2025', published_date: new Date('2025-02-15'),
+      page_count: 208, country_of_origin: 'Vietnam', default_language: 'vi', is_active: true,
+      metadata: { genre: ['children', 'adventure'], target_audience: ['children', 'family'], reading_level: 'beginner' },
+    },
+  }),
+  prisma.books.upsert({
+    where: { book_code: 'BK-EXT-002' },
+    update: {},
+    create: {
+      book_code: 'BK-EXT-002', title: 'Tư Duy Phản Biện', subtitle: 'Kỹ năng cho người học suốt đời',
+      description: 'Cẩm nang thực hành đánh giá lập luận, nguồn tin và ra quyết định dựa trên bằng chứng.',
+      publisher_id: publishers[1].id, edition: 'Lần 2', published_date: new Date('2024-09-10'),
+      page_count: 356, country_of_origin: 'Vietnam', default_language: 'vi', is_active: true,
+      metadata: { genre: ['education', 'self-help'], target_audience: ['university', 'professional'], reading_level: 'intermediate' },
+    },
+  }),
+  prisma.books.upsert({
+    where: { book_code: 'BK-EXT-003' },
+    update: {},
+    create: {
+      book_code: 'BK-EXT-003', title: 'Project Hail Mary', subtitle: 'A Novel',
+      description: 'A science-fiction survival story centered on problem solving and collaboration.',
+      publisher_id: publishers[2].id, edition: 'Paperback', published_date: new Date('2023-05-02'),
+      page_count: 496, country_of_origin: 'United States', default_language: 'en', is_active: true,
+      metadata: { genre: ['science-fiction'], target_audience: ['adult'], reading_level: 'advanced' },
+    },
+  }),
+]);
+
+const extendedVariants = await Promise.all([
+  prisma.book_variants.upsert({
+    where: { sku: 'SKU-EXT-001-PB' }, update: {},
+    create: { book_id: extendedBooks[0].id, sku: 'SKU-EXT-001-PB', isbn13: '9786042389001', internal_barcode: 'BC-EXT-001', cover_type: 'PAPERBACK', language_code: 'vi', publish_year: 2025, condition_grade: 'NEW', unit_cost: 68000, list_price: 99000, replacement_cost: 120000, is_borrowable: true, is_sellable: true, is_track_by_unit: true, is_active: true },
+  }),
+  prisma.book_variants.upsert({
+    where: { sku: 'SKU-EXT-002-PB' }, update: {},
+    create: { book_id: extendedBooks[1].id, sku: 'SKU-EXT-002-PB', isbn13: '9786042389002', internal_barcode: 'BC-EXT-002', cover_type: 'PAPERBACK', language_code: 'vi', publish_year: 2024, condition_grade: 'NEW', unit_cost: 92000, list_price: 145000, replacement_cost: 175000, is_borrowable: true, is_sellable: true, is_track_by_unit: false, is_active: true },
+  }),
+  prisma.book_variants.upsert({
+    where: { sku: 'SKU-EXT-003-PB' }, update: {},
+    create: { book_id: extendedBooks[2].id, sku: 'SKU-EXT-003-PB', isbn13: '9780593135204', internal_barcode: 'BC-EXT-003', cover_type: 'PAPERBACK', language_code: 'en', publish_year: 2023, condition_grade: 'NEW', unit_cost: 210000, list_price: 320000, replacement_cost: 380000, is_borrowable: true, is_sellable: true, is_track_by_unit: true, is_active: true },
+  }),
+]);
+
+await prisma.book_categories.createMany({
+  data: extendedBooks.map((book, index) => ({ book_id: book.id, category_id: categories[index % categories.length].id })),
+  skipDuplicates: true,
+});
+await prisma.book_authors.createMany({
+  data: extendedBooks.map((book, index) => ({ book_id: book.id, author_id: authors[index % authors.length].id, author_order: 1 })),
+  skipDuplicates: true,
+});
+await prisma.supplier_variants.createMany({
+  data: extendedVariants.map((variant, index) => ({ supplier_id: suppliers[index % suppliers.length].id, variant_id: variant.id, supplier_sku: `EXT-SUP-${String(index + 1).padStart(3, '0')}`, default_cost: [68000, 92000, 210000][index], min_order_qty: 5, is_preferred: true })),
+  skipDuplicates: true,
+});
+await Promise.all(extendedVariants.map((variant, index) => prisma.stock_balances.upsert({
+  where: { variant_id_location_id: { variant_id: variant.id, location_id: compartments[index].id } }, update: {},
+  create: { warehouse_id: hcmWarehouse.id, variant_id: variant.id, location_id: compartments[index].id, on_hand_qty: [18, 4, 0][index], available_qty: [16, 3, 0][index], reserved_qty: [2, 1, 0][index], safety_stock_qty: 5, reorder_point: 6, version: 1, status: index === 2 ? 'OUT_OF_STOCK' : 'AVAILABLE', last_movement_at: new Date('2026-08-01T09:00:00+07:00') },
+})));
+
+const extendedPurchaseOrders = await Promise.all([
+  prisma.purchase_orders.upsert({
+    where: { po_number: 'PO-EXT-001' }, update: {},
+    create: { po_number: 'PO-EXT-001', supplier_id: suppliers[0].id, warehouse_id: hcmWarehouse.id, status: 'APPROVED', ordered_by_user_id: '00000000-0000-0000-0000-000000000001', approved_by_user_id: '00000000-0000-0000-0000-000000000001', order_date: new Date('2026-07-20'), expected_date: new Date('2026-08-05'), note: 'Approved replenishment for children and skills titles.' },
+  }),
+  prisma.purchase_orders.upsert({
+    where: { po_number: 'PO-EXT-002' }, update: {},
+    create: { po_number: 'PO-EXT-002', supplier_id: suppliers[2].id, warehouse_id: hnWarehouse.id, status: 'DRAFT', ordered_by_user_id: '00000000-0000-0000-0000-000000000001', order_date: new Date('2026-08-10'), expected_date: new Date('2026-09-05'), note: 'Draft import order for international fiction.' },
+  }),
+]);
+await prisma.purchase_order_items.createMany({
+  data: [
+    { purchase_order_id: extendedPurchaseOrders[0].id, variant_id: extendedVariants[0].id, ordered_qty: 30, received_qty: 0, unit_cost: 68000 },
+    { purchase_order_id: extendedPurchaseOrders[0].id, variant_id: extendedVariants[1].id, ordered_qty: 20, received_qty: 0, unit_cost: 92000 },
+    { purchase_order_id: extendedPurchaseOrders[1].id, variant_id: extendedVariants[2].id, ordered_qty: 12, received_qty: 0, unit_cost: 210000 },
+  ], skipDuplicates: true,
+});
+
+console.log(`✅ Created ${extendedBooks.length} extended books, ${extendedVariants.length} variants, and ${extendedPurchaseOrders.length} purchase orders`);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FINAL SUMMARY
