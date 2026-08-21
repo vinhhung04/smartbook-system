@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowLeft, ArrowRight, ChevronRight, Home, MapPin, Package, Plus, Pencil, Trash2, Save, X,
@@ -306,7 +306,7 @@ export function WarehousesPage() {
     setDrillPath((prev) => prev.slice(0, depth));
   };
 
-  const loadWarehouses = async (preferredId?: string) => {
+  const loadWarehouses = useCallback(async (preferredId?: string) => {
     try {
       setLoadingWarehouses(true);
       setPageError("");
@@ -329,9 +329,9 @@ export function WarehousesPage() {
     } finally {
       setLoadingWarehouses(false);
     }
-  };
+  }, [selectedWarehouseId]);
 
-  const loadLocationTree = async (warehouseId: string, preferredLocationId?: string): Promise<LocationNode[]> => {
+  const loadLocationTree = useCallback(async (warehouseId: string, preferredLocationId?: string): Promise<LocationNode[]> => {
     if (!warehouseId) {
       setLocationTree([]);
       setSelectedLocationId("");
@@ -374,11 +374,11 @@ export function WarehousesPage() {
     } finally {
       setLoadingLocations(false);
     }
-  };
+  }, [selectedLocationId]);
 
   useEffect(() => {
     void loadWarehouses();
-  }, []);
+  }, [loadWarehouses]);
 
   useEffect(() => {
     if (!selectedWarehouse) {
@@ -405,7 +405,7 @@ export function WarehousesPage() {
     }
 
     void loadLocationTree(selectedWarehouseId);
-  }, [selectedWarehouseId]);
+  }, [selectedWarehouseId, loadLocationTree]);
 
   useEffect(() => {
     if (!selectedLocation) {

@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const BCRYPT_ROUNDS = 12;
 const prisma = require('../lib/prisma');
 
 function normalizeText(value) {
@@ -232,7 +233,7 @@ async function createUser(req, res) {
       }
 
       const roleIds = await resolveRoleIds(tx, req.body?.role_ids, req.body?.role_codes);
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
       const inserted = await tx.$queryRawUnsafe(
         `

@@ -7,13 +7,14 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "prisma:generate": "prisma generate",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@smartbook/shared": "workspace:*",
     "@prisma/client": "5.21.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",

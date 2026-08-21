@@ -24,7 +24,10 @@ const FINE_EVENTS = ['fine:created', 'fine:paid', 'fine:waived'];
 export function useBorrowRealtime(callbacks: BorrowRealtimeCallbacks = {}) {
   const { socket } = useSocket();
   const cbRef = useRef(callbacks);
-  cbRef.current = callbacks;
+
+  useEffect(() => {
+    cbRef.current = callbacks;
+  }, [callbacks]);
 
   useEffect(() => {
     if (!socket) return;

@@ -69,7 +69,7 @@ export function TransferReceivingPage() {
     };
 
     void run();
-  }, []);
+  }, [canManageQueue]);
 
   useEffect(() => {
     if (!canManageQueue) return;

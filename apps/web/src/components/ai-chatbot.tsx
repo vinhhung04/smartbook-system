@@ -8,6 +8,7 @@ import { authService, type AuthUser } from '@/services/auth';
 import { getPrimaryRole } from '@/lib/rbac';
 import { toast } from 'sonner';
 import { ActionCard } from './ai-action-card';
+import { useMemo } from 'react';
 
 interface UIMessage {
   id: number;
@@ -390,55 +391,32 @@ async function gatherSystemContext(user: AuthUser | null): Promise<SystemContext
 // ── Main AIChatbot component ──────────────────────────────────────────────────
 
 export function AIChatbot() {
+  const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [messages, setMessages] = useState<UIMessage[]>(() => loadStoredMessages(currentUser?.id || 'anon'));
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextReady, setContextReady] = useState(true);
-  const [showSuggestions, setShowSuggestions] = useState(true);
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const systemContextRef = useRef<SystemContext | undefined>(undefined);
+  const [showSuggestions, setShowSuggestions] = useState(() => messages.length === 0);
+  const [systemContext, setSystemContext] = useState<SystemContext | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // The persist effect below fires on this same mount render too, with the
-  // still-empty initial `messages` state — skip that one run so it doesn't
-  // clobber the just-loaded history before React re-renders with it.
-  const skipNextPersistRef = useRef(true);
+  const messageIdRef = useRef(messages.reduce((highest, message) => Math.max(highest, message.id), 0));
 
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    setCurrentUser(user);
-    const stored = loadStoredMessages(user?.id || 'anon');
-    if (stored.length > 0) {
-      setMessages(stored);
-      setShowSuggestions(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (skipNextPersistRef.current) {
-      skipNextPersistRef.current = false;
-      return;
-    }
     saveStoredMessages(currentUser?.id || 'anon', messages);
   }, [messages, currentUser?.id]);
 
   const refreshContext = useCallback(async () => {
     try {
       setContextReady(false);
-      systemContextRef.current = await gatherSystemContext(currentUser);
+      setSystemContext(await gatherSystemContext(currentUser));
       setContextReady(true);
     } catch {
-      systemContextRef.current = undefined;
+      setSystemContext(undefined);
       setContextReady(true);
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    if (open && !systemContextRef.current) {
-      setContextReady(true);
-    }
-  }, [open]);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -457,19 +435,19 @@ export function AIChatbot() {
     if (!trimmed || loading) return;
 
     setShowSuggestions(false);
-    const userMsg: UIMessage = { id: Date.now(), role: 'user', text: trimmed };
+    const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     const history = buildHistory();
-    const botMsgId = Date.now() + 1;
+    const botMsgId = ++messageIdRef.current;
     // The assistant bubble is only added to `messages` once the first chunk
     // arrives, so the typing indicator (shown while `loading`) isn't doubled
     // up with an empty message bubble in the meantime.
     let started = false;
 
-    await aiService.chatStream(trimmed, history, systemContextRef.current, {
+    await aiService.chatStream(trimmed, history, systemContext, {
       onToken: (chunk) => {
         if (!started) {
           started = true;
@@ -501,18 +479,18 @@ export function AIChatbot() {
       },
       onError: () => {
         setLoading(false);
-        const errorText = 'Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau! 🙏';
+        const errorText = 'AI tạm thời không khả dụng. Các nghiệp vụ thư viện và kho vẫn hoạt động bình thường.';
         setMessages((prev) =>
           started
             ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText } : m))
             : [...prev, { id: botMsgId, role: 'assistant', text: errorText }],
         );
-        toast.error('Không thể kết nối tới AI service');
+        toast.error('AI tạm thời không khả dụng');
       },
     });
   };
 
-  const ACTION_FOLLOWUP_SUGGESTIONS: Record<string, string[]> = {
+  const ACTION_FOLLOWUP_SUGGESTIONS = useMemo<Record<string, string[]>>(() => ({
     CREATE_STOCK_ALERT: [
       'Tạo phiếu yêu cầu nhập hàng cho các sách tồn kho thấp',
       'Tạo task cho staff kiểm tra các sách hết hàng',
@@ -529,7 +507,7 @@ export function AIChatbot() {
       'Tạo cảnh báo tồn kho thấp',
       'Nên nhập thêm sách nào?',
     ],
-  };
+  }), []);
 
   const handleActionConfirmed = useCallback((_actionId: string, result: any, actionType: string) => {
     const followUpSuggestions = ACTION_FOLLOWUP_SUGGESTIONS[actionType] ?? [];
@@ -538,7 +516,7 @@ export function AIChatbot() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now(),
+          id: ++messageIdRef.current,
           role: 'assistant',
           text: '✅ Hành động đã xác nhận. Xem báo cáo bên dưới.',
           action_result: result,
@@ -610,7 +588,7 @@ export function AIChatbot() {
     setMessages((prev) => [
       ...prev,
       {
-        id: Date.now(),
+        id: ++messageIdRef.current,
         role: 'assistant',
         text: fullText || 'Hành động đã được thực thi.',
         action_result: result,
@@ -623,7 +601,7 @@ export function AIChatbot() {
     setMessages((prev) => [
       ...prev,
       {
-        id: Date.now(),
+        id: ++messageIdRef.current,
         role: 'assistant',
         text: 'Đã hủy hành động.',
       },
@@ -634,7 +612,7 @@ export function AIChatbot() {
     setMessages([]);
     setInput('');
     setShowSuggestions(true);
-    systemContextRef.current = undefined;
+    setSystemContext(undefined);
     setContextReady(true);
   };
 
@@ -844,13 +822,13 @@ export function AIChatbot() {
           </div>
 
           {/* Context status bar */}
-          {contextReady && systemContextRef.current?.summary && (
+          {contextReady && systemContext?.summary && (
             <div className="px-3 py-1.5 bg-indigo-50/60 border-t border-indigo-100/50 flex items-center gap-3 text-[10px] text-indigo-600 shrink-0">
-              <span>📚 {systemContextRef.current.summary.totalBooks} sách</span>
-              <span>📖 {systemContextRef.current.summary.activeLoans} đang mượn</span>
-              {systemContextRef.current.summary.overdueLoans > 0 && (
+              <span>📚 {systemContext.summary.totalBooks} sách</span>
+              <span>📖 {systemContext.summary.activeLoans} đang mượn</span>
+              {systemContext.summary.overdueLoans > 0 && (
                 <span className="text-rose-600">
-                  ⚠️ {systemContextRef.current.summary.overdueLoans} quá hạn
+                  ⚠️ {systemContext.summary.overdueLoans} quá hạn
                 </span>
               )}
             </div>

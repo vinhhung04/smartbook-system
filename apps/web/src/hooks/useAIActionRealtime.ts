@@ -14,7 +14,10 @@ const AI_ACTION_EVENTS = [
 export function useAIActionRealtime(onEvent: AIActionEventCallback) {
   const { socket } = useSocket();
   const cbRef = useRef(onEvent);
-  cbRef.current = onEvent;
+
+  useEffect(() => {
+    cbRef.current = onEvent;
+  }, [onEvent]);
 
   useEffect(() => {
     if (!socket) return;

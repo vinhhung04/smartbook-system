@@ -118,7 +118,7 @@ export function SmartReceivingPage() {
       }
     };
     void loadWarehouses();
-  }, []);
+  }, [selectedWarehouse]);
 
   // Handle file selection
   const handleFileSelect = useCallback((file: File) => {

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const redis = require('../../lib/redis');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Check if token is blacklisted
 async function isTokenBlacklisted(tokenId) {
@@ -49,7 +49,7 @@ async function authMiddleware(req, res, next) {
 }
 
 // Generate token with unique ID
-function generateToken(user, expiresIn = '24h') {
+function generateToken(user, expiresIn = process.env.JWT_EXPIRES_IN || '2h') {
   const jti = `${user.id}-${Date.now()}`;
   return {
     token: jwt.sign(

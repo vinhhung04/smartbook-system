@@ -1,0 +1,8 @@
+services:
+  api-gateway:
+    ports: !override
+      - "127.0.0.1:13000:3000"
+
+  smartbook-ui:
+    ports: !override
+      - "127.0.0.1:15173:80"

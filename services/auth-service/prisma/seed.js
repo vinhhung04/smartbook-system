@@ -545,6 +545,20 @@ async function main() {
         is_superuser: false,
       },
     }),
+    // Catalog curator covers a distinct day-to-day operational persona.
+    prisma.user.upsert({
+      where: { username: 'curator01' },
+      update: {},
+      create: {
+        username: 'curator01',
+        email: 'curator01@smartbook.vn',
+        password_hash: passwordHash,
+        full_name: 'Nguyen Minh Chau',
+        phone: '+84901234580',
+        status: 'ACTIVE',
+        is_superuser: false,
+      },
+    }),
   ]);
 
   console.log(`✅ Created ${users.length} users`);
@@ -577,6 +591,7 @@ async function main() {
   await assignUserRoles('cs01', [librarianRole]);
   await assignUserRoles('librarian01', [librarianRole]);
   await assignUserRoles('customer01', [customerRole]);
+  await assignUserRoles('curator01', [warehouseManagerRole]);
 
   console.log('✅ Assigned roles to all users');
 
@@ -607,6 +622,7 @@ async function main() {
     { user_id: userByUsername.staff03.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.warehouse01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.cs01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
+    { user_id: userByUsername.curator01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
   ];
 
   for (const scope of warehouseScopes) {
@@ -661,6 +677,15 @@ async function main() {
         ip_address: '192.168.1.102',
         user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Mobile/15E148',
         created_at: new Date('2024-03-01 10:00:00+07'),
+      },
+      {
+        actor_user_id: userByUsername.curator01.id,
+        action_name: 'CATALOG_REVIEW',
+        entity_type: 'BOOK',
+        detail: { review_reason: 'metadata_quality_check' },
+        ip_address: '192.168.1.110',
+        user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0',
+        created_at: new Date('2024-03-02 14:30:00+07'),
       },
     ],
     skipDuplicates: true,

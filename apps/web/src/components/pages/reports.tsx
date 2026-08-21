@@ -17,7 +17,7 @@ import { borrowService, type Loan, type Fine } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { stockMovementService } from '@/services/stock-movement';
 import { getApiErrorMessage } from '@/services/api';
-import { exportToExcel, exportToPdf, exportSummaryReport, type ExportColumn } from '@/lib/export-utils';
+import { exportToCsv, exportToPdf, exportSummaryReport, type ExportColumn } from '@/lib/export-utils';
 import { toast } from 'sonner';
 
 type DateRange = '7d' | '30d' | '90d' | 'all';
@@ -228,9 +228,9 @@ export function ReportsPage() {
       issued_at: f.issued_at?.slice(0, 10) || '',
     }));
 
-  const handleExportLoansExcel = () => {
-    exportToExcel(prepareLoanExportData(), loanColumns, `bao-cao-muon-tra-${range}`);
-    toast.success('Đã xuất file Excel báo cáo mượn/trả');
+  const handleExportLoansCsv = () => {
+    exportToCsv(prepareLoanExportData(), loanColumns, `bao-cao-muon-tra-${range}`);
+    toast.success('Đã xuất file CSV báo cáo mượn/trả');
   };
 
   const handleExportLoansPdf = () => {
@@ -238,9 +238,9 @@ export function ReportsPage() {
     toast.success('Đã xuất file PDF báo cáo mượn/trả');
   };
 
-  const handleExportFinesExcel = () => {
-    exportToExcel(prepareFineExportData(), fineColumns, `bao-cao-phat-${range}`);
-    toast.success('Đã xuất file Excel báo cáo phạt');
+  const handleExportFinesCsv = () => {
+    exportToCsv(prepareFineExportData(), fineColumns, `bao-cao-phat-${range}`);
+    toast.success('Đã xuất file CSV báo cáo phạt');
   };
 
   const handleExportFinesPdf = () => {
@@ -485,8 +485,8 @@ export function ReportsPage() {
           subtitle={`${filteredLoans.length} phiếu mượn`}
           actions={
             <div className="flex items-center gap-2">
-              <button onClick={handleExportLoansExcel} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition-colors font-medium">
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+              <button onClick={handleExportLoansCsv} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10 transition-colors font-medium">
+                <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
               </button>
               <button onClick={handleExportLoansPdf} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10 transition-colors font-medium">
                 <FileText className="w-3.5 h-3.5" /> PDF
@@ -546,8 +546,8 @@ export function ReportsPage() {
           subtitle={`${filteredFines.length} khoản phạt`}
           actions={
             <div className="flex items-center gap-2">
-              <button onClick={handleExportFinesExcel} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 transition-colors font-medium">
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+              <button onClick={handleExportFinesCsv} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-emerald-700 hover:bg-emerald-50 transition-colors font-medium">
+                <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
               </button>
               <button onClick={handleExportFinesPdf} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-rose-700 hover:bg-rose-50 transition-colors font-medium">
                 <FileText className="w-3.5 h-3.5" /> PDF

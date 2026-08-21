@@ -7,8 +7,16 @@
     "dev": "pnpm -r --parallel --filter ./apps/* --filter ./services/* dev",
     "build": "pnpm -r --filter ./apps/* build",
     "lint": "pnpm -r --filter ./apps/* lint",
+    "lint:ci": "pnpm lint",
     "typecheck": "pnpm --filter web exec tsc --noEmit",
-    "test:workspace-config": "node --test tests/workspace-config.test.mjs",
+    "test:node": "pnpm -r --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
+    "test:ai": "python -m pytest services/ai-service -q",
+    "test:workspace-config": "node --test tests/*.test.mjs",
+    "test:smoke": "node scripts/demo-smoke.mjs",
+    "verify": "pnpm lint:ci && pnpm typecheck && pnpm build && pnpm test:workspace-config && pnpm test:node && pnpm test:ai",
+    "demo:env": "node scripts/init-demo-env.mjs",
+    "demo:seed": "docker compose --profile demo run --rm demo-seed-auth && docker compose --profile demo run --rm demo-seed-inventory && docker compose --profile demo run --rm demo-seed-borrow",
+    "demo:status": "docker compose ps && node -e \"fetch('http://localhost:3000/ready').then(async r=>{console.log(await r.text());process.exit(r.ok?0:1)}).catch(e=>{console.error(e.message);process.exit(1)})\"",
     "doctor:react": "npx -y react-doctor@latest .",
     "doctor:react:web": "pnpm --dir apps/web run doctor:react",
     "start": "pnpm -r --parallel --filter ./apps/* --filter ./services/* start",
@@ -21,6 +29,17 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "http-proxy-middleware": "^3.0.5"
+    "http-proxy-middleware": "^3.0.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "engine.io": "6.6.7",
+      "form-data": "4.0.6",
+      "lodash": "4.18.0",
+      "path-to-regexp": "8.4.0",
+      "picomatch": "2.3.2",
+      "socket.io-parser": "4.2.7",
+      "ws": "8.21.0"
+    }
   }
 }

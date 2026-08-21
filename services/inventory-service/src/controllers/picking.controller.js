@@ -5,9 +5,20 @@ const prisma = new PrismaClient();
 
 const OUTBOUND_READY_STATUS = ["APPROVED", "PICKING"];
 const TRANSFER_READY_STATUS = ["APPROVED", "PICKING"];
-const REPICK_META_MARKER = "REPICK_META";
-const REPICK_LINE_MARKER = "REPICK_LINE";
-const SHORT_PICK_MARKER = "SHORT_PICK";
+const {
+  REPICK_META_MARKER,
+  REPICK_LINE_MARKER,
+  SHORT_PICK_MARKER,
+  normalizeCode,
+  appendOrderNote,
+  upsertMarkerLine,
+  parseRepickMeta,
+  parseRepickLineMeta,
+  getLineShortPickedQty,
+  withLineShortPickedQty,
+  calculateLineRemaining,
+  getTaskClassFromNote,
+} = require("../services/picking-note.service");
 
 const {
   SHIPPING_LOCATION_TYPE,
@@ -90,165 +101,6 @@ function canAccessTask(user, assignedPickerUserId) {
   if (!assigned) return false;
 
   return assigned === scope.currentUserId;
-}
-
-function normalizeCode(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
-}
-
-function appendOrderNote(existingNote, marker, text) {
-  const line = text ? `[${marker}] ${text}` : `[${marker}]`;
-  return [existingNote, line].filter(Boolean).join("\n");
-}
-
-function encodeMetaValue(value) {
-  return encodeURIComponent(String(value ?? ""));
-}
-
-function decodeMetaValue(value) {
-  try {
-    return decodeURIComponent(String(value || ""));
-  } catch {
-    return String(value || "");
-  }
-}
-
-function buildMarkerLine(marker, payload) {
-  const entries = Object.entries(payload || {})
-    .filter(
-      ([, value]) =>
-        value !== null && value !== undefined && String(value).trim() !== "",
-    )
-    .map(([key, value]) => `${key}=${encodeMetaValue(value)}`);
-
-  if (entries.length === 0) {
-    return `[${marker}]`;
-  }
-
-  return `[${marker}] ${entries.join(";")}`;
-}
-
-function parseMarkerPayload(note, marker) {
-  const lines = String(note || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const prefix = `[${marker}]`;
-  const line = lines.find((item) => item.startsWith(prefix));
-  if (!line) return null;
-
-  const rawPayload = line.slice(prefix.length).trim();
-  if (!rawPayload) return {};
-
-  const parsed = {};
-  rawPayload
-    .split(";")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .forEach((entry) => {
-      const idx = entry.indexOf("=");
-      if (idx <= 0) return;
-      const key = entry.slice(0, idx).trim();
-      const value = decodeMetaValue(entry.slice(idx + 1).trim());
-      if (key) parsed[key] = value;
-    });
-
-  return parsed;
-}
-
-function upsertMarkerLine(note, marker, payload) {
-  const lines = String(note || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const prefix = `[${marker}]`;
-  const markerLine = buildMarkerLine(marker, payload);
-  const next = [];
-  let replaced = false;
-
-  lines.forEach((line) => {
-    if (line.startsWith(prefix)) {
-      if (!replaced) {
-        next.push(markerLine);
-        replaced = true;
-      }
-      return;
-    }
-    next.push(line);
-  });
-
-  if (!replaced) {
-    next.push(markerLine);
-  }
-
-  return next.join("\n");
-}
-
-function parsePositiveInt(value) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return 0;
-  return Math.max(0, Math.trunc(num));
-}
-
-function parseRepickMeta(note) {
-  const payload = parseMarkerPayload(note, REPICK_META_MARKER);
-  if (!payload) return null;
-
-  const rootTaskType = String(payload.root_task_type || "").trim();
-  const rootTaskId = String(payload.root_task_id || "").trim();
-  const parentTaskType = String(payload.parent_task_type || "").trim();
-  const parentTaskId = String(payload.parent_task_id || "").trim();
-
-  if (!rootTaskType || !rootTaskId || !parentTaskType || !parentTaskId) {
-    return null;
-  }
-
-  return {
-    root_task_type: rootTaskType,
-    root_task_id: rootTaskId,
-    parent_task_type: parentTaskType,
-    parent_task_id: parentTaskId,
-    repick_sequence: parsePositiveInt(payload.repick_sequence),
-    repick_reason:
-      String(payload.repick_reason || "SHORT_PICK").trim() || "SHORT_PICK",
-  };
-}
-
-function parseRepickLineMeta(note) {
-  const payload = parseMarkerPayload(note, REPICK_LINE_MARKER);
-  if (!payload) return null;
-
-  return {
-    original_line_id: String(payload.original_line_id || "").trim() || null,
-    source_task_type: String(payload.source_task_type || "").trim() || null,
-    source_task_id: String(payload.source_task_id || "").trim() || null,
-    missing_qty: parsePositiveInt(payload.missing_qty),
-  };
-}
-
-function getLineShortPickedQty(note) {
-  const payload = parseMarkerPayload(note, SHORT_PICK_MARKER);
-  if (!payload) return 0;
-  return parsePositiveInt(payload.qty);
-}
-
-function withLineShortPickedQty(note, qty) {
-  return upsertMarkerLine(note, SHORT_PICK_MARKER, {
-    qty: parsePositiveInt(qty),
-  });
-}
-
-// short-pick auto repick is deprecated; partial pick remains on original task
-function calculateLineRemaining(quantity, pickedQty) {
-  const requested = Math.max(0, Number(quantity || 0));
-  const picked = Math.max(0, Number(pickedQty || 0));
-  return Math.max(requested - picked, 0);
-}
-
-function getTaskClassFromNote(note) {
-  return parseRepickMeta(note) ? "REPICK" : "PICK";
 }
 
 // Compute the correct outbound_orders.status from the full pick/repick chain.

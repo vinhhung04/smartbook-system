@@ -1,5 +1,6 @@
 import { formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
+import { useState } from 'react';
 
 interface LoanItemProps {
   item: any;
@@ -7,10 +8,11 @@ interface LoanItemProps {
 }
 
 export function LoanItem({ item, onView }: LoanItemProps) {
+  const [mountedAt] = useState(() => Date.now());
   const status = String(item.status || '').toUpperCase();
   const isOverdue = status === 'OVERDUE';
   const dueDate = item?.due_date ? new Date(item.due_date) : null;
-  const remainingDays = dueDate ? Math.ceil((dueDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : null;
+  const remainingDays = dueDate ? Math.ceil((dueDate.getTime() - mountedAt) / (24 * 60 * 60 * 1000)) : null;
   const isDueSoon = !isOverdue && remainingDays !== null && remainingDays >= 0 && remainingDays <= 3;
 
   return (

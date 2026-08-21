@@ -331,13 +331,15 @@ export function PackingPage() {
 
   // Route camera auto-detected codes through the same dispatcher — swapping the handler never
   // restarts the camera or its scan loop (see hooks/use-packing-camera.ts).
+  const { setBarcodeHandler } = camera;
+
   useEffect(() => {
     if (task?.status === "COMPLETED" || completingCurrentTask) {
-      camera.setBarcodeHandler(null);
+      setBarcodeHandler(null);
     } else {
-      camera.setBarcodeHandler(handleAnyScannedCode);
+      setBarcodeHandler(handleAnyScannedCode);
     }
-  }, [task?.status, completingCurrentTask, handleAnyScannedCode, camera.setBarcodeHandler]);
+  }, [task?.status, completingCurrentTask, handleAnyScannedCode, setBarcodeHandler]);
 
   // Hardware keyboard-wedge scanner — listens for the whole time the Packing page is open, not
   // just while an order is selected, so an invoice barcode scans exactly like a book barcode.

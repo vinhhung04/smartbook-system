@@ -23,7 +23,43 @@ test("CI installs dependencies reproducibly", () => {
     "utf8",
   );
   assert.match(workflow, /pnpm install --frozen-lockfile/);
-  assert.match(workflow, /pnpm typecheck/);
+  assert.match(workflow, /pnpm verify/);
+  assert.doesNotMatch(workflow, /test_stock_request\.py is excluded/);
+});
+
+test("workspace exposes one complete verification command", () => {
+  const manifest = readJson("package.json");
+  assert.match(manifest.scripts.verify, /lint:ci/);
+  assert.match(manifest.scripts.verify, /typecheck/);
+  assert.match(manifest.scripts.verify, /build/);
+  assert.match(manifest.scripts.verify, /test:node/);
+  assert.match(manifest.scripts.verify, /test:ai/);
+});
+
+test("workspace exposes repeatable demo seed and golden-flow commands", () => {
+  const manifest = readJson("package.json");
+  assert.match(manifest.scripts["demo:seed"], /--profile demo/);
+  assert.match(manifest.scripts["test:smoke"], /demo-smoke\.mjs/);
+  const smoke = readFileSync(resolve(repositoryRoot, "scripts/demo-smoke.mjs"), "utf8");
+  assert.match(smoke, /rbac-role-access-integration/);
+  assert.match(smoke, /purchase-supplier-receiving-integration/);
+  assert.match(smoke, /borrow-phase2-integration/);
+});
+
+test("every Node service has a real test command", () => {
+  const manifests = [
+    "apps/api-gateway/package.json",
+    "services/analytics-service/package.json",
+    "services/auth-service/package.json",
+    "services/borrow-service/package.json",
+    "services/inventory-service/package.json",
+  ];
+
+  for (const manifestPath of manifests) {
+    const testCommand = readJson(manifestPath).scripts?.test || "";
+    assert.match(testCommand, /node --test/, `${manifestPath} must run Node tests`);
+    assert.doesNotMatch(testCommand, /no test specified/);
+  }
 });
 
 test("web build and lint commands use locally installed tools", () => {
@@ -59,5 +95,25 @@ test("Node Docker images build from the workspace lockfile", () => {
 
 test("web container serves the built single-page application", () => {
   const dockerfile = readFileSync(resolve(repositoryRoot, "apps/web/Dockerfile"), "utf8");
-  assert.match(dockerfile, /CMD \["serve", "-s", "dist", "-l", "5173"\]/);
+  const nginx = readFileSync(resolve(repositoryRoot, "apps/web/nginx.conf"), "utf8");
+  assert.match(dockerfile, /FROM nginx:/);
+  assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html/);
+  assert.match(nginx, /Content-Security-Policy/);
+  assert.match(nginx, /Permissions-Policy/);
+});
+
+test("web pages are loaded on demand", () => {
+  const routes = readFileSync(resolve(repositoryRoot, "apps/web/src/app/routes.ts"), "utf8");
+  assert.doesNotMatch(routes, /from ["']@\/components\/pages\//);
+  for (const module of ["dashboard", "ai-import", "reports", "picking", "packing", "stock-audits"] ) {
+    assert.match(routes, new RegExp(`import\\(.*pages/${module}`), module);
+  }
+});
+
+test("admin monitor only calls public gateway health boundaries", () => {
+  const monitor = readFileSync(resolve(repositoryRoot, "apps/web/src/services/monitor.ts"), "utf8");
+  assert.match(monitor, /localhost:3000\/health/);
+  assert.match(monitor, /localhost:3000\/ready/);
+  assert.doesNotMatch(monitor, /localhost:300[1-9]/);
+  assert.match(monitor, /'ready'/);
 });

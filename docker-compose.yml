@@ -1,32 +1,29 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: smartbook_postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-inventory}
-      ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics_reader}
-      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_readonly_pw}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:?Set ANALYTICS_DB_USER in .env}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Set ANALYTICS_DB_PASSWORD in .env}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-inventory}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db-init:/docker-entrypoint-initdb.d
       - ./data:/seed-data
 
   pgadmin:
+    profiles: ["tools"]
     image: dpage/pgadmin4
-    container_name: smartbook_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
     ports:
       - "8080:80"
     depends_on:
@@ -35,9 +32,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: smartbook_redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -51,18 +45,16 @@ services:
     build:
       context: .
       dockerfile: services/inventory-service/Dockerfile
-    container_name: inventory-service
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed && node src/index.js"
-    ports:
-      - "3003:3001"
+    command: sh -c "npx prisma migrate deploy && node src/index.js"
     environment:
       - PORT=3001
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
-      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
       - GATEWAY_URL=http://api-gateway:3000
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
     volumes:
@@ -84,15 +76,14 @@ services:
     build:
       context: .
       dockerfile: services/auth-service/Dockerfile
-    container_name: auth-service
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start"
-    ports:
-      - "3004:3002"
+    command: sh -c "npx prisma migrate deploy && npm run start"
     environment:
       - PORT=3002
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
-      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -117,17 +108,15 @@ services:
     build:
       context: .
       dockerfile: services/borrow-service/Dockerfile
-    container_name: borrow-service
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm run start"
-    ports:
-      - "3005:3005"
+    command: sh -c "npx prisma migrate deploy && npm run start"
     environment:
       - PORT=3005
-      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
-      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - GATEWAY_URL=http://api-gateway:3000
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
@@ -148,16 +137,14 @@ services:
     build:
       context: .
       dockerfile: services/analytics-service/Dockerfile
-    container_name: analytics-service
-    ports:
-      - "3006:3006"
     environment:
       - PORT=3006
-      - INVENTORY_DATABASE_URL=postgresql://${ANALYTICS_DB_USER:-analytics_reader}:${ANALYTICS_DB_PASSWORD:-analytics_readonly_pw}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
-      - BORROW_DATABASE_URL=postgresql://${ANALYTICS_DB_USER:-analytics_reader}:${ANALYTICS_DB_PASSWORD:-analytics_readonly_pw}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
-      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
+      - INVENTORY_DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
+      - BORROW_DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
     depends_on:
       db:
         condition: service_healthy
@@ -169,17 +156,57 @@ services:
       retries: 10
       start_period: 20s
 
+  demo-seed-auth:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AUTH_DB_NAME:-auth_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+
+  demo-seed-inventory:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+    depends_on:
+      inventory-service:
+        condition: service_healthy
+
+  demo-seed-borrow:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/borrow-service/Dockerfile
+    command: npx prisma db seed
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+    depends_on:
+      borrow-service:
+        condition: service_healthy
+
   ai-service:
+    profiles: ["ai"]
     build: ./services/ai-service
-    container_name: ai-service
-    ports:
-      - "8000:8000"
     depends_on:
       - ollama
     environment:
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
       # Dùng chung 1 model text (llama3.1, hỗ trợ tool-calling) cho cả tóm tắt/chat và /assistant —
@@ -207,7 +234,6 @@ services:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
-    container_name: api-gateway
     ports:
       - "3000:3000"
     environment:
@@ -217,8 +243,9 @@ services:
       - BORROW_SERVICE_URL=http://borrow-service:3005
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AI_SERVICE_URL=http://ai-service:8000
-      - JWT_SECRET=${JWT_SECRET:-smartbook_shared_jwt_secret}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-smartbook_internal_key}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       auth-service:
@@ -229,8 +256,6 @@ services:
         condition: service_healthy
       analytics-service:
         condition: service_healthy
-      ai-service:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
@@ -242,9 +267,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    container_name: smartbook-ui
     ports:
-      - "5173:5173"
+      - "5173:80"
     environment:
       - VITE_API_BASE_URL=http://localhost:3000
       - VITE_AUTH_BASE_URL=http://localhost:3000
@@ -264,10 +288,8 @@ services:
         condition: service_healthy
 
   ollama:
+    profiles: ["ai"]
     image: ollama/ollama:latest
-    container_name: ollama
-    ports:
-      - "11434:11434"
     volumes:
       - ./ollama_data:/root/.ollama
     stdin_open: true

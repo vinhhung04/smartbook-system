@@ -60,12 +60,6 @@ function RoleCreateModal(props: {
   const { open, creating, onClose, onSubmit } = props;
   const [form, setForm] = useState<RoleCreateForm>({ code: "", name: "", description: "" });
 
-  useEffect(() => {
-    if (!open) {
-      setForm({ code: "", name: "", description: "" });
-    }
-  }, [open]);
-
   if (!open) return null;
 
   return (
@@ -636,14 +630,14 @@ export function RolesPage() {
       </FadeItem>
       )}
 
-      <RoleCreateModal
+      {showCreateModal && <RoleCreateModal
         open={showCreateModal}
         creating={creatingRole}
         onClose={() => {
           if (!creatingRole) setShowCreateModal(false);
         }}
         onSubmit={handleCreateRole}
-      />
+      />}
 
       <RolePermissionModal
         open={Boolean(editingRole)}

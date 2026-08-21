@@ -230,7 +230,7 @@ def _detect_warehouse_hint(normalized_msg: str) -> str | None:
       "o kho wh-hn"                 → "wh-hn"
     """
     _WAREHOUSE_STOPWORDS = {
-        "kho", "tai", "cho", "o", "theo", "trong", "cua", "thuoc",
+        "kho", "tai", "cho", "o", "tu", "theo", "trong", "cua", "thuoc",
         "tao", "phieu", "nhap", "sach", "nha", "cung", "cap",
         "dang", "co", "va", "cac", "nhung", "la", "se", "da",
         "can", "muon", "them", "tat", "ca", "tung", "moi",
@@ -238,9 +238,6 @@ def _detect_warehouse_hint(normalized_msg: str) -> str | None:
         "thap", "cao", "rong", "day", "nao", "nay", "do", "khac",
         "tot", "xau", "trang", "trong",
     }
-    # "kho" used as part of compound inventory terms (not standalone warehouse word)
-    _COMPOUND_KHO_PREFIXES = {"ton", "nhap", "xuat", "quan", "ly", "kiem", "kiem"}
-
     words = normalized_msg.split()
 
     def _extract_after(idx: int) -> str | None:
@@ -251,13 +248,11 @@ def _detect_warehouse_hint(normalized_msg: str) -> str | None:
             hint_words.append(words[j])
         return " ".join(hint_words) if hint_words else None
 
-    # Priority 1: word after "kho" (e.g. "kho ha noi", "kho WH-HN")
-    # Skip "kho" that's part of compound: "tồn kho", "nhập kho", "xuất kho", etc.
+    # Priority 1: word after "kho" (e.g. "kho ha noi", "nhap kho ha noi").
+    # Stock-level phrases such as "ton kho thap" are rejected by the stopword
+    # check, while a real location following a compound phrase remains usable.
     for i, word in enumerate(words):
         if word == "kho" and i + 1 < len(words):
-            # Skip if preceded by a compound-kho prefix word
-            if i > 0 and words[i - 1] in _COMPOUND_KHO_PREFIXES:
-                continue
             hint = _extract_after(i)
             if hint:
                 return hint

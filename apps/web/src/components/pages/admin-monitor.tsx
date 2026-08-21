@@ -28,6 +28,7 @@ const AUTO_REFRESH_MS = 30000;
 
 const SERVICE_ICONS: Record<string, LucideIcon> = {
   'api-gateway': Wifi,
+  'core-services': Server,
   'auth-service': ShieldCheck,
   'inventory-service': Database,
   'borrow-service': Server,

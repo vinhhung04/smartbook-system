@@ -1,4 +1,5 @@
 const express = require("express");
+const { createRateLimiter } = require("@smartbook/shared/runtime");
 
 const {
   getPortalOrder,
@@ -11,6 +12,7 @@ const {
 } = require("../controllers/supplier-portal.controller");
 
 const router = express.Router();
+router.use(createRateLimiter({ max: 60, windowMs: 15 * 60 * 1000 }));
 
 router.get("/orders/:token", getPortalOrder);
 router.post("/orders/:token/confirm", confirmPortalOrder);

@@ -135,7 +135,7 @@ export function StorageSuggestionPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [warehouseId, bookId, variantId, quantity, canRead, canWrite, canTaskProgress]);
+  }, [warehouseId, bookId, variantId, quantity, canViewSuggestions]);
 
   const handleSelectLocation = useCallback(
     (suggestion: StorageSuggestion) => {
@@ -156,7 +156,7 @@ export function StorageSuggestionPanel({
 
       toast.success(`Đã chọn vị trí: ${suggestion.locationCode}`);
     },
-    [canWrite, onSelectLocation]
+    [canSelectSuggestion, onSelectLocation]
   );
 
   const getLocationPath = (suggestion: StorageSuggestion): string => {

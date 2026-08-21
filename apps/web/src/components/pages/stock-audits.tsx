@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
 import { AlertTriangle, ArrowLeft, Boxes, Camera, Check, ClipboardCheck, ClipboardList, PackageCheck, RefreshCw, ScanLine, UserCheck, Warehouse } from "lucide-react";
 import { toast } from "sonner";
@@ -58,7 +58,7 @@ function StockAuditListView() {
   const [note, setNote] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await stockAuditService.getAll();
@@ -68,9 +68,9 @@ function StockAuditListView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
     if (!isManager) return;
@@ -267,7 +267,7 @@ function StockAuditDetailView({ id }: { id: string }) {
   const [localCounts, setLocalCounts] = useState<Record<string, string>>({});
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const response = await stockAuditService.getById(id);
@@ -280,9 +280,9 @@ function StockAuditDetailView({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { setSelectedLineId(null); void load(); }, [id]);
+  useEffect(() => { setSelectedLineId(null); void load(); }, [load]);
 
   useEffect(() => {
     if (!isManager) return;
@@ -580,13 +580,13 @@ function StockAuditDetailView({ id }: { id: string }) {
 /** Mounted only while `canCount` — so viewing a read-only (already-submitted/completed) audit
  *  never prompts for camera access. Every scan source funnels into the same `onScan` callback. */
 function ScanCountPanel({ onScan }: { onScan: (code: string) => void }) {
-  const camera = usePackingCamera();
+  const { videoRef, isLive, cameraError, setBarcodeHandler } = usePackingCamera();
   const [isManualScanOpen, setIsManualScanOpen] = useState(false);
 
   useEffect(() => {
-    camera.setBarcodeHandler(onScan);
-    return () => camera.setBarcodeHandler(null);
-  }, [camera.setBarcodeHandler, onScan]);
+    setBarcodeHandler(onScan);
+    return () => setBarcodeHandler(null);
+  }, [setBarcodeHandler, onScan]);
 
   useHardwareScanner(onScan);
 
@@ -595,10 +595,10 @@ function ScanCountPanel({ onScan }: { onScan: (code: string) => void }) {
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-slate-900">
-            <video ref={camera.videoRef} muted playsInline className="h-full w-full object-cover" />
-            {!camera.isLive && (
+            <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
+            {!isLive && (
               <div className="absolute inset-0 flex items-center justify-center px-1 text-center text-[9px] leading-tight text-slate-300">
-                {camera.cameraError ? "Không có camera" : "Đang mở..."}
+                {cameraError ? "Không có camera" : "Đang mở..."}
               </div>
             )}
           </div>

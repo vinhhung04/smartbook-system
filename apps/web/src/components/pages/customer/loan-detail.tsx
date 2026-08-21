@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, useParams } from 'react-router';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { customerCatalogService } from '@/services/customer-catalog';
@@ -21,7 +21,7 @@ export function CustomerLoanDetailPage() {
   const getBookTitle = (variantId: string) =>
     books.find((b) => b.variant_id === variantId)?.title ?? variantId;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
@@ -37,11 +37,11 @@ export function CustomerLoanDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     void load();
-  }, [id]);
+  }, [load]);
 
   const handleRenewRequest = async () => {
     if (!id) return;

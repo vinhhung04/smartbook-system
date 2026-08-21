@@ -11,10 +11,11 @@ const { getZonesAndBinsByWarehouse } = require('../controllers/location.controll
 const { authorizeManagerDecision, authorizeManagerRead, authorizeTaskProgress } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const canListWarehouses = authorizeManagerRead(['inventory.warehouse.read', 'inventory.stock.read']);
 const canReadWarehouse = authorizeTaskProgress(['inventory.task.progress', 'inventory.warehouse.read', 'inventory.stock.read']);
 const canWriteWarehouse = authorizeManagerDecision(['inventory.warehouse.write']);
 
-router.get('/', canReadWarehouse, getAllWarehouses);
+router.get('/', canListWarehouses, getAllWarehouses);
 router.get('/:id', canReadWarehouse, getWarehouseById);
 router.post('/', canWriteWarehouse, createWarehouse);
 router.put('/:id', canWriteWarehouse, updateWarehouse);
