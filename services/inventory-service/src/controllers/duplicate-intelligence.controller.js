@@ -88,6 +88,8 @@ async function decide(req, res) {
       let selectedVariant = null;
       if (action === 'LINK_EXISTING_VARIANT') {
         if (draft.classification !== 'EXACT_DUPLICATE' || !selectedVariantId) { const error = new Error('Exact duplicate and selectedVariantId are required to link an existing variant'); error.statusCode = 400; throw error; }
+        const candidateVariantIds = (Array.isArray(draft.candidates) ? draft.candidates : []).flatMap((candidate) => Array.isArray(candidate.variantIds) ? candidate.variantIds : []);
+        if (!candidateVariantIds.includes(selectedVariantId)) { const error = new Error('Selected variant is not a duplicate review candidate'); error.statusCode = 400; throw error; }
         selectedVariant = await tx.book_variants.findUnique({ where: { id: selectedVariantId } });
         if (!selectedVariant) { const error = new Error('Selected variant not found'); error.statusCode = 404; throw error; }
         selectedBook = await tx.books.findUnique({ where: { id: selectedVariant.book_id } });

@@ -10,6 +10,12 @@ test('classifies an ISBN match as an exact duplicate', () => {
   assert.equal(result.candidates[0].score, 1);
 });
 
+test('uses ISBN-13 even when title metadata differs', () => {
+  const result = checkDuplicates({ isbn13: '978-0132350884', title: 'Unrelated imported title' }, [candidate]);
+  assert.equal(result.classification, 'EXACT_DUPLICATE');
+  assert.equal(result.similarityScore, 1);
+});
+
 test('recognizes the same work with a different edition', () => {
   const result = checkDuplicates({ title: 'Clean Code', authors: ['Robert C Martin'], publisher: 'Other', publishedDate: '2024-01-01', language: 'vi' }, [candidate]);
   assert.equal(result.classification, 'SAME_WORK_DIFFERENT_EDITION');

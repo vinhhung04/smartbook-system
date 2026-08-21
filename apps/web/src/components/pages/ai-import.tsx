@@ -31,7 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { aiService, type LookupBookByIsbnResponse, type EnrichBookMetadataResponse, type EnrichMode, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
-import { metadataIntelligenceService, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
+import { metadataIntelligenceService, type DuplicateDecisionResult, type DuplicateReview, type FinalMetadata, type ReconciliationDraft } from "@/services/metadata-intelligence";
 import { getApiErrorMessage } from "@/services/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -156,6 +156,59 @@ function mapLookupToForm(data: LookupBookByIsbnResponse): EditableBookForm {
     thumbnail: data.thumbnail || "",
     summaryVi: data.summaryVi || "",
     keywordsText: (data.keywords || []).join(", "),
+  };
+}
+
+function splitCommaValues(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function buildDuplicateCheckMetadata({ lookup, normalizedMetadata, form }: { lookup: LookupBookByIsbnResponse; normalizedMetadata: Record<string, unknown>; form: EditableBookForm }): Record<string, unknown> {
+  const pick = (formValue: string, normalizedKey: string, lookupValue: unknown) => formValue.trim() || normalizedMetadata[normalizedKey] || lookupValue || undefined;
+  const isbn13 = normalizeIsbnInput(form.isbn13 || "");
+  const isbn10 = normalizeIsbnInput(form.isbn10 || "");
+  const isbn = normalizeIsbnInput(form.isbn || "") || (isbn13.length === 13 ? isbn13 : isbn10);
+  return {
+    isbn,
+    isbn13: isbn13.length === 13 ? isbn13 : normalizeIsbnInput(String(normalizedMetadata.isbn13 || lookup.isbn13 || "")),
+    isbn10: isbn10.length === 10 ? isbn10 : normalizeIsbnInput(String(normalizedMetadata.isbn10 || lookup.isbn10 || "")),
+    barcode: normalizeIsbnInput(form.isbn) || String(normalizedMetadata.barcode || normalizedMetadata.internal_barcode || lookup.isbn || ""),
+    internal_barcode: normalizeIsbnInput(form.isbn) || String(normalizedMetadata.internalBarcode || normalizedMetadata.internal_barcode || lookup.isbn || ""),
+    title: pick(form.title, "title", lookup.title),
+    authors: splitCommaValues(form.authorsText).length ? splitCommaValues(form.authorsText) : normalizedMetadata.authors || lookup.authors || [],
+    publisher: pick(form.publisher, "publisher", lookup.publisher),
+    categories: splitCommaValues(form.categoriesText).length ? splitCommaValues(form.categoriesText) : normalizedMetadata.categories || lookup.categories || [],
+    language: pick(form.language, "language", lookup.language),
+    publishedDate: pick(form.publishedDate, "publishedDate", lookup.publishedDate),
+    pageCount: form.pageCount.trim() ? Number(form.pageCount) : normalizedMetadata.pageCount || lookup.pageCount,
+    coverFormat: normalizedMetadata.coverFormat,
+  };
+}
+
+function reconciliationValueFromForm(field: string, form: EditableBookForm): unknown {
+  switch (field) {
+    case "title": return form.title.trim();
+    case "authors": return splitCommaValues(form.authorsText);
+    case "publisher": return form.publisher.trim();
+    case "categories": return splitCommaValues(form.categoriesText);
+    case "language": return form.language.trim();
+    case "publishedDate": return form.publishedDate.trim() || null;
+    case "pageCount": return form.pageCount.trim() ? Number(form.pageCount) : null;
+    case "description": return form.description.trim() || null;
+    default: return undefined;
+  }
+}
+
+function finalMetadataFromForm(form: EditableBookForm): FinalMetadata {
+  const isbn13 = normalizeIsbnInput(form.isbn13 || form.isbn);
+  const isbn10 = normalizeIsbnInput(form.isbn10 || "");
+  const keywords = [...new Set(splitCommaValues(form.keywordsText).filter((item) => item.length <= 50))].slice(0, 15);
+  return {
+    title: form.title.trim(), subtitle: form.subtitle.trim() || null, description: form.description.trim() || null,
+    summaryVi: form.summaryVi.trim() || null, language: form.language.trim() || "vi",
+    ...(isbn13.length === 13 ? { isbn13 } : {}), ...(isbn10.length === 10 ? { isbn10 } : {}),
+    internalBarcode: normalizeIsbnInput(form.isbn || "") || null, publishYear: parsePublishYear(form.publishedDate),
+    pageCount: form.pageCount.trim() ? Number(form.pageCount) : null, coverImageUrl: form.thumbnail.trim() || null, keywords,
   };
 }
 
@@ -764,6 +817,7 @@ export function AIImportPage() {
   const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft | null>(null);
   const [createAuthorityEntities, setCreateAuthorityEntities] = useState<Record<string, boolean>>({});
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReview | null>(null);
+  const [duplicateDecisionResult, setDuplicateDecisionResult] = useState<DuplicateDecisionResult | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
 
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -941,6 +995,7 @@ export function AIImportPage() {
     setReconciliationDraft(null);
     setCreateAuthorityEntities({});
     setDuplicateReview(null);
+    setDuplicateDecisionResult(null);
     const stageTimer = window.setTimeout(() => setLookupStage("ai"), 700);
     try {
       const result = await aiService.enrichBookAfterIsbn({
@@ -958,7 +1013,7 @@ export function AIImportPage() {
         try {
           const draft = await metadataIntelligenceService.createReconciliationDraft(lookup, result.aiSuggestions);
           setReconciliationDraft(draft);
-          const duplicate = await metadataIntelligenceService.checkDuplicate(draft.normalized_metadata);
+          const duplicate = await metadataIntelligenceService.checkDuplicate(buildDuplicateCheckMetadata({ lookup, normalizedMetadata: draft.normalized_metadata, form: mapLookupToForm(lookup) }));
           setDuplicateReview(duplicate);
           const draftNeedsReview = draft.decisions.length === 0 || draft.decisions.some((item) => item.status === "PENDING");
           const duplicateRequiresAction = duplicate.classification !== "NEW_TITLE";
@@ -994,10 +1049,11 @@ export function AIImportPage() {
   async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED") {
     if (!reconciliationDraft) return;
     try {
-      await metadataIntelligenceService.decideField(reconciliationDraft.id, field, status);
+      const value = status === "ACCEPTED" ? reconciliationValueFromForm(field, form) : undefined;
+      const decision = await metadataIntelligenceService.decideField(reconciliationDraft.id, field, status, value);
       setReconciliationDraft((current) => current ? {
         ...current,
-        decisions: current.decisions.map((item) => item.field === field ? { ...item, status } : item),
+        decisions: current.decisions.map((item) => item.field === field ? { ...item, status: decision.status, value: decision.value } : item),
       } : current);
       toast.success(status === "ACCEPTED" ? "Đã chấp nhận đề xuất" : "Đã từ chối đề xuất");
     } catch (error) {
@@ -1016,12 +1072,13 @@ export function AIImportPage() {
     if (["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION", "CREATE_NEW_TITLE"].includes(action) && !window.confirm("Thao tác này sẽ tạo catalog/edition mới. Bạn có muốn tiếp tục?")) return;
     try {
       const variantId = candidate?.variantIds[0];
-      await metadataIntelligenceService.decideDuplicate(duplicateReview.id, action, {
+      const result = await metadataIntelligenceService.decideDuplicate(duplicateReview.id, action, {
         ...(action === "LINK_EXISTING_VARIANT" && variantId ? { selectedVariantId: variantId } : {}),
         ...(["CREATE_VARIANT_FOR_EDITION", "CREATE_NEW_EDITION"].includes(action) && candidate ? { selectedBookId: candidate.bookId } : {}),
       });
       toast.success(action === "DISMISS_WARNING" ? "Đã ghi nhận quyết định bỏ qua cảnh báo duplicate" : "Đã lưu quyết định duplicate; chỉ metadata được duyệt mới được áp dụng.");
       setDuplicateReview(null);
+      setDuplicateDecisionResult(result);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể lưu quyết định duplicate"));
     }
@@ -1161,6 +1218,14 @@ export function AIImportPage() {
       toast.error("Sách này có thể đã tồn tại trong catalog. Vui lòng xác nhận ở cảnh báo bên dưới trước khi lưu.");
       return;
     }
+    if (reconciliationDraft?.decisions.some((item) => item.status === "PENDING")) {
+      toast.error("Vui lòng hoàn tất các quyết định metadata trước khi lưu.");
+      return;
+    }
+    if (duplicateReview && duplicateReview.classification !== "NEW_TITLE") {
+      toast.error("Vui lòng xử lý duplicate review trước khi lưu.");
+      return;
+    }
 
     const authors = form.authorsText
       .split(",")
@@ -1173,19 +1238,6 @@ export function AIImportPage() {
 
     setSaving(true);
     try {
-      const created = await bookService.createIncomplete({
-        isbn13: normalizedIsbn,
-        title,
-        price: 0,
-        language: (form.language || "vi").trim() || "vi",
-      });
-
-      const payload = created?.data;
-      if (!payload?.book_id) {
-        toast.error("Không lấy được book id để cập nhật metadata");
-        return;
-      }
-
       const updatePayload: Record<string, unknown> = {
         title,
         subtitle: form.subtitle.trim() || null,
@@ -1222,25 +1274,39 @@ export function AIImportPage() {
         updatePayload.keywords = uniqueKeywords;
       }
 
+      let savedBookId: string;
+      let appendSnapshot = false;
       if (reconciliationDraft) {
-        await metadataIntelligenceService.applyReconciliationDraft(reconciliationDraft.id, String(payload.book_id), createAuthorityEntities);
+        const duplicateAction = duplicateDecisionResult?.review.decision;
+        const result = await metadataIntelligenceService.applyReconciliationDraft(reconciliationDraft.id, {
+          bookId: duplicateDecisionResult?.book?.id || duplicateDecisionResult?.review.selected_book_id || undefined,
+          variantId: duplicateDecisionResult?.variant?.id || duplicateDecisionResult?.review.selected_variant_id || undefined,
+          createEntities: createAuthorityEntities,
+          finalMetadata: finalMetadataFromForm(form),
+          duplicateReviewId: duplicateDecisionResult?.review.id,
+        });
+        savedBookId = result.book.id;
+        appendSnapshot = duplicateAction !== "LINK_EXISTING_VARIANT";
       } else {
-        await bookService.update(String(payload.book_id), updatePayload);
+        const created = await bookService.createIncomplete({ isbn13: normalizedIsbn, title, price: 0, language: (form.language || "vi").trim() || "vi" });
+        const payload = created?.data;
+        if (!payload?.book_id) throw new Error("Không lấy được book id để cập nhật metadata");
+        savedBookId = String(payload.book_id);
+        appendSnapshot = Boolean(payload.created_new);
+        await bookService.update(savedBookId, updatePayload);
       }
       toast.success("Đã lưu sách với metadata ISBN");
 
       // Keep the local catalog snapshot in sync so the duplicate check catches
       // this book if the user immediately tries to import it again this session.
-      setCatalogBooks((prev) => [
-        ...prev,
-        { id: String(payload.book_id), title, author: authors[0] || "", isbn: normalizedIsbn, category: categories[0] || "" },
-      ]);
+      if (appendSnapshot) setCatalogBooks((prev) => [...prev, { id: savedBookId, title, author: authors[0] || "", isbn: normalizedIsbn, category: categories[0] || "" }]);
 
       setLookupData(null);
       setPostIsbnSuggestions(null);
       setReconciliationDraft(null);
       setCreateAuthorityEntities({});
       setDuplicateReview(null);
+      setDuplicateDecisionResult(null);
       setForm(EMPTY_FORM);
       setIsbnInput("");
       setConfirmDuplicateSave(false);

@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
+const { normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear } = require('../services/catalog-metadata.validation');
 
 const prisma = new PrismaClient();
 
@@ -314,33 +315,6 @@ function buildManualSku(barcode) {
   const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
   const compactBarcode = barcode.replace(/\s+/g, '').slice(0, 16);
   return `MANUAL-${compactBarcode || 'BOOK'}-${suffix}`;
-}
-
-function normalizeCoverImageUrl(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return null;
-  if (normalized.startsWith('data:image/')) return normalized;
-  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
-  return null;
-}
-
-function normalizeLanguageCode(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return null;
-  return normalized.slice(0, 10);
-}
-
-function normalizePublishYear(value) {
-  if (value === undefined || value === null || String(value).trim() === '') {
-    return null;
-  }
-
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1000 || parsed > 2100) {
-    return undefined;
-  }
-
-  return parsed;
 }
 
 async function getOrCreateUncategorizedCategory(tx) {
