@@ -41,6 +41,7 @@ from rag import (
 )
 from retrieval import retrieve_context
 from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
+from source_reliability import reliability
 from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
@@ -1602,14 +1603,6 @@ def _metadata_completeness_score(data: dict) -> float:
 # source reliability, while agreement is calculated from the responses received
 # for this ISBN; no model-generated score is used for catalog metadata.
 ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook"]
-ISBN_SOURCE_RELIABILITY = {
-    "googleBooks": 1.0,
-    "openLibrary": 0.9,
-    "worldCat": 0.85,
-    "fahasa": 0.8,
-    "tiki": 0.8,
-    "vinabook": 0.75,
-}
 ISBN_INTELLIGENCE_FIELDS = (
     "title", "subtitle", "authors", "publisher", "publishedDate", "description",
     "categories", "language", "pageCount", "thumbnail",
@@ -1652,12 +1645,13 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
                     item["sourceUrl"] = source_url
                 confirmations.append(item)
 
-        selected = confirmations[0] if confirmations else None
+        selected = max(confirmations, key=lambda item: reliability(item["source"], field)) if confirmations else None
         metadata[field] = selected["value"] if selected else ([] if field in {"authors", "categories"} else None)
         field_evidence[field] = {
             "selectedValue": metadata[field],
             "selectedSource": selected["source"] if selected else None,
             "confirmations": confirmations,
+            "selectionReason": {"sourceReliability": reliability(selected["source"], field) if selected else 0, "agreementCount": 0, "conflictCount": 0},
         }
         if not selected:
             field_confidence[field] = 0.0
@@ -1666,12 +1660,12 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
         selected_normalized = _normalize_evidence_value(selected["value"])
         responding = [item for item in confirmations]
         agreement = sum(
-            ISBN_SOURCE_RELIABILITY[item["source"]]
+            reliability(item["source"], field)
             for item in responding if _normalize_evidence_value(item["value"]) == selected_normalized
-        ) / sum(ISBN_SOURCE_RELIABILITY[item["source"]] for item in responding)
+        ) / sum(reliability(item["source"], field) for item in responding)
         # A single provider is useful but cannot be as strong as corroborated data.
         corroboration = 0.7 + (0.3 * agreement)
-        field_confidence[field] = round(min(1.0, ISBN_SOURCE_RELIABILITY[selected["source"]] * corroboration), 3)
+        field_confidence[field] = round(min(1.0, reliability(selected["source"], field) * corroboration), 3)
 
         alternatives = [
             {"source": item["source"], "value": item["value"]}
@@ -1680,6 +1674,8 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
         ]
         if alternatives:
             conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})
+        field_evidence[field]["selectionReason"]["agreementCount"] = sum(1 for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized)
+        field_evidence[field]["selectionReason"]["conflictCount"] = len(alternatives)
 
     quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
     quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
