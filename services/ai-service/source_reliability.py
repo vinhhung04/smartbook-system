@@ -6,6 +6,7 @@ SOURCE_RELIABILITY = {
     "fahasa": {"default": 0.8, "title": 0.85, "authors": 0.76, "publisher": 0.84, "categories": 0.72},
     "tiki": {"default": 0.8, "title": 0.8, "authors": 0.7, "publisher": 0.72, "categories": 0.7},
     "vinabook": {"default": 0.75, "title": 0.78, "authors": 0.68, "publisher": 0.72, "categories": 0.66},
+    "webSearch": {"default": 0.55, "title": 0.6, "authors": 0.55, "publisher": 0.55},
 }
 
 def reliability(source: str, field: str) -> float:

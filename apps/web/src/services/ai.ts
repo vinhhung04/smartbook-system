@@ -33,7 +33,7 @@ export interface LookupBookByIsbnRequest {
   generateVietnameseSummary?: boolean;
 }
 
-export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook';
+export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook' | 'webSearch';
 
 export interface IsbnFieldEvidence {
   selectedValue: string | string[] | number | null;

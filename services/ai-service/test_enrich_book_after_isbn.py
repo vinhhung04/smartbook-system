@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from main import (
     _build_isbn_intelligence,
+    _parse_web_search_metadata,
     _manual_entry_response,
     _build_source_statuses,
     enrich_book_after_isbn,
@@ -12,6 +13,25 @@ from main import (
 
 
 class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
+    def test_web_search_fallback_extracts_labeled_metadata_for_exact_isbn(self):
+        metadata = _parse_web_search_metadata(
+            "8935095630639",
+            {
+                "title": "Gói thầu số 4 Mua sách",
+                "body": (
+                    "Nửa kia vượt trội | Ký mã hiệu: 8935095630639; "
+                    "Tác giả: Sharon Moalem; Nhà XB: Dân Trí; Năm: 2021"
+                ),
+                "href": "https://example.test/books",
+            },
+        )
+
+        self.assertEqual(metadata["title"], "Nửa kia vượt trội")
+        self.assertEqual(metadata["authors"], ["Sharon Moalem"])
+        self.assertEqual(metadata["publisher"], "Dân Trí")
+        self.assertEqual(metadata["publishedDate"], "2021")
+        self.assertEqual(metadata["sourceUrl"], "https://example.test/books")
+
     def test_provider_error_outcome_is_not_reported_as_not_found(self):
         statuses = _build_source_statuses({
             "source": {"googleBooks": False, "openLibrary": False},
@@ -71,7 +91,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["found"])
         self.assertEqual(result["metadataQualityScore"], 0.0)
-        self.assertEqual(len(result["sources"]), 6)
+        self.assertEqual(len(result["sources"]), 7)
         self.assertIn("processingTimeMs", result)
 
     async def test_lookup_keeps_metadata_when_one_provider_times_out(self):
@@ -113,6 +133,34 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
             "tiki": "TIMEOUT",
             "vinabook": "TIMEOUT",
         })
+
+    async def test_lookup_uses_web_fallback_when_all_catalog_sources_are_empty(self):
+        from main import lookup_book_by_isbn, IsbnLookupRequest
+
+        fallback = {
+            "title": "Nửa kia vượt trội",
+            "subtitle": None,
+            "authors": ["Sharon Moalem"],
+            "publisher": "Dân Trí",
+            "publishedDate": "2021",
+            "description": None,
+            "categories": [],
+            "language": "vi",
+            "pageCount": None,
+            "thumbnail": None,
+            "sourceUrl": "https://example.test/books",
+        }
+        marketplace = (None, 0.0, None, 0.0, None, 0.0, False, {})
+        with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), \
+             patch("main._run_standard_lookups", new=AsyncMock(return_value=[(None, 0.0), (None, 0.0)])), \
+             patch("main._fetch_all_marketplace", new=AsyncMock(return_value=marketplace)), \
+             patch("main._fetch_web_search_fallback", new=AsyncMock(return_value=(fallback, 0.55, None))):
+            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="8935095630639"))
+
+        self.assertTrue(result["found"])
+        self.assertEqual(result["title"], "Nửa kia vượt trội")
+        self.assertTrue(result["source"]["webSearch"])
+        self.assertEqual(result["fieldEvidence"]["title"]["selectedSource"], "webSearch")
     async def test_returns_lookup_and_ai_suggestions_for_found_isbn(self):
         lookup = {
             "success": True,

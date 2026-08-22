@@ -1150,6 +1150,87 @@ def _ddgs_search_one_domain(code: str, domain: str, max_results: int) -> list[st
     return urls
 
 
+def _parse_web_search_metadata(isbn: str, result: dict) -> dict | None:
+    """Extract only explicitly labelled book fields from one web-search snippet."""
+    if not isinstance(result, dict):
+        return None
+
+    body = result.get("body")
+    href = result.get("href")
+    if not isinstance(body, str) or not isinstance(href, str) or isbn not in body:
+        return None
+
+    match = re.search(
+        rf"(?P<title>[^|\n]{{2,300}}?)\s*\|\s*"
+        rf"(?:Ký mã hiệu|Mã sách|ISBN(?:\s*(?:mã|code))?)\s*:\s*{re.escape(isbn)}\s*;\s*"
+        rf"Tác giả:\s*(?P<author>[^;|\n]{{2,200}})\s*;\s*"
+        rf"Nhà\s*XB:\s*(?P<publisher>[^;|\n]{{2,160}})"
+        rf"(?:\s*;\s*Năm(?:\s*XB)?\s*:\s*(?P<year>\d{{4}}))?",
+        body,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    def clean(group: str) -> str | None:
+        value = re.sub(r"\s+", " ", match.group(group)).strip()
+        return value or None
+
+    title = clean("title")
+    author = clean("author")
+    publisher = clean("publisher")
+    if not title or not author or not publisher:
+        return None
+
+    return {
+        "title": title,
+        "subtitle": None,
+        "authors": [author],
+        "publisher": publisher,
+        "publishedDate": clean("year") if match.group("year") else None,
+        "description": None,
+        "categories": [],
+        "language": "vi",
+        "pageCount": None,
+        "thumbnail": None,
+        "sourceUrl": href,
+        "sourceProvider": "webSearch",
+        "sourceFetchMode": "search-snippet",
+    }
+
+
+def _ddgs_search_web_metadata(isbn: str, max_results: int) -> dict | None:
+    """Find a labelled, exact-ISBN record without fetching result URLs."""
+    try:
+        from ddgs import DDGS
+
+        with DDGS() as ddgs:
+            for result in ddgs.text(isbn, max_results=max_results):
+                metadata = _parse_web_search_metadata(isbn, result)
+                if metadata:
+                    return metadata
+    except Exception as exc:
+        logger.warning("DDGS web fallback failed for ISBN %s: %s", isbn, exc)
+    return None
+
+
+async def _fetch_web_search_fallback(isbn: str) -> tuple[dict | None, float, str | None]:
+    """Return low-confidence metadata from a labelled generic-search snippet."""
+    try:
+        metadata = await asyncio.wait_for(
+            asyncio.to_thread(_ddgs_search_web_metadata, isbn, BOOK_LOOKUP_MAX_WEB_RESULTS),
+            timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("DDGS web fallback timed out for ISBN %s", isbn)
+        return None, 0.0, "TIMEOUT"
+    except Exception as exc:
+        logger.warning("DDGS web fallback errored for ISBN %s: %s", isbn, exc)
+        return None, 0.0, "ERROR"
+
+    return (metadata, _metadata_completeness_score(metadata), None) if metadata else (None, 0.0, "NOT_FOUND")
+
+
 # ── 5. Tiki direct API ────────────────────────────────────────────────────────
 
 async def _fetch_tiki_by_isbn_api(
@@ -1602,7 +1683,7 @@ def _metadata_completeness_score(data: dict) -> float:
 # Smart ISBN Intelligence is deliberately deterministic.  These weights describe
 # source reliability, while agreement is calculated from the responses received
 # for this ISBN; no model-generated score is used for catalog metadata.
-ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook"]
+ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "webSearch"]
 ISBN_INTELLIGENCE_FIELDS = (
     "title", "subtitle", "authors", "publisher", "publishedDate", "description",
     "categories", "language", "pageCount", "thumbnail",
@@ -1679,7 +1760,13 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
 
     quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
     quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
-    sources = [{"name": source, **source_statuses[source]} for source in ISBN_SOURCE_ORDER]
+    sources = [
+        {
+            "name": source,
+            **source_statuses.get(source, {"enabled": False, "status": "DISABLED", "durationMs": 0}),
+        }
+        for source in ISBN_SOURCE_ORDER
+    ]
     return {
         "metadata": metadata,
         "fieldEvidence": field_evidence,
@@ -2232,6 +2319,14 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         merged = _merge_with_marketplace(merged, fahasa_data, tiki_data, vinabook_data)
 
     found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
+    web_data, web_score = None, 0.0
+    if not found and ENABLE_MARKETPLACE_LOOKUP:
+        web_data, web_score, web_outcome = await _fetch_web_search_fallback(isbn13)
+        if web_outcome and web_outcome != "NOT_FOUND":
+            provider_outcomes["webSearch"] = web_outcome
+        if web_data:
+            merged = _merge_with_marketplace(merged, web_data, None, None)
+            found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
 
     # ── Not found → return empty response with source flags ───────────────────
     if not found:
@@ -2244,7 +2339,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             "fahasa": bool(fahasa_data),
             "tiki": bool(tiki_data),
             "vinabook": bool(vinabook_data),
-            "webSearch": web_searched,
+            "webSearch": bool(web_data),
         })
         result["confidence"].update({
             "googleBooks": google_score,
@@ -2253,13 +2348,14 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             "fahasa": fahasa_score,
             "tiki": tiki_score,
             "vinabook": vinabook_score,
+            "webSearch": web_score,
             "overall": max(google_score, open_score,
                            worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
-                           fahasa_score, tiki_score, vinabook_score),
+                           fahasa_score, tiki_score, vinabook_score, web_score),
         })
         result["_providerMetadata"] = {
             "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
-            "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+            "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data, "webSearch": web_data,
         }
         result["_providerOutcomes"] = provider_outcomes
         return result
@@ -2281,6 +2377,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         google_score, open_score,
         worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
         fahasa_score, tiki_score, vinabook_score,
+        web_score,
     ]
     overall_confidence = round(max(all_scores), 3)
     active_scores = [s for s in all_scores if s > 0]
@@ -2311,7 +2408,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             "fahasa": bool(fahasa_data),
             "tiki": bool(tiki_data),
             "vinabook": bool(vinabook_data),
-            "webSearch": web_searched,
+            "webSearch": bool(web_data),
             "aiSummary": ai_provider,
         },
         "confidence": {
@@ -2322,17 +2419,17 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
             "fahasa": fahasa_score,
             "tiki": tiki_score,
             "vinabook": vinabook_score,
-            "webSearch": 0.0,
+            "webSearch": web_score,
         },
         "summaryVi": summary_vi,
         "keywords": keywords,
         "manualEntryRequired": False,
-        "sourceUrl": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceUrl"),
-        "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or {}).get("sourceFetchMode"),
+        "sourceUrl": (fahasa_data or tiki_data or vinabook_data or web_data or {}).get("sourceUrl"),
+        "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or web_data or {}).get("sourceFetchMode"),
     }
     result["_providerMetadata"] = {
         "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
-        "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data,
+        "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data, "webSearch": web_data,
     }
     result["_providerOutcomes"] = provider_outcomes
     return result
@@ -2347,6 +2444,7 @@ def _build_source_statuses(result: dict, started_at: float) -> dict:
         "fahasa": ENABLE_MARKETPLACE_LOOKUP,
         "tiki": ENABLE_MARKETPLACE_LOOKUP,
         "vinabook": ENABLE_MARKETPLACE_LOOKUP,
+        "webSearch": ENABLE_MARKETPLACE_LOOKUP,
     }
     elapsed = int((time.perf_counter() - started_at) * 1000)
     outcomes = result.get("_providerOutcomes") or {}
