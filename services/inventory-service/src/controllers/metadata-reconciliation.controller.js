@@ -4,6 +4,10 @@ const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLangu
 
 const prisma = new PrismaClient();
 const FIELDS = ['title', 'authors', 'publisher', 'categories', 'language', 'publishedDate', 'pageCount', 'coverFormat', 'description'];
+// Only authors/publisher/categories are matched against a catalog authority (see reconcileMetadata) and
+// surfaced for staff review in AuthorityReviewPanel. The rest are plain passthrough fields with nothing
+// to reconcile, so they must not stay PENDING forever — that would permanently block save.
+const AUTO_ACCEPT_FIELDS = new Set(['title', 'language', 'publishedDate', 'pageCount', 'coverFormat', 'description']);
 
 function jsonValue(value) {
   return value === null || value === undefined ? Prisma.JsonNull : value;
@@ -44,6 +48,13 @@ async function createDraft(req, res) {
   if (!isbn) return res.status(400).json({ message: 'isbn is required' });
   try {
     const result = reconcileMetadata(raw, await readAuthorities());
+    // authors/categories only get a review row in AuthorityReviewPanel when reconcileMetadata actually
+    // produced a suggestion for them (rawValue was non-empty). An empty input (e.g. no categories found
+    // by the lookup) means there is nothing to normalize and nothing for staff to review — leaving that
+    // decision PENDING would block save forever with no way to resolve it, so auto-accept it too.
+    const autoAcceptFields = new Set(AUTO_ACCEPT_FIELDS);
+    if (result.authorNormalization.length === 0) autoAcceptFields.add('authors');
+    if (result.categoryNormalization.length === 0) autoAcceptFields.add('categories');
     const draft = await prisma.metadata_reconciliation_drafts.create({
       data: {
         isbn,
@@ -55,7 +66,7 @@ async function createDraft(req, res) {
         authority_matches: result.authorityMatches,
         explanation: explain(result, raw),
         created_by_user_id: req.user.id,
-        decisions: { create: FIELDS.map((field) => ({ field, value: jsonValue(result.normalized[field]), provenance: 'RULE' })) },
+        decisions: { create: FIELDS.map((field) => ({ field, value: jsonValue(result.normalized[field]), provenance: 'RULE', status: autoAcceptFields.has(field) ? 'ACCEPTED' : 'PENDING' })) },
       },
       include: { decisions: true },
     });
@@ -169,10 +180,10 @@ async function applyDraft(req, res) {
       if ((finalMetadata.isbn13 !== undefined && !isbn13) || (finalMetadata.isbn10 !== undefined && !isbn10) || (publishYear === undefined && finalMetadata.publishYear !== undefined) || (pageCount === undefined && finalMetadata.pageCount !== undefined)) { const error = new Error('Invalid final metadata'); error.statusCode = 400; throw error; }
       let book = bookId ? await tx.books.findUnique({ where: { id: bookId }, include: { book_authors: true, book_categories: true, book_variants: true } }) : null;
       if (!book && !bookId) {
-        const title = String(accepted.title || finalMetadata.title || '').trim();
+        const title = String(finalMetadata.title || accepted.title || '').trim();
         if (!title || !isbn13) { const error = new Error('title and valid isbn13 are required to create a catalog book'); error.statusCode = 400; throw error; }
-        const createdBook = await tx.books.create({ data: { title, default_language: normalizeLanguageCode(accepted.language || finalMetadata.language) || 'vi', metadata: { is_incomplete: false, metadataProvenance: { title: accepted.title ? 'STAFF_APPROVED' : 'STAFF_APPROVED' } } } });
-        const createdVariant = await tx.book_variants.create({ data: { book_id: createdBook.id, sku: `IMPORT-${isbn13}`, isbn13, language_code: normalizeLanguageCode(accepted.language || finalMetadata.language) || 'vi' } });
+        const createdBook = await tx.books.create({ data: { title, default_language: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi', metadata: { is_incomplete: false, metadataProvenance: { title: accepted.title ? 'STAFF_APPROVED' : 'STAFF_APPROVED' } } } });
+        const createdVariant = await tx.book_variants.create({ data: { book_id: createdBook.id, sku: `IMPORT-${isbn13}`, isbn13, language_code: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi' } });
         bookId = createdBook.id;
         book = { ...createdBook, book_authors: [], book_categories: [], book_variants: [createdVariant] };
       }
@@ -187,11 +198,11 @@ async function applyDraft(req, res) {
       const isLinkedVariant = duplicateReview?.decision === 'LINK_EXISTING_VARIANT';
       const metadataProvenance = Object.fromEntries(Object.keys(accepted).map((field) => [field, 'STAFF_APPROVED']));
       const data = {
-        ...(accepted.title ? { title: String(accepted.title) } : {}),
+        ...(finalMetadata.title !== undefined ? { title: String(finalMetadata.title || '').trim() } : accepted.title ? { title: String(accepted.title) } : {}),
         ...(finalMetadata.subtitle !== undefined ? { subtitle: String(finalMetadata.subtitle || '').trim() || null } : {}),
-        ...(Object.prototype.hasOwnProperty.call(accepted, 'description') ? { description: accepted.description } : {}),
-        ...(Object.prototype.hasOwnProperty.call(accepted, 'language') ? { default_language: accepted.language } : {}),
-        ...(Object.prototype.hasOwnProperty.call(accepted, 'pageCount') ? { page_count: accepted.pageCount } : pageCount !== undefined ? { page_count: pageCount } : {}),
+        ...(finalMetadata.description !== undefined ? { description: finalMetadata.description } : Object.prototype.hasOwnProperty.call(accepted, 'description') ? { description: accepted.description } : {}),
+        ...(finalMetadata.language !== undefined ? { default_language: normalizeLanguageCode(finalMetadata.language) || 'vi' } : Object.prototype.hasOwnProperty.call(accepted, 'language') ? { default_language: accepted.language } : {}),
+        ...(pageCount !== undefined ? { page_count: pageCount } : Object.prototype.hasOwnProperty.call(accepted, 'pageCount') ? { page_count: accepted.pageCount } : {}),
         ...(Object.prototype.hasOwnProperty.call(accepted, 'publishedDate') ? { published_date: accepted.publishedDate ? new Date(`${accepted.publishedDate}T00:00:00.000Z`) : null } : {}),
         ...(accepted.publisher && relations.publisher ? { publisher_id: relations.publisher.id } : {}),
         metadata: { ...(book.metadata || {}), ...(finalMetadata.summaryVi !== undefined ? { summary_vi: String(finalMetadata.summaryVi || '').trim() || null } : {}), ...(finalMetadata.keywords !== undefined ? { keywords: normalizeKeywords(finalMetadata.keywords) } : {}), metadataProvenance: { ...(book.metadata?.metadataProvenance || {}), ...metadataProvenance, ...(finalMetadata.summaryVi !== undefined ? { summaryVi: 'STAFF_APPROVED' } : {}), ...(finalMetadata.keywords !== undefined ? { keywords: 'STAFF_APPROVED' } : {}) } },

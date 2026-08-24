@@ -23,6 +23,7 @@ export function BarcodeScanModal({
   title = "Quet Barcode",
 }: BarcodeScanModalProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const manualInputRef = useRef<HTMLInputElement>(null);
   const [manualCode, setManualCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -144,20 +145,40 @@ export function BarcodeScanModal({
     };
   }, [isOpen, startScanner, stopScanner]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    manualInputRef.current?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void closeModal();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, closeModal]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => void closeModal()} />
 
-      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+      <div
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="barcode-scan-title"
+      >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <Camera size={18} className="text-primary" />
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            <h2 id="barcode-scan-title" className="text-base font-semibold text-foreground">{title}</h2>
           </div>
           <button
             onClick={() => void closeModal()}
+            aria-label="Đóng"
             className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
           >
             <X size={20} />
@@ -174,6 +195,7 @@ export function BarcodeScanModal({
                   setSelectedCameraId(cameraId);
                   void startScanner(cameraId);
                 }}
+                aria-label="Chọn camera"
                 className="flex-1 rounded-lg border border-border bg-input-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {cameras.map((camera) => (
@@ -184,6 +206,7 @@ export function BarcodeScanModal({
               </select>
               <button
                 title="Thu lai"
+                aria-label="Thử lại"
                 className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary cursor-pointer"
                 onClick={() => {
                   if (selectedCameraId) {
@@ -214,12 +237,14 @@ export function BarcodeScanModal({
         </div>
 
         <div className="border-t border-border px-4 py-4">
-          <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+          <label htmlFor="barcode-manual-input" className="mb-1.5 block text-xs font-semibold text-muted-foreground">
             <Keyboard size={12} className="mr-1 inline" />
             Nhap barcode thu cong
           </label>
           <div className="flex items-center gap-2">
             <input
+              id="barcode-manual-input"
+              ref={manualInputRef}
               value={manualCode}
               onChange={(event) => setManualCode(event.target.value)}
               onKeyDown={(event) => {
