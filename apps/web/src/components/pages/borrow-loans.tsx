@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { BookOpen, Loader2, RefreshCw, Plus, X } from 'lucide-react';
@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
 
@@ -39,6 +40,9 @@ export function BorrowLoansPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | LoanStatus>('ALL');
   const [showDirectLoan, setShowDirectLoan] = useState(false);
+  const directLoanModalRef = useRef<HTMLDivElement>(null);
+  const closeDirectLoan = () => setShowDirectLoan(false);
+  useDialogA11y(showDirectLoan, closeDirectLoan, directLoanModalRef);
   const [dlCustomers, setDlCustomers] = useState<any[]>([]);
   const [dlBooks, setDlBooks] = useState<any[]>([]);
   const [dlWarehouses, setDlWarehouses] = useState<WarehouseLookupItem[]>([]);
@@ -411,11 +415,11 @@ export function BorrowLoansPage() {
       </motion.div>
 
       {showDirectLoan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="direct-loan-modal-title">
+          <motion.div ref={directLoanModalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[16px] font-semibold">Tạo phiếu mượn trực tiếp</h3>
+              <h3 id="direct-loan-modal-title" className="text-[16px] font-semibold">Tạo phiếu mượn trực tiếp</h3>
               <button onClick={() => setShowDirectLoan(false)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-4">

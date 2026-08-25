@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, NavLink } from 'react-router';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertTriangle,
   ArrowRight,
   Ban,
+  Bell,
   BookMarked,
   BookOpen,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   ShieldOff,
   ShoppingCart,
+  Sparkles,
   TicketCheck,
   TrendingUp,
   Warehouse,
@@ -40,6 +42,7 @@ import { LoadingOverlay } from '@/components/ui/loading-state';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { PageWrapper, FadeItem, AnimatedCounter } from '@/components/motion-utils';
 import {
   analyticsService,
@@ -47,6 +50,7 @@ import {
   type DashboardKpis,
   type FineSummary,
   type OverdueSummary,
+  type ReorderSuggestionsData,
   type ReservationFunnel,
   type TopBookItem,
   type WarehouseStockRiskItem,
@@ -56,6 +60,8 @@ import { toast } from 'sonner';
 import { authService } from '@/services/auth';
 import { purchaseRequestService } from '@/services/purchase-requests';
 import { exceptionReportService } from '@/services/exception-reports';
+import { useBorrowRealtime } from '@/hooks/useBorrowRealtime';
+import { useInventoryRealtime } from '@/hooks/useInventoryRealtime';
 
 const CHART_COLORS = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-1)'];
 const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
@@ -112,6 +118,14 @@ const emptyFunnel: ReservationFunnel = {
   conversion_rate: 0,
 };
 
+const emptyReorderSummary: ReorderSuggestionsData['summary'] = {
+  total_candidates: 0,
+  high_priority: 0,
+  medium_priority: 0,
+  low_priority: 0,
+  estimated_total_reorder_qty: 0,
+};
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -136,34 +150,34 @@ function getGreeting(hour: number) {
 
 const DECISION_COLORS = {
   orange: {
-    active: 'border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:hover:bg-orange-500/15',
-    iconActive: 'bg-orange-100 border-orange-200 dark:bg-orange-500/15 dark:border-orange-500/20',
-    iconColorActive: 'text-orange-600 dark:text-orange-400',
-    textActive: 'text-orange-700 dark:text-orange-400',
+    pill: 'border-orange-200 bg-orange-50 hover:bg-orange-100 dark:border-orange-500/20 dark:bg-orange-500/10 dark:hover:bg-orange-500/15',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    text: 'text-orange-700 dark:text-orange-400',
   },
   red: {
-    active: 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:hover:bg-red-500/15',
-    iconActive: 'bg-red-100 border-red-200 dark:bg-red-500/15 dark:border-red-500/20',
-    iconColorActive: 'text-red-600 dark:text-red-400',
-    textActive: 'text-red-700 dark:text-red-400',
+    pill: 'border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:hover:bg-red-500/15',
+    iconColor: 'text-red-600 dark:text-red-400',
+    text: 'text-red-700 dark:text-red-400',
   },
   amber: {
-    active: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/15',
-    iconActive: 'bg-amber-100 border-amber-200 dark:bg-amber-500/15 dark:border-amber-500/20',
-    iconColorActive: 'text-amber-600 dark:text-amber-400',
-    textActive: 'text-amber-700 dark:text-amber-400',
+    pill: 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/15',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    text: 'text-amber-700 dark:text-amber-400',
   },
   rose: {
-    active: 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:hover:bg-rose-500/15',
-    iconActive: 'bg-rose-100 border-rose-200 dark:bg-rose-500/15 dark:border-rose-500/20',
-    iconColorActive: 'text-rose-600 dark:text-rose-400',
-    textActive: 'text-rose-700 dark:text-rose-400',
+    pill: 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-500/10 dark:hover:bg-rose-500/15',
+    iconColor: 'text-rose-600 dark:text-rose-400',
+    text: 'text-rose-700 dark:text-rose-400',
   },
   violet: {
-    active: 'border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:hover:bg-violet-500/15',
-    iconActive: 'bg-violet-100 border-violet-200 dark:bg-violet-500/15 dark:border-violet-500/20',
-    iconColorActive: 'text-violet-600 dark:text-violet-400',
-    textActive: 'text-violet-700 dark:text-violet-400',
+    pill: 'border-violet-200 bg-violet-50 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:hover:bg-violet-500/15',
+    iconColor: 'text-violet-600 dark:text-violet-400',
+    text: 'text-violet-700 dark:text-violet-400',
+  },
+  blue: {
+    pill: 'border-blue-200 bg-blue-50 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:hover:bg-blue-500/15',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    text: 'text-blue-700 dark:text-blue-400',
   },
 } as const;
 
@@ -185,6 +199,8 @@ export function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
   const [pendingPR, setPendingPR] = useState(0);
   const [openER, setOpenER] = useState(0);
+  const [reorderSummary, setReorderSummary] = useState(emptyReorderSummary);
+  const [hasNewData, setHasNewData] = useState(false);
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
@@ -199,6 +215,7 @@ export function DashboardPage() {
     try {
       setLoading(true);
       setError(null);
+      setHasNewData(false);
 
       const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel] = await Promise.all([
         analyticsService.getDashboardKpis(),
@@ -220,14 +237,16 @@ export function DashboardPage() {
         funnel: funnel || emptyFunnel,
       });
 
-      const [prRes, erRes] = await Promise.allSettled([
+      const [prRes, erRes, reorderRes] = await Promise.allSettled([
         purchaseRequestService.getAll({ status: 'PENDING', limit: 1 }),
         exceptionReportService.getAll({ status: 'OPEN', limit: 1 }),
+        analyticsService.getReorderSuggestions({ priority: 'ALL', limit: 1 }),
       ]);
       setPendingPR(prRes.status === 'fulfilled' ? (prRes.value.total ?? prRes.value.data?.length ?? 0) : 0);
       setOpenER(erRes.status === 'fulfilled' ? (erRes.value.total ?? erRes.value.data?.length ?? 0) : 0);
+      setReorderSummary(reorderRes.status === 'fulfilled' ? (reorderRes.value.summary || emptyReorderSummary) : emptyReorderSummary);
     } catch (err) {
-      const message = getApiErrorMessage(err, 'Failed to load analytics dashboard.');
+      const message = getApiErrorMessage(err, 'Không tải được bảng phân tích.');
       setError(message);
       toast.error(message);
     } finally {
@@ -238,6 +257,20 @@ export function DashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  const markNewData = useCallback(() => {
+    if (canViewAnalytics && !loading) setHasNewData(true);
+  }, [canViewAnalytics, loading]);
+
+  useBorrowRealtime({
+    onLoanEvent: markNewData,
+    onReservationEvent: markNewData,
+    onFineEvent: markNewData,
+  });
+  useInventoryRealtime({
+    onStockEvent: markNewData,
+    onPurchaseRequestEvent: markNewData,
+  });
 
   const trendData = useMemo(
     () =>
@@ -281,70 +314,66 @@ export function DashboardPage() {
     month: '2-digit',
     year: 'numeric',
   });
-  const totalActionable = pendingPR + openER + kpis.low_stock_variants + kpis.overdue_loans + fines.unpaid_count;
+  const totalActionable = pendingPR + openER + kpis.low_stock_variants + kpis.overdue_loans + fines.unpaid_count + reorderSummary.high_priority;
 
   if (isWarehouseStaff) {
     return <Navigate to="/my-warehouse-tasks" replace />;
   }
 
+  const headerDescription = canViewAnalytics && !loading && !error
+    ? totalActionable > 0
+      ? `${todayLabel} — Bạn có ${totalActionable} việc cần xử lý hôm nay.`
+      : `${todayLabel} — Không có việc gì khẩn cấp hôm nay, mọi thứ đang ổn định.`
+    : `${todayLabel} — Xem KPI thư viện, kho vận và các việc cần xử lý trong ngày.`;
+
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900"
-      >
-        <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-500/30 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
-
-        <div className="relative max-w-7xl mx-auto px-6 py-8 lg:px-8 lg:py-10">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/15 backdrop-blur">
-                <LayoutDashboard className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-[13px] font-medium capitalize text-white/80">{todayLabel}</p>
-                <h1 className="mt-0.5 text-2xl font-bold text-white">
-                  {greeting}{currentUser?.full_name ? `, ${currentUser.full_name}` : ''}
-                </h1>
-                <p className="mt-1.5 text-[13px] text-white/85">
-                  {canViewAnalytics && !loading && !error
-                    ? totalActionable > 0
-                      ? `Bạn có ${totalActionable} việc cần xử lý hôm nay.`
-                      : 'Không có việc gì khẩn cấp hôm nay — mọi thứ đang ổn định.'
-                    : 'Dữ liệu thời gian thực từ Kho, Mượn trả, Đặt trước, Phạt.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void loadDashboard()}
-                disabled={!canViewAnalytics}
-                loading={loading}
-                aria-label="Làm mới dữ liệu"
-                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
-              >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
+        <PageHeader
+          icon={LayoutDashboard}
+          title={`${greeting}${currentUser?.full_name ? `, ${currentUser.full_name}` : ''}`}
+          description={headerDescription}
+          iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          actions={
+            <>
+              <Button type="button" variant="outline" onClick={() => void loadDashboard()} disabled={!canViewAnalytics} loading={loading} aria-label="Làm mới dữ liệu">
                 <RefreshCw className="h-4 w-4" />
                 Làm mới
               </Button>
               {canViewAnalytics ? (
-                <Button type="button" asChild className="bg-white text-indigo-700 hover:bg-white/90">
+                <Button type="button" asChild>
                   <NavLink to="/reports">
                     Báo cáo <ArrowRight className="h-4 w-4" />
                   </NavLink>
                 </Button>
               ) : null}
-            </div>
-          </div>
-        </div>
-      </motion.div>
+            </>
+          }
+        />
+      </FadeItem>
 
-      <PageWrapper className="space-y-6">
+      <AnimatePresence>
+        {hasNewData && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+              <div className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
+                <Bell className="h-4 w-4 shrink-0" />
+                Có dữ liệu mới — số liệu bên dưới có thể đã thay đổi.
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadDashboard()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-indigo-700 transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Cập nhật ngay
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {!canViewAnalytics ? (
         <SectionCard>
           <EmptyState
@@ -397,33 +426,31 @@ export function DashboardPage() {
                 <p className="text-[12px] text-muted-foreground mt-0.5">Các mục cần quyết định hoặc theo dõi ngay</p>
               </div>
             </div>
-            <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+            <div className="flex flex-wrap gap-2">
               {([
-                { to: '/purchase-requests?status=PENDING', icon: ShoppingCart, count: pendingPR, label: ['Yêu cầu mua hàng', 'chờ duyệt'], color: 'orange' },
-                { to: '/exception-reports?status=OPEN', icon: AlertTriangle, count: openER, label: ['Báo cáo sự cố', 'chưa xử lý'], color: 'red' },
-                { to: '/inventory', icon: Warehouse, count: kpis.low_stock_variants, label: ['Đầu sách', 'tồn kho thấp'], color: 'amber' },
-                { to: '/borrow/loans?status=OVERDUE', icon: Clock, count: kpis.overdue_loans, label: ['Phiếu mượn', 'quá hạn'], color: 'rose' },
-                { to: '/borrow/fines?status=UNPAID', icon: Receipt, count: fines.unpaid_count, label: ['Tiền phạt', 'chưa thu'], color: 'violet' },
+                { to: '/purchase-requests?status=PENDING', icon: ShoppingCart, count: pendingPR, label: 'Yêu cầu mua hàng chờ duyệt', color: 'orange' },
+                { to: '/exception-reports?status=OPEN', icon: AlertTriangle, count: openER, label: 'Báo cáo sự cố chưa xử lý', color: 'red' },
+                { to: '/inventory', icon: Warehouse, count: kpis.low_stock_variants, label: 'Đầu sách tồn kho thấp', color: 'amber' },
+                { to: '/borrow/loans?status=OVERDUE', icon: Clock, count: kpis.overdue_loans, label: 'Phiếu mượn quá hạn', color: 'rose' },
+                { to: '/borrow/fines?status=UNPAID', icon: Receipt, count: fines.unpaid_count, label: 'Tiền phạt chưa thu', color: 'violet' },
+                { to: '/reorder-suggestions', icon: Sparkles, count: reorderSummary.high_priority, label: 'Cần nhập thêm hàng', color: 'blue' },
               ] as const).map((item, index) => {
                 const active = item.count > 0;
                 const colors = DECISION_COLORS[item.color];
                 const Icon = item.icon;
                 return (
-                  <NavLink key={item.to} to={item.to} className="group">
+                  <NavLink key={item.to} to={item.to}>
                     <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, delay: index * 0.04 }}
-                      whileHover={{ y: -2 }}
-                      className={`flex items-center gap-3 rounded-xl border p-4 transition-colors hover:shadow-sm cursor-pointer ${active ? colors.active : 'border-border bg-card hover:bg-muted/40'}`}
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: index * 0.03 }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`inline-flex h-11 items-center gap-2 rounded-full border pl-3 pr-3.5 transition-colors cursor-pointer ${active ? colors.pill : 'border-border bg-muted/50 hover:bg-muted'}`}
                     >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${active ? colors.iconActive : 'bg-muted border-border'}`}>
-                        <Icon className={`h-4 w-4 ${active ? colors.iconColorActive : 'text-muted-foreground'}`} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className={`text-xl font-bold leading-none ${active ? colors.textActive : 'text-foreground'}`}>{item.count}</div>
-                        <div className="text-[11px] mt-1 leading-tight text-muted-foreground">{item.label[0]}<br />{item.label[1]}</div>
-                      </div>
+                      <Icon className={`h-4 w-4 shrink-0 ${active ? colors.iconColor : 'text-muted-foreground'}`} />
+                      <span className={`text-[13px] font-bold tabular-nums ${active ? colors.text : 'text-muted-foreground'}`}>{item.count}</span>
+                      <span className="text-[13px] text-foreground">{item.label}</span>
                     </motion.div>
                   </NavLink>
                 );
@@ -431,8 +458,9 @@ export function DashboardPage() {
             </div>
           </FadeItem>
 
+          {/* KPI: hero tile + thư viện overview */}
           <FadeItem>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:auto-rows-[minmax(120px,1fr)] md:grid-flow-dense lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:auto-rows-[minmax(120px,1fr)] md:grid-flow-dense lg:grid-cols-5">
               <div className="relative col-span-2 overflow-hidden rounded-xl border border-indigo-700/20 bg-gradient-to-br from-indigo-600 to-blue-600 p-5 flex flex-col justify-between text-white shadow-[0_4px_20px_-6px_rgba(79,70,229,0.5)] md:row-span-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-white/70">Đang mượn</span>
@@ -445,10 +473,6 @@ export function DashboardPage() {
               </div>
               <StatCard label="Đầu sách" value={kpis.total_titles} icon={BookOpen} variant="default" animateValue />
               <StatCard label="Bản sao" value={kpis.total_copies} icon={Package} variant="success" animateValue />
-              <StatCard label="Đặt trước" value={kpis.pending_reservations} icon={FileText} variant="primary" animateValue />
-              <StatCard label="Đã xác nhận" value={kpis.confirmed_reservations} icon={PackageCheck} variant="success" animateValue />
-              <StatCard label="Sẵn lấy" value={kpis.ready_for_pickup_reservations} icon={TicketCheck} variant="info" animateValue />
-              <StatCard label="Sắp hết hạn lấy" value={kpis.pickup_codes_expiring_soon} icon={Clock} variant="warning" animateValue />
               <StatCard label="Tỷ lệ nhận sách" value={formatPercent(kpis.reservation_conversion_rate)} icon={TrendingUp} variant="success" />
               <StatCard label="Mục quá hạn" value={overdue.total_overdue_items} icon={AlertTriangle} variant="danger" animateValue />
             </div>
@@ -457,8 +481,7 @@ export function DashboardPage() {
           <FadeItem>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <section className="xl:col-span-2">
-                <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp} className="relative overflow-hidden">
-                  <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-cyan-500" />
+                <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
                   {trendData.length ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
@@ -484,10 +507,27 @@ export function DashboardPage() {
                 </SectionCard>
               </section>
 
-              <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck} className="relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-violet-500 to-purple-500" />
+              <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(dashboard?.funnel.conversion_rate || 0)}`} icon={TicketCheck}>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+                    <p className="text-[10px] uppercase text-muted-foreground">Đặt trước</p>
+                    <p className="text-[15px] font-semibold text-foreground">{kpis.pending_reservations}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+                    <p className="text-[10px] uppercase text-muted-foreground">Đã xác nhận</p>
+                    <p className="text-[15px] font-semibold text-foreground">{kpis.confirmed_reservations}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+                    <p className="text-[10px] uppercase text-muted-foreground">Sẵn lấy</p>
+                    <p className="text-[15px] font-semibold text-foreground">{kpis.ready_for_pickup_reservations}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+                    <p className="text-[10px] uppercase text-muted-foreground">Sắp hết hạn lấy</p>
+                    <p className="text-[15px] font-semibold text-foreground">{kpis.pickup_codes_expiring_soon}</p>
+                  </div>
+                </div>
                 {funnelData.some((item) => item.value > 0) ? (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                       <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
@@ -509,8 +549,7 @@ export function DashboardPage() {
 
           <FadeItem>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown} className="relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 to-orange-500" />
+              <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
                 {topBookData.length ? (
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
@@ -530,8 +569,7 @@ export function DashboardPage() {
                 )}
               </SectionCard>
 
-              <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt} className="relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-rose-500 to-pink-500" />
+              <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-500/20 dark:bg-rose-500/10">
                     <div className="flex items-center gap-1.5 text-[11px] uppercase text-rose-700 dark:text-rose-400">
@@ -573,8 +611,7 @@ export function DashboardPage() {
 
           <FadeItem>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse} className="relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 to-red-500" />
+            <SectionCard title="Rủi ro tồn kho theo kho" subtitle="Biến thể sắp hết và hết hàng theo kho" icon={Warehouse}>
               {stockRisk.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[560px] text-left text-[13px]">
@@ -589,16 +626,26 @@ export function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stockRisk.map((item) => (
-                        <tr key={item.warehouse_id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="py-3 pr-3 font-medium">{item.warehouse_name}</td>
-                          <td className="py-3 pr-3 text-amber-700 dark:text-amber-400 font-semibold">{item.low_stock_variants}</td>
-                          <td className="py-3 pr-3 text-rose-700 dark:text-rose-400 font-semibold">{item.out_of_stock_variants}</td>
-                          <td className="py-3 pr-3">{item.total_available_qty}</td>
-                          <td className="py-3 pr-3">{item.total_reserved_qty}</td>
-                          <td className="py-3 pr-3">{item.total_borrowed_qty}</td>
-                        </tr>
-                      ))}
+                      {stockRisk.map((item) => {
+                        const hasRisk = item.low_stock_variants > 0 || item.out_of_stock_variants > 0;
+                        return (
+                          <Fragment key={item.warehouse_id}>
+                            <tr className={`border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors ${hasRisk && item.reasoning ? 'border-b-0' : ''}`}>
+                              <td className="py-3 pr-3 font-medium">{item.warehouse_name}</td>
+                              <td className="py-3 pr-3 text-amber-700 dark:text-amber-400 font-semibold">{item.low_stock_variants}</td>
+                              <td className="py-3 pr-3 text-rose-700 dark:text-rose-400 font-semibold">{item.out_of_stock_variants}</td>
+                              <td className="py-3 pr-3">{item.total_available_qty}</td>
+                              <td className="py-3 pr-3">{item.total_reserved_qty}</td>
+                              <td className="py-3 pr-3">{item.total_borrowed_qty}</td>
+                            </tr>
+                            {hasRisk && item.reasoning ? (
+                              <tr className="border-b border-border/60 last:border-0">
+                                <td colSpan={6} className="pb-3 pt-0 text-[11px] italic text-muted-foreground">{item.reasoning}</td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -607,8 +654,11 @@ export function DashboardPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Mượn quá hạn" subtitle={`Trung bình ${overdue.average_overdue_days} ngày quá hạn`} icon={Clock} className="relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-rose-500 to-red-500" />
+            <SectionCard
+              title="Mượn quá hạn"
+              subtitle={`Trung bình ${overdue.average_overdue_days} ngày · ${overdue.total_overdue_loans} phiếu · lâu nhất ${overdue.oldest_overdue_days} ngày`}
+              icon={Clock}
+            >
               {overdue.items.length ? (
                 <div className="space-y-2">
                   {overdue.items.slice(0, 6).map((item) => (
@@ -632,7 +682,6 @@ export function DashboardPage() {
           </FadeItem>
         </>
       )}
-      </PageWrapper>
-    </>
+    </PageWrapper>
   );
 }

@@ -48,8 +48,8 @@ export const customerBorrowService = {
     return response.data;
   },
 
-  async getMyReservations() {
-    const response = await gatewayAPI.get('/my/reservations');
+  async getMyReservations(params?: { page?: number; pageSize?: number }) {
+    const response = await gatewayAPI.get('/my/reservations', { params });
     return response.data;
   },
 
@@ -73,8 +73,8 @@ export const customerBorrowService = {
     return response.data;
   },
 
-  async getMyLoans() {
-    const response = await gatewayAPI.get('/my/loans');
+  async getMyLoans(params?: { page?: number; pageSize?: number }) {
+    const response = await gatewayAPI.get('/my/loans', { params });
     return response.data;
   },
 
@@ -103,8 +103,8 @@ export const customerBorrowService = {
     return response.data as { data: MomoPaymentStatus };
   },
 
-  async getMyNotifications() {
-    const response = await gatewayAPI.get('/my/notifications');
+  async getMyNotifications(params?: { page?: number; pageSize?: number }) {
+    const response = await gatewayAPI.get('/my/notifications', { params });
     return response.data;
   },
 

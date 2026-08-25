@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { getApiErrorMessage } from "@/services/api";
 import { myWarehouseTaskService, type AvailableWarehouseTask, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
+import { getWarehouseTaskStatusVariant } from "@/lib/status-registry";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận hàng",
@@ -63,13 +64,8 @@ function taskActionLabel(type: string) {
   return "Thực hiện";
 }
 
-function taskStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
-  const upper = String(status || "").toUpperCase();
-  if (upper.includes("DONE") || upper.includes("COMPLETE") || upper.includes("POSTED") || upper.includes("RECEIVED")) return "success";
-  if (upper.includes("PROGRESS") || upper.includes("PICKING")) return "info";
-  if (upper.includes("PENDING") || upper.includes("READY") || upper.includes("APPROVED")) return "warning";
-  if (upper.includes("CANCEL") || upper.includes("REJECT")) return "danger";
-  return "neutral";
+function taskStatusVariant(status: string) {
+  return getWarehouseTaskStatusVariant(status);
 }
 
 function formatDate(value: string | null | undefined) {

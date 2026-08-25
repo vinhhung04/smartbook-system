@@ -16,17 +16,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
+import { getStatusVariant } from "@/lib/status-registry";
 
 const statuses = ["ALL", "DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED", "RECEIVED", "CANCELLED"];
-
-function statusVariant(status: string) {
-  if (status === "RECEIVED") return "success";
-  if (status === "APPROVED" || status === "SUPPLIER_CONFIRMED") return "primary";
-  if (status === "PENDING_APPROVAL" || status === "SENT_TO_SUPPLIER" || status === "SHORTAGE_REPORTED") return "warning";
-  if (status === "PARTIALLY_RECEIVED") return "cyan";
-  if (status === "REJECTED" || status === "CANCELLED") return "danger";
-  return "neutral";
-}
 
 function formatCurrency(value: number) {
   return `${Number(value || 0).toLocaleString("vi-VN")} VND`;
@@ -51,11 +43,14 @@ export function PurchaseOrdersPage() {
   const [supplierId, setSupplierId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [view, setView] = useState("all");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 20;
 
   const load = async () => {
     try {
       setLoading(true);
-      const params: Record<string, string> = { view };
+      const params: Record<string, string | number> = { view, page, pageSize: PAGE_SIZE };
       if (search.trim()) params.search = search.trim();
       if (status !== "ALL") params.status = status;
       if (supplierId) params.supplier_id = supplierId;
@@ -66,6 +61,7 @@ export function PurchaseOrdersPage() {
         warehouseService.getAll(),
       ]);
       setRows(Array.isArray(poResp.data) ? poResp.data : []);
+      setTotalPages(Math.max(1, Math.ceil((poResp.pagination?.total || 0) / PAGE_SIZE)));
       setSuppliers(Array.isArray(supplierRows) ? supplierRows : []);
       setWarehouses(Array.isArray(warehouseRows) ? warehouseRows : []);
     } catch (error) {
@@ -78,7 +74,7 @@ export function PurchaseOrdersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, supplierId, warehouseId, view]);
+  }, [status, supplierId, warehouseId, view, page]);
 
   const counts = useMemo(() => ({
     draft: rows.filter((row) => row.status === "DRAFT").length,
@@ -120,19 +116,19 @@ export function PurchaseOrdersPage() {
 
       <SectionCard>
         <div className="grid gap-3 md:grid-cols-5">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void load()} placeholder="Tìm PO, nhà cung cấp, kho..." className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); void load(); } }} placeholder="Tìm PO, nhà cung cấp, kho..." className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
             {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
+          <select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setPage(1); }} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
             <option value="">Tất cả nhà cung cấp</option>
             {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
           </select>
-          <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
+          <select value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setPage(1); }} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
             <option value="">Tất cả kho</option>
             {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>)}
           </select>
-          <select value={view} onChange={(e) => setView(e.target.value)} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
+          <select value={view} onChange={(e) => { setView(e.target.value); setPage(1); }} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]">
             <option value="all">Tất cả</option>
             <option value="my">Của tôi</option>
             <option value="approval">Chờ duyệt</option>
@@ -160,7 +156,7 @@ export function PurchaseOrdersPage() {
                   <td className="px-5 py-3.5"><NavLink to={`/purchase-orders/${row.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.po_number}</NavLink></td>
                   <td className="px-5 py-3.5 text-[13px]">{row.supplier_name || "-"}</td>
                   <td className="px-5 py-3.5 text-[13px]">{row.warehouse_code || row.warehouse_name || "-"}</td>
-                  <td className="px-5 py-3.5"><StatusBadge label={row.status} variant={statusVariant(row.status)} dot /></td>
+                  <td className="px-5 py-3.5"><StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot /></td>
                   <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(row.order_date)}</td>
                   <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(row.expected_date)}</td>
                   <td className="px-5 py-3.5 text-[13px]">{row.item_count}</td>
@@ -172,6 +168,25 @@ export function PurchaseOrdersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
+          <span>Trang {page} / {totalPages}</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Tiếp
+            </button>
+          </div>
         </div>
       </SectionCard>
     </div>

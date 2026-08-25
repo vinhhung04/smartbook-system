@@ -1,9 +1,10 @@
 import { supplierService, Supplier } from '@/services/supplier';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Truck, Plus, Edit, Trash2, RefreshCw, X } from 'lucide-react';
 import { getApiErrorMessage } from '@/services/api';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
@@ -45,15 +46,19 @@ function isActiveStatus(status: string) {
   return String(status || '').toUpperCase() === 'ACTIVE';
 }
 
+const PAGE_SIZE = 10;
+
 export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [form, setForm] = useState<SupplierFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const canManageSuppliers = canAccess(authService.getCurrentUser(), ROUTE_ACCESS.supplierWrite);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const loadSuppliers = useCallback(async () => {
     try {
@@ -73,6 +78,9 @@ export function SuppliersPage() {
 
   const totalCount = suppliers.length;
   const activeCount = suppliers.filter((s) => isActiveStatus(s.status)).length;
+  const totalPages = Math.max(1, Math.ceil(suppliers.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedSuppliers = suppliers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openCreate = () => {
     setEditing(null);
@@ -99,6 +107,8 @@ export function SuppliersPage() {
     setEditing(null);
     setForm(EMPTY_FORM);
   };
+
+  useDialogA11y(modalOpen, closeModal, modalRef);
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
@@ -207,7 +217,7 @@ export function SuppliersPage() {
                   </td>
                 </tr>
               ) : (
-                suppliers.map((row) => {
+                paginatedSuppliers.map((row) => {
                   const poCount = row._count?.purchase_orders ?? 0;
                   return (
                     <motion.tr
@@ -253,6 +263,26 @@ export function SuppliersPage() {
             </tbody>
           </table>
         </div>
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
+          <span>Hiển thị {paginatedSuppliers.length} / {suppliers.length} nhà cung cấp</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-1 rounded border border-input text-sky-600 dark:text-sky-400 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Trước
+            </button>
+            <span className="px-2">Trang {currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1 rounded border border-input text-sky-600 dark:text-sky-400 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Tiếp
+            </button>
+          </div>
+        </div>
       </SectionCard>
 
       {modalOpen ? (
@@ -263,6 +293,7 @@ export function SuppliersPage() {
           aria-labelledby="supplier-modal-title"
         >
           <motion.div
+            ref={modalRef}
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}

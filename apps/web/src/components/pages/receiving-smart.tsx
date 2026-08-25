@@ -23,6 +23,7 @@ import { aiService } from "@/services/ai";
 import { authService } from "@/services/auth";
 import { receivingSmartService, MatchResult, SmartReceivingDraft } from "@/services/receiving-smart";
 import { getApiErrorMessage } from "@/services/api";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 import { PageHeader } from "../ui/page-header";
 import { StatusBadge } from "@/components/status-badge";
 
@@ -95,6 +96,9 @@ export function SmartReceivingPage() {
 
   // Edit item modal
   const [editingItem, setEditingItem] = useState<{ index: number; result: MatchResult } | null>(null);
+  const editingItemModalRef = useRef<HTMLDivElement>(null);
+  const closeEditingItem = () => setEditingItem(null);
+  useDialogA11y(Boolean(editingItem), closeEditingItem, editingItemModalRef);
 
   // Load warehouses on mount
   useEffect(() => {
@@ -542,9 +546,9 @@ export function SmartReceivingPage() {
       </div>
 
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-card border border-border p-5 shadow-xl">
-            <h3 className="text-base font-semibold text-foreground">Xác nhận item đã sửa</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-item-modal-title">
+          <div ref={editingItemModalRef} className="w-full max-w-md rounded-xl bg-card border border-border p-5 shadow-xl">
+            <h3 id="edit-item-modal-title" className="text-base font-semibold text-foreground">Xác nhận item đã sửa</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Đánh dấu dòng "{editingItem.result.title || "-"}" là đã được kiểm tra thủ công.
               Dòng này sẽ được tính là hợp lệ khi tạo phiếu nháp.

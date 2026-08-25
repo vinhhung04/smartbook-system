@@ -17,6 +17,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 const FILTERS = [
   { value: "All", label: "Tất cả" },
@@ -50,6 +51,9 @@ export function CatalogPage() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDrawer, setShowDrawer] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const closeDrawer = () => setShowDrawer(false);
+  useDialogA11y(showDrawer, closeDrawer, drawerRef);
   const [books, setBooks] = useState<CatalogBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -59,6 +63,9 @@ export function CatalogPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
+  const deleteModalRef = useRef<HTMLDivElement>(null);
+  const closeDeleteBook = () => setDeleteBook(null);
+  useDialogA11y(Boolean(deleteBook), closeDeleteBook, deleteModalRef);
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newBook, setNewBook] = useState({ barcode: "", title: "", author: "", category: "", isbn: "" });
@@ -495,6 +502,10 @@ export function CatalogPage() {
               onClick={() => setShowDrawer(false)}
             />
             <motion.div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-book-drawer-title"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -507,7 +518,7 @@ export function CatalogPage() {
                     <Plus className="w-4 h-4 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-[15px]" style={{ fontWeight: 650 }}>Thêm sách mới</h3>
+                    <h3 id="add-book-drawer-title" className="text-[15px]" style={{ fontWeight: 650 }}>Thêm sách mới</h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Tạo bản ghi sách chưa hoàn chỉnh</p>
                   </div>
                 </div>
@@ -611,6 +622,10 @@ export function CatalogPage() {
               onClick={() => setDeleteBook(null)}
             />
             <motion.div
+              ref={deleteModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-book-modal-title"
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -623,7 +638,7 @@ export function CatalogPage() {
                     <AlertOctagon className="w-5 h-5 text-red-500" />
                   </div>
                   <div>
-                    <h3 className="text-[15px] font-semibold">Xóa sách</h3>
+                    <h3 id="delete-book-modal-title" className="text-[15px] font-semibold">Xóa sách</h3>
                     <p className="text-[11px] text-muted-foreground">Hành động này không thể hoàn tác</p>
                   </div>
                 </div>

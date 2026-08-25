@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 interface WarehouseOption {
   id: string;
@@ -63,8 +64,14 @@ export function GoodsReceiptPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const confirmModalRef = useRef<HTMLDivElement>(null);
+  const closeConfirmModal = () => setShowConfirmModal(false);
+  useDialogA11y(showConfirmModal, closeConfirmModal, confirmModalRef);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showNewBookModal, setShowNewBookModal] = useState(false);
+  const newBookModalRef = useRef<HTMLDivElement>(null);
+  const closeNewBookModal = () => setShowNewBookModal(false);
+  useDialogA11y(showNewBookModal, closeNewBookModal, newBookModalRef);
   const [pendingIsbn13, setPendingIsbn13] = useState("");
   const [pendingTitle, setPendingTitle] = useState("");
   const [isCreatingNewBook, setIsCreatingNewBook] = useState(false);
@@ -904,14 +911,15 @@ export function GoodsReceiptPage() {
       </FadeItem>
 
       {showConfirmModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="confirm-receipt-modal-title">
           <motion.div
+            ref={confirmModalRef}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl"
           >
-            <h3 className="mb-2 text-[16px] font-semibold">Xác nhận tạo phiếu nhập</h3>
+            <h3 id="confirm-receipt-modal-title" className="mb-2 text-[16px] font-semibold">Xác nhận tạo phiếu nhập</h3>
             <p className="mb-6 text-[13px] text-muted-foreground">
               Tạo phiếu nhập nháp với <span className="font-semibold">{items.length} dòng</span>
               {showUnitCost ? (
@@ -941,14 +949,15 @@ export function GoodsReceiptPage() {
       ) : null}
 
       {showNewBookModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="new-book-modal-title">
           <motion.div
+            ref={newBookModalRef}
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
           >
-            <h3 className="mb-2 text-[16px] font-semibold">Tạo sách tạm cho ISBN13 mới</h3>
+            <h3 id="new-book-modal-title" className="mb-2 text-[16px] font-semibold">Tạo sách tạm cho ISBN13 mới</h3>
             <p className="mb-4 text-[13px] text-muted-foreground">
               ISBN13 chua ton tai trong he thong. Vui long nhap ten sach de tao ban ghi INCOMPLETE.
             </p>

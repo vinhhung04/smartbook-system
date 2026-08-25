@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   ScrollText, RefreshCw, ChevronLeft, ChevronRight, Eye, X,
@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 interface AuditLog {
   id: string;
@@ -47,6 +48,9 @@ export function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState('');
   const [searchAction, setSearchAction] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeLog = useCallback(() => setSelectedLog(null), []);
+  useDialogA11y(Boolean(selectedLog), closeLog, modalRef);
 
   const loadLogs = useCallback(async () => {
     try {
@@ -155,12 +159,12 @@ export function AuditTrailPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSelectedLog(null)}>
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSelectedLog(null)} role="dialog" aria-modal="true" aria-labelledby="audit-log-modal-title">
+          <motion.div ref={modalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-xl border border-border shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div>
-                <h3 className="text-[14px] text-foreground" style={{ fontWeight: 650 }}>Chi tiết Audit Log</h3>
+                <h3 id="audit-log-modal-title" className="text-[14px] text-foreground" style={{ fontWeight: 650 }}>Chi tiết Audit Log</h3>
                 <p className="text-[11px] text-muted-foreground">{selectedLog.action_name} — {selectedLog.entity_type}</p>
               </div>
               <button onClick={() => setSelectedLog(null)} aria-label="Đóng" className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-all">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, UserPlus, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
 import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 const customerStatuses: CustomerStatus[] = ['ACTIVE', 'SUSPENDED', 'BLOCKED', 'INACTIVE'];
 
@@ -84,6 +85,12 @@ export function BorrowCustomersPage() {
     setFormState(initialFormState);
     setFormOpen(false);
   };
+
+  const formModalRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(formOpen, resetForm, formModalRef);
+  const notifyModalRef = useRef<HTMLDivElement>(null);
+  const closeNotify = () => setNotifyTarget(null);
+  useDialogA11y(Boolean(notifyTarget), closeNotify, notifyModalRef);
 
   const openEdit = (customer: Customer) => {
     setFormState({
@@ -267,15 +274,19 @@ export function BorrowCustomersPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-form-modal-title"
           >
             <motion.div
+              ref={formModalRef}
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
-              <h3 className="text-base font-semibold mb-4">{formState.id ? 'Sửa khách hàng' : 'Khách hàng mới'}</h3>
+              <h3 id="customer-form-modal-title" className="text-base font-semibold mb-4">{formState.id ? 'Sửa khách hàng' : 'Khách hàng mới'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <label className="text-xs font-medium text-muted-foreground">
                   Tên đầy đủ *
@@ -347,11 +358,11 @@ export function BorrowCustomersPage() {
       </AnimatePresence>
 
       {notifyTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="notify-modal-title">
+          <motion.div ref={notifyModalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[16px] font-semibold">Gửi thông báo</h3>
+              <h3 id="notify-modal-title" className="text-[16px] font-semibold">Gửi thông báo</h3>
               <button onClick={() => setNotifyTarget(null)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
             </div>
             <p className="text-[12px] text-muted-foreground mb-3">Gửi đến: <strong>{notifyTarget.full_name}</strong> ({notifyTarget.customer_code})</p>

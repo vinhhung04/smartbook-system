@@ -18,6 +18,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/ui/stat-card";
 import { getApiErrorMessage } from "@/services/api.ts";
+import { getPickingTaskStatusVariant } from "@/lib/status-registry";
 import { authService } from "@/services/auth";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import {
@@ -57,13 +58,8 @@ function taskClassLabel(taskClass?: string): string {
   return taskClass === "REPICK" ? "REPICK" : "PICK";
 }
 
-function taskStatusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
-  const upper = String(status || "").toUpperCase();
-  if (upper.includes("COMPLETED") || upper.includes("DONE")) return "success";
-  if (upper.includes("PICKING") || upper.includes("IN_PROGRESS")) return "info";
-  if (upper.includes("SHORT") || upper.includes("CANCEL")) return "danger";
-  if (upper.includes("PENDING") || upper.includes("READY")) return "warning";
-  return "neutral";
+function taskStatusVariant(status: string) {
+  return getPickingTaskStatusVariant(status);
 }
 
 type PickingScanTarget = "presence" | "location" | "product";

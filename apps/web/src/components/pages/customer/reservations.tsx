@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, RefreshCw } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
@@ -9,25 +9,30 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { ReservationCard } from './_shared/reservation-card';
 
+const PAGE_SIZE = 20;
+
 export function CustomerReservationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await customerBorrowService.getMyReservations();
+      const response = await customerBorrowService.getMyReservations({ page, pageSize: PAGE_SIZE });
       setRows(Array.isArray(response?.data) ? response.data : []);
+      setTotalPages(response?.meta?.totalPages || 1);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Không tải được đặt trước'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const handleCancel = async (id: string) => {
     try {
@@ -103,6 +108,27 @@ export function CustomerReservationsPage() {
           {rows.map((row) => (
             <ReservationCard key={row.id} item={row} onCancel={(id) => void handleCancel(id)} />
           ))}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 text-[12px] text-muted-foreground">
+              <span>Trang {page} / {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1 rounded border border-input text-amber-700 dark:text-amber-400 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Trước
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1 rounded border border-input text-amber-700 dark:text-amber-400 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Tiếp
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
