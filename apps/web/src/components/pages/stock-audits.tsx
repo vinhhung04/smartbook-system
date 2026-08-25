@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
-import { AlertTriangle, ArrowLeft, Boxes, Camera, Check, ClipboardCheck, ClipboardList, PackageCheck, RefreshCw, ScanLine, UserCheck, Warehouse } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Boxes, Camera, ChevronRight, Check, ClipboardCheck, ClipboardList, Minus, PackageCheck, Plus, RefreshCw, ScanLine, Search, UserCheck, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { stockAuditService, type StockAudit, type StockAuditDetail, type StockAuditLine } from "@/services/stock-audit";
 import { warehouseService } from "@/services/warehouse";
@@ -53,6 +53,7 @@ function StockAuditListView() {
   const [audits, setAudits] = useState<StockAudit[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
   const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [note, setNote] = useState("");
@@ -79,10 +80,17 @@ function StockAuditListView() {
       .catch(() => {});
   }, [isManager]);
 
-  const filtered = useMemo(
-    () => (statusFilter === "ALL" ? audits : audits.filter((a) => a.status === statusFilter)),
-    [audits, statusFilter],
-  );
+  const filtered = useMemo(() => {
+    const byStatus = statusFilter === "ALL" ? audits : audits.filter((a) => a.status === statusFilter);
+    const q = search.trim().toLowerCase();
+    if (!q) return byStatus;
+    return byStatus.filter(
+      (a) =>
+        a.audit_number.toLowerCase().includes(q) ||
+        (a.warehouse_name || "").toLowerCase().includes(q) ||
+        (a.warehouse_code || "").toLowerCase().includes(q),
+    );
+  }, [audits, statusFilter, search]);
 
   const counts = useMemo(() => ({
     total: audits.length,
@@ -141,7 +149,8 @@ function StockAuditListView() {
                 key={card.key}
                 type="button"
                 onClick={() => setStatusFilter(isActive ? "ALL" : card.key)}
-                className={`relative w-full rounded-xl text-left transition-all cursor-pointer ${isActive ? "scale-[0.98] shadow-md" : ""}`}
+                aria-pressed={isActive}
+                className="relative w-full rounded-xl text-left transition-all cursor-pointer active:scale-[0.97]"
               >
                 <StatCard label={card.label} value={card.value} icon={card.icon} variant={card.variant} />
                 {isActive && (
@@ -156,7 +165,7 @@ function StockAuditListView() {
       )}
 
       {isManager && (
-        <SectionCard>
+        <SectionCard title="Tạo phiếu kiểm kê mới" icon={ClipboardCheck}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Kho cần kiểm kê</label>
@@ -183,6 +192,22 @@ function StockAuditListView() {
       )}
 
       <SectionCard noPadding>
+        {!loading && audits.length > 0 && (
+          <div className="border-b border-border p-4">
+            <div className="relative max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm theo số phiếu hoặc kho..."
+                aria-label="Tìm kiếm phiếu kiểm kê"
+                className="h-10 pl-9"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Mobile cards (< md) */}
         {loading ? (
           <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
@@ -190,23 +215,30 @@ function StockAuditListView() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="md:hidden">
-            <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" />
+            {audits.length === 0 ? (
+              <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" />
+            ) : (
+              <EmptyState variant="no-results" title="Không tìm thấy phiếu nào" description="Thử đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái." className="py-12" />
+            )}
           </div>
         ) : (
           <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
             {filtered.map((audit) => {
               const meta = statusMeta(audit.status);
               return (
-                <NavLink key={audit.id} to={`/stock-audits/${audit.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2 hover:bg-muted/20 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">{audit.audit_number}</p>
-                    <StatusBadge label={meta.label} variant={meta.variant} dot />
+                <NavLink key={audit.id} to={`/stock-audits/${audit.id}`} className="flex items-center gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/20 active:scale-[0.99]">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-[13px] font-semibold text-indigo-600 dark:text-indigo-400">{audit.audit_number}</p>
+                      <StatusBadge label={meta.label} variant={meta.variant} dot />
+                    </div>
+                    <p className="truncate text-[12px] text-muted-foreground">{audit.warehouse_name || audit.warehouse_code || "-"}</p>
+                    <div className="mt-1 flex items-center justify-between text-[12px] text-muted-foreground">
+                      <span>{audit.line_count ?? 0} mục</span>
+                      <span>{formatDate(audit.created_at)}</span>
+                    </div>
                   </div>
-                  <p className="text-[12px] text-muted-foreground truncate">{audit.warehouse_name || audit.warehouse_code || "-"}</p>
-                  <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-                    <span>{audit.line_count ?? 0} mục</span>
-                    <span>{formatDate(audit.created_at)}</span>
-                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 </NavLink>
               );
             })}
@@ -218,7 +250,7 @@ function StockAuditListView() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Phiếu kiểm kê", "Kho", "Số mục", "Trạng thái", "Tạo lúc", "Thao tác"].map((heading) => (
+                {["Phiếu kiểm kê", "Kho", "Số mục", "Trạng thái", "Tạo lúc", ""].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{heading}</th>
                 ))}
               </tr>
@@ -227,22 +259,38 @@ function StockAuditListView() {
               {loading ? (
                 <SkeletonTableRow columns={6} rows={4} />
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" /></td></tr>
+                <tr>
+                  <td colSpan={6}>
+                    {audits.length === 0 ? (
+                      <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" />
+                    ) : (
+                      <EmptyState variant="no-results" title="Không tìm thấy phiếu nào" description="Thử đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái." className="py-12" />
+                    )}
+                  </td>
+                </tr>
               ) : filtered.map((audit) => {
                 const meta = statusMeta(audit.status);
                 return (
-                  <tr key={audit.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={audit.id}
+                    onClick={() => navigate(`/stock-audits/${audit.id}`)}
+                    className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-muted/30"
+                  >
                     <td className="px-5 py-3.5">
-                      <NavLink to={`/stock-audits/${audit.id}`} className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{audit.audit_number}</NavLink>
+                      <NavLink
+                        to={`/stock-audits/${audit.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                      >
+                        {audit.audit_number}
+                      </NavLink>
                     </td>
                     <td className="px-5 py-3.5 text-[13px]">{audit.warehouse_name || audit.warehouse_code || "-"}</td>
                     <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{audit.line_count ?? 0}</td>
                     <td className="px-5 py-3.5"><StatusBadge label={meta.label} variant={meta.variant} dot /></td>
                     <td className="px-5 py-3.5 text-[12px] text-muted-foreground whitespace-nowrap">{formatDate(audit.created_at)}</td>
-                    <td className="px-5 py-3.5">
-                      <NavLink to={`/stock-audits/${audit.id}`}>
-                        <Button size="sm" variant="outline">Xem chi tiết</Button>
-                      </NavLink>
+                    <td className="px-5 py-3.5 text-right">
+                      <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground/60" aria-label="Xem chi tiết" />
                     </td>
                   </tr>
                 );
@@ -333,6 +381,13 @@ function StockAuditDetailView({ id }: { id: string }) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed === item.counted_qty) return;
     void applyLineCount(item, Math.trunc(parsed));
+  };
+
+  // +/- buttons for quick manual adjustment alongside scanning — same "current draft or last
+  // saved count" base as handleScanCode, so stepping and scanning never fight over the value.
+  const adjustLineCount = (item: StockAuditLine, delta: number) => {
+    const currentQty = Number(localCounts[item.id] ?? item.counted_qty ?? 0) || 0;
+    void applyLineCount(item, Math.max(0, currentQty + delta));
   };
 
   // Every scan source (hardware scanner, camera auto-scan, manual modal) funnels through here.
@@ -505,35 +560,56 @@ function StockAuditDetailView({ id }: { id: string }) {
               <div
                 key={item.id}
                 onClick={canCount ? () => setSelectedLineId(item.id) : undefined}
-                className={`flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors ${canCount ? "cursor-pointer hover:bg-muted/30" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/40" : ""}`}
+                className={`flex flex-col gap-3 px-5 py-3.5 transition-colors sm:flex-row sm:items-center sm:gap-4 ${canCount ? "cursor-pointer hover:bg-muted/30" : ""} ${isSelected ? "bg-primary/5 ring-1 ring-inset ring-primary/40" : ""}`}
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-medium text-foreground truncate">{item.title || item.sku || "-"}</p>
                   <p className="text-[11px] font-mono text-muted-foreground">{item.sku || item.isbn13 || "-"} · Vị trí {item.location_code || "-"}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-4 text-[12px]">
+                <div className="flex shrink-0 items-center justify-between gap-4 text-[12px] sm:justify-end">
                   <div className="text-center">
                     <p className="text-muted-foreground">Hệ thống</p>
                     <p className="font-mono font-semibold">{item.expected_qty}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-muted-foreground">Đếm được</p>
+                    <p className="mb-1 text-muted-foreground">Đếm được</p>
                     {canCount ? (
-                      <Input
-                        type="number"
-                        min={0}
-                        value={localCounts[item.id] ?? ""}
-                        onChange={(e) => setLocalCounts((current) => ({ ...current, [item.id]: e.target.value }))}
-                        onBlur={() => void handleLineBlur(item)}
-                        className="h-8 w-20 text-center"
-                      />
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => adjustLineCount(item, -1)}
+                          aria-label="Giảm 1"
+                          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted active:scale-95"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={localCounts[item.id] ?? ""}
+                          onChange={(e) => setLocalCounts((current) => ({ ...current, [item.id]: e.target.value }))}
+                          onBlur={() => void handleLineBlur(item)}
+                          className="h-11 w-16 text-center text-[14px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => adjustLineCount(item, 1)}
+                          aria-label="Tăng 1"
+                          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted active:scale-95"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
                     ) : (
                       <p className="font-mono font-semibold">{item.counted_qty ?? "-"}</p>
                     )}
                   </div>
-                  <div className="text-center w-16">
+                  <div className="w-16 text-center">
                     <p className="text-muted-foreground">Chênh lệch</p>
-                    <p className={`font-mono font-semibold ${varianceColor}`}>
+                    <p className={`flex items-center justify-center gap-0.5 font-mono font-semibold ${varianceColor}`}>
+                      {item.variance_qty !== null && item.variance_qty > 0 && <ArrowUp className="h-3 w-3" />}
+                      {item.variance_qty !== null && item.variance_qty < 0 && <ArrowDown className="h-3 w-3" />}
                       {item.variance_qty === null ? "-" : item.variance_qty > 0 ? `+${item.variance_qty}` : item.variance_qty}
                     </p>
                   </div>
@@ -548,18 +624,18 @@ function StockAuditDetailView({ id }: { id: string }) {
       </SectionCard>
 
       {canCount && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none flex items-center justify-between gap-3">
+        <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-card/95 p-5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
           <p className="text-[12px] text-muted-foreground">
             {allCounted ? "Đã đếm đủ tất cả mục. Nộp phiếu để quản lý duyệt." : "Cần nhập số lượng đếm được cho tất cả mục trước khi nộp."}
           </p>
-          <Button onClick={() => void handleSubmitAudit()} disabled={!allCounted} loading={saving}>
+          <Button onClick={() => void handleSubmitAudit()} disabled={!allCounted} loading={saving} className="shrink-0">
             <ClipboardCheck className="h-4 w-4" /> Nộp phiếu kiểm kê
           </Button>
         </div>
       )}
 
       {isManager && audit.status === "SUBMITTED" && (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none flex items-center justify-between gap-3">
+        <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-border bg-card/95 p-5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12px] text-muted-foreground">
             {audit.items.some((i) => i.variance_qty)
               ? "Có chênh lệch giữa số đếm và hệ thống. Duyệt để tự động điều chỉnh tồn kho."
@@ -593,11 +669,16 @@ function ScanCountPanel({ onScan }: { onScan: (code: string) => void }) {
   return (
     <SectionCard noPadding>
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-slate-900">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="relative h-24 w-32 shrink-0 overflow-hidden rounded-lg border border-border bg-slate-900">
             <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
+            {isLive && (
+              <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" /> Live
+              </span>
+            )}
             {!isLive && (
-              <div className="absolute inset-0 flex items-center justify-center px-1 text-center text-[9px] leading-tight text-slate-300">
+              <div className="absolute inset-0 flex items-center justify-center px-1 text-center text-[10px] leading-tight text-slate-300">
                 {cameraError ? "Không có camera" : "Đang mở..."}
               </div>
             )}
