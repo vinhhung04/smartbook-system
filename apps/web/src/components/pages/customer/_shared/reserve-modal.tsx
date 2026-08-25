@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { X, MapPin, CheckCircle, Loader2 } from 'lucide-react';
 import { CustomerCatalogBook } from '@/services/customer-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 interface ReserveModalProps {
   book: CustomerCatalogBook | null;
@@ -20,6 +21,8 @@ interface WarehouseOption {
 export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(Boolean(book), onClose, containerRef);
 
   const availableWarehouses = useMemo<WarehouseOption[]>(() => {
     if (!book?.locations) return [];
@@ -66,18 +69,19 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="reserve-modal-title">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
 
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15">
+      <div ref={containerRef} className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
-            <h2 className="text-[15px] text-slate-900" style={{ fontWeight: 700 }}>Chọn cửa hàng đặt trước</h2>
+            <h2 id="reserve-modal-title" className="text-[15px] text-slate-900" style={{ fontWeight: 700 }}>Chọn cửa hàng đặt trước</h2>
             <p className="mt-0.5 text-[12px] text-slate-400 line-clamp-1">{book.title}</p>
           </div>
           <button
             onClick={onClose}
+            aria-label="Đóng"
             className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
           >
             <X className="h-4 w-4" />

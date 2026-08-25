@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { motion } from 'motion/react';
 import { StatusBadge } from '../status-badge';
@@ -9,6 +9,7 @@ import { aiService } from '@/services/ai';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 interface BookLocation {
   warehouse_name: string;
@@ -86,6 +87,9 @@ export function BookDetailPage() {
   const [isApplyingAiMetadata, setIsApplyingAiMetadata] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const editModalRef = useRef<HTMLDivElement>(null);
+  const closeEditModal = useCallback(() => setShowEditModal(false), []);
+  useDialogA11y(showEditModal, closeEditModal, editModalRef);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState<EditForm>({
     title: "", subtitle: "", author_name: "", publisher_name: "", category_name: "",
@@ -407,11 +411,11 @@ export function BookDetailPage() {
 
       {/* Edit Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEditModal(false)}>
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEditModal(false)} role="dialog" aria-modal="true" aria-labelledby="book-edit-modal-title">
+          <motion.div ref={editModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             className="w-full max-w-3xl rounded-2xl bg-card p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-5 text-[16px] font-semibold">Edit Book Information</h3>
+            <h3 id="book-edit-modal-title" className="mb-5 text-[16px] font-semibold">Edit Book Information</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

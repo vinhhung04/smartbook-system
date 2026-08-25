@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 import {
   borrowService,
   type Reservation,
@@ -80,6 +81,9 @@ export function BorrowReservationsPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ReservationStatus>('ALL');
   const [formOpen, setFormOpen] = useState(false);
+  const formModalRef = useRef<HTMLDivElement>(null);
+  const closeReservationForm = () => { setFormOpen(false); setFormMode('RESERVATION'); };
+  useDialogA11y(formOpen, closeReservationForm, formModalRef);
   const [formMode, setFormMode] = useState<'RESERVATION' | 'DIRECT_LOAN'>('RESERVATION');
   const [formState, setFormState] = useState<ReservationFormState>(initialFormState);
   const [customerQuery, setCustomerQuery] = useState('');
@@ -660,15 +664,19 @@ export function BorrowReservationsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reservation-form-modal-title"
           >
             <motion.div
+              ref={formModalRef}
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="bg-background rounded-xl p-6 w-full max-w-lg shadow-2xl border border-border"
             >
-              <h3 className="text-base font-semibold mb-4">
+              <h3 id="reservation-form-modal-title" className="text-base font-semibold mb-4">
                 {formMode === 'DIRECT_LOAN' ? 'Mượn trực tiếp (Quầy)' : 'Đặt trước mới'}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

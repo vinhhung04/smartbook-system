@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Lock, Plus, Unlock, X, Edit, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 interface RoleItem {
   id: string;
@@ -65,16 +66,20 @@ function statusBadgeVariant(status: UserRow["status"]): "success" | "danger" | "
   return "neutral";
 }
 
+const PAGE_SIZE = 10;
+
 export function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateUserForm>(EMPTY_FORM);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const loadData = async () => {
     try {
@@ -106,11 +111,21 @@ export function UsersPage() {
     });
   }, [search, users]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const closeUserModal = () => {
     setShowCreateModal(false);
     setEditingUser(null);
     setForm(EMPTY_FORM);
   };
+
+  useDialogA11y(showCreateModal, closeUserModal, modalRef);
 
   const validateUserForm = (isEdit: boolean) => {
     const email = form.email.trim().toLowerCase();
@@ -307,7 +322,7 @@ export function UsersPage() {
                   <td colSpan={7}><EmptyState variant="no-data" title="Không có người dùng nào" description="Tạo người dùng mới để bắt đầu" className="py-12" /></td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => (
+                paginatedUsers.map((user) => (
                   <motion.tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <td className="px-5 py-3.5 text-[13px] font-semibold">{user.username}</td>
                     <td className="px-5 py-3.5 text-[13px]">{user.full_name}</td>
@@ -357,14 +372,34 @@ export function UsersPage() {
             </tbody>
           </table>
           </div>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
+            <span>Hiển thị {paginatedUsers.length} / {filteredUsers.length} người dùng</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                Trước
+              </button>
+              <span className="px-2">Trang {currentPage} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                Tiếp
+              </button>
+            </div>
+          </div>
         </SectionCard>
       </FadeItem>
 
       {showCreateModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
+              <h3 id="user-modal-title" className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
               <button onClick={closeUserModal} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Eye, EyeOff, Mail, Lock, BookOpen, Warehouse, BarChart3, Users } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { getHomePathForUser } from "@/lib/rbac";
+import { AuthLayout } from "@/components/auth-layout";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export function LoginPage() {
 
   const handleLogin = async () => {
     if (!credentials.identifier || !credentials.password) {
-      toast.error("Please enter both account and password");
+      toast.error("Vui lòng nhập tài khoản và mật khẩu");
       return;
     }
 
@@ -33,115 +34,75 @@ export function LoginPage() {
         localStorage.removeItem('smartbook-remember');
         localStorage.removeItem('smartbook-saved-identifier');
       }
-      toast.success("Login successful");
+      toast.success("Đăng nhập thành công");
       navigate(getHomePathForUser(loginData.user));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Login failed"));
+      toast.error(getApiErrorMessage(error, "Đăng nhập thất bại"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
-      {/* Left - Branding */}
-      <div className="hidden lg:flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8">
-        {/* Animated Shapes */}
-        <motion.div animate={{ y: [0, 20, 0], x: [0, 10, 0] }} transition={{ duration: 6, repeat: Infinity }} className="absolute w-40 h-40 bg-blue-400/10 rounded-full top-10 left-10" />
-        <motion.div animate={{ y: [0, -20, 0], x: [0, -10, 0] }} transition={{ duration: 8, repeat: Infinity, delay: 1 }} className="absolute w-60 h-60 bg-purple-400/10 rounded-full bottom-20 right-10" />
-        <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }} className="absolute w-32 h-32 border-2 border-blue-300/20 rounded-lg top-1/3 right-1/4" />
-
-        <div className="relative z-10 text-center">
-          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
-            <div className="w-16 h-16 rounded-[16px] bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-              <BookOpen className="w-8 h-8 text-white" />
-            </div>
-          </motion.div>
-
-          <h1 className="text-4xl text-white mb-3 tracking-[-0.02em]" style={{ fontWeight: 800 }}>SmartBook</h1>
-          <p className="text-blue-100 text-lg mb-8">Inventory Management System</p>
-
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="space-y-6">
-            {[
-              { icon: Warehouse, label: "Multi-Warehouse", desc: "Manage inventory across multiple locations" },
-              { icon: BarChart3, label: "Smart Analytics", desc: "Data-driven insights for optimization" },
-              { icon: Users, label: "Team Collaboration", desc: "Seamless workflows for your team" },
-            ].map((f, i) => (
-              <motion.div key={i} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.4 + i * 0.1 }} className="flex items-center gap-4 text-left">
-                <f.icon className="w-6 h-6 text-blue-200 shrink-0" />
-                <div>
-                  <p className="text-white" style={{ fontWeight: 600 }}>{f.label}</p>
-                  <p className="text-blue-100 text-sm">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Right - Login Form */}
-      <div className="flex flex-col items-center justify-center p-8 bg-card">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-12 h-12 rounded-[12px] bg-gradient-to-br from-blue-100 to-indigo-50 flex items-center justify-center border border-blue-200/40 mx-auto mb-3">
-              <BookOpen className="w-6 h-6 text-blue-600" />
-            </div>
-            <h1 className="text-2xl tracking-[-0.02em]" style={{ fontWeight: 700 }}>SmartBook</h1>
-          </div>
-
-          <h2 className="text-[24px] text-foreground mb-2 tracking-[-0.02em]" style={{ fontWeight: 700 }}>Welcome back</h2>
-          <p className="text-muted-foreground mb-8">Sign in to your account to continue</p>
-
-          <form
-            className="space-y-4 mb-6"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleLogin();
-            }}
-          >
-            <div>
-              <label className="text-[12px] text-muted-foreground block mb-2" style={{ fontWeight: 550 }}>Email or Username</label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={credentials.identifier} onChange={e => setCredentials({ ...credentials, identifier: e.target.value })} type="text" placeholder="Enter email or username" autoComplete="username"
-                  className="w-full pl-10 pr-4 py-3 bg-muted/50 border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[12px] text-muted-foreground block mb-2" style={{ fontWeight: 550 }}>Password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={credentials.password} onChange={e => setCredentials({ ...credentials, password: e.target.value })} type={showPassword ? "text" : "password"} placeholder="Enter password" autoComplete="current-password"
-                  className="w-full pl-10 pr-10 py-3 bg-muted/50 border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-400/60 transition-all" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-input accent-primary" />
-              <span className="text-[12px] text-muted-foreground">Remember me</span>
-            </label>
-            <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              className="w-full py-3 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] font-semibold shadow-lg shadow-blue-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
-              {isSubmitting ? "Signing in..." : "Sign In"}
-            </motion.button>
-          </form>
-
+    <AuthLayout
+      title="Chào mừng trở lại"
+      subtitle="Đăng nhập để tiếp tục quản lý thư viện và kho vận"
+      footer={
+        <>
           <div className="text-center text-[12px] text-muted-foreground">
-            Don't have an account?{" "}
-            <NavLink to="/register" className="text-blue-600 hover:text-blue-800 font-semibold">
-              Sign up
+            Chưa có tài khoản?{" "}
+            <NavLink to="/register" className="text-primary hover:opacity-80 font-semibold">
+              Đăng ký
             </NavLink>
           </div>
 
           <NavLink to="/forgot-password" className="block w-full mt-6 py-2.5 rounded-[10px] border border-input text-muted-foreground text-[12px] text-center hover:bg-muted/50 transition-all">
-            Forgot password?
+            Quên mật khẩu?
           </NavLink>
-        </motion.div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form
+        className="space-y-4 mb-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleLogin();
+        }}
+      >
+        <div>
+          <label htmlFor="login-identifier" className="text-[12px] text-muted-foreground block mb-2 font-medium">
+            Tên đăng nhập hoặc email <span className="text-destructive">*</span>
+          </label>
+          <div className="relative">
+            <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input id="login-identifier" value={credentials.identifier} onChange={e => setCredentials({ ...credentials, identifier: e.target.value })} type="text" placeholder="Nhập email hoặc tên đăng nhập" autoComplete="username" required
+              className="w-full pl-10 pr-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="login-password" className="text-[12px] text-muted-foreground block mb-2 font-medium">
+            Mật khẩu <span className="text-destructive">*</span>
+          </label>
+          <div className="relative">
+            <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input id="login-password" value={credentials.password} onChange={e => setCredentials({ ...credentials, password: e.target.value })} type={showPassword ? "text" : "password"} placeholder="Nhập mật khẩu" autoComplete="current-password" required
+              className="w-full pl-10 pr-10 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-input accent-primary" />
+          <span className="text-[12px] text-muted-foreground">Ghi nhớ đăng nhập</span>
+        </label>
+        <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          className="w-full py-3 rounded-[10px] bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] font-semibold shadow-lg shadow-indigo-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
+          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+        </motion.button>
+      </form>
+    </AuthLayout>
   );
 }

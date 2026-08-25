@@ -11,6 +11,7 @@ import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
 import { userService, type WarehouseStaffOption } from "@/services/user";
+import { getStatusVariant } from "@/lib/status-registry";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận",
@@ -30,12 +31,8 @@ const EXCEPTION_TYPE_LABELS: Record<string, string> = {
 
 const STATUS_FILTERS = ["ALL", "OPEN", "ACKNOWLEDGED", "RESOLVED"];
 
-function statusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
-  const s = status.toUpperCase();
-  if (s === "RESOLVED") return "success";
-  if (s === "OPEN") return "danger";
-  if (s === "ACKNOWLEDGED") return "warning";
-  return "neutral";
+function statusVariant(status: string) {
+  return getStatusVariant("exceptionReport", status);
 }
 
 function formatDate(value: string | null | undefined) {

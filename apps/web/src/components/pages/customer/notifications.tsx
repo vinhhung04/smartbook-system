@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bell, RefreshCw, CheckCheck } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
@@ -8,26 +8,31 @@ import { LoadingOverlay } from '@/components/ui/loading-state';
 import { NotificationListItem } from './_shared/notification-list-item';
 import { toast } from 'sonner';
 
+const PAGE_SIZE = 20;
+
 export function CustomerNotificationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'UNREAD' | 'READ'>('ALL');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await customerBorrowService.getMyNotifications();
+      const response = await customerBorrowService.getMyNotifications({ page, pageSize: PAGE_SIZE });
       setRows(Array.isArray(response?.data) ? response.data : []);
+      setTotalPages(response?.meta?.totalPages || 1);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Không tải được thông báo'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
-  useEffect(() => { void loadNotifications(); }, []);
+  useEffect(() => { void loadNotifications(); }, [loadNotifications]);
 
   const filteredRows = rows.filter((row) => {
     if (filter === 'UNREAD') return !row.read_at;
@@ -113,6 +118,27 @@ export function CustomerNotificationsPage() {
                 {readRows.map((row) => (
                   <NotificationListItem key={row.id} item={row} />
                 ))}
+              </div>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 text-[12px] text-muted-foreground">
+              <span>Trang {page} / {totalPages}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Trước
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Tiếp
+                </button>
               </div>
             </div>
           )}

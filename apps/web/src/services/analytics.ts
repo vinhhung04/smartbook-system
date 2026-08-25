@@ -93,6 +93,7 @@ export type WarehouseStockRiskItem = {
   total_available_qty: number;
   total_reserved_qty: number;
   total_borrowed_qty: number;
+  reasoning?: string;
 };
 
 export type ReservationFunnel = {

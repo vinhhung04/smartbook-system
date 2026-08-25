@@ -87,7 +87,7 @@ async function requireSupplierAuthLoader() {
 
 function RouterHydrateFallback() {
   return createElement("div", {
-    className: "min-h-screen bg-gray-50",
+    className: "min-h-screen bg-background",
     role: "status",
     "aria-label": "Loading",
   });

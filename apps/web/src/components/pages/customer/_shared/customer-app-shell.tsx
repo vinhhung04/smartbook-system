@@ -1,6 +1,7 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { CustomerSidebar } from './customer-sidebar';
 import { CustomerHeader } from './customer-header';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 interface CustomerAppShellProps {
   children: ReactNode;
@@ -9,6 +10,9 @@ interface CustomerAppShellProps {
 export function CustomerAppShell({ children }: CustomerAppShellProps) {
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
+  const closeMobileMenu = () => setIsMobileOpen(false);
+  useDialogA11y(isMobileOpen, closeMobileMenu, mobileDrawerRef);
 
   return (
     <div className="min-h-screen bg-background">
@@ -25,6 +29,10 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
           <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setIsMobileOpen(false)}>
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
             <motion.div
+              ref={mobileDrawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu điều hướng"
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}

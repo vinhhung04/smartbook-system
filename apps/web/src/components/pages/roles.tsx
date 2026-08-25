@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import { Shield, Search, Plus, Settings2, Loader2, X, LayoutList, Grid3x3, Check } from "lucide-react";
@@ -13,6 +13,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 interface RoleRow {
   id: string;
@@ -59,15 +60,17 @@ function RoleCreateModal(props: {
 }) {
   const { open, creating, onClose, onSubmit } = props;
   const [form, setForm] = useState<RoleCreateForm>({ code: "", name: "", description: "" });
+  const modalRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, onClose, modalRef);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-      <div className="w-full max-w-xl rounded-xl border border-border bg-card shadow-[0_12px_38px_rgba(15,23,42,0.2)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true" aria-labelledby="role-create-modal-title">
+      <div ref={modalRef} className="w-full max-w-xl rounded-xl border border-border bg-card shadow-[0_12px_38px_rgba(15,23,42,0.2)]">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-foreground">Tạo vai trò mới</h3>
+            <h3 id="role-create-modal-title" className="text-[16px] font-semibold text-foreground">Tạo vai trò mới</h3>
             <p className="mt-0.5 text-[12px] text-muted-foreground">Vai trò sẽ được lưu trực tiếp vào auth_db</p>
           </div>
           <button onClick={onClose} aria-label="Đóng" className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">
@@ -156,6 +159,9 @@ function RolePermissionModal(props: {
     onSave,
   } = props;
 
+  const modalRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, onClose, modalRef);
+
   const filteredPermissions = useMemo(() => {
     const key = keyword.trim().toLowerCase();
     if (!key) return permissions;
@@ -181,11 +187,11 @@ function RolePermissionModal(props: {
   if (!open || !role) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-5">
-      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_12px_42px_rgba(15,23,42,0.28)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-5" role="dialog" aria-modal="true" aria-labelledby="role-permission-modal-title">
+      <div ref={modalRef} className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_12px_42px_rgba(15,23,42,0.28)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-foreground">Phân quyền: {role.name}</h3>
+            <h3 id="role-permission-modal-title" className="text-[16px] font-semibold text-foreground">Phân quyền: {role.name}</h3>
             <p className="mt-0.5 text-[12px] text-muted-foreground">Code: {role.code} · Tick để cấp/thu hồi quyền và lưu vào DB</p>
           </div>
           <button onClick={onClose} aria-label="Đóng" className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">

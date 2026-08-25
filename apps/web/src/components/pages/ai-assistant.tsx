@@ -31,6 +31,7 @@ interface AssistantMessage {
   toolsUsed?: AssistantToolCall[];
   data?: Record<string, unknown>;
   pendingAction?: PendingAction;
+  isError?: boolean;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -272,6 +273,7 @@ export function AIAssistantPage() {
           updateLastMessage(() => ({
             role: 'assistant',
             content: 'Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại.',
+            isError: true,
           }));
         },
       });
@@ -338,6 +340,7 @@ export function AIAssistantPage() {
                 onClick={startNewConversation}
                 disabled={loading}
                 title="Bắt đầu cuộc trò chuyện mới"
+                className="active:scale-95 transition-transform"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Trò chuyện mới
@@ -353,16 +356,21 @@ export function AIAssistantPage() {
                 description="Thử hỏi về tồn kho thấp, sách quá hạn, gợi ý nhập hàng, hoặc phễu reservation."
                 footer={
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {SUGGESTED_QUESTIONS.map(({ icon: Icon, text }) => (
-                      <button
+                    {SUGGESTED_QUESTIONS.map(({ icon: Icon, text }, index) => (
+                      <motion.button
                         key={text}
                         type="button"
                         onClick={() => sendMessage(text)}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
                         className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-[12px] text-foreground transition-colors hover:border-violet-300 hover:bg-violet-50 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
                       >
                         <Icon className="h-3.5 w-3.5 text-violet-500" />
                         {text}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 }
@@ -382,14 +390,21 @@ export function AIAssistantPage() {
                       className={`flex gap-2.5 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {message.role === 'assistant' && (
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/15">
-                          <Bot className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-500/15">
+                          {isStreamingMessage && (
+                            <span className="absolute inset-0 rounded-full bg-violet-400 animate-ping opacity-30" />
+                          )}
+                          <Bot className="relative h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
                         </div>
                       )}
                       <div className="max-w-[85%] space-y-2">
                         <div
                           className={`whitespace-pre-wrap rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed ${
-                            message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                            message.role === 'user'
+                              ? 'bg-primary text-primary-foreground'
+                              : message.isError
+                                ? 'border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400'
+                                : 'bg-muted text-foreground'
                           }`}
                           aria-live={isStreamingMessage ? 'polite' : undefined}
                           role={isStreamingMessage ? 'status' : undefined}
@@ -401,11 +416,20 @@ export function AIAssistantPage() {
                                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.15s]" />
                                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400" />
                               </span>
-                              <span className="text-[12px]">{currentStage.label}</span>
+                              <motion.span
+                                key={currentStage.label}
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="text-[12px]"
+                              >
+                                {currentStage.label}
+                              </motion.span>
                               <span className="tabular-nums text-[12px] text-muted-foreground/60">· {elapsedSeconds}s</span>
                             </span>
                           ) : (
                             <>
+                              {message.isError && <AlertTriangle className="mr-1.5 inline-block h-3.5 w-3.5 -translate-y-px" />}
                               {message.role === 'assistant' ? <MessageText text={message.content} /> : message.content}
                               {isStreamingMessage && (
                                 <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-current" />
@@ -416,29 +440,44 @@ export function AIAssistantPage() {
                         {message.toolsUsed && message.toolsUsed.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {message.toolsUsed.map((call, callIdx) => (
-                              <span
+                              <motion.span
                                 key={callIdx}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2, delay: callIdx * 0.04, ease: [0.22, 1, 0.36, 1] }}
                                 className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
                               >
                                 {call.name}
-                              </span>
+                              </motion.span>
                             ))}
                           </div>
                         )}
                         {message.pendingAction && (
-                          <ActionCard
-                            action={message.pendingAction}
-                            onConfirmed={handleActionConfirmed}
-                            onCancelled={handleActionCancelled}
-                          />
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                          >
+                            <ActionCard
+                              action={message.pendingAction}
+                              onConfirmed={handleActionConfirmed}
+                              onCancelled={handleActionCancelled}
+                            />
+                          </motion.div>
                         )}
                         {message.data && Object.keys(message.data).length > 0 && (
                           <div className="space-y-3">
-                            {Object.entries(message.data).map(([toolName, result]) => (
-                              <div key={toolName} className="space-y-1">
+                            {Object.entries(message.data).map(([toolName, result], blockIdx) => (
+                              <motion.div
+                                key={toolName}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.22, delay: blockIdx * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                                className="space-y-1"
+                              >
                                 <p className="text-[11px] font-medium text-muted-foreground">{toolName}</p>
                                 <ToolResultBlock result={result} />
-                              </div>
+                              </motion.div>
                             ))}
                           </div>
                         )}
@@ -476,7 +515,13 @@ export function AIAssistantPage() {
               className="max-h-32 min-h-[44px]"
               disabled={loading}
             />
-            <Button type="submit" disabled={loading || !input.trim()} size="icon" aria-label="Gửi câu hỏi">
+            <Button
+              type="submit"
+              disabled={loading || !input.trim()}
+              size="icon"
+              aria-label="Gửi câu hỏi"
+              className="active:scale-95 transition-transform"
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>

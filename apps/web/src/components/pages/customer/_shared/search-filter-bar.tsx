@@ -25,6 +25,7 @@ export function SearchFilterBar({
             value={searchValue}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             className="h-10 w-full rounded-[10px] border border-slate-200 py-2 pl-9 pr-3 text-[13px] text-slate-700 outline-none focus:border-indigo-300 focus:ring-[3px] focus:ring-indigo-500/10"
           />
         </div>

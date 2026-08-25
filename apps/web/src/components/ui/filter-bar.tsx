@@ -43,6 +43,7 @@ export function FilterBar({
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             className={cn(
               "w-full pl-9 pr-9 py-2.5 rounded-xl border border-input bg-background text-[13px]",
               "outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40",
@@ -53,6 +54,7 @@ export function FilterBar({
           {showSearchClear && searchValue && searchValue.length > 0 && (
             <button
               onClick={() => onSearchChange("")}
+              aria-label="Xóa tìm kiếm"
               className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="w-3.5 h-3.5" />

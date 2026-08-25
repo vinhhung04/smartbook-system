@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowLeft, ArrowRight, ChevronRight, Home, MapPin, Package, Plus, Pencil, Trash2, Save, X,
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useDialogA11y } from "@/hooks/useDialogA11y";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 
@@ -263,6 +264,12 @@ export function WarehousesPage() {
   const [pageError, setPageError] = useState("");
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
   const [showLocationForm, setShowLocationForm] = useState(false);
+  const warehouseModalRef = useRef<HTMLDivElement>(null);
+  const closeWarehouseForm = () => setShowWarehouseForm(false);
+  useDialogA11y(showWarehouseForm, closeWarehouseForm, warehouseModalRef);
+  const locationModalRef = useRef<HTMLDivElement>(null);
+  const closeLocationForm = () => setShowLocationForm(false);
+  useDialogA11y(showLocationForm, closeLocationForm, locationModalRef);
   const [showDeleteWarehouseConfirm, setShowDeleteWarehouseConfirm] = useState(false);
   const [showDeleteLocationConfirm, setShowDeleteLocationConfirm] = useState(false);
   const [drillPath, setDrillPath] = useState<LocationNode[]>([]);
@@ -948,15 +955,15 @@ export function WarehousesPage() {
       )}
 
       {showWarehouseForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="warehouse-form-modal-title">
+          <motion.div ref={warehouseModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
             <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${warehouseTypeMeta(warehouseForm.warehouse_type).accentBorder}`} />
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${warehouseTypeMeta(warehouseForm.warehouse_type).iconBg}`}>
                   {(() => { const Icon = warehouseTypeMeta(warehouseForm.warehouse_type).icon; return <Icon className={`w-4 h-4 ${warehouseTypeMeta(warehouseForm.warehouse_type).iconColor}`} />; })()}
                 </div>
-                <h3 className="text-[16px] font-semibold">{warehouseMode === "create" ? "Thêm kho" : "Sửa kho"}</h3>
+                <h3 id="warehouse-form-modal-title" className="text-[16px] font-semibold">{warehouseMode === "create" ? "Thêm kho" : "Sửa kho"}</h3>
               </div>
               <button onClick={() => setShowWarehouseForm(false)} aria-label="Đóng" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                 <X className="h-4 w-4" />
@@ -996,15 +1003,15 @@ export function WarehousesPage() {
       ) : null}
 
       {showLocationForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="location-form-modal-title">
+          <motion.div ref={locationModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
             <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${locationTypeMeta(locationForm.location_type).accentBorder}`} />
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${locationTypeMeta(locationForm.location_type).iconBg}`}>
                   {(() => { const Icon = locationTypeMeta(locationForm.location_type).icon; return <Icon className={`w-4 h-4 ${locationTypeMeta(locationForm.location_type).textColor}`} />; })()}
                 </div>
-                <h3 className="text-[16px] font-semibold">{locationMode === "edit" ? "Sửa vị trí" : "Thêm vị trí"}</h3>
+                <h3 id="location-form-modal-title" className="text-[16px] font-semibold">{locationMode === "edit" ? "Sửa vị trí" : "Thêm vị trí"}</h3>
               </div>
               <button onClick={() => setShowLocationForm(false)} aria-label="Đóng" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                 <X className="h-4 w-4" />

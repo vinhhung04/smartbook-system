@@ -11,13 +11,10 @@ import { LoadingOverlay } from "@/components/ui/loading-state";
 import { Button } from "@/components/ui/button";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
+import { getStatusVariant } from "@/lib/status-registry";
 
 function statusVariant(status: string) {
-  if (status === "RECEIVED" || status === "MATCHED" || status === "FULLY_RECEIVED") return "success";
-  if (status === "APPROVED" || status === "SENT" || status === "ACKNOWLEDGED" || status === "SUPPLIER_CONFIRMED") return "primary";
-  if (status === "PENDING_APPROVAL" || status === "UNDER_RECEIVED" || status === "PARTIALLY_RECEIVED" || status === "SENT_TO_SUPPLIER" || status === "SHORTAGE_REPORTED" || status === "SUBMITTED" || status === "OPEN") return "warning";
-  if (status === "REJECTED" || status === "CANCELLED" || status === "OVER_RECEIVED" || status === "FAILED") return "danger";
-  return "neutral";
+  return getStatusVariant("purchaseOrder", status);
 }
 
 function formatCurrency(value: number) {

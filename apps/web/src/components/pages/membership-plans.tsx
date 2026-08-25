@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { borrowService } from '@/services/borrow';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
+import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { Button } from '@/components/ui/button';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -142,6 +143,9 @@ export function MembershipPlansPage() {
       setForm(initialFormState);
     }
   };
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(showModal, closeModal, modalRef);
 
   const onSubmit = async () => {
     const name = form.name.trim();
@@ -359,19 +363,22 @@ export function MembershipPlansPage() {
 
       {showModal && (
         <div
-          role="presentation"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="membership-plan-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal();
           }}
         >
           <motion.div
+            ref={modalRef}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-[16px] font-semibold text-foreground mb-1">
+            <h2 id="membership-plan-modal-title" className="text-[16px] font-semibold text-foreground mb-1">
               {isEdit ? 'Sửa gói hội viên' : 'Gói hội viên mới'}
             </h2>
             <p className="text-[12px] text-muted-foreground mb-5">

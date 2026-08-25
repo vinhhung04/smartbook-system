@@ -13,6 +13,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport, type ExceptionReportCreateInput } from "@/services/exception-reports";
 import { warehouseService } from "@/services/warehouse";
 import { myWarehouseTaskService, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
+import { getStatusVariant } from "@/lib/status-registry";
 
 const TASK_TYPES = [
   { value: "RECEIVING", label: "Tiếp nhận hàng" },
@@ -30,12 +31,8 @@ const EXCEPTION_TYPES = [
   { value: "OTHER", label: "Khác" },
 ];
 
-function statusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
-  const s = status.toUpperCase();
-  if (s === "RESOLVED") return "success";
-  if (s === "OPEN") return "danger";
-  if (s === "ACKNOWLEDGED") return "warning";
-  return "neutral";
+function statusVariant(status: string) {
+  return getStatusVariant("exceptionReport", status);
 }
 
 function formatDate(value: string | null | undefined) {

@@ -1,32 +1,39 @@
+import { CUSTOMER_STATUS, type Tone } from '@/lib/status-registry';
+
 type StatusTone = {
   label: string;
   className: string;
 };
 
-const STATUS_STYLES: Record<string, StatusTone> = {
-  ACTIVE: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  OVERDUE: { label: 'Overdue', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-  RETURNED: { label: 'Returned', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  PENDING: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  APPROVED: { label: 'Approved', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  REJECTED: { label: 'Rejected', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-  CANCELLED: { label: 'Cancelled', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  READY_FOR_PICKUP: { label: 'Ready for pickup', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-  OUT_OF_STOCK: { label: 'Out of stock', className: 'bg-slate-100 text-slate-700 border-slate-200' },
-  UNPAID: { label: 'Unpaid', className: 'bg-rose-50 text-rose-700 border-rose-200' },
-  PARTIALLY_PAID: { label: 'Partially paid', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  PAID: { label: 'Paid', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  WAIVED: { label: 'Waived', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+// Same soft/rounded visual shell this file always used — just keyed by the
+// shared registry's `tone` now instead of a second hardcoded per-status map.
+const TONE_CLASSNAME: Record<Tone, string> = {
+  success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  warning: 'bg-amber-50 text-amber-700 border-amber-200',
+  danger: 'bg-red-50 text-red-700 border-red-200',
+  rose: 'bg-rose-50 text-rose-700 border-rose-200',
+  info: 'bg-blue-50 text-blue-700 border-blue-200',
+  neutral: 'bg-slate-100 text-slate-700 border-slate-200',
+  primary: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  violet: 'bg-violet-50 text-violet-700 border-violet-200',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  teal: 'bg-teal-50 text-teal-700 border-teal-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
 export function getStatusTone(status?: string | null): StatusTone {
   if (!status) {
-    return { label: 'Unknown', className: 'bg-slate-100 text-slate-700 border-slate-200' };
+    return { label: 'Unknown', className: TONE_CLASSNAME.neutral };
   }
 
   const normalized = status.toUpperCase();
-  return STATUS_STYLES[normalized] || {
+  const entry = CUSTOMER_STATUS[normalized];
+  if (entry) {
+    return { label: entry.label, className: TONE_CLASSNAME[entry.tone] };
+  }
+
+  return {
     label: status.replace(/_/g, ' ').toLowerCase().replace(/(^\w|\s\w)/g, (m: string) => m.toUpperCase()),
-    className: 'bg-slate-100 text-slate-700 border-slate-200',
+    className: TONE_CLASSNAME.neutral,
   };
 }

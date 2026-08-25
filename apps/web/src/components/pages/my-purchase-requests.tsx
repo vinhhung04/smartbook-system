@@ -11,6 +11,7 @@ import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest, type PurchaseRequestCreateInput } from "@/services/purchase-requests";
 import { warehouseService } from "@/services/warehouse";
+import { getStatusVariant } from "@/lib/status-registry";
 
 const REASONS = [
   { value: "LOW_STOCK", label: "Tồn kho thấp" },
@@ -20,12 +21,8 @@ const REASONS = [
   { value: "OTHER", label: "Lý do khác" },
 ];
 
-function statusVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
-  const s = status.toUpperCase();
-  if (s === "APPROVED" || s === "CONVERTED") return "success";
-  if (s === "PENDING") return "warning";
-  if (s === "REJECTED") return "danger";
-  return "neutral";
+function statusVariant(status: string) {
+  return getStatusVariant("purchaseRequest", status);
 }
 
 function formatDate(value: string | null | undefined) {
