@@ -141,6 +141,16 @@ export interface AssistantToolCall {
   arguments: Record<string, unknown>;
 }
 
+export interface AiEvidenceItem {
+  label: string;
+  source_type: string;
+  tool_name: string;
+  metric: string;
+  value: unknown;
+  unit?: string;
+  description?: string;
+}
+
 export interface AssistantResponse {
   answer: string;
   tools_used: AssistantToolCall[];
@@ -148,6 +158,8 @@ export interface AssistantResponse {
   conversation_id?: string | null;
   grounding_warning?: string | null;
   pending_action?: PendingAction | null;
+  evidence?: AiEvidenceItem[];
+  retrieval_warnings?: string[];
 }
 
 export interface PendingAction {
@@ -175,6 +187,73 @@ export interface ConfirmActionResponse {
   status: string;
   message: string;
   result?: any;
+}
+
+export interface AiActionListItem {
+  id: string;
+  type: string;
+  status: string;
+  summary: string;
+  risk: string;
+  requires_review: boolean;
+  created_by_user_id: string | null;
+  created_at: string;
+  expires_at: string;
+  conversation_id: string | null;
+}
+
+export interface AiActionDetail extends AiActionListItem {
+  payload: any;
+  requires_confirmation: boolean;
+  allowed_roles: string[];
+  allowed_permissions: string[];
+  sources: Array<{ name: string; endpoint?: string; status?: string }>;
+  intent?: string | null;
+  created_from_message?: string | null;
+  warnings: string[];
+  created_by_roles: string[];
+  confirmed_by_user_id: string | null;
+  cancelled_by_user_id: string | null;
+  result: any;
+  error_message: string | null;
+  updated_at: string;
+  confirmed_at: string | null;
+  executed_at: string | null;
+  cancelled_at: string | null;
+  failed_at: string | null;
+  expired_at: string | null;
+}
+
+export interface AiAuditLogEntry {
+  event_type: string;
+  actor_user_id: string | null;
+  actor_roles: string[];
+  old_status: string | null;
+  new_status: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AiConversationSummary {
+  conversation_id: string;
+  title: string | null;
+  status: string;
+  last_intent: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string | null;
+}
+
+export interface AiMessageRecord {
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | null;
+  tool_calls: AssistantToolCall[] | null;
+  tool_results: Record<string, unknown> | null;
+  data: Record<string, unknown> | null;
+  pending_action_id: string | null;
+  grounding_warning: string | null;
+  sources: unknown[] | null;
+  created_at: string;
 }
 
 export interface ChatResponse {
@@ -497,6 +576,56 @@ export const aiService = {
 
   getPendingAction: async (actionId: string): Promise<PendingAction> => {
     const response = await aiAPI.get(`/actions/pending/${actionId}`);
+    return response.data;
+  },
+
+  listActions: async (params?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+    conversationId?: string;
+    mine?: boolean;
+  }): Promise<{ items: AiActionListItem[]; limit: number; offset: number }> => {
+    const response = await aiAPI.get('/assistant/actions', {
+      params: {
+        status: params?.status,
+        limit: params?.limit,
+        offset: params?.offset,
+        conversation_id: params?.conversationId,
+        mine: params?.mine,
+      },
+    });
+    return response.data;
+  },
+
+  getActionDetail: async (
+    actionId: string,
+  ): Promise<{ action: AiActionDetail; audit_logs: AiAuditLogEntry[] }> => {
+    const response = await aiAPI.get(`/assistant/actions/${actionId}`);
+    return response.data;
+  },
+
+  listConversations: async (): Promise<{ items: AiConversationSummary[] }> => {
+    const response = await aiAPI.get('/assistant/conversations');
+    return response.data;
+  },
+
+  getConversationDetail: async (
+    conversationId: string,
+  ): Promise<{ conversation: AiConversationSummary; messages: AiMessageRecord[] }> => {
+    const response = await aiAPI.get(`/assistant/conversations/${conversationId}`);
+    return response.data;
+  },
+
+  renameConversation: async (conversationId: string, title: string): Promise<AiConversationSummary> => {
+    const response = await aiAPI.patch(`/assistant/conversations/${conversationId}`, { title });
+    return response.data;
+  },
+
+  archiveConversation: async (
+    conversationId: string,
+  ): Promise<{ success: boolean; conversation_id: string; status: string }> => {
+    const response = await aiAPI.delete(`/assistant/conversations/${conversationId}`);
     return response.data;
   },
 

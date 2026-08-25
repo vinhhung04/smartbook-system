@@ -51,10 +51,10 @@ from agent_store import (
     cancel_pending_action,
     mark_action_executed,
     mark_action_failed,
+    mark_action_confirmed,
+    get_action_result,
     cleanup_expired_actions,
     is_expired,
-    PENDING_ACTIONS,
-    ACTION_RESULTS,
 )
 from agent_permissions import get_user_context, can_confirm_action, require_can_confirm_action
 from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
@@ -67,6 +67,13 @@ from agent_actions import (
     EXPIRED as ACTION_EXPIRED,
     get_action_config,
 )
+from sqlalchemy import select, func
+from db import init_db, get_session
+from db_models import PendingActionRow
+from evidence import extract_evidence
+import conversation_store
+from routes_actions import router as actions_router
+from routes_conversations import router as conversations_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -83,6 +90,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(actions_router)
+app.include_router(conversations_router)
+
+
+@app.on_event("startup")
+async def _startup_init_db() -> None:
+    await init_db()
+
 
 # Lấy host Ollama từ biến môi trường (mặc định cho Docker Compose)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
@@ -3170,6 +3186,8 @@ class AssistantResponse(BaseModel):
     conversation_id: str | None = None
     grounding_warning: str | None = None
     pending_action: dict | None = None
+    evidence: list[dict] = []
+    retrieval_warnings: list[str] = []
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3463,7 +3481,7 @@ async def chat(request: Request, req: ChatRequest):
                     if not can_confirm_action(user_ctx, temp_action):
                         reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
                     else:
-                        action = create_pending_action(
+                        action = await create_pending_action(
                             action_type=planned["type"],
                             summary=planned["summary"],
                             payload=planned["payload"],
@@ -3635,6 +3653,7 @@ async def _build_assistant_pending_action(
     collected_data: dict,
     user_ctx,
     auth_header: str | None,
+    conversation_id: str | None = None,
 ) -> dict | None:
     """Best-effort: propose a CREATE_REORDER_DRAFT action when the message asks to
     create a purchase request and the tool loop already fetched reorder suggestions.
@@ -3675,7 +3694,7 @@ async def _build_assistant_pending_action(
         if not can_confirm_action(user_ctx, temp_action):
             return None
 
-        action = create_pending_action(
+        action = await create_pending_action(
             action_type=planned["type"],
             summary=planned["summary"],
             payload=planned["payload"],
@@ -3686,6 +3705,7 @@ async def _build_assistant_pending_action(
             warnings=planned.get("warnings", []),
             requires_review=planned.get("requires_review", False),
             user_context=user_ctx,
+            conversation_id=conversation_id,
         )
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:created",
@@ -3712,6 +3732,32 @@ def _assistant_can_access(user_ctx) -> bool:
     return False
 
 
+def _collect_evidence(collected_data: dict) -> list[dict]:
+    evidence: list[dict] = []
+    for tool_name, tool_result in collected_data.items():
+        evidence.extend(extract_evidence(tool_name, tool_result))
+    return evidence
+
+
+def _collect_retrieval_warnings(collected_data: dict) -> list[str]:
+    return [
+        f"{name}: {result['error']}"
+        for name, result in collected_data.items()
+        if isinstance(result, dict) and "error" in result
+    ]
+
+
+async def _load_conversation_messages(conversation) -> list[dict]:
+    """Replay the last few human-readable turns (user/assistant text only — not tool
+    calls/results, to keep the prompt short) as context for the next round."""
+    recent = await conversation_store.get_recent_messages(conversation.id)
+    return [
+        {"role": m.role, "content": m.content or ""}
+        for m in recent
+        if m.role in ("user", "assistant") and m.content
+    ]
+
+
 @app.post("/assistant", response_model=AssistantResponse)
 async def assistant(request: Request, req: AssistantRequest):
     if not req.message.strip():
@@ -3729,13 +3775,30 @@ async def assistant(request: Request, req: AssistantRequest):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
 
     message_text = req.message.strip()
+    conversation = await conversation_store.get_or_create_conversation(
+        req.conversation_id, user_ctx, first_message=message_text
+    )
+    conversation_id_str = str(conversation.conversation_id)
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+
     cache_key = _assistant_cache_key(message_text)
     cached = assistant_response_cache.get(cache_key)
     if cached is not None:
-        return AssistantResponse(**{**cached, "conversation_id": req.conversation_id})
+        evidence = cached.get("evidence") or _collect_evidence(cached["data"])
+        await conversation_store.append_message(
+            conversation.id,
+            role="assistant",
+            content=cached["answer"],
+            tool_calls=[dict(call) for call in cached["tools_used"]],
+            data=cached["data"],
+            grounding_warning=cached.get("grounding_warning"),
+        )
+        return AssistantResponse(**{**cached, "evidence": evidence, "conversation_id": conversation_id_str})
 
+    history = await _load_conversation_messages(conversation)
     messages: list[dict] = [
         {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        *history,
         {"role": "user", "content": message_text},
     ]
 
@@ -3810,11 +3873,13 @@ async def assistant(request: Request, req: AssistantRequest):
         answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
     grounding_warning = _grounding_check(answer, collected_data)
+    evidence = _collect_evidence(collected_data)
+    retrieval_warnings = _collect_retrieval_warnings(collected_data)
 
     pending_action_data = None
     if answered_normally:
         pending_action_data = await _build_assistant_pending_action(
-            message_text, collected_data, user_ctx, auth_header,
+            message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
 
     if answered_normally and not pending_action_data:
@@ -3823,15 +3888,28 @@ async def assistant(request: Request, req: AssistantRequest):
             "tools_used": [AssistantToolCall(**call) for call in tools_used],
             "data": collected_data,
             "grounding_warning": grounding_warning,
+            "evidence": evidence,
         })
+
+    await conversation_store.append_message(
+        conversation.id,
+        role="assistant",
+        content=answer,
+        tool_calls=tools_used,
+        data=collected_data,
+        pending_action_id=pending_action_data.get("id") if pending_action_data else None,
+        grounding_warning=grounding_warning,
+    )
 
     return AssistantResponse(
         answer=answer,
         tools_used=[AssistantToolCall(**call) for call in tools_used],
         data=collected_data,
-        conversation_id=req.conversation_id,
+        conversation_id=conversation_id_str,
         grounding_warning=grounding_warning,
         pending_action=pending_action_data,
+        evidence=evidence,
+        retrieval_warnings=retrieval_warnings,
     )
 
 
@@ -3875,23 +3953,43 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
 
     message_text = req.message.strip()
+    conversation = await conversation_store.get_or_create_conversation(
+        req.conversation_id, user_ctx, first_message=message_text
+    )
+    conversation_id_str = str(conversation.conversation_id)
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+
     cache_key = _assistant_cache_key(message_text)
     cached = assistant_response_cache.get(cache_key)
     if cached is not None:
+        evidence = cached.get("evidence") or _collect_evidence(cached["data"])
+
         async def cached_event_generator():
             yield _sse("token", {"text": cached["answer"]})
+            await conversation_store.append_message(
+                conversation.id,
+                role="assistant",
+                content=cached["answer"],
+                tool_calls=[dict(call) for call in cached["tools_used"]],
+                data=cached["data"],
+                grounding_warning=cached.get("grounding_warning"),
+            )
             yield _sse("done", {
                 "answer": cached["answer"],
                 "tools_used": [dict(call) for call in cached["tools_used"]],
                 "data": cached["data"],
-                "conversation_id": req.conversation_id,
+                "conversation_id": conversation_id_str,
                 "grounding_warning": cached.get("grounding_warning"),
                 "pending_action": None,
+                "evidence": evidence,
+                "retrieval_warnings": [],
             })
         return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
 
+    history = await _load_conversation_messages(conversation)
     messages: list[dict] = [
         {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        *history,
         {"role": "user", "content": message_text},
     ]
 
@@ -3982,9 +4080,11 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 "answer": answer,
                 "tools_used": tools_used,
                 "data": collected_data,
-                "conversation_id": req.conversation_id,
+                "conversation_id": conversation_id_str,
                 "grounding_warning": None,
                 "pending_action": None,
+                "evidence": [],
+                "retrieval_warnings": [],
             })
             return
 
@@ -3992,11 +4092,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
         grounding_warning = _grounding_check(answer, collected_data)
+        evidence = _collect_evidence(collected_data)
+        retrieval_warnings = _collect_retrieval_warnings(collected_data)
 
         pending_action_data = None
         if answered_normally:
             pending_action_data = await _build_assistant_pending_action(
-                message_text, collected_data, user_ctx, auth_header,
+                message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
             )
 
         if answered_normally and not pending_action_data:
@@ -4005,15 +4107,28 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 "tools_used": [AssistantToolCall(name=call["name"], arguments=call["arguments"]) for call in tools_used],
                 "data": collected_data,
                 "grounding_warning": grounding_warning,
+                "evidence": evidence,
             })
+
+        await conversation_store.append_message(
+            conversation.id,
+            role="assistant",
+            content=answer,
+            tool_calls=tools_used,
+            data=collected_data,
+            pending_action_id=pending_action_data.get("id") if pending_action_data else None,
+            grounding_warning=grounding_warning,
+        )
 
         yield _sse("done", {
             "answer": answer,
             "tools_used": tools_used,
             "data": collected_data,
-            "conversation_id": req.conversation_id,
+            "conversation_id": conversation_id_str,
             "grounding_warning": grounding_warning,
             "pending_action": pending_action_data,
+            "evidence": evidence,
+            "retrieval_warnings": retrieval_warnings,
         })
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -4120,7 +4235,7 @@ async def chat_stream(request: Request, req: ChatRequest):
                     if not can_confirm_action(user_ctx, temp_action):
                         reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
                     else:
-                        action = create_pending_action(
+                        action = await create_pending_action(
                             action_type=planned["type"],
                             summary=planned["summary"],
                             payload=planned["payload"],
@@ -4197,13 +4312,13 @@ async def chat_stream(request: Request, req: ChatRequest):
 
 @app.post("/actions/confirm", response_model=ConfirmActionResponse)
 async def confirm_action(request: Request, req: ConfirmActionRequest):
-    cleanup_expired_actions()
+    await cleanup_expired_actions()
 
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to confirm actions.")
 
-    action = get_pending_action(req.action_id)
+    action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
 
@@ -4211,7 +4326,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         raise HTTPException(status_code=400, detail="This action was already cancelled.")
 
     if action.status == EXECUTED:
-        stored_result = ACTION_RESULTS.get(req.action_id)
+        stored_result = await get_action_result(req.action_id)
         return ConfirmActionResponse(
             success=True,
             action_id=req.action_id,
@@ -4223,8 +4338,12 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     if is_expired(action) or action.status == ACTION_EXPIRED:
         raise HTTPException(status_code=410, detail="Action has expired. Please ask AI to create a new one.")
 
+    # Resolved up-front (not only on the confirm path) so a cancel-via-confirm
+    # (`confirm: false`) also records who cancelled it in the audit log.
+    user_ctx = await get_user_context(auth_header)
+
     if not req.confirm:
-        cancel_pending_action(req.action_id)
+        await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:cancelled",
             req.action_id,
@@ -4238,7 +4357,6 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
             message="Action cancelled by user.",
         )
 
-    user_ctx = await get_user_context(auth_header)
     require_can_confirm_action(user_ctx, action)
 
     # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload
@@ -4247,6 +4365,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         action = action.model_copy(update={"payload": merged_payload})
 
     user_id_for_emit = action.created_by_user_id
+    await mark_action_confirmed(req.action_id, actor_user_id=user_ctx.user_id)
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:confirmed",
         req.action_id,
@@ -4256,7 +4375,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
     try:
         result = await execute_agent_action(action, auth_header, user_ctx)
-        mark_action_executed(req.action_id, result)
+        await mark_action_executed(req.action_id, result, actor_user_id=user_ctx.user_id)
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:executed",
             req.action_id,
@@ -4274,7 +4393,7 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        mark_action_failed(req.action_id, str(exc))
+        await mark_action_failed(req.action_id, str(exc), actor_user_id=user_ctx.user_id)
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:failed",
             req.action_id,
@@ -4291,7 +4410,7 @@ async def cancel_action(request: Request, req: CancelActionRequest):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to cancel actions.")
 
-    action = get_pending_action(req.action_id)
+    action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
 
@@ -4303,7 +4422,7 @@ async def cancel_action(request: Request, req: CancelActionRequest):
         if user_ctx.user_id != action.created_by_user_id:
             raise HTTPException(status_code=403, detail="You can only cancel your own actions.")
 
-    cancel_pending_action(req.action_id)
+    await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:cancelled",
         req.action_id,
@@ -4319,7 +4438,7 @@ async def get_action(request: Request, action_id: str):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
 
-    action = get_pending_action(action_id)
+    action = await get_pending_action(action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
 
@@ -4342,11 +4461,17 @@ async def actions_stats(request: Request):
     user_ctx = await get_user_context(auth_header)
     if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
         raise HTTPException(status_code=403, detail="Admin access required.")
-    return {
-        "pending": sum(1 for a in PENDING_ACTIONS.values() if a.status == PENDING_CONFIRMATION),
-        "executed": len(ACTION_RESULTS),
-        "total": len(PENDING_ACTIONS),
-    }
+
+    async with get_session() as session:
+        pending = await session.scalar(
+            select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == PENDING_CONFIRMATION)
+        )
+        executed = await session.scalar(
+            select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == EXECUTED)
+        )
+        total = await session.scalar(select(func.count()).select_from(PendingActionRow))
+
+    return {"pending": pending or 0, "executed": executed or 0, "total": total or 0}
 
 
 @app.post("/cache/clear")

@@ -5,3 +5,6 @@ python-multipart
 ddgs
 httpx
 cloakbrowser
+sqlalchemy[asyncio]
+asyncpg
+aiosqlite
