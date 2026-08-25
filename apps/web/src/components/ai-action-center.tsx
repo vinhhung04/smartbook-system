@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import {
   DataTable,
@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { aiService, type AiActionListItem, type AiActionDetail, type AiAuditLogEntry } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
+import { useSocket } from '@/lib/socket';
+import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 
 // Action Center — lists AI-drafted actions (pending/executed/cancelled/failed/expired)
 // with their audit trail. Complements the inline ActionCard shown in the chat itself
@@ -71,7 +73,6 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     aiService
       .getActionDetail(actionId)
       .then((data) => {
@@ -87,6 +88,14 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
       cancelled = true;
     };
   }, [actionId]);
+
+  // If this exact action changes elsewhere (e.g. confirmed from the chat tab while this
+  // detail panel is open here), quietly refetch instead of leaving stale data on screen.
+  useAIActionRealtime((_event, data) => {
+    const eventActionId = (data as { action_id?: string } | null)?.action_id;
+    if (eventActionId !== actionId) return;
+    aiService.getActionDetail(actionId).then(setDetail).catch(() => {});
+  });
 
   if (loading) {
     return <p className="px-5 py-4 text-[12px] text-muted-foreground">Đang tải chi tiết...</p>;
@@ -141,6 +150,8 @@ export function AIActionCenter() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { connected } = useSocket();
+  const reloadTimerRef = useRef<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -155,6 +166,19 @@ export function AIActionCenter() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  // Action lifecycle events (created/confirmed/executed/failed/cancelled) can arrive as a
+  // quick burst from one confirm click — debounce so that only triggers one refetch, not N.
+  useAIActionRealtime(() => {
+    if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = window.setTimeout(load, 300);
+  });
+
+  useEffect(() => {
+    return () => {
+      if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-4 px-5 py-6">
@@ -173,7 +197,14 @@ export function AIActionCenter() {
             {f.label}
           </button>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={load} disabled={loading} className="ml-auto">
+        <span
+          className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground"
+          title={connected ? 'Đang nhận cập nhật trực tiếp' : 'Mất kết nối trực tiếp — danh sách chỉ cập nhật khi bấm Làm mới'}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+          {connected ? 'Trực tiếp' : 'Ngoại tuyến'}
+        </span>
+        <Button type="button" variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           Làm mới
         </Button>
