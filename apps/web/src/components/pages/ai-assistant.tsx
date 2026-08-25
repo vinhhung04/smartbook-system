@@ -12,27 +12,20 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
+  Trash2,
   TrendingUp,
   User,
   Warehouse,
-  Wrench,
 } from 'lucide-react';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { PriorityBadge } from '@/components/ui/priority-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import {
-  aiService,
-  type AiConversationSummary,
-  type AiEvidenceItem,
-  type AssistantToolCall,
-  type PendingAction,
-} from '@/services/ai';
+import { aiService, type AiConversationSummary, type AiEvidenceItem, type PendingAction } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
@@ -41,8 +34,6 @@ import { AIActionCenter } from '@/components/ai-action-center';
 interface AssistantMessage {
   role: 'user' | 'assistant';
   content: string;
-  toolsUsed?: AssistantToolCall[];
-  data?: Record<string, unknown>;
   pendingAction?: PendingAction;
   evidence?: AiEvidenceItem[];
   groundingWarning?: string | null;
@@ -59,8 +50,9 @@ const SUGGESTED_QUESTIONS = [
   { icon: TrendingUp, text: 'Tỷ lệ chuyển đổi reservation sang mượn sách hiện tại ra sao?' },
 ];
 
-// Real answers take 60-120s+ on this deployment's CPU-only Ollama (each tool-calling round
-// re-processes the full system prompt + tool schema set). A single static "loading" message
+// Real answers take 60-120s+ on this deployment's Ollama, which only partially offloads
+// the model to GPU (VRAM-constrained shared laptop GPU) and re-processes the full system
+// prompt + tool schema set every tool-calling round. A single static "loading" message
 // reads as frozen well before that; these stages set honest expectations as time passes.
 const LOADING_STAGES = [
   { atSeconds: 0, label: 'Đang phân tích câu hỏi...' },
@@ -68,8 +60,6 @@ const LOADING_STAGES = [
   { atSeconds: 30, label: 'Đang tra cứu dữ liệu từ hệ thống...' },
   { atSeconds: 60, label: 'Đang tổng hợp câu trả lời (có thể mất đến ~2 phút)...' },
 ];
-
-const PRIORITY_VALUES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 
 /** The assistant's system prompt asks it to bold key figures with **text** — render that
  * instead of showing literal asterisks. Intentionally bold-only (no headings/lists): that's
@@ -105,128 +95,11 @@ function MessageText({ text }: { text: string }) {
   );
 }
 
-function isRowArray(value: unknown): value is Record<string, unknown>[] {
-  return (
-    Array.isArray(value) &&
-    value.length > 0 &&
-    value.every((item) => item && typeof item === 'object' && !Array.isArray(item))
-  );
-}
-
-function formatColumnLabel(key: string): string {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function formatPlainValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'number') return value.toLocaleString('vi-VN');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
-}
-
-function renderCell(column: string, value: unknown) {
-  if (value === null || value === undefined || value === '') {
-    return <span className="text-muted-foreground/50">—</span>;
-  }
-  if (column.toLowerCase() === 'priority' && typeof value === 'string' && PRIORITY_VALUES.has(value.toUpperCase())) {
-    return <PriorityBadge priority={value} />;
-  }
-  if (typeof value === 'number') {
-    return <span className="tabular-nums">{value.toLocaleString('vi-VN')}</span>;
-  }
-  return formatPlainValue(value);
-}
-
-function DataTable({ rows }: { rows: Record<string, unknown>[] }) {
-  const columns = Array.from(
-    rows.reduce((set, row) => {
-      Object.keys(row).forEach((key) => set.add(key));
-      return set;
-    }, new Set<string>()),
-  ).slice(0, 8);
-  const numericColumns = new Set(columns.filter((col) => typeof rows[0]?.[col] === 'number'));
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-[12px]">
-        <thead className="bg-muted/50">
-          <tr>
-            {columns.map((col) => (
-              <th
-                key={col}
-                className={`whitespace-nowrap px-3 py-2 font-medium text-muted-foreground ${
-                  numericColumns.has(col) ? 'text-right' : 'text-left'
-                }`}
-              >
-                {formatColumnLabel(col)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, 20).map((row, idx) => (
-            <tr key={idx} className="border-t border-border transition-colors hover:bg-muted/30">
-              {columns.map((col) => (
-                <td
-                  key={col}
-                  className={`whitespace-nowrap px-3 py-2 text-foreground ${numericColumns.has(col) ? 'text-right' : ''}`}
-                >
-                  {renderCell(col, row[col])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length > 20 && (
-        <p className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-          ... và {rows.length - 20} dòng khác
-        </p>
-      )}
-    </div>
-  );
-}
-
-function KeyValueGrid({ obj }: { obj: Record<string, unknown> }) {
-  const entries = Object.entries(obj).filter(([, value]) => value === null || typeof value !== 'object');
-  if (!entries.length) return null;
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {entries.map(([key, value]) => (
-        <div key={key} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{formatColumnLabel(key)}</div>
-          <div className="text-[13px] font-medium tabular-nums text-foreground">{formatPlainValue(value)}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ToolResultBlock({ result }: { result: unknown }) {
-  if (result === null || result === undefined) return null;
-
-  if (typeof result === 'object' && !Array.isArray(result) && 'error' in (result as Record<string, unknown>)) {
-    return (
-      <p className="flex items-start gap-1.5 text-[12px] text-rose-600 dark:text-rose-400">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        {String((result as Record<string, unknown>).error)}
-      </p>
-    );
-  }
-
-  if (isRowArray(result)) {
-    return <DataTable rows={result} />;
-  }
-
-  if (typeof result === 'object') {
-    const record = result as Record<string, unknown>;
-    if (isRowArray(record.items)) {
-      return <DataTable rows={record.items as Record<string, unknown>[]} />;
-    }
-    return <KeyValueGrid obj={record} />;
-  }
-
-  return <p className="text-[13px] text-foreground">{String(result)}</p>;
 }
 
 function newConversationId() {
@@ -263,8 +136,6 @@ export function AIAssistantPage() {
       const base: AssistantMessage[] = records.map((record) => ({
         role: record.role === 'user' ? 'user' : 'assistant',
         content: record.content ?? '',
-        toolsUsed: record.tool_calls ?? undefined,
-        data: record.data ?? undefined,
         groundingWarning: record.grounding_warning ?? undefined,
       }));
       setMessages(base);
@@ -346,8 +217,6 @@ export function AIAssistantPage() {
           updateLastMessage(() => ({
             role: 'assistant',
             content: response.answer,
-            toolsUsed: response.tools_used,
-            data: response.data,
             pendingAction: response.pending_action ?? undefined,
             evidence: response.evidence,
             groundingWarning: response.grounding_warning,
@@ -424,6 +293,21 @@ export function AIAssistantPage() {
     }
   };
 
+  const handleDeleteConversation = async (id: string, title: string | null) => {
+    const confirmed = window.confirm(`Xóa hội thoại "${title || 'chưa đặt tên'}"? Hành động này không thể hoàn tác.`);
+    if (!confirmed) return;
+    try {
+      await aiService.archiveConversation(id);
+      setConversations((prev) => prev.filter((c) => c.conversation_id !== id));
+      if (id === conversationId) {
+        startNewConversation();
+      }
+      toast.success('Đã xóa hội thoại.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Không thể xóa hội thoại.'));
+    }
+  };
+
   return (
     <PageWrapper>
       <FadeItem className="space-y-6">
@@ -489,17 +373,32 @@ export function AIAssistantPage() {
                         {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('vi-VN') : ''}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRenameConversation(conv.conversation_id, conv.title);
-                      }}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                      title="Đổi tên hội thoại"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRenameConversation(conv.conversation_id, conv.title);
+                        }}
+                        className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted"
+                        title="Đổi tên hội thoại"
+                        aria-label="Đổi tên hội thoại"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteConversation(conv.conversation_id, conv.title);
+                        }}
+                        className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                        title="Xóa hội thoại"
+                        aria-label="Xóa hội thoại"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -606,21 +505,6 @@ export function AIAssistantPage() {
                             </>
                           )}
                         </div>
-                        {message.toolsUsed && message.toolsUsed.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {message.toolsUsed.map((call, callIdx) => (
-                              <motion.span
-                                key={callIdx}
-                                initial={{ opacity: 0, y: 6 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.2, delay: callIdx * 0.04, ease: [0.22, 1, 0.36, 1] }}
-                                className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
-                              >
-                                {call.name}
-                              </motion.span>
-                            ))}
-                          </div>
-                        )}
                         {message.pendingAction && (
                           <motion.div
                             initial={{ opacity: 0, y: 6 }}
@@ -640,7 +524,7 @@ export function AIAssistantPage() {
                             <AlertTriangle />
                             <AlertDescription className="text-amber-800 dark:text-amber-400">
                               {message.groundingWarning ||
-                                'Một số số liệu trong câu trả lời chưa khớp hoàn toàn với dữ liệu tool. Vui lòng kiểm tra dữ liệu gốc bên dưới.'}
+                                'Một số số liệu trong câu trả lời chưa khớp hoàn toàn với dữ liệu tra cứu được. Vui lòng đối chiếu lại trước khi sử dụng.'}
                               {message.retrievalWarnings && message.retrievalWarnings.length > 0 && (
                                 <ul className="mt-1 list-disc pl-4">
                                   {message.retrievalWarnings.map((warning, i) => (
@@ -652,74 +536,33 @@ export function AIAssistantPage() {
                           </Alert>
                         )}
 
-                        {((message.evidence && message.evidence.length > 0) ||
-                          (message.toolsUsed && message.toolsUsed.length > 0) ||
-                          (message.data && Object.keys(message.data).length > 0)) && (
+                        {message.evidence && message.evidence.length > 0 && (
                           <Accordion type="multiple" className="rounded-xl border border-border">
-                            {message.evidence && message.evidence.length > 0 && (
-                              <AccordionItem value="evidence" className="px-3">
-                                <AccordionTrigger className="text-[12px]">
-                                  Bằng chứng AI đã dùng ({message.evidence.length})
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    {message.evidence.map((item, i) => (
-                                      <div key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                          {item.label}
+                            <AccordionItem value="evidence" className="px-3">
+                              <AccordionTrigger className="text-[12px]">
+                                Bằng chứng AI đã dùng ({message.evidence.length})
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                  {message.evidence.map((item, i) => (
+                                    <div key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                        {item.label}
+                                      </div>
+                                      <div className="text-[13px] font-medium tabular-nums text-foreground">
+                                        {formatPlainValue(item.value)}
+                                        {item.unit ? ` ${item.unit}` : ''}
+                                      </div>
+                                      {item.description && (
+                                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                          {item.description}
                                         </div>
-                                        <div className="text-[13px] font-medium tabular-nums text-foreground">
-                                          {formatPlainValue(item.value)}
-                                          {item.unit ? ` ${item.unit}` : ''}
-                                        </div>
-                                        {item.description && (
-                                          <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                            {item.description}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            {message.toolsUsed && message.toolsUsed.length > 0 && (
-                              <AccordionItem value="tools" className="px-3">
-                                <AccordionTrigger className="text-[12px]">
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <Wrench className="h-3 w-3" />
-                                    Công cụ đã gọi ({message.toolsUsed.length})
-                                  </span>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <div className="space-y-1.5">
-                                    {message.toolsUsed.map((call, i) => (
-                                      <div key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                                        <p className="text-[12px] font-medium text-foreground">{call.name}</p>
-                                        <pre className="mt-0.5 overflow-x-auto text-[11px] text-muted-foreground">
-                                          {JSON.stringify(call.arguments, null, 2)}
-                                        </pre>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
-                            {message.data && Object.keys(message.data).length > 0 && (
-                              <AccordionItem value="data" className="px-3">
-                                <AccordionTrigger className="text-[12px]">Dữ liệu gốc</AccordionTrigger>
-                                <AccordionContent>
-                                  <div className="space-y-3">
-                                    {Object.entries(message.data).map(([toolName, result]) => (
-                                      <div key={toolName} className="space-y-1">
-                                        <p className="text-[11px] font-medium text-muted-foreground">{toolName}</p>
-                                        <ToolResultBlock result={result} />
-                                      </div>
-                                    ))}
-                                  </div>
-                                </AccordionContent>
-                              </AccordionItem>
-                            )}
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
                           </Accordion>
                         )}
                       </div>

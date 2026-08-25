@@ -144,11 +144,33 @@ CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 # Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
-# CPU-only Ollama (no GPU in docker-compose) re-processes the full system prompt +
-# 8 tool schemas on every round (Ollama's chat API is stateless per call), measured
-# at 25-70s+ per round directly against /api/chat during verification.
+# Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
+# partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
+# desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
+# 17 layers run on CPU, so every round is a CPU+GPU hybrid, not pure CPU — but still slow,
+# and it re-processes the full system prompt + tool schemas each round (stateless chat API),
+# measured at 25-70s+ per round directly against /api/chat during verification.
 ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
 ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
+
+
+@app.on_event("startup")
+async def _startup_warmup_assistant_model() -> None:
+    """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
+    request pays that cost. Fire-and-forget — must never delay app startup or crash it if
+    Ollama isn't reachable yet (docker-compose only waits for the container to *start*,
+    not for Ollama's model server to be ready)."""
+    async def _warm_up():
+        try:
+            await ollama.AsyncClient(host=OLLAMA_HOST).chat(
+                model=ASSISTANT_MODEL,
+                messages=[{"role": "user", "content": "hi"}],
+                options={"num_predict": 1},
+            )
+        except Exception as exc:
+            logger.warning("Assistant model warm-up failed (non-fatal): %s", exc)
+
+    asyncio.create_task(_warm_up())
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
 ASSISTANT_ALLOWED_PERMISSIONS = {
     "analytics.reports.view",
@@ -3557,6 +3579,15 @@ def _filter_tool_args(tool_fn, args: dict) -> dict:
     return {key: value for key, value in args.items() if key in valid_params}
 
 
+async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tuple[str, dict]:
+    """Execute one model-requested tool call, used with asyncio.gather to run every tool
+    call within a single round concurrently — all ANALYTICS_TOOLS are read-only GETs."""
+    tool_fn = TOOL_FUNCTIONS.get(name)
+    if tool_fn is None:
+        return name, {"error": f"Unknown tool: {name}"}
+    return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+
+
 _FAST_PATH_INTENT_TOOL = {
     DASHBOARD_SUMMARY_QUERY: "get_dashboard_kpis",
     TOP_BORROWED_BOOKS_QUERY: "get_top_books",
@@ -3570,16 +3601,24 @@ _FAST_PATH_INTENT_TOOL = {
     AGING_INVENTORY_QUERY: "get_aging_inventory",
 }
 
+# Per-intent override of the fast-path confidence bar, scoped to /assistant only (does not
+# touch intent.py's confidence values or nlu.py's own 0.85 gate, which other callers share).
+# DASHBOARD_SUMMARY_QUERY/BOOK_SEARCH_QUERY are fairly unambiguous keyword-matched intents
+# that just happen to score slightly under the default bar — safe to trust at their own level.
+_FAST_PATH_MIN_CONFIDENCE = {
+    DASHBOARD_SUMMARY_QUERY: 0.84,
+    BOOK_SEARCH_QUERY: 0.82,
+}
+_FAST_PATH_DEFAULT_MIN_CONFIDENCE = 0.85
+
 
 def _fast_path_tool(message: str) -> tuple[str, dict] | None:
-    """Rule-based shortcut for /assistant's first tool-selection round. Reuses the SAME
-    confidence/complexity/action-surface gate nlu.classify_user_message() already uses
-    for its own fast path, so this never fires on anything that gate wouldn't also trust.
+    """Rule-based shortcut for /assistant's first tool-selection round. Uses the same
+    complexity/action-surface gate nlu.classify_user_message() uses for its own fast path,
+    plus a confidence bar — 0.85 by default, with a couple of per-intent overrides in
+    _FAST_PATH_MIN_CONFIDENCE for intents whose rule-classifier score never quite clears
+    0.85 despite being fairly unambiguous keyword matches (see intent.py).
     Returns (tool_name, tool_args) or None (fall through to normal LLM tool selection).
-
-    Note: DASHBOARD_SUMMARY_QUERY (0.84) and BOOK_SEARCH_QUERY (0.82) never clear the
-    0.85 bar in practice — included here anyway so they benefit automatically if intent.py's
-    confidence values are ever tuned up; today only ~7 of the 10 intents actually fast-path.
     """
     rule_result = detect_intent(message)
     tool_name = _FAST_PATH_INTENT_TOOL.get(rule_result.get("intent"))
@@ -3587,8 +3626,11 @@ def _fast_path_tool(message: str) -> tuple[str, dict] | None:
         return None
 
     normalized = normalize_text(message)
+    min_confidence = _FAST_PATH_MIN_CONFIDENCE.get(
+        rule_result.get("intent"), _FAST_PATH_DEFAULT_MIN_CONFIDENCE
+    )
     if (
-        rule_result.get("confidence", 0.35) < 0.85
+        rule_result.get("confidence", 0.35) < min_confidence
         or _is_complex_message(message)
         or _has_action_surface(normalized)
     ):
@@ -3634,8 +3676,12 @@ async def _run_fast_path_tool(message: str, auth_header: str | None) -> dict | N
     return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
 
 
-def _assistant_cache_key(message: str) -> str:
-    return f"assistant:{normalize_text(message.strip())[:200]}"
+def _assistant_cache_key(conversation_id: str, message: str) -> str:
+    # Keyed by conversation, not just message text — /assistant now injects each
+    # conversation's own history into the prompt, so the same literal question can need a
+    # different, context-dependent answer in different conversations. Without conversation_id
+    # in the key, a hit here would serve one conversation's cached answer to another.
+    return f"assistant:{conversation_id}:{normalize_text(message.strip())[:200]}"
 
 
 def _grounding_check(answer: str, collected_data: dict) -> str | None:
@@ -3781,7 +3827,7 @@ async def assistant(request: Request, req: AssistantRequest):
     conversation_id_str = str(conversation.conversation_id)
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
 
-    cache_key = _assistant_cache_key(message_text)
+    cache_key = _assistant_cache_key(conversation_id_str, message_text)
     cached = assistant_response_cache.get(cache_key)
     if cached is not None:
         evidence = cached.get("evidence") or _collect_evidence(cached["data"])
@@ -3822,12 +3868,13 @@ async def assistant(request: Request, req: AssistantRequest):
         })
         start_round = 1
 
+    client = ollama.Client(host=OLLAMA_HOST)
     try:
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
             predict_cap = 200 if (_round == start_round and start_round == 0) else 700
             response = await asyncio.wait_for(
                 asyncio.to_thread(
-                    ollama.Client(host=OLLAMA_HOST).chat,
+                    client.chat,
                     model=ASSISTANT_MODEL,
                     messages=messages,
                     tools=ANALYTICS_TOOLS,
@@ -3844,16 +3891,15 @@ async def assistant(request: Request, req: AssistantRequest):
                 answered_normally = True
                 break
 
-            for call in tool_calls:
-                name = call["function"]["name"]
-                args = dict(call["function"]["arguments"] or {})
-                tools_used.append({"name": name, "arguments": args})
-
-                tool_fn = TOOL_FUNCTIONS.get(name)
-                if tool_fn is None:
-                    tool_result = {"error": f"Unknown tool: {name}"}
-                else:
-                    tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+            calls = [
+                (call["function"]["name"], dict(call["function"]["arguments"] or {}))
+                for call in tool_calls
+            ]
+            tools_used.extend({"name": name, "arguments": args} for name, args in calls)
+            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently. gather()
+            # preserves input order, so results still line up with `calls` for pairing.
+            results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
+            for name, tool_result in results:
                 collected_data[name] = tool_result
                 messages.append({
                     "role": "tool",
@@ -3959,7 +4005,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
     conversation_id_str = str(conversation.conversation_id)
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
 
-    cache_key = _assistant_cache_key(message_text)
+    cache_key = _assistant_cache_key(conversation_id_str, message_text)
     cached = assistant_response_cache.get(cache_key)
     if cached is not None:
         evidence = cached.get("evidence") or _collect_evidence(cached["data"])
@@ -4052,16 +4098,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     answered_normally = True
                     break
 
-                for call in tool_calls:
-                    name = call["function"]["name"]
-                    args = dict(call["function"]["arguments"] or {})
-                    tools_used.append({"name": name, "arguments": args})
-
-                    tool_fn = TOOL_FUNCTIONS.get(name)
-                    if tool_fn is None:
-                        tool_result = {"error": f"Unknown tool: {name}"}
-                    else:
-                        tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+                calls = [
+                    (call["function"]["name"], dict(call["function"]["arguments"] or {}))
+                    for call in tool_calls
+                ]
+                tools_used.extend({"name": name, "arguments": args} for name, args in calls)
+                results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
+                for name, tool_result in results:
                     collected_data[name] = tool_result
                     messages.append({
                         "role": "tool",

@@ -294,6 +294,11 @@ services:
   ollama:
     profiles: ["ai"]
     image: ollama/ollama:latest
+    environment:
+      # Ollama's default 5-minute idle unload means the first question after any gap in a
+      # demo session pays full model-load latency again — 30m keeps it resident through
+      # normal gaps between questions without pinning it in VRAM/RAM forever (-1).
+      - OLLAMA_KEEP_ALIVE=30m
     volumes:
       - ./ollama_data:/root/.ollama
     stdin_open: true
