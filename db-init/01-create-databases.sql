@@ -15,3 +15,7 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'borrow_db')\gexec
 -- Create inventory_db if it doesn't exist
 SELECT 'CREATE DATABASE inventory_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'inventory_db')\gexec
+
+-- Create ai_db if it doesn't exist
+SELECT 'CREATE DATABASE ai_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ai_db')\gexec

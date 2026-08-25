@@ -202,8 +202,12 @@ services:
     profiles: ["ai"]
     build: ./services/ai-service
     depends_on:
-      - ollama
+      ollama:
+        condition: service_started
+      db:
+        condition: service_healthy
     environment:
+      - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AI_DB_NAME:-ai_db}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}

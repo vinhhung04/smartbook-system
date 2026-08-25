@@ -23,6 +23,17 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /chat | Hỏi đáp AI |
 | POST | /reading-stats | Tổng hợp thống kê đọc |
 | POST | /assistant | Trợ lý hỗ trợ ra quyết định (Ollama tool-calling qua Analytics Service) |
+| POST | /assistant/stream | Bản streaming (SSE) của /assistant |
+| POST | /actions/confirm | Xác nhận (hoặc hủy, nếu `confirm: false`) một pending action |
+| POST | /actions/cancel | Hủy một pending action |
+| GET | /actions/pending/{action_id} | Xem chi tiết một pending action (chủ sở hữu hoặc superuser) |
+| GET | /actions/stats | Thống kê tổng số action pending/executed/total (admin) |
+| GET | /assistant/actions | Action Center — danh sách action, filter theo `status`/`conversation_id`/`mine` |
+| GET | /assistant/actions/{action_id} | Chi tiết action + audit log đầy đủ (CREATED→CONFIRMED→EXECUTED/...) |
+| GET | /assistant/conversations | Danh sách hội thoại của user hiện tại |
+| GET | /assistant/conversations/{conversation_id} | Chi tiết hội thoại + toàn bộ message |
+| PATCH | /assistant/conversations/{conversation_id} | Đổi tên hội thoại (`{ "title": "..." }`) |
+| DELETE | /assistant/conversations/{conversation_id} | Archive hội thoại (soft delete) |
 
 Ghi chú quan trọng:
 
@@ -32,7 +43,20 @@ Ghi chú quan trọng:
 - `/isbn-intelligence` là hợp đồng tra cứu chuẩn; `/lookup-book-by-isbn` và `lookup` của `/enrich-book-after-isbn` được mở rộng tương thích bằng `fieldEvidence`, `fieldConfidence`, `sources`, `conflicts`, `metadataQualityScore`, và `processingTimeMs`. Confidence được tính xác định từ độ tin cậy và đồng thuận dữ liệu nguồn, không dùng điểm do LLM sinh ra. Kết quả chỉ là đề xuất để nhân viên duyệt, không ghi catalog.
 - Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
-- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng Ollama tool-calling thật (`ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer": "string", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id" }`. Endpoint không nhận `conversation_history` — stateless theo từng request, `conversation_id` chỉ được echo lại để client tự quản lý lịch sử hiển thị. Không có fallback Anthropic cho endpoint này.
+- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng Ollama tool-calling thật (`ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. Không có fallback Anthropic cho endpoint này.
+- **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
+- **Evidence-first**: `evidence` được sinh best-effort từ kết quả tool (xem `evidence.py`) — nếu tool trả `{"error": ...}` hoặc hình dạng dữ liệu không khớp, extractor tương ứng chỉ trả `[]`, không lỗi.
+- **AI Action Center + audit log**: `agent_store.py` không còn lưu action trong RAM — mỗi pending action được lưu trong bảng `ai_pending_actions` (Postgres, DB `ai_db`), và mọi bước trong vòng đời (CREATED/CONFIRMED/EXECUTED/CANCELLED/FAILED/EXPIRED) được ghi vào `ai_action_audit_logs`. Danh sách/chi tiết xem qua `GET /assistant/actions` và `GET /assistant/actions/{id}`. Denylist hành động nguy hiểm (`agent_actions.DANGEROUS_ACTION_DENYLIST`) không đổi.
+
+## Database
+
+Từ bản nâng cấp Action Center + trí nhớ hội thoại, `ai-service` có DB Postgres riêng (`ai_db`, tách biệt với `auth_db`/`inventory_db`/`borrow_db`, theo đúng quy ước mỗi service một DB của repo):
+
+- **Truy cập DB**: SQLAlchemy (async, driver `asyncpg`) — xem `db.py`/`db_models.py`. Không dùng Prisma (đó là quy ước riêng của các service Node).
+- **Migration**: không dùng Alembic — `schema.sql` chứa các câu lệnh `CREATE TABLE IF NOT EXISTS` idempotent, được áp dụng tự động lúc service khởi động (`@app.on_event("startup")` trong `main.py` gọi `db.init_db()`). An toàn khi chạy lại nhiều lần.
+- **Bảng**: `ai_pending_actions`, `ai_action_audit_logs`, `ai_conversations`, `ai_messages` — chi tiết cột xem `schema.sql`/`db_models.py`.
+- **Biến môi trường**: `DATABASE_URL=postgresql+asyncpg://<user>:<pass>@db:5432/ai_db` (xem `docker-compose.yml`), `AI_DB_NAME` (mặc định `ai_db`, khai báo trong `.env`).
+- **Test**: `test_agent_store.py`/`test_conversation_store.py` chạy trên SQLite in-memory (`aiosqlite`), không cần Postgres thật để test đơn vị.
 
 ## Biến môi trường đặc thù
 
@@ -71,6 +95,15 @@ cd services/ai-service
 pip install -r requirements.txt
 python main.py
 ```
+
+## Demo: Action Center + trí nhớ hội thoại + Evidence-first
+
+1. Chạy Docker Compose đầy đủ (xem `RUN_WITH_DOCKER.md`), đăng nhập với tài khoản ADMIN hoặc WAREHOUSE_MANAGER, mở trang **Trợ lý AI**.
+2. Tab "Hội thoại": hỏi "Sách nào cần nhập thêm gấp trong 30 ngày tới?" — câu trả lời hiển thị kèm 3 khối có thể mở/đóng: "Bằng chứng AI đã dùng", "Công cụ đã gọi", "Dữ liệu gốc"; nếu có `grounding_warning`/`retrieval_warnings` sẽ thấy banner cảnh báo màu vàng.
+3. Hỏi tiếp "Tạo đề xuất nhập hàng cho các sách đó" — action card xuất hiện với trạng thái "Chờ xác nhận". Bấm **Xác nhận**.
+4. Chuyển sang tab "Trung tâm hành động AI" — action vừa xác nhận xuất hiện với badge trạng thái/risk; bấm vào dòng để xem payload, kết quả, và lịch sử audit log (CREATED → CONFIRMED → EXECUTED).
+5. Refresh trang — hội thoại vẫn còn (danh sách hội thoại nạp lại từ `GET /assistant/conversations`, tự động mở lại hội thoại đang hoạt động).
+6. Mở lại hội thoại cũ trong sidebar, hỏi câu tiếp theo tham chiếu ngữ cảnh trước ("So với kết quả trên thì ưu tiên kho nào?") — trợ lý dùng 10 message gần nhất của hội thoại đó làm ngữ cảnh.
 
 ## Tích hợp với hệ thống
 
