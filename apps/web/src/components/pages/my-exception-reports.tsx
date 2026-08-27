@@ -1,14 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { motion } from "motion/react";
 import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
+import { PageWrapper, FadeItem } from "../motion-utils";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport, type ExceptionReportCreateInput } from "@/services/exception-reports";
 import { warehouseService } from "@/services/warehouse";
@@ -30,6 +42,18 @@ const EXCEPTION_TYPES = [
   { value: "WRONG_QTY", label: "Sai số lượng" },
   { value: "OTHER", label: "Khác" },
 ];
+
+const STATUS_FILTERS = [
+  { value: "all", label: "Mọi trạng thái" },
+  { value: "OPEN", label: "Mở" },
+  { value: "ACKNOWLEDGED", label: "Đã ghi nhận" },
+  { value: "RESOLVED", label: "Đã xử lý" },
+  { value: "DISMISSED", label: "Đã hủy" },
+];
+
+const PAGE_SIZE = 10;
+
+type PageTab = "queue" | "compose";
 
 function statusVariant(status: string) {
   return getStatusVariant("exceptionReport", status);
@@ -58,14 +82,18 @@ const emptyForm: ExceptionReportCreateInput = {
 
 export function MyExceptionReportsPage() {
   const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<PageTab>("queue");
   const [reports, setReports] = useState<ExceptionReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [taskList, setTaskList] = useState<MyWarehouseTask[]>([]);
   const [form, setForm] = useState<ExceptionReportCreateInput>(emptyForm);
   const prefillApplied = useRef(false);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const load = async () => {
     setLoading(true);
@@ -100,7 +128,7 @@ export function MyExceptionReportsPage() {
             task_type: preTaskType,
             warehouse_id: matchedWH?.id ?? f.warehouse_id,
           }));
-          setShowForm(true);
+          setActiveTab("compose");
         }
       }
     } catch (err) {
@@ -111,6 +139,35 @@ export function MyExceptionReportsPage() {
   };
 
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const filteredReports = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return reports.filter((r) => {
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (query) {
+        const exceptionLabel = EXCEPTION_TYPES.find((t) => t.value === r.exception_type)?.label || r.exception_type;
+        const taskLabel = TASK_TYPES.find((t) => t.value === r.task_type)?.label || r.task_type;
+        const haystack = `${r.report_number} ${r.note} ${r.warehouses?.code || ""} ${r.warehouses?.name || ""} ${exceptionLabel} ${taskLabel}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [reports, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+
+  const pagedReports = useMemo(
+    () => filteredReports.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredReports, page],
+  );
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const handleTaskSelect = (taskId: string) => {
     if (!taskId) {
@@ -151,10 +208,10 @@ export function MyExceptionReportsPage() {
       };
       await exceptionReportService.createReport(payload);
       toast.success("Đã gửi báo cáo sự cố");
-      setShowForm(false);
       setForm(emptyForm);
       prefillApplied.current = true;
       await load();
+      setActiveTab("queue");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Gửi báo cáo thất bại"));
     } finally {
@@ -163,18 +220,14 @@ export function MyExceptionReportsPage() {
   };
 
   const closeForm = () => {
-    setShowForm(false);
     setForm(emptyForm);
     prefillApplied.current = true;
+    setActiveTab("queue");
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <PageHeader
           icon={AlertTriangle}
           title="Báo cáo sự cố của tôi"
@@ -187,187 +240,279 @@ export function MyExceptionReportsPage() {
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
                 Làm mới
               </Button>
-              <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
+              <Button type="button" size="sm" onClick={() => setActiveTab("compose")} disabled={activeTab === "compose"}>
                 <Plus className="h-3.5 w-3.5" />
                 Báo cáo sự cố
               </Button>
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-        Báo cáo sự cố không tự động điều chỉnh tồn kho. Quản lý sẽ xem xét và quyết định xử lý phù hợp.
-      </div>
+      <FadeItem>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+          Báo cáo sự cố không tự động điều chỉnh tồn kho. Quản lý sẽ xem xét và quyết định xử lý phù hợp.
+        </div>
+      </FadeItem>
 
-      {/* Create Form */}
-      {showForm && (
-        <SectionCard>
-          <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-            <h2 className="text-[14px] font-semibold">Báo cáo sự cố mới</h2>
-            <button type="button" onClick={closeForm} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {/* Task dropdown */}
-              <div className="sm:col-span-2">
-                <label className="block text-[12px] font-medium mb-1">Task liên quan *</label>
-                {taskList.length > 0 ? (
-                  <select
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                    value={form.task_id}
-                    onChange={(e) => handleTaskSelect(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Chọn task liên quan --</option>
-                    {taskList.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        [{t.type}] {t.title}{t.warehouse ? ` — ${t.warehouse}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                    Không tìm thấy task đang hoạt động. Kiểm tra lại "Công việc kho của tôi" hoặc liên hệ quản lý.
-                  </div>
+      <FadeItem>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PageTab)}>
+          <TabsList className="w-full sm:w-fit">
+            <TabsTrigger value="queue">Báo cáo của tôi</TabsTrigger>
+            <TabsTrigger value="compose">Tạo báo cáo mới</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="queue" className="mt-4">
+            <SectionCard title="Danh sách báo cáo sự cố">
+              <FilterBar
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Tìm theo mã báo cáo, mô tả hoặc kho..."
+                className="mb-4"
+                filters={(
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[160px]" size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_FILTERS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
+              />
+
+              <div className="overflow-hidden rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Mã báo cáo</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Kho</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Task</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Loại sự cố</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">SL dự kiến</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">SL thực tế</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Tạo lúc</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedReports.length === 0 ? (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={8} className="whitespace-normal py-10 text-center">
+                          <EmptyState
+                            icon={AlertTriangle}
+                            variant={reports.length === 0 ? "no-data" : "no-results"}
+                            title={reports.length === 0 ? "Chưa có báo cáo sự cố" : "Không tìm thấy báo cáo phù hợp"}
+                            description={
+                              reports.length === 0
+                                ? "Khi phát hiện sự cố trong quá trình làm việc, hãy báo cáo để quản lý xử lý kịp thời."
+                                : "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
+                            }
+                            action={reports.length === 0 ? (
+                              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
+                                <Plus className="h-3.5 w-3.5" />
+                                Báo cáo sự cố
+                              </Button>
+                            ) : undefined}
+                            className="py-0"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : pagedReports.map((r) => (
+                      <TableRow key={r.id} className="hover:bg-muted/30">
+                        <TableCell className="font-mono text-[12px] text-muted-foreground">{r.report_number}</TableCell>
+                        <TableCell className="text-[13px]">{r.warehouses?.code || "-"}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">
+                          {TASK_TYPES.find((t) => t.value === r.task_type)?.label || r.task_type}
+                        </TableCell>
+                        <TableCell className="text-[13px]">
+                          {EXCEPTION_TYPES.find((t) => t.value === r.exception_type)?.label || r.exception_type}
+                        </TableCell>
+                        <TableCell className="text-[13px]">{r.expected_qty ?? "-"}</TableCell>
+                        <TableCell className="text-[13px]">{r.actual_qty ?? "-"}</TableCell>
+                        <TableCell>
+                          <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{formatDate(r.created_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
 
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Kho *</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.warehouse_id}
-                  onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value }))}
-                  required
-                >
-                  <option value="">-- Chọn kho --</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Loại task</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.task_type}
-                  onChange={(e) => setForm((f) => ({ ...f, task_type: e.target.value }))}
-                >
-                  {TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Loại sự cố *</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.exception_type}
-                  onChange={(e) => setForm((f) => ({ ...f, exception_type: e.target.value }))}
-                >
-                  {EXCEPTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Số lượng dự kiến</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  placeholder="Số lượng theo chứng từ"
-                  value={form.expected_qty ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, expected_qty: e.target.value ? Number(e.target.value) : undefined }))}
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Số lượng thực tế</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  placeholder="Số lượng thực nhận/kiểm"
-                  value={form.actual_qty ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, actual_qty: e.target.value ? Number(e.target.value) : undefined }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1">Mô tả sự cố *</label>
-              <textarea
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                rows={3}
-                placeholder="Mô tả chi tiết sự cố phát hiện..."
-                value={form.note}
-                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1">Ghi chú bằng chứng</label>
-              <textarea
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                rows={2}
-                placeholder="Ghi chú số serial, vị trí, hình ảnh (nếu có)..."
-                value={form.evidence_notes || ""}
-                onChange={(e) => setForm((f) => ({ ...f, evidence_notes: e.target.value }))}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={closeForm}>Hủy</Button>
-              <Button type="submit" size="sm" disabled={submitting}>
-                {submitting ? "Đang gửi..." : "Gửi báo cáo"}
-              </Button>
-            </div>
-          </form>
-        </SectionCard>
-      )}
+              {filteredReports.length > 0 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedReports.length}</span> / {filteredReports.length} báo cáo
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </TabsContent>
 
-      {/* List */}
-      <SectionCard noPadding>
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sách báo cáo sự cố</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {["Mã báo cáo", "Kho", "Task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Trạng thái", "Tạo lúc"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={8} rows={4} />
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-10">
-                    <EmptyState icon={AlertTriangle} title="Chưa có báo cáo sự cố" description="Khi phát hiện sự cố trong quá trình làm việc, hãy báo cáo để quản lý xử lý kịp thời." />
-                  </td>
-                </tr>
-              ) : reports.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{r.report_number}</td>
-                  <td className="px-4 py-3 text-[13px]">{r.warehouses?.code || "-"}</td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">
-                    {TASK_TYPES.find((t) => t.value === r.task_type)?.label || r.task_type}
-                  </td>
-                  <td className="px-4 py-3 text-[13px]">
-                    {EXCEPTION_TYPES.find((t) => t.value === r.exception_type)?.label || r.exception_type}
-                  </td>
-                  <td className="px-4 py-3 text-[13px]">{r.expected_qty ?? "-"}</td>
-                  <td className="px-4 py-3 text-[13px]">{r.actual_qty ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </div>
+          <TabsContent value="compose" className="mt-4">
+            <SectionCard>
+              <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+                <h2 className="text-[14px] font-semibold">Báo cáo sự cố mới</h2>
+                <button type="button" onClick={closeForm} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Task dropdown */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[12px] font-medium mb-1">Task liên quan *</label>
+                    {taskList.length > 0 ? (
+                      <select
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                        value={form.task_id}
+                        onChange={(e) => handleTaskSelect(e.target.value)}
+                        required
+                      >
+                        <option value="">-- Chọn task liên quan --</option>
+                        {taskList.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            [{t.type}] {t.title}{t.warehouse ? ` — ${t.warehouse}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                        Không tìm thấy task đang hoạt động. Kiểm tra lại "Công việc kho của tôi" hoặc liên hệ quản lý.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Kho *</label>
+                    <select
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                      value={form.warehouse_id}
+                      onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value }))}
+                      required
+                    >
+                      <option value="">-- Chọn kho --</option>
+                      {warehouses.map((w) => (
+                        <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Loại task</label>
+                    <select
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                      value={form.task_type}
+                      onChange={(e) => setForm((f) => ({ ...f, task_type: e.target.value }))}
+                    >
+                      {TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Loại sự cố *</label>
+                    <select
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                      value={form.exception_type}
+                      onChange={(e) => setForm((f) => ({ ...f, exception_type: e.target.value }))}
+                    >
+                      {EXCEPTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Số lượng dự kiến</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Số lượng theo chứng từ"
+                      value={form.expected_qty ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, expected_qty: e.target.value ? Number(e.target.value) : undefined }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Số lượng thực tế</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Số lượng thực nhận/kiểm"
+                      value={form.actual_qty ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, actual_qty: e.target.value ? Number(e.target.value) : undefined }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium mb-1">Mô tả sự cố *</label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Mô tả chi tiết sự cố phát hiện..."
+                    value={form.note}
+                    onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium mb-1">Ghi chú bằng chứng</label>
+                  <Textarea
+                    rows={2}
+                    placeholder="Ghi chú số serial, vị trí, hình ảnh (nếu có)..."
+                    value={form.evidence_notes || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, evidence_notes: e.target.value }))}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={closeForm}>Hủy</Button>
+                  <Button type="submit" size="sm" disabled={submitting}>
+                    {submitting ? "Đang gửi..." : "Gửi báo cáo"}
+                  </Button>
+                </div>
+              </form>
+            </SectionCard>
+          </TabsContent>
+        </Tabs>
+      </FadeItem>
+    </PageWrapper>
   );
 }

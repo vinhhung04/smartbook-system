@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Fine } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 
@@ -17,13 +18,6 @@ const STATUS_LABELS: Record<string, string> = {
   PAID: 'Đã trả',
   WAIVED: 'Đã miễn',
 };
-
-function getStatusVariant(status: string) {
-  if (status === 'PAID') return 'success';
-  if (status === 'WAIVED') return 'neutral';
-  if (status === 'UNPAID') return 'danger';
-  return 'warning';
-}
 
 export function BorrowFinesPage() {
   const [fines, setFines] = useState<Fine[]>([]);
@@ -228,7 +222,7 @@ export function BorrowFinesPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{Number(fine.amount || 0).toLocaleString('vi-VN')} VND</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{Number(fine.summary?.remaining_balance || 0).toLocaleString('vi-VN')} VND</td>
                       <td className="px-5 py-3.5">
-                        <StatusBadge label={fine.status} variant={getStatusVariant(fine.status)} dot />
+                        <StatusBadge label={fine.status} variant={getStatusVariant('fine', fine.status)} dot />
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">

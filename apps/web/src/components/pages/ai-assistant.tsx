@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { aiService, type AiConversationSummary, type AiEvidenceItem, type PendingAction } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
@@ -114,6 +115,8 @@ export function AIAssistantPage() {
   const [conversationId, setConversationId] = useState<string>(newConversationId);
   const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
   const [hydrating, setHydrating] = useState(false);
+  const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string | null } | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -293,18 +296,26 @@ export function AIAssistantPage() {
     }
   };
 
-  const handleDeleteConversation = async (id: string, title: string | null) => {
-    const confirmed = window.confirm(`Xóa hội thoại "${title || 'chưa đặt tên'}"? Hành động này không thể hoàn tác.`);
-    if (!confirmed) return;
+  const handleDeleteConversation = (id: string, title: string | null) => {
+    setPendingDeleteConversation({ id, title });
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!pendingDeleteConversation) return;
+    const { id } = pendingDeleteConversation;
     try {
+      setDeletingConversation(true);
       await aiService.archiveConversation(id);
       setConversations((prev) => prev.filter((c) => c.conversation_id !== id));
       if (id === conversationId) {
         startNewConversation();
       }
       toast.success('Đã xóa hội thoại.');
+      setPendingDeleteConversation(null);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Không thể xóa hội thoại.'));
+    } finally {
+      setDeletingConversation(false);
     }
   };
 
@@ -627,6 +638,17 @@ export function AIAssistantPage() {
           </TabsContent>
         </Tabs>
       </FadeItem>
+
+      <ConfirmDialog
+        open={!!pendingDeleteConversation}
+        onOpenChange={(open) => { if (!open) setPendingDeleteConversation(null); }}
+        title="Xóa hội thoại?"
+        description={`Xóa hội thoại "${pendingDeleteConversation?.title || 'chưa đặt tên'}"? Hành động này không thể hoàn tác.`}
+        variant="destructive"
+        confirmLabel="Xóa"
+        onConfirm={confirmDeleteConversation}
+        loading={deletingConversation}
+      />
     </PageWrapper>
   );
 }

@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 interface RoleItem {
@@ -77,6 +84,7 @@ export function UsersPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(null);
   const [form, setForm] = useState<CreateUserForm>(EMPTY_FORM);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -252,9 +260,6 @@ export function UsersPage() {
   };
 
   const handleDeleteUser = async (user: UserRow) => {
-    const accepted = window.confirm(`Xóa người dùng ${user.username}?`);
-    if (!accepted) return;
-
     try {
       setDeletingUserId(user.id);
       await userService.delete(user.id);
@@ -264,6 +269,7 @@ export function UsersPage() {
       toast.error(getApiErrorMessage(error, "Xóa người dùng thất bại"));
     } finally {
       setDeletingUserId(null);
+      setPendingDeleteUser(null);
     }
   };
 
@@ -357,7 +363,7 @@ export function UsersPage() {
                           {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
                         </button>
                         <button
-                          onClick={() => void handleDeleteUser(user)}
+                          onClick={() => setPendingDeleteUser(user)}
                           disabled={deletingUserId === user.id}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 disabled:opacity-60"
                         >
@@ -372,25 +378,50 @@ export function UsersPage() {
             </tbody>
           </table>
           </div>
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
+          <div className="flex flex-col gap-3 px-5 py-3 border-t border-border text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>Hiển thị {paginatedUsers.length} / {filteredUsers.length} người dùng</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-                className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-              >
-                Trước
-              </button>
-              <span className="px-2">Trang {currentPage} / {totalPages}</span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-              >
-                Tiếp
-              </button>
-            </div>
+            {totalPages > 1 && (
+              <Pagination className="mx-0 w-auto justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setPage((current) => Math.max(1, current - 1));
+                      }}
+                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                  {getPaginationRange(currentPage, totalPages).map((item) => (
+                    <PaginationItem key={item}>
+                      {typeof item === "number" ? (
+                        <PaginationLink
+                          isActive={item === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setPage(item);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {item}
+                        </PaginationLink>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setPage((current) => Math.min(totalPages, current + 1));
+                      }}
+                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         </SectionCard>
       </FadeItem>
@@ -460,6 +491,17 @@ export function UsersPage() {
           </motion.div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={!!pendingDeleteUser}
+        onOpenChange={(open) => { if (!open) setPendingDeleteUser(null); }}
+        title="Xóa người dùng?"
+        description={pendingDeleteUser ? `Xóa người dùng ${pendingDeleteUser.username}? Thao tác này không thể hoàn tác.` : undefined}
+        variant="destructive"
+        confirmLabel="Xóa"
+        onConfirm={async () => { if (pendingDeleteUser) await handleDeleteUser(pendingDeleteUser); }}
+        loading={!!deletingUserId}
+      />
     </PageWrapper>
   );
 }

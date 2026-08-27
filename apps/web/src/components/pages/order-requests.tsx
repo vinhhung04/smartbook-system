@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
-  ArrowRightLeft, Book, Check, CheckCircle2, Clock, ListOrdered, Loader2,
-  Package, Plus, Search, Send, Truck, X,
+  ArrowRightLeft, Book, Check, CheckCircle2, Clock, Inbox, ListOrdered, Loader2,
+  Package, Plus, Search, Send, ShieldAlert, Truck, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
@@ -20,36 +20,75 @@ import { userService, type WarehouseStaffOption } from "@/services/user";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityBadge } from "@/components/ui/priority-badge";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 
 type RequestType = "outbound" | "transfer";
+type PageTab = "queue" | "compose";
+type StatusFilter = "all" | "pending" | "approved" | "rejected";
+type TypeFilter = "all" | "outbound" | "transfer";
+type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
-const OUTBOUND_REFERENCE_OPTIONS: Array<{
-  value: OutboundReferenceType;
+const OUTBOUND_REFERENCE_GROUPS: Array<{
   label: string;
+  options: Array<{ value: OutboundReferenceType; label: string }>;
 }> = [
-  { value: "TRANSFER_TO_STORE", label: "Xuất hàng tới cửa hàng bán lẻ" },
-  { value: "WAREHOUSE_TRANSFER", label: "Điều chuyển giữa kho" },
-  { value: "RETURN_TO_SUPPLIER", label: "Trả hàng nhà cung cấp" },
-  { value: "SALES_ORDER", label: "Xuất theo đơn bán hàng" },
-  { value: "INTERNAL_REQUEST", label: "Xuất theo yêu cầu nội bộ" },
-  { value: "ISSUE_REQUEST", label: "Xuất theo phiếu cấp phát" },
-  { value: "RESERVATION", label: "Xuất cho đơn đặt trước" },
-  { value: "LOAN_REQUEST", label: "Xuất cho phiếu mượn thư viện" },
-  { value: "MAINTENANCE", label: "Xuất để bảo trì/kiểm kê" },
-  { value: "INVENTORY_ADJUSTMENT", label: "Xuất do điều chỉnh tồn kho" },
-  { value: "DAMAGED_RETURN", label: "Xuất hàng lỗi/hỏng" },
-  { value: "PROMOTION", label: "Xuất theo khuyến mãi/tặng" },
-  { value: "OTHER", label: "Khác" },
+  {
+    label: "Bán hàng & khách hàng",
+    options: [
+      { value: "SALES_ORDER", label: "Xuất theo đơn bán hàng" },
+      { value: "RESERVATION", label: "Xuất cho đơn đặt trước" },
+      { value: "PROMOTION", label: "Xuất theo khuyến mãi/tặng" },
+    ],
+  },
+  {
+    label: "Nội bộ & thư viện",
+    options: [
+      { value: "INTERNAL_REQUEST", label: "Xuất theo yêu cầu nội bộ" },
+      { value: "ISSUE_REQUEST", label: "Xuất theo phiếu cấp phát" },
+      { value: "LOAN_REQUEST", label: "Xuất cho phiếu mượn thư viện" },
+      { value: "MAINTENANCE", label: "Xuất để bảo trì/kiểm kê" },
+    ],
+  },
+  {
+    label: "Kho & nhà cung cấp",
+    options: [
+      { value: "TRANSFER_TO_STORE", label: "Xuất hàng tới cửa hàng bán lẻ" },
+      { value: "WAREHOUSE_TRANSFER", label: "Điều chuyển giữa kho" },
+      { value: "RETURN_TO_SUPPLIER", label: "Trả hàng nhà cung cấp" },
+      { value: "INVENTORY_ADJUSTMENT", label: "Xuất do điều chỉnh tồn kho" },
+      { value: "DAMAGED_RETURN", label: "Xuất hàng lỗi/hỏng" },
+    ],
+  },
+  {
+    label: "Khác",
+    options: [{ value: "OTHER", label: "Khác" }],
+  },
 ];
+
+const PAGE_SIZE = 10;
 
 type DraftLine = {
   isbn13: string;
@@ -57,6 +96,14 @@ type DraftLine = {
   sku: string | null;
   barcode: string | null;
   quantity: number;
+};
+
+type PendingAction = {
+  taskType: RequestTaskType;
+  taskId: string;
+  mode: "approve" | "reject";
+  orderNumber: string;
+  totalQuantity: number;
 };
 
 function formatDate(value: string | null | undefined): string {
@@ -116,7 +163,7 @@ function getTransferInsufficientStockDescription(error: unknown): string | null 
     .join(" | ");
 }
 
-function requestAgingPriority(requestedAt: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+function requestAgingPriority(requestedAt: string): Priority {
   const requestedDate = new Date(requestedAt);
   if (Number.isNaN(requestedDate.getTime())) return "LOW";
   const hoursWaited = (Date.now() - requestedDate.getTime()) / (1000 * 60 * 60);
@@ -124,6 +171,12 @@ function requestAgingPriority(requestedAt: string): "LOW" | "MEDIUM" | "HIGH" | 
   if (hoursWaited >= 24) return "HIGH";
   if (hoursWaited >= 4) return "MEDIUM";
   return "LOW";
+}
+
+function priorityAccentClass(priority: Priority): string {
+  if (priority === "URGENT") return "border-l-2 border-l-red-500";
+  if (priority === "HIGH") return "border-l-2 border-l-amber-500";
+  return "border-l-2 border-l-transparent";
 }
 
 function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
@@ -145,6 +198,11 @@ function isApprovedStatus(status: string): boolean {
   return upper.includes("APPROVED") || upper.includes("COMPLETED") || upper.includes("READY");
 }
 
+function isRejectedStatus(status: string): boolean {
+  const upper = String(status || "").toUpperCase();
+  return upper.includes("REJECT") || upper.includes("CANCEL");
+}
+
 function orderTypeMeta(type: string): { label: string; variant: "info" | "violet" } {
   const upper = String(type || "").toUpperCase();
   if (upper.includes("TRANSFER")) return { label: "Điều chuyển", variant: "violet" };
@@ -154,7 +212,8 @@ function orderTypeMeta(type: string): { label: string; variant: "info" | "violet
 export function OrderRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [processingActionKey, setProcessingActionKey] = useState("");
+
+  const [activeTab, setActiveTab] = useState<PageTab>("queue");
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
@@ -178,6 +237,15 @@ export function OrderRequestsPage() {
   const [listView, setListView] = useState<"my" | "approval">("my");
   const [requests, setRequests] = useState<OrderRequestSummary[]>([]);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [page, setPage] = useState(1);
+
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+
   const canApprove = canApproveRequests();
 
   const filteredWarehouses = useMemo(() => {
@@ -189,13 +257,38 @@ export function OrderRequestsPage() {
     const total = requests.length;
     const pending = requests.filter((row) => isPendingStatus(row.status)).length;
     const approved = requests.filter((row) => isApprovedStatus(row.status)).length;
+    const urgent = requests.filter(
+      (row) => isPendingStatus(row.status) && requestAgingPriority(row.requested_at) === "URGENT",
+    ).length;
     const totalQuantity = requests.reduce((sum, row) => sum + (row.total_quantity || 0), 0);
-    return { total, pending, approved, totalQuantity };
+    return { total, pending, approved, urgent, totalQuantity };
   }, [requests]);
 
   const draftTotalQuantity = useMemo(
     () => draftLines.reduce((sum, line) => sum + (line.quantity || 0), 0),
     [draftLines],
+  );
+
+  const filteredRequests = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return requests.filter((row) => {
+      if (typeFilter !== "all" && row.task_type !== typeFilter) return false;
+      if (statusFilter === "pending" && !isPendingStatus(row.status)) return false;
+      if (statusFilter === "approved" && !isApprovedStatus(row.status)) return false;
+      if (statusFilter === "rejected" && !isRejectedStatus(row.status)) return false;
+      if (query) {
+        const haystack = `${row.order_number} ${row.source_warehouse_code || ""} ${row.target_warehouse_code || ""}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+  }, [requests, search, statusFilter, typeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+
+  const pagedRequests = useMemo(
+    () => filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRequests, page],
   );
 
   const loadRequests = async (view: "my" | "approval", warehouseId?: string) => {
@@ -272,6 +365,14 @@ export function OrderRequestsPage() {
       cancelled = true;
     };
   }, [referencePreviewRefreshKey, referenceType, requestType]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, typeFilter, listView]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const handleSearchVariant = async () => {
     const q = variantQuery.trim();
@@ -392,6 +493,7 @@ export function OrderRequestsPage() {
       resetForm();
       setListView("my");
       await loadRequests("my", selectedWarehouseId || undefined);
+      setActiveTab("queue");
     } catch (error) {
       const message = getApiErrorMessage(error, "Tao request that bai");
       const shortageDescription = getTransferInsufficientStockDescription(error);
@@ -406,29 +508,45 @@ export function OrderRequestsPage() {
     }
   };
 
-  const handleApproveOrReject = async (
-    taskType: RequestTaskType,
-    taskId: string,
-    mode: "approve" | "reject",
-  ) => {
-    try {
-      const key = `${mode}:${taskType}:${taskId}`;
-      setProcessingActionKey(key);
+  const openActionDialog = (row: OrderRequestSummary, mode: "approve" | "reject") => {
+    setPendingAction({
+      taskType: row.task_type,
+      taskId: row.task_id,
+      mode,
+      orderNumber: row.order_number,
+      totalQuantity: row.total_quantity,
+    });
+    setRejectReason("");
+  };
 
-      if (mode === "approve") {
-        await orderRequestService.approveRequest(taskType, taskId);
+  const closeActionDialog = () => {
+    if (actionSubmitting) return;
+    setPendingAction(null);
+    setRejectReason("");
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+
+    try {
+      setActionSubmitting(true);
+
+      if (pendingAction.mode === "approve") {
+        await orderRequestService.approveRequest(pendingAction.taskType, pendingAction.taskId);
         toast.success("Da duyet request");
       } else {
-        await orderRequestService.rejectRequest(taskType, taskId);
+        await orderRequestService.rejectRequest(pendingAction.taskType, pendingAction.taskId, rejectReason.trim() || undefined);
         toast.success("Da tu choi request");
       }
 
       const warehouseFilter = listView === "approval" ? undefined : (selectedWarehouseId || undefined);
       await loadRequests(listView, warehouseFilter);
+      setPendingAction(null);
+      setRejectReason("");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Cap nhat request that bai"));
     } finally {
-      setProcessingActionKey("");
+      setActionSubmitting(false);
     }
   };
 
@@ -451,413 +569,576 @@ export function OrderRequestsPage() {
           description="Tao don yeu cau va duyet truoc khi vao Picking"
           iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50 dark:from-cyan-500/15 dark:to-sky-500/10 dark:border-cyan-500/20"
           iconColor="text-cyan-700 dark:text-cyan-400"
+          actions={(
+            <Button type="button" onClick={() => setActiveTab("compose")}>
+              <Plus className="h-3.5 w-3.5" />
+              Tạo yêu cầu mới
+            </Button>
+          )}
         />
       </FadeItem>
 
       {requests.length > 0 && (
         <FadeItem>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <StatCard label="Tổng request" value={requestStats.total} icon={ListOrdered} variant="primary" animateValue />
             <StatCard label="Chờ duyệt" value={requestStats.pending} icon={Clock} variant="warning" animateValue />
             <StatCard label="Đã duyệt" value={requestStats.approved} icon={CheckCircle2} variant="success" animateValue />
+            <StatCard label="Khẩn cấp" value={requestStats.urgent} icon={ShieldAlert} variant="danger" animateValue />
             <StatCard label="Tổng số lượng" value={requestStats.totalQuantity} icon={Package} variant="info" animateValue />
           </div>
         </FadeItem>
       )}
 
       <FadeItem>
-        <SectionCard
-          title="Thông tin request"
-          subtitle="Chọn loại, kho nguồn và ghi chú trước khi thêm dòng hàng."
-          icon={Send}
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="md:col-span-3">
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại request</p>
-              <div className="flex items-center gap-3 flex-wrap">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PageTab)}>
+          <TabsList className="w-full sm:w-fit">
+            <TabsTrigger value="queue">Danh sách & Duyệt</TabsTrigger>
+            <TabsTrigger value="compose">Tạo yêu cầu mới</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="queue" className="mt-4">
+            <SectionCard
+              title="Danh sách & Duyệt"
+              subtitle={listView === "my" ? "Các đơn bạn đã tạo theo kho nguồn." : "Hàng chờ duyệt (cần quyền phù hợp)."}
+              actions={canApprove ? (
                 <SegmentedControl
-                  options={[
-                    { value: "outbound", label: "Xuất kho" },
-                    { value: "transfer", label: "Điều chuyển kho" },
-                  ]}
-                  value={requestType}
-                  onChange={(v) => setRequestType(v as RequestType)}
-                  layoutId="order-request-type"
-                  gradientClassName={requestType === "transfer" ? "from-violet-600 to-purple-600" : "from-cyan-600 to-sky-600"}
+                  options={[{ value: "my", label: "Đơn của tôi" }, { value: "approval", label: "Hàng chờ duyệt" }]}
+                  value={listView}
+                  onChange={(v) => setListView(v as "my" | "approval")}
+                  layoutId="order-requests-list-view"
+                  gradientClassName="from-cyan-600 to-sky-600"
                 />
-                <div
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                    requestType === "transfer"
-                      ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400"
-                      : "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400"
-                  }`}
-                >
-                  {requestType === "transfer" ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
-                  {requestType === "transfer" ? "Chuyển hàng giữa 2 kho" : "Xuất hàng ra khỏi kho"}
+              ) : undefined}
+            >
+              <FilterBar
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Tìm theo mã đơn hoặc mã kho..."
+                className="mb-4"
+                filters={(
+                  <>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                      <SelectTrigger className="w-[150px]" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Mọi trạng thái</SelectItem>
+                        <SelectItem value="pending">Chờ duyệt</SelectItem>
+                        <SelectItem value="approved">Đã duyệt</SelectItem>
+                        <SelectItem value="rejected">Từ chối</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+                      <SelectTrigger className="w-[150px]" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Mọi loại</SelectItem>
+                        <SelectItem value="outbound">Xuất kho</SelectItem>
+                        <SelectItem value="transfer">Điều chuyển</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+              />
+
+              <div className="overflow-hidden rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Order</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Loại</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Nguồn</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Đích</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Ưu tiên</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Số lượng</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Yêu cầu lúc</TableHead>
+                      <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedRequests.length === 0 ? (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={9} className="whitespace-normal py-10 text-center">
+                          <EmptyState
+                            variant={requests.length === 0 && listView === "approval" ? "inbox" : "no-data"}
+                            title={requests.length === 0 ? "Không có request nào" : "Không tìm thấy request phù hợp"}
+                            description={
+                              requests.length === 0
+                                ? (listView === "approval" ? "Không có đơn nào đang chờ duyệt." : "Hãy tạo request đầu tiên của bạn.")
+                                : "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
+                            }
+                            action={requests.length === 0 && listView === "my" ? (
+                              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
+                                <Plus className="h-3.5 w-3.5" />
+                                Tạo yêu cầu mới
+                              </Button>
+                            ) : undefined}
+                            className="py-0"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : pagedRequests.map((row) => {
+                      const priority = requestAgingPriority(row.requested_at);
+                      const meta = orderTypeMeta(row.order_type);
+                      const canTakeAction = listView === "approval"
+                        && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
+                          || (row.task_type === "transfer" && row.status === "REQUESTED"));
+
+                      return (
+                        <TableRow
+                          key={`${row.task_type}-${row.task_id}`}
+                          className={cn("hover:bg-muted/30", priorityAccentClass(priority))}
+                        >
+                          <TableCell className="whitespace-normal text-[12px]">
+                            <p className="font-semibold text-foreground">{row.order_number}</p>
+                            <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
+                          </TableCell>
+                          <TableCell className="text-[12px]">
+                            <StatusBadge label={meta.label} variant={meta.variant} />
+                          </TableCell>
+                          <TableCell className="text-[12px]">{row.source_warehouse_code || "-"}</TableCell>
+                          <TableCell className="text-[12px]">{row.target_warehouse_code || "-"}</TableCell>
+                          <TableCell className="text-[12px]">
+                            <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
+                          </TableCell>
+                          <TableCell className="text-[12px]">
+                            <PriorityBadge priority={priority} />
+                          </TableCell>
+                          <TableCell className="text-[12px] font-medium">{row.total_quantity}</TableCell>
+                          <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</TableCell>
+                          <TableCell className="text-right">
+                            {canTakeAction ? (
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="success-outline"
+                                  size="sm"
+                                  onClick={() => openActionDialog(row, "approve")}
+                                >
+                                  <Check className="h-3 w-3" />
+                                  Duyệt
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="danger-outline"
+                                  size="sm"
+                                  onClick={() => openActionDialog(row, "reject")}
+                                >
+                                  Từ chối
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredRequests.length > 0 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedRequests.length}</span> / {filteredRequests.length} request
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
                 </div>
-              </div>
-            </div>
+              )}
+            </SectionCard>
+          </TabsContent>
 
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguồn</p>
-              <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn warehouse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <TabsContent value="compose" className="mt-4 space-y-6">
+            <SectionCard
+              title="Thông tin request"
+              subtitle="Chọn loại, kho nguồn và ghi chú trước khi thêm dòng hàng."
+              icon={Send}
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="md:col-span-3">
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại request</p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <SegmentedControl
+                      options={[
+                        { value: "outbound", label: "Xuất kho" },
+                        { value: "transfer", label: "Điều chuyển kho" },
+                      ]}
+                      value={requestType}
+                      onChange={(v) => setRequestType(v as RequestType)}
+                      layoutId="order-request-type"
+                      gradientClassName={requestType === "transfer" ? "from-violet-600 to-purple-600" : "from-cyan-600 to-sky-600"}
+                    />
+                    <div
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                        requestType === "transfer"
+                          ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400"
+                          : "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400"
+                      }`}
+                    >
+                      {requestType === "transfer" ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
+                      {requestType === "transfer" ? "Chuyển hàng giữa 2 kho" : "Xuất hàng ra khỏi kho"}
+                    </div>
+                  </div>
+                </div>
 
-            {requestType === "transfer" ? (
-              <div>
-                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse đích</p>
-                <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Chọn warehouse đích" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredWarehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Type</p>
-                  <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguồn</p>
+                  <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <SelectValue placeholder="Chọn warehouse" />
                     </SelectTrigger>
                     <SelectContent>
-                      {OUTBOUND_REFERENCE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      {warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Code</p>
-                  <div className="relative">
-                    <Input
-                      value={externalReference}
-                      readOnly
-                      placeholder={loadingReferenceCode ? "Đang sinh mã..." : "Tự động tạo"}
-                      className="bg-muted/50 pr-8 text-muted-foreground"
-                    />
-                    {loadingReferenceCode && (
-                      <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                    )}
+
+                {requestType === "transfer" ? (
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse đích</p>
+                    <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Chọn warehouse đích" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredWarehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Type</p>
+                      <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OUTBOUND_REFERENCE_GROUPS.map((group) => (
+                            <SelectGroup key={group.label}>
+                              <SelectLabel>{group.label}</SelectLabel>
+                              {group.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Code</p>
+                      <div className="relative">
+                        <Input
+                          value={externalReference}
+                          readOnly
+                          placeholder={loadingReferenceCode ? "Đang sinh mã..." : "Tự động tạo"}
+                          className="bg-muted/50 pr-8 text-muted-foreground"
+                        />
+                        {loadingReferenceCode && (
+                          <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {canApprove && warehouseStaff.length > 0 && (
+                  <div className="md:col-span-3">
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Giao nhân viên phụ trách (tùy chọn)</p>
+                    <Select value={assignedPickerUserId || "none"} onValueChange={(v) => setAssignedPickerUserId(v === "none" ? "" : v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Chưa giao (giao sau ở Picking)</SelectItem>
+                        {warehouseStaff.map((staff) => (
+                          <SelectItem key={staff.id} value={staff.id}>
+                            {staff.full_name} ({staff.username})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="md:col-span-3">
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Ghi chú</p>
+                  <Textarea
+                    value={requestNote}
+                    onChange={(event) => setRequestNote(event.target.value)}
+                    rows={2}
+                    className="resize-y"
+                    placeholder="Lý do tạo request..."
+                  />
                 </div>
               </div>
-            )}
+            </SectionCard>
 
-            {canApprove && warehouseStaff.length > 0 && (
-              <div className="md:col-span-3">
-                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Giao nhân viên phụ trách (tùy chọn)</p>
-                <Select value={assignedPickerUserId || "none"} onValueChange={(v) => setAssignedPickerUserId(v === "none" ? "" : v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Chưa giao (giao sau ở Picking)</SelectItem>
-                    {warehouseStaff.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        {staff.full_name} ({staff.username})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="md:col-span-3">
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Ghi chú</p>
-              <Textarea
-                value={requestNote}
-                onChange={(event) => setRequestNote(event.target.value)}
-                rows={2}
-                className="resize-y"
-                placeholder="Lý do tạo request..."
-              />
-            </div>
-          </div>
-        </SectionCard>
-      </FadeItem>
-
-      <FadeItem>
-        <SectionCard
-          title="Thêm lines"
-          subtitle="Tìm variant theo ISBN13, SKU hoặc tên sách, sau đó thêm vào bảng dưới."
-          icon={Plus}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={variantQuery}
-                onChange={(event) => setVariantQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void handleSearchVariant();
-                  }
-                }}
-                placeholder="Nhập ISBN13, SKU hoặc tên sách"
-                className="pl-9"
-              />
-            </div>
-            <Button
-              type="button"
-              onClick={() => void handleSearchVariant()}
-              disabled={searchingVariant}
-              loading={searchingVariant}
-              className="shrink-0 sm:w-auto"
+            <SectionCard
+              title="Thêm lines"
+              subtitle="Tìm variant theo ISBN13, SKU hoặc tên sách, sau đó thêm vào bảng dưới."
+              icon={Plus}
             >
-              Tim
-            </Button>
-          </div>
-
-          {variantResults.length > 0 && (
-            <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
-              {variantResults.map((variant, index) => (
-                <motion.div
-                  key={variant.variant_id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.24) }}
-                  className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/40 transition-colors"
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={variantQuery}
+                    onChange={(event) => setVariantQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleSearchVariant();
+                      }
+                    }}
+                    placeholder="Nhập ISBN13, SKU hoặc tên sách"
+                    className="pl-9"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void handleSearchVariant()}
+                  disabled={searchingVariant}
+                  loading={searchingVariant}
+                  className="shrink-0 sm:w-auto"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
-                      <Book className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="info-outline"
-                    size="sm"
-                    onClick={() => handleAddLine(variant)}
-                    className="shrink-0"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Thêm
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  Tim
+                </Button>
+              </div>
 
-          <div className="mt-5 overflow-hidden rounded-xl border border-border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  {["Sản phẩm", "Số lượng", "Thao tác"].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+              {variantResults.length > 0 && (
+                <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
+                  {variantResults.map((variant, index) => (
+                    <motion.div
+                      key={variant.variant_id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.24) }}
+                      className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/40 transition-colors"
                     >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {draftLines.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="py-10 text-center">
-                      <EmptyState
-                        variant="no-data"
-                        title="Chưa có line nào"
-                        description="Tìm sản phẩm và nhấn Thêm để bắt đầu."
-                        className="py-0"
-                      />
-                    </td>
-                  </tr>
-                ) : draftLines.map((line) => (
-                  <tr key={line.isbn13} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-3 text-[12px]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
-                          <Book className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
+                          <Book className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-foreground">{line.title}</p>
+                          <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
                           <p className="text-[11px] text-muted-foreground">
-                            ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
+                            ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
                           </p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-[12px]">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={line.quantity}
-                        onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
-                        aria-label={`Số lượng cho ${line.title}`}
-                        className="max-w-[120px]"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
                       <Button
                         type="button"
-                        variant="ghost"
-                        size="sm-icon"
-                        className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                        onClick={() => handleRemoveLine(line.isbn13)}
-                        aria-label="Xoa dong"
+                        variant="info-outline"
+                        size="sm"
+                        onClick={() => handleAddLine(variant)}
+                        className="shrink-0"
                       >
-                        <X className="h-4 w-4" />
+                        <Plus className="h-3.5 w-3.5" />
+                        Thêm
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
-            <div className="text-[12px] text-muted-foreground">
-              {draftLines.length > 0 ? (
-                <span>
-                  <span className="font-semibold text-foreground">{draftLines.length}</span> dòng ·{" "}
-                  <span className="font-semibold text-foreground">{draftTotalQuantity}</span> cuốn
-                </span>
-              ) : (
-                <span>Chưa có dòng nào</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={resetForm}>
-                Reset
-              </Button>
-              <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
-                <Send className="h-3.5 w-3.5" />
-                Tạo request
-              </Button>
-            </div>
-          </div>
-        </SectionCard>
-      </FadeItem>
-
-      <FadeItem>
-        <SectionCard
-          title="Danh sách requests"
-          subtitle={listView === "my" ? "Các đơn bạn đã tạo theo kho nguồn." : "Hàng chờ duyệt (cần quyền phù hợp)."}
-          actions={(
-            <SegmentedControl
-              options={
-                canApprove
-                  ? [{ value: "my", label: "Đơn của tôi" }, { value: "approval", label: "Hàng chờ duyệt" }]
-                  : [{ value: "my", label: "Đơn của tôi" }]
-              }
-              value={listView}
-              onChange={(v) => setListView(v as "my" | "approval")}
-              layoutId="order-requests-list-view"
-              gradientClassName="from-cyan-600 to-sky-600"
-            />
-          )}
-        >
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  {["Order", "Loại", "Nguồn", "Đích", "Trạng thái", "Ưu tiên", "Số lượng", "Yêu cầu lúc", "Thao tác"].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-                    >
-                      {head}
-                    </th>
+                    </motion.div>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {requests.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-10 text-center">
-                      <EmptyState
-                        variant="no-data"
-                        title="Không có request nào"
-                        description={listView === "approval" ? "Không có đơn chờ duyệt." : "Hãy tạo request mới ở phần trên."}
-                        className="py-0"
-                      />
-                    </td>
-                  </tr>
-                ) : requests.map((row) => {
-                  const approveKey = `approve:${row.task_type}:${row.task_id}`;
-                  const rejectKey = `reject:${row.task_type}:${row.task_id}`;
-                  const canTakeAction = listView === "approval"
-                    && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
-                      || (row.task_type === "transfer" && row.status === "REQUESTED"));
+                </div>
+              )}
 
-                  return (
-                    <tr key={`${row.task_type}-${row.task_id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-3 text-[12px]">
-                        <p className="font-semibold text-foreground">{row.order_number}</p>
-                        <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
-                      </td>
-                      <td className="px-4 py-3 text-[12px]">
-                        {(() => { const meta = orderTypeMeta(row.order_type); return <StatusBadge label={meta.label} variant={meta.variant} />; })()}
-                      </td>
-                      <td className="px-4 py-3 text-[12px]">{row.source_warehouse_code || "-"}</td>
-                      <td className="px-4 py-3 text-[12px]">{row.target_warehouse_code || "-"}</td>
-                      <td className="px-4 py-3 text-[12px]">
-                        <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
-                      </td>
-                      <td className="px-4 py-3 text-[12px]">
-                        {listView === "approval" ? <PriorityBadge priority={requestAgingPriority(row.requested_at)} /> : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-[12px] font-medium">{row.total_quantity}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</td>
-                      <td className="px-4 py-3 text-right">
-                        {canTakeAction ? (
-                          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                            <Button
-                              type="button"
-                              variant="success-outline"
-                              size="sm"
-                              onClick={() => void handleApproveOrReject(row.task_type, row.task_id, "approve")}
-                              disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
-                            >
-                              <Check className="h-3 w-3" />
-                              Duyệt
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="danger-outline"
-                              size="sm"
-                              onClick={() => void handleApproveOrReject(row.task_type, row.task_id, "reject")}
-                              disabled={processingActionKey === approveKey || processingActionKey === rejectKey}
-                            >
-                              Từ chối
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        )}
-                      </td>
+              <div className="mt-5 overflow-hidden rounded-xl border border-border">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40">
+                      {["Sản phẩm", "Số lượng", "Thao tác"].map((head) => (
+                        <th
+                          key={head}
+                          className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                        >
+                          {head}
+                        </th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </SectionCard>
+                  </thead>
+                  <tbody>
+                    {draftLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-10 text-center">
+                          <EmptyState
+                            variant="no-data"
+                            title="Chưa có line nào"
+                            description="Tìm sản phẩm và nhấn Thêm để bắt đầu."
+                            className="py-0"
+                          />
+                        </td>
+                      </tr>
+                    ) : draftLines.map((line) => (
+                      <tr key={line.isbn13} className="border-b border-border last:border-0 hover:bg-muted/30">
+                        <td className="px-4 py-3 text-[12px]">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
+                              <Book className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground">{line.title}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[12px]">
+                          <Input
+                            type="number"
+                            min={1}
+                            value={line.quantity}
+                            onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
+                            aria-label={`Số lượng cho ${line.title}`}
+                            className="max-w-[120px]"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm-icon"
+                            className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                            onClick={() => handleRemoveLine(line.isbn13)}
+                            aria-label="Xoa dong"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+                <div className="text-[12px] text-muted-foreground">
+                  {draftLines.length > 0 ? (
+                    <span>
+                      <span className="font-semibold text-foreground">{draftLines.length}</span> dòng ·{" "}
+                      <span className="font-semibold text-foreground">{draftTotalQuantity}</span> cuốn
+                    </span>
+                  ) : (
+                    <span>Chưa có dòng nào</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Reset
+                  </Button>
+                  <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
+                    <Send className="h-3.5 w-3.5" />
+                    Tạo request
+                  </Button>
+                </div>
+              </div>
+            </SectionCard>
+          </TabsContent>
+        </Tabs>
       </FadeItem>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => { if (!open) closeActionDialog(); }}>
+        <AlertDialogContent className="max-w-[420px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.mode === "approve" ? "Duyệt request?" : "Từ chối request?"}
+            </AlertDialogTitle>
+            {pendingAction && (
+              <AlertDialogDescription>
+                Request <span className="font-medium text-foreground">{pendingAction.orderNumber}</span> · {pendingAction.totalQuantity} cuốn.{" "}
+                {pendingAction.mode === "approve"
+                  ? "Request sẽ chuyển sang bước Picking."
+                  : "Người tạo request sẽ được thông báo về việc từ chối."}
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+
+          {pendingAction?.mode === "reject" && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do từ chối (tùy chọn)</p>
+              <Textarea
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                rows={2}
+                placeholder="Cho người tạo biết vì sao request bị từ chối..."
+              />
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionSubmitting} onClick={closeActionDialog}>
+              Hủy
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmAction();
+              }}
+              disabled={actionSubmitting}
+              className={cn(
+                buttonVariants({ variant: pendingAction?.mode === "reject" ? "destructive" : "default" }),
+                "min-w-[96px]",
+              )}
+            >
+              {actionSubmitting ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Đang xử lý...
+                </span>
+              ) : pendingAction?.mode === "approve" ? "Duyệt" : "Từ chối"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageWrapper>
   );
 }

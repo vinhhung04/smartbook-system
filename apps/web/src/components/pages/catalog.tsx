@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, AlertOctagon } from "lucide-react";
+import { Plus, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, Copy, Check } from "lucide-react";
 import { StatusBadge } from "../status-badge";
+import { CatalogBookThumbnail } from "./catalog-book-thumbnail";
+import { getCategoryTone } from "./catalog-book-category";
 import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
 import { toast } from "sonner";
 import { BarcodeScanModal } from "../barcode-scan-modal";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
+import { PageWrapper, FadeItem } from "../motion-utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,6 +20,14 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 
 const FILTERS = [
@@ -26,6 +37,8 @@ const FILTERS = [
   { value: "Low Stock", label: "Sắp hết hàng" },
   { value: "Out of Stock", label: "Hết hàng" },
 ];
+
+const PAGE_SIZE = 10;
 
 interface CatalogBook {
   id: string;
@@ -38,6 +51,18 @@ interface CatalogBook {
   location: string;
   is_incomplete: boolean;
   updated_at?: string;
+  cover_image_url?: string | null;
+  list_price?: number;
+}
+
+function toDisplayPrice(value?: number) {
+  if (!value) return "-";
+  return value.toLocaleString("vi-VN") + " đ";
+}
+
+function csvCell(value: string | number) {
+  const str = String(value ?? "");
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
 function toDisplayDate(value?: string) {
@@ -61,11 +86,9 @@ export function CatalogPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
-  const deleteModalRef = useRef<HTMLDivElement>(null);
-  const closeDeleteBook = () => setDeleteBook(null);
-  useDialogA11y(Boolean(deleteBook), closeDeleteBook, deleteModalRef);
+  const [page, setPage] = useState(1);
+  const [copiedBarcode, setCopiedBarcode] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newBook, setNewBook] = useState({ barcode: "", title: "", author: "", category: "", isbn: "" });
@@ -85,6 +108,8 @@ export function CatalogPage() {
         location: row.location || "-",
         is_incomplete: Boolean(row.is_incomplete),
         updated_at: row.updated_at,
+        cover_image_url: row.cover_image_url || null,
+        list_price: Number(row.list_price || 0),
       })) as CatalogBook[];
       setBooks(rows);
     } catch (error) {
@@ -129,6 +154,17 @@ export function CatalogPage() {
       return a.title.localeCompare(b.title) * dir;
     });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pagedBooks = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, activeFilter, selectedCategory]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const handleAddBook = async () => {
     const isbn13 = newBook.barcode.trim().replace(/[^0-9]/g, "");
     const title = newBook.title.trim();
@@ -166,20 +202,52 @@ export function CatalogPage() {
   const handleDeleteBook = async () => {
     if (!deleteBook) return;
     try {
-      setDeleting(deleteBook.id);
       await bookService.delete(deleteBook.id);
       toast.success(`Đã xóa sách: ${deleteBook.title}`);
       setDeleteBook(null);
       await loadBooks();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Xóa sách thất bại"));
-    } finally {
-      setDeleting(null);
     }
   };
 
   const handleExport = () => {
-    toast.success("Export started", { description: `${filtered.length} books will be exported to CSV` });
+    if (filtered.length === 0) {
+      toast.error("Không có sách nào để xuất");
+      return;
+    }
+
+    const header = ["Mã vạch", "Tên sách", "Tác giả", "Danh mục", "Trạng thái", "Giá", "Tồn kho", "Vị trí", "Cập nhật"];
+    const rows = filtered.map((book) => [
+      book.barcode || "",
+      book.title,
+      book.author || "",
+      book.category || "",
+      book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh",
+      book.list_price || 0,
+      book.quantity,
+      book.location || "",
+      toDisplayDate(book.updated_at),
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const csvBom = String.fromCharCode(0xfeff);
+    const blob = new Blob([csvBom + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `danh-muc-sach-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    toast.success("Đã xuất file", { description: `${filtered.length} sách đã được xuất ra CSV` });
+  };
+
+  const handleCopyBarcode = (barcode: string) => {
+    if (!barcode) return;
+    navigator.clipboard.writeText(barcode)
+      .then(() => setCopiedBarcode(barcode))
+      .then(() => setTimeout(() => setCopiedBarcode(""), 1500))
+      .catch(() => toast.error("Không thể sao chép"));
   };
 
   const handleOpenManualInput = () => {
@@ -203,13 +271,9 @@ export function CatalogPage() {
   const outOfStockCount = books.filter((book) => book.quantity === 0).length;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <PageWrapper className="space-y-6">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+      <FadeItem>
         <PageHeader
           icon={BookOpen}
           title="Danh mục sách"
@@ -235,15 +299,11 @@ export function CatalogPage() {
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.3 }}
-        >
+      <FadeItem>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             label="Tổng đầu sách"
             value={books.length}
@@ -251,12 +311,6 @@ export function CatalogPage() {
             variant="default"
             animateValue
           />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.3 }}
-        >
           <StatCard
             label="Hoàn chỉnh"
             value={completeCount}
@@ -264,12 +318,6 @@ export function CatalogPage() {
             variant="success"
             animateValue
           />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.3 }}
-        >
           <StatCard
             label="Sắp hết hàng"
             value={lowStockCount}
@@ -277,12 +325,6 @@ export function CatalogPage() {
             variant="warning"
             animateValue
           />
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.3 }}
-        >
           <StatCard
             label="Hết hàng"
             value={outOfStockCount}
@@ -290,15 +332,11 @@ export function CatalogPage() {
             variant="danger"
             animateValue
           />
-        </motion.div>
-      </div>
+        </div>
+      </FadeItem>
 
       {/* Filter Bar */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.3 }}
-      >
+      <FadeItem>
         <div className="rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4">
           <FilterBar
             searchValue={searchQuery}
@@ -336,72 +374,65 @@ export function CatalogPage() {
             }
           />
         </div>
-      </motion.div>
+      </FadeItem>
 
       {/* Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25, duration: 0.3 }}
-      >
+      <FadeItem>
         <SectionCard noPadding className="overflow-hidden">
           {loading ? (
             <LoadingOverlay />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="w-12 px-5 py-3" />
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
                       Mã vạch
-                    </th>
-                    <th
-                      className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
-                      style={{ fontWeight: 550 }}
+                    </TableHead>
+                    <TableHead
+                      className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleSort("title")}
                     >
                       <span className="inline-flex items-center gap-1">
                         Tên sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
                       Tác giả
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
                       Danh mục
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
                       Trạng thái
-                    </th>
-                    <th
-                      className="text-right text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
-                      style={{ fontWeight: 550 }}
+                    </TableHead>
+                    <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
+                      Giá
+                    </TableHead>
+                    <TableHead
+                      className="text-right text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleSort("stock")}
                     >
                       <span className="inline-flex items-center gap-1 justify-end">
                         Tồn kho {sortField === "stock" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
-                    </th>
-                    <th
-                      className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
-                      style={{ fontWeight: 550 }}
+                    </TableHead>
+                    <TableHead
+                      className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleSort("updatedAt")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Vị trí · Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                      Vị trí
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3" style={{ fontWeight: 550 }}>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                    <TableHead className="px-5 py-3" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={9}>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={10} className="whitespace-normal py-10 text-center">
                         <EmptyState
                           variant="no-results"
                           title="Không tìm thấy sách"
@@ -419,34 +450,51 @@ export function CatalogPage() {
                             </button>
                           }
                         />
-                      </td>
-                    </tr>
-                  ) : filtered.map((book, index) => (
-                    <motion.tr
-                      key={book.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.02, duration: 0.2 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{book.barcode || "-"}</td>
-                      <td className="px-5 py-3.5 text-[13px] group-hover:text-primary transition-colors" style={{ fontWeight: 550 }}>
+                      </TableCell>
+                    </TableRow>
+                  ) : pagedBooks.map((book) => (
+                    <TableRow key={book.id} className="group cursor-pointer">
+                      <TableCell className="px-5 py-3.5">
+                        <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">
+                        {book.barcode ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyBarcode(book.barcode!);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded hover:text-foreground transition-colors"
+                            aria-label={`Sao chép mã vạch ${book.barcode}`}
+                          >
+                            {book.barcode}
+                            {copiedBarcode === book.barcode ? (
+                              <Check className="h-3 w-3 text-success" />
+                            ) : (
+                              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                            )}
+                          </button>
+                        ) : "-"}
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5 text-[13px] group-hover:text-primary transition-colors" style={{ fontWeight: 550 }}>
                         <NavLink to={`/book/${book.id}`} className="hover:underline">
                           {book.title}
                         </NavLink>
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.author || "-"}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge label={book.category || "Chưa phân loại"} variant="teal" />
-                      </td>
-                      <td className="px-5 py-3.5">
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.author || "-"}</TableCell>
+                      <TableCell className="px-5 py-3.5">
+                        <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5">
                         <StatusBadge
                           label={book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh"}
                           variant={book.is_incomplete ? "warning" : "success"}
                           dot
                         />
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-[13px] font-mono" style={{ fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5 text-right text-[13px] text-muted-foreground">{toDisplayPrice(book.list_price)}</TableCell>
+                      <TableCell className="px-5 py-3.5 text-right text-[13px] font-mono" style={{ fontWeight: 600 }}>
                         <span className={
                           book.quantity === 0 ? "text-destructive" :
                           book.quantity <= 10 ? "text-amber-600" :
@@ -454,10 +502,12 @@ export function CatalogPage() {
                         }>
                           {book.quantity}
                         </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{toDisplayDate(book.updated_at)}</td>
-                      <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.location || "-"}</td>
-                      <td className="px-5 py-3.5">
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5 text-[13px]">
+                        <p className="text-foreground/90">{book.location || "-"}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">Cập nhật: {toDisplayDate(book.updated_at)}</p>
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-140">
                           <IconButton asChild variant="ghost" size="sm-icon" label="Xem chi tiết sách">
                             <NavLink to={`/book/${book.id}`}>
@@ -477,18 +527,65 @@ export function CatalogPage() {
                             <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
                           </IconButton>
                         </div>
-                      </td>
-                    </motion.tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-              <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
-                <span>Hiển thị {filtered.length} / {books.length} sách</span>
-              </div>
+                </TableBody>
+              </Table>
+
+              {filtered.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedBooks.length}</span> / {filtered.length} sách
+                  </span>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
       {/* Drawer */}
       <AnimatePresence>
@@ -610,65 +707,30 @@ export function CatalogPage() {
         title="Quét mã vạch sách"
       />
 
-      {/* Delete Confirmation Modal */}
-      <AnimatePresence>
+      <ConfirmDialog
+        open={!!deleteBook}
+        onOpenChange={(open) => { if (!open) setDeleteBook(null); }}
+        title="Xóa sách"
+        description="Hành động này không thể hoàn tác."
+        confirmLabel="Xóa"
+        cancelLabel="Hủy"
+        variant="destructive"
+        onConfirm={handleDeleteBook}
+      >
         {deleteBook && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-50"
-              onClick={() => setDeleteBook(null)}
-            />
-            <motion.div
-              ref={deleteModalRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-book-modal-title"
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-background rounded-2xl border border-border shadow-2xl z-50 overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
-                    <AlertOctagon className="w-5 h-5 text-red-500" />
-                  </div>
-                  <div>
-                    <h3 id="delete-book-modal-title" className="text-[15px] font-semibold">Xóa sách</h3>
-                    <p className="text-[11px] text-muted-foreground">Hành động này không thể hoàn tác</p>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-muted/40 border border-border mb-5">
-                  <p className="text-[13px] font-medium mb-1">{deleteBook.title}</p>
-                  <p className="text-[12px] text-muted-foreground">
-                    ISBN: {deleteBook.barcode || "N/A"} | Tồn kho: {deleteBook.quantity}
-                  </p>
-                </div>
-                <p className="text-[13px] text-muted-foreground mb-5">
-                  Bạn có chắc muốn xóa sách này? Sách sẽ bị xóa vĩnh viễn khỏi danh mục.
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={() => void handleDeleteBook()}
-                    loading={deleting === deleteBook.id}
-                  >
-                    Xóa
-                  </Button>
-                  <Button variant="outline" className="flex-1" onClick={() => setDeleteBook(null)}>
-                    Hủy
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="mb-1 text-[13px] font-medium text-foreground">{deleteBook.title}</p>
+              <p className="text-[12px] text-muted-foreground">
+                ISBN: {deleteBook.barcode || "N/A"} | Tồn kho: {deleteBook.quantity}
+              </p>
+            </div>
+            <p className="text-[13px] text-muted-foreground">
+              Bạn có chắc muốn xóa sách này? Sách sẽ bị xóa vĩnh viễn khỏi danh mục.
+            </p>
+          </div>
         )}
-      </AnimatePresence>
-    </div>
+      </ConfirmDialog>
+    </PageWrapper>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Sparkles } from "lucide-react";
+import { AlertTriangle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
@@ -12,7 +12,6 @@ import { aiService, type EnrichMode, type LookupBookByIsbnResponse, type PostIsb
 import { bookService } from "@/services/book";
 import { metadataIntelligenceService, type DuplicateDecisionResult, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
 import { getApiErrorMessage } from "@/services/api";
-import { AiAssistTab } from "./ai-assist-tab";
 import { BookInfoTab } from "./book-info-tab";
 import { EmptyLookupState } from "./empty-state";
 import { IsbnLookupProgress } from "./isbn-lookup-progress";
@@ -59,7 +58,7 @@ export function AIImportPage() {
   const [catalogBooks, setCatalogBooks] = useState<CatalogBookLite[]>([]);
   const [confirmDuplicateSave, setConfirmDuplicateSave] = useState(false);
   const [activeReviewId, setActiveReviewId] = useState<"duplicate" | "authority" | "evidence" | null>(null);
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<"book" | "review" | "ai">("book");
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<"book" | "review">("book");
   const initializedTabForLookup = useRef<LookupBookByIsbnResponse | null>(null);
 
   const [confirmEntityField, setConfirmEntityField] = useState<string | null>(null);
@@ -638,7 +637,6 @@ export function AIImportPage() {
           onScanClick={() => setShowScanner(true)}
           lookupLoading={lookupLoading}
           hasLookupData={Boolean(lookupData)}
-          hasPostIsbnSuggestions={hasPostIsbnSuggestions}
         />
       </FadeItem>
 
@@ -659,31 +657,39 @@ export function AIImportPage() {
               {lookupData.found ? <MetadataFoundHero lookup={lookupData} form={form} completeSignalCount={completeSignalCount} /> : null}
 
               {manualMode ? (
-                <div className="mb-4 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
-                  Không tìm thấy metadata từ nhà cung cấp. Vui lòng nhập tay thông tin sách, ISBN đã được giữ lại.
-                  <button type="button" onClick={() => focusField("title")} className="ml-1 cursor-pointer font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30">
-                    Chuyển tới ô nhập tay
-                  </button>
+                <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-foreground">Không tìm thấy metadata từ nhà cung cấp</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">Vui lòng nhập tay thông tin sách — ISBN đã được giữ lại.</p>
+                    <button type="button" onClick={() => focusField("title")} className="mt-1.5 inline-flex cursor-pointer items-center text-[12px] font-semibold text-warning underline decoration-warning/50 underline-offset-4 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30">
+                      Chuyển tới ô nhập tay
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
               {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
-                <div className="mb-4 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
-                  Mã quét có thể là barcode bán lẻ, không phải ISBN chuẩn. Kết quả được tìm từ nhà sách trực tuyến.
+                <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-foreground">Mã quét có thể không phải ISBN chuẩn</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">Có thể là barcode bán lẻ — kết quả được tìm từ nhà sách trực tuyến.</p>
+                  </div>
                 </div>
               ) : null}
 
               <div className="space-y-6 pb-24">
                 <MetadataReadiness signals={reviewSignals} onFocusField={focusField} />
 
-                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review" | "ai")} className="gap-0">
+                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="gap-0">
                   <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 sm:gap-6" aria-label="Không gian làm việc nhập sách">
                     <TabsTrigger
                       value="book"
-                      aria-label="Thông tin sách"
+                      aria-label="Thông tin sách và AI hỗ trợ"
                       className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:text-cyan-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-cyan-300"
                     >
-                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin sách</span>
+                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin & AI</span>
                       <StatusBadge label={`${completeSignalCount}/4`} variant={completeSignalCount === 4 ? "success" : "warning"} />
                     </TabsTrigger>
                     <TabsTrigger
@@ -693,14 +699,6 @@ export function AIImportPage() {
                     >
                       <span className="sm:hidden">Duyệt</span><span className="hidden sm:inline">Kiểm duyệt</span>
                       <StatusBadge label={String(reviewIssueCount)} variant={reviewIssueCount ? "warning" : "success"} />
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="ai"
-                      aria-label={`AI hỗ trợ, ${aiSuggestionCount} đề xuất chờ duyệt`}
-                      className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-violet-500 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-violet-300"
-                    >
-                      <span className="sm:hidden">AI</span><span className="hidden sm:inline">AI hỗ trợ</span>
-                      <StatusBadge label={String(aiSuggestionCount)} variant={aiSuggestionCount ? "violet" : "neutral"} />
                     </TabsTrigger>
                   </TabsList>
 
@@ -733,14 +731,6 @@ export function AIImportPage() {
                         form={form}
                         onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
                         completeSignalCount={completeSignalCount}
-                      />
-                    </motion.div>
-                  </TabsContent>
-
-                  <TabsContent value="ai" className="mt-0 pt-6">
-                    <motion.div initial={shouldReduceMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}>
-                      <AiAssistTab
-                        title={form.title}
                         aiFieldCandidates={aiFieldCandidates}
                         aiFieldLoading={aiFieldLoading}
                         onRegenerateField={(field) => void regenerateAiField(field)}
@@ -753,7 +743,6 @@ export function AIImportPage() {
                         onDismissQualityCheck={() => setQualityCheckResult(null)}
                         postIsbnSuggestions={postIsbnSuggestions}
                         hasPostIsbnSuggestions={hasPostIsbnSuggestions}
-                        onFocusField={focusField}
                       />
                     </motion.div>
                   </TabsContent>

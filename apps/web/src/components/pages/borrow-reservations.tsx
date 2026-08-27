@@ -2,11 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
-import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
+import { PageWrapper, FadeItem } from '../motion-utils';
+import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+import { getPaginationRange } from '@/lib/pagination';
+import { cn } from '@/components/ui/utils';
 import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import {
@@ -20,6 +29,8 @@ import {
 import { getApiErrorMessage } from '@/services/api';
 import { bookService } from '@/services/book';
 import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
+
+const PAGE_SIZE = 10;
 
 const statuses: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'];
 
@@ -61,14 +72,6 @@ const initialFormState: ReservationFormState = {
   notes: '',
 };
 
-function getStatusVariant(status: ReservationStatus) {
-  if (status === 'PENDING') return 'warning';
-  if (status === 'CONFIRMED' || status === 'READY_FOR_PICKUP') return 'info';
-  if (status === 'CONVERTED_TO_LOAN') return 'success';
-  if (status === 'CANCELLED' || status === 'EXPIRED') return 'neutral';
-  return 'neutral';
-}
-
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
 }
@@ -101,6 +104,8 @@ export function BorrowReservationsPage() {
   const [pickupCode, setPickupCode] = useState('');
   const [pickupConverting, setPickupConverting] = useState(false);
   const [pickupScannerOpen, setPickupScannerOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
 
   const loadReservations = async () => {
     try {
@@ -318,6 +323,21 @@ export function BorrowReservationsPage() {
     });
   }, [reservations, query, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  const pagedReservations = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const submitReservation = async () => {
     if (!formState.customer_id || !formState.variant_id || !formState.warehouse_id) {
       toast.error('Vui lòng chọn khách hàng, biến thể sách và kho');
@@ -361,12 +381,13 @@ export function BorrowReservationsPage() {
     }
   };
 
-  const cancelReservation = async (id: string) => {
-    if (!window.confirm('Hủy đặt trước này?')) return;
+  const handleConfirmCancelReservation = async () => {
+    if (!cancelTarget) return;
 
     try {
-      await borrowService.cancelReservation(id);
+      await borrowService.cancelReservation(cancelTarget.id);
       toast.success('Đã hủy đặt trước');
+      setCancelTarget(null);
       await loadReservations();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Hủy đặt trước thất bại'));
@@ -442,12 +463,8 @@ export function BorrowReservationsPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <PageHeader
           icon={CalendarClock}
           title="Đặt trước sách"
@@ -471,13 +488,9 @@ export function BorrowReservationsPage() {
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
-      >
+      <FadeItem>
         <SectionCard title="Quầy nhận sách">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <label className="flex-1 text-xs font-medium text-muted-foreground">
@@ -520,13 +533,9 @@ export function BorrowReservationsPage() {
             </div>
           </div>
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
-      >
+      <FadeItem>
         <FilterBar
           searchValue={query}
           onSearchChange={setQuery}
@@ -554,58 +563,48 @@ export function BorrowReservationsPage() {
             </div>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
-      >
+      <FadeItem>
         <SectionCard noPadding>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
+          <div className="overflow-hidden rounded-xl border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
                   {['Số đặt trước', 'Khách hàng', 'Tên sách', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
-                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                    <TableHead key={header} className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
                       {header}
-                    </th>
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {loading ? (
                   <SkeletonTableRow columns={8} rows={5} />
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>
+                ) : pagedReservations.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={8} className="whitespace-normal">
                       <EmptyState
                         variant="no-results"
                         title="Không tìm thấy đặt trước"
                         description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
                         className="py-12"
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  filtered.map((reservation, index) => (
-                    <motion.tr
-                      key={reservation.id}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: index * 0.02 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</td>
-                      <td className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</td>
-                      <td className="px-5 py-3.5 text-sm" title={reservation.variant_id}>{getBookTitle(reservation.variant_id)}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</td>
-                      <td className="px-5 py-3.5 text-sm">{reservation.quantity}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge label={reservation.status} variant={getStatusVariant(reservation.status)} dot />
-                      </td>
-                      <td className="px-5 py-3.5">
+                  pagedReservations.map((reservation) => (
+                    <TableRow key={reservation.id} className="hover:bg-muted/30">
+                      <TableCell className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</TableCell>
+                      <TableCell className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</TableCell>
+                      <TableCell className="px-5 py-3.5 text-sm" title={reservation.variant_id}>{getBookTitle(reservation.variant_id)}</TableCell>
+                      <TableCell className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</TableCell>
+                      <TableCell className="px-5 py-3.5 text-sm">{reservation.quantity}</TableCell>
+                      <TableCell className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell className="px-5 py-3.5">
+                        <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5">
                         {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
                           <div className="flex flex-wrap items-center gap-2">
                             {reservation.status === 'PENDING' ? (
@@ -639,7 +638,7 @@ export function BorrowReservationsPage() {
                               size="sm"
                               variant="outline"
                               className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
-                              onClick={() => void cancelReservation(reservation.id)}
+                              onClick={() => setCancelTarget(reservation)}
                             >
                               Hủy
                             </Button>
@@ -647,15 +646,63 @@ export function BorrowReservationsPage() {
                         ) : (
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
-                      </td>
-                    </motion.tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
+
+          {!loading && filtered.length > 0 && (
+            <div className="flex flex-col gap-3 px-5 py-3 border-t border-border text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>Hiển thị <span className="font-medium text-foreground">{pagedReservations.length}</span> / {filtered.length} đặt trước</span>
+              {totalPages > 1 && (
+                <Pagination className="mx-0 w-auto justify-end">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.max(1, current - 1));
+                        }}
+                        className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                    {getPaginationRange(page, totalPages).map((item) => (
+                      <PaginationItem key={item}>
+                        {typeof item === "number" ? (
+                          <PaginationLink
+                            isActive={item === page}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage(item);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {item}
+                          </PaginationLink>
+                        ) : (
+                          <PaginationEllipsis />
+                        )}
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.min(totalPages, current + 1));
+                        }}
+                        className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          )}
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
       <AnimatePresence>
         {formOpen && (
@@ -934,6 +981,16 @@ export function BorrowReservationsPage() {
         onDetected={(code) => void convertPickupCode(code)}
         title="Quét QR nhận sách"
       />
-    </div>
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
+        title="Hủy đặt trước này?"
+        description={cancelTarget ? `Đặt trước ${cancelTarget.reservation_number} sẽ chuyển sang trạng thái đã hủy.` : undefined}
+        variant="destructive"
+        confirmLabel="Hủy đặt trước"
+        onConfirm={handleConfirmCancelReservation}
+      />
+    </PageWrapper>
   );
 }
