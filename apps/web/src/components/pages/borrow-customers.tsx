@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
@@ -31,13 +32,6 @@ const initialFormState: CustomerFormState = {
   address: '',
   status: 'ACTIVE',
 };
-
-function getStatusVariant(status: CustomerStatus) {
-  if (status === 'ACTIVE') return 'success';
-  if (status === 'SUSPENDED') return 'warning';
-  if (status === 'BLOCKED') return 'danger';
-  return 'neutral';
-}
 
 export function BorrowCustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -242,7 +236,7 @@ export function BorrowCustomersPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.email || '-'}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.phone || '-'}</td>
                       <td className="px-5 py-3.5">
-                        <StatusBadge label={customer.status} variant={getStatusVariant(customer.status)} dot />
+                        <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
                       </td>
                       <td className="px-5 py-3.5 text-sm font-medium text-rose-600 dark:text-rose-400">
                         {Number(customer.total_fine_balance).toLocaleString('vi-VN')} VND

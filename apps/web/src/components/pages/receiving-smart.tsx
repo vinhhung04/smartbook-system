@@ -648,10 +648,6 @@ export function SmartReceivingPage() {
       <PageHeader
         title="Nhập hàng thông minh (AI)"
         description="Quét hóa đơn và tự động khớp với danh mục sách"
-        breadcrumbs={[
-          { label: "Kho", href: "/inventory" },
-          { label: "Nhập hàng thông minh", href: "/receiving-smart" },
-        ]}
       />
 
       {/* Step indicators */}

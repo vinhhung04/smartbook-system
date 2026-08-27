@@ -8,8 +8,6 @@ interface PageHeaderProps {
   title: string;
   /** Subtitle / description */
   description?: string;
-  /** Breadcrumb trail */
-  breadcrumbs?: Array<{ label: string; href?: string }>;
   /** Action buttons on the right */
   actions?: React.ReactNode;
   /** Icon background color classes */
@@ -37,7 +35,6 @@ export function PageHeader({
   icon: Icon,
   title,
   description,
-  breadcrumbs,
   actions,
   iconBg = "bg-indigo-100",
   iconColor = "text-indigo-600",
@@ -59,25 +56,6 @@ export function PageHeader({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          {/* Breadcrumbs */}
-          {breadcrumbs && breadcrumbs.length > 0 && (
-            <nav className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-1">
-              {breadcrumbs.map((crumb, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <span className="text-slate-300">/</span>}
-                  {crumb.href ? (
-                    <a href={crumb.href} className="hover:text-foreground transition-colors">
-                      {crumb.label}
-                    </a>
-                  ) : (
-                    <span className={i === breadcrumbs.length - 1 ? "text-foreground font-medium" : ""}>
-                      {crumb.label}
-                    </span>
-                  )}
-                </React.Fragment>
-              ))}
-            </nav>
-          )}
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
           {description && (
             <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>

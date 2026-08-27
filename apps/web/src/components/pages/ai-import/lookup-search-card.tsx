@@ -3,7 +3,6 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/status-badge";
-import { WorkflowStepper, type WorkflowStep } from "@/components/ui/workflow-stepper";
 
 export function LookupSearchCard({
   isbnInput,
@@ -12,7 +11,6 @@ export function LookupSearchCard({
   onScanClick,
   lookupLoading,
   hasLookupData,
-  hasPostIsbnSuggestions,
 }: {
   isbnInput: string;
   onIsbnInputChange: (value: string) => void;
@@ -20,24 +18,19 @@ export function LookupSearchCard({
   onScanClick: () => void;
   lookupLoading: boolean;
   hasLookupData: boolean;
-  hasPostIsbnSuggestions: boolean;
 }) {
-  const steps: WorkflowStep[] = [
-    { id: "lookup", label: "Tra cứu ISBN", icon: Search, status: hasLookupData ? "completed" : "active" },
-    { id: "ai", label: "AI đề xuất", icon: Sparkles, status: hasPostIsbnSuggestions ? "completed" : lookupLoading ? "active" : "pending" },
-    { id: "edit", label: "Admin duyệt", icon: ClipboardCheck, status: hasLookupData ? "active" : "pending" },
-  ];
   const statusLabel = lookupLoading ? "Đang tra cứu" : hasLookupData ? "Đang review" : "Sẵn sàng";
   const statusVariant = lookupLoading ? "info" : hasLookupData ? "success" : "neutral";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <>
       <SectionCard
         icon={Search}
         title="Tra cứu ISBN"
         subtitle="Sau lookup, AI hoàn thiện metadata ở dạng đề xuất để admin chọn áp dụng"
         className="border-cyan-200/70 shadow-[0_4px_20px_rgba(8,145,178,0.06)] dark:border-cyan-500/20"
         headerClassName="border-b border-cyan-100/80 dark:border-cyan-500/15"
+        actions={<StatusBadge label={statusLabel} variant={statusVariant} dot />}
       >
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
@@ -102,17 +95,6 @@ export function LookupSearchCard({
           </div>
         </div>
       </SectionCard>
-
-      <div className="rounded-xl border border-border/80 bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:shadow-none">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[12px] font-semibold text-foreground">Luồng nhập hiện tại</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">ISBN-first, AI hỗ trợ sau lookup</p>
-          </div>
-          <StatusBadge label={statusLabel} variant={statusVariant} dot />
-        </div>
-        <WorkflowStepper steps={steps} orientation="vertical" compact />
-      </div>
-    </div>
+    </>
   );
 }

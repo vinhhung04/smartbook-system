@@ -4,20 +4,13 @@ import { Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { StatusBadge } from '../status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { printLoanReceipt } from '@/lib/print-utils';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
-
-function getVariant(status: string) {
-  if (status === 'BORROWED') return 'info';
-  if (status === 'RETURNED') return 'success';
-  if (status === 'OVERDUE' || status === 'LOST') return 'warning';
-  if (status === 'CANCELLED') return 'neutral';
-  return 'primary';
-}
 
 export function BorrowLoanDetailPage() {
   const { id } = useParams();
@@ -98,7 +91,7 @@ export function BorrowLoanDetailPage() {
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground">Status</p>
-                <StatusBadge label={loan.status} variant={getVariant(loan.status)} dot />
+                <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground">Borrow Date</p>

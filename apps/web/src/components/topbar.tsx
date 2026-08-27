@@ -11,37 +11,45 @@ import { useBorrowRealtime } from "@/hooks/useBorrowRealtime";
 import { useInventoryRealtime } from "@/hooks/useInventoryRealtime";
 import { useWarehouseTaskRealtime } from "@/hooks/useWarehouseTaskRealtime";
 import { useAIActionRealtime } from "@/hooks/useAIActionRealtime";
+import { navGroups } from "@/lib/nav-groups";
 
 type Crumb = { labelKey: string; to?: string };
 
+// Two-level (parent -> child) routes, plus a handful of flat routes that have
+// no sidebar nav item to derive a label from (receiving-smart, transfer-receiving,
+// forbidden). Every other single-level route is derived from `navGroups` below,
+// so a route only needs an entry here if it needs a *different* label/hierarchy
+// than its sidebar item, or has no sidebar item at all.
 const breadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = {
   "/": { crumbs: [{ labelKey: "breadcrumb.dashboard" }], color: "text-indigo-600" },
-  "/catalog": { crumbs: [{ labelKey: "breadcrumb.catalog" }], color: "text-blue-600" },
-  "/inventory": { crumbs: [{ labelKey: "breadcrumb.inventory" }], color: "text-emerald-600" },
-  "/orders": { crumbs: [{ labelKey: "breadcrumb.goods_receipts" }], color: "text-indigo-600" },
   "/orders/new": { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.new_receipt" }], color: "text-indigo-600" },
-  "/putaway": { crumbs: [{ labelKey: "breadcrumb.putaway" }], color: "text-violet-600" },
-  "/receiving-putaway": { crumbs: [{ labelKey: "breadcrumb.receiving_putaway" }], color: "text-amber-700" },
-  "/order-requests": { crumbs: [{ labelKey: "breadcrumb.order_requests" }], color: "text-cyan-700" },
-  "/picking": { crumbs: [{ labelKey: "breadcrumb.picking" }], color: "text-emerald-700" },
-  "/outbound": { crumbs: [{ labelKey: "breadcrumb.outbound" }], color: "text-sky-700" },
-  "/warehouses": { crumbs: [{ labelKey: "breadcrumb.warehouses" }], color: "text-emerald-600" },
-  "/shelves": { crumbs: [{ labelKey: "breadcrumb.shelves" }], color: "text-cyan-700" },
-  "/movements": { crumbs: [{ labelKey: "breadcrumb.movements" }], color: "text-blue-600" },
-  "/ai-import": { crumbs: [{ labelKey: "breadcrumb.ai_import" }], color: "text-cyan-600" },
-  "/recommendations": { crumbs: [{ labelKey: "breadcrumb.recommendations" }], color: "text-violet-600" },
-  "/reorder-suggestions": { crumbs: [{ labelKey: "breadcrumb.ai_reorder" }], color: "text-emerald-600" },
-  "/reports": { crumbs: [{ labelKey: "breadcrumb.reports" }], color: "text-emerald-600" },
-  "/borrow": { crumbs: [{ labelKey: "breadcrumb.borrow" }], color: "text-amber-600" },
-  "/users": { crumbs: [{ labelKey: "breadcrumb.users" }], color: "text-slate-600" },
-  "/roles": { crumbs: [{ labelKey: "breadcrumb.roles" }], color: "text-indigo-600" },
+  "/purchase-orders/new": { crumbs: [{ labelKey: "sidebar.purchase_orders", to: "/purchase-orders" }, { labelKey: "breadcrumb.new_purchase_order" }], color: "text-indigo-600" },
+  "/forbidden": { crumbs: [{ labelKey: "breadcrumb.forbidden" }], color: "text-slate-600" },
+  "/receiving-smart": { crumbs: [{ labelKey: "breadcrumb.receiving_smart" }], color: "text-cyan-600" },
+  "/transfer-receiving": { crumbs: [{ labelKey: "breadcrumb.transfer_receiving" }], color: "text-sky-700" },
 };
+
+// Every single-level route with a sidebar nav item gets its breadcrumb derived
+// from that item automatically, so adding a page to the sidebar is enough to
+// give it a correct breadcrumb too (previously ~30 routes silently fell back
+// to showing "Dashboard" because this map was hand-maintained and drifted).
+const sidebarBreadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = Object.fromEntries(
+  navGroups.flatMap((group) => group.items.map((item) => [
+    item.to,
+    { crumbs: [{ labelKey: item.labelKey }], color: item.textColor },
+  ])),
+);
 
 function resolveBreadcrumb(pathname: string): { crumbs: Crumb[]; color: string } {
   if (breadcrumbMap[pathname]) return breadcrumbMap[pathname];
   if (pathname.startsWith("/book/")) return { crumbs: [{ labelKey: "breadcrumb.catalog", to: "/catalog" }, { labelKey: "breadcrumb.book_detail" }], color: "text-blue-600" };
-  if (pathname.startsWith("/order/")) return { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.order_detail" }], color: "text-indigo-600" };
-  if (pathname.startsWith("/orders")) return breadcrumbMap["/orders"];
+  if (pathname.startsWith("/orders/")) return { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.order_detail" }], color: "text-indigo-600" };
+  if (pathname.startsWith("/purchase-orders/")) return { crumbs: [{ labelKey: "sidebar.purchase_orders", to: "/purchase-orders" }, { labelKey: "breadcrumb.purchase_order_detail" }], color: "text-indigo-600" };
+  if (pathname.startsWith("/putaway/")) return { crumbs: [{ labelKey: "sidebar.putaway", to: "/putaway" }, { labelKey: "breadcrumb.putaway_detail" }], color: "text-violet-600" };
+  if (pathname.startsWith("/stock-audits/")) return { crumbs: [{ labelKey: "sidebar.stock_audits", to: "/stock-audits" }, { labelKey: "breadcrumb.stock_audit_detail" }], color: "text-violet-700" };
+  if (pathname.startsWith("/borrow/loans/")) return { crumbs: [{ labelKey: "sidebar.loans", to: "/borrow/loans" }, { labelKey: "breadcrumb.loan_detail" }], color: "text-emerald-600" };
+  if (pathname.startsWith("/supplier-deliveries/")) return { crumbs: [{ labelKey: "sidebar.supplier_deliveries" }], color: "text-sky-700" };
+  if (sidebarBreadcrumbMap[pathname]) return sidebarBreadcrumbMap[pathname];
   return { crumbs: [{ labelKey: "breadcrumb.dashboard" }], color: "text-indigo-600" };
 }
 

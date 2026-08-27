@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
@@ -24,14 +25,6 @@ const STATUS_LABELS: Record<string, string> = {
   LOST: 'Mất sách',
   CANCELLED: 'Đã hủy',
 };
-
-function getStatusVariant(status: LoanStatus) {
-  if (status === 'BORROWED') return 'info';
-  if (status === 'RETURNED') return 'success';
-  if (status === 'OVERDUE' || status === 'LOST') return 'danger';
-  if (status === 'CANCELLED') return 'neutral';
-  return 'primary';
-}
 
 export function BorrowLoansPage() {
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -371,7 +364,7 @@ export function BorrowLoansPage() {
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</td>
                       <td className="px-5 py-3.5 text-sm">{loan.total_items}</td>
                       <td className="px-5 py-3.5">
-                        <StatusBadge label={loan.status} variant={getStatusVariant(loan.status)} dot />
+                        <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
                       </td>
                       <td className="px-5 py-3.5">
                         {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (

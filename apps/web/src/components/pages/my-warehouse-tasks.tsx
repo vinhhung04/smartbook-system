@@ -1,15 +1,23 @@
 import { useMemo, useEffect, useState } from "react";
-import { motion } from "motion/react";
-import { AlertTriangle, ArrowLeftRight, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPinned, PackageCheck, RefreshCw, Search, ShoppingCart, Truck, X } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ClipboardCheck, ClipboardList, Hand, Inbox, Link2, MapPinned, PackageCheck, RefreshCw, Search, ShoppingCart, Truck } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
+import { PageWrapper, FadeItem } from "../motion-utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { LoadingSpinner, SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import { myWarehouseTaskService, type AvailableWarehouseTask, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
 import { getWarehouseTaskStatusVariant } from "@/lib/status-registry";
@@ -50,6 +58,10 @@ const CHIP_TONE: Record<string, { bg: string; text: string; border: string }> = 
 };
 
 const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND", "TRANSFER_RECEIVING"];
+
+const PAGE_SIZE = 10;
+
+type MainView = "my" | "available";
 
 function taskActionLabel(type: string) {
   const upper = String(type || "").toUpperCase();
@@ -103,11 +115,14 @@ export function MyWarehouseTasksPage() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<MyWarehouseTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mainView, setMainView] = useState<MainView>("my");
   const [activeTab, setActiveTab] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [availableTasks, setAvailableTasks] = useState<AvailableWarehouseTask[]>([]);
   const [loadingAvailable, setLoadingAvailable] = useState(true);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [myPage, setMyPage] = useState(1);
+  const [availablePage, setAvailablePage] = useState(1);
 
   const countsByType = useMemo(() => {
     const map: Record<string, number> = { ALL: tasks.length };
@@ -125,6 +140,20 @@ export function MyWarehouseTasksPage() {
   }, [tasks, activeTab, searchQuery]);
 
   const isFiltering = activeTab !== "ALL" || searchQuery.trim() !== "";
+
+  const myTotalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
+
+  const pagedTasks = useMemo(
+    () => filteredTasks.slice((myPage - 1) * PAGE_SIZE, myPage * PAGE_SIZE),
+    [filteredTasks, myPage],
+  );
+
+  const availableTotalPages = Math.max(1, Math.ceil(availableTasks.length / PAGE_SIZE));
+
+  const pagedAvailableTasks = useMemo(
+    () => availableTasks.slice((availablePage - 1) * PAGE_SIZE, availablePage * PAGE_SIZE),
+    [availableTasks, availablePage],
+  );
 
   const loadTasks = async () => {
     try {
@@ -145,6 +174,18 @@ export function MyWarehouseTasksPage() {
   };
 
   useEffect(() => { void loadTasks(); }, []);
+
+  useEffect(() => {
+    setMyPage(1);
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    setMyPage((current) => Math.min(current, myTotalPages));
+  }, [myTotalPages]);
+
+  useEffect(() => {
+    setAvailablePage((current) => Math.min(current, availableTotalPages));
+  }, [availableTotalPages]);
 
   const handleReportException = (task: MyWarehouseTask) => {
     const params = new URLSearchParams({ task_id: task.id, task_type: task.type, task_warehouse: task.warehouse ?? "" });
@@ -171,12 +212,8 @@ export function MyWarehouseTasksPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <PageHeader
           icon={ClipboardList}
           title="Công việc kho của tôi"
@@ -190,190 +227,114 @@ export function MyWarehouseTasksPage() {
             </Button>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
-        <span><span className="font-semibold">Task của tôi</span> — đã nhận hoặc được quản lý giao.</span>
-        <span><span className="font-semibold">Có thể nhận</span> — công việc chưa phân công, bạn tự nhận để xử lý.</span>
-      </div>
+      <FadeItem>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+          <span><span className="font-semibold">Task của tôi</span> — đã nhận hoặc được quản lý giao.</span>
+          <span><span className="font-semibold">Có thể nhận</span> — công việc chưa phân công, bạn tự nhận để xử lý.</span>
+        </div>
+      </FadeItem>
 
-      {/* Filter chips — doubles as summary counts, single source of truth for the table below */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {FILTER_CHIPS.map((chip) => {
-          const isActive = activeTab === chip.key;
-          const tone = CHIP_TONE[chip.key];
-          const count = countsByType[chip.key] ?? 0;
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setActiveTab(chip.key)}
-              className={`shrink-0 flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-medium cursor-pointer transition-colors ${
-                isActive
-                  ? `${tone.bg} ${tone.text} ${tone.border} shadow-sm`
-                  : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              }`}
-            >
-              <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
-                <chip.icon className="h-3.5 w-3.5" />
-              </span>
-              {chip.label}
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <FadeItem>
+        <Tabs value={mainView} onValueChange={(value) => setMainView(value as MainView)}>
+          <TabsList className="w-full sm:w-fit">
+            <TabsTrigger value="my">Task của tôi</TabsTrigger>
+            <TabsTrigger value="available">Có thể nhận</TabsTrigger>
+          </TabsList>
 
-      {/* Task của tôi */}
-      <SectionCard
-        noPadding
-        icon={ClipboardList}
-        title="Task của tôi"
-        subtitle={`${filteredTasks.length}/${tasks.length} task${activeTab !== "ALL" ? ` · ${TASK_TYPE_LABELS[activeTab] ?? activeTab}` : ""}`}
-        actions={
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm mã task, kho..."
-              className="h-8 w-40 sm:w-56 pl-8 pr-7 text-[12px]"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Xóa tìm kiếm"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        }
-      >
-        {/* Mobile cards (< md) */}
-        {loading ? (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
-          </div>
-        ) : filteredTasks.length === 0 ? (
-          <div className="px-5 py-10 md:hidden">
-            <EmptyState
-              icon={isFiltering ? Search : ClipboardList}
-              title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
-              description={
-                isFiltering
-                  ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
-                  : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao."
-              }
-            />
-          </div>
-        ) : (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-            {filteredTasks.map((task) => {
-              const actionPath = getTaskActionPath(task);
-              const canReport = OPERATIONAL_TYPES.includes(task.type);
-              const relatedEntity = getRelatedEntityDisplay(task);
-              return (
-                <div key={`card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                      <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
-                    </div>
-                    <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
-                  </div>
-                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <span className="truncate">{task.warehouse || "-"}</span>
-                    <span>·</span>
-                    <span className="shrink-0">{formatDate(task.created_at)}</span>
-                  </div>
-                  {relatedEntity && (
-                    <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                      <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
-                        <Link2 className="h-2.5 w-2.5 shrink-0" />
-                        {relatedEntity.ref_number}
-                      </p>
-                      {relatedEntity.details && (
-                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {actionPath ? (
-                      <NavLink
-                        to={actionPath}
-                        className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
-                      >
-                        {taskActionLabel(task.type)}
-                      </NavLink>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground">Không có thao tác</span>
-                    )}
-                    {canReport && (
-                      <button
-                        type="button"
-                        onClick={() => handleReportException(task)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
-                        title="Báo cáo sự cố cho task này"
-                      >
-                        <AlertTriangle className="h-3 w-3" />
-                        Báo cáo
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Desktop table (>= md) */}
-        <div className="hidden md:block overflow-auto max-h-[560px]">
-          <table className="w-full min-w-[800px]">
-            <thead>
-              <tr className="sticky top-0 z-10 border-b border-border bg-muted">
-                {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Hoàn tất", "Thao tác"].map((header) => (
-                  <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={7} rows={4} />
-              ) : filteredTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10">
-                    <EmptyState
-                      icon={isFiltering ? Search : ClipboardList}
-                      title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
-                      description={
-                        isFiltering
-                          ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
-                          : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao. Các nghiệp vụ tạo đơn, điều chuyển và điều chỉnh tồn kho không hiển thị tại đây."
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : filteredTasks.map((task) => {
-                const actionPath = getTaskActionPath(task);
-                const canReport = OPERATIONAL_TYPES.includes(task.type);
-                const relatedEntity = getRelatedEntityDisplay(task);
+          <TabsContent value="my" className="mt-4 space-y-4">
+            {/* Filter chips — doubles as summary counts, single source of truth for the table below */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {FILTER_CHIPS.map((chip) => {
+                const isActive = activeTab === chip.key;
+                const tone = CHIP_TONE[chip.key];
+                const count = countsByType[chip.key] ?? 0;
                 return (
-                  <tr key={`${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-5 py-3 text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</td>
-                    <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
-                    <td className="px-5 py-3 text-[13px] text-muted-foreground">{task.warehouse || "-"}</td>
-                    <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
-                    <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
-                    <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
-                    <td className="px-5 py-3 text-[12px]">
-                      <div className="flex flex-col gap-1.5">
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={() => setActiveTab(chip.key)}
+                    className={`shrink-0 flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-medium cursor-pointer transition-colors ${
+                      isActive
+                        ? `${tone.bg} ${tone.text} ${tone.border} shadow-sm`
+                        : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    }`}
+                  >
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
+                      <chip.icon className="h-3.5 w-3.5" />
+                    </span>
+                    {chip.label}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${isActive ? "bg-white/70 dark:bg-black/20" : "bg-muted"}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <SectionCard
+              noPadding
+              icon={ClipboardList}
+              title="Task của tôi"
+              subtitle={`${filteredTasks.length}/${tasks.length} task${activeTab !== "ALL" ? ` · ${TASK_TYPE_LABELS[activeTab] ?? activeTab}` : ""}`}
+              actions={(
+                <FilterBar
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Tìm mã task, kho..."
+                  className="sm:w-auto"
+                />
+              )}
+            >
+              {/* Mobile cards (< md) */}
+              {loading ? (
+                <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+                  {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
+                </div>
+              ) : pagedTasks.length === 0 ? (
+                <div className="px-5 py-10 md:hidden">
+                  <EmptyState
+                    icon={isFiltering ? Search : ClipboardList}
+                    title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
+                    description={
+                      isFiltering
+                        ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
+                        : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao."
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+                  {pagedTasks.map((task) => {
+                    const actionPath = getTaskActionPath(task);
+                    const canReport = OPERATIONAL_TYPES.includes(task.type);
+                    const relatedEntity = getRelatedEntityDisplay(task);
+                    return (
+                      <div key={`card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                            <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
+                          </div>
+                          <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                        </div>
+                        <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                          <span className="truncate">{task.warehouse || "-"}</span>
+                          <span>·</span>
+                          <span className="shrink-0">{formatDate(task.created_at)}</span>
+                        </div>
+                        {relatedEntity && (
+                          <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                            <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
+                              <Link2 className="h-2.5 w-2.5 shrink-0" />
+                              {relatedEntity.ref_number}
+                            </p>
+                            {relatedEntity.details && (
+                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {actionPath ? (
                             <NavLink
@@ -383,7 +344,7 @@ export function MyWarehouseTasksPage() {
                               {taskActionLabel(task.type)}
                             </NavLink>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <span className="text-[11px] text-muted-foreground">Không có thao tác</span>
                           )}
                           {canReport && (
                             <button
@@ -397,165 +358,341 @@ export function MyWarehouseTasksPage() {
                             </button>
                           )}
                         </div>
-                        {relatedEntity && (
-                          <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                            <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
-                              <Link2 className="h-2.5 w-2.5 shrink-0" />
-                              {relatedEntity.ref_number}
-                            </p>
-                            {relatedEntity.details && (
-                              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
-                            )}
-                          </div>
-                        )}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      {/* Có thể nhận */}
-      <SectionCard noPadding>
-        <div className="px-5 py-3.5 border-b border-border flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50">
-            <Hand className="h-4 w-4 text-emerald-700" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">Công việc có thể tự nhận</p>
-            <p className="text-[11px] text-muted-foreground">Lấy hàng, xuất kho, nhận chuyển kho chưa phân công — nhận task và bắt đầu ngay</p>
-          </div>
-        </div>
-
-        {/* Mobile card layout */}
-        {loadingAvailable ? (
-          <div className="px-5 py-8 flex justify-center">
-            <LoadingSpinner message="Đang tải..." />
-          </div>
-        ) : availableTasks.length === 0 ? (
-          <div className="px-5 py-8">
-            <EmptyState
-              icon={Hand}
-              title="Không có task nào đang chờ"
-              description="Hiện tại tất cả task đã được phân công hoặc chưa có task mới. Cất hàng (putaway) luôn cần manager phân công trực tiếp."
-            />
-          </div>
-        ) : (
-          <>
-            {/* Mobile cards (< md) */}
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {availableTasks.map((task) => (
-                <div key={`avail-card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                        {task.is_repick && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">Bổ sung</span>
-                        )}
-                      </div>
-                      {task.type === "PICKING" && !task.is_repick && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
-                      {task.type === "PICKING" && task.is_repick && (
-                        <p className="text-[10px] text-muted-foreground">Bổ sung cho <span className="font-mono">{task.parent_order_number}</span></p>
-                      )}
-                      {task.type === "OUTBOUND" && <p className="text-[10px] text-muted-foreground">Bước 2: Xuất kho</p>}
-                      {task.type === "TRANSFER_RECEIVING" && <p className="text-[10px] text-muted-foreground">Nhận chuyển kho</p>}
-                      <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
-                    </div>
-                    <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
-                  </div>
-                  <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                    <span className="truncate">
-                      {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
-                        ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
-                        : task.warehouse || "-"}
-                    </span>
-                    <span>·</span>
-                    <span className="shrink-0">{formatDate(task.created_at)}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void handleClaimTask(task)}
-                    disabled={claimingId === task.id}
-                    className="w-full text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[12px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
-                  >
-                    {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
-                  </Button>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-            {/* Desktop table (>= md) */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Thao tác"].map((header) => (
-                      <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {availableTasks.map((task) => (
-                    <tr key={`avail:${task.type}:${task.id}`} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                          {task.is_repick && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-                              Bổ sung
-                            </span>
-                          )}
+              )}
+
+              {/* Desktop table (>= md) */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Hoàn tất", "Thao tác"].map((header) => (
+                        <TableHead key={header} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {header}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <SkeletonTableRow columns={7} rows={4} />
+                    ) : pagedTasks.length === 0 ? (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={7} className="whitespace-normal px-5 py-10">
+                          <EmptyState
+                            icon={isFiltering ? Search : ClipboardList}
+                            title={isFiltering ? "Không tìm thấy task phù hợp" : "Chưa có task được giao"}
+                            description={
+                              isFiltering
+                                ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm khác."
+                                : "Nhân viên kho chỉ thao tác trên task đã được quản lý giao. Các nghiệp vụ tạo đơn, điều chuyển và điều chỉnh tồn kho không hiển thị tại đây."
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : pagedTasks.map((task) => {
+                      const actionPath = getTaskActionPath(task);
+                      const canReport = OPERATIONAL_TYPES.includes(task.type);
+                      const relatedEntity = getRelatedEntityDisplay(task);
+                      return (
+                        <TableRow key={`${task.type}:${task.id}`} className="hover:bg-muted/30">
+                          <TableCell className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</TableCell>
+                          <TableCell className="text-[12px] font-mono text-muted-foreground">{task.title}</TableCell>
+                          <TableCell className="text-[13px] text-muted-foreground">{task.warehouse || "-"}</TableCell>
+                          <TableCell><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></TableCell>
+                          <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.created_at)}</TableCell>
+                          <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</TableCell>
+                          <TableCell className="whitespace-normal text-[12px]">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {actionPath ? (
+                                  <NavLink
+                                    to={actionPath}
+                                    className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
+                                  >
+                                    {taskActionLabel(task.type)}
+                                  </NavLink>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                                {canReport && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReportException(task)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
+                                    title="Báo cáo sự cố cho task này"
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Báo cáo
+                                  </button>
+                                )}
+                              </div>
+                              {relatedEntity && (
+                                <div className="rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+                                  <p className="flex items-center gap-1 text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
+                                    <Link2 className="h-2.5 w-2.5 shrink-0" />
+                                    {relatedEntity.ref_number}
+                                  </p>
+                                  {relatedEntity.details && (
+                                    <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredTasks.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedTasks.length}</span> / {filteredTasks.length} task
+                  </p>
+                  {myTotalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setMyPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", myPage === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(myPage, myTotalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === myPage}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setMyPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setMyPage((current) => Math.min(myTotalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", myPage === myTotalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </TabsContent>
+
+          <TabsContent value="available" className="mt-4">
+            <SectionCard noPadding>
+              <div className="px-5 py-3.5 border-b border-border flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50">
+                  <Hand className="h-4 w-4 text-emerald-700" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Công việc có thể tự nhận</p>
+                  <p className="text-[11px] text-muted-foreground">Lấy hàng, xuất kho, nhận chuyển kho chưa phân công — nhận task và bắt đầu ngay</p>
+                </div>
+              </div>
+
+              {/* Mobile card layout */}
+              {loadingAvailable ? (
+                <div className="px-5 py-8 flex justify-center">
+                  <LoadingSpinner message="Đang tải..." />
+                </div>
+              ) : availableTasks.length === 0 ? (
+                <div className="px-5 py-8">
+                  <EmptyState
+                    icon={Hand}
+                    title="Không có task nào đang chờ"
+                    description="Hiện tại tất cả task đã được phân công hoặc chưa có task mới. Cất hàng (putaway) luôn cần manager phân công trực tiếp."
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* Mobile cards (< md) */}
+                  <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
+                    {pagedAvailableTasks.map((task) => (
+                      <div key={`avail-card:${task.type}:${task.id}`} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-3 hover:bg-muted/20 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                              {task.is_repick && (
+                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">Bổ sung</span>
+                              )}
+                            </div>
+                            {task.type === "PICKING" && !task.is_repick && <p className="text-[10px] text-muted-foreground">Bước 1: Lấy hàng</p>}
+                            {task.type === "PICKING" && task.is_repick && (
+                              <p className="text-[10px] text-muted-foreground">Bổ sung cho <span className="font-mono">{task.parent_order_number}</span></p>
+                            )}
+                            {task.type === "OUTBOUND" && <p className="text-[10px] text-muted-foreground">Bước 2: Xuất kho</p>}
+                            {task.type === "TRANSFER_RECEIVING" && <p className="text-[10px] text-muted-foreground">Nhận chuyển kho</p>}
+                            <p className="text-[13px] font-mono font-medium mt-0.5 truncate">{task.title}</p>
+                          </div>
+                          <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
                         </div>
-                        {task.type === "PICKING" && !task.is_repick && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Bước 1: Lấy hàng</p>
-                        )}
-                        {task.type === "PICKING" && task.is_repick && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Bổ sung cho <span className="font-mono">{task.parent_order_number}</span>
-                          </p>
-                        )}
-                        {task.type === "OUTBOUND" && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Bước 2: Xuất kho</p>
-                        )}
-                        {task.type === "TRANSFER_RECEIVING" && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Nhận chuyển kho</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-[12px] font-mono text-muted-foreground">{task.title}</td>
-                      <td className="px-5 py-3 text-[13px] text-muted-foreground">
-                        {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
-                          ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
-                          : task.warehouse || "-"}
-                      </td>
-                      <td className="px-5 py-3"><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></td>
-                      <td className="px-5 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
-                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                          <span className="truncate">
+                            {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
+                              ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
+                              : task.warehouse || "-"}
+                          </span>
+                          <span>·</span>
+                          <span className="shrink-0">{formatDate(task.created_at)}</span>
+                        </div>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => void handleClaimTask(task)}
                           disabled={claimingId === task.id}
-                          className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
+                          className="w-full text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[12px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
                         >
                           {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
                         </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </SectionCard>
-    </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table (>= md) */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          {["Loại", "Mã task", "Kho", "Trạng thái", "Tạo lúc", "Thao tác"].map((header) => (
+                            <TableHead key={header} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {header}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pagedAvailableTasks.map((task) => (
+                          <TableRow key={`avail:${task.type}:${task.id}`} className="hover:bg-muted/30">
+                            <TableCell className="whitespace-normal">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-[13px] font-medium">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
+                                {task.is_repick && (
+                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                                    Bổ sung
+                                  </span>
+                                )}
+                              </div>
+                              {task.type === "PICKING" && !task.is_repick && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Bước 1: Lấy hàng</p>
+                              )}
+                              {task.type === "PICKING" && task.is_repick && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Bổ sung cho <span className="font-mono">{task.parent_order_number}</span>
+                                </p>
+                              )}
+                              {task.type === "OUTBOUND" && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Bước 2: Xuất kho</p>
+                              )}
+                              {task.type === "TRANSFER_RECEIVING" && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Nhận chuyển kho</p>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-[12px] font-mono text-muted-foreground">{task.title}</TableCell>
+                            <TableCell className="text-[13px] text-muted-foreground">
+                              {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
+                                ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
+                                : task.warehouse || "-"}
+                            </TableCell>
+                            <TableCell><StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot /></TableCell>
+                            <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.created_at)}</TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleClaimTask(task)}
+                                disabled={claimingId === task.id}
+                                className="text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[11px] dark:text-emerald-400 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15"
+                              >
+                                {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+
+              {availableTasks.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedAvailableTasks.length}</span> / {availableTasks.length} task
+                  </p>
+                  {availableTotalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setAvailablePage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", availablePage === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(availablePage, availableTotalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === availablePage}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setAvailablePage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setAvailablePage((current) => Math.min(availableTotalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", availablePage === availableTotalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </TabsContent>
+        </Tabs>
+      </FadeItem>
+    </PageWrapper>
   );
 }

@@ -1,17 +1,33 @@
-import { useEffect, useState } from "react";
-import { motion } from "motion/react";
-import { ShoppingCart, Plus, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ShoppingCart, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { PageWrapper, FadeItem } from "../motion-utils";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest, type PurchaseRequestCreateInput } from "@/services/purchase-requests";
 import { warehouseService } from "@/services/warehouse";
 import { getStatusVariant } from "@/lib/status-registry";
+
+type PageTab = "queue" | "compose";
+
+const PAGE_SIZE = 10;
 
 const REASONS = [
   { value: "LOW_STOCK", label: "Tồn kho thấp" },
@@ -74,10 +90,13 @@ const emptyForm: PurchaseRequestCreateInput = {
 export function MyPurchaseRequestsPage() {
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [form, setForm] = useState<PurchaseRequestCreateInput>(emptyForm);
+
+  const [activeTab, setActiveTab] = useState<PageTab>("queue");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const load = async () => {
     setLoading(true);
@@ -97,6 +116,37 @@ export function MyPurchaseRequestsPage() {
 
   useEffect(() => { void load(); }, []);
 
+  const filteredRequests = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return requests;
+    return requests.filter((req) => {
+      const reasonLabel = REASONS.find((r) => r.value === req.reason)?.label || req.reason;
+      const haystack = [
+        req.request_number,
+        req.book_variants?.books?.title,
+        req.book_title_hint,
+        reasonLabel,
+        req.status,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [requests, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+
+  const pagedRequests = useMemo(
+    () => filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRequests, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.warehouse_id) { toast.error("Vui lòng chọn kho"); return; }
@@ -114,9 +164,9 @@ export function MyPurchaseRequestsPage() {
       };
       await purchaseRequestService.createRequest(payload);
       toast.success("Đã gửi yêu cầu mua hàng");
-      setShowForm(false);
       setForm(emptyForm);
       await load();
+      setActiveTab("queue");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Gửi yêu cầu thất bại"));
     } finally {
@@ -125,163 +175,235 @@ export function MyPurchaseRequestsPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <PageHeader
           icon={ShoppingCart}
           title="Yêu cầu mua hàng của tôi"
           description="Gửi yêu cầu bổ sung hàng cho quản lý xem xét và điều phối"
           iconBg="bg-orange-100 dark:bg-orange-500/15"
           iconColor="text-orange-700 dark:text-orange-400"
-          actions={
+          actions={(
             <>
               <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
                 Làm mới
               </Button>
-              <Button type="button" size="sm" onClick={() => setShowForm(true)} disabled={showForm}>
+              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
                 <Plus className="h-3.5 w-3.5" />
                 Tạo yêu cầu
               </Button>
             </>
-          }
+          )}
         />
-      </motion.div>
+      </FadeItem>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-        Yêu cầu mua hàng là để báo cáo nhu cầu bổ sung kho cho quản lý. Quản lý sẽ xem xét và tạo đơn đặt hàng chính thức (PO) nếu phê duyệt.
-      </div>
+      <FadeItem>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          Yêu cầu mua hàng là để báo cáo nhu cầu bổ sung kho cho quản lý. Quản lý sẽ xem xét và tạo đơn đặt hàng chính thức (PO) nếu phê duyệt.
+        </div>
+      </FadeItem>
 
-      {/* Create Form */}
-      {showForm && (
-        <SectionCard>
-          <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-            <h2 className="text-[14px] font-semibold">Tạo yêu cầu mua hàng mới</h2>
-            <button type="button" onClick={() => { setShowForm(false); setForm(emptyForm); }} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Kho *</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.warehouse_id}
-                  onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value }))}
-                  required
-                >
-                  <option value="">-- Chọn kho --</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Lý do *</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.reason}
-                  onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-                >
-                  {REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Tên sách / gợi ý</label>
-                <input
-                  type="text"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  placeholder="Nhập tên sách hoặc ISBN nếu có"
-                  value={form.book_title_hint || ""}
-                  onChange={(e) => setForm((f) => ({ ...f, book_title_hint: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">Số lượng cần đặt *</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.quantity_requested}
-                  onChange={(e) => setForm((f) => ({ ...f, quantity_requested: Number(e.target.value) }))}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1">Ghi chú</label>
-              <textarea
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                rows={3}
-                placeholder="Mô tả thêm về nhu cầu hoặc bối cảnh..."
-                value={form.note || ""}
-                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+      <FadeItem>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PageTab)}>
+          <TabsList className="w-full sm:w-fit">
+            <TabsTrigger value="queue">Yêu cầu của tôi</TabsTrigger>
+            <TabsTrigger value="compose">Tạo yêu cầu mới</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="queue" className="mt-4">
+            <SectionCard title="Danh sách yêu cầu" subtitle="Các yêu cầu mua hàng bạn đã gửi.">
+              <FilterBar
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Tìm theo mã yêu cầu, tên sách hoặc trạng thái..."
+                className="mb-4"
               />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setForm(emptyForm); }}>
-                Hủy
-              </Button>
-              <Button type="submit" size="sm" disabled={submitting}>
-                {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
-              </Button>
-            </div>
-          </form>
-        </SectionCard>
-      )}
 
-      {/* List */}
-      <SectionCard noPadding>
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sách yêu cầu</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px]">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {["Mã yêu cầu", "Kho", "Sách / Gợi ý", "Số lượng", "Lý do", "Trạng thái", "Phản hồi", "Tạo lúc"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={8} rows={4} />
-              ) : requests.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-10">
-                    <EmptyState icon={ShoppingCart} title="Chưa có yêu cầu nào" description="Tạo yêu cầu mua hàng để báo cáo nhu cầu bổ sung kho cho quản lý." />
-                  </td>
-                </tr>
-              ) : requests.map((req) => (
-                <tr key={req.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{req.request_number}</td>
-                  <td className="px-4 py-3 text-[13px]">{req.warehouses?.code || "-"}</td>
-                  <td className="px-4 py-3 text-[13px]">
-                    {req.book_variants?.books?.title || req.book_title_hint || <span className="text-muted-foreground">-</span>}
-                  </td>
-                  <td className="px-4 py-3 text-[13px]">{req.quantity_requested}</td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">
-                    {REASONS.find((r) => r.value === req.reason)?.label || req.reason}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge label={req.status} variant={statusVariant(req.status)} dot />
-                  </td>
-                  <td className="px-4 py-3">
-                    <ResponseCell req={req} />
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(req.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </div>
+              <div className="overflow-hidden rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Mã yêu cầu</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Kho</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Sách / Gợi ý</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Số lượng</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Lý do</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Phản hồi</TableHead>
+                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Tạo lúc</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <SkeletonTableRow columns={8} rows={4} />
+                    ) : pagedRequests.length === 0 ? (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={8} className="whitespace-normal py-10 text-center">
+                          <EmptyState
+                            icon={ShoppingCart}
+                            title={requests.length === 0 ? "Chưa có yêu cầu nào" : "Không tìm thấy yêu cầu phù hợp"}
+                            description={
+                              requests.length === 0
+                                ? "Tạo yêu cầu mua hàng để báo cáo nhu cầu bổ sung kho cho quản lý."
+                                : "Thử điều chỉnh từ khóa tìm kiếm."
+                            }
+                            action={requests.length === 0 ? (
+                              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
+                                <Plus className="h-3.5 w-3.5" />
+                                Tạo yêu cầu
+                              </Button>
+                            ) : undefined}
+                            className="py-0"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : pagedRequests.map((req) => (
+                      <TableRow key={req.id} className="hover:bg-muted/30">
+                        <TableCell className="text-[12px] font-mono text-muted-foreground">{req.request_number}</TableCell>
+                        <TableCell className="text-[13px]">{req.warehouses?.code || "-"}</TableCell>
+                        <TableCell className="whitespace-normal text-[13px]">
+                          {req.book_variants?.books?.title || req.book_title_hint || <span className="text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell className="text-[13px]">{req.quantity_requested}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">
+                          {REASONS.find((r) => r.value === req.reason)?.label || req.reason}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge label={req.status} variant={statusVariant(req.status)} dot />
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <ResponseCell req={req} />
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{formatDate(req.created_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredRequests.length > 0 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedRequests.length}</span> / {filteredRequests.length} yêu cầu
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </TabsContent>
+
+          <TabsContent value="compose" className="mt-4">
+            <SectionCard title="Tạo yêu cầu mua hàng mới" subtitle="Điền thông tin nhu cầu bổ sung kho để gửi cho quản lý." icon={Plus}>
+              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Kho *</label>
+                    <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v }))}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="-- Chọn kho --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>{w.code} - {w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Lý do *</label>
+                    <Select value={form.reason} onValueChange={(v) => setForm((f) => ({ ...f, reason: v }))}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REASONS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Tên sách / gợi ý</label>
+                    <Input
+                      type="text"
+                      placeholder="Nhập tên sách hoặc ISBN nếu có"
+                      value={form.book_title_hint || ""}
+                      onChange={(e) => setForm((f) => ({ ...f, book_title_hint: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">Số lượng cần đặt *</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.quantity_requested}
+                      onChange={(e) => setForm((f) => ({ ...f, quantity_requested: Number(e.target.value) }))}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium mb-1">Ghi chú</label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Mô tả thêm về nhu cầu hoặc bối cảnh..."
+                    value={form.note || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setForm(emptyForm)}>
+                    Đặt lại
+                  </Button>
+                  <Button type="submit" size="sm" disabled={submitting} loading={submitting}>
+                    Gửi yêu cầu
+                  </Button>
+                </div>
+              </form>
+            </SectionCard>
+          </TabsContent>
+        </Tabs>
+      </FadeItem>
+    </PageWrapper>
   );
 }
