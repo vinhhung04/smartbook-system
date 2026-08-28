@@ -6,6 +6,7 @@ import {
   Clock,
   MessageCircle,
   MessagesSquare,
+  PanelLeft,
   Package,
   Pencil,
   RotateCcw,
@@ -22,15 +23,21 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { aiService, type AiConversationSummary, type AiEvidenceItem, type PendingAction } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
 import { AIActionCenter } from '@/components/ai-action-center';
+import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 
 interface AssistantMessage {
   role: 'user' | 'assistant';
@@ -103,6 +110,118 @@ function formatPlainValue(value: unknown): string {
   return String(value);
 }
 
+/** Every evidence item is a citation backing the answer above — numbered like footnotes
+ * in a research memo. The backend returns a flat list with no per-word anchor, so chips
+ * are numbered in order rather than tied to specific claims in the text. */
+function EvidenceCitations({ evidence }: { evidence: AiEvidenceItem[] }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const active = openIndex !== null ? evidence[openIndex] : null;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-0.5 text-[11px] text-muted-foreground">Bằng chứng:</span>
+        {evidence.map((item, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-expanded={openIndex === i}
+            aria-label={`Xem bằng chứng số ${i + 1}: ${item.label}`}
+            onClick={() => setOpenIndex(openIndex === i ? null : i)}
+            className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border text-[10px] font-medium transition-colors ${
+              openIndex === i
+                ? 'border-violet-600 bg-violet-600 text-white dark:border-violet-500 dark:bg-violet-500'
+                : 'border-border text-muted-foreground hover:border-violet-300 dark:hover:border-violet-500/40'
+            }`}
+          >
+            {i + 1}
+          </button>
+        ))}
+      </div>
+      {active && (
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-medium text-foreground">{active.label}</span>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{active.source_type}</span>
+          </div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{active.metric}</div>
+          <div className="text-[13px] font-medium tabular-nums text-foreground">
+            {formatPlainValue(active.value)}
+            {active.unit ? ` ${active.unit}` : ''}
+          </div>
+          {active.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{active.description}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ConversationListProps {
+  conversations: AiConversationSummary[];
+  activeId: string;
+  onSwitch: (id: string) => void;
+  onRename: (id: string, currentTitle: string | null) => void;
+  onDelete: (id: string, title: string | null) => void;
+  onAfterSelect?: () => void;
+}
+
+function ConversationList({ conversations, activeId, onSwitch, onRename, onDelete, onAfterSelect }: ConversationListProps) {
+  if (conversations.length === 0) {
+    return <p className="px-4 py-4 text-[12px] text-muted-foreground">Chưa có hội thoại nào.</p>;
+  }
+  return (
+    <div className="max-h-[65vh] min-h-[420px] overflow-y-auto">
+      {conversations.map((conv) => (
+        <div
+          key={conv.conversation_id}
+          onClick={() => {
+            onSwitch(conv.conversation_id);
+            onAfterSelect?.();
+          }}
+          className={`group flex cursor-pointer items-start gap-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
+            conv.conversation_id === activeId ? 'bg-muted/70' : ''
+          }`}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-medium text-foreground">
+              {conv.title || 'Hội thoại chưa đặt tên'}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('vi-VN') : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRename(conv.conversation_id, conv.title);
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted"
+              title="Đổi tên hội thoại"
+              aria-label="Đổi tên hội thoại"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(conv.conversation_id, conv.title);
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+              title="Xóa hội thoại"
+              aria-label="Xóa hội thoại"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function newConversationId() {
   return crypto.randomUUID();
 }
@@ -117,7 +236,13 @@ export function AIAssistantPage() {
   const [hydrating, setHydrating] = useState(false);
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string | null } | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string | null } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [pendingActionCount, setPendingActionCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingCountReloadTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -131,6 +256,29 @@ export function AIAssistantPage() {
       // Non-critical — the sidebar just stays empty, doesn't block the chat itself.
     }
   };
+
+  // Approximate, not a true live total — the API has no count endpoint, so this is
+  // capped at 50 and shown as "50+" past that. Good enough to flag "something's
+  // waiting" on the tab without opening it.
+  const loadPendingActionCount = () => {
+    aiService
+      .listActions({ status: 'PENDING_CONFIRMATION', limit: 50 })
+      .then((res) => setPendingActionCount(res.items.length))
+      .catch(() => {
+        // Non-critical — the badge just stays at its last known count.
+      });
+  };
+
+  useAIActionRealtime(() => {
+    if (pendingCountReloadTimerRef.current) window.clearTimeout(pendingCountReloadTimerRef.current);
+    pendingCountReloadTimerRef.current = window.setTimeout(loadPendingActionCount, 300);
+  });
+
+  useEffect(() => {
+    return () => {
+      if (pendingCountReloadTimerRef.current) window.clearTimeout(pendingCountReloadTimerRef.current);
+    };
+  }, []);
 
   const hydrateConversation = async (id: string) => {
     setHydrating(true);
@@ -177,6 +325,7 @@ export function AIAssistantPage() {
 
   useEffect(() => {
     loadConversations();
+    loadPendingActionCount();
     const storedId = localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY);
     if (storedId) {
       hydrateConversation(storedId);
@@ -285,14 +434,22 @@ export function AIAssistantPage() {
     hydrateConversation(id);
   };
 
-  const handleRenameConversation = async (id: string, currentTitle: string | null) => {
-    const nextTitle = window.prompt('Đổi tên hội thoại', currentTitle ?? '');
-    if (!nextTitle || !nextTitle.trim()) return;
+  const openRenameDialog = (id: string, currentTitle: string | null) => {
+    setRenameTarget({ id, title: currentTitle });
+    setRenameValue(currentTitle ?? '');
+  };
+
+  const submitRename = async () => {
+    if (!renameTarget || !renameValue.trim()) return;
     try {
-      await aiService.renameConversation(id, nextTitle.trim());
-      loadConversations();
+      setRenaming(true);
+      await aiService.renameConversation(renameTarget.id, renameValue.trim());
+      await loadConversations();
+      setRenameTarget(null);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Không thể đổi tên hội thoại.'));
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -339,6 +496,11 @@ export function AIAssistantPage() {
             <TabsTrigger value="actions">
               <ShieldAlert className="h-3.5 w-3.5" />
               Trung tâm hành động AI
+              {pendingActionCount > 0 && (
+                <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]">
+                  {pendingActionCount > 50 ? '50+' : pendingActionCount}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -348,73 +510,57 @@ export function AIAssistantPage() {
           subtitle="Hội thoại được lưu để tiếp tục phân tích sau"
           noPadding
           actions={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={startNewConversation}
-              disabled={loading}
-              title="Bắt đầu cuộc trò chuyện mới"
-              className="active:scale-95 transition-transform"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Trò chuyện mới
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setMobileSidebarOpen(true)}
+                title="Xem các hội thoại trước"
+                className="md:hidden"
+              >
+                <PanelLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={startNewConversation}
+                disabled={loading}
+                title="Bắt đầu cuộc trò chuyện mới"
+                className="active:scale-95 transition-transform"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Trò chuyện mới
+              </Button>
+            </div>
           }
         >
           <div className="flex">
           <aside className="hidden w-56 shrink-0 flex-col divide-y divide-border border-r border-border md:flex">
-            {conversations.length === 0 ? (
-              <p className="px-4 py-4 text-[12px] text-muted-foreground">Chưa có hội thoại nào.</p>
-            ) : (
-              <div className="max-h-[65vh] min-h-[420px] overflow-y-auto">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.conversation_id}
-                    onClick={() => switchConversation(conv.conversation_id)}
-                    className={`group flex cursor-pointer items-start gap-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
-                      conv.conversation_id === conversationId ? 'bg-muted/70' : ''
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12.5px] font-medium text-foreground">
-                        {conv.title || 'Hội thoại chưa đặt tên'}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('vi-VN') : ''}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleRenameConversation(conv.conversation_id, conv.title);
-                        }}
-                        className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted"
-                        title="Đổi tên hội thoại"
-                        aria-label="Đổi tên hội thoại"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDeleteConversation(conv.conversation_id, conv.title);
-                        }}
-                        className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                        title="Xóa hội thoại"
-                        aria-label="Xóa hội thoại"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <ConversationList
+              conversations={conversations}
+              activeId={conversationId}
+              onSwitch={switchConversation}
+              onRename={openRenameDialog}
+              onDelete={handleDeleteConversation}
+            />
           </aside>
+          <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+            <SheetContent side="left" className="w-72 p-0">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle>Hội thoại trước</SheetTitle>
+              </SheetHeader>
+              <ConversationList
+                conversations={conversations}
+                activeId={conversationId}
+                onSwitch={switchConversation}
+                onRename={openRenameDialog}
+                onDelete={handleDeleteConversation}
+                onAfterSelect={() => setMobileSidebarOpen(false)}
+              />
+            </SheetContent>
+          </Sheet>
           <div className="min-w-0 flex-1">
           <div ref={scrollRef} className="max-h-[65vh] min-h-[420px] space-y-6 overflow-y-auto px-5 py-6">
             {messages.length === 0 ? (
@@ -548,33 +694,7 @@ export function AIAssistantPage() {
                         )}
 
                         {message.evidence && message.evidence.length > 0 && (
-                          <Accordion type="multiple" className="rounded-xl border border-border">
-                            <AccordionItem value="evidence" className="px-3">
-                              <AccordionTrigger className="text-[12px]">
-                                Bằng chứng AI đã dùng ({message.evidence.length})
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                  {message.evidence.map((item, i) => (
-                                    <div key={i} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                        {item.label}
-                                      </div>
-                                      <div className="text-[13px] font-medium tabular-nums text-foreground">
-                                        {formatPlainValue(item.value)}
-                                        {item.unit ? ` ${item.unit}` : ''}
-                                      </div>
-                                      {item.description && (
-                                        <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                          {item.description}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
+                          <EvidenceCitations evidence={message.evidence} />
                         )}
                       </div>
                       {isUser && (
@@ -590,6 +710,30 @@ export function AIAssistantPage() {
           </div>
 
           <div className="border-t border-border px-5 py-4">
+            {messages.length > 0 && (
+              <Accordion type="single" collapsible className="mb-2">
+                <AccordionItem value="suggestions" className="border-none">
+                  <AccordionTrigger className="py-1 text-[11px] text-muted-foreground hover:no-underline">
+                    Câu hỏi gợi ý
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {SUGGESTED_QUESTIONS.map(({ text }) => (
+                        <button
+                          key={text}
+                          type="button"
+                          onClick={() => sendMessage(text)}
+                          disabled={loading}
+                          className="cursor-pointer rounded-full border border-border bg-card px-3 py-1 text-[12px] text-foreground transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -621,6 +765,11 @@ export function AIAssistantPage() {
                 <Send className="h-4 w-4" />
               </Button>
             </form>
+            {!loading && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Có thể mất 30–120 giây để trả lời do mô hình AI chạy nội bộ.
+              </p>
+            )}
           </div>
           </div>
           </div>
@@ -649,6 +798,37 @@ export function AIAssistantPage() {
         onConfirm={confirmDeleteConversation}
         loading={deletingConversation}
       />
+
+      <Dialog open={!!renameTarget} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Đổi tên hội thoại</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="rename-conversation-input">Tên hội thoại</Label>
+            <Input
+              id="rename-conversation-input"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submitRename();
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRenameTarget(null)} disabled={renaming}>
+              Hủy
+            </Button>
+            <Button type="button" onClick={submitRename} disabled={!renameValue.trim()} loading={renaming}>
+              Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

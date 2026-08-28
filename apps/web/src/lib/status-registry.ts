@@ -14,7 +14,7 @@ const DOMAINS = {
   // report, reconciliation, goods receipt) — that page already reused one
   // function across all of them, so they share one domain here too.
   purchaseOrder: {
-    RECEIVED: 'success', MATCHED: 'success', FULLY_RECEIVED: 'success',
+    RECEIVED: 'success', MATCHED: 'success', FULLY_RECEIVED: 'success', RESOLVED: 'success',
     APPROVED: 'primary', SENT: 'primary', ACKNOWLEDGED: 'primary', SUPPLIER_CONFIRMED: 'primary',
     PENDING_APPROVAL: 'warning', UNDER_RECEIVED: 'warning', PARTIALLY_RECEIVED: 'warning',
     SENT_TO_SUPPLIER: 'warning', SHORTAGE_REPORTED: 'warning', SUBMITTED: 'warning', OPEN: 'warning',
@@ -62,6 +62,28 @@ const DOMAINS = {
   supplier: {
     ACTIVE: 'success',
     INACTIVE: 'neutral',
+  },
+  // AI action lifecycle (ai-assistant.tsx's inline ActionCard + the Action
+  // Center tab) — both previously hand-rolled their own, disagreeing color
+  // maps for the same statuses; this is now their one shared source.
+  aiAction: {
+    PENDING_CONFIRMATION: 'info',
+    EXECUTED: 'success',
+    CANCELLED: 'neutral',
+    EXPIRED: 'danger',
+    FAILED: 'danger',
+  },
+  pendingActionRisk: {
+    LOW: 'success',
+    MEDIUM: 'warning',
+    HIGH: 'danger',
+  },
+  // Warehouse stock health (inventory.tsx) — was a page-local stockStatusMeta()
+  // function before, exactly the drift this registry exists to prevent.
+  stockLevel: {
+    IN_STOCK: 'success',
+    LOW_STOCK: 'warning',
+    OUT_OF_STOCK: 'danger',
   },
 } satisfies Record<string, ToneMap>;
 

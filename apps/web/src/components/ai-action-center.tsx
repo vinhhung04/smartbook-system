@@ -8,8 +8,9 @@ import {
   DataTableRow,
   DataTableCell,
 } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
+import { AI_ACTION_TYPE_LABEL, AI_ACTION_STATUS_LABEL } from '@/lib/ai-action-labels';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { aiService, type AiActionListItem, type AiActionDetail, type AiAuditLogEntry } from '@/services/ai';
@@ -31,36 +32,6 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'FAILED', label: 'Thất bại' },
   { value: 'EXPIRED', label: 'Hết hạn' },
 ];
-
-const STATUS_VARIANT: Record<string, string> = {
-  PENDING_CONFIRMATION: 'info',
-  EXECUTED: 'success',
-  CANCELLED: 'neutral',
-  FAILED: 'danger',
-  EXPIRED: 'danger',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING_CONFIRMATION: 'Chờ xác nhận',
-  EXECUTED: 'Đã thực thi',
-  CANCELLED: 'Đã hủy',
-  FAILED: 'Thất bại',
-  EXPIRED: 'Hết hạn',
-};
-
-const RISK_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  LOW: 'secondary',
-  MEDIUM: 'outline',
-  HIGH: 'destructive',
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  CREATE_REORDER_DRAFT: 'Đề xuất nhập sách',
-  CREATE_REPORT_DRAFT: 'Tạo báo cáo',
-  CREATE_RESERVATION_DRAFT: 'Đặt chỗ sách',
-  CREATE_STOCK_ALERT: 'Cảnh báo tồn kho',
-  CREATE_STAFF_TASK_DRAFT: 'Task cho staff',
-};
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -234,15 +205,15 @@ export function AIActionCenter() {
                     className="cursor-pointer"
                     onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
                   >
-                    <DataTableCell>{TYPE_LABEL[item.type] ?? item.type}</DataTableCell>
+                    <DataTableCell>{AI_ACTION_TYPE_LABEL[item.type] ?? item.type}</DataTableCell>
                     <DataTableCell className="max-w-xs truncate">{item.summary}</DataTableCell>
                     <DataTableCell>
-                      <Badge variant={RISK_VARIANT[item.risk] ?? 'outline'}>{item.risk}</Badge>
+                      <StatusBadge label={item.risk} variant={getStatusVariant('pendingActionRisk', item.risk)} />
                     </DataTableCell>
                     <DataTableCell>
                       <StatusBadge
-                        label={STATUS_LABEL[item.status] ?? item.status}
-                        variant={STATUS_VARIANT[item.status] ?? 'neutral'}
+                        label={AI_ACTION_STATUS_LABEL[item.status] ?? item.status}
+                        variant={getStatusVariant('aiAction', item.status)}
                         dot
                       />
                     </DataTableCell>
