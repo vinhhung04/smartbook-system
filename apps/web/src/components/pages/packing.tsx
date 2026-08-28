@@ -372,6 +372,9 @@ export function PackingPage() {
     <PageWrapper className="space-y-5">
       <FadeItem>
         <div className="rounded-xl border border-border bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+          <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/70">
+            Bench · Packing Station
+          </p>
           <PageHeader
             icon={PackageCheck}
             title="Packing Station"
@@ -395,6 +398,7 @@ export function PackingPage() {
             autoScanSupported={camera.autoScanSupported}
             savedCount={savedCount}
             scanStatus={!task ? undefined : allVerified ? "complete" : "incomplete"}
+            orderNumber={task?.outbound_orders?.outbound_number}
           />
         </FadeItem>
 
@@ -403,23 +407,32 @@ export function PackingPage() {
             <>
               <FadeItem>
                 <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-                  <div className="flex flex-col items-center gap-3 bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] px-6 py-7 text-center border-b border-border">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                      <QrCode className="h-6 w-6" />
+                  <div className="flex flex-col items-center gap-3 bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] px-6 py-8 text-center border-b border-dashed border-border">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <QrCode className="h-7 w-7" />
                     </div>
-                    <p className="text-[13px] text-muted-foreground max-w-xs">Quét hoá đơn / mã đơn xuất kho để bắt đầu đóng gói</p>
-                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)}>
+                    <div>
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Bắt đầu đóng gói
+                      </p>
+                      <p className="mt-1 text-[14px] text-foreground max-w-xs">
+                        Quét hoá đơn / mã đơn xuất kho để mở phiếu đóng gói
+                      </p>
+                    </div>
+                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)} className="mt-1">
                       Scan hoá đơn
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between px-5 py-3">
                     <div>
-                      <p className="text-[13px] font-semibold text-foreground">Đơn đang chờ đóng gói</p>
+                      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+                        Đơn đang chờ đóng gói
+                      </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">Đơn đã Picking xong, chưa hoàn tất Gói hàng</p>
                     </div>
                     {pendingTasks.length > 0 && (
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold text-muted-foreground">
                         {pendingTasks.length}
                       </span>
                     )}
@@ -438,7 +451,7 @@ export function PackingPage() {
                       />
                     </div>
                   ) : (
-                    <div className="divide-y divide-border border-t border-border">
+                    <div className="divide-y divide-dashed divide-border border-t border-border">
                       {pendingTasks.map((entry) => {
                         const status =
                           entry.status === "NOT_STARTED"
@@ -450,14 +463,14 @@ export function PackingPage() {
                           <button
                             key={entry.id || entry.root_order_id}
                             onClick={() => void openPendingTask(entry)}
-                            className="group flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted/50 transition-colors cursor-pointer"
+                            className="group flex w-full items-center gap-3 border-l-4 border-l-transparent py-3.5 pl-4 pr-5 text-left transition-colors hover:border-l-primary/60 hover:bg-muted/50 cursor-pointer"
                           >
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                               <PackageCheck className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[13px] font-medium text-foreground truncate">
-                                {entry.outbound_orders?.outbound_number || entry.root_order_id}
+                              <p className="font-mono text-[13px] font-semibold text-foreground truncate">
+                                #{entry.outbound_orders?.outbound_number || entry.root_order_id}
                               </p>
                               <p className="text-[11px] text-muted-foreground truncate">{entry.warehouses?.name}</p>
                             </div>
@@ -473,43 +486,49 @@ export function PackingPage() {
           ) : (
             <>
               <FadeItem>
-                <div
-                  className={`rounded-xl border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4 ${
-                    task.status === "COMPLETED"
-                      ? "border-l-muted-foreground/30"
-                      : recordCountdown !== null && countdownTaskIdRef.current === task.id
-                        ? "border-l-amber-500"
-                        : "border-l-emerald-500"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <button
-                        onClick={backToQueue}
-                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary cursor-pointer mb-1.5"
-                      >
-                        <ArrowLeft className="h-3 w-3" /> Quay lại danh sách
-                      </button>
-                      <p className="text-[15px] font-semibold text-foreground">
-                        Đơn {task.outbound_orders?.outbound_number}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">Packing {task.task_number}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      {task.status === "COMPLETED" ? (
-                        <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
-                          Đã đóng gói
-                        </span>
-                      ) : recordCountdown !== null && countdownTaskIdRef.current === task.id ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                          Đang lưu video... {recordCountdown}s
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                          <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
-                        </span>
-                      )}
-                      <div className="flex items-center gap-2">
+                <div className="relative">
+                  <div className="pointer-events-none absolute -top-2 left-3 z-10 h-4 w-4 rounded-full border border-border bg-background" />
+                  <div className="pointer-events-none absolute -top-2 right-3 z-10 h-4 w-4 rounded-full border border-border bg-background" />
+                  <div
+                    className={`rounded-xl border bg-card p-5 pt-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4 ${
+                      task.status === "COMPLETED"
+                        ? "border-l-muted-foreground/30"
+                        : recordCountdown !== null && countdownTaskIdRef.current === task.id
+                          ? "border-l-amber-500"
+                          : "border-l-emerald-500"
+                    }`}
+                  >
+                    <p className="mb-3 border-b border-dashed border-border pb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Phiếu đóng gói
+                    </p>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <button
+                          onClick={backToQueue}
+                          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary cursor-pointer mb-1.5"
+                        >
+                          <ArrowLeft className="h-3 w-3" /> Quay lại danh sách
+                        </button>
+                        <p className="font-mono text-[20px] font-bold leading-tight text-foreground">
+                          #{task.outbound_orders?.outbound_number}
+                        </p>
+                        <p className="font-mono text-[11px] text-muted-foreground">Packing {task.task_number}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {task.status === "COMPLETED" ? (
+                          <span className="rounded-full bg-muted px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Đã đóng gói
+                          </span>
+                        ) : recordCountdown !== null && countdownTaskIdRef.current === task.id ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                            Đang lưu video... {recordCountdown}s
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -534,104 +553,109 @@ export function PackingPage() {
                     </div>
                   </div>
 
-                  {photoEvidence.length > 0 ? (
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {photoEvidence.map((evidence) => {
-                        const unexpectedTitles = findUnexpectedTitles(
-                          evidence.ai_verification_result?.detected_titles || [],
-                          expectedTitles,
-                        );
-                        return (
-                          <span key={evidence.id} className="inline-flex flex-wrap items-center gap-1.5">
-                            <span
-                              title={
-                                evidence.ai_verification_result
-                                  ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
-                                  : undefined
-                              }
-                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                                evidence.ai_verification_status === "MATCH"
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                                  : evidence.ai_verification_status === "MISMATCH"
-                                    ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                                    : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              <CameraIcon className="h-3 w-3" />
-                              {evidence.ai_verification_status === "MATCH"
-                                ? "AI: Khớp"
-                                : evidence.ai_verification_status === "MISMATCH"
-                                  ? "AI: Lệch số lượng"
-                                  : "AI: Chưa xác minh"}
-                            </span>
-                            {unexpectedTitles.length > 0 && (
+                    {photoEvidence.length > 0 ? (
+                      <div className="mb-3 flex flex-wrap gap-2.5">
+                        {photoEvidence.map((evidence) => {
+                          const unexpectedTitles = findUnexpectedTitles(
+                            evidence.ai_verification_result?.detected_titles || [],
+                            expectedTitles,
+                          );
+                          return (
+                            <span key={evidence.id} className="inline-flex flex-wrap items-center gap-1.5">
                               <span
-                                title={`AI phát hiện: ${unexpectedTitles.join(", ")}`}
-                                className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400"
+                                title={
+                                  evidence.ai_verification_result
+                                    ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
+                                    : undefined
+                                }
+                                className={`inline-flex -rotate-3 items-center gap-1 rounded-md border-2 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${
+                                  evidence.ai_verification_status === "MATCH"
+                                    ? "border-emerald-500/70 text-emerald-600 dark:border-emerald-400/60 dark:text-emerald-400"
+                                    : evidence.ai_verification_status === "MISMATCH"
+                                      ? "border-[#C23B34]/70 text-[#C23B34] dark:border-[#e0655e]/70 dark:text-[#e0655e]"
+                                      : "border-muted-foreground/30 text-muted-foreground"
+                                }`}
                               >
-                                ⚠️ Nghi lẫn đơn
+                                <CameraIcon className="h-3 w-3" />
+                                {evidence.ai_verification_status === "MATCH"
+                                  ? "AI: Khớp"
+                                  : evidence.ai_verification_status === "MISMATCH"
+                                    ? "AI: Lệch số lượng"
+                                    : "AI: Chưa xác minh"}
                               </span>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-
-                  {items.length > 0 && (
-                    <div className="mb-3 flex items-center gap-3">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                          style={{ width: `${Math.round((verifiedItemsCount / items.length) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
-                        {verifiedItemsCount}/{items.length} đầu sách
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="divide-y divide-border">
-                    {items.map((item) => (
-                      <div key={item.id} className="py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[13px] text-foreground truncate">
-                              {item.book_variants?.books.title || item.book_variants?.sku}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">SKU {item.book_variants?.sku}</p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="text-[12px] text-muted-foreground">
-                              {item.scanned_qty}/{item.expected_qty}
+                              {unexpectedTitles.length > 0 && (
+                                <span
+                                  title={`AI phát hiện: ${unexpectedTitles.join(", ")}`}
+                                  className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400"
+                                >
+                                  ⚠️ Nghi lẫn đơn
+                                </span>
+                              )}
                             </span>
-                            {item.status === "VERIFIED" ? <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" /> : null}
-                          </div>
-                        </div>
-                        {item.expected_qty > 1 && (
-                          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${item.status === "VERIFIED" ? "bg-emerald-500" : "bg-primary"}`}
-                              style={{ width: `${Math.min(100, Math.round((item.scanned_qty / item.expected_qty) * 100))}%` }}
-                            />
-                          </div>
-                        )}
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    ) : null}
 
-                  {lastScanFeedback && !lastScanFeedback.ok ? (
-                    <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
-                      {lastScanFeedback.message}
-                    </p>
-                  ) : null}
+                    {items.length > 0 && (
+                      <div className="mb-3 flex items-center gap-3">
+                        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                            style={{ width: `${Math.round((verifiedItemsCount / items.length) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
+                          {verifiedItemsCount}/{items.length} đầu sách
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="divide-y divide-dashed divide-border">
+                      {items.map((item) => (
+                        <div key={item.id} className="py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[14px] text-foreground truncate">
+                                {item.book_variants?.books.title || item.book_variants?.sku}
+                              </p>
+                              <p className="font-mono text-[11px] text-muted-foreground">SKU {item.book_variants?.sku}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2.5">
+                              <span className="font-mono text-[13px] font-medium tabular-nums text-muted-foreground">
+                                {item.scanned_qty}/{item.expected_qty}
+                              </span>
+                              {item.status === "VERIFIED" ? (
+                                <span className="inline-flex h-6 w-6 shrink-0 -rotate-6 items-center justify-center rounded-full border-2 border-emerald-500 text-emerald-500 dark:border-emerald-400 dark:text-emerald-400">
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          {item.expected_qty > 1 && (
+                            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${item.status === "VERIFIED" ? "bg-emerald-500" : "bg-primary"}`}
+                                style={{ width: `${Math.min(100, Math.round((item.scanned_qty / item.expected_qty) * 100))}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {lastScanFeedback && !lastScanFeedback.ok ? (
+                      <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                        {lastScanFeedback.message}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               </FadeItem>
 
               <FadeItem>
-                <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none flex items-center justify-between gap-3">
-                  <p className="text-[12px] text-muted-foreground">
+                <div className="rounded-xl border border-border bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+                  <p className="mb-3 text-center text-[12px] text-muted-foreground">
                     {recordCountdown !== null && countdownTaskIdRef.current === task.id
                       ? `Đã scan đủ — camera ghi thêm ${recordCountdown}s trước khi hoàn tất.`
                       : allVerified
@@ -641,9 +665,9 @@ export function PackingPage() {
                   <button
                     disabled={!allVerified || task.status === "COMPLETED" || (completingCurrentTask && recordCountdown === null)}
                     onClick={handleCompletePackingNow}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   >
-                    {task.status !== "COMPLETED" && !completingCurrentTask && <CheckCircle2 className="h-4 w-4" />}
+                    {task.status !== "COMPLETED" && !completingCurrentTask && <CheckCircle2 className="h-5 w-5" />}
                     {task.status === "COMPLETED"
                       ? "Đã hoàn tất"
                       : recordCountdown !== null && countdownTaskIdRef.current === task.id

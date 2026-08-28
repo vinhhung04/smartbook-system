@@ -162,6 +162,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
       { path: "forbidden", lazy: { Component: async () => (await import("@/components/pages/forbidden")).ForbiddenPage } },
+      { path: "messages", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.messaging), lazy: { Component: async () => (await import("@/components/pages/messages")).MessagesPage } },
       { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), lazy: { Component: async () => (await import("@/components/pages/my-warehouse-tasks")).MyWarehouseTasksPage } },
       { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestSelf), lazy: { Component: async () => (await import("@/components/pages/my-purchase-requests")).MyPurchaseRequestsPage } },
       { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportSelf), lazy: { Component: async () => (await import("@/components/pages/my-exception-reports")).MyExceptionReportsPage } },
