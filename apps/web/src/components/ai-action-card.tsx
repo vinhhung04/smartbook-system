@@ -1,69 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, CheckCircle, XCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen } from 'lucide-react';
+import { Sparkles, CheckCircle, XCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen, ShieldCheck } from 'lucide-react';
 import { aiService, type PendingAction } from '@/services/ai';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { userService, type WarehouseStaffOption } from '@/services/user';
 import { supplierService, type Supplier } from '@/services/supplier';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/http-clients';
+import { StatusBadge } from '@/components/status-badge';
+import { getStatusVariant } from '@/lib/status-registry';
+import { AI_ACTION_TYPE_LABEL, AI_ACTION_STATUS_LABEL } from '@/lib/ai-action-labels';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Shared confirm/cancel card for an AI-proposed action (PendingAction). Used by both
 // the floating chatbot widget (ai-chatbot.tsx) and the Decision Assistant page
 // (pages/ai-assistant.tsx) so the two surfaces render the same action UX.
 
-function RiskBadge({ risk }: { risk: string }) {
-  const map: Record<string, string> = {
-    LOW: 'bg-emerald-100 text-emerald-700',
-    MEDIUM: 'bg-amber-100 text-amber-700',
-    HIGH: 'bg-red-100 text-red-700',
-  };
-  return (
-    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${map[risk] ?? 'bg-gray-100 text-gray-600'}`}>
-      {risk}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    PENDING_CONFIRMATION: 'bg-blue-100 text-blue-700',
-    EXECUTED: 'bg-emerald-100 text-emerald-700',
-    CANCELLED: 'bg-gray-100 text-gray-500',
-    EXPIRED: 'bg-red-100 text-red-600',
-    FAILED: 'bg-red-100 text-red-700',
-  };
-  const label: Record<string, string> = {
-    PENDING_CONFIRMATION: 'Chờ xác nhận',
-    EXECUTED: 'Đã thực thi',
-    CANCELLED: 'Đã hủy',
-    EXPIRED: 'Hết hạn',
-    FAILED: 'Thất bại',
-  };
-  return (
-    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${map[status] ?? 'bg-gray-100 text-gray-500'}`}>
-      {label[status] ?? status}
-    </span>
-  );
-}
-
 function ActionTypeIcon({ type }: { type: string }) {
   const icons: Record<string, React.ReactNode> = {
-    CREATE_REORDER_DRAFT: <ShoppingCart size={13} className="text-indigo-600" />,
-    CREATE_REPORT_DRAFT: <FileText size={13} className="text-indigo-600" />,
-    CREATE_RESERVATION_DRAFT: <BookOpen size={13} className="text-indigo-600" />,
-    CREATE_STOCK_ALERT: <Bell size={13} className="text-indigo-600" />,
-    CREATE_STAFF_TASK_DRAFT: <ClipboardList size={13} className="text-indigo-600" />,
+    CREATE_REORDER_DRAFT: <ShoppingCart size={13} className="text-indigo-600 dark:text-indigo-400" />,
+    CREATE_REPORT_DRAFT: <FileText size={13} className="text-indigo-600 dark:text-indigo-400" />,
+    CREATE_RESERVATION_DRAFT: <BookOpen size={13} className="text-indigo-600 dark:text-indigo-400" />,
+    CREATE_STOCK_ALERT: <Bell size={13} className="text-indigo-600 dark:text-indigo-400" />,
+    CREATE_STAFF_TASK_DRAFT: <ClipboardList size={13} className="text-indigo-600 dark:text-indigo-400" />,
   };
-  return <>{icons[type] ?? <Sparkles size={13} className="text-indigo-600" />}</>;
+  return <>{icons[type] ?? <Sparkles size={13} className="text-indigo-600 dark:text-indigo-400" />}</>;
 }
-
-const ACTION_TYPE_LABEL: Record<string, string> = {
-  CREATE_REORDER_DRAFT: 'Đề xuất nhập sách',
-  CREATE_REPORT_DRAFT: 'Tạo báo cáo',
-  CREATE_RESERVATION_DRAFT: 'Đặt chỗ sách',
-  CREATE_STOCK_ALERT: 'Cảnh báo tồn kho',
-  CREATE_STAFF_TASK_DRAFT: 'Task cho staff',
-};
 
 // ── Payload preview by action type ────────────────────────────────────────────
 
@@ -72,7 +34,7 @@ function PayloadPreview({ action }: { action: PendingAction }) {
 
   if (action.type === 'CREATE_REORDER_DRAFT') {
     const items: any[] = p.items || [];
-    if (!items.length) return <p className="text-gray-500 italic">Không có dữ liệu items.</p>;
+    if (!items.length) return <p className="text-muted-foreground italic">Không có dữ liệu items.</p>;
 
     // Group items by warehouse, collect supplier suggestion per warehouse
     const itemsWithWh = items.filter((it: any) => it.warehouse_id);
@@ -92,26 +54,26 @@ function PayloadPreview({ action }: { action: PendingAction }) {
     return (
       <div className="space-y-1.5">
         {warehouseGroups.length > 0 && (
-          <p className="font-medium text-gray-600 text-[11px]">
+          <p className="font-medium text-muted-foreground text-[11px]">
             Theo kho ({warehouseGroups.length} kho, {itemsWithWh.length} dòng):
           </p>
         )}
         {warehouseGroups.map((group, gi) => (
           <div key={gi} className="space-y-0.5">
-            <p className="text-[10px] font-semibold text-indigo-700">
+            <p className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
               🏭 {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} sách
               {group.supplierName && (
-                <span className="ml-1.5 font-normal text-gray-500">· NCC: {group.supplierName}</span>
+                <span className="ml-1.5 font-normal text-muted-foreground">· NCC: {group.supplierName}</span>
               )}
             </p>
             <div className="space-y-0.5 max-h-20 overflow-y-auto">
               {group.items.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
-                  <span className="truncate flex-1 text-gray-700 text-[11px]" title={item.title}>{item.title || 'Unknown'}</span>
+                <div key={i} className="flex items-center justify-between bg-card rounded px-2 py-0.5 border border-border">
+                  <span className="truncate flex-1 text-foreground text-[11px]" title={item.title}>{item.title || 'Unknown'}</span>
                   <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                    <span className="text-gray-400 text-[10px]">Còn: {item.current_stock ?? '?'}</span>
-                    <span className="text-indigo-600 font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
-                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600">HIGH</span>}
+                    <span className="text-muted-foreground text-[10px]">Còn: {item.current_stock ?? '?'}</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
+                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">HIGH</span>}
                   </div>
                 </div>
               ))}
@@ -120,17 +82,17 @@ function PayloadPreview({ action }: { action: PendingAction }) {
         ))}
         {itemsNoWh.length > 0 && (
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold text-amber-700">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
+            <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
             {itemsNoWh.slice(0, 4).map((item: any, i: number) => (
-              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100">
-                <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
-                <span className="text-gray-400 text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
+              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/20">
+                <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
+                <span className="text-muted-foreground text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
               </div>
             ))}
-            {itemsNoWh.length > 4 && <p className="text-gray-400 text-[10px] text-center">... và {itemsNoWh.length - 4} sách khác</p>}
+            {itemsNoWh.length > 4 && <p className="text-muted-foreground text-[10px] text-center">... và {itemsNoWh.length - 4} sách khác</p>}
           </div>
         )}
-        {items.length > 10 && <p className="text-gray-400 text-[10px] text-center">Tổng: {items.length} dòng</p>}
+        {items.length > 10 && <p className="text-muted-foreground text-[10px] text-center">Tổng: {items.length} dòng</p>}
       </div>
     );
   }
@@ -139,8 +101,8 @@ function PayloadPreview({ action }: { action: PendingAction }) {
     const lines = (p.report_markdown || '').split('\n').slice(0, 6);
     return (
       <div className="space-y-1">
-        <p className="font-medium text-gray-600">{p.report_title || 'Báo cáo SmartBook AI'}</p>
-        <pre className="text-[10px] text-gray-600 bg-white rounded p-2 border border-gray-100 whitespace-pre-wrap max-h-24 overflow-y-auto">
+        <p className="font-medium text-muted-foreground">{p.report_title || 'Báo cáo SmartBook AI'}</p>
+        <pre className="text-[10px] text-muted-foreground bg-card rounded p-2 border border-border whitespace-pre-wrap max-h-24 overflow-y-auto">
           {lines.join('\n')}{lines.length >= 6 ? '\n...' : ''}
         </pre>
       </div>
@@ -150,14 +112,14 @@ function PayloadPreview({ action }: { action: PendingAction }) {
   if (action.type === 'CREATE_RESERVATION_DRAFT') {
     return (
       <div className="space-y-1">
-        <div className="bg-white rounded p-2 border border-gray-100 space-y-1">
-          <p><span className="text-gray-500">Sách:</span> <span className="font-medium">{p.title_query || 'N/A'}</span></p>
-          <p><span className="text-gray-500">Variant ID:</span> {p.variant_id || p.book_variant_id || <span className="text-amber-600">Chưa có</span>}</p>
-          <p><span className="text-gray-500">Warehouse ID:</span> {p.warehouse_id || <span className="text-amber-600">Chưa có</span>}</p>
-          <p><span className="text-gray-500">Số lượng:</span> {p.quantity || 1}</p>
+        <div className="bg-card rounded p-2 border border-border space-y-1">
+          <p><span className="text-muted-foreground">Sách:</span> <span className="font-medium text-foreground">{p.title_query || 'N/A'}</span></p>
+          <p><span className="text-muted-foreground">Variant ID:</span> {p.variant_id || p.book_variant_id || <span className="text-amber-600 dark:text-amber-400">Chưa có</span>}</p>
+          <p><span className="text-muted-foreground">Warehouse ID:</span> {p.warehouse_id || <span className="text-amber-600 dark:text-amber-400">Chưa có</span>}</p>
+          <p><span className="text-muted-foreground">Số lượng:</span> {p.quantity || 1}</p>
         </div>
         {p.requires_review && (
-          <p className="text-amber-600 text-[10px]">⚠ Thiếu variant_id hoặc warehouse_id. Sẽ lưu draft, không gọi API thật.</p>
+          <p className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ Thiếu variant_id hoặc warehouse_id. Sẽ lưu draft, không gọi API thật.</p>
         )}
       </div>
     );
@@ -177,23 +139,23 @@ function PayloadPreview({ action }: { action: PendingAction }) {
 
     return (
       <div className="space-y-1.5">
-        <p className="font-medium text-gray-600 text-[11px]">
-          Loại: <span className="text-red-600">{p.alert_type || 'LOW_STOCK'}</span>
-          {' '}· Mức độ: <RiskBadge risk={p.severity || 'MEDIUM'} />
+        <p className="font-medium text-muted-foreground text-[11px] flex flex-wrap items-center gap-1.5">
+          Loại: <span className="text-red-600 dark:text-red-400">{p.alert_type || 'LOW_STOCK'}</span>
+          · Mức độ: <StatusBadge label={p.severity || 'MEDIUM'} variant={getStatusVariant('pendingActionRisk', p.severity || 'MEDIUM')} />
         </p>
         {warehouseGroups.length > 0 && (
-          <p className="text-[10px] text-gray-500 font-medium">Theo kho ({warehouseGroups.length} kho):</p>
+          <p className="text-[10px] text-muted-foreground font-medium">Theo kho ({warehouseGroups.length} kho):</p>
         )}
         {warehouseGroups.map((group, gi) => (
           <div key={gi} className="space-y-0.5">
-            <p className="text-[10px] font-semibold text-red-700">🏭 {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} cảnh báo</p>
+            <p className="text-[10px] font-semibold text-red-700 dark:text-red-400">🏭 {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} cảnh báo</p>
             <div className="space-y-0.5 max-h-16 overflow-y-auto">
               {group.items.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
-                  <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
+                <div key={i} className="flex items-center justify-between bg-card rounded px-2 py-0.5 border border-border">
+                  <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
                   <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                    <span className="text-gray-400 text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
-                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600">HIGH</span>}
+                    <span className="text-muted-foreground text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
+                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">HIGH</span>}
                   </div>
                 </div>
               ))}
@@ -202,11 +164,11 @@ function PayloadPreview({ action }: { action: PendingAction }) {
         ))}
         {itemsNoWh.length > 0 && (
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold text-amber-700">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
+            <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">⚠ Chưa xác định kho ({itemsNoWh.length} sách):</p>
             {itemsNoWh.slice(0, 3).map((item: any, i: number) => (
-              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100">
-                <span className="truncate flex-1 text-gray-700 text-[11px]">{item.title || 'Unknown'}</span>
-                <span className="text-gray-400 text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
+              <div key={i} className="flex items-center justify-between bg-amber-50 rounded px-2 py-0.5 border border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/20">
+                <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
+                <span className="text-muted-foreground text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
               </div>
             ))}
           </div>
@@ -219,22 +181,22 @@ function PayloadPreview({ action }: { action: PendingAction }) {
     const relatedItems: any[] = p.related_items || [];
     return (
       <div className="space-y-1.5">
-        <div className="bg-white rounded p-2 border border-gray-100 space-y-1">
-          <p><span className="text-gray-500">Tiêu đề:</span> <span className="font-medium">{p.task_title || p.title || 'N/A'}</span></p>
-          <p><span className="text-gray-500">Loại task:</span> {p.task_type || 'N/A'}</p>
-          <p><span className="text-gray-500">Ưu tiên:</span> {p.priority || 'MEDIUM'}</p>
+        <div className="bg-card rounded p-2 border border-border space-y-1">
+          <p><span className="text-muted-foreground">Tiêu đề:</span> <span className="font-medium text-foreground">{p.task_title || p.title || 'N/A'}</span></p>
+          <p><span className="text-muted-foreground">Loại task:</span> {p.task_type || 'N/A'}</p>
+          <p><span className="text-muted-foreground">Ưu tiên:</span> {p.priority || 'MEDIUM'}</p>
           {!p.assignee_user_id && (
-            <p className="text-amber-600 text-[10px]">⚠ Chưa có người thực hiện — chọn nhân viên bên dưới.</p>
+            <p className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ Chưa có người thực hiện — chọn nhân viên bên dưới.</p>
           )}
         </div>
         {relatedItems.length > 0 && (
           <div className="space-y-0.5">
-            <p className="text-[10px] text-gray-500 font-medium">Sách liên quan ({relatedItems.length}):</p>
+            <p className="text-[10px] text-muted-foreground font-medium">Sách liên quan ({relatedItems.length}):</p>
             <div className="max-h-16 overflow-y-auto space-y-0.5">
               {relatedItems.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-white rounded px-2 py-0.5 border border-gray-100">
-                  <span className="truncate flex-1 text-gray-700 text-[10px]">{item.title || 'Unknown'}</span>
-                  <span className="text-gray-400 ml-2 text-[10px]">Còn: {item.quantity ?? '?'}</span>
+                <div key={i} className="flex items-center justify-between bg-card rounded px-2 py-0.5 border border-border">
+                  <span className="truncate flex-1 text-foreground text-[10px]">{item.title || 'Unknown'}</span>
+                  <span className="text-muted-foreground ml-2 text-[10px]">Còn: {item.quantity ?? '?'}</span>
                 </div>
               ))}
             </div>
@@ -398,23 +360,27 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
   };
 
   return (
-    <div className="mt-2 rounded-xl border border-indigo-100 bg-indigo-50/80 p-3 space-y-2 text-[11px]">
-      {/* Header */}
+    <div className="mt-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 space-y-2 text-[11px] dark:border-indigo-500/20 dark:bg-indigo-500/10">
+      {/* Header — framed explicitly as a recommendation awaiting sign-off, not a chat reply */}
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+        <ShieldCheck size={12} />
+        Đề xuất hành động — cần bạn xác nhận
+      </div>
       <div className="flex items-center gap-1.5">
         <ActionTypeIcon type={action.type} />
-        <span className="font-semibold text-indigo-700 flex-1">
-          {ACTION_TYPE_LABEL[action.type] ?? action.type}
+        <span className="font-semibold text-indigo-700 dark:text-indigo-300 flex-1">
+          {AI_ACTION_TYPE_LABEL[action.type] ?? action.type}
         </span>
-        <RiskBadge risk={action.risk} />
-        <StatusBadge status={localStatus} />
+        <StatusBadge label={action.risk} variant={getStatusVariant('pendingActionRisk', action.risk)} />
+        <StatusBadge label={AI_ACTION_STATUS_LABEL[localStatus] ?? localStatus} variant={getStatusVariant('aiAction', localStatus)} />
       </div>
 
       {/* Summary */}
-      <p className="text-gray-700">{action.summary}</p>
+      <p className="text-foreground">{action.summary}</p>
 
       {/* Review warning */}
       {action.requires_review && (
-        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-700">
+        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400">
           <AlertTriangle size={11} className="mt-0.5 shrink-0" />
           <span>Cần xem xét thêm trước khi xác nhận. Có thể chỉ tạo draft, không gọi API thật.</span>
         </div>
@@ -424,7 +390,7 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       {action.warnings && action.warnings.length > 0 && (
         <div className="space-y-0.5">
           {action.warnings.slice(0, 3).map((w, i) => (
-            <p key={i} className="text-amber-600 text-[10px]">⚠ {w}</p>
+            <p key={i} className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ {w}</p>
           ))}
         </div>
       )}
@@ -434,17 +400,17 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
 
       {/* Warehouse resolution status banners */}
       {isReorder && !isDone && warehouseResolutionStatus === 'RESOLVED' && resolvedWarehouseCode && (
-        <div className="text-[10px] bg-green-50 border border-green-200 rounded-lg px-2 py-1.5 text-green-700">
+        <div className="text-[10px] bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">
           Kho xác định từ yêu cầu của bạn: <strong>{resolvedWarehouseCode} — {resolvedWarehouseName}</strong>
         </div>
       )}
       {isReorder && !isDone && warehouseResolutionStatus === 'AMBIGUOUS' && (
-        <div className="text-[10px] bg-yellow-50 border border-yellow-200 rounded-lg px-2 py-1.5 text-yellow-700">
+        <div className="text-[10px] bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400">
           ⚠ AI tìm thấy {warehouseCandidates.length} kho khớp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn đúng kho cần tạo phiếu bên dưới.
         </div>
       )}
       {isReorder && !isDone && warehouseResolutionStatus === 'NOT_FOUND' && warehouseHint && (
-        <div className="text-[10px] bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 text-red-700">
+        <div className="text-[10px] bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 text-red-700 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400">
           ⚠ Không tìm thấy kho phù hợp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn kho từ danh sách.
         </div>
       )}
@@ -452,7 +418,7 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       {/* Warehouse selector for stock alerts, reorder fallback, ambiguous/not-found resolution */}
       {needsWarehouseSelector && !isDone && (
         <div className="space-y-1">
-          <label className="text-[10px] font-medium text-gray-600">
+          <label className="text-[10px] font-medium text-muted-foreground">
             {warehouseResolutionStatus === 'AMBIGUOUS'
               ? `Chọn kho (tìm thấy ${warehouseCandidates.length} kho khớp)`
               : warehouseResolutionStatus === 'NOT_FOUND'
@@ -465,23 +431,23 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
           {warehouseLoadError ? (
             <p className="text-[10px] text-red-500">{warehouseLoadError}</p>
           ) : warehouses.length === 0 && warehouseCandidates.length === 0 ? (
-            <p className="text-[10px] text-gray-400 italic">Đang tải danh sách kho...</p>
+            <p className="text-[10px] text-muted-foreground italic">Đang tải danh sách kho...</p>
           ) : (
-            <select
-              value={selectedWarehouseId}
-              onChange={(e) => setSelectedWarehouseId(e.target.value)}
-              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            >
-              <option value="">-- Chọn kho --</option>
-              {(warehouseResolutionStatus === 'AMBIGUOUS' && warehouseCandidates.length > 0
-                ? warehouseCandidates
-                : warehouses
-              ).map((wh) => (
-                <option key={wh.id} value={wh.id}>
-                  {wh.name} ({wh.code})
-                </option>
-              ))}
-            </select>
+            <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+              <SelectTrigger size="sm" className="w-full text-[11px]">
+                <SelectValue placeholder="-- Chọn kho --" />
+              </SelectTrigger>
+              <SelectContent>
+                {(warehouseResolutionStatus === 'AMBIGUOUS' && warehouseCandidates.length > 0
+                  ? warehouseCandidates
+                  : warehouses
+                ).map((wh) => (
+                  <SelectItem key={wh.id} value={wh.id}>
+                    {wh.name} ({wh.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       )}
@@ -489,32 +455,35 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       {/* Supplier selector for reorder drafts (optional) */}
       {isReorder && !isDone && (
         <div className="space-y-1">
-          <label className="text-[10px] font-medium text-gray-600">
+          <label className="text-[10px] font-medium text-muted-foreground">
             Nhà cung cấp{' '}
-            <span className="text-gray-400 font-normal">(tùy chọn — ghi vào phiếu như gợi ý cho quản lý)</span>
+            <span className="text-muted-foreground/70 font-normal">(tùy chọn — ghi vào phiếu như gợi ý cho quản lý)</span>
           </label>
           {suppliers.length === 0 ? (
-            <p className="text-[10px] text-gray-400 italic">Đang tải hoặc chưa có NCC trong hệ thống...</p>
+            <p className="text-[10px] text-muted-foreground italic">Đang tải hoặc chưa có NCC trong hệ thống...</p>
           ) : (
-            <select
+            <Select
               value={selectedSupplierId}
-              onChange={(e) => {
-                setSelectedSupplierId(e.target.value);
-                const s = suppliers.find((sup) => sup.id === e.target.value);
+              onValueChange={(value) => {
+                setSelectedSupplierId(value);
+                const s = suppliers.find((sup) => sup.id === value);
                 setSelectedSupplierName(s?.name || '');
               }}
-              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
             >
-              <option value="">-- Dùng NCC gợi ý tự động theo từng sách --</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}{s.code ? ` (${s.code})` : ''}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger size="sm" className="w-full text-[11px]">
+                <SelectValue placeholder="-- Dùng NCC gợi ý tự động theo từng sách --" />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}{s.code ? ` (${s.code})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {!selectedSupplierId && (
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-muted-foreground">
               Hệ thống sẽ dùng NCC liên kết với từng đầu sách (nếu có). Nếu chưa có liên kết, phiếu vẫn được tạo và quản lý chọn NCC khi duyệt.
             </p>
           )}
@@ -524,24 +493,24 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       {/* Staff assignee selector for staff task drafts */}
       {isStaffTask && !action.payload?.assignee_user_id && !isDone && (
         <div className="space-y-1">
-          <label className="text-[10px] font-medium text-gray-600">
+          <label className="text-[10px] font-medium text-muted-foreground">
             Giao cho nhân viên <span className="text-red-500">*</span>
           </label>
           {staffList.length === 0 ? (
-            <p className="text-[10px] text-gray-400 italic">Đang tải danh sách nhân viên...</p>
+            <p className="text-[10px] text-muted-foreground italic">Đang tải danh sách nhân viên...</p>
           ) : (
-            <select
-              value={selectedAssigneeId}
-              onChange={(e) => setSelectedAssigneeId(e.target.value)}
-              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            >
-              <option value="">-- Chọn nhân viên --</option>
-              {staffList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.full_name || s.username}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedAssigneeId} onValueChange={setSelectedAssigneeId}>
+              <SelectTrigger size="sm" className="w-full text-[11px]">
+                <SelectValue placeholder="-- Chọn nhân viên --" />
+              </SelectTrigger>
+              <SelectContent>
+                {staffList.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.full_name || s.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       )}
@@ -549,46 +518,44 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       {/* Buttons */}
       {!isDone && (
         <div className="flex gap-2 pt-0.5">
-          <button
+          <Button
+            type="button"
+            size="sm"
             onClick={() => void handleConfirm()}
             disabled={confirming || (needsWarehouseSelector && !!warehouseLoadError)}
-            className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[11px] font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+            loading={confirming}
+            loadingLabel="Đang xử lý..."
+            className="flex-1 text-[11px]"
           >
-            {confirming ? (
-              <>
-                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Đang xử lý...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={11} />
-                Xác nhận
-              </>
-            )}
-          </button>
-          <button
+            <CheckCircle size={11} />
+            Xác nhận
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => void handleCancel()}
             disabled={confirming}
-            className="flex-1 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[11px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+            className="flex-1 text-[11px]"
           >
             <XCircle size={11} />
             Hủy
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Done states */}
       {localStatus === 'EXECUTED' && (
-        <div className="flex items-center gap-1 text-emerald-600 font-medium">
+        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
           <CheckCircle size={11} />
           Đã xác nhận. Xem kết quả bên dưới.
         </div>
       )}
       {localStatus === 'CANCELLED' && (
-        <p className="text-gray-400">Hành động đã bị hủy.</p>
+        <p className="text-muted-foreground">Hành động đã bị hủy.</p>
       )}
       {localStatus === 'EXPIRED' && (
-        <p className="text-red-500">Hành động đã hết hạn. Hãy hỏi AI để tạo lại.</p>
+        <p className="text-red-500 dark:text-red-400">Hành động đã hết hạn. Hãy hỏi AI để tạo lại.</p>
       )}
     </div>
   );

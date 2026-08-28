@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { motion } from "motion/react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { Eye, EyeOff, Mail, Lock, Loader2, TriangleAlert } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
@@ -8,8 +8,14 @@ import { getApiErrorMessage } from "@/services/api.ts";
 import { getHomePathForUser } from "@/lib/rbac";
 import { AuthLayout } from "@/components/auth-layout";
 
+interface FormErrors {
+  identifier?: string;
+  password?: string;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const shouldReduceMotion = useReducedMotion();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('smartbook-remember') === 'true');
@@ -17,10 +23,15 @@ export function LoginPage() {
     const saved = localStorage.getItem('smartbook-saved-identifier');
     return { identifier: saved || "", password: "" };
   });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [capsLockOn, setCapsLockOn] = useState(false);
 
   const handleLogin = async () => {
-    if (!credentials.identifier || !credentials.password) {
-      toast.error("Vui lòng nhập tài khoản và mật khẩu");
+    const nextErrors: FormErrors = {};
+    if (!credentials.identifier) nextErrors.identifier = "Vui lòng nhập tên đăng nhập hoặc email";
+    if (!credentials.password) nextErrors.password = "Vui lòng nhập mật khẩu";
+    if (nextErrors.identifier || nextErrors.password) {
+      setErrors(nextErrors);
       return;
     }
 
@@ -64,6 +75,7 @@ export function LoginPage() {
     >
       <form
         className="space-y-4 mb-6"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void handleLogin();
@@ -75,9 +87,21 @@ export function LoginPage() {
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input id="login-identifier" value={credentials.identifier} onChange={e => setCredentials({ ...credentials, identifier: e.target.value })} type="text" placeholder="Nhập email hoặc tên đăng nhập" autoComplete="username" required
-              className="w-full pl-10 pr-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
+            <input
+              id="login-identifier"
+              value={credentials.identifier}
+              onChange={e => { setCredentials({ ...credentials, identifier: e.target.value }); setErrors((prev) => ({ ...prev, identifier: undefined })); }}
+              type="text"
+              placeholder="Nhập email hoặc tên đăng nhập"
+              autoComplete="username"
+              aria-invalid={!!errors.identifier}
+              aria-describedby={errors.identifier ? "login-identifier-error" : undefined}
+              className={`w-full pl-10 pr-4 py-3 bg-input-background border rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all ${errors.identifier ? "border-destructive" : "border-input"}`}
+            />
           </div>
+          {errors.identifier && (
+            <p id="login-identifier-error" role="alert" className="mt-1.5 text-[12px] text-destructive">{errors.identifier}</p>
+          )}
         </div>
 
         <div>
@@ -86,20 +110,41 @@ export function LoginPage() {
           </label>
           <div className="relative">
             <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input id="login-password" value={credentials.password} onChange={e => setCredentials({ ...credentials, password: e.target.value })} type={showPassword ? "text" : "password"} placeholder="Nhập mật khẩu" autoComplete="current-password" required
-              className="w-full pl-10 pr-10 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
+            <input
+              id="login-password"
+              value={credentials.password}
+              onChange={e => { setCredentials({ ...credentials, password: e.target.value }); setErrors((prev) => ({ ...prev, password: undefined })); }}
+              onKeyUp={(e) => setCapsLockOn(e.getModifierState("CapsLock"))}
+              onBlur={() => setCapsLockOn(false)}
+              type={showPassword ? "text" : "password"}
+              placeholder="Nhập mật khẩu"
+              autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "login-password-error" : undefined}
+              className={`w-full pl-10 pr-10 py-3 bg-input-background border rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all ${errors.password ? "border-destructive" : "border-input"}`}
+            />
             <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          {errors.password && (
+            <p id="login-password-error" role="alert" className="mt-1.5 text-[12px] text-destructive">{errors.password}</p>
+          )}
+          {capsLockOn && !errors.password && (
+            <p className="mt-1.5 flex items-center gap-1 text-[12px] text-amber-600 dark:text-amber-400">
+              <TriangleAlert className="h-3 w-3" />
+              Đang bật Caps Lock
+            </p>
+          )}
         </div>
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-input accent-primary" />
           <span className="text-[12px] text-muted-foreground">Ghi nhớ đăng nhập</span>
         </label>
-        <motion.button type="submit" disabled={isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          className="w-full py-3 rounded-[10px] bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] font-semibold shadow-lg shadow-indigo-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
+        <motion.button type="submit" disabled={isSubmitting} whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-[10px] bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] font-semibold shadow-lg shadow-indigo-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
         </motion.button>
       </form>
