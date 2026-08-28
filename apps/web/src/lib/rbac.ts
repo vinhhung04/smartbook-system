@@ -27,6 +27,7 @@ const ADMIN_ROLES = ["ADMIN"];
 
 export const ROUTE_ACCESS = {
   internal: { roles: INTERNAL_ROLES },
+  messaging: { roles: INTERNAL_ROLES },
   catalog: { roles: [...MANAGER_OPERATION_ROLES, ...STAFF_TRACKING_ROLES, ...LIBRARY_ROLES, "CUSTOMER"], permissions: ["inventory.catalog.read"] },
   managerInventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   inventoryRead: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },

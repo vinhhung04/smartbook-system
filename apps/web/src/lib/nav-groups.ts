@@ -3,7 +3,7 @@ import {
   Sparkles, ThumbsUp, BookMarked, Users, Shield,
   UserRound, CalendarClock, HandCoins, Layers3,
   MapPinned, ListOrdered, Inbox, Hand, Truck, Activity, Receipt, BarChart3, ScrollText, Crown, ClipboardCheck, ClipboardList,
-  ShoppingCart, AlertTriangle, PackageCheck, MessageCircle, Gauge,
+  ShoppingCart, AlertTriangle, PackageCheck, MessageCircle, Gauge, MessagesSquare,
 } from "lucide-react";
 import { ROUTE_ACCESS } from "@/lib/rbac";
 
@@ -21,6 +21,14 @@ export const navGroups = [
       { to: "/my-exception-reports", icon: AlertTriangle, labelKey: "sidebar.my_exception_reports", access: ROUTE_ACCESS.exceptionReportSelf, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
       { to: "/staff-tasks", icon: ClipboardCheck, labelKey: "sidebar.staff_tasks", access: ROUTE_ACCESS.staffTaskProgress, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-700", iconBg: "bg-violet-500/10" },
       { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+    ],
+  },
+  {
+    labelKey: "sidebar.group.communication",
+    color: "text-indigo-400",
+    dotColor: "bg-indigo-400",
+    items: [
+      { to: "/messages", icon: MessagesSquare, labelKey: "sidebar.messages", access: ROUTE_ACCESS.messaging, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
     ],
   },
   {

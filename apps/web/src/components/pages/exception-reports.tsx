@@ -1,13 +1,28 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, RefreshCw, CheckCircle, X, UserCheck } from "lucide-react";
+import { AlertTriangle, RefreshCw, CheckCircle, X, UserCheck, Inbox, ClipboardCheck, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { getPaginationRange } from "@/lib/pagination";
+import { cn } from "@/components/ui/utils";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
 import { userService, type WarehouseStaffOption } from "@/services/user";
@@ -29,7 +44,18 @@ const EXCEPTION_TYPE_LABELS: Record<string, string> = {
   OTHER: "Khác",
 };
 
-const STATUS_FILTERS = ["ALL", "OPEN", "ACKNOWLEDGED", "RESOLVED"];
+const STATUS_FILTERS = ["ALL", "OPEN", "ACKNOWLEDGED", "RESOLVED"] as const;
+const STATUS_LABELS: Record<string, string> = {
+  ALL: "Tất cả",
+  OPEN: "Đang mở",
+  ACKNOWLEDGED: "Đã tiếp nhận",
+  RESOLVED: "Đã xử lý",
+};
+
+const PAGE_SIZE = 20;
+// Backend has no hard cap on `limit` (see exception-report.controller.js) — fetch a generous
+// bounded batch instead of the previous default (limit=50), which silently truncated the list.
+const FETCH_LIMIT = 200;
 
 function statusVariant(status: string) {
   return getStatusVariant("exceptionReport", status);
@@ -45,7 +71,9 @@ function formatDate(value: string | null | undefined) {
 export function ExceptionReportsPage() {
   const [reports, setReports] = useState<ExceptionReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [resolveState, setResolveState] = useState<{ id: string; notes: string } | null>(null);
   const [resolving, setResolving] = useState(false);
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
@@ -55,7 +83,10 @@ export function ExceptionReportsPage() {
   const load = async (status?: string) => {
     setLoading(true);
     try {
-      const res = await exceptionReportService.getAll(status && status !== "ALL" ? { status } : {});
+      const res = await exceptionReportService.getAll({
+        ...(status && status !== "ALL" ? { status } : {}),
+        limit: FETCH_LIMIT,
+      });
       setReports(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Không tải được danh sách báo cáo sự cố"));
@@ -71,6 +102,32 @@ export function ExceptionReportsPage() {
       setWarehouseStaff(Array.isArray(res.data) ? res.data : []);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => { setPage(1); }, [query, statusFilter]);
+
+  const stats = useMemo(() => ({
+    total: reports.length,
+    open: reports.filter((r) => r.status === "OPEN").length,
+    acknowledged: reports.filter((r) => r.status === "ACKNOWLEDGED").length,
+    resolved: reports.filter((r) => r.status === "RESOLVED").length,
+  }), [reports]);
+
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return reports;
+    return reports.filter((r) => (
+      r.report_number.toLowerCase().includes(keyword)
+      || r.warehouses?.code?.toLowerCase().includes(keyword)
+      || r.warehouses?.name?.toLowerCase().includes(keyword)
+      || r.note?.toLowerCase().includes(keyword)
+      || (TASK_TYPE_LABELS[r.task_type] || r.task_type).toLowerCase().includes(keyword)
+      || (EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type).toLowerCase().includes(keyword)
+    ));
+  }, [reports, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleAssign = async (reportId: string) => {
     const staffId = assignState[reportId];
@@ -119,60 +176,108 @@ export function ExceptionReportsPage() {
           iconBg="bg-red-50 dark:bg-red-500/10"
           iconColor="text-red-700 dark:text-red-400"
           actions={
-            <>
-              <select
-                className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                {STATUS_FILTERS.map((s) => (
-                  <option key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</option>
-                ))}
-              </select>
-              <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                Làm mới
-              </Button>
-            </>
+            <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
           }
         />
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, delay: 0.05 }}
+        className="grid grid-cols-2 gap-4 sm:grid-cols-4"
+      >
+        <StatCard label="Tổng số" value={stats.total} icon={Inbox} variant="default" />
+        <StatCard label="Đang mở" value={stats.open} icon={AlertTriangle} variant="danger" />
+        <StatCard label="Đã tiếp nhận" value={stats.acknowledged} icon={ClipboardCheck} variant="warning" />
+        <StatCard label="Đã xử lý" value={stats.resolved} icon={ShieldCheck} variant="success" />
       </motion.div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
         Giải quyết báo cáo sự cố KHÔNG tự động điều chỉnh tồn kho. Nếu cần chỉnh tồn kho, sử dụng chức năng Stock Adjustment riêng.
       </div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, delay: 0.1 }}
+      >
+        <FilterBar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Tìm mã báo cáo, kho, mô tả..."
+          filters={
+            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
+              {STATUS_FILTERS.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all",
+                    statusFilter === status
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  )}
+                >
+                  {STATUS_LABELS[status] ?? status}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </motion.div>
+
       <SectionCard noPadding>
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">Danh sách báo cáo sự cố</h2>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {["Mã báo cáo", "Kho", "Loại task", "Loại sự cố", "SL dự kiến", "SL thực tế", "Mô tả", "Trạng thái", "Tạo lúc", "Giao xử lý", "Thao tác"].map((h) => (
+                {["Mã báo cáo", "Kho", "Task / Sự cố", "Chênh lệch", "Mô tả", "Trạng thái", "Tạo lúc", "Giao xử lý", "Thao tác"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonTableRow columns={11} rows={4} />
-              ) : reports.length === 0 ? (
+                <SkeletonTableRow columns={9} rows={4} />
+              ) : paged.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-5 py-10">
-                    <EmptyState icon={AlertTriangle} title="Chưa có báo cáo sự cố" description="Các báo cáo từ nhân viên kho sẽ hiển thị tại đây." />
+                  <td colSpan={9} className="px-5 py-10">
+                    <EmptyState
+                      icon={AlertTriangle}
+                      variant={filtered.length === 0 && reports.length > 0 ? "no-results" : "no-data"}
+                      title={reports.length === 0 ? "Chưa có báo cáo sự cố" : "Không tìm thấy báo cáo phù hợp"}
+                      description={reports.length === 0 ? "Các báo cáo từ nhân viên kho sẽ hiển thị tại đây." : "Thử điều chỉnh tìm kiếm hoặc bộ lọc."}
+                    />
                   </td>
                 </tr>
-              ) : reports.map((r) => (
+              ) : paged.map((r) => {
+                const hasQty = r.expected_qty !== null && r.actual_qty !== null;
+                const delta = hasQty ? (r.actual_qty as number) - (r.expected_qty as number) : 0;
+                return (
                 <React.Fragment key={r.id}>
                   <tr className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3 text-[12px] font-mono text-muted-foreground">{r.report_number}</td>
                     <td className="px-4 py-3 text-[13px]">{r.warehouses?.code || "-"}</td>
-                    <td className="px-4 py-3 text-[12px]">{TASK_TYPE_LABELS[r.task_type] || r.task_type}</td>
-                    <td className="px-4 py-3 text-[13px]">{EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type}</td>
-                    <td className="px-4 py-3 text-[13px]">{r.expected_qty ?? "-"}</td>
-                    <td className="px-4 py-3 text-[13px]">{r.actual_qty ?? "-"}</td>
+                    <td className="px-4 py-3 text-[12px]">
+                      <p className="text-muted-foreground">{TASK_TYPE_LABELS[r.task_type] || r.task_type}</p>
+                      <p className="text-[13px] font-medium text-foreground">{EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type}</p>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[13px] tabular-nums">
+                      {hasQty ? (
+                        <span className="whitespace-nowrap">
+                          {r.expected_qty} → <span className={cn(
+                            "font-semibold",
+                            delta < 0 && "text-rose-600 dark:text-rose-400",
+                            delta > 0 && "text-amber-600 dark:text-amber-400",
+                            delta === 0 && "text-muted-foreground",
+                          )}>{r.actual_qty}</span>
+                        </span>
+                      ) : "-"}
+                    </td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground max-w-[200px]">
                       <span className="block truncate" title={r.note}>{r.note}</span>
                     </td>
@@ -182,26 +287,30 @@ export function ExceptionReportsPage() {
                     <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
                     <td className="px-4 py-3 text-[12px]">
                       {warehouseStaff.length > 0 && r.status !== "RESOLVED" && (
-                        <div className="flex items-center gap-1">
-                          <select
+                        <div className="flex items-center gap-1.5">
+                          <Select
                             value={assignState[r.id] || r.assigned_to_user_id || ""}
-                            onChange={(e) => setAssignState((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                            className="h-7 rounded border border-border bg-card px-1.5 text-[11px]"
+                            onValueChange={(value) => setAssignState((prev) => ({ ...prev, [r.id]: value }))}
                           >
-                            <option value="">Chọn nhân viên</option>
-                            {warehouseStaff.map((s) => (
-                              <option key={s.id} value={s.id}>{s.full_name}</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
+                            <SelectTrigger size="sm" className="h-7 w-[140px] text-[11px]">
+                              <SelectValue placeholder="Chọn nhân viên" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouseStaff.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            variant="warning-outline"
                             disabled={assigningId === r.id}
                             onClick={() => void handleAssign(r.id)}
                             aria-label="Giao xử lý"
-                            className="h-7 rounded bg-amber-500 px-2 text-[10px] font-semibold text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                            className="h-7 w-7 p-0"
                           >
                             <UserCheck className="h-3 w-3" />
-                          </button>
+                          </Button>
                         </div>
                       )}
                       {r.assigned_to_user_id && warehouseStaff.length === 0 && (
@@ -210,9 +319,9 @@ export function ExceptionReportsPage() {
                     </td>
                     <td className="px-4 py-3 text-[12px]">
                       {r.status !== "RESOLVED" && (
-                        <Button type="button" size="sm" disabled={resolving}
+                        <Button type="button" size="sm" variant="success-outline" disabled={resolving}
                           onClick={() => setResolveState(resolveState?.id === r.id ? null : { id: r.id, notes: "" })}
-                          className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
+                        >
                           <CheckCircle className="h-3 w-3" /> Xử lý
                         </Button>
                       )}
@@ -225,20 +334,18 @@ export function ExceptionReportsPage() {
                   </tr>
                   {resolveState?.id === r.id && (
                     <tr key={`${r.id}-resolve`} className="bg-emerald-50/50 dark:bg-emerald-500/10 border-b border-border">
-                      <td colSpan={11} className="px-4 py-3">
+                      <td colSpan={9} className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            className="flex-1 rounded-md border border-emerald-200 bg-card px-3 py-1.5 text-[13px] dark:border-emerald-500/20"
+                          <Input
+                            className="flex-1"
                             placeholder="Ghi chú xử lý (tùy chọn — không tự động điều chỉnh stock)..."
                             value={resolveState.notes}
                             onChange={(e) => setResolveState({ ...resolveState, notes: e.target.value })}
                           />
-                          <Button type="button" size="sm" disabled={resolving} onClick={() => void handleResolve()}
-                            className="bg-emerald-600 hover:bg-emerald-700 h-7 px-3 text-[11px]">
+                          <Button type="button" size="sm" variant="success-outline" disabled={resolving} onClick={() => void handleResolve()}>
                             Xác nhận xử lý
                           </Button>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} aria-label="Hủy" className="h-7 px-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} aria-label="Hủy" className="h-8 px-2">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
@@ -246,10 +353,61 @@ export function ExceptionReportsPage() {
                     </tr>
                   )}
                 </React.Fragment>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
+
+        {!loading && filtered.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[12px] text-muted-foreground">
+              Hiển thị <span className="font-medium text-foreground">{paged.length}</span> / {filtered.length} báo cáo
+            </p>
+            {totalPages > 1 && (
+              <Pagination className="mx-0 w-auto justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setPage((current) => Math.max(1, current - 1));
+                      }}
+                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                  {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                    <PaginationItem key={typeof item === "number" ? item : `${item}-${i}`}>
+                      {typeof item === "number" ? (
+                        <PaginationLink
+                          isActive={item === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setPage(item);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {item}
+                        </PaginationLink>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setPage((current) => Math.min(totalPages, current + 1));
+                      }}
+                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        )}
       </SectionCard>
     </div>
   );

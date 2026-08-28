@@ -8,6 +8,26 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import { getPaginationRange } from '@/lib/pagination';
+import { cn } from '@/components/ui/utils';
 import { getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
 import { bookService } from '@/services/book';
@@ -15,6 +35,16 @@ import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
+
+const PAGE_SIZE = 20;
+// Backend caps pageSize at 100 (see loan.controller.js parsePagination) — fetch the max in
+// one request instead of the previous unparameterized call, which silently capped at 20 loans.
+const FETCH_PAGE_SIZE = 100;
+
+function daysOverdue(dueDate: string): number {
+  const diffMs = Date.now() - new Date(dueDate).getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
 
 const STATUS_LABELS: Record<string, string> = {
   ALL: 'Tất cả',
@@ -32,6 +62,10 @@ export function BorrowLoansPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | LoanStatus>('ALL');
+  const [page, setPage] = useState(1);
+  const [renewalDialog, setRenewalDialog] = useState<{ request: RenewalRequest; decision: 'APPROVE' | 'REJECT' } | null>(null);
+  const [renewalReason, setRenewalReason] = useState('');
+  const [submittingRenewal, setSubmittingRenewal] = useState(false);
   const [showDirectLoan, setShowDirectLoan] = useState(false);
   const directLoanModalRef = useRef<HTMLDivElement>(null);
   const closeDirectLoan = () => setShowDirectLoan(false);
@@ -54,7 +88,7 @@ export function BorrowLoansPage() {
     try {
       setLoading(true);
       const [response, renewals] = await Promise.all([
-        borrowService.getLoans(),
+        borrowService.getLoans({ pageSize: FETCH_PAGE_SIZE }),
         borrowService.getRenewalRequests({ status: 'PENDING', pageSize: 20 }),
       ]);
       setLoans(response.data ?? []);
@@ -70,6 +104,10 @@ export function BorrowLoansPage() {
     void loadLoans();
   }, []);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter]);
+
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return loans.filter((loan) => {
@@ -82,6 +120,10 @@ export function BorrowLoansPage() {
       );
     });
   }, [loans, query, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openConfirm = (title: string, description: string, variant: 'default' | 'destructive', action: () => Promise<void>) => {
     setConfirmState({ open: true, title, description, variant, onConfirm: action });
@@ -184,20 +226,26 @@ export function BorrowLoansPage() {
     } finally { setDlSaving(false); }
   };
 
-  const reviewRenewal = async (loanId: string, decision: 'APPROVE' | 'REJECT') => {
-    const reason = decision === 'REJECT'
-      ? window.prompt('Lý do từ chối (không bắt buộc):', '') || undefined
-      : window.prompt('Lý do chấp thuận (không bắt buộc):', '') || undefined;
+  const openRenewalDialog = (request: RenewalRequest, decision: 'APPROVE' | 'REJECT') => {
+    setRenewalReason('');
+    setRenewalDialog({ request, decision });
+  };
 
+  const submitRenewalReview = async () => {
+    if (!renewalDialog?.request.loan?.id) return;
+    setSubmittingRenewal(true);
     try {
-      await borrowService.reviewLoanRenewal(loanId, {
-        decision,
-        reason,
+      await borrowService.reviewLoanRenewal(renewalDialog.request.loan.id, {
+        decision: renewalDialog.decision,
+        reason: renewalReason.trim() || undefined,
       });
-      toast.success(decision === 'APPROVE' ? 'Đã duyệt gia hạn' : 'Đã từ chối gia hạn');
+      toast.success(renewalDialog.decision === 'APPROVE' ? 'Đã duyệt gia hạn' : 'Đã từ chối gia hạn');
+      setRenewalDialog(null);
       await loadLoans();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, decision === 'APPROVE' ? 'Duyệt gia hạn thất bại' : 'Từ chối gia hạn thất bại'));
+      toast.error(getApiErrorMessage(error, renewalDialog.decision === 'APPROVE' ? 'Duyệt gia hạn thất bại' : 'Từ chối gia hạn thất bại'));
+    } finally {
+      setSubmittingRenewal(false);
     }
   };
 
@@ -289,17 +337,15 @@ export function BorrowLoansPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
-                        onClick={() => void reviewRenewal(request.loan!.id, 'APPROVE')}
+                        variant="success-outline"
+                        onClick={() => openRenewalDialog(request, 'APPROVE')}
                       >
                         Duyệt
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                        onClick={() => void reviewRenewal(request.loan!.id, 'REJECT')}
+                        variant="danger-outline"
+                        onClick={() => openRenewalDialog(request, 'REJECT')}
                       >
                         Từ chối
                       </Button>
@@ -334,7 +380,7 @@ export function BorrowLoansPage() {
               <tbody>
                 {loading ? (
                   <SkeletonTableRow columns={7} rows={5} />
-                ) : filtered.length === 0 ? (
+                ) : paged.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
                       <EmptyState
@@ -346,13 +392,18 @@ export function BorrowLoansPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((loan, index) => (
+                  paged.map((loan, index) => {
+                    const overdueDays = loan.status === 'OVERDUE' ? daysOverdue(loan.due_date) : 0;
+                    return (
                     <motion.tr
                       key={loan.id}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.15, delay: index * 0.02 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                      className={cn(
+                        'border-b border-border last:border-0 hover:bg-muted/30 transition-colors',
+                        loan.status === 'OVERDUE' && 'bg-rose-50/40 dark:bg-rose-500/[0.04]',
+                      )}
                     >
                       <td className="px-5 py-3.5">
                         <Link to={`/borrow/loans/${loan.id}`} className="text-sm font-medium text-primary hover:underline">
@@ -361,7 +412,14 @@ export function BorrowLoansPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm">{loan.customers?.full_name || loan.customer_id}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.borrow_date).toLocaleString('vi-VN')}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                        {new Date(loan.due_date).toLocaleString('vi-VN')}
+                        {overdueDays > 0 && (
+                          <p className="font-mono text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                            Quá hạn {overdueDays} ngày
+                          </p>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5 text-sm">{loan.total_items}</td>
                       <td className="px-5 py-3.5">
                         <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
@@ -371,24 +429,21 @@ export function BorrowLoansPage() {
                           <div className="flex items-center gap-2">
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+                              variant="success-outline"
                               onClick={() => void returnLoan(loan.id)}
                             >
                               Trả sách
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                              variant="warning-outline"
                               onClick={() => void reportDamage(loan.id)}
                             >
                               Báo hư hỏng
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                              variant="danger-outline"
                               onClick={() => void markLost(loan.id)}
                             >
                               Đánh dấu mất
@@ -399,11 +454,62 @@ export function BorrowLoansPage() {
                         )}
                       </td>
                     </motion.tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
+
+          {!loading && filtered.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] text-muted-foreground">
+                Hiển thị <span className="font-medium text-foreground">{paged.length}</span> / {filtered.length} phiếu mượn
+              </p>
+              {totalPages > 1 && (
+                <Pagination className="mx-0 w-auto justify-end">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.max(1, current - 1));
+                        }}
+                        className={cn('cursor-pointer', currentPage === 1 && 'pointer-events-none opacity-50')}
+                      />
+                    </PaginationItem>
+                    {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                      <PaginationItem key={typeof item === 'number' ? item : `${item}-${i}`}>
+                        {typeof item === 'number' ? (
+                          <PaginationLink
+                            isActive={item === currentPage}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage(item);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {item}
+                          </PaginationLink>
+                        ) : (
+                          <PaginationEllipsis />
+                        )}
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.min(totalPages, current + 1));
+                        }}
+                        className={cn('cursor-pointer', currentPage === totalPages && 'pointer-events-none opacity-50')}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          )}
         </SectionCard>
       </motion.div>
 
@@ -474,6 +580,46 @@ export function BorrowLoansPage() {
         variant={confirmState.variant}
         onConfirm={confirmState.onConfirm}
       />
+
+      {/* Duyệt/từ chối gia hạn — thay cho window.prompt() trước đây */}
+      <Dialog open={renewalDialog !== null} onOpenChange={(open) => !open && setRenewalDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          {renewalDialog && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {renewalDialog.decision === 'APPROVE' ? 'Duyệt gia hạn' : 'Từ chối gia hạn'}
+                </DialogTitle>
+                <DialogDescription>
+                  {renewalDialog.request.loan?.loan_number || renewalDialog.request.loan?.id} ·{' '}
+                  {renewalDialog.request.customer?.full_name || renewalDialog.request.customer?.customer_code}
+                  {' '}· Gia hạn thêm {renewalDialog.request.requested_extension_days ?? '-'} ngày
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-foreground">
+                  Lý do {renewalDialog.decision === 'APPROVE' ? 'chấp thuận' : 'từ chối'} (không bắt buộc)
+                </label>
+                <Textarea rows={2} value={renewalReason} onChange={(event) => setRenewalReason(event.target.value)} />
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRenewalDialog(null)} disabled={submittingRenewal}>
+                  Huỷ
+                </Button>
+                <Button
+                  variant={renewalDialog.decision === 'APPROVE' ? 'success-outline' : 'danger-outline'}
+                  loading={submittingRenewal}
+                  onClick={() => void submitRenewalReview()}
+                >
+                  {renewalDialog.decision === 'APPROVE' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

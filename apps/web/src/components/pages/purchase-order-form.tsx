@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, Plus, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderLinePayload, type VariantSearchItem } from "@/services/purchase-order";
 import { supplierService, type Supplier } from "@/services/supplier";
@@ -8,8 +8,13 @@ import { warehouseService, type Warehouse } from "@/services/warehouse";
 import { getApiErrorMessage } from "@/services/api";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { cn } from "@/components/ui/utils";
 
 interface FormLine extends PurchaseOrderLinePayload {
   key: string;
@@ -45,6 +50,7 @@ export function PurchaseOrderFormPage() {
   const [lines, setLines] = useState<FormLine[]>([newLine()]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<VariantSearchItem[]>([]);
+  const [searching, setSearching] = useState(false);
   const [activeLineKey, setActiveLineKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,7 +68,7 @@ export function PurchaseOrderFormPage() {
         if (id) {
           const po = await purchaseOrderService.getById(id);
           if (!["DRAFT", "REJECTED"].includes(po.status)) {
-            toast.error("Only DRAFT or REJECTED purchase orders can be edited");
+            toast.error("Chỉ có thể sửa đơn mua hàng ở trạng thái Nháp hoặc Bị từ chối");
             navigate(`/purchase-orders/${id}`);
             return;
           }
@@ -82,7 +88,7 @@ export function PurchaseOrderFormPage() {
           })));
         }
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Failed to load purchase order form"));
+        toast.error(getApiErrorMessage(error, "Không tải được biểu mẫu đơn mua hàng"));
       } finally {
         setLoading(false);
       }
@@ -97,12 +103,16 @@ export function PurchaseOrderFormPage() {
   };
 
   const searchVariants = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
     try {
       const rows = await purchaseOrderService.searchVariants(query);
       setResults(rows);
-      if (rows.length === 0) toast.info("No variants found");
+      if (rows.length === 0) toast.info("Không tìm thấy biến thể sách nào");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Variant search failed"));
+      toast.error(getApiErrorMessage(error, "Tìm kiếm biến thể thất bại"));
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -119,16 +129,16 @@ export function PurchaseOrderFormPage() {
   };
 
   const validate = () => {
-    if (!supplierId) return "Supplier is required";
-    if (!warehouseId) return "Warehouse is required";
-    if (lines.length === 0) return "At least one line is required";
+    if (!supplierId) return "Vui lòng chọn nhà cung cấp";
+    if (!warehouseId) return "Vui lòng chọn kho nhận hàng";
+    if (lines.length === 0) return "Cần ít nhất một dòng sách";
     const seen = new Set<string>();
     for (const line of lines) {
-      if (!line.variant_id && !line.isbn13) return "Each line needs a selected variant or ISBN";
-      if (line.variant_id && seen.has(line.variant_id)) return "Duplicate variant in PO";
+      if (!line.variant_id && !line.isbn13) return "Mỗi dòng cần chọn biến thể sách hoặc nhập ISBN";
+      if (line.variant_id && seen.has(line.variant_id)) return "Có biến thể sách bị trùng trong đơn";
       if (line.variant_id) seen.add(line.variant_id);
-      if (!Number.isInteger(Number(line.ordered_qty)) || Number(line.ordered_qty) <= 0) return "Ordered qty must be greater than 0";
-      if (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0) return "Unit cost must be >= 0";
+      if (!Number.isInteger(Number(line.ordered_qty)) || Number(line.ordered_qty) <= 0) return "Số lượng đặt phải lớn hơn 0";
+      if (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0) return "Đơn giá phải lớn hơn hoặc bằng 0";
     }
     return null;
   };
@@ -157,10 +167,10 @@ export function PurchaseOrderFormPage() {
       const response = isEdit && id
         ? await purchaseOrderService.update(id, payload)
         : await purchaseOrderService.create(payload);
-      toast.success(isEdit ? "Purchase order updated" : "Purchase order created");
+      toast.success(isEdit ? "Đã cập nhật đơn mua hàng" : "Đã tạo đơn mua hàng");
       navigate(`/purchase-orders/${response.data.id}`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to save purchase order"));
+      toast.error(getApiErrorMessage(err, "Lưu đơn mua hàng thất bại"));
     } finally {
       setSaving(false);
     }
@@ -174,84 +184,127 @@ export function PurchaseOrderFormPage() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <NavLink to={id ? `/purchase-orders/${id}` : "/purchase-orders"} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back
+        Quay lại
       </NavLink>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{isEdit ? "Edit Purchase Order" : "New Purchase Order"}</h1>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">Create an internal PO and submit it for approval before receiving stock.</p>
-        </div>
-        <Button onClick={() => void save()} disabled={saving}>
-          <Save className="h-3.5 w-3.5" />
-          {saving ? "Saving..." : "Save PO"}
-        </Button>
-      </div>
+      <PageHeader
+        icon={ClipboardList}
+        title={isEdit ? "Sửa đơn mua hàng" : "Tạo đơn mua hàng"}
+        description="Tạo đơn mua hàng nội bộ và gửi duyệt trước khi nhận hàng."
+        iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+        iconColor="text-indigo-700 dark:text-indigo-400"
+        actions={
+          <Button onClick={() => void save()} loading={saving}>
+            <Save className="h-3.5 w-3.5" />
+            {saving ? "Đang lưu..." : "Lưu đơn mua hàng"}
+          </Button>
+        }
+      />
 
-      <SectionCard title="Purchase Order Info">
+      <SectionCard title="Thông tin đơn mua hàng">
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-1.5 text-[13px]">
-            <span className="font-medium">Supplier</span>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2">
-              <option value="">Select supplier</option>
-              {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-[13px]">
-            <span className="font-medium">Warehouse</span>
-            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2">
-              <option value="">Select warehouse</option>
-              {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>)}
-            </select>
-          </label>
-          <label className="space-y-1.5 text-[13px]">
-            <span className="font-medium">Expected Date</span>
-            <input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2" />
-          </label>
-          <label className="space-y-1.5 text-[13px]">
-            <span className="font-medium">Note</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note" className="w-full rounded-lg border border-input bg-background px-3 py-2" />
-          </label>
+          <div className="space-y-1.5">
+            <Label>Nhà cung cấp</Label>
+            <Select value={supplierId} onValueChange={setSupplierId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Chọn nhà cung cấp..." />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliers.map((supplier) => (
+                  <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Kho nhận hàng</Label>
+            <Select value={warehouseId} onValueChange={setWarehouseId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Chọn kho..." />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Ngày dự kiến nhận</Label>
+            <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Ghi chú</Label>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú (không bắt buộc)" />
+          </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Items" subtitle={`Estimated total: ${formatCurrency(totalAmount)}`}>
+      <SectionCard title="Danh sách sách" subtitle={`Tạm tính: ${formatCurrency(totalAmount)}`}>
         <div className="mb-4 rounded-xl border border-dashed border-input bg-muted/20 p-3">
           <div className="flex flex-col gap-2 md:flex-row">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, SKU or ISBN..." className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-[13px]" />
-            <Button type="button" variant="outline" onClick={() => void searchVariants()}>
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void searchVariants(); }}
+              placeholder="Tìm theo tên sách, SKU hoặc ISBN..."
+              className="flex-1"
+            />
+            <Button type="button" variant="outline" loading={searching} onClick={() => void searchVariants()}>
               <Search className="h-3.5 w-3.5" />
-              Search Variant
+              Tìm biến thể
             </Button>
           </div>
           {results.length > 0 && (
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {results.map((variant) => (
-                <button key={variant.variant_id} type="button" onClick={() => selectVariant(variant)} className="rounded-lg border border-input bg-card p-3 text-left text-[13px] hover:border-indigo-200 hover:bg-indigo-50 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10">
+                <button
+                  key={variant.variant_id}
+                  type="button"
+                  onClick={() => selectVariant(variant)}
+                  disabled={!activeLineKey}
+                  className="rounded-lg border border-input bg-card p-3 text-left text-[13px] hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10"
+                >
                   <div className="font-medium">{variant.title}</div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">{variant.isbn13 || variant.sku || variant.barcode || variant.variant_id}</div>
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">{variant.isbn13 || variant.sku || variant.barcode || variant.variant_id}</div>
                 </button>
               ))}
             </div>
           )}
+          {results.length > 0 && !activeLineKey && (
+            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Chọn một dòng sách bên dưới trước khi gán biến thể.</p>
+          )}
         </div>
 
         {lines.length === 0 ? (
-          <EmptyState variant="no-data" title="No lines" description="Add at least one item line" />
+          <EmptyState variant="no-data" title="Chưa có dòng sách nào" description="Thêm ít nhất một dòng sách" />
         ) : (
           <div className="space-y-3">
             {lines.map((line, index) => (
               <div key={line.key} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1.5fr_110px_130px_1fr_40px]">
-                <button type="button" onClick={() => setActiveLineKey(line.key)} className={`rounded-lg border px-3 py-2 text-left text-[13px] ${activeLineKey === line.key ? "border-indigo-300 bg-indigo-50 dark:border-indigo-500/30 dark:bg-indigo-500/10" : "border-input bg-background"}`}>
-                  <div className="font-medium">{line.title || `Line ${index + 1}: select variant`}</div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">{line.isbn13 || line.sku || line.variant_id || "Click then search above"}</div>
+                <button
+                  type="button"
+                  onClick={() => setActiveLineKey(line.key)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left text-[13px]",
+                    activeLineKey === line.key ? "border-indigo-300 bg-indigo-50 dark:border-indigo-500/30 dark:bg-indigo-500/10" : "border-input bg-background",
+                  )}
+                >
+                  <div className="font-medium">{line.title || `Dòng ${index + 1}: chọn biến thể sách`}</div>
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">{line.isbn13 || line.sku || line.variant_id || "Bấm rồi tìm ở trên"}</div>
                 </button>
-                <input type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Qty" />
-                <input type="number" min={0} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(e.target.value) })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Unit cost" />
-                <input value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} className="rounded-lg border border-input bg-background px-3 py-2 text-[13px]" placeholder="Line note" />
-                <button type="button" onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))} className="inline-flex h-10 items-center justify-center rounded-lg border border-red-100 text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10" aria-label="Remove line">
+                <Input type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="font-mono" placeholder="SL" />
+                <Input type="number" min={0} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(e.target.value) })} className="font-mono" placeholder="Đơn giá" />
+                <Input value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Ghi chú dòng" />
+                <Button
+                  type="button"
+                  variant="danger-outline"
+                  size="icon"
+                  onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
+                  aria-label="Xóa dòng"
+                >
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -260,7 +313,7 @@ export function PurchaseOrderFormPage() {
         <div className="mt-4">
           <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine()])}>
             <Plus className="h-3.5 w-3.5" />
-            Add line
+            Thêm dòng
           </Button>
         </div>
       </SectionCard>
