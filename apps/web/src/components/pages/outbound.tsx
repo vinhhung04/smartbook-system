@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CheckCircle2, PackageCheck, ScanLine, UserCheck } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { ArrowRight, Boxes, CheckCircle2, Clock, ListChecks, PackageCheck, ScanLine, Truck, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
@@ -15,35 +16,78 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { StatusBadge } from '@/components/status-badge';
+import { StatCard } from '@/components/ui/stat-card';
+import { WorkflowStepper, type WorkflowStep } from '@/components/ui';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Progress } from '@/components/ui/progress';
 import { Button, IconButton } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from '@/components/ui/pagination';
+import { getPaginationRange } from '@/lib/pagination';
+import { cn } from '@/components/ui/utils';
+import { getPickingTaskStatusVariant, getStatusVariant, TONE_CLASSNAME } from '@/lib/status-registry';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+
+const PAGE_SIZE = 10;
+const READY_STATUSES = new Set(['READY_FOR_OUTBOUND', 'READY_TO_SHIP']);
 
 function taskLabel(taskType: 'outbound' | 'transfer'): string {
   return taskType === 'transfer' ? 'Chuyển kho' : 'Xuất kho';
 }
 
+const OUTBOUND_STATUS_LABEL: Record<string, string> = {
+  APPROVED: 'Đã duyệt',
+  PICKING: 'Đang lấy',
+  PARTIAL_PICKED: 'Lấy một phần',
+  REPICKING: 'Đang re-pick',
+  READY_FOR_OUTBOUND: 'Sẵn xuất kho',
+  READY_TO_SHIP: 'Sẵn xuất kho',
+  COMPLETED: 'Hoàn tất',
+  CANCELLED: 'Đã hủy',
+};
+
 function outboundStatusBadge(status: string): { label: string; variant: string } {
-  switch (status) {
-    case 'APPROVED':     return { label: 'Đã duyệt', variant: 'info' };
-    case 'PICKING':      return { label: 'Đang lấy', variant: 'info' };
-    case 'PARTIAL_PICKED': return { label: 'Lấy một phần', variant: 'amber' };
-    case 'REPICKING':    return { label: 'Đang re-pick', variant: 'warning' };
-    case 'READY_FOR_OUTBOUND':
-    case 'READY_TO_SHIP': return { label: 'Sẵn xuất kho', variant: 'success' };
-    case 'COMPLETED':    return { label: 'Hoàn tất', variant: 'neutral' };
-    case 'CANCELLED':    return { label: 'Đã hủy', variant: 'danger' };
-    default:             return { label: status, variant: 'neutral' };
-  }
+  return {
+    label: OUTBOUND_STATUS_LABEL[status] || status,
+    variant: getStatusVariant('outbound', status),
+  };
 }
 
 function canConfirmOutbound(status: string, aggregateRemaining?: number): boolean {
-  if (status === 'READY_FOR_OUTBOUND' || status === 'READY_TO_SHIP') return true;
+  if (READY_STATUSES.has(status)) return true;
   // REPICKING allowed when aggregate pick + repick chain is complete
   if (status === 'REPICKING') return (aggregateRemaining ?? 1) === 0;
   return false;
+}
+
+function outboundWorkflowSteps(status: string): WorkflowStep[] {
+  const cancelled = status === 'CANCELLED';
+  const readyDone = READY_STATUSES.has(status) || status === 'COMPLETED';
+  const readyActive = READY_STATUSES.has(status);
+  const dispatched = status === 'COMPLETED';
+
+  return [
+    { id: 'approved', label: 'Đã duyệt', icon: CheckCircle2, status: cancelled ? 'error' : 'completed' },
+    {
+      id: 'picking',
+      label: 'Đang lấy hàng',
+      icon: ListChecks,
+      status: readyDone ? 'completed' : cancelled ? 'pending' : 'active',
+    },
+    {
+      id: 'ready',
+      label: 'Sẵn xuất kho',
+      icon: PackageCheck,
+      status: dispatched ? 'completed' : readyActive ? 'active' : 'pending',
+    },
+    { id: 'done', label: 'Đã xuất kho', icon: Truck, status: dispatched ? 'completed' : 'pending' },
+  ];
 }
 
 export function OutboundPage() {
@@ -55,6 +99,8 @@ export function OutboundPage() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
 
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'READY' | 'PROCESSING'>('ALL');
+  const [page, setPage] = useState(1);
   const [queue, setQueue] = useState<OutboundQueueItem[]>([]);
 
   const [selectedTaskType, setSelectedTaskType] = useState<'outbound' | 'transfer' | null>(null);
@@ -70,17 +116,41 @@ export function OutboundPage() {
   const currentUser = authService.getCurrentUser();
   const canManageQueue = canManageReceiving(currentUser);
 
-  const filteredQueue = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) return queue;
+  const queueStats = useMemo(() => {
+    const ready = queue.filter((item) => READY_STATUSES.has(item.status)).length;
+    const unassigned = queue.filter((item) => !item.outbound_assigned_user_id).length;
+    return { total: queue.length, ready, processing: queue.length - ready, unassigned };
+  }, [queue]);
 
-    return queue.filter((item) => (
+  const filteredQueue = useMemo(() => {
+    const statusFiltered = statusFilter === 'ALL'
+      ? queue
+      : queue.filter((item) => (statusFilter === 'READY' ? READY_STATUSES.has(item.status) : !READY_STATUSES.has(item.status)));
+
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return statusFiltered;
+
+    return statusFiltered.filter((item) => (
       item.order_number.toLowerCase().includes(keyword)
       || String(item.source_warehouse_code || '').toLowerCase().includes(keyword)
       || String(item.target_warehouse_code || '').toLowerCase().includes(keyword)
       || taskLabel(item.task_type).toLowerCase().includes(keyword)
     ));
-  }, [queue, query]);
+  }, [queue, query, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredQueue.length / PAGE_SIZE));
+  const pagedQueue = useMemo(
+    () => filteredQueue.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredQueue, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const loadQueue = async (warehouseId?: string) => {
     const response = await outboundService.getQueue(warehouseId);
@@ -149,6 +219,13 @@ export function OutboundPage() {
     }
   };
 
+  const handleBackToQueue = () => {
+    setDetail(null);
+    setSelectedTaskId('');
+    setSelectedTaskType(null);
+    setScanCode('');
+  };
+
   const handleAssignOutbound = async (task: OutboundQueueItem) => {
     const key = `${task.task_type}:${task.task_id}`;
     const staffId = assigningStaffByTask[key];
@@ -182,17 +259,17 @@ export function OutboundPage() {
 
       if (selectedTaskType === 'transfer') {
         toast.success('Đã xác nhận xuất kho. Hàng đang vận chuyển — chờ kho đích xác nhận nhận hàng.');
-      } else if (response.data.destination_receipt_number) {
-        toast.success(`Đã xuất kho. Phiếu nhập tại kho đích: ${response.data.destination_receipt_number}`);
       } else {
-        toast.success('Đã xác nhận xuất kho thành công');
+        confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
+        if (response.data.destination_receipt_number) {
+          toast.success(`Đã xuất kho. Phiếu nhập tại kho đích: ${response.data.destination_receipt_number}`);
+        } else {
+          toast.success('Đã xác nhận xuất kho thành công');
+        }
       }
 
       await loadQueue(canManageQueue ? (selectedWarehouseId || undefined) : undefined);
-      setDetail(null);
-      setSelectedTaskId('');
-      setSelectedTaskType(null);
-      setScanCode('');
+      handleBackToQueue();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Xác nhận xuất kho thất bại'));
     } finally {
@@ -215,8 +292,20 @@ export function OutboundPage() {
   }
 
   const tableHeads = canManageQueue
-    ? ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tổng SL', 'Sẵn sàng', 'Nhân viên xuất kho', 'Thao tác']
-    : ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tổng SL', 'Sẵn sàng', 'Thao tác'];
+    ? ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tiến độ', 'Nhân viên xuất kho', 'Thao tác']
+    : ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tiến độ', 'Thao tác'];
+
+  const detailAccentBorder = detail
+    ? (detail.status === 'CANCELLED'
+      ? 'border-l-red-500'
+      : detail.status === 'COMPLETED'
+        ? 'border-l-muted-foreground/30'
+        : READY_STATUSES.has(detail.status)
+          ? 'border-l-emerald-500'
+          : 'border-l-sky-500')
+    : '';
+
+  const detailConfirmable = detail ? canConfirmOutbound(detail.status, detail.aggregate_remaining_qty) : false;
 
   return (
     <PageWrapper className="space-y-5">
@@ -241,75 +330,113 @@ export function OutboundPage() {
 
       {!detail ? (
         <>
+          {canManageQueue && (
+            <FadeItem>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Tổng đơn" value={queueStats.total} icon={Boxes} variant="primary" animateValue />
+                <StatCard label="Sẵn xuất kho" value={queueStats.ready} icon={PackageCheck} variant="success" animateValue />
+                <StatCard label="Đang xử lý" value={queueStats.processing} icon={ListChecks} variant="info" animateValue />
+                <StatCard
+                  label="Chưa giao"
+                  value={queueStats.unassigned}
+                  icon={Clock}
+                  variant={queueStats.unassigned > 0 ? 'danger' : 'default'}
+                  animateValue
+                />
+              </div>
+            </FadeItem>
+          )}
+
           <FadeItem>
             <FilterBar
               searchValue={query}
               onSearchChange={setQuery}
               searchPlaceholder="Mã đơn / kho / loại đơn"
-              filters={canManageQueue ? (
-                <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Chọn kho" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Chọn kho</SelectItem>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : undefined}
+              filters={(
+                <div className="flex items-center gap-2 flex-wrap">
+                  <SegmentedControl
+                    options={[
+                      { value: 'ALL', label: 'Tất cả' },
+                      { value: 'READY', label: 'Sẵn xuất kho' },
+                      { value: 'PROCESSING', label: 'Đang xử lý' },
+                    ]}
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as 'ALL' | 'READY' | 'PROCESSING')}
+                    layoutId="outbound-status-filter"
+                    gradientClassName="from-blue-600 to-indigo-600"
+                  />
+                  {canManageQueue && (
+                    <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Chọn kho" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Chọn kho</SelectItem>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
             />
           </FadeItem>
 
           <FadeItem>
             <SectionCard noPadding>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-gradient-to-r from-sky-50/30 to-transparent">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gradient-to-r from-sky-50/30 to-transparent hover:bg-transparent dark:from-sky-500/5">
                     {tableHeads.map((head) => (
-                      <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                      <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                         {head}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredQueue.length === 0 ? (
-                    <tr>
-                      <td colSpan={tableHeads.length}>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedQueue.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={tableHeads.length} className="whitespace-normal">
                         <EmptyState variant="no-data" title="Không có đơn nào cần xuất kho" className="py-10" />
-                      </td>
-                    </tr>
-                  ) : filteredQueue.map((task) => {
+                      </TableCell>
+                    </TableRow>
+                  ) : pagedQueue.map((task) => {
                     const key = `${task.task_type}:${task.task_id}`;
                     const selectedStaffId = assigningStaffByTask[key] || '';
                     const assignedName = getAssignedStaffName(task.outbound_assigned_user_id);
                     const isAssigning = assigningTaskKey === key;
+                    const progressPct = task.total_quantity > 0 ? Math.min(100, Math.round((task.ready_quantity / task.total_quantity) * 100)) : 0;
 
                     return (
-                      <tr key={key} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                        <td className="px-4 py-3 text-[12px] font-semibold">
+                      <TableRow key={key}>
+                        <TableCell className="text-[12px] font-semibold">
                           <div>{task.order_number}</div>
                           {(task.repick_count ?? 0) > 0 && (
                             <div className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
                               {task.repick_count} repick{(task.active_repick_count ?? 0) > 0 ? ` · ${task.active_repick_count} chưa xong` : ''}
                             </div>
                           )}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{taskLabel(task.task_type)}</td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.source_warehouse_code || '-'}</td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.target_warehouse_code || '-'}</td>
-                        <td className="px-4 py-3 text-[12px]">
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{taskLabel(task.task_type)}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{task.source_warehouse_code || '-'}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{task.target_warehouse_code || '-'}</TableCell>
+                        <TableCell className="text-[12px]">
                           {(() => { const b = outboundStatusBadge(task.status); return (
                             <StatusBadge label={b.label} variant={b.variant} dot />
                           ); })()}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.total_quantity}</td>
-                        <td className="px-4 py-3 text-[12px] font-semibold">{task.ready_quantity}</td>
+                        </TableCell>
+                        <TableCell className="text-[12px] w-[140px]">
+                          <div className="flex items-center gap-2">
+                            <Progress value={progressPct} className="h-1.5 w-16" />
+                            <span className="font-mono text-[11px] font-semibold tabular-nums text-foreground whitespace-nowrap">
+                              {task.ready_quantity}/{task.total_quantity}
+                            </span>
+                          </div>
+                        </TableCell>
                         {canManageQueue ? (
-                          <td className="px-4 py-3">
+                          <TableCell>
                             {assignedName && !selectedStaffId ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 font-semibold dark:bg-emerald-500/10 dark:text-emerald-400">
@@ -317,7 +444,7 @@ export function OutboundPage() {
                                 </span>
                                 <button
                                   onClick={() => setAssigningStaffByTask((prev) => ({ ...prev, [key]: 'PICK' }))}
-                                  className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                                  className="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
                                 >
                                   Đổi
                                 </button>
@@ -349,72 +476,137 @@ export function OutboundPage() {
                                 </Button>
                               </div>
                             )}
-                          </td>
+                          </TableCell>
                         ) : null}
-                        <td className="px-4 py-3">
+                        <TableCell>
                           <Button size="sm" variant="outline" onClick={() => void handleOpen(task)}>
                             Xem & xuất <ArrowRight className="w-3 h-3" />
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
+
+              {filteredQueue.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedQueue.length}</span> / {filteredQueue.length} đơn
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn('cursor-pointer', page === 1 && 'pointer-events-none opacity-50')}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === 'number' ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn('cursor-pointer', page === totalPages && 'pointer-events-none opacity-50')}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
             </SectionCard>
           </FadeItem>
         </>
       ) : (
         <>
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-[11px] text-muted-foreground font-semibold">Đơn đang thao tác xuất kho</p>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskLabel(detail.task_type)}</h2>
-                    {(() => { const b = outboundStatusBadge(detail.status); return (
-                      <StatusBadge label={b.label} variant={b.variant} dot />
-                    ); })()}
+            <div className="relative">
+              <div className="pointer-events-none absolute -top-2 left-6 z-10 h-4 w-4 rounded-full border border-border bg-background" />
+              <div className="pointer-events-none absolute -top-2 right-6 z-10 h-4 w-4 rounded-full border border-border bg-background" />
+              <div className={cn('rounded-xl border bg-card p-5 pt-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4', detailAccentBorder)}>
+                <p className="mb-3 border-b border-dashed border-border pb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Phiếu xuất kho
+                </p>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[20px] font-bold leading-tight text-foreground">#{detail.order_number}</p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="font-mono text-[11px] text-muted-foreground">{taskLabel(detail.task_type)}</span>
+                      {(() => { const b = outboundStatusBadge(detail.status); return (
+                        <StatusBadge label={b.label} variant={b.variant} dot />
+                      ); })()}
+                    </div>
+                    <p className="text-[12px] text-muted-foreground mt-2">
+                      Nguồn: {detail.source_warehouse_code || '-'}
+                      {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
+                      {` | Số dòng: ${detail.lines.length}`}
+                    </p>
+                    {detail.aggregate_requested_qty !== undefined && (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Tổng: <span className="font-mono font-semibold tabular-nums">{detail.aggregate_picked_qty}</span>/{detail.aggregate_requested_qty} cuốn
+                        {(detail.aggregate_remaining_qty ?? 0) > 0 && (
+                          <span className="text-amber-600 dark:text-amber-400"> · Còn thiếu: {detail.aggregate_remaining_qty}</span>
+                        )}
+                      </p>
+                    )}
+                    {detail.outbound_assigned_user_id ? (
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
+                        Nhân viên xuất kho: {getAssignedStaffName(detail.outbound_assigned_user_id)}
+                      </p>
+                    ) : null}
                   </div>
-                  <p className="text-[12px] text-muted-foreground mt-1">
-                    Nguồn: {detail.source_warehouse_code || '-'}
-                    {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
-                    {` | Số dòng: ${detail.lines.length}`}
-                  </p>
-                  {detail.aggregate_requested_qty !== undefined && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Tổng: <span className="font-semibold">{detail.aggregate_picked_qty}</span>/{detail.aggregate_requested_qty} cuốn
-                      {(detail.aggregate_remaining_qty ?? 0) > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400"> · Còn thiếu: {detail.aggregate_remaining_qty}</span>
-                      )}
-                    </p>
-                  )}
-                  {detail.outbound_assigned_user_id ? (
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
-                      Nhân viên xuất kho: {getAssignedStaffName(detail.outbound_assigned_user_id)}
-                    </p>
-                  ) : null}
+                  <Button variant="outline" onClick={handleBackToQueue}>
+                    Quay lại hàng đợi
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDetail(null);
-                    setSelectedTaskId('');
-                    setSelectedTaskType(null);
-                    setScanCode('');
-                  }}
-                >
-                  Quay lại hàng đợi
-                </Button>
               </div>
             </div>
           </FadeItem>
 
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <h3 className="text-[14px] font-semibold mb-3">Quét mã và xác nhận xuất kho</h3>
+            <SectionCard title="Tiến trình xuất kho">
+              <WorkflowStepper steps={outboundWorkflowSteps(detail.status)} compact />
+            </SectionCard>
+          </FadeItem>
+
+          <FadeItem>
+            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <h3 className="text-[14px] font-semibold">Quét mã và xác nhận xuất kho</h3>
+                {detailConfirmable ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Chưa thể xuất kho
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-muted-foreground mb-3">Nhập tay hoặc quét mã đơn để xác nhận xuất kho.</p>
               <div className="flex gap-2 flex-wrap">
                 <Input
@@ -427,7 +619,7 @@ export function OutboundPage() {
                     }
                   }}
                   placeholder="Mã đơn / mã quét"
-                  className="flex-1 min-w-[200px] h-auto py-2.5"
+                  className="flex-1 min-w-[200px] h-auto py-2.5 font-mono tracking-wide"
                 />
                 <IconButton
                   variant="outline"
@@ -439,56 +631,78 @@ export function OutboundPage() {
                 </IconButton>
                 <Button
                   onClick={() => void handleConfirm()}
-                  disabled={!canConfirmOutbound(detail.status, detail.aggregate_remaining_qty)}
+                  disabled={!detailConfirmable}
                   loading={confirming}
-                  title={!canConfirmOutbound(detail.status, detail.aggregate_remaining_qty) ? `Đơn đang ở trạng thái ${detail.status} — chưa thể xuất kho` : undefined}
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                 >
                   Xác nhận xuất kho
                 </Button>
               </div>
 
+              {scanCode && (
+                <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                  Đã nhập mã: <span className="text-foreground font-semibold">{scanCode}</span>
+                </p>
+              )}
+
+              {!detailConfirmable && (
+                <p className="mt-2 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  Đơn đang ở trạng thái "{outboundStatusBadge(detail.status).label}" — chưa thể xuất kho.
+                </p>
+              )}
+
               {loadingDetail ? <p className="text-[12px] text-muted-foreground mt-3">Đang tải chi tiết...</p> : null}
             </div>
           </FadeItem>
 
           <FadeItem>
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
-              <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-gradient-to-r from-sky-50/30 to-transparent">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Sản phẩm</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">SKU/Mã vạch</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-[100px]">Yêu cầu</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-[100px]">Đã lấy</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <SectionCard noPadding>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gradient-to-r from-sky-50/30 to-transparent hover:bg-transparent dark:from-sky-500/5">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Sản phẩm</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">SKU/Mã vạch</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-[150px]">Tiến độ</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {detail.lines.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-[12px] text-muted-foreground text-center">Không có dòng nào</td>
-                    </tr>
-                  ) : detail.lines.map((line) => (
-                    <tr key={line.line_id} className="border-b border-border last:border-0 text-[12px]">
-                      <td className="px-4 py-3">
-                        <p className="text-foreground font-medium">{line.book_title}</p>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{line.sku || line.barcode || '-'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{line.quantity}</td>
-                      <td className="px-4 py-3 font-semibold">{line.ready_qty}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-            </div>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={3} className="whitespace-normal py-6 text-center text-[12px] text-muted-foreground">Không có dòng nào</TableCell>
+                    </TableRow>
+                  ) : detail.lines.map((line) => {
+                    const short = line.ready_qty < line.quantity;
+                    const linePct = line.quantity > 0 ? Math.min(100, Math.round((line.ready_qty / line.quantity) * 100)) : 0;
+
+                    return (
+                      <TableRow key={line.line_id} className={cn('border-dashed', short && 'bg-amber-50/40 dark:bg-amber-500/5')}>
+                        <TableCell className="whitespace-normal text-[12px]">
+                          <p className="text-foreground font-medium">{line.book_title}</p>
+                        </TableCell>
+                        <TableCell className="font-mono text-[12px] text-muted-foreground">{line.sku || line.barcode || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={linePct} className="h-1.5 w-16" />
+                            <span className={cn(
+                              'font-mono text-[11px] font-semibold tabular-nums whitespace-nowrap',
+                              short ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
+                            )}>
+                              {line.ready_qty}/{line.quantity}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </SectionCard>
           </FadeItem>
 
           {/* Execution chain: PICK task + REPICK children */}
           {(detail.pick_task || (detail.repick_tasks && detail.repick_tasks.length > 0)) && (
             <FadeItem>
-              <div className="rounded-xl border border-border/80 bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)]">
+              <div className="rounded-xl border border-border/80 bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">Execution Chain</p>
                 <div className="space-y-2">
                   {/* PICK root task */}
@@ -499,10 +713,7 @@ export function OutboundPage() {
                           <span className="rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-bold dark:bg-sky-500/15 dark:text-sky-400">PICK</span>
                           <span className="text-[12px] font-semibold text-sky-900 dark:text-sky-300">{detail.pick_task.task_number}</span>
                         </div>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          detail.pick_task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
-                          : detail.pick_task.status === 'PICKING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400'
-                          : 'bg-muted text-muted-foreground'}`}>
+                        <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', TONE_CLASSNAME[getPickingTaskStatusVariant(detail.pick_task.status)])}>
                           {detail.pick_task.status}
                         </span>
                       </div>
@@ -525,10 +736,7 @@ export function OutboundPage() {
                             <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold dark:bg-amber-500/15 dark:text-amber-400">REPICK</span>
                             <span className="text-[12px] font-semibold text-amber-900 dark:text-amber-300">{rt.task_number}</span>
                           </div>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            rt.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
-                            : rt.status === 'PICKING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400'
-                            : 'bg-muted text-muted-foreground'}`}>
+                          <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', TONE_CLASSNAME[getPickingTaskStatusVariant(rt.status)])}>
                             {rt.status}
                           </span>
                         </div>

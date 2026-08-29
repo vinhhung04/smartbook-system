@@ -9,28 +9,57 @@ const FEATURES = [
 ];
 
 // A shelf of book spines instead of an abstract floating shape — grounded in the
-// actual subject (a library) rather than a generic SaaS gradient-blob hero.
-const SPINE_COLORS = ["bg-white/20", "bg-indigo-300/25", "bg-violet-300/25", "bg-teal-300/20", "bg-amber-300/20", "bg-white/15", "bg-rose-300/20"];
+// actual subject (a library) rather than a generic SaaS gradient-blob hero. Given
+// real layout room at the foot of the panel (not hidden behind the centered copy),
+// with a title-tick per spine and a shelf ledge so it reads unmistakably as books
+// on a shelf rather than an abstract striped texture.
+const SPINE_COLORS = ["bg-white/25", "bg-indigo-200/30", "bg-violet-200/30", "bg-teal-200/25", "bg-white/20", "bg-rose-200/25", "bg-blue-200/25"];
 const SPINES = [
-  { w: 14, h: 88 }, { w: 9, h: 120 }, { w: 20, h: 70 }, { w: 11, h: 140 }, { w: 16, h: 95 },
-  { w: 24, h: 60 }, { w: 10, h: 110 }, { w: 13, h: 130 }, { w: 18, h: 80 }, { w: 9, h: 150 },
-  { w: 22, h: 75 }, { w: 12, h: 105 }, { w: 15, h: 90 }, { w: 19, h: 65 }, { w: 11, h: 125 },
+  { w: 16, h: 150 }, { w: 10, h: 195 }, { w: 22, h: 120 }, { w: 12, h: 230 }, { w: 18, h: 165 },
+  { w: 26, h: 100 }, { w: 11, h: 185 }, { w: 15, h: 210 }, { w: 20, h: 135 }, { w: 10, h: 245 },
+  { w: 24, h: 125 }, { w: 13, h: 175 }, { w: 17, h: 150 }, { w: 21, h: 110 }, { w: 12, h: 205 },
 ];
+
+// The one spine that stands in for SmartBook itself on its own shelf — the single
+// deliberate accent, everything else stays in the quiet indigo/violet family.
+const FEATURED_SPINE_INDEX = 7;
 
 function BookshelfSpines() {
   const shouldReduceMotion = useReducedMotion();
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-center gap-1.5 px-4" aria-hidden="true">
-      {SPINES.map((spine, i) => (
-        <motion.div
-          key={i}
-          className={`rounded-t-[3px] ${SPINE_COLORS[i % SPINE_COLORS.length]}`}
-          style={{ width: spine.w }}
-          initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
-          animate={{ height: spine.h, opacity: 1 }}
-          transition={{ duration: 0.5, delay: i * 0.03, ease: [0.22, 1, 0.36, 1] }}
-        />
-      ))}
+    <div className="relative z-10 w-full" aria-hidden="true">
+      <div className="flex items-end justify-center gap-1.5 px-6">
+        {SPINES.map((spine, i) => {
+          const featured = i === FEATURED_SPINE_INDEX;
+          return (
+            <motion.div
+              key={i}
+              className={`relative rounded-t-[3px] shadow-[inset_1px_0_0_rgba(255,255,255,0.15)] ${featured ? "bg-amber-300/70" : SPINE_COLORS[i % SPINE_COLORS.length]}`}
+              style={{ width: spine.w, height: spine.h, transformOrigin: "bottom" }}
+              initial={shouldReduceMotion ? false : { scaleY: 0, opacity: 0 }}
+              animate={{ scaleY: 1, opacity: 1 }}
+              transition={{ duration: 0.5, delay: i * 0.03, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {spine.w > 12 && (
+                <span
+                  className={`absolute left-1/2 top-4 h-[2px] -translate-x-1/2 rounded-full ${featured ? "bg-amber-900/40" : "bg-white/35"}`}
+                  style={{ width: spine.w - 8 }}
+                />
+              )}
+              {featured && !shouldReduceMotion && (
+                <motion.span
+                  className="absolute inset-0 rounded-t-[3px] bg-amber-200/60"
+                  animate={{ opacity: [0.4, 0.9, 0.4] }}
+                  transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+      <div className="relative mt-0 h-3 w-full bg-white/15">
+        <div className="absolute inset-x-0 top-0 h-px bg-white/30" />
+      </div>
     </div>
   );
 }
@@ -62,10 +91,8 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
       {/* Left - Branding */}
-      <div className="hidden lg:flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-8">
-        <BookshelfSpines />
-
-        <div className="relative z-10 text-center">
+      <div className="hidden lg:flex flex-col overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600">
+        <div className="flex-1 flex flex-col items-center justify-center text-center px-8 pt-10">
           <motion.div initial={shouldReduceMotion ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
             <LogoMark />
           </motion.div>
@@ -85,6 +112,8 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             ))}
           </motion.div>
         </div>
+
+        <BookshelfSpines />
       </div>
 
       {/* Right - Form */}
@@ -95,6 +124,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             <h1 className="text-2xl tracking-[-0.02em] font-bold text-foreground">SmartBook</h1>
           </div>
 
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60 mb-2">SmartBook · Nội bộ</p>
           <h2 className="text-[24px] text-foreground mb-2 tracking-[-0.02em] font-bold">{title}</h2>
           <p className="text-muted-foreground mb-8">{subtitle}</p>
 

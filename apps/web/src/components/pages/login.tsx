@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Eye, EyeOff, Mail, Lock, Loader2, TriangleAlert } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Loader2, TriangleAlert, ArrowRight } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
@@ -73,6 +73,16 @@ export function LoginPage() {
         </>
       }
     >
+      <div className="mb-6 flex items-center justify-between gap-3 rounded-[10px] border border-indigo-200/60 bg-indigo-50/60 px-4 py-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+        <p className="text-[12px] text-indigo-900 dark:text-indigo-300">Bạn là bạn đọc thư viện?</p>
+        <NavLink
+          to="/customer/login"
+          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-indigo-700 hover:opacity-80 transition-opacity dark:text-indigo-400"
+        >
+          Đăng nhập tại đây <ArrowRight className="w-3 h-3" />
+        </NavLink>
+      </div>
+
       <form
         className="space-y-4 mb-6"
         noValidate
