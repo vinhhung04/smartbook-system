@@ -17,6 +17,14 @@ REORDER_SUGGESTION_QUERY = "REORDER_SUGGESTION_QUERY"
 AGING_INVENTORY_QUERY = "AGING_INVENTORY_QUERY"
 GENERAL_QUERY = "GENERAL_QUERY"
 
+# Intents that should still reach retrieve_context() even for roles blocked
+# from system-wide analytics (CUSTOMER, SUPPLIER - see
+# user_personal_context.ANALYTICS_BLOCKED_ROLES): book search was always exempt
+# so customers can look up the catalog; GENERAL_QUERY is exempt too so FAQ
+# semantic search (faq_retrieval.find_relevant) answers policy questions for
+# every role, not just staff.
+ANALYTICS_BLOCK_EXEMPT_INTENTS: frozenset[str] = frozenset({BOOK_SEARCH_QUERY, GENERAL_QUERY})
+
 
 def normalize_text(value: str) -> str:
     text = unicodedata.normalize("NFD", value or "")

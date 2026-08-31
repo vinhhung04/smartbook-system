@@ -102,6 +102,14 @@ def _evidence_reorder_suggestions(result: dict) -> list[dict]:
             entry.get("suggested_reorder_qty"), "bản",
             description=f"Mức ưu tiên: {entry.get('priority', 'N/A')}",
         ))
+        # A lead time measured from real deliveries is a fact worth showing; a
+        # default or caller-supplied one is not evidence of anything.
+        if entry.get("lead_time_source") == "LEARNED":
+            items.append(_item(
+                f"Thời gian chờ hàng thực tế: {entry['title']}", "get_reorder_suggestions",
+                "lead_time_days", entry.get("lead_time_days"), "ngày",
+                description=f"Trung vị của {entry.get('lead_time_samples', 0)} lần giao gần đây",
+            ))
     return items
 
 

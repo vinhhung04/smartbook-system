@@ -322,6 +322,10 @@ Ví dụ response rút gọn:
 
 Endpoint `/analytics/reorder-suggestions` nhận các query phổ biến như `days=30`, `limit=20`, `leadTimeDays=14`, `priority=HIGH|MEDIUM|LOW|ALL`. Response gồm summary tổng số candidate, số lượng HIGH/MEDIUM/LOW, tổng số lượng đề xuất nhập thêm và danh sách sách với `forecast_7d`, `forecast_30d`, `estimated_days_until_stockout`, `priority`, `suggested_reorder_qty`, `reason`.
 
+**Lead time học từ dữ liệu thật.** Thời gian chờ hàng không còn là hằng số 14 ngày cho mọi sách. Với mỗi đầu sách, hệ thống lấy **trung vị** khoảng cách từ `purchase_orders.order_date` tới `goods_receipts.received_at` của các lần giao thực tế (trung vị chứ không phải trung bình, để một chuyến giao trễ bất thường không kéo lệch mọi đề xuất sau đó). Thang ưu tiên: lịch sử của chính đầu sách → lịch sử của nhà cung cấp → `supplier_variants.lead_time_days` (cam kết) → mặc định. Cần tối thiểu 3 lần giao mới coi là học được. Mỗi item trả thêm `lead_time_days`, `lead_time_source` (`LEARNED` / `SUPPLIER_DECLARED` / `DEFAULT` / `REQUESTED`) và `lead_time_samples`, nên câu trả lời của trợ lý AI nói rõ được con số đến từ đâu. Truyền `leadTimeDays` trên query sẽ ép giá trị cho mọi sách và đánh dấu nguồn là `REQUESTED`.
+
+> Lead time ảnh hưởng trực tiếp tới hai đại lượng: mức dự phòng an toàn `z × σ × √leadTime` và nhu cầu dự báo trong thời gian chờ hàng — nên đây là thay đổi làm số liệu đề xuất nhập hàng dựa trên đo đạc thay vì phỏng đoán.
+
 ### 🔔 Real-time / Thông báo
 
 API Gateway giữ một kết nối Socket.IO dùng chung cho cả hai phía. Client xác thực bằng JWT khi handshake; sau khi kết nối, mỗi user tự động vào phòng riêng (`user:{id}`) và các phòng theo vai trò: `admin`, `librarian`, `warehouse_manager`, `warehouse_staff`, hoặc phòng `customer:{id}` nếu là khách hàng. Các service nội bộ gọi `POST /internal/push-event` (xác thực bằng `INTERNAL_SERVICE_KEY`) để gateway phát sự kiện tới đúng phòng, ví dụ:
@@ -542,6 +546,7 @@ AI là tính năng tùy chọn. Stack thư viện/kho vận mặc định không
 ```powershell
 docker compose --profile ai up -d --build ai-service ollama
 docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
+docker compose exec ollama ollama pull nomic-embed-text
 ```
 
 pgAdmin chỉ bật khi cần quản trị DB:
@@ -737,6 +742,7 @@ Script này đăng nhập bằng tài khoản manager demo, gọi `POST /ai/assi
 
 ```powershell
 docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
+docker compose exec ollama ollama pull nomic-embed-text
 node scripts\ai-assistant-integration.mjs
 ```
 

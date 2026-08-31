@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from typing import Any, Awaitable, Callable
 
 import httpx
 
+import book_index
 from intent import normalize_text
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
@@ -133,25 +135,56 @@ def _compact_book_with_content(book: dict) -> dict:
     }
 
 
-def _score_and_rank_books(books: list, query: str, limit: int) -> list[dict]:
+def _keyword_score(compact: dict, normalized_query: str, tokens: list[str]) -> int:
+    haystack = normalize_text(" ".join([
+        compact["title"], compact["author"], str(compact["category"]),
+        str(compact["isbn"]), compact["description"], compact["summary_vi"],
+    ]))
+    score = sum(1 for token in tokens if token in haystack)
+    if normalized_query and normalized_query in haystack:
+        score += 3
+    return score
+
+
+def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
+    """Hybrid ranking: keyword overlap fused with cosine similarity over the
+    book's own text.
+
+    Keyword scoring alone cannot match a topical question ("sach day tre ky nang
+    song") against a book whose description says the same thing in other words;
+    embeddings alone are unreliable for exact identifiers like an ISBN. Both are
+    scored, normalised to 0..1, and averaged. When embeddings are unavailable
+    (Ollama down, model not pulled) the semantic half is simply absent and this
+    degrades to exactly the previous keyword-only ranking.
+
+    Blocking: calls Ollama. Callers on the event loop must use asyncio.to_thread.
+    """
     normalized_query = normalize_text(query)
     tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
     if not tokens:
         return []
+
+    valid_books = [book for book in books if isinstance(book, dict)]
+    if not valid_books:
+        return []
+
+    compacts = [_compact_book_with_content(book) for book in valid_books]
+    keyword = [_keyword_score(compact, normalized_query, tokens) for compact in compacts]
+    max_keyword = max(keyword)
+
+    semantic = book_index.semantic_scores(valid_books, query, client=client)
+    if len(semantic) != len(valid_books):
+        semantic = [0.0] * len(valid_books)
+
     scored = []
-    for book in books:
-        if not isinstance(book, dict):
+    for compact, keyword_score, semantic_score in zip(compacts, keyword, semantic):
+        # A book enters the result set on either signal: any keyword hit, or a
+        # semantic score clearing the threshold.
+        if keyword_score <= 0 and semantic_score < book_index.BOOK_SEMANTIC_THRESHOLD:
             continue
-        compact = _compact_book_with_content(book)
-        haystack = normalize_text(" ".join([
-            compact["title"], compact["author"], str(compact["category"]),
-            str(compact["isbn"]), compact["description"], compact["summary_vi"],
-        ]))
-        score = sum(1 for token in tokens if token in haystack)
-        if normalized_query and normalized_query in haystack:
-            score += 3
-        if score > 0:
-            scored.append((score, compact))
+        keyword_norm = (keyword_score / max_keyword) if max_keyword else 0.0
+        scored.append((0.5 * keyword_norm + 0.5 * semantic_score, compact))
+
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
     return [item[1] for item in scored[:limit]]
 
@@ -159,7 +192,9 @@ def _score_and_rank_books(books: list, query: str, limit: int) -> list[dict]:
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:
     """Tìm sách theo từ khóa tự do, kể cả nội dung mô tả — không dùng /api/books?search=
     vì backend chỉ lọc theo title/author/category/publisher/isbn, không lọc description/
-    summary_vi. Lấy toàn bộ catalog rồi tự chấm điểm liên quan cục bộ để bao phủ cả nội dung."""
+    summary_vi. Lấy toàn bộ catalog rồi chấm điểm cục bộ theo hai tín hiệu: trùng từ khóa
+    (khớp chính xác ISBN/tên sách) và cosine similarity trên embedding của chính nội dung
+    sách (câu hỏi theo chủ đề). Nếu Ollama không sẵn sàng, chỉ còn phần từ khóa."""
     query = (query or "").strip()
     if not query:
         return {"error": "query khong duoc de trong"}
@@ -175,7 +210,12 @@ async def search_books(auth_header: str | None = None, query: str = "") -> dict:
         return {"error": "/api/books het thoi gian cho phan hoi"}
     except Exception as exc:
         return {"error": f"/api/books that bai: {type(exc).__name__}"}
-    return {"query": query, "results": _score_and_rank_books(books, query, SEARCH_BOOKS_RESULT_LIMIT)}
+    # _score_and_rank_books embeds via Ollama (blocking network call), so it
+    # must run off the event loop - same convention as main.py's _chat_with_ollama.
+    results = await asyncio.to_thread(
+        _score_and_rank_books, books, query, SEARCH_BOOKS_RESULT_LIMIT
+    )
+    return {"query": query, "results": results}
 
 
 async def get_aging_inventory(
@@ -284,15 +324,18 @@ ANALYTICS_TOOLS: list[dict] = [
             "name": "get_reorder_suggestions",
             "description": (
                 "Gợi ý nhập thêm sách theo dự báo nhu cầu (forecast_7d/30d), mức ưu tiên (HIGH/MEDIUM/LOW), "
-                "số lượng đề xuất (suggested_reorder_qty) và lý do (reason) từng đầu sách. Công cụ chính cho "
-                "câu hỏi nên nhập sách gì, kho nào cần ưu tiên."
+                "số lượng đề xuất (suggested_reorder_qty) và lý do (reason) từng đầu sách. Mỗi sách còn có "
+                "lead_time_days (thời gian chờ hàng dùng để tính toán), lead_time_source (LEARNED = trung vị "
+                "lịch sử giao hàng thực tế, SUPPLIER_DECLARED = cam kết của nhà cung cấp, DEFAULT = giá trị "
+                "mặc định, REQUESTED = do người hỏi chỉ định) và lead_time_samples (số lần giao đã đo). Công "
+                "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "days": {"type": "integer", "description": "Số ngày lịch sử dùng để tính nhu cầu, 1-365, mặc định 30"},
                     "limit": {"type": "integer", "description": "Số lượng đầu sách tối đa muốn lấy, 1-100, mặc định 20"},
-                    "lead_time_days": {"type": "integer", "description": "Thời gian chờ hàng về (lead time) tính bằng ngày, mặc định 14"},
+                    "lead_time_days": {"type": "integer", "description": "Ép thời gian chờ hàng (ngày) cho mọi sách. Bỏ trống để hệ thống tự học từ lịch sử giao hàng thực tế của từng sách/nhà cung cấp"},
                     "priority": {
                         "type": "string",
                         "enum": ["ALL", "HIGH", "MEDIUM", "LOW"],
@@ -319,9 +362,10 @@ ANALYTICS_TOOLS: list[dict] = [
         "function": {
             "name": "search_books",
             "description": (
-                "Tìm sách theo từ khóa tự do: tên sách, tác giả, thể loại, ISBN, hoặc nội dung/chủ đề "
-                "trong mô tả sách. Trả về sách phù hợp nhất kèm mô tả/tóm tắt để trả lời câu hỏi về nội "
-                "dung sách (sách nói về gì, phù hợp đối tượng nào)."
+                "Tìm sách theo từ khóa tự do HOẶC theo ngữ nghĩa: tên sách, tác giả, thể loại, ISBN, "
+                "hoặc chủ đề/nội dung mô tả sách. Tìm được cả khi câu hỏi diễn đạt khác từ ngữ trong mô tả "
+                "(ví dụ hỏi 'sách dạy trẻ tự lập' vẫn ra sách có mô tả 'kỹ năng sống cho bé'). Trả về sách "
+                "phù hợp nhất kèm mô tả/tóm tắt để trả lời câu hỏi về nội dung sách."
             ),
             "parameters": {
                 "type": "object",

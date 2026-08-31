@@ -42,7 +42,7 @@ from rag import (
 from retrieval import retrieve_context
 from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 from source_reliability import reliability
-from intent import BOOK_SEARCH_QUERY as _BOOK_SEARCH_INTENT
+from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
 from agent_store import (
@@ -3415,10 +3415,11 @@ async def chat(request: Request, req: ChatRequest):
 
     # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
     # context (loans, fines, tasks) already comes from build_user_personal_context.
-    # Exception: allow BOOK_SEARCH_QUERY so customers can still look up catalog books.
+    # Exception (ANALYTICS_BLOCK_EXEMPT_INTENTS): BOOK_SEARCH_QUERY so customers can still
+    # look up catalog books, and GENERAL_QUERY so they reach the FAQ semantic search.
     _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
-    _is_book_search = intent_info.get("intent") == _BOOK_SEARCH_INTENT
-    if _blocked and not _is_book_search:
+    _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
+    if _blocked and not _is_exempt_intent:
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
@@ -4209,8 +4210,8 @@ async def chat_stream(request: Request, req: ChatRequest):
     personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
 
     _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
-    _is_book_search = intent_info.get("intent") == _BOOK_SEARCH_INTENT
-    if _blocked and not _is_book_search:
+    _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
+    if _blocked and not _is_exempt_intent:
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
