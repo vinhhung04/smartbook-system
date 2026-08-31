@@ -163,7 +163,7 @@ export function CustomerLoginPage() {
                 <input type="checkbox" className="w-4 h-4 rounded border-input bg-background accent-primary" />
                 <span className="text-[12px] text-muted-foreground">Ghi nhớ đăng nhập</span>
               </label>
-              <NavLink to="/forgot-password" className="text-[12px] text-primary hover:text-primary/80 transition-colors" style={{ fontWeight: 500 }}>
+              <NavLink to="/forgot-password?portal=customer" className="text-[12px] text-primary hover:text-primary/80 transition-colors" style={{ fontWeight: 500 }}>
                 Quên mật khẩu?
               </NavLink>
             </div>

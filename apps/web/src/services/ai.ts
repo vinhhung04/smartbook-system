@@ -303,6 +303,31 @@ export interface AIRecommendation {
   category: string;
   reason: string;
   score: number;
+  /** Per-component contribution to `score`, computed server-side (never by the LLM). */
+  breakdown?: {
+    semantic: number;
+    affinity: number;
+    quality: number;
+    availability: number;
+  };
+}
+
+export interface AIRecommendationsResult {
+  recommendations: AIRecommendation[];
+  ai_provider: string;
+  /**
+   * False when the caller has no reading history to personalise from (no customer
+   * profile, or no loans/wishlist/ratings yet). The UI must say so rather than
+   * presenting a library-wide list as if it were personal.
+   */
+  personalized: boolean;
+  basis: {
+    loans_used: number;
+    wishlist_used: number;
+    ratings_used: number;
+    loans_status: number | null;
+  };
+  semantic_used: boolean;
 }
 
 export interface ReadingStatsResponse {
@@ -541,14 +566,13 @@ export const aiService = {
     }
   },
 
-  getRecommendationsAI: async (
-    borrowHistory: { title: string; author?: string; category?: string }[],
-    catalogBooks: { id: string; title: string; author?: string; category?: string; quantity: number }[],
-  ): Promise<{ recommendations: AIRecommendation[]; ai_provider: string }> => {
-    const response = await aiAPI.post('/recommendations', {
-      borrow_history: borrowHistory,
-      catalog_books: catalogBooks,
-    });
+  /**
+   * Personalised recommendations for the signed-in reader. Takes no history from
+   * the client: the service reads the caller's own loans, wishlist and ratings
+   * with the caller's token, so the browser cannot decide whose history is used.
+   */
+  getRecommendationsAI: async (limit = 6): Promise<AIRecommendationsResult> => {
+    const response = await aiAPI.post('/recommendations', { limit });
     return response.data;
   },
 

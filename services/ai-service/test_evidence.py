@@ -48,6 +48,35 @@ def test_reorder_suggestions_extracts_summary_and_items():
     assert any(item["metric"] == "suggested_reorder_qty" and item["value"] == 10 for item in items)
 
 
+def test_reorder_suggestions_surface_only_measured_lead_times():
+    result = {
+        "summary": {"total_candidates": 2},
+        "items": [
+            {
+                "title": "Sách đo được",
+                "suggested_reorder_qty": 6,
+                "priority": "HIGH",
+                "lead_time_days": 21,
+                "lead_time_source": "LEARNED",
+                "lead_time_samples": 5,
+            },
+            {
+                "title": "Sách mặc định",
+                "suggested_reorder_qty": 3,
+                "priority": "LOW",
+                "lead_time_days": 14,
+                "lead_time_source": "DEFAULT",
+                "lead_time_samples": 0,
+            },
+        ],
+    }
+    items = extract_evidence("get_reorder_suggestions", result)
+    lead_time_items = [item for item in items if item["metric"] == "lead_time_days"]
+    assert len(lead_time_items) == 1, "a DEFAULT lead time is not evidence and must not be listed"
+    assert lead_time_items[0]["value"] == 21
+    assert "5 lần giao" in lead_time_items[0]["description"]
+
+
 def test_search_books_extracts_results():
     result = {"query": "python", "results": [{"title": "Sách D", "quantity": 4, "author": "Tác giả"}]}
     items = extract_evidence("search_books", result)

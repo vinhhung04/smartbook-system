@@ -130,6 +130,28 @@ async function createOrUpdateMyReview(req, res) {
   }
 }
 
+// Lists the signed-in customer's own reviews. Resolved through
+// ensureCurrentCustomer (the convention used by my.controller/wishlist.controller)
+// because the JWT carries the auth user id, not the customer id.
+async function getMyReviews(req, res) {
+  try {
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+
+    const reviews = await prisma.book_reviews.findMany({
+      where: { customer_id: customer.id },
+      select: { book_id: true, rating: true, status: true, created_at: true, updated_at: true },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    return res.json({ data: reviews });
+  } catch (error) {
+    console.error('[review] getMyReviews error:', error);
+    return res.status(500).json({ message: 'Failed to load my reviews' });
+  }
+}
+
 async function getMyReviewForBook(req, res) {
   try {
     const customerId = req.user?.customer_id || req.user?.id;
@@ -191,6 +213,7 @@ module.exports = {
   getReviewsByBook,
   getBookRatingStats,
   createOrUpdateMyReview,
+  getMyReviews,
   getMyReviewForBook,
   deleteMyReview,
 };

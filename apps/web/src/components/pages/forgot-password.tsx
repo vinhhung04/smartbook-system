@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { Mail, ArrowLeft } from "lucide-react";
-import { NavLink } from "react-router";
+import { NavLink, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { AuthLayout } from "@/components/auth-layout";
 
 export function ForgotPasswordPage() {
+  const [searchParams] = useSearchParams();
+  const isCustomerPortal = searchParams.get("portal") === "customer";
+  const backTo = isCustomerPortal ? "/customer/login" : "/login";
+  const backLabel = isCustomerPortal ? "Quay lại đăng nhập khách hàng" : "Quay lại đăng nhập";
   const [identifier, setIdentifier] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -39,9 +43,9 @@ export function ForgotPasswordPage() {
       }
       footer={
         <div className="text-center text-[12px] text-muted-foreground">
-          <NavLink to="/login" className="inline-flex items-center gap-1.5 text-primary hover:opacity-80 font-semibold">
+          <NavLink to={backTo} className="inline-flex items-center gap-1.5 text-primary hover:opacity-80 font-semibold">
             <ArrowLeft className="w-3.5 h-3.5" />
-            Quay lại đăng nhập
+            {backLabel}
           </NavLink>
         </div>
       }

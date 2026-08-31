@@ -9,6 +9,7 @@ const {
 } = require('../utils/date-range');
 const { findSeasonalEvent } = require('../config/seasonal-events');
 const { ewma, linearTrendSlope, stdDev, projectedDemand } = require('../utils/forecast');
+const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
 
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -63,7 +64,10 @@ function parseBoolean(value, defaultValue = false) {
 function parseReorderDateRanges(queryParams) {
   const daysParam = queryParams.days ?? 30;
   let days = parsePositiveInteger(daysParam, 30, 365, 'days');
-  const leadTimeDays = parsePositiveInteger(queryParams.leadTimeDays, 14, 365, 'leadTimeDays');
+  const leadTimeDays = parsePositiveInteger(queryParams.leadTimeDays, DEFAULT_LEAD_TIME_DAYS, 365, 'leadTimeDays');
+  // Whether the caller actually asked for a lead time. Without this flag an explicit
+  // ?leadTimeDays=14 is indistinguishable from the default, and per-item learned lead
+  // times would silently override what the caller asked for.
   const to = queryParams.to ? new Date(String(queryParams.to)) : new Date();
   const from = queryParams.from ? new Date(String(queryParams.from)) : new Date(to.getTime() - days * DAY_MS);
 
@@ -88,6 +92,7 @@ function parseReorderDateRanges(queryParams) {
     previousTo: from,
     days,
     leadTimeDays,
+    leadTimeDaysProvided: queryParams.leadTimeDays !== undefined && String(queryParams.leadTimeDays) !== '',
   };
 }
 
@@ -633,6 +638,69 @@ async function getAvailabilityAlertDemandByBook() {
   }
 }
 
+// Real supplier lead times, measured from each purchase order's order_date to the
+// received_at of the goods receipt that fulfilled it. Grouping by goods receipt id
+// de-duplicates receipts that list the same variant on more than one line.
+async function getLeadTimeHistory() {
+  const [deliveryRows, supplierVariantRows] = await Promise.all([
+    query(
+      inventoryPool,
+      `
+      SELECT
+        gri.variant_id::text AS variant_id,
+        po.supplier_id::text AS supplier_id,
+        EXTRACT(EPOCH FROM (gr.received_at - po.order_date::timestamptz)) / 86400 AS lead_time_days
+      FROM goods_receipts gr
+      JOIN purchase_orders po ON po.id = gr.purchase_order_id
+      JOIN goods_receipt_items gri ON gri.goods_receipt_id = gr.id
+      WHERE gr.received_at IS NOT NULL
+        AND gr.cancelled_at IS NULL
+        AND gr.received_at >= po.order_date::timestamptz
+      GROUP BY gr.id, gri.variant_id, po.supplier_id, gr.received_at, po.order_date
+      `,
+    ),
+    query(
+      inventoryPool,
+      `
+      SELECT
+        variant_id::text AS variant_id,
+        supplier_id::text AS supplier_id,
+        lead_time_days,
+        is_preferred
+      FROM supplier_variants
+      ORDER BY is_preferred DESC
+      `,
+    ),
+  ]);
+
+  const observationsByVariant = new Map();
+  const observationsBySupplier = new Map();
+  for (const row of deliveryRows) {
+    const days = number(row.lead_time_days);
+    if (!Number.isFinite(days)) continue;
+    if (!observationsByVariant.has(row.variant_id)) observationsByVariant.set(row.variant_id, []);
+    observationsByVariant.get(row.variant_id).push(days);
+    if (row.supplier_id) {
+      if (!observationsBySupplier.has(row.supplier_id)) observationsBySupplier.set(row.supplier_id, []);
+      observationsBySupplier.get(row.supplier_id).push(days);
+    }
+  }
+
+  // Rows arrive preferred-first, so the first supplier seen for a variant is the
+  // preferred one when there is one.
+  const supplierByVariant = new Map();
+  const declaredByVariant = new Map();
+  for (const row of supplierVariantRows) {
+    if (supplierByVariant.has(row.variant_id)) continue;
+    supplierByVariant.set(row.variant_id, row.supplier_id);
+    if (row.lead_time_days !== null && row.lead_time_days !== undefined) {
+      declaredByVariant.set(row.variant_id, number(row.lead_time_days));
+    }
+  }
+
+  return { observationsByVariant, observationsBySupplier, supplierByVariant, declaredByVariant };
+}
+
 async function getInventorySnapshot() {
   return query(
     inventoryPool,
@@ -741,6 +809,11 @@ function buildReason(item, days, leadTimeDays) {
   } else {
     parts.push('Chưa cần nhập thêm ngay, nhưng nên tiếp tục theo dõi nhu cầu.');
   }
+  if (item.lead_time_source === 'LEARNED') {
+    parts.push(`Thời gian chờ hàng ${leadTimeDays} ngày là trung vị thực tế của ${item.lead_time_samples} lần giao gần đây, không phải giá trị mặc định.`);
+  } else if (item.lead_time_source === 'SUPPLIER_DECLARED') {
+    parts.push(`Thời gian chờ hàng ${leadTimeDays} ngày lấy theo cam kết của nhà cung cấp vì chưa đủ lịch sử giao hàng thực tế.`);
+  }
   if (item.demand_volatility > 0) {
     parts.push(`Mức dự phòng an toàn được tính theo độ biến động nhu cầu thực tế (độ lệch chuẩn ${item.demand_volatility} bản/ngày, mức phục vụ ~95%).`);
   }
@@ -751,7 +824,12 @@ function buildReason(item, days, leadTimeDays) {
   return parts.join(' ');
 }
 
-function calculateSuggestion(row, demand, ranges, seasonal = {}, series = []) {
+function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], leadTime = null) {
+  // Lead time drives both the safety stock and the demand projected over the
+  // reorder horizon, so it is resolved per item from real delivery history
+  // rather than shared across the whole catalog.
+  const resolvedLeadTime = leadTime || { days: ranges.leadTimeDays, source: 'DEFAULT', samples: 0 };
+  const leadTimeDays = resolvedLeadTime.days;
   const availableQty = number(row.available_qty);
   const onHandQty = number(row.on_hand_qty);
   const reservedQty = number(row.reserved_qty);
@@ -780,10 +858,10 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = []) {
   const hasDemandSignal = borrowCount > 0 || reservationCount > 0;
   const safetyStock = Math.max(
     reorderPoint,
-    Math.ceil(SAFETY_STOCK_Z_SCORE * demandVolatility * Math.sqrt(ranges.leadTimeDays)),
+    Math.ceil(SAFETY_STOCK_Z_SCORE * demandVolatility * Math.sqrt(leadTimeDays)),
     hasDemandSignal ? 2 : 0,
   );
-  const expectedDemandDuringLeadTime = projectedDemand(series, ranges.leadTimeDays, seasonalIndex);
+  const expectedDemandDuringLeadTime = projectedDemand(series, leadTimeDays, seasonalIndex);
   let suggestedReorderQty = Math.max(0, expectedDemandDuringLeadTime + safetyStock - availableQty);
   const demandScore = round(
     borrowCount * 2
@@ -800,7 +878,7 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = []) {
     reservationCount,
     forecast30d,
     estimatedDaysUntilStockout,
-    leadTimeDays: ranges.leadTimeDays,
+    leadTimeDays,
   });
 
   if (priority === 'HIGH' && suggestedReorderQty < 5) {
@@ -840,12 +918,31 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = []) {
     suggested_reorder_qty: suggestedReorderQty,
     seasonal_index: round(seasonalIndex, 2),
     seasonal_event: seasonalEvent,
+    lead_time_days: leadTimeDays,
+    lead_time_source: resolvedLeadTime.source,
+    lead_time_samples: resolvedLeadTime.samples,
   };
 
   return {
     ...item,
-    reason: buildReason(item, ranges.days, ranges.leadTimeDays),
+    reason: buildReason(item, ranges.days, leadTimeDays),
   };
+}
+
+// An explicit ?leadTimeDays= is an instruction, not a hint: it overrides the
+// learned value, and says so in lead_time_source so the answer stays honest
+// about where the number came from.
+function resolveItemLeadTime(variantId, history, ranges) {
+  if (ranges.leadTimeDaysProvided) {
+    return { days: ranges.leadTimeDays, source: 'REQUESTED', samples: 0 };
+  }
+  const supplierId = history.supplierByVariant.get(variantId) || null;
+  return resolveLeadTime({
+    variantObservations: history.observationsByVariant.get(variantId) || [],
+    supplierObservations: supplierId ? history.observationsBySupplier.get(supplierId) || [] : [],
+    declaredLeadTimeDays: history.declaredByVariant.get(variantId) ?? null,
+    defaultLeadTimeDays: ranges.leadTimeDays,
+  });
 }
 
 const getReorderSuggestions = asyncHandler(async (req, res) => {
@@ -867,6 +964,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     alertsByBook,
     seasonalIndexByVariant,
     dailySeriesByVariant,
+    leadTimeHistory,
   ] = await Promise.all([
     getInventorySnapshot(),
     getBorrowDemandByVariant(ranges.from, ranges.to),
@@ -876,6 +974,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     getAvailabilityAlertDemandByBook(),
     getSeasonalIndexByVariant(ranges),
     getDailyBorrowSeriesByVariant(ranges.from, ranges.to),
+    getLeadTimeHistory(),
   ]);
 
   const seasonalEvent = findSeasonalEvent(ranges.to);
@@ -890,7 +989,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     }, ranges, {
       index: seasonalIndexByVariant.get(row.variant_id) ?? 1,
       event: seasonalEvent,
-    }, dailySeriesByVariant.get(row.variant_id) || []))
+    }, dailySeriesByVariant.get(row.variant_id) || [], resolveItemLeadTime(row.variant_id, leadTimeHistory, ranges)))
     .filter((item) => {
       if (priority !== 'ALL' && item.priority !== priority) return false;
       if (includeLowDemand) return true;
@@ -1075,4 +1174,7 @@ module.exports = {
   getReservationFunnel,
   getAgingInventory,
   getBookTurnover,
+  // Exported for unit tests: resolves one variant's lead time from the
+  // delivery history maps built by getLeadTimeHistory().
+  resolveItemLeadTime,
 };

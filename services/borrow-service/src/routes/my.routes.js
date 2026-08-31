@@ -16,6 +16,7 @@ const {
 } = require('../controllers/my.controller');
 const {
   createOrUpdateMyReview,
+  getMyReviews,
   getMyReviewForBook,
   deleteMyReview,
 } = require('../controllers/review.controller');
@@ -126,6 +127,7 @@ router.patch('/preferences', async (req, res) => {
 });
 
 router.post('/reviews', createOrUpdateMyReview);
+router.get('/reviews', getMyReviews);
 router.get('/reviews/book/:bookId', getMyReviewForBook);
 router.delete('/reviews/book/:bookId', deleteMyReview);
 

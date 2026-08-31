@@ -85,6 +85,18 @@ const DOMAINS = {
     LOW_STOCK: 'warning',
     OUT_OF_STOCK: 'danger',
   },
+  // Outbound queue/detail status (outbound.tsx) — tone only; Vietnamese labels
+  // stay local to the page since the registry doesn't localize domain labels.
+  outbound: {
+    APPROVED: 'info',
+    PICKING: 'info',
+    PARTIAL_PICKED: 'amber',
+    REPICKING: 'warning',
+    READY_FOR_OUTBOUND: 'success',
+    READY_TO_SHIP: 'success',
+    COMPLETED: 'neutral',
+    CANCELLED: 'danger',
+  },
 } satisfies Record<string, ToneMap>;
 
 export type StatusDomain = keyof typeof DOMAINS;

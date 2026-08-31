@@ -1,5 +1,7 @@
 # Chatbot FAQ Semantic Retrieval Implementation Plan
 
+> **Trạng thái: đã hiện thực (2026-08-31).** Tasks 1-5 đã xong; `faq_data.py`, `faq_retrieval.py`, `test_faq_retrieval.py`, `test_retrieval.py` đã có trong `services/ai-service/`. Hai điểm khác với plan gốc: (1) phần embed + cache dùng chung được tách ra `embeddings.py` để `book_index.py` (hybrid book search) dùng lại; (2) khi embed toàn bộ FAQ thất bại, kết quả **không** được memo vào `_faq_vectors` — plan gốc memo hóa danh sách vector rỗng, khiến một lần Ollama chết lúc khởi động sẽ tắt FAQ search cho tới khi restart process.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** When `/chat` (the chatbot used by every role, including CUSTOMER) can't match a message to one of its 11 fixed intents, search a curated FAQ set by semantic similarity instead of returning nothing.
