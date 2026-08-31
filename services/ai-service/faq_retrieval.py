@@ -33,9 +33,14 @@ class FAQMatch(NamedTuple):
 
 
 def _content_hash() -> str:
-    return embeddings.content_hash(
-        [{"id": e["id"], "question": e["question"], "answer": e["answer"]} for e in FAQ_ENTRIES]
-    )
+    # The model name is part of the key: vectors from a different embedding model
+    # have a different dimensionality, and cosine_similarity scores mismatched
+    # lengths as 0.0 - so a model swap would silently return "nothing matches"
+    # forever instead of rebuilding the index.
+    return embeddings.content_hash({
+        "model": embeddings.EMBED_MODEL,
+        "entries": [{"id": e["id"], "question": e["question"], "answer": e["answer"]} for e in FAQ_ENTRIES],
+    })
 
 
 def embed_text(text: str, client: ollama.Client | None = None) -> list[float] | None:

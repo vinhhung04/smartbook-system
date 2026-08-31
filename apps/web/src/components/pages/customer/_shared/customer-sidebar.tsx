@@ -1,4 +1,4 @@
-import { LucideIcon, Bell, BookOpen, CalendarClock, HandCoins, House, ReceiptText, ShieldCheck, User, ChevronLeft, BarChart3, Heart } from 'lucide-react';
+import { LucideIcon, Bell, BookOpen, CalendarClock, HandCoins, House, ReceiptText, ShieldCheck, User, ChevronLeft, BarChart3, Heart, Sparkles } from 'lucide-react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -20,6 +20,7 @@ const primaryItems: CustomerSidebarItem[] = [
   { to: '/customer/loans', label: 'Phiếu mượn', icon: HandCoins },
   { to: '/customer/reservations', label: 'Đặt trước', icon: CalendarClock },
   { to: '/customer/wishlist', label: 'Yêu thích', icon: Heart },
+  { to: '/customer/recommendations', label: 'Gợi ý cho bạn', icon: Sparkles },
   { to: '/customer/reading-analytics', label: 'Thống kê đọc sách', icon: BarChart3 },
 ];
 

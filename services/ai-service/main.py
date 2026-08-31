@@ -40,8 +40,10 @@ from rag import (
     verify_numeric_grounding,
 )
 from retrieval import retrieve_context
-from assistant_tools import ANALYTICS_TOOLS, TOOL_FUNCTIONS
+from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
 from source_reliability import reliability
+import book_index
+import recommendation
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
@@ -151,6 +153,10 @@ ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
 # and it re-processes the full system prompt + tool schemas each round (stateless chat API),
 # measured at 25-70s+ per round directly against /api/chat during verification.
 ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
+# Per-request budget for the gateway reads that back /recommendations (loans,
+# wishlist, ratings, catalog). Kept short: a slow dependency should degrade the
+# recommendation, not hold the page open.
+RECOMMENDATION_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDATION_TIMEOUT_SECONDS", "10"))
 ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 
 
@@ -4551,104 +4557,244 @@ async def cache_stats(request: Request):
 # AI Recommendations — Gợi ý sách cá nhân hóa
 # ────────────────────────────────────────────────────────────────────────────────
 
-RECOMMENDATION_SYSTEM_PROMPT = (
-    "Bạn là hệ thống gợi ý sách thông minh của thư viện SmartBook.\n\n"
-    "## Nhiệm vụ\n"
-    "Dựa trên lịch sử mượn sách và danh mục sách hiện có, hãy:\n"
-    "1. Phân tích sở thích đọc (thể loại, tác giả ưa thích)\n"
-    "2. Gợi ý sách phù hợp TỪ DANH MỤC HIỆN CÓ\n"
-    "3. Giải thích ngắn gọn lý do gợi ý\n\n"
+RECOMMENDATION_REASON_SYSTEM_PROMPT = (
+    "Bạn viết lý do gợi ý sách cho thư viện SmartBook.\n\n"
+    "Bạn KHÔNG chọn sách và KHÔNG chấm điểm — danh sách sách cùng các tín hiệu đã được hệ thống "
+    "tính sẵn và đưa cho bạn.\n"
+    "Nhiệm vụ duy nhất: với mỗi sách, viết MỘT câu tiếng Việt ngắn (tối đa 25 từ) giải thích vì sao "
+    "nó phù hợp, chỉ dựa trên các tín hiệu được cung cấp.\n\n"
     "## Quy tắc\n"
-    "- CHỈ gợi ý sách có trong [DANH MỤC SÁCH]. KHÔNG bịa ra sách không tồn tại.\n"
-    "- KHÔNG gợi ý sách mà người dùng đã mượn.\n"
-    "- Ưu tiên sách còn hàng (quantity > 0).\n"
-    "- Mỗi gợi ý phải có: book_id, title, author, category, reason (lý do gợi ý tiếng Việt).\n"
-    "- Trả về ĐÚNG JSON array, không có markdown hay text thừa.\n"
-    "- Tối đa 6 gợi ý, tối thiểu 1.\n\n"
-    "## Định dạng output (JSON array)\n"
-    '[{"book_id":"...","title":"...","author":"...","category":"...","reason":"...","score":0.95}]\n'
-    "score là độ phù hợp từ 0.0 đến 1.0.\n"
+    "- Không bịa thông tin về nội dung sách ngoài dữ liệu đã cho.\n"
+    "- Không nhắc tới điểm số, phần trăm hay thuật ngữ kỹ thuật.\n"
+    "- Không thêm sách nào ngoài danh sách đã cho.\n"
+    '- Trả về DUY NHẤT một JSON object dạng {"<book_id>": "<lý do>"}, không markdown, không giải thích thừa.\n'
 )
+
+# Endpoints that make a recommendation personal. A failure on any of them degrades
+# the result rather than failing the request — see _load_reader_signals.
+_REC_LOANS_ENDPOINT = "/borrow/my/loans"
+_REC_WISHLIST_ENDPOINT = "/borrow/my/wishlists"
+_REC_REVIEWS_ENDPOINT = "/borrow/my/reviews"
+_REC_CATALOG_ENDPOINT = "/api/books"
+_REC_RATING_STATS_ENDPOINT = "/borrow/reviews/stats"
+# getBookRatingStats rejects more than 100 ids per call.
+_REC_RATING_STATS_CHUNK = 100
 
 
 class RecommendationRequest(BaseModel):
-    borrow_history: list[dict] = []
-    catalog_books: list[dict] = []
+    limit: int = 6
 
 
-def _build_recommendation_prompt(req: RecommendationRequest) -> str:
-    parts = []
-
-    if req.borrow_history:
-        parts.append("[LỊCH SỬ MƯỢN SÁCH]")
-        for b in req.borrow_history[:30]:
-            title = b.get("title", "?")
-            author = b.get("author", "")
-            category = b.get("category", "")
-            parts.append(f"- {title} | {author} | {category}")
-    else:
-        parts.append("[LỊCH SỬ MƯỢN SÁCH]: Không có — hãy gợi ý sách phổ biến nhất.")
-
-    parts.append("")
-
-    if req.catalog_books:
-        parts.append(f"[DANH MỤC SÁCH] ({len(req.catalog_books)} đầu sách)")
-        for b in req.catalog_books[:60]:
-            bid = b.get("id", "?")
-            title = b.get("title", "?")
-            author = b.get("author", "")
-            category = b.get("category", "")
-            qty = b.get("quantity", 0)
-            flag = " (HẾT HÀNG)" if qty == 0 else ""
-            parts.append(f"- [{bid}] {title} | {author} | {category} | qty={qty}{flag}")
-
-    parts.append("\nHãy trả về JSON array gợi ý sách.")
-    return "\n".join(parts)
-
-
-def _parse_recommendation_json(text: str) -> list[dict]:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines).strip()
-
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1:
-        text = text[start : end + 1]
-
-    try:
-        data = json.loads(text)
+def _rec_unwrap(payload) -> list:
+    """Both `[...]` and `{"data": [...]}` shapes are in use across the services."""
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        data = payload.get("data")
         if isinstance(data, list):
-            return data[:6]
-    except json.JSONDecodeError:
-        pass
+            return data
     return []
 
 
+async def _rec_fetch(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    auth_header: str | None,
+    params: dict | None = None,
+) -> tuple[object, int | None]:
+    """GET one gateway endpoint. Returns (payload, status). status is None when the
+    call never completed, so callers can tell "no permission" from "service down"."""
+    headers = {"Authorization": auth_header} if auth_header else {}
+    try:
+        response = await client.get(f"{GATEWAY_URL}{endpoint}", headers=headers, params=params or {})
+        if response.status_code >= 400:
+            return None, response.status_code
+        return response.json(), response.status_code
+    except (httpx.HTTPError, ValueError) as exc:
+        # Only transport and decode failures degrade to "no data". A broad
+        # `except Exception` here would disguise a programming error as a
+        # network problem and quietly return a non-personalised answer.
+        logger.warning("recommendations: %s failed: %s", endpoint, type(exc).__name__)
+        return None, None
+
+
+async def _rec_fetch_rating_stats(
+    client: httpx.AsyncClient,
+    auth_header: str | None,
+    book_ids: list[str],
+) -> dict:
+    stats: dict = {}
+    for start in range(0, len(book_ids), _REC_RATING_STATS_CHUNK):
+        chunk = book_ids[start:start + _REC_RATING_STATS_CHUNK]
+        payload, _ = await _rec_fetch(
+            client, _REC_RATING_STATS_ENDPOINT, auth_header, {"bookIds": ",".join(chunk)}
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            stats.update(payload["data"])
+    return stats
+
+
+async def _load_reader_signals(auth_header: str | None) -> dict:
+    """Fetch the caller's own history plus the catalog.
+
+    `personalized` is False when the caller has no customer profile (404) or no
+    permission (403) — the answer then falls back to library-wide quality, and the
+    response says so instead of quietly presenting a generic list as personal.
+    """
+    async with httpx.AsyncClient(timeout=httpx.Timeout(RECOMMENDATION_TIMEOUT_SECONDS)) as client:
+        (loans_payload, loans_status), (wishlist_payload, _), (reviews_payload, _), (catalog_payload, _) = (
+            await asyncio.gather(
+                _rec_fetch(client, _REC_LOANS_ENDPOINT, auth_header, {"pageSize": 100}),
+                _rec_fetch(client, _REC_WISHLIST_ENDPOINT, auth_header),
+                _rec_fetch(client, _REC_REVIEWS_ENDPOINT, auth_header),
+                _rec_fetch(client, _REC_CATALOG_ENDPOINT, auth_header),
+            )
+        )
+
+        catalog = [book for book in _rec_unwrap(catalog_payload) if isinstance(book, dict)]
+        loans = _rec_unwrap(loans_payload)
+        wishlist_rows = _rec_unwrap(wishlist_payload)
+        review_rows = _rec_unwrap(reviews_payload)
+
+        loan_books = recommendation.books_from_loans(loans, catalog)
+        wishlist_books = recommendation.books_from_ids(
+            [row.get("book_id") for row in wishlist_rows if isinstance(row, dict)], catalog
+        )
+        rated_books = [
+            (book, row.get("rating"))
+            for row in review_rows
+            if isinstance(row, dict)
+            for book in recommendation.books_from_ids([row.get("book_id")], catalog)
+        ]
+
+        signals = recommendation.collect_signals(loan_books, wishlist_books, rated_books)
+        profile = recommendation.build_taste_profile(signals)
+        candidates = recommendation.select_candidates(catalog, profile)
+        rating_stats = await _rec_fetch_rating_stats(
+            client, auth_header, [recommendation.book_key(book) for book in candidates]
+        )
+
+    return {
+        "catalog": catalog,
+        "profile": profile,
+        "candidates": candidates,
+        "rating_stats": rating_stats,
+        "personalized": loans_status == 200 and bool(signals),
+        "basis": {
+            "loans_used": len(loan_books),
+            "wishlist_used": len(wishlist_books),
+            "ratings_used": len(rated_books),
+            "loans_status": loans_status,
+        },
+    }
+
+
+def _build_recommendation_reason_prompt(entries: list[dict], profile: dict) -> str:
+    liked_categories = sorted(
+        (name for name, weight in (profile.get("categories") or {}).items() if weight > 0),
+    )[:5]
+    liked_authors = sorted(
+        (name for name, weight in (profile.get("authors") or {}).items() if weight > 0),
+    )[:5]
+
+    lines = ["[SỞ THÍCH NGƯỜI ĐỌC]"]
+    lines.append(f"- Thể loại hay mượn: {', '.join(liked_categories) if liked_categories else 'chưa có dữ liệu'}")
+    lines.append(f"- Tác giả hay đọc: {', '.join(liked_authors) if liked_authors else 'chưa có dữ liệu'}")
+    lines.append("")
+    lines.append("[SÁCH ĐƯỢC HỆ THỐNG CHỌN]")
+    for entry in entries:
+        breakdown = entry.get("breakdown") or {}
+        hints = []
+        if breakdown.get("affinity", 0) >= 0.3:
+            hints.append("khớp thể loại/tác giả người đọc ưa thích")
+        if breakdown.get("semantic", 0) >= 0.6:
+            hints.append("nội dung gần với sách đã đọc")
+        if breakdown.get("quality", 0) >= 0.7:
+            hints.append("được đánh giá cao")
+        if breakdown.get("availability", 1.0) < 1.0:
+            hints.append("đang hết hàng, cần đặt trước")
+        lines.append(
+            f"- book_id={entry['book_id']} | {entry['title']} | tác giả {entry.get('author') or 'chưa rõ'} "
+            f"| thể loại {entry.get('category') or 'chưa rõ'} | tín hiệu: {'; '.join(hints) or 'phổ biến trong thư viện'}"
+        )
+    lines.append("")
+    lines.append("Hãy trả về JSON object, khóa là book_id ở trên, giá trị là một câu lý do tiếng Việt.")
+    return "\n".join(lines)
+
+
+async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> str:
+    """Fill in `reason` for each entry. Returns the provider actually used.
+
+    The model only writes prose: any key it returns that is not one of our chosen
+    book_ids is discarded, and anything it fails to produce falls back to a
+    rule-based sentence, so a recommendation is never left unexplained.
+    """
+    allowed = {entry["book_id"] for entry in entries}
+    reasons: dict = {}
+    provider = "rules"
+
+    if entries:
+        user_prompt = _build_recommendation_reason_prompt(entries, profile)
+        parsed, ok = await _call_anthropic_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+        if ok and parsed:
+            provider = "anthropic"
+        else:
+            parsed, ok = await _call_ollama_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+            if ok and parsed:
+                provider = "ollama"
+        if ok and isinstance(parsed, dict):
+            reasons = {
+                str(key): str(value).strip()
+                for key, value in parsed.items()
+                if str(key) in allowed and isinstance(value, str) and value.strip()
+            }
+
+    for entry in entries:
+        entry["reason"] = reasons.get(entry["book_id"]) or recommendation.rule_based_reason(entry, profile)
+    if not reasons:
+        provider = "rules"
+    return provider
+
+
 @app.post("/recommendations")
-async def get_recommendations(req: RecommendationRequest):
-    user_prompt = _build_recommendation_prompt(req)
+async def get_recommendations(request: Request, req: RecommendationRequest):
+    """Personalised book recommendations for the signed-in reader.
 
-    messages = [
-        {"role": "system", "content": RECOMMENDATION_SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
+    Candidates are generated and ranked in code (recommendation.py) from the
+    caller's own borrow/wishlist/rating history, so every returned book_id exists
+    in the catalog by construction. The LLM is only asked to phrase each reason.
+    """
+    auth_header = request.headers.get("authorization")
+    limit = max(1, min(int(req.limit or 6), 20))
 
-    reply, anthropic_ok = await _chat_with_anthropic(messages)
-    if anthropic_ok and reply:
-        recs = _parse_recommendation_json(reply)
-        if recs:
-            return {"recommendations": recs, "ai_provider": "anthropic"}
+    signals = await _load_reader_signals(auth_header)
+    candidates = signals["candidates"]
 
-    reply, ollama_ok = await _chat_with_ollama(messages)
-    if ollama_ok and reply:
-        recs = _parse_recommendation_json(reply)
-        if recs:
-            return {"recommendations": recs, "ai_provider": "ollama"}
+    semantic: list[float] = []
+    profile_text = (signals["profile"].get("text") or "").strip()
+    if candidates and profile_text:
+        # Blocking Ollama call; keep it off the event loop like every other
+        # embedding caller in this service.
+        semantic = await asyncio.to_thread(
+            book_index.semantic_scores, candidates, profile_text
+        )
 
-    return {"recommendations": [], "ai_provider": "fallback"}
+    entries = recommendation.rank_candidates(
+        candidates,
+        signals["profile"],
+        rating_stats=signals["rating_stats"],
+        semantic=semantic,
+        limit=limit,
+    )
+    provider = await _attach_recommendation_reasons(entries, signals["profile"])
+
+    return {
+        "recommendations": entries,
+        "ai_provider": provider,
+        "personalized": signals["personalized"],
+        "basis": signals["basis"],
+        "semantic_used": bool(semantic),
+    }
 
 
 # ────────────────────────────────────────────────────────────────────────────────

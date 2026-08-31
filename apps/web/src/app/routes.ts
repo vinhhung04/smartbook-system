@@ -143,6 +143,7 @@ export const router = createBrowserRouter([
       { path: 'notifications', lazy: { Component: async () => (await import("@/components/pages/customer/notifications")).CustomerNotificationsPage } },
       { path: 'reading-analytics', lazy: { Component: async () => (await import("@/components/pages/customer/reading-analytics")).CustomerReadingAnalyticsPage } },
       { path: 'wishlist', lazy: { Component: async () => (await import("@/components/pages/customer/wishlist")).CustomerWishlistPage } },
+      { path: 'recommendations', lazy: { Component: async () => (await import("@/components/pages/customer/recommendations")).CustomerRecommendationsPage } },
     ],
   },
   {

@@ -105,5 +105,37 @@ class FindRelevantTests(unittest.TestCase):
         self.assertTrue(all(vector for _, vector in second_load))
 
 
+class CacheKeyTests(unittest.TestCase):
+    """A cached index built by one embedding model must not be reused by another:
+    the vectors have different dimensions, and cosine similarity scores mismatched
+    lengths as 0.0, which looks like "nothing is relevant" rather than an error."""
+
+    def setUp(self):
+        _reset_module_state()
+        self.original_model = faq_retrieval.embeddings.EMBED_MODEL
+
+    def tearDown(self):
+        faq_retrieval.embeddings.EMBED_MODEL = self.original_model
+        _reset_module_state()
+
+    def test_cache_key_changes_when_the_embedding_model_changes(self):
+        first = faq_retrieval._content_hash()
+        faq_retrieval.embeddings.EMBED_MODEL = self.original_model + "-other"
+        self.assertNotEqual(first, faq_retrieval._content_hash())
+
+    def test_index_is_rebuilt_after_an_embedding_model_swap(self):
+        small = {entry["question"]: [1.0, 0.0] for entry in FAQ_ENTRIES}
+        client = FakeOllamaClient(small, default=[1.0, 0.0])
+        faq_retrieval._load_faq_vectors(client=client)
+        self.assertTrue(os.path.exists(faq_retrieval._CACHE_PATH))
+
+        faq_retrieval.embeddings.EMBED_MODEL = self.original_model + "-other"
+        faq_retrieval._faq_vectors = None
+        wide = {entry["question"]: [0.0, 1.0, 0.0, 0.0] for entry in FAQ_ENTRIES}
+        rebuilt = faq_retrieval._load_faq_vectors(client=FakeOllamaClient(wide, default=[0.0, 1.0, 0.0, 0.0]))
+        self.assertTrue(all(len(vector) == 4 for _, vector in rebuilt),
+                        "stale 2-dim vectors were reused after the model changed")
+
+
 if __name__ == "__main__":
     unittest.main()
