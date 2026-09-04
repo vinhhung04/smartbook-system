@@ -1,6 +1,6 @@
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
-const { resolveActiveMembership } = require('../services/membership.service');
+const { resolveActiveMembership, computeMembershipEndDate } = require('../services/membership.service');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -116,6 +116,7 @@ async function ensureCurrentCustomer(req) {
           plan_id: membershipPlan.id,
           card_number: generateCardNumber(customer.id),
           start_date: new Date(),
+          end_date: computeMembershipEndDate(new Date()),
           status: 'ACTIVE',
           note: 'Auto assigned from customer self provisioning',
         },
@@ -232,6 +233,7 @@ async function createCustomer(req, res) {
             plan_id: membershipPlan.id,
             card_number: generateCardNumber(customer.id),
             start_date: new Date(),
+            end_date: computeMembershipEndDate(new Date()),
             status: resolvedStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
             note: 'Auto assigned on customer creation',
           },
@@ -572,6 +574,7 @@ async function provisionCustomerFromAuth(req, res) {
           plan_id: ensuredPlan.id,
           card_number: generateCardNumber(customer.id),
           start_date: new Date(),
+          end_date: computeMembershipEndDate(new Date()),
           status: 'ACTIVE',
           note: 'Auto assigned from auth register',
         },

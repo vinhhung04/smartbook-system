@@ -36,6 +36,17 @@ async function resolveActiveMembership(tx, customerId) {
   };
 }
 
+const DEFAULT_MEMBERSHIP_DURATION_DAYS = 365;
+
+function computeMembershipEndDate(startDate, durationDays = DEFAULT_MEMBERSHIP_DURATION_DAYS) {
+  const start = startDate instanceof Date ? startDate : new Date(startDate);
+  const end = new Date(start.getTime());
+  end.setUTCDate(end.getUTCDate() + durationDays);
+  return end;
+}
+
 module.exports = {
   resolveActiveMembership,
+  computeMembershipEndDate,
+  DEFAULT_MEMBERSHIP_DURATION_DAYS,
 };
