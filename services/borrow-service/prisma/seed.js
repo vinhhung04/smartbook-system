@@ -249,11 +249,17 @@ await prisma.customer_memberships.createMany({
 
 // customers[6] giữ một membership ĐÃ HẾT HẠN có chủ đích — dùng để demo/test luồng
 // "khách hết hạn không mượn được sách" mà không cần chờ dữ liệu thật quá hạn.
-await prisma.customer_memberships.create({
-  data: {
+await prisma.customer_memberships.upsert({
+  where: { card_number: 'CARD-007-BASIC' },
+  create: {
     customer_id: customers[6].id,
     plan_id: plans[0].id,
     card_number: 'CARD-007-BASIC',
+    start_date: new Date(Date.now() - oneYearMs - 30 * 24 * 60 * 60 * 1000),
+    end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    status: 'EXPIRED',
+  },
+  update: {
     start_date: new Date(Date.now() - oneYearMs - 30 * 24 * 60 * 60 * 1000),
     end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     status: 'EXPIRED',
