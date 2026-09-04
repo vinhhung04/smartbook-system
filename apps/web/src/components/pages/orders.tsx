@@ -13,6 +13,7 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { exportToCsv } from "@/lib/export-utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,6 +83,30 @@ export function OrdersPage() {
     );
   }), [receiptsData, statusFilter, searchQuery]);
 
+  const handleExport = () => {
+    exportToCsv(
+      filtered.map((r) => ({
+        receipt_number: r.receipt_number,
+        po_number: r.po_number || '',
+        warehouse_name: r.warehouse_name || '',
+        item_count: r.item_count,
+        total_amount: r.total_amount,
+        status: r.status,
+        created_at: formatDate(r.created_at),
+      })),
+      [
+        { header: 'Số phiếu', key: 'receipt_number' },
+        { header: 'Số PO', key: 'po_number' },
+        { header: 'Kho', key: 'warehouse_name' },
+        { header: 'Số mặt hàng', key: 'item_count' },
+        { header: 'Tổng tiền', key: 'total_amount' },
+        { header: 'Trạng thái', key: 'status' },
+        { header: 'Ngày tạo', key: 'created_at' },
+      ],
+      'phieu-nhap-kho',
+    );
+  };
+
   useEffect(() => {
     setPage(1);
   }, [statusFilter, searchQuery]);
@@ -119,7 +144,7 @@ export function OrdersPage() {
               <NavLink to="/putaway" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-emerald-100 dark:border-emerald-500/20 bg-card text-emerald-700 dark:text-emerald-400 text-[13px] hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all shadow-sm font-medium">
                 <ClipboardCheck className="w-3.5 h-3.5" /> Putaway
               </NavLink>
-              <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 dark:border-blue-500/20 bg-card text-blue-700 dark:text-blue-400 text-[13px] hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all shadow-sm font-medium">
+              <button onClick={handleExport} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 dark:border-blue-500/20 bg-card text-blue-700 dark:text-blue-400 text-[13px] hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all shadow-sm font-medium">
                 <Download className="w-3.5 h-3.5" /> Xuất
               </button>
               <NavLink to="/orders/new" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all font-medium">
