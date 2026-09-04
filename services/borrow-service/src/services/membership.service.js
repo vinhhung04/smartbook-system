@@ -45,8 +45,15 @@ function computeMembershipEndDate(startDate, durationDays = DEFAULT_MEMBERSHIP_D
   return end;
 }
 
+function resolveRenewalStart(currentEndDate, today = new Date()) {
+  if (!currentEndDate) return today;
+  const end = currentEndDate instanceof Date ? currentEndDate : new Date(currentEndDate);
+  return end.getTime() > today.getTime() ? end : today;
+}
+
 module.exports = {
   resolveActiveMembership,
   computeMembershipEndDate,
+  resolveRenewalStart,
   DEFAULT_MEMBERSHIP_DURATION_DAYS,
 };
