@@ -184,7 +184,6 @@ export const router = createBrowserRouter([
       { path: "receiving-check", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/receiving-check")).ReceivingCheckPage } },
       { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway")).PutawayPage } },
       { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-detail")).PutawayDetailPage } },
-      { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-execute")).PutawayExecutePage } },
       { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), lazy: { Component: async () => (await import("@/components/pages/receiving-putaway")).ReceivingPutawayPage } },
       { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/receiving-smart")).SmartReceivingPage } },
       { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/picking")).PickingPage } },

@@ -55,6 +55,7 @@ export const navGroups = [
       { to: "/suppliers", icon: Truck, labelKey: "sidebar.suppliers", access: ROUTE_ACCESS.suppliers, activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/catalog", icon: BookOpen, labelKey: "sidebar.catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
       { to: "/ai-import", icon: Sparkles, labelKey: "sidebar.ai_import", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
+      { to: "/receiving-smart", icon: Sparkles, labelKey: "sidebar.receiving_smart", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-teal-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
     ],
   },
   {
