@@ -1,4 +1,4 @@
-import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun, MessagesSquare } from "lucide-react";
+import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -189,10 +189,6 @@ export function Topbar() {
       <div className="flex items-center gap-2">
         <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
           <ScanBarcode className="w-4 h-4" />
-        </NavLink>
-
-        <NavLink to="/messages" className="w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500 dark:text-slate-400" title={t('sidebar.messages')} aria-label={t('sidebar.messages')}>
-          <MessagesSquare className="w-4 h-4" />
         </NavLink>
 
         <ThemeToggle />
