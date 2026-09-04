@@ -6,6 +6,7 @@ const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
 const { AccountError, getCustomerAccountSnapshot, creditAccount, listAccountLedger } = require('../services/account.service');
 const { recomputeCustomerFineBalance } = require('../services/fine.service');
+const { getVariantDetails } = require('../services/inventory-integration.service');
 
 function parsePagination(query) {
   const page = Math.max(1, Number.parseInt(String(query.page || '1'), 10) || 1);
@@ -47,8 +48,26 @@ async function getMyReservations(req, res) {
       prisma.loan_reservations.count({ where }),
     ]);
 
+    let variantById = new Map();
+    try {
+      const variants = await getVariantDetails({
+        variantIds: items.map((item) => item.variant_id),
+        authHeader: req.headers.authorization,
+      });
+      variantById = new Map(variants.map((v) => [v.id, v]));
+    } catch (enrichError) {
+      console.error('getMyReservations: failed to enrich book titles:', enrichError);
+    }
+
+    const enrichedItems = items.map((item) => ({
+      ...item,
+      book_title: variantById.get(item.variant_id)?.title || null,
+      book_author: variantById.get(item.variant_id)?.author || null,
+      book_cover_url: variantById.get(item.variant_id)?.cover_image_url || null,
+    }));
+
     return res.json({
-      data: items,
+      data: enrichedItems,
       meta: {
         page: pagination.page,
         pageSize: pagination.pageSize,
@@ -132,8 +151,31 @@ async function getMyLoans(req, res) {
       prisma.loan_transactions.count({ where }),
     ]);
 
+    let variantById = new Map();
+    try {
+      const allVariantIds = items.flatMap((loan) => loan.loan_items.map((li) => li.variant_id));
+      const variants = await getVariantDetails({ variantIds: allVariantIds, authHeader: req.headers.authorization });
+      variantById = new Map(variants.map((v) => [v.id, v]));
+    } catch (enrichError) {
+      console.error('getMyLoans: failed to enrich book titles:', enrichError);
+    }
+
+    const enrichedItems = items.map((loan) => {
+      const enrichedLoanItems = loan.loan_items.map((li) => ({
+        ...li,
+        book_title: variantById.get(li.variant_id)?.title || null,
+        book_cover_url: variantById.get(li.variant_id)?.cover_image_url || null,
+      }));
+      return {
+        ...loan,
+        loan_items: enrichedLoanItems,
+        primary_book_title: enrichedLoanItems[0]?.book_title || null,
+        extra_item_count: Math.max(0, enrichedLoanItems.length - 1),
+      };
+    });
+
     return res.json({
-      data: items,
+      data: enrichedItems,
       meta: {
         page: pagination.page,
         pageSize: pagination.pageSize,
