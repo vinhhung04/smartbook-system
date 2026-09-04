@@ -322,6 +322,9 @@ async function getMyAccount(req, res) {
   }
 }
 
+// NOTE: không còn route nào gọi hàm này — thanh toán phạt và nạp ví tự phục vụ đã bị gỡ
+// vì hệ thống chưa tích hợp cổng thanh toán thật (xem finding CUST-01/LIB-02).
+// Việc ghi nhận thanh toán phạt thật do nhân viên thực hiện qua POST /borrow/fines/:id/payments.
 async function payMyFine(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -457,6 +460,9 @@ async function payMyFine(req, res) {
   }
 }
 
+// NOTE: không còn route nào gọi hàm này — thanh toán phạt và nạp ví tự phục vụ đã bị gỡ
+// vì hệ thống chưa tích hợp cổng thanh toán thật (xem finding CUST-01/LIB-02).
+// Việc ghi nhận thanh toán phạt thật do nhân viên thực hiện qua POST /borrow/fines/:id/payments.
 async function getMyMomoPaymentStatus(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -500,6 +506,9 @@ async function getMyMomoPaymentStatus(req, res) {
   }
 }
 
+// NOTE: không còn route nào gọi hàm này — thanh toán phạt và nạp ví tự phục vụ đã bị gỡ
+// vì hệ thống chưa tích hợp cổng thanh toán thật (xem finding CUST-01/LIB-02).
+// Việc ghi nhận thanh toán phạt thật do nhân viên thực hiện qua POST /borrow/fines/:id/payments.
 async function topupMyAccount(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);

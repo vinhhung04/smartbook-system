@@ -3,14 +3,11 @@ import { StatusBadge } from './status-badge';
 
 interface FineItemProps {
   fine: any;
-  paying: boolean;
-  onPay: (fine: any, mode: 'PARTIAL' | 'FULL') => void;
 }
 
-export function FineItem({ fine, paying, onPay }: FineItemProps) {
+export function FineItem({ fine }: FineItemProps) {
   const paid = (fine?.fine_payments || []).reduce((sum: number, row: any) => sum + Number(row?.amount || 0), 0);
   const remaining = Math.max(0, Number(fine?.amount || 0) - Number(fine?.waived_amount || 0) - paid);
-  const disabled = remaining <= 0 || paying;
   const status = String(fine?.status || '').toUpperCase();
   const isHighRemaining = remaining >= 500000;
 
@@ -37,24 +34,11 @@ export function FineItem({ fine, paying, onPay }: FineItemProps) {
         </div>
       </div>
 
-      <div className="mt-3 flex gap-2">
-        <button
-          disabled={disabled}
-          onClick={() => onPay(fine, 'PARTIAL')}
-          className="rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          style={{ fontWeight: 600 }}
-        >
-          Trả 50%
-        </button>
-        <button
-          disabled={disabled}
-          onClick={() => onPay(fine, 'FULL')}
-          className="rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:opacity-60"
-          style={{ fontWeight: 600 }}
-        >
-          Trả đầy đủ
-        </button>
-      </div>
+      {remaining > 0 ? (
+        <div className="mt-3 rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] text-slate-600">
+          Vui lòng thanh toán khoản phạt này tại quầy thư viện. Nhân viên sẽ ghi nhận thanh toán vào hệ thống.
+        </div>
+      ) : null}
     </div>
   );
 }
