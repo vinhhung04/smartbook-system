@@ -25,6 +25,7 @@ const LOCATION_SELECT_FIELDS = {
   bin: true,
   barcode: true,
   capacity_qty: true,
+  available: true,
   is_pickable: true,
   is_active: true,
   created_at: true,

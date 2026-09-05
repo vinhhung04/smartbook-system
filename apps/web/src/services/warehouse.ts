@@ -50,6 +50,7 @@ export interface LocationNode {
   is_active: boolean;
   barcode?: string | null;
   capacity_qty?: number | null;
+  available?: number | null;
   children?: LocationNode[];
 }
 
