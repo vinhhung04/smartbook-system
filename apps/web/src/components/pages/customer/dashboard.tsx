@@ -115,8 +115,8 @@ export function CustomerDashboardPage() {
       >
         {/* Decorative */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
-        <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full translate-y-1/3 -translate-x-1/4" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-card/5 rounded-full -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-40 h-40 bg-card/5 rounded-full translate-y-1/3 -translate-x-1/4" />
 
         <div className="relative flex items-center justify-between gap-4">
           <div className="text-white">
@@ -155,10 +155,10 @@ export function CustomerDashboardPage() {
               <div className="space-y-2">
                 {overdueLoans.map((loan: any) => (
                   <NavLink key={loan.id} to="/customer/loans"
-                    className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 hover:bg-red-100 transition-colors">
+                    className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 hover:bg-red-100 transition-colors dark:border-red-900/40 dark:bg-red-950/30 dark:hover:bg-red-900/40">
                     <div className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-                      <span className="text-[13px] text-red-800">
+                      <span className="text-[13px] text-red-800 dark:text-red-300">
                         Sách quá hạn: <span className="font-medium">{loan.loan_number || loan.id?.slice(0, 8)}</span>
                       </span>
                     </div>
@@ -167,10 +167,10 @@ export function CustomerDashboardPage() {
                 ))}
                 {readyReservations.map((res: any) => (
                   <NavLink key={res.id} to="/customer/reservations"
-                    className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5 hover:bg-emerald-100 transition-colors">
+                    className="flex items-center justify-between rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5 hover:bg-emerald-100 transition-colors dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40">
                     <div className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="text-[13px] text-emerald-800">
+                      <span className="text-[13px] text-emerald-800 dark:text-emerald-300">
                         Sách sẵn sàng nhận: <span className="font-medium">{res.book_title || res.id?.slice(0, 8)}</span>
                       </span>
                     </div>
@@ -179,10 +179,10 @@ export function CustomerDashboardPage() {
                 ))}
                 {fineBalance > 0 && (
                   <NavLink to="/customer/fines"
-                    className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 hover:bg-amber-100 transition-colors">
+                    className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 hover:bg-amber-100 transition-colors dark:border-amber-900/40 dark:bg-amber-950/30 dark:hover:bg-amber-900/40">
                     <div className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
-                      <span className="text-[13px] text-amber-800">
+                      <span className="text-[13px] text-amber-800 dark:text-amber-300">
                         Tiền phạt chưa thanh toán: <span className="font-medium">{formatCurrencyVnd(fineBalance)}</span>
                       </span>
                     </div>
@@ -201,7 +201,7 @@ export function CustomerDashboardPage() {
           <StatCard
             label="Hội viên"
             value={membership.plan_name || 'Tiêu chuẩn'}
-            hint={<span className="text-indigo-600">{membership.plan_code}</span>}
+            hint={<span className="text-indigo-600 dark:text-indigo-400">{membership.plan_code}</span>}
             icon={ShieldCheck}
             variant="primary"
           />
@@ -386,12 +386,12 @@ export function CustomerDashboardPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.45 }}
-          className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 flex items-center gap-3"
+          className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 flex items-center gap-3 dark:border-amber-800/40 dark:from-amber-950/30 dark:to-orange-950/20"
         >
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
           <div>
-            <p className="text-[13px] font-semibold text-amber-800">Còn tiền phạt chưa trả</p>
-            <p className="text-[12px] text-amber-700 mt-0.5">
+            <p className="text-[13px] font-semibold text-amber-800 dark:text-amber-300">Còn tiền phạt chưa trả</p>
+            <p className="text-[12px] text-amber-700 dark:text-amber-400 mt-0.5">
               Bạn còn {formatCurrencyVnd(fineBalance)} tiền phạt. Trả sớm để tránh bị hạn chế mượn sách.
             </p>
           </div>

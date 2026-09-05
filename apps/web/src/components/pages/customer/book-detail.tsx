@@ -52,7 +52,7 @@ function StarRating({ value, onChange, size = 20, readonly = false }: {
             className={`transition-colors ${
               star <= (hover || value)
                 ? 'fill-amber-400 text-amber-400'
-                : 'fill-transparent text-slate-300'
+                : 'fill-transparent text-slate-300 dark:text-slate-600'
             }`}
           />
         </button>
@@ -174,7 +174,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
                 <div key={row.star} className="flex items-center gap-2">
                   <span className="text-[11px] text-muted-foreground w-4 text-right">{row.star}</span>
                   <Star size={12} className="fill-amber-400 text-amber-400 shrink-0" />
-                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full bg-amber-400 transition-all"
                       style={{ width: stats.totalReviews > 0 ? `${(row.count / stats.totalReviews) * 100}%` : '0%' }}
@@ -203,7 +203,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-input bg-white px-4 py-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/10 resize-none"
+            className="w-full rounded-xl border border-input bg-card px-4 py-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/10 resize-none"
           />
           <div className="flex items-center gap-2">
             <button
@@ -217,7 +217,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
               <button
                 onClick={() => void handleDelete()}
                 disabled={deleting}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 disabled:opacity-50 transition-colors dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-900/40"
               >
                 <Trash2 size={14} />
                 {deleting ? 'Deleting...' : 'Delete'}
@@ -230,8 +230,8 @@ function ReviewSection({ bookId }: { bookId: string }) {
       {/* Reviews List */}
       <div className="space-y-3">
         {reviews.length === 0 && !loading ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-8 text-center">
-            <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+          <div className="rounded-xl border border-dashed border-border bg-muted/50 py-8 text-center">
+            <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
             <p className="text-[13px] text-muted-foreground">No reviews yet. Be the first to share your thoughts!</p>
           </div>
         ) : (
@@ -239,8 +239,8 @@ function ReviewSection({ bookId }: { bookId: string }) {
             <div key={review.id} className="rounded-xl border border-black/5 bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                    <span className="text-[13px] font-semibold text-indigo-600">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
+                    <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400">
                       {review.customers?.full_name?.charAt(0)?.toUpperCase() || '?'}
                     </span>
                   </div>
@@ -350,7 +350,7 @@ export function CustomerBookDetailPage() {
         className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/20"
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-60 h-60 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3" />
+        <div className="absolute top-0 right-0 w-60 h-60 bg-card/5 rounded-full -translate-y-1/2 translate-x-1/3" />
         <div className="relative flex items-center gap-4">
           <div>
             <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>{book.title}</h1>
@@ -388,10 +388,10 @@ export function CustomerBookDetailPage() {
             {book.cover_image_url ? (
               <img src={book.cover_image_url} alt={book.title} className="w-full h-auto object-cover" />
             ) : (
-              <div className="aspect-[2/3] bg-gradient-to-br from-indigo-100 via-blue-50 to-cyan-50 flex items-center justify-center">
+              <div className="aspect-[2/3] bg-gradient-to-br from-indigo-100 via-blue-50 to-cyan-50 dark:from-indigo-950/40 dark:via-card dark:to-cyan-950/30 flex items-center justify-center">
                 <div className="text-center p-6">
-                  <BookOpen className="w-12 h-12 text-indigo-300 mx-auto mb-3" />
-                  <p className="text-[12px] text-indigo-400">{book.category || 'Book'}</p>
+                  <BookOpen className="w-12 h-12 text-indigo-300 dark:text-indigo-700 mx-auto mb-3" />
+                  <p className="text-[12px] text-indigo-400 dark:text-indigo-500">{book.category || 'Book'}</p>
                 </div>
               </div>
             )}
@@ -400,15 +400,15 @@ export function CustomerBookDetailPage() {
           {/* Availability Status */}
           <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${
             isAvailable
-              ? 'bg-emerald-50 border-emerald-100'
-              : 'bg-rose-50 border-rose-100'
+              ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/40'
+              : 'bg-rose-50 border-rose-100 dark:bg-rose-950/30 dark:border-rose-900/40'
           }`}>
             <div className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-rose-500'}`} />
             <div>
-              <p className={`text-[13px] font-semibold ${isAvailable ? 'text-emerald-700' : 'text-rose-700'}`}>
+              <p className={`text-[13px] font-semibold ${isAvailable ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                 {isAvailable ? 'Có thể đặt trước' : 'Hết sách'}
               </p>
-              <p className={`text-[11px] ${isAvailable ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <p className={`text-[11px] ${isAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                 {isAvailable ? `${availableStock} cuốn sẵn sàng` : 'Hiện không có sẵn'}
               </p>
             </div>
@@ -452,20 +452,20 @@ export function CustomerBookDetailPage() {
 
           {/* AI Summary */}
           {book.summary_vi && (
-            <div className="rounded-xl border border-cyan-100 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="rounded-xl border border-cyan-100 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:border-cyan-900/30 dark:from-cyan-950/20 dark:to-blue-950/10">
               <div className="flex items-center gap-2 mb-3">
-                <Star className="w-4 h-4 text-cyan-600" />
-                <h3 className="text-[14px] font-semibold text-cyan-800">Tóm tắt AI</h3>
+                <Star className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <h3 className="text-[14px] font-semibold text-cyan-800 dark:text-cyan-300">Tóm tắt AI</h3>
               </div>
-              <p className="text-[13px] text-cyan-900 leading-relaxed whitespace-pre-line">{book.summary_vi}</p>
+              <p className="text-[13px] text-cyan-900 dark:text-cyan-200 leading-relaxed whitespace-pre-line">{book.summary_vi}</p>
             </div>
           )}
 
           {/* Reserve CTA */}
-          <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-violet-50/40 p-5">
+          <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-violet-50/40 p-5 dark:border-indigo-900/30 dark:from-indigo-950/20 dark:to-violet-950/10">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
-                <ShoppingCart className="w-5 h-5 text-indigo-600" />
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0 mt-0.5">
+                <ShoppingCart className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div className="flex-1">
                 <h3 className="text-[14px] font-semibold text-foreground mb-1">Đặt trước sách này</h3>
@@ -487,8 +487,8 @@ export function CustomerBookDetailPage() {
           </div>
 
           {/* Info Note */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-[12px] text-amber-700 leading-relaxed">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
+            <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
               <strong>Lưu ý:</strong> Đặt trước chỉ được giữ trong thời gian giới hạn. Vui lòng nhận sách tại thư viện trong thời hạn quy định. Đến trễ có thể dẫn đến hủy đặt trước.
             </p>
           </div>

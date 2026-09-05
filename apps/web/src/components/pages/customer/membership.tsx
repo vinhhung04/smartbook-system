@@ -38,9 +38,9 @@ export function CustomerMembershipPage() {
       {/* Hero Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-card/5 rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="relative flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-card/10 backdrop-blur border border-white/20 flex items-center justify-center">
             <ShieldCheck className="w-7 h-7 text-white" />
           </div>
           <div>
@@ -89,20 +89,20 @@ export function CustomerMembershipPage() {
       {/* QR Code */}
       <SectionCard title="Mã QR thẻ thành viên" subtitle="Xuất trình khi đến thư viện" icon={QrCode}>
         <div className="flex flex-col items-center gap-3 py-4">
-          <div className="p-3 bg-white rounded-xl border-2 border-indigo-100 shadow-sm">
+          <div className="p-3 bg-card rounded-xl border-2 border-indigo-100 shadow-sm">
             <QRCode value={`SMARTBOOK:MEMBER:${membership.card_number || membership.membership_id}`} size={180} />
           </div>
-          <p className="text-[14px] font-mono text-slate-700" style={{ fontWeight: 600, letterSpacing: '0.05em' }}>
+          <p className="text-[14px] font-mono text-slate-700 dark:text-slate-300" style={{ fontWeight: 600, letterSpacing: '0.05em' }}>
             {membership.card_number || membership.membership_id || 'N/A'}
           </p>
-          <p className="text-[11px] text-slate-400">Quét mã này tại quầy để mượn/trả sách nhanh chóng</p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">Quét mã này tại quầy để mượn/trả sách nhanh chóng</p>
         </div>
       </SectionCard>
 
       {/* Info Note */}
-      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-        <p className="text-[12px] text-amber-700 leading-relaxed">
+      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
+        <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+        <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
           Giới hạn mượn và chính sách được xác định bởi gói hội viên hiện tại. Liên hệ nhân viên thư viện để nâng cấp hoặc thỏa thuận đặc biệt.
         </p>
       </div>

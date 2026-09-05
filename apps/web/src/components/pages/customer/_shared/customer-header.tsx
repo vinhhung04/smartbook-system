@@ -54,7 +54,7 @@ export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, is
             </button>
             <h1 className="truncate text-[18px] text-foreground" style={{ fontWeight: 700 }}>{current.title}</h1>
           </div>
-          <p className="mt-0.5 truncate text-[12px] text-slate-500">{current.subtitle}</p>
+          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{current.subtitle}</p>
         </div>
 
         <div className="flex items-center gap-2">

@@ -46,8 +46,8 @@ export function CustomerFinesPage() {
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 to-red-50 flex items-center justify-center border border-rose-200/40">
-            <ReceiptText className="w-5 h-5 text-rose-600" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 to-red-50 dark:from-rose-950/40 dark:to-red-950/20 flex items-center justify-center border border-rose-200/40 dark:border-rose-800/40">
+            <ReceiptText className="w-5 h-5 text-rose-600 dark:text-rose-400" />
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Tiền phạt & Ví của tôi</h1>
@@ -57,7 +57,7 @@ export function CustomerFinesPage() {
         <button
           onClick={() => void loadFines()}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Làm mới
@@ -78,7 +78,7 @@ export function CustomerFinesPage() {
           </div>
 
           {totalFine > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-[13px] text-amber-800">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-[13px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
               Bạn còn <strong>{formatCurrencyVnd(totalFine)}</strong> tiền phạt chưa thanh toán. Vui lòng đến quầy thư viện để thanh toán trực tiếp — nhân viên sẽ ghi nhận vào hệ thống ngay khi bạn thanh toán xong.
             </div>
           ) : null}
@@ -106,7 +106,7 @@ export function CustomerFinesPage() {
                       <p className="text-[13px] font-medium text-foreground truncate">{entry.entry_type || entry.reference_type || 'Entry'}</p>
                       <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
                     </div>
-                    <span className={`text-[14px] font-bold shrink-0 ml-3 ${Number(entry.amount) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <span className={`text-[14px] font-bold shrink-0 ml-3 ${Number(entry.amount) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                       {Number(entry.amount) >= 0 ? '+' : ''}{formatCurrencyVnd(Number(entry.amount))}
                     </span>
                   </div>
