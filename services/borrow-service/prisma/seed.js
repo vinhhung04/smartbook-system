@@ -232,20 +232,25 @@ const memberships = [
   { customer_id: customers[7].id, plan_id: plans[2].id, card_number: 'CARD-008-GOLD', daysAgo: 90 },
 ];
 
-await prisma.customer_memberships.createMany({
-  data: memberships.map((m) => {
-    const start = membershipStart(m.daysAgo);
-    return {
+for (const m of memberships) {
+  const start = membershipStart(m.daysAgo);
+  await prisma.customer_memberships.upsert({
+    where: { card_number: m.card_number },
+    create: {
       customer_id: m.customer_id,
       plan_id: m.plan_id,
       card_number: m.card_number,
       start_date: start,
       end_date: membershipEnd(start),
       status: 'ACTIVE',
-    };
-  }),
-  skipDuplicates: true,
-});
+    },
+    update: {
+      start_date: start,
+      end_date: membershipEnd(start),
+      status: 'ACTIVE',
+    },
+  });
+}
 
 // customers[6] giữ một membership ĐÃ HẾT HẠN có chủ đích — dùng để demo/test luồng
 // "khách hết hạn không mượn được sách" mà không cần chờ dữ liệu thật quá hạn.

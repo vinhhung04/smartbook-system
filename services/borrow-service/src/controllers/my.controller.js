@@ -210,7 +210,25 @@ async function getMyLoanById(req, res) {
       return res.status(404).json({ message: 'Loan not found' });
     }
 
-    return res.json({ data: loan });
+    let variantById = new Map();
+    try {
+      const variantIds = loan.loan_items.map((li) => li.variant_id);
+      const variants = await getVariantDetails({ variantIds, authHeader: req.headers.authorization });
+      variantById = new Map(variants.map((v) => [v.id, v]));
+    } catch (enrichError) {
+      console.error('getMyLoanById: failed to enrich book titles:', enrichError);
+    }
+
+    const enrichedLoan = {
+      ...loan,
+      loan_items: loan.loan_items.map((li) => ({
+        ...li,
+        book_title: variantById.get(li.variant_id)?.title || null,
+        book_cover_url: variantById.get(li.variant_id)?.cover_image_url || null,
+      })),
+    };
+
+    return res.json({ data: enrichedLoan });
   } catch (error) {
     console.error('getMyLoanById error:', error);
     return res.status(500).json({ message: 'Internal server error' });

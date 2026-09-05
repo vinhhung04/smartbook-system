@@ -18,8 +18,8 @@ export function CustomerLoanDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingRenew, setIsSubmittingRenew] = useState(false);
 
-  const getBookTitle = (variantId: string) =>
-    books.find((b) => b.variant_id === variantId)?.title ?? variantId;
+  const getBookTitle = (item: any) =>
+    item.book_title || books.find((b) => b.variant_id === item.variant_id)?.title || 'Sách chưa xác định';
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -110,7 +110,7 @@ export function CustomerLoanDetailPage() {
             <div className="mt-2 space-y-2">
               {loan.loan_items.map((item: any) => (
                 <div key={item.id} className="rounded-[10px] border border-slate-200 p-3 text-[13px]">
-                  <div><span className="text-slate-500">Tên sách:</span> {getBookTitle(item.variant_id)}</div>
+                  <div><span className="text-slate-500">Tên sách:</span> {getBookTitle(item)}</div>
                   <div><span className="text-slate-500">Trạng thái:</span> {getStatusTone(item.status).label}</div>
                   <div><span className="text-slate-500">Hạn:</span> {formatDateTime(item.due_date)}</div>
                 </div>
