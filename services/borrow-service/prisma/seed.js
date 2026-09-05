@@ -218,74 +218,57 @@ console.log(`✅ Created ${customers.length} customers`);
 // STEP 3: CUSTOMER MEMBERSHIPS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-await prisma.customer_memberships.createMany({
-  data: [
-    {
-      customer_id: customers[0].id,
-      plan_id: plans[2].id, // GOLD
-      card_number: 'CARD-001-GOLD',
-      start_date: new Date('2024-01-01'),
-      end_date: new Date('2025-01-01'),
+const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+const membershipStart = (daysAgo) => new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+const membershipEnd = (startDate, durationDays = 365) => new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+const memberships = [
+  { customer_id: customers[0].id, plan_id: plans[2].id, card_number: 'CARD-001-GOLD', daysAgo: 240 },
+  { customer_id: customers[1].id, plan_id: plans[0].id, card_number: 'CARD-002-BASIC', daysAgo: 200 },
+  { customer_id: customers[2].id, plan_id: plans[1].id, card_number: 'CARD-003-SILVER', daysAgo: 180 },
+  { customer_id: customers[3].id, plan_id: plans[3].id, card_number: 'CARD-004-VIP', daysAgo: 220 },
+  { customer_id: customers[4].id, plan_id: plans[0].id, card_number: 'CARD-005-BASIC', daysAgo: 150 },
+  { customer_id: customers[5].id, plan_id: plans[1].id, card_number: 'CARD-006-SILVER', daysAgo: 120 },
+  { customer_id: customers[7].id, plan_id: plans[2].id, card_number: 'CARD-008-GOLD', daysAgo: 90 },
+];
+
+for (const m of memberships) {
+  const start = membershipStart(m.daysAgo);
+  await prisma.customer_memberships.upsert({
+    where: { card_number: m.card_number },
+    create: {
+      customer_id: m.customer_id,
+      plan_id: m.plan_id,
+      card_number: m.card_number,
+      start_date: start,
+      end_date: membershipEnd(start),
       status: 'ACTIVE',
     },
-    {
-      customer_id: customers[1].id,
-      plan_id: plans[0].id, // BASIC
-      card_number: 'CARD-002-BASIC',
-      start_date: new Date('2024-02-15'),
-      end_date: new Date('2025-02-15'),
+    update: {
+      start_date: start,
+      end_date: membershipEnd(start),
       status: 'ACTIVE',
     },
-    {
-      customer_id: customers[2].id,
-      plan_id: plans[1].id, // SILVER
-      card_number: 'CARD-003-SILVER',
-      start_date: new Date('2024-03-01'),
-      end_date: new Date('2025-03-01'),
-      status: 'ACTIVE',
-    },
-    {
-      customer_id: customers[3].id,
-      plan_id: plans[3].id, // VIP
-      card_number: 'CARD-004-VIP',
-      start_date: new Date('2024-01-15'),
-      end_date: new Date('2025-01-15'),
-      status: 'ACTIVE',
-    },
-    {
-      customer_id: customers[4].id,
-      plan_id: plans[0].id, // BASIC
-      card_number: 'CARD-005-BASIC',
-      start_date: new Date('2024-04-01'),
-      end_date: new Date('2025-04-01'),
-      status: 'ACTIVE',
-    },
-    {
-      customer_id: customers[5].id,
-      plan_id: plans[1].id, // SILVER
-      card_number: 'CARD-006-SILVER',
-      start_date: new Date('2024-05-01'),
-      end_date: new Date('2025-05-01'),
-      status: 'ACTIVE',
-    },
-    {
-      customer_id: customers[6].id,
-      plan_id: plans[0].id, // BASIC
-      card_number: 'CARD-007-BASIC',
-      start_date: new Date('2023-06-01'),
-      end_date: new Date('2024-06-01'),
-      status: 'EXPIRED',
-    },
-    {
-      customer_id: customers[7].id,
-      plan_id: plans[2].id, // GOLD
-      card_number: 'CARD-008-GOLD',
-      start_date: new Date('2024-06-01'),
-      end_date: new Date('2025-06-01'),
-      status: 'ACTIVE',
-    },
-  ],
-  skipDuplicates: true,
+  });
+}
+
+// customers[6] giữ một membership ĐÃ HẾT HẠN có chủ đích — dùng để demo/test luồng
+// "khách hết hạn không mượn được sách" mà không cần chờ dữ liệu thật quá hạn.
+await prisma.customer_memberships.upsert({
+  where: { card_number: 'CARD-007-BASIC' },
+  create: {
+    customer_id: customers[6].id,
+    plan_id: plans[0].id,
+    card_number: 'CARD-007-BASIC',
+    start_date: new Date(Date.now() - oneYearMs - 30 * 24 * 60 * 60 * 1000),
+    end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    status: 'EXPIRED',
+  },
+  update: {
+    start_date: new Date(Date.now() - oneYearMs - 30 * 24 * 60 * 60 * 1000),
+    end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    status: 'EXPIRED',
+  },
 });
 
 console.log('✅ Created customer memberships');
@@ -1168,7 +1151,15 @@ const extendedCustomer = await prisma.customers.upsert({
   },
 });
 await prisma.customer_memberships.createMany({
-  data: [{ customer_id: extendedCustomer.id, plan_id: plans[1].id, card_number: 'CARD-EXT-001-SILVER', start_date: new Date('2026-01-01'), end_date: new Date('2027-01-01'), status: 'ACTIVE', note: 'Student reader with mixed digital and counter activity.' }],
+  data: [{
+    customer_id: extendedCustomer.id,
+    plan_id: plans[1].id,
+    card_number: 'CARD-EXT-001-SILVER',
+    start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+    end_date: new Date(Date.now() + 305 * 24 * 60 * 60 * 1000),
+    status: 'ACTIVE',
+    note: 'Student reader with mixed digital and counter activity.',
+  }],
   skipDuplicates: true,
 });
 await prisma.customer_preferences.upsert({

@@ -3,6 +3,7 @@ import { createBrowserRouter, type LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authService } from "@/services/auth";
 import { canAccess, getHomePathForUser, ROUTE_ACCESS, type RouteAccessMeta } from "@/lib/rbac";
+import { RouteErrorPage } from "@/components/route-error-boundary";
 
 async function requireAuthLoader() {
   const user = await authService.hydrateCurrentUser();
@@ -129,6 +130,7 @@ export const router = createBrowserRouter([
   {
     path: '/customer',
     loader: requireCustomerAuthLoader,
+    errorElement: createElement(RouteErrorPage),
     lazy: { Component: async () => (await import("@/components/pages/customer/layout")).CustomerLayout },
     children: [
       { index: true, lazy: { Component: async () => (await import("@/components/pages/customer/dashboard")).CustomerDashboardPage } },
@@ -153,17 +155,18 @@ export const router = createBrowserRouter([
   {
     path: "/supplier",
     loader: requireSupplierAuthLoader,
+    errorElement: createElement(RouteErrorPage),
     lazy: { Component: async () => (await import("@/components/pages/supplier/supplier-account")).SupplierAccountPage },
   },
   {
     path: "/",
     loader: requireAuthLoader,
     hydrateFallbackElement,
+    errorElement: createElement(RouteErrorPage),
     lazy: { Component: async () => (await import("@/components/layout")).AppLayout },
     children: [
       { index: true, lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
       { path: "forbidden", lazy: { Component: async () => (await import("@/components/pages/forbidden")).ForbiddenPage } },
-      { path: "messages", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.messaging), lazy: { Component: async () => (await import("@/components/pages/messages")).MessagesPage } },
       { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), lazy: { Component: async () => (await import("@/components/pages/my-warehouse-tasks")).MyWarehouseTasksPage } },
       { path: "my-purchase-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.purchaseRequestSelf), lazy: { Component: async () => (await import("@/components/pages/my-purchase-requests")).MyPurchaseRequestsPage } },
       { path: "my-exception-reports", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.exceptionReportSelf), lazy: { Component: async () => (await import("@/components/pages/my-exception-reports")).MyExceptionReportsPage } },
@@ -185,7 +188,6 @@ export const router = createBrowserRouter([
       { path: "receiving-check", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/receiving-check")).ReceivingCheckPage } },
       { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway")).PutawayPage } },
       { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-detail")).PutawayDetailPage } },
-      { path: "putaway/:id/execute", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-execute")).PutawayExecutePage } },
       { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), lazy: { Component: async () => (await import("@/components/pages/receiving-putaway")).ReceivingPutawayPage } },
       { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/receiving-smart")).SmartReceivingPage } },
       { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/picking")).PickingPage } },

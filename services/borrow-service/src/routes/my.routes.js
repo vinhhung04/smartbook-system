@@ -7,11 +7,8 @@ const {
   getMyLoanById,
   requestMyLoanRenewal,
   getMyAccount,
-  topupMyAccount,
   getMyAccountLedger,
   getMyFines,
-  payMyFine,
-  getMyMomoPaymentStatus,
   getMyNotifications,
 } = require('../controllers/my.controller');
 const {
@@ -44,11 +41,8 @@ router.get('/loans/:id', getMyLoanById);
 router.post('/loans/:id/renew-request', requestMyLoanRenewal);
 
 router.get('/account', getMyAccount);
-router.post('/account/topup', topupMyAccount);
 router.get('/account/ledger', getMyAccountLedger);
 router.get('/fines', getMyFines);
-router.post('/fines/payments', payMyFine);
-router.get('/payments/momo/:orderId', getMyMomoPaymentStatus);
 router.get('/notifications', getMyNotifications);
 router.patch('/notifications/:id/read', async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 import { formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
 import { QRCode } from '@/components/ui/qr-code';
+import { BookCoverPlaceholder } from './book-cover-placeholder';
 import { useState } from 'react';
 
 interface ReservationItemProps {
@@ -17,18 +18,25 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
   const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
   const hoursToExpire = expiresAt ? Math.floor((expiresAt.getTime() - mountedAt) / (60 * 60 * 1000)) : null;
   const isExpiringSoon = status === 'PENDING' && hoursToExpire !== null && hoursToExpire >= 0 && hoursToExpire <= 72;
+  const bookTitle = item.book_title || 'Sách chưa xác định';
 
   return (
     <div className={`rounded-[12px] border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${isReady ? 'border-cyan-200 bg-cyan-50/60' : isExpiringSoon ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white'}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.reservation_number || 'Phiếu đặt trước'}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400">Thời gian đặt trước</div>
-          <div className="mt-1 text-[12px] text-slate-500">Ngày đặt: {formatDateTime(item.reserved_at)}</div>
-          <div className={`text-[12px] ${isExpiringSoon ? 'text-amber-700' : 'text-slate-500'}`} style={{ fontWeight: isExpiringSoon ? 600 : 500 }}>Hết hạn: {formatDateTime(item.expires_at)}</div>
+        <div className="flex gap-3 min-w-0">
+          <div className="w-12 shrink-0">
+            <BookCoverPlaceholder title={bookTitle} imageUrl={item.book_cover_url} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] text-slate-900 truncate" style={{ fontWeight: 700 }}>{bookTitle}</div>
+            {item.book_author ? <div className="text-[11px] text-slate-500 truncate">{item.book_author}</div> : null}
+            <div className="mt-1 text-[11px] text-slate-400">{item.reservation_number || 'Phiếu đặt trước'}</div>
+            <div className="mt-1 text-[12px] text-slate-500">Ngày đặt: {formatDateTime(item.reserved_at)}</div>
+            <div className={`text-[12px] ${isExpiringSoon ? 'text-amber-700' : 'text-slate-500'}`} style={{ fontWeight: isExpiringSoon ? 600 : 500 }}>Hết hạn: {formatDateTime(item.expires_at)}</div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <StatusBadge status={item.status} />
           <button
             disabled={!canCancel}

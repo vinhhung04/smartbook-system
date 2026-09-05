@@ -36,6 +36,24 @@ async function resolveActiveMembership(tx, customerId) {
   };
 }
 
+const DEFAULT_MEMBERSHIP_DURATION_DAYS = 365;
+
+function computeMembershipEndDate(startDate, durationDays = DEFAULT_MEMBERSHIP_DURATION_DAYS) {
+  const start = startDate instanceof Date ? startDate : new Date(startDate);
+  const end = new Date(start.getTime());
+  end.setUTCDate(end.getUTCDate() + durationDays);
+  return end;
+}
+
+function resolveRenewalStart(currentEndDate, today = new Date()) {
+  if (!currentEndDate) return today;
+  const end = currentEndDate instanceof Date ? currentEndDate : new Date(currentEndDate);
+  return end.getTime() > today.getTime() ? end : today;
+}
+
 module.exports = {
   resolveActiveMembership,
+  computeMembershipEndDate,
+  resolveRenewalStart,
+  DEFAULT_MEMBERSHIP_DURATION_DAYS,
 };

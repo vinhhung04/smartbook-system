@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { ReceiptText, RefreshCw, Wallet } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { toast } from 'sonner';
 import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatCard } from '@/components/ui/stat-card';
@@ -13,9 +12,6 @@ import { FineCard } from './_shared/fine-card';
 export function CustomerFinesPage() {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [payingFineId, setPayingFineId] = useState<string | null>(null);
-  const [topupAmount, setTopupAmount] = useState('50000');
-  const [isTopupLoading, setIsTopupLoading] = useState(false);
   const [accountSnapshot, setAccountSnapshot] = useState<any | null>(null);
   const [ledgerRows, setLedgerRows] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -43,51 +39,6 @@ export function CustomerFinesPage() {
 
   useEffect(() => { void loadFines(); }, []);
 
-  const getRemainingBalance = (fine: any) => {
-    const paid = (fine?.fine_payments || []).reduce(
-      (sum: number, payment: any) => sum + Number(payment?.amount || 0),
-      0
-    );
-    return Math.max(0, Number(fine?.amount || 0) - Number(fine?.waived_amount || 0) - paid);
-  };
-
-  const payFine = async (fine: any, mode: 'FULL' | 'PARTIAL') => {
-    const remaining = getRemainingBalance(fine);
-    if (remaining <= 0) {
-      toast.info('Khoản phạt này đã được thanh toán');
-      return;
-    }
-    const amount = mode === 'FULL' ? remaining : Number((remaining / 2).toFixed(2));
-    try {
-      setPayingFineId(String(fine.id));
-      await customerBorrowService.payFine({ fine_id: fine.id, amount, payment_method: 'EWALLET' });
-      toast.success(mode === 'FULL' ? 'Đã thanh toán tiền phạt' : 'Đã ghi nhận thanh toán một phần');
-      await loadFines();
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Thanh toán tiền phạt thất bại'));
-    } finally {
-      setPayingFineId(null);
-    }
-  };
-
-  const handleTopup = async () => {
-    const amount = Number(topupAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Số tiền nạp phải lớn hơn 0');
-      return;
-    }
-    try {
-      setIsTopupLoading(true);
-      await customerBorrowService.topupMyAccount({ amount, note: 'Topup from customer portal' });
-      toast.success('Nạp ví thành công');
-      await loadFines();
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Nạp ví thất bại'));
-    } finally {
-      setIsTopupLoading(false);
-    }
-  };
-
   const totalFine = Number(data?.total_fine_balance || 0);
   const walletBalance = Number(accountSnapshot?.available_balance || 0);
 
@@ -100,7 +51,7 @@ export function CustomerFinesPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Tiền phạt & Ví của tôi</h1>
-            <p className="text-[13px] text-muted-foreground">Quản lý số dư phạt và nạp tiền ví</p>
+            <p className="text-[13px] text-muted-foreground">Xem số dư phạt và lịch sử giao dịch ví</p>
           </div>
         </div>
         <button
@@ -126,46 +77,23 @@ export function CustomerFinesPage() {
             <StatCard label="Lần thanh toán" value={(data?.fine_payments || []).length} icon={ReceiptText} variant="info" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div>
-              <div className="rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
-                    <Wallet className="w-3.5 h-3.5 text-indigo-600" />
-                  </div>
-                  <h3 className="text-[14px] font-semibold">Nạp tiền ví</h3>
-                </div>
-                <p className="text-[12px] text-muted-foreground mb-3">Số dư: <strong className="text-foreground">{formatCurrencyVnd(walletBalance)}</strong></p>
-                <div className="flex items-center gap-2">
-                  <input value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} className="flex-1 h-10 rounded-xl border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40" inputMode="numeric" />
-                  <button onClick={() => void handleTopup()} disabled={isTopupLoading} className="h-10 rounded-xl bg-primary text-primary-foreground px-4 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap">
-                    {isTopupLoading ? 'Đang xử lý...' : 'Nạp tiền'}
-                  </button>
-                </div>
-                <div className="mt-2 flex gap-2">
-                  {['50000', '100000', '200000'].map(amt => (
-                    <button key={amt} onClick={() => setTopupAmount(amt)} className="text-[11px] rounded-lg border border-input px-2 py-1 text-muted-foreground hover:bg-muted transition-colors">
-                      {Number(amt).toLocaleString()} VND
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {totalFine > 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-[13px] text-amber-800">
+              Bạn còn <strong>{formatCurrencyVnd(totalFine)}</strong> tiền phạt chưa thanh toán. Vui lòng đến quầy thư viện để thanh toán trực tiếp — nhân viên sẽ ghi nhận vào hệ thống ngay khi bạn thanh toán xong.
             </div>
+          ) : null}
 
-            <div className="lg:col-span-2">
-              <SectionCard title="Phiếu phạt" subtitle={`${(data?.fines || []).length} phiếu`}>
-                {(data?.fines || []).length === 0 ? (
-                  <EmptyState variant="no-data" title="Chưa có phiếu phạt" description="Bạn không có tiền phạt. Tiếp tục đọc sách nhé!" />
-                ) : (
-                  <div className="space-y-3">
-                    {(data?.fines || []).map((fine: any) => (
-                      <FineCard key={fine.id} fine={fine} paying={payingFineId === String(fine.id)} onPay={(item, mode) => void payFine(item, mode)} />
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
-            </div>
-          </div>
+          <SectionCard title="Phiếu phạt" subtitle={`${(data?.fines || []).length} phiếu`}>
+            {(data?.fines || []).length === 0 ? (
+              <EmptyState variant="no-data" title="Chưa có phiếu phạt" description="Bạn không có tiền phạt. Tiếp tục đọc sách nhé!" />
+            ) : (
+              <div className="space-y-3">
+                {(data?.fines || []).map((fine: any) => (
+                  <FineCard key={fine.id} fine={fine} />
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
           <SectionCard title="Giao dịch ví gần đây" subtitle="Giao dịch mới nhất">
             {ledgerRows.length === 0 ? (

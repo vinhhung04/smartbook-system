@@ -1,6 +1,6 @@
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
-const { resolveActiveMembership } = require('../services/membership.service');
+const { resolveActiveMembership, computeMembershipEndDate, resolveRenewalStart, DEFAULT_MEMBERSHIP_DURATION_DAYS } = require('../services/membership.service');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -116,6 +116,7 @@ async function ensureCurrentCustomer(req) {
           plan_id: membershipPlan.id,
           card_number: generateCardNumber(customer.id),
           start_date: new Date(),
+          end_date: computeMembershipEndDate(new Date()),
           status: 'ACTIVE',
           note: 'Auto assigned from customer self provisioning',
         },
@@ -232,6 +233,7 @@ async function createCustomer(req, res) {
             plan_id: membershipPlan.id,
             card_number: generateCardNumber(customer.id),
             start_date: new Date(),
+            end_date: computeMembershipEndDate(new Date()),
             status: resolvedStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
             note: 'Auto assigned on customer creation',
           },
@@ -409,6 +411,83 @@ async function getActiveMembership(req, res) {
   }
 }
 
+async function renewMembership(req, res) {
+  const id = parseId(req.params.id);
+  if (!id || !isUuid(id)) {
+    return res.status(400).json({ message: 'Invalid customer id' });
+  }
+
+  const durationDays = req.body?.duration_days == null
+    ? DEFAULT_MEMBERSHIP_DURATION_DAYS
+    : Number(req.body.duration_days);
+  if (!Number.isFinite(durationDays) || durationDays <= 0) {
+    return res.status(400).json({ message: 'duration_days must be a positive number' });
+  }
+
+  try {
+    const customer = await prisma.customers.findUnique({ where: { id } });
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const currentMembership = await prisma.customer_memberships.findFirst({
+      where: { customer_id: id },
+      orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
+    });
+
+    const planId = req.body?.plan_id ? String(req.body.plan_id) : currentMembership?.plan_id;
+    if (!planId) {
+      return res.status(400).json({ message: 'plan_id is required when the customer has no prior membership' });
+    }
+
+    const plan = await prisma.membership_plans.findUnique({ where: { id: planId } });
+    if (!plan || !plan.is_active) {
+      return res.status(404).json({ message: 'Membership plan not found or inactive' });
+    }
+
+    const startDate = resolveRenewalStart(currentMembership?.end_date || null);
+    const endDate = computeMembershipEndDate(startDate, durationDays);
+
+    const membership = await prisma.$transaction(async (tx) => {
+      const created = await tx.customer_memberships.create({
+        data: {
+          customer_id: id,
+          plan_id: plan.id,
+          card_number: generateCardNumber(id),
+          start_date: startDate,
+          end_date: endDate,
+          status: 'ACTIVE',
+          note: `Renewed from membership ${currentMembership?.card_number || 'N/A'}`,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        actor_user_id: req.user?.id || null,
+        action_name: 'RENEW_CUSTOMER_MEMBERSHIP',
+        entity_type: 'CUSTOMER_MEMBERSHIP',
+        entity_id: created.id,
+        before_data: currentMembership ? { end_date: currentMembership.end_date, status: currentMembership.status } : null,
+        after_data: { end_date: created.end_date, plan_id: created.plan_id, card_number: created.card_number },
+      });
+
+      return created;
+    });
+
+    return res.status(201).json({
+      data: {
+        membership_id: membership.id,
+        card_number: membership.card_number,
+        plan_id: membership.plan_id,
+        start_date: membership.start_date,
+        end_date: membership.end_date,
+      },
+    });
+  } catch (error) {
+    console.error('renewMembership error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function getMyProfile(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -572,6 +651,7 @@ async function provisionCustomerFromAuth(req, res) {
           plan_id: ensuredPlan.id,
           card_number: generateCardNumber(customer.id),
           start_date: new Date(),
+          end_date: computeMembershipEndDate(new Date()),
           status: 'ACTIVE',
           note: 'Auto assigned from auth register',
         },
@@ -636,6 +716,7 @@ module.exports = {
   getCustomerById,
   updateCustomer,
   getActiveMembership,
+  renewMembership,
   getMyProfile,
   updateMyProfile,
   getMyMembership,
