@@ -7,6 +7,7 @@ import { SocketProvider } from "@/lib/socket";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { RouteErrorBoundary } from "./route-error-boundary";
+import { CommandPalette } from "./command-palette";
 
 export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -28,6 +29,7 @@ export function AppLayout() {
           </main>
         </div>
         {!hasDedicatedAssistant && <AIChatbot />}
+        <CommandPalette />
       </div>
     </SocketProvider>
   );

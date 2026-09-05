@@ -1,4 +1,4 @@
-import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun } from "lucide-react";
+import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun, Search } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -12,6 +12,7 @@ import { useInventoryRealtime } from "@/hooks/useInventoryRealtime";
 import { useWarehouseTaskRealtime } from "@/hooks/useWarehouseTaskRealtime";
 import { useAIActionRealtime } from "@/hooks/useAIActionRealtime";
 import { navGroups } from "@/lib/nav-groups";
+import { openCommandPalette } from "@/lib/command-palette-bus";
 
 type Crumb = { labelKey: string; to?: string };
 
@@ -187,6 +188,16 @@ export function Topbar() {
       </nav>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => openCommandPalette()}
+          className="hidden items-center gap-2 rounded-[8px] border border-input bg-background px-3 h-8 text-[12px] text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground sm:flex"
+        >
+          <Search className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden md:inline">{t('command_palette.search_placeholder')}</span>
+          <kbd className="ml-1 hidden rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px] md:inline-block">⌘K</kbd>
+        </button>
+
         <NavLink to="/orders/new" className="w-8 h-8 flex items-center justify-center rounded-[8px] bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 transition-all duration-140" title={t('topbar.quick_scan')} aria-label={t('topbar.quick_scan')}>
           <ScanBarcode className="w-4 h-4" />
         </NavLink>
