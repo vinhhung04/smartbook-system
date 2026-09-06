@@ -66,7 +66,7 @@ export function CustomerLoanDetailPage() {
 
   return (
     <div className="space-y-4">
-      <NavLink to="/customer/loans" className="text-[12px] text-indigo-600 hover:text-indigo-700" style={{ fontWeight: 600 }}>Quay lại phiếu mượn</NavLink>
+      <NavLink to="/customer/loans" className="text-[12px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300" style={{ fontWeight: 600 }}>Quay lại phiếu mượn</NavLink>
 
       <CustomerPageHeader
         title={loan.loan_number}
@@ -74,7 +74,7 @@ export function CustomerLoanDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
-              className="px-4 py-2.5 rounded-[10px] border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px]">
+              className="px-4 py-2.5 rounded-[10px] border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px] dark:border-indigo-800/40 dark:bg-indigo-950/30 dark:text-indigo-400">
               In phiếu
             </button>
             <button
@@ -89,30 +89,30 @@ export function CustomerLoanDetailPage() {
         }
       />
 
-      <div className="rounded-[14px] border border-slate-200 bg-white p-6">
+      <div className="rounded-[14px] border border-border bg-card p-6">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px]">
           <div>
-            <span className="text-slate-500">Trạng thái:</span>{' '}
+            <span className="text-muted-foreground">Trạng thái:</span>{' '}
             <span className={`inline-flex rounded-[8px] border px-2 py-0.5 text-[11px] ${getStatusTone(loan.status).className}`}>
               {getStatusTone(loan.status).label}
             </span>
           </div>
-          <div><span className="text-slate-500">Ngày mượn:</span> {formatDateTime(loan.borrow_date)}</div>
-          <div><span className="text-slate-500">Hạn trả:</span> {formatDateTime(loan.due_date)}</div>
-          <div><span className="text-slate-500">Tổng số sách:</span> {loan.total_items}</div>
+          <div><span className="text-muted-foreground">Ngày mượn:</span> {formatDateTime(loan.borrow_date)}</div>
+          <div><span className="text-muted-foreground">Hạn trả:</span> {formatDateTime(loan.due_date)}</div>
+          <div><span className="text-muted-foreground">Tổng số sách:</span> {loan.total_items}</div>
         </div>
 
         <div className="mt-5">
-          <h3 className="text-[13px] text-slate-700" style={{ fontWeight: 600 }}>Sách đang mượn</h3>
+          <h3 className="text-[13px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>Sách đang mượn</h3>
           {(loan.loan_items || []).length === 0 ? (
-            <div className="text-[13px] text-slate-500 mt-2">Không có sách.</div>
+            <div className="text-[13px] text-muted-foreground mt-2">Không có sách.</div>
           ) : (
             <div className="mt-2 space-y-2">
               {loan.loan_items.map((item: any) => (
-                <div key={item.id} className="rounded-[10px] border border-slate-200 p-3 text-[13px]">
-                  <div><span className="text-slate-500">Tên sách:</span> {getBookTitle(item)}</div>
-                  <div><span className="text-slate-500">Trạng thái:</span> {getStatusTone(item.status).label}</div>
-                  <div><span className="text-slate-500">Hạn:</span> {formatDateTime(item.due_date)}</div>
+                <div key={item.id} className="rounded-[10px] border border-border p-3 text-[13px]">
+                  <div><span className="text-muted-foreground">Tên sách:</span> {getBookTitle(item)}</div>
+                  <div><span className="text-muted-foreground">Trạng thái:</span> {getStatusTone(item.status).label}</div>
+                  <div><span className="text-muted-foreground">Hạn:</span> {formatDateTime(item.due_date)}</div>
                 </div>
               ))}
             </div>

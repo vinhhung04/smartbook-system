@@ -33,20 +33,20 @@ export function UserAvatarMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="inline-flex items-center gap-2 rounded-[11px] border border-slate-200 bg-white px-2 py-1.5 hover:bg-slate-50">
-          <Avatar className="h-8 w-8 border border-indigo-200">
-            <AvatarFallback className="bg-indigo-50 text-[12px] text-indigo-700">{initials}</AvatarFallback>
+        <button className="inline-flex items-center gap-2 rounded-[11px] border border-border bg-card px-2 py-1.5 hover:bg-muted">
+          <Avatar className="h-8 w-8 border border-indigo-200 dark:border-indigo-800/40">
+            <AvatarFallback className="bg-indigo-50 text-[12px] text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">{initials}</AvatarFallback>
           </Avatar>
           <div className="hidden text-left sm:block">
-            <p className="text-[12px] text-slate-700" style={{ fontWeight: 600 }}>{user?.full_name || user?.username}</p>
+            <p className="text-[12px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>{user?.full_name || user?.username}</p>
           </div>
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-64 rounded-[12px] border-slate-200 p-1.5">
+      <DropdownMenuContent align="end" className="w-64 rounded-[12px] border-border p-1.5">
         <div className="px-2 py-1.5">
-          <p className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{user?.full_name || user?.username}</p>
-          <p className="text-[11px] text-slate-500">{user?.email}</p>
+          <p className="text-[12px] text-foreground" style={{ fontWeight: 700 }}>{user?.full_name || user?.username}</p>
+          <p className="text-[11px] text-muted-foreground">{user?.email}</p>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate('/customer/profile')} className="rounded-[9px] text-[12px]">

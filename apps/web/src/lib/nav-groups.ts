@@ -45,6 +45,16 @@ export const navGroups = [
     ],
   },
   {
+    labelKey: "sidebar.group.catalog",
+    color: "text-blue-400",
+    dotColor: "bg-blue-400",
+    items: [
+      { to: "/catalog", icon: BookOpen, labelKey: "sidebar.catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+      { to: "/ai-import", icon: Sparkles, labelKey: "sidebar.ai_import", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
+      { to: "/recommendations", icon: ThumbsUp, labelKey: "sidebar.recommendations", access: ROUTE_ACCESS.catalog, activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+    ],
+  },
+  {
     labelKey: "sidebar.group.purchasing",
     color: "text-sky-400",
     dotColor: "bg-sky-400",
@@ -53,8 +63,6 @@ export const navGroups = [
       { to: "/purchase-requests", icon: ShoppingCart, labelKey: "sidebar.purchase_requests", access: ROUTE_ACCESS.purchaseRequestManage, activeColor: "from-indigo-500/15 to-sky-500/10", textColor: "text-indigo-700", iconBg: "bg-indigo-500/10" },
       { to: "/supplier-deliveries", icon: Truck, labelKey: "sidebar.supplier_deliveries", access: ROUTE_ACCESS.supplierDeliveries, activeColor: "from-sky-500/15 to-cyan-500/10", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
       { to: "/suppliers", icon: Truck, labelKey: "sidebar.suppliers", access: ROUTE_ACCESS.suppliers, activeColor: "from-sky-500/12 to-cyan-500/8", textColor: "text-sky-700", iconBg: "bg-sky-500/10" },
-      { to: "/catalog", icon: BookOpen, labelKey: "sidebar.catalog", access: ROUTE_ACCESS.catalog, activeColor: "from-blue-500/15 to-teal-500/10", textColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-      { to: "/ai-import", icon: Sparkles, labelKey: "sidebar.ai_import", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-violet-500/10", textColor: "text-cyan-600", iconBg: "bg-cyan-500/10" },
       { to: "/receiving-smart", icon: Sparkles, labelKey: "sidebar.receiving_smart", access: ROUTE_ACCESS.managerStockDecision, activeColor: "from-cyan-500/15 to-teal-500/10", textColor: "text-cyan-700", iconBg: "bg-cyan-500/10" },
     ],
   },
@@ -77,7 +85,6 @@ export const navGroups = [
     dotColor: "bg-violet-400",
     items: [
       { to: "/reports", icon: BarChart3, labelKey: "sidebar.reports", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-cyan-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-      { to: "/recommendations", icon: ThumbsUp, labelKey: "sidebar.recommendations", access: ROUTE_ACCESS.catalog, activeColor: "from-violet-500/15 to-blue-500/10", textColor: "text-violet-600", iconBg: "bg-violet-500/10" },
       { to: "/reorder-suggestions", icon: Package, labelKey: "sidebar.ai_reorder", access: ROUTE_ACCESS.reports, activeColor: "from-emerald-500/15 to-violet-500/10", textColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
       { to: "/ai-assistant", icon: MessageCircle, labelKey: "sidebar.ai_assistant", access: ROUTE_ACCESS.aiAssistant, activeColor: "from-violet-500/15 to-indigo-500/10", textColor: "text-violet-700", iconBg: "bg-violet-500/10" },
     ],

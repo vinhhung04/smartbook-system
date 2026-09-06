@@ -64,7 +64,7 @@ export function CustomerLoginPage() {
 
         <div className="relative z-10 text-center max-w-sm">
           <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
-            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-card/10 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-2xl">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
           </motion.div>
@@ -85,7 +85,7 @@ export function CustomerLoginPage() {
               <motion.div key={i} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.4 + i * 0.1 }}
                 className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-card/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0">
                   <f.icon className="w-5 h-5 text-blue-200" />
                 </div>
                 <div>
@@ -103,8 +103,8 @@ export function CustomerLoginPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-50 flex items-center justify-center border border-indigo-200/40 mx-auto mb-3 shadow-lg">
-              <BookOpen className="w-6 h-6 text-indigo-600" />
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40 mx-auto mb-3 shadow-lg">
+              <BookOpen className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
             </div>
             <p className="text-[12px] text-muted-foreground">Cổng thông tin khách hàng</p>
           </div>

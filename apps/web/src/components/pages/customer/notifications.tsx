@@ -48,8 +48,8 @@ export function CustomerNotificationsPage() {
       {/* Hero */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-cyan-50 flex items-center justify-center border border-indigo-200/40">
-            <Bell className="w-5 h-5 text-indigo-600" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-cyan-50 dark:from-indigo-950/40 dark:to-cyan-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40">
+            <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Thông báo của tôi</h1>
@@ -64,12 +64,12 @@ export function CustomerNotificationsPage() {
               toast.success('Đã đánh dấu tất cả là đã đọc');
             } catch (err) { toast.error(getApiErrorMessage(err, 'Thất bại')); }
           }} disabled={loading || rows.every((r) => r.read_at)}
-            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors disabled:opacity-50">
             <CheckCheck className="w-3.5 h-3.5" />
             Đánh dấu đã đọc tất cả
           </button>
           <button onClick={() => void loadNotifications()} disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
           </button>

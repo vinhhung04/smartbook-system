@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
+import { useHardwareScanner } from "@/hooks/useHardwareScanner";
+import { playScanError, playScanSuccess } from "@/lib/scan-feedback";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -342,8 +344,10 @@ export function PickingPage() {
         currentLocationInput: confirmedLocation,
       });
 
+      playScanSuccess();
       toast.success(`Đã xác nhận hiện diện tại ${res.data.location_code}`);
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Xác nhận hiện diện thất bại"));
     } finally {
       setConfirmingPresence(false);
@@ -381,6 +385,7 @@ export function PickingPage() {
         setAmbiguousMatches(res.matches || []);
         setSelectedScannedVariantId("");
         setProductVerified(false);
+        playScanError();
         toast.error("Barcode trùng nhiều SKU, vui lòng chọn đúng item");
         return;
       }
@@ -390,15 +395,18 @@ export function PickingPage() {
         if (res.selected.variant_id !== currentLine.variant_id) {
           setProductVerified(false);
           setSelectedScannedVariantId("");
+          playScanError();
           toast.error("Sai sản phẩm cho dòng hiện tại");
           return;
         }
 
         setSelectedScannedVariantId(res.selected.variant_id);
         setProductVerified(true);
+        playScanSuccess();
         toast.success(`Đã nhận diện: ${res.selected.book_title}`);
       }
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Không tra cứu được mã vạch sản phẩm"));
     } finally {
       setLoadingLookup(false);
@@ -456,6 +464,7 @@ export function PickingPage() {
         loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
       ]);
 
+      playScanSuccess();
       if (result.data.task_completed) {
         confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
         toast.success("Đã hoàn tất toàn bộ task picking");
@@ -465,6 +474,7 @@ export function PickingPage() {
         toast.success("Đã xác nhận lấy dòng thành công");
       }
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Xác nhận lấy dòng thất bại"));
     } finally {
       setConfirmingLine(false);
@@ -540,12 +550,14 @@ export function PickingPage() {
       setQuantityInput(Math.max(1, Math.trunc(Number(currentLine.remaining_qty || 1))));
       setSelectedScannedVariantId("");
       setAmbiguousMatches([]);
+      playScanSuccess();
       toast.success("Đã xác nhận đúng vị trí lấy hàng");
       return;
     }
 
     setLocationVerified(false);
     setProductVerified(false);
+    playScanError();
     toast.error(`Sai vị trí. Cần đến ${currentLine.source_location_code || "vị trí được chỉ định"}`);
   };
 
@@ -567,6 +579,22 @@ export function PickingPage() {
 
     setActiveScanTarget(null);
   };
+
+  // Hardware keyboard-wedge scanner (a handheld gun, not the camera modal): the current step
+  // decides what a scan means, so staff never has to tap a field or button before scanning —
+  // scan the shelf location, then the book, one after another, hands mostly on the cart.
+  const handleHardwareScan = (code: string) => {
+    if (!detail || !currentLine) return;
+    if (!presenceConfirmed) {
+      void handleConfirmPresence(code);
+    } else if (!locationVerified) {
+      handleVerifyLocation(code);
+    } else if (!productVerified) {
+      void handleLookupProduct(code);
+    }
+  };
+
+  useHardwareScanner(handleHardwareScan);
 
   if (loading) {
     return (
@@ -1018,7 +1046,7 @@ export function PickingPage() {
                         }
                       }}
                       placeholder="Barcode hoặc mã vị trí hiện tại"
-                      className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                      className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                       disabled={presenceConfirmed}
                     />
                     <IconButton
@@ -1026,15 +1054,15 @@ export function PickingPage() {
                       onClick={() => setActiveScanTarget("presence")}
                       disabled={confirmingPresence || presenceConfirmed}
                       label="Quét mã vị trí hiện tại"
-                      className="h-12 w-12 shrink-0"
+                      className="h-14 w-14 shrink-0"
                     >
-                      <ScanLine className="w-4 h-4" />
+                      <ScanLine className="w-5 h-5" />
                     </IconButton>
                     <Button
                       onClick={() => void handleConfirmPresence()}
                       disabled={presenceConfirmed}
                       loading={confirmingPresence}
-                      className={`h-12 px-4 text-[15px] ${
+                      className={`h-14 px-4 text-[15px] ${
                         presenceConfirmed
                           ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400"
                           : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
@@ -1075,20 +1103,20 @@ export function PickingPage() {
                             }
                           }}
                           placeholder="Barcode hoặc mã vị trí đích"
-                          className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                          className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                         />
                         <IconButton
                           variant="outline"
                           onClick={() => setActiveScanTarget("location")}
                           disabled={!presenceConfirmed || !currentLine}
                           label="Quét mã vị trí cần đến"
-                          className="h-12 w-12 shrink-0"
+                          className="h-14 w-14 shrink-0"
                         >
-                          <ScanLine className="w-4 h-4" />
+                          <ScanLine className="w-5 h-5" />
                         </IconButton>
                         <Button
                           onClick={() => handleVerifyLocation()}
-                          className={`h-12 px-4 text-[15px] ${
+                          className={`h-14 px-4 text-[15px] ${
                             locationVerified
                               ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400"
                               : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
@@ -1132,21 +1160,21 @@ export function PickingPage() {
                                 }
                               }}
                               placeholder="Barcode / mã nội bộ / ISBN / SKU"
-                              className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                              className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                             />
                             <IconButton
                               variant="outline"
                               onClick={() => setActiveScanTarget("product")}
                               disabled={loadingLookup || !locationVerified}
                               label="Quét mã vạch sản phẩm"
-                              className="h-12 w-12 shrink-0"
+                              className="h-14 w-14 shrink-0"
                             >
-                              <ScanLine className="w-4 h-4" />
+                              <ScanLine className="w-5 h-5" />
                             </IconButton>
                             <Button
                               onClick={() => void handleLookupProduct()}
                               loading={loadingLookup}
-                              className="h-12 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
+                              className="h-14 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                             >
                               Xác nhận mã
                             </Button>
@@ -1195,7 +1223,7 @@ export function PickingPage() {
                                     max={currentLine?.remaining_qty || 1}
                                     value={quantityInput}
                                     onChange={(event) => setQuantityInput(Math.max(1, Math.trunc(Number(event.target.value || 1))))}
-                                    className="w-full h-12 py-3.5 text-[15px]"
+                                    className="w-full h-14 py-3.5 text-[15px]"
                                   />
                                 </div>
                                 <div className="flex items-end justify-end">
@@ -1203,7 +1231,7 @@ export function PickingPage() {
                                     onClick={handleConfirmLine}
                                     disabled={!canConfirmLine}
                                     loading={confirmingLine}
-                                    className="h-12 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
+                                    className="h-14 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
                                   >
                                     Xác nhận lấy dòng
                                   </Button>

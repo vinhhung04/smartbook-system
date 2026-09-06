@@ -72,17 +72,17 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="reserve-modal-title">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
 
-      <div ref={containerRef} className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15">
+      <div ref={containerRef} className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl shadow-slate-900/15">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 id="reserve-modal-title" className="text-[15px] text-slate-900" style={{ fontWeight: 700 }}>Chọn cửa hàng đặt trước</h2>
-            <p className="mt-0.5 text-[12px] text-slate-400 line-clamp-1">{book.title}</p>
+            <h2 id="reserve-modal-title" className="text-[15px] text-foreground" style={{ fontWeight: 700 }}>Chọn cửa hàng đặt trước</h2>
+            <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500 line-clamp-1">{book.title}</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Đóng"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-border text-muted-foreground hover:bg-muted transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -92,24 +92,24 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
         <div className="px-5 py-4">
           {availableWarehouses.length === 0 ? (
             <div className="py-6 text-center">
-              <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-              <p className="text-[13px] text-slate-500">Hiện không có cửa hàng nào có sách trên kệ</p>
-              <p className="mt-1 text-[12px] text-slate-400">Sách có thể đang trong quá trình nhập kho</p>
+              <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" />
+              <p className="text-[13px] text-muted-foreground">Hiện không có cửa hàng nào có sách trên kệ</p>
+              <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">Sách có thể đang trong quá trình nhập kho</p>
             </div>
           ) : availableWarehouses.length === 1 ? (
             <div className="space-y-3">
-              <p className="text-[12px] text-slate-500">Cửa hàng có sách:</p>
-              <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+              <p className="text-[12px] text-muted-foreground">Cửa hàng có sách:</p>
+              <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800/40 dark:bg-indigo-950/30">
                 <CheckCircle className="h-4 w-4 text-indigo-500 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{availableWarehouses[0].warehouse_name}</p>
-                  <p className="text-[11px] text-emerald-600">{availableWarehouses[0].available_quantity} cuốn sẵn sàng</p>
+                  <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>{availableWarehouses[0].warehouse_name}</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{availableWarehouses[0].available_quantity} cuốn sẵn sàng</p>
                 </div>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[12px] text-slate-500">Chọn cửa hàng bạn muốn đến lấy sách:</p>
+              <p className="text-[12px] text-muted-foreground">Chọn cửa hàng bạn muốn đến lấy sách:</p>
               <div className="space-y-2 max-h-56 overflow-y-auto">
                 {availableWarehouses.map((wh) => {
                   const selected = effectiveWarehouseId === wh.warehouse_id;
@@ -119,18 +119,18 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
                       onClick={() => setSelectedWarehouseId(wh.warehouse_id)}
                       className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
                         selected
-                          ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200'
-                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-950/30 dark:ring-indigo-800/50'
+                          : 'border-border bg-card hover:border-slate-300 dark:border-slate-600 hover:bg-muted'
                       }`}
                     >
                       <div className={`h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                        selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'
+                        selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300 dark:border-slate-600'
                       }`}>
                         {selected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{wh.warehouse_name}</p>
-                        <p className="text-[11px] text-emerald-600">{wh.available_quantity} cuốn sẵn sàng</p>
+                        <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>{wh.warehouse_name}</p>
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{wh.available_quantity} cuốn sẵn sàng</p>
                       </div>
                     </button>
                   );
@@ -142,11 +142,11 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
 
         {/* Footer */}
         {availableWarehouses.length > 0 && (
-          <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
             <button
               onClick={onClose}
               disabled={submitting}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-xl border border-border bg-card px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-muted disabled:opacity-50"
               style={{ fontWeight: 500 }}
             >
               Hủy
@@ -154,7 +154,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
             <button
               onClick={() => void handleConfirm()}
               disabled={!effectiveWarehouseId || submitting}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground transition-colors"
               style={{ fontWeight: 600 }}
             >
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

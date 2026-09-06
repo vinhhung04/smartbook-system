@@ -120,8 +120,8 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
                 transition={{ duration: 0.2 }}
               >
                 <div>
-                  <p className="text-[14px] tracking-[-0.3px] text-indigo-700" style={{ fontWeight: 700 }}>SmartBook</p>
-                  <p className="text-[10px] text-slate-400">Cổng khách hàng</p>
+                  <p className="text-[14px] tracking-[-0.3px] text-indigo-700 dark:text-indigo-400" style={{ fontWeight: 700 }}>SmartBook</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Cổng khách hàng</p>
                 </div>
               </motion.div>
             )}
@@ -141,8 +141,8 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
                   exit={{ opacity: 0 }}
                   className="flex items-center gap-1.5 px-3 pb-2"
                 >
-                  <div className="w-1 h-1 rounded-full bg-slate-300" />
-                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-400" style={{ fontWeight: 600 }}>
+                  <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500" style={{ fontWeight: 600 }}>
                     {group.title}
                   </span>
                 </motion.div>
@@ -165,7 +165,7 @@ export function CustomerSidebar({ collapsed = false, onNavigate }: CustomerSideb
       {/* Footer branding */}
       {!collapsed && (
         <div className="px-4 py-3 border-t border-border shrink-0">
-          <p className="text-[10px] text-slate-300 text-center">SmartBook Library System</p>
+          <p className="text-[10px] text-slate-300 dark:text-slate-600 text-center">SmartBook Library System</p>
         </div>
       )}
     </aside>

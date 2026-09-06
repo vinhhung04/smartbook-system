@@ -5,9 +5,11 @@ import type { LocationNode, Warehouse } from "@/services/warehouse";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/status-badge";
 import { LocationTree } from "./location-tree";
+import { WarehouseFloorMap } from "./warehouse-floor-map";
 import {
   CHILD_TYPE_BY_PARENT,
   ancestorIds,
@@ -18,6 +20,11 @@ import {
   normalizeType,
   warehouseTypeMeta,
 } from "./meta";
+
+const VIEW_OPTIONS = [
+  { value: "tree" as const, label: "Cây thư mục" },
+  { value: "map" as const, label: "Sơ đồ kho" },
+];
 
 const COUNT_TYPES = ["ZONE", "SHELF", "SHELF_COMPARTMENT"] as const;
 
@@ -59,8 +66,13 @@ export function LocationExplorer({
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const [view, setView] = useState<"tree" | "map">("tree");
 
   const flatLocations = useMemo(() => flattenNodes(locationTree), [locationTree]);
+  const zoneRoots = useMemo(
+    () => locationTree.filter((node) => normalizeType(node.location_type) === "ZONE"),
+    [locationTree],
+  );
   const selectedLocation = useMemo(
     () => flatLocations.find((item) => item.id === selectedLocationId) || null,
     [flatLocations, selectedLocationId],
@@ -226,84 +238,122 @@ export function LocationExplorer({
         </motion.div>
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4"
-      >
-        <div className="hidden lg:block rounded-lg border border-border bg-card p-3.5 h-fit max-h-[560px]">
-          {treePanel}
+      {flatLocations.length > 0 && (
+        <div className="flex justify-end">
+          <SegmentedControl
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+            layoutId="location-explorer-view"
+            gradientClassName="from-violet-600 to-indigo-600"
+          />
         </div>
+      )}
 
-        <div className="lg:hidden">
-          <Sheet open={mobileTreeOpen} onOpenChange={setMobileTreeOpen}>
-            <SheetTrigger className="inline-flex w-full items-center justify-center gap-1.5 h-8 rounded-md border border-input bg-background px-3 text-[13px] font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 active:scale-[0.98]">
-              <ListTree className="w-3.5 h-3.5" /> Sơ đồ cấu trúc
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] p-4">
-              <SheetHeader className="p-0 mb-1">
-                <SheetTitle>Cấu trúc vị trí</SheetTitle>
-              </SheetHeader>
-              {treePanel}
-            </SheetContent>
-          </Sheet>
-        </div>
+      {view === "map" ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="space-y-4"
+        >
+          <div className="rounded-lg border border-border bg-card p-4">
+            <WarehouseFloorMap zones={zoneRoots} selectedLocationId={selectedLocationId} onSelectLocation={onSelectLocation} />
+          </div>
 
-        <div className="rounded-lg border border-border bg-card p-4 min-w-0">
-          {selectedLocation ? (
-            <LocationDataPlate
-              node={selectedLocation}
-              canAddChild={canAddChild}
-              onAddChild={onCreateChildLocation}
-              onEdit={onEditLocation}
-              onDelete={onDeleteLocation}
-              deleting={deletingLocation}
-            />
-          ) : (
-            <div className="rounded-lg bg-muted/40 p-3.5 text-[12px] text-muted-foreground">
-              Chọn một vị trí trong sơ đồ, hoặc chọn một khu vực bên dưới để xem chi tiết.
+          {selectedLocation && (
+            <div className="rounded-lg border border-border bg-card p-4">
+              <LocationDataPlate
+                node={selectedLocation}
+                canAddChild={canAddChild}
+                onAddChild={onCreateChildLocation}
+                onEdit={onEditLocation}
+                onDelete={onDeleteLocation}
+                deleting={deletingLocation}
+              />
             </div>
           )}
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4"
+        >
+          <div className="hidden lg:block rounded-lg border border-border bg-card p-3.5 h-fit max-h-[560px]">
+            {treePanel}
+          </div>
 
-          <div className="mt-4">
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
-              {selectedLocation ? `Bên trong ${selectedLocation.name || selectedLocation.code}` : "Khu vực gốc"}
-            </h4>
+          <div className="lg:hidden">
+            <Sheet open={mobileTreeOpen} onOpenChange={setMobileTreeOpen}>
+              <SheetTrigger className="inline-flex w-full items-center justify-center gap-1.5 h-8 rounded-md border border-input bg-background px-3 text-[13px] font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 active:scale-[0.98]">
+                <ListTree className="w-3.5 h-3.5" /> Sơ đồ cấu trúc
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[300px] p-4">
+                <SheetHeader className="p-0 mb-1">
+                  <SheetTitle>Cấu trúc vị trí</SheetTitle>
+                </SheetHeader>
+                {treePanel}
+              </SheetContent>
+            </Sheet>
+          </div>
 
-            {loadingLocations ? (
-              <LoadingOverlay className="py-8" />
-            ) : childrenToShow.length === 0 ? (
-              <EmptyState
-                variant="no-data"
-                title={
-                  selectedLocation && !canAddChild
-                    ? "Đây là cấp thấp nhất"
-                    : `Chưa có ${selectedLocation ? "vị trí con" : "khu vực"} nào`
-                }
-                description={
-                  selectedLocation && !canAddChild
-                    ? "Ngăn kệ không thể chứa vị trí con."
-                    : "Bấm 'Thêm node con' hoặc 'Thêm khu vực gốc' để bắt đầu."
-                }
-                className="py-8"
+          <div className="rounded-lg border border-border bg-card p-4 min-w-0">
+            {selectedLocation ? (
+              <LocationDataPlate
+                node={selectedLocation}
+                canAddChild={canAddChild}
+                onAddChild={onCreateChildLocation}
+                onEdit={onEditLocation}
+                onDelete={onDeleteLocation}
+                deleting={deletingLocation}
               />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-                {childrenToShow.map((node, index) => (
-                  <LocationTagCard
-                    key={node.id}
-                    node={node}
-                    index={index}
-                    isSelected={selectedLocationId === node.id}
-                    onSelect={() => onSelectLocation(node.id)}
-                  />
-                ))}
+              <div className="rounded-lg bg-muted/40 p-3.5 text-[12px] text-muted-foreground">
+                Chọn một vị trí trong sơ đồ, hoặc chọn một khu vực bên dưới để xem chi tiết.
               </div>
             )}
+
+            <div className="mt-4">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">
+                {selectedLocation ? `Bên trong ${selectedLocation.name || selectedLocation.code}` : "Khu vực gốc"}
+              </h4>
+
+              {loadingLocations ? (
+                <LoadingOverlay className="py-8" />
+              ) : childrenToShow.length === 0 ? (
+                <EmptyState
+                  variant="no-data"
+                  title={
+                    selectedLocation && !canAddChild
+                      ? "Đây là cấp thấp nhất"
+                      : `Chưa có ${selectedLocation ? "vị trí con" : "khu vực"} nào`
+                  }
+                  description={
+                    selectedLocation && !canAddChild
+                      ? "Ngăn kệ không thể chứa vị trí con."
+                      : "Bấm 'Thêm node con' hoặc 'Thêm khu vực gốc' để bắt đầu."
+                  }
+                  className="py-8"
+                />
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                  {childrenToShow.map((node, index) => (
+                    <LocationTagCard
+                      key={node.id}
+                      node={node}
+                      index={index}
+                      isSelected={selectedLocationId === node.id}
+                      onSelect={() => onSelectLocation(node.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }
