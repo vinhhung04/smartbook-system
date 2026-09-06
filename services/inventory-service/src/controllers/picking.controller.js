@@ -11,6 +11,7 @@ const {
   SHORT_PICK_MARKER,
   normalizeCode,
   appendOrderNote,
+  encodeMetaValue,
   upsertMarkerLine,
   parseRepickMeta,
   parseRepickLineMeta,

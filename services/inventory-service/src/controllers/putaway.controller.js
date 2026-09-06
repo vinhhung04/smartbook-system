@@ -1006,10 +1006,47 @@ async function claimPutawayTask(req, res) {
   }
 }
 
+async function assignPutawayTask(req, res) {
+  const receiptId = parseId(req.params.id);
+  const assigneeUserId = parseId(req.body?.user_id || req.body?.putaway_assignee_user_id);
+
+  if (!receiptId) {
+    return res.status(400).json({ message: 'Invalid goods receipt id' });
+  }
+  if (!assigneeUserId) {
+    return res.status(400).json({ message: 'user_id is required' });
+  }
+
+  try {
+    const receipt = await prisma.goods_receipts.findUnique({
+      where: { id: receiptId },
+      select: { id: true, status: true },
+    });
+
+    if (!receipt) {
+      return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
+    }
+    if (receipt.status !== READY_PUTAWAY_STATUS) {
+      return res.status(400).json({ message: 'Phiếu nhập chưa được duyệt (cần status POSTED)' });
+    }
+
+    await prisma.goods_receipts.update({
+      where: { id: receiptId },
+      data: { putaway_assignee_user_id: assigneeUserId },
+    });
+
+    return res.json({ success: true, message: 'Đã giao task putaway cho nhân viên' });
+  } catch (error) {
+    console.error('Error assigning putaway task:', error);
+    return res.status(500).json({ message: 'Lỗi khi giao task' });
+  }
+}
+
 module.exports = {
   getReadyReceipts,
   getReadyReceiptDetail,
   getPutawayLocations,
   confirmPutaway,
   claimPutawayTask,
+  assignPutawayTask,
 };

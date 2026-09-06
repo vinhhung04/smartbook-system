@@ -128,4 +128,9 @@ export const putawayService = {
     const response = await inventoryAPI.patch(`/api/putaway/receipts/${receiptId}/claim-self`);
     return response.data;
   },
+
+  assignStaff: async (receiptId: string, userId: string) => {
+    const response = await inventoryAPI.patch(`/api/putaway/receipts/${receiptId}/assign`, { user_id: userId });
+    return response.data;
+  },
 };

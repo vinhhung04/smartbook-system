@@ -12,6 +12,7 @@ import {
   type OutboundSession,
   type ScanAttempt,
 } from '../../../src/lib/outboundSession';
+import { canConfirmOutbound } from '../../../src/lib/outboundRules';
 import { resolveScannedCode, type OutboundMode } from '../../../src/lib/outboundScan';
 import { notifyScanError, notifyScanSuccess } from '../../../src/scanner/haptics';
 import { ScanField } from '../../../src/scanner/ScanField';
@@ -28,8 +29,11 @@ export default function OutboundScanSessionScreen() {
 
   const [session, setSession] = useState<OutboundSession>(() => createSession(mode));
   const sessionRef = useRef(session);
-  sessionRef.current = session;
   const finalizedRef = useRef(false);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const [scanInput, setScanInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -76,17 +80,41 @@ export default function OutboundScanSessionScreen() {
           timestamp: new Date().toISOString(),
         };
       } else {
-        if (resolved.kind === 'claim-then-confirm') {
-          await outboundApi.claimSelf(resolved.claimEndpoint);
+        // A REPICKING order may already have a fully-picked repick chain — the list
+        // data alone doesn't carry aggregate_remaining_qty, so that one status needs
+        // an extra lookup before deciding readiness. Every other status is judged
+        // from the list data already in hand.
+        const ready =
+          resolved.status === 'REPICKING'
+            ? await outboundApi
+                .getOrderStatusDetail(resolved.taskType, resolved.taskId)
+                .then((detail) => canConfirmOutbound(detail.status, detail.aggregate_remaining_qty))
+            : canConfirmOutbound(resolved.status);
+
+        if (!ready) {
+          attempt = {
+            code,
+            success: false,
+            message:
+              resolved.status === 'REPICKING'
+                ? `Đơn ${resolved.orderNumber} đang lấy bù (REPICK), chưa lấy đủ hàng`
+                : `Đơn ${resolved.orderNumber} chưa sẵn sàng xuất kho (trạng thái: ${resolved.status})`,
+            order_number: resolved.orderNumber,
+            timestamp: new Date().toISOString(),
+          };
+        } else {
+          if (resolved.kind === 'claim-then-confirm') {
+            await outboundApi.claimSelf(resolved.claimEndpoint);
+          }
+          const result = await outboundApi.confirmOutbound(resolved.taskType, resolved.taskId, code);
+          attempt = {
+            code,
+            success: true,
+            message: `Đã xác nhận ${result.data.status === 'COMPLETED' ? 'xuất kho' : 'điều chuyển'}: ${resolved.orderNumber}`,
+            order_number: resolved.orderNumber,
+            timestamp: new Date().toISOString(),
+          };
         }
-        const result = await outboundApi.confirmOutbound(resolved.taskType, resolved.taskId, code);
-        attempt = {
-          code,
-          success: true,
-          message: `Đã xác nhận ${result.data.status === 'COMPLETED' ? 'xuất kho' : 'điều chuyển'}: ${resolved.orderNumber}`,
-          order_number: resolved.orderNumber,
-          timestamp: new Date().toISOString(),
-        };
       }
     } catch (err) {
       attempt = {

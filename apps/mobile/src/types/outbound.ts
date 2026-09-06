@@ -34,3 +34,11 @@ export type ConfirmOutboundResult = {
     destination_receipt_number?: string;
   };
 };
+
+// Slim view of GET /api/outbound/orders/:taskType/:taskId — only the fields the
+// scan session needs to decide if a REPICKING order's repick chain has finished
+// (the full response also carries lines/pick_task/repick_tasks, unused here).
+export type OutboundOrderStatusDetail = {
+  status: string;
+  aggregate_remaining_qty?: number;
+};

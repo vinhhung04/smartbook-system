@@ -32,7 +32,8 @@
         {
           "cameraPermission": "Ứng dụng cần quyền camera để quét mã vạch/QR khi lấy hàng."
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }

@@ -2,6 +2,7 @@
  * Shared design tokens for the mobile app. Keeps colors, spacing, radii,
  * typography and shadows consistent across every screen.
  */
+import { Platform } from 'react-native';
 
 export const colors = {
   bg: '#F8FAFC',
@@ -69,11 +70,16 @@ export const typography = {
 };
 
 export const shadow = {
-  card: {
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
+  // react-native-web wants a CSS boxShadow string; native (iOS/Android) only
+  // understands the shadow*/elevation props — same visual result either way.
+  card: Platform.select({
+    web: { boxShadow: '0px 3px 10px rgba(15, 23, 42, 0.06)' },
+    default: {
+      shadowColor: '#0F172A',
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 2,
+    },
+  }),
 };

@@ -43,6 +43,7 @@ describe('resolveScannedCode', () => {
       taskType: 'outbound',
       claimEndpoint: '/api/outbound/orders/outbound/task-1/claim-self',
       orderNumber: 'OUT-001',
+      status: 'READY_FOR_OUTBOUND',
     });
   });
 
@@ -53,6 +54,7 @@ describe('resolveScannedCode', () => {
       taskId: 'task-2',
       taskType: 'outbound',
       orderNumber: 'OUT-002',
+      status: 'READY_FOR_OUTBOUND',
     });
   });
 
@@ -61,9 +63,22 @@ describe('resolveScannedCode', () => {
     expect(result.kind).toBe('claim-then-confirm');
   });
 
-  it('ignores an assigned order whose status is not confirmable yet', () => {
+  it('still resolves an assigned order that is not yet ready — readiness is the caller\'s job', () => {
+    // resolveScannedCode only answers "which order is this?"; canConfirmOutbound
+    // (applied by the scan screen) decides whether PICKING/REPICKING is ready.
     const result = resolveScannedCode('OUT-002', 'outbound', [], [makeMine({ status: 'PICKING' })]);
-    expect(result).toEqual({ kind: 'not-found' });
+    expect(result).toEqual({
+      kind: 'confirm',
+      taskId: 'task-2',
+      taskType: 'outbound',
+      orderNumber: 'OUT-002',
+      status: 'PICKING',
+    });
+  });
+
+  it('carries a REPICKING status through so the caller can check the repick chain', () => {
+    const result = resolveScannedCode('OUT-002', 'outbound', [], [makeMine({ status: 'REPICKING' })]);
+    expect(result).toMatchObject({ kind: 'confirm', status: 'REPICKING' });
   });
 
   it('does not cross-match a transfer order while scanning in outbound mode', () => {

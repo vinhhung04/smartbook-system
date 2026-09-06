@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   viewfinderOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.lg,

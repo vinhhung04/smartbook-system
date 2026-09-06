@@ -2,6 +2,7 @@ import { apiFetch } from './client';
 import type {
   AvailableTask,
   ConfirmLineResult,
+  DeclareShortageResult,
   LookupBarcodeResult,
   PickingTaskDetail,
   PickingTaskListItem,
@@ -19,6 +20,21 @@ export function getAvailableTasks() {
 
 export function claimSelf(taskType: PickingTaskType, taskId: string) {
   return apiFetch(`/api/picking/tasks/${taskType}/${taskId}/claim-self`, { method: 'POST' });
+}
+
+// Manager-only: /claim (unlike /claim-self) accepts an arbitrary picker_user_id and
+// is allowed to override a task that's already assigned to someone else — this is
+// the same endpoint the web "Giao task" button uses for manager reassignment.
+export function assignTask(taskType: PickingTaskType, taskId: string, pickerUserId: string) {
+  return apiFetch<{
+    task_type: PickingTaskType;
+    task_id: string;
+    assigned_picker_user_id: string | null;
+    status: string;
+  }>(`/api/picking/tasks/${taskType}/${taskId}/claim`, {
+    method: 'POST',
+    body: { picker_user_id: pickerUserId },
+  });
 }
 
 export function getTaskDetail(taskType: PickingTaskType, taskId: string) {
@@ -50,5 +66,11 @@ export function confirmLine(
   return apiFetch<ConfirmLineResult>(`/api/picking/tasks/${taskType}/${taskId}/lines/${lineId}/confirm`, {
     method: 'POST',
     body,
+  });
+}
+
+export function declareShortage(taskType: PickingTaskType, taskId: string) {
+  return apiFetch<DeclareShortageResult>(`/api/picking/tasks/${taskType}/${taskId}/declare-shortage`, {
+    method: 'POST',
   });
 }

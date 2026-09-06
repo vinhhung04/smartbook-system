@@ -1,5 +1,5 @@
 import { apiFetch } from './client';
-import type { LoginResponse } from '../types/auth';
+import type { LoginResponse, WarehouseStaffOption } from '../types/auth';
 
 export function login(username: string, password: string) {
   return apiFetch<LoginResponse>('/auth/login', {
@@ -7,4 +7,8 @@ export function login(username: string, password: string) {
     body: { username, password },
     skipAuth: true,
   });
+}
+
+export function getWarehouseStaff() {
+  return apiFetch<{ data: WarehouseStaffOption[] }>('/auth/warehouse-staff');
 }

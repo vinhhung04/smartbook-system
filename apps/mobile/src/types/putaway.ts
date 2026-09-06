@@ -1,3 +1,17 @@
+export type PutawayReceiptSummary = {
+  id: string;
+  receipt_number: string;
+  warehouse_id: string;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  status: string;
+  putaway_assignee_user_id: string | null;
+  line_count: number;
+  total_quantity: number;
+  putaway_quantity: number;
+  remaining_quantity: number;
+};
+
 export type ReceivingLocation = {
   id: string;
   location_code: string;

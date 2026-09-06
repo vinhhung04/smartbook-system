@@ -59,7 +59,7 @@ export default function StockAuditDetailScreen() {
 
   async function handleScan(value: string) {
     const code = value.trim().toLowerCase();
-    if (!code || !audit) return;
+    if (!code || !audit || savingLineId) return;
 
     const line = audit.items.find(
       (l) => (l.sku && l.sku.toLowerCase() === code) || (l.isbn13 && l.isbn13.toLowerCase() === code),
@@ -151,6 +151,7 @@ export default function StockAuditDetailScreen() {
             onSubmit={handleScan}
             placeholder="Quét mã sách để +1 số lượng đếm"
             autoFocus
+            editable={!savingLineId}
           />
           {scanMessage ? <Text style={scanMessage.ok ? styles.success : styles.error}>{scanMessage.text}</Text> : null}
         </View>

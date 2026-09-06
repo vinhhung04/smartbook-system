@@ -1,20 +1,33 @@
 import { apiFetch } from './client';
-import { getAvailableTasks } from './picking';
 import type {
   CompartmentCandidate,
   LocationLookupResult,
+  PutawayReceiptSummary,
   ReceivingItem,
   ReceivingLocation,
   TransferResult,
   VariantLookupResult,
 } from '../types/putaway';
 
-// WAREHOUSE_STAFF cannot call GET /api/warehouses (manager-only), so the working
-// warehouse is derived from whatever task data the account can already see.
-export async function getWorkingWarehouseId(): Promise<string | null> {
-  const available = await getAvailableTasks();
-  const withWarehouse = available.data.find((task) => task.warehouse_id);
-  return withWarehouse?.warehouse_id ?? null;
+// GET /api/warehouses (manager-only) can't tell a WAREHOUSE_STAFF which warehouse
+// they work in, but this endpoint lists POSTED goods receipts ready for putaway —
+// already scoped per-user server-side (unassigned, or assigned to me) — so each
+// receipt's own warehouse_id is the real signal, not a guess from unrelated tasks.
+export function getReadyReceipts() {
+  return apiFetch<PutawayReceiptSummary[]>('/api/putaway/receipts');
+}
+
+export function claimReceipt(receiptId: string) {
+  return apiFetch<{ success: boolean; message: string }>(`/api/putaway/receipts/${receiptId}/claim-self`, {
+    method: 'PATCH',
+  });
+}
+
+export function assignReceipt(receiptId: string, userId: string) {
+  return apiFetch<{ success: boolean; message: string }>(`/api/putaway/receipts/${receiptId}/assign`, {
+    method: 'PATCH',
+    body: { user_id: userId },
+  });
 }
 
 export function getReceivings(warehouseId: string) {

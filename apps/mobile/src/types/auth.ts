@@ -11,3 +11,11 @@ export type LoginResponse = {
   token: string;
   user: User;
 };
+
+export type WarehouseStaffOption = {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  status: 'ACTIVE';
+};

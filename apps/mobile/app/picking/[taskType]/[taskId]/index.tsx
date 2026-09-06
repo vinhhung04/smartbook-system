@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +32,7 @@ export default function TaskDetailScreen() {
   const [locationInput, setLocationInput] = useState('');
   const [presenceMessage, setPresenceMessage] = useState<string | null>(null);
   const [isConfirmingPresence, setIsConfirmingPresence] = useState(false);
+  const [isDeclaringShortage, setIsDeclaringShortage] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -76,6 +78,35 @@ export default function TaskDetailScreen() {
     } finally {
       setIsConfirmingPresence(false);
     }
+  }
+
+  async function declareShortage() {
+    setIsDeclaringShortage(true);
+    try {
+      const result = await pickingApi.declareShortage(taskType, taskId);
+      Alert.alert(
+        'Đã khai báo thiếu hàng',
+        result.data?.order_number
+          ? `Đã tạo REPICK ${result.data.order_number} — nhân viên khác có thể nhận và lấy bù.`
+          : 'Đã tạo REPICK để lấy bù phần còn thiếu.',
+        [{ text: 'OK', onPress: () => router.replace('/picking') }],
+      );
+    } catch (err) {
+      Alert.alert('Khai báo thiếu hàng thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
+    } finally {
+      setIsDeclaringShortage(false);
+    }
+  }
+
+  function handleDeclareShortage() {
+    Alert.alert(
+      'Khai báo thiếu hàng?',
+      'Hệ thống sẽ tạo đơn REPICK để lấy bù phần còn thiếu — nhân viên khác cũng có thể nhận đơn REPICK này.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Xác nhận', style: 'destructive', onPress: () => void declareShortage() },
+      ],
+    );
   }
 
   if (isLoading) {
@@ -126,13 +157,26 @@ export default function TaskDetailScreen() {
     );
   }
 
+  const totalPickedQty = task.lines.reduce((sum, l) => sum + l.picked_qty, 0);
+  const canDeclareShortage = totalPickedQty > 0 && task.lines.some((l) => l.remaining_qty > 0);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: task.order_number }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.warehouse}>
-          Kho: {task.source_warehouse_code ?? '-'} · còn {task.remaining_line_count} dòng
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.warehouse}>
+            Kho: {task.source_warehouse_code ?? '-'} · còn {task.remaining_line_count} dòng
+          </Text>
+          {task.task_class === 'REPICK' ? (
+            <View style={styles.repickBadge}>
+              <Text style={styles.repickBadgeText}>
+                REPICK{task.repick_sequence ? ` #${task.repick_sequence}` : ''}
+                {task.parent_order_number ? ` · gốc ${task.parent_order_number}` : ''}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         {task.current_line ? (
           <View style={styles.currentLineCard}>
@@ -171,6 +215,23 @@ export default function TaskDetailScreen() {
             </View>
           ))}
         </View>
+
+        {canDeclareShortage ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.shortageButton,
+              (isDeclaringShortage || pressed) && styles.buttonPressed,
+            ]}
+            onPress={handleDeclareShortage}
+            disabled={isDeclaringShortage}
+          >
+            {isDeclaringShortage ? (
+              <ActivityIndicator color={colors.warning} />
+            ) : (
+              <Text style={styles.shortageButtonText}>Khai báo thiếu hàng & tạo REPICK</Text>
+            )}
+          </Pressable>
+        ) : null}
       </ScrollView>
     </>
   );
@@ -195,6 +256,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
     backgroundColor: colors.bg,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  repickBadge: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.pill,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs + 2,
+  },
+  repickBadgeText: {
+    color: colors.warning,
+    fontWeight: '700',
+    fontSize: 10,
+  },
+  shortageButton: {
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warningBorder,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  shortageButtonText: {
+    color: colors.warning,
+    fontWeight: '700',
   },
   error: {
     color: colors.danger,

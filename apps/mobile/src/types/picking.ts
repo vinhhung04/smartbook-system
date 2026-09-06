@@ -5,6 +5,8 @@ export type PickingTaskListItem = {
   task_id: string;
   order_number: string;
   order_type: string;
+  task_class: 'PICK' | 'REPICK';
+  repick_sequence: number | null;
   status: string;
   source_warehouse_code: string | null;
   source_warehouse_name: string | null;
@@ -23,6 +25,8 @@ export type AvailableTask = {
   task_type: PickingTaskType;
   title: string;
   status: string;
+  is_repick?: boolean;
+  parent_order_number?: string | null;
   warehouse: string | null;
   warehouse_id: string | null;
   created_at: string;
@@ -67,6 +71,9 @@ export type PickingTaskDetail = {
   task_id: string;
   order_number: string;
   status: string;
+  task_class: 'PICK' | 'REPICK';
+  repick_sequence: number | null;
+  parent_order_number: string | null;
   source_warehouse_code: string | null;
   source_warehouse_name: string | null;
   target_warehouse_code: string | null;
@@ -97,4 +104,14 @@ export type ConfirmLineResult = {
     line_remaining_quantity: number;
     task_completed: boolean;
   };
+};
+
+export type DeclareShortageResult = {
+  message: string;
+  data: {
+    task_type: string;
+    task_id: string | null;
+    order_number: string | null;
+    reused_existing?: boolean;
+  } | null;
 };
