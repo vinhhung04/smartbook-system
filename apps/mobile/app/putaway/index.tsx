@@ -16,7 +16,7 @@ import * as authApi from '../../src/api/auth';
 import { ApiError, useAuth } from '../../src/auth/auth-context';
 import type { PutawayReceiptSummary } from '../../src/types/putaway';
 import type { WarehouseStaffOption } from '../../src/types/auth';
-import { colors, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
 const MANAGER_ROLES = ['ADMIN', 'WAREHOUSE_MANAGER'];
 
@@ -296,7 +296,10 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontFamily: fonts.monoSemibold,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   filterTextActive: {
     color: colors.onPrimary,
@@ -362,24 +365,30 @@ const styles = StyleSheet.create({
   },
   badgeMineText: {
     color: colors.success,
-    fontWeight: '700',
-    fontSize: 12,
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   badgeAvailable: {
     backgroundColor: colors.primarySoft,
   },
   badgeAvailableText: {
     color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   badgeOther: {
     backgroundColor: colors.neutralSoft,
   },
   badgeOtherText: {
     color: colors.neutral,
-    fontWeight: '700',
-    fontSize: 12,
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   actionsColumn: {
     alignItems: 'flex-end',
@@ -394,7 +403,9 @@ const styles = StyleSheet.create({
   },
   giaoButtonText: {
     color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });

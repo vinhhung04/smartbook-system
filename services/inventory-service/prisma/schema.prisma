@@ -1126,6 +1126,7 @@ model warehouse_exception_reports {
   actual_qty           Int?
   note                 String
   evidence_notes       String?
+  evidence_photo_url   String?
   status               String          @default("OPEN") @db.VarChar(20)
   resolved_by_user_id  String?         @db.Uuid
   resolved_at          DateTime?       @db.Timestamptz(6)

@@ -7,8 +7,10 @@ import * as stockAuditApi from '../../src/api/stockAudit';
 import { ApiError } from '../../src/auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../../src/scanner/haptics';
 import { ScanField } from '../../src/scanner/ScanField';
+import { StampBadge } from '../../src/components/StampBadge';
+import { ChecklistMeter } from '../../src/components/ChecklistMeter';
 import type { StockAuditDetail, StockAuditLine } from '../../src/types/stockAudit';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
 
 export default function StockAuditDetailScreen() {
   const { auditId } = useLocalSearchParams<{ auditId: string }>();
@@ -134,14 +136,7 @@ export default function StockAuditDetailScreen() {
           <Text style={styles.headerText}>
             {audit.warehouse_code ?? '-'} · {countedTotal}/{audit.items.length} đã đếm
           </Text>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${audit.items.length === 0 ? 0 : (countedTotal / audit.items.length) * 100}%` },
-              ]}
-            />
-          </View>
+          <ChecklistMeter value={countedTotal} max={audit.items.length} />
         </View>
 
         <View style={styles.scanBox}>
@@ -153,7 +148,7 @@ export default function StockAuditDetailScreen() {
             autoFocus
             editable={!savingLineId}
           />
-          {scanMessage ? <Text style={scanMessage.ok ? styles.success : styles.error}>{scanMessage.text}</Text> : null}
+          {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.ok ? 'success' : 'danger'} /> : null}
         </View>
 
         <FlatList
@@ -243,19 +238,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   headerText: {
-    ...typography.caption,
-    fontWeight: '700',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    ...typography.code,
+    fontSize: 13,
   },
   scanBox: {
     paddingHorizontal: spacing.lg,
@@ -289,27 +273,28 @@ const styles = StyleSheet.create({
     width: 60,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     paddingVertical: spacing.sm,
     textAlign: 'center',
+    fontFamily: fonts.mono,
     fontSize: 16,
     color: colors.textPrimary,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceRaised,
   },
   rowSpinner: {
     width: 32,
   },
   varianceOk: {
+    ...typography.code,
     width: 32,
     textAlign: 'center',
     color: colors.success,
-    fontWeight: '700',
   },
   varianceBad: {
+    ...typography.code,
     width: 32,
     textAlign: 'center',
     color: colors.danger,
-    fontWeight: '700',
   },
   submitButton: {
     margin: spacing.lg,
@@ -322,8 +307,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
+    fontFamily: fonts.displayBold,
     color: colors.onPrimary,
-    fontWeight: '700',
     fontSize: 16,
+    letterSpacing: 0.5,
   },
 });

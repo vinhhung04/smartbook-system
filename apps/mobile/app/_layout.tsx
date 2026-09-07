@@ -1,7 +1,21 @@
+import 'react-native-gesture-handler';
+
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts as useSora, Sora_600SemiBold, Sora_700Bold } from '@expo-google-fonts/sora';
+import {
+  useFonts as useManrope,
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+} from '@expo-google-fonts/manrope';
+import {
+  useFonts as useRobotoMono,
+  RobotoMono_400Regular,
+  RobotoMono_700Bold,
+} from '@expo-google-fonts/roboto-mono';
 
 import { AuthProvider, useAuth } from '../src/auth/auth-context';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
@@ -46,6 +60,18 @@ function RootNavigation() {
 }
 
 export default function RootLayout() {
+  const [soraLoaded] = useSora({ Sora_600SemiBold, Sora_700Bold });
+  const [manropeLoaded] = useManrope({ Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold });
+  const [robotoMonoLoaded] = useRobotoMono({ RobotoMono_400Regular, RobotoMono_700Bold });
+
+  if (!soraLoaded || !manropeLoaded || !robotoMonoLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <ErrorBoundary>

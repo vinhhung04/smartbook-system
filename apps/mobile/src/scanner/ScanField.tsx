@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { CameraScannerModal } from './CameraScannerModal';
-import { colors, radius, spacing } from '../theme/tokens';
+import { colors, fonts, radius, spacing } from '../theme/tokens';
 
 type Props = {
   value: string;
@@ -18,24 +18,32 @@ type Props = {
  * keyboard-wedge scanner input directly (the scanner types + presses
  * Enter, which fires onSubmitEditing), plus a camera button as an
  * alternative input source. Both paths funnel through the same onSubmit.
+ *
+ * Styled as a manifest form field (bordered box, monospace entry) since
+ * this is the single most repeated interaction in the app.
  */
 export function ScanField({ value, onChangeText, onSubmit, placeholder, editable = true, autoFocus }: Props) {
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.row}>
-      <TextInput
-        style={[styles.input, !editable && styles.inputDisabled]}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        value={value}
-        onChangeText={onChangeText}
-        onSubmitEditing={(e) => onSubmit(e.nativeEvent.text)}
-        editable={editable}
-        autoFocus={autoFocus}
-        autoCapitalize="characters"
-        blurOnSubmit={false}
-      />
+      <View style={[styles.inputWrap, isFocused && styles.inputWrapFocused, !editable && styles.inputDisabled]}>
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          value={value}
+          onChangeText={onChangeText}
+          onSubmitEditing={(e) => onSubmit(e.nativeEvent.text)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          editable={editable}
+          autoFocus={autoFocus}
+          autoCapitalize="characters"
+          blurOnSubmit={false}
+        />
+      </View>
       <Pressable
         style={({ pressed }) => [styles.cameraButton, pressed && styles.cameraButtonPressed, !editable && styles.cameraButtonDisabled]}
         onPress={() => setCameraOpen(true)}
@@ -66,23 +74,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  input: {
+  inputWrap: {
     flex: 1,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.sm,
+  },
+  inputWrapFocused: {
+    borderColor: colors.primary,
+    borderWidth: 2,
   },
   inputDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
+  },
+  input: {
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.md,
+    fontFamily: fonts.mono,
+    fontSize: 16,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.textPrimary,
   },
   cameraButton: {
     width: 48,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     backgroundColor: colors.primarySoft,
     borderWidth: 1,
     borderColor: colors.primaryBorder,

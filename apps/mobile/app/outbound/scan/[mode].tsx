@@ -16,7 +16,8 @@ import { canConfirmOutbound } from '../../../src/lib/outboundRules';
 import { resolveScannedCode, type OutboundMode } from '../../../src/lib/outboundScan';
 import { notifyScanError, notifyScanSuccess } from '../../../src/scanner/haptics';
 import { ScanField } from '../../../src/scanner/ScanField';
-import { colors, radius, spacing, typography } from '../../../src/theme/tokens';
+import { ChecklistMeter } from '../../../src/components/ChecklistMeter';
+import { colors, fonts, radius, spacing, typography } from '../../../src/theme/tokens';
 
 const MODE_LABEL: Record<OutboundMode, string> = {
   outbound: 'Xuất kho',
@@ -164,9 +165,7 @@ export default function OutboundScanSessionScreen() {
           <Text style={styles.headerText}>
             Đã quét: {count}/{SESSION_SCAN_CAP} kiện
           </Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${(count / SESSION_SCAN_CAP) * 100}%` }]} />
-          </View>
+          <ChecklistMeter value={count} max={SESSION_SCAN_CAP} />
         </View>
 
         <View style={styles.scanBox}>
@@ -213,19 +212,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   headerText: {
-    ...typography.caption,
-    fontWeight: '700',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    ...typography.code,
+    fontSize: 13,
   },
   scanBox: {
     paddingHorizontal: spacing.lg,
@@ -250,11 +238,12 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   rowTitleOk: {
-    fontWeight: '700',
-    color: colors.textPrimary,
+    ...typography.code,
+    fontSize: 15,
   },
   rowTitleFail: {
-    fontWeight: '700',
+    ...typography.code,
+    fontSize: 15,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
   },
@@ -279,8 +268,9 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   endButtonText: {
+    fontFamily: fonts.displayBold,
     color: colors.onPrimary,
-    fontWeight: '700',
     fontSize: 16,
+    letterSpacing: 0.5,
   },
 });

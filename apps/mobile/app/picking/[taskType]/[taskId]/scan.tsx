@@ -16,8 +16,9 @@ import { ApiError } from '../../../../src/auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/haptics';
 import { matchesCode } from '../../../../src/scanner/matching';
 import { ScanField } from '../../../../src/scanner/ScanField';
+import { StampBadge } from '../../../../src/components/StampBadge';
 import type { PickingLine, PickingTaskDetail, PickingTaskType, VariantMatch } from '../../../../src/types/picking';
-import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
 
 export default function ScanScreen() {
   const { taskType, taskId } = useLocalSearchParams<{ taskType: PickingTaskType; taskId: string }>();
@@ -259,7 +260,7 @@ export default function ScanScreen() {
             autoFocus
           />
           {locationMessage ? (
-            <Text style={locationMessage.ok ? styles.success : styles.error}>{locationMessage.text}</Text>
+            <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} />
           ) : null}
         </View>
 
@@ -289,7 +290,7 @@ export default function ScanScreen() {
             />
             {isLookingUpProduct ? <ActivityIndicator color={colors.primary} /> : null}
             {productMessage ? (
-              <Text style={productMessage.ok ? styles.success : styles.error}>{productMessage.text}</Text>
+              <StampBadge text={productMessage.text} tone={productMessage.ok ? 'success' : 'danger'} />
             ) : null}
 
             {ambiguousMatches.length > 0 && (
@@ -360,14 +361,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   error: {
+    ...typography.code,
     color: colors.danger,
     fontSize: 13,
-    fontWeight: '600',
   },
   success: {
+    ...typography.code,
     color: colors.success,
     fontSize: 13,
-    fontWeight: '600',
   },
   doneBox: {
     padding: spacing.lg,
@@ -394,17 +395,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   stepBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBadgeText: {
     color: colors.onPrimary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fonts.monoSemibold,
+    fontSize: 13,
   },
   stepLabel: {
     ...typography.h3,
@@ -416,18 +417,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   infoLabel: {
+    ...typography.code,
     fontSize: 12,
     color: colors.textSecondary,
   },
   infoValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    ...typography.code,
+    fontSize: 17,
+    color: colors.primary,
   },
   infoValueBold: {
+    ...typography.body,
+    fontFamily: fonts.bodySemibold,
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
     marginBottom: 2,
   },
   ambiguousBox: {
@@ -467,8 +469,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   confirmButtonText: {
+    fontFamily: fonts.displayBold,
     color: colors.onPrimary,
-    fontWeight: '700',
     fontSize: 16,
+    letterSpacing: 0.5,
   },
 });

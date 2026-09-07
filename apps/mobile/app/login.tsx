@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApiError, useAuth } from '../src/auth/auth-context';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { colors, fonts, radius, spacing, typography } from '../src/theme/tokens';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -27,8 +27,11 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.brand}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoMarkText}>SB</Text>
+        <Text style={styles.eyebrow}>THƯ VIỆN · KHO VẬN</Text>
+        <View style={styles.stamp}>
+          <View style={styles.stampInner}>
+            <Text style={styles.stampText}>SB</Text>
+          </View>
         </View>
         <Text style={styles.title}>SmartBook Picking</Text>
         <Text style={styles.subtitle}>Đăng nhập để bắt đầu ca làm việc</Text>
@@ -97,19 +100,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xxl,
   },
-  logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary,
+  eyebrow: {
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
+    letterSpacing: 2,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  stamp: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
+    transform: [{ rotate: '-6deg' }],
   },
-  logoMarkText: {
-    color: colors.onPrimary,
+  stampInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stampText: {
+    fontFamily: fonts.monoSemibold,
+    color: colors.primary,
     fontSize: 20,
-    fontWeight: '700',
   },
   title: {
     ...typography.h1,
@@ -130,11 +151,12 @@ const styles = StyleSheet.create({
     ...typography.label,
   },
   input: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
+    fontFamily: fonts.body,
     fontSize: 16,
     color: colors.textPrimary,
     backgroundColor: colors.surface,
@@ -151,11 +173,11 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fonts.bodySemibold,
   },
   button: {
     backgroundColor: colors.primary,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     paddingVertical: spacing.md + 4,
     alignItems: 'center',
     marginTop: spacing.xs,
@@ -164,11 +186,12 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   buttonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   buttonText: {
+    fontFamily: fonts.display,
     color: colors.onPrimary,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 20,
+    letterSpacing: 0.6,
   },
 });

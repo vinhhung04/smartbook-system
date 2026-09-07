@@ -1,40 +1,55 @@
 /**
  * Shared design tokens for the mobile app. Keeps colors, spacing, radii,
  * typography and shadows consistent across every screen.
+ *
+ * Visual language: "Ca làm việc" (the shift) — a calm reading-lamp green
+ * gives today's real numbers room to be the loudest thing on the screen,
+ * instead of costuming the whole app as a physical object again.
  */
 import { Platform } from 'react-native';
 
-export const colors = {
-  bg: '#F8FAFC',
-  surface: '#FFFFFF',
-  border: '#E2E8F0',
-  borderStrong: '#CBD5E1',
+export const fonts = {
+  display: 'Sora_600SemiBold',
+  displayBold: 'Sora_700Bold',
+  body: 'Manrope_400Regular',
+  bodyMedium: 'Manrope_500Medium',
+  bodySemibold: 'Manrope_600SemiBold',
+  mono: 'RobotoMono_400Regular',
+  monoSemibold: 'RobotoMono_700Bold',
+};
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+export const colors = {
+  bg: '#F6F7F5',
+  surface: '#FFFFFF',
+  surfaceRaised: '#ECEFEA',
+  border: '#DEE3DD',
+  borderStrong: '#C3CBC2',
+
+  textPrimary: '#1B211D',
+  textSecondary: '#5B6660',
+  textMuted: '#96A199',
   onPrimary: '#FFFFFF',
 
-  primary: '#2563EB',
-  primarySoft: '#EFF6FF',
-  primaryBorder: '#BFDBFE',
+  primary: '#1F8A6B',
+  primarySoft: 'rgba(31,138,107,0.10)',
+  primaryBorder: 'rgba(31,138,107,0.35)',
 
-  success: '#16A34A',
-  successSoft: '#F0FDF4',
-  successBorder: '#BBF7D0',
+  success: '#2E8F5C',
+  successSoft: 'rgba(46,143,92,0.10)',
+  successBorder: 'rgba(46,143,92,0.35)',
 
-  danger: '#DC2626',
-  dangerSoft: '#FEF2F2',
-  dangerBorder: '#FECACA',
+  danger: '#C0392E',
+  dangerSoft: 'rgba(192,57,46,0.10)',
+  dangerBorder: 'rgba(192,57,46,0.35)',
 
-  warning: '#D97706',
-  warningSoft: '#FFFBEB',
-  warningBorder: '#FDE68A',
+  warning: '#B5791A',
+  warningSoft: 'rgba(181,121,26,0.10)',
+  warningBorder: 'rgba(181,121,26,0.35)',
 
-  neutral: '#334155',
-  neutralSoft: '#F1F5F9',
+  neutral: '#6D766F',
+  neutralSoft: 'rgba(109,118,111,0.12)',
 
-  overlay: 'rgba(15, 23, 42, 0.72)',
+  overlay: 'rgba(16,20,17,0.78)',
 };
 
 export const spacing = {
@@ -47,39 +62,45 @@ export const spacing = {
 };
 
 export const radius = {
-  sm: 8,
+  sm: 6,
   md: 12,
-  lg: 16,
+  lg: 18,
   pill: 999,
 };
 
 export const typography = {
-  h1: { fontSize: 24, fontWeight: '700' as const, color: colors.textPrimary },
-  h2: { fontSize: 19, fontWeight: '700' as const, color: colors.textPrimary },
-  h3: { fontSize: 16, fontWeight: '700' as const, color: colors.textPrimary },
-  body: { fontSize: 16, fontWeight: '400' as const, color: colors.textPrimary },
-  bodyBold: { fontSize: 16, fontWeight: '600' as const, color: colors.textPrimary },
-  caption: { fontSize: 13, fontWeight: '500' as const, color: colors.textSecondary },
+  h1: { fontFamily: fonts.display, fontSize: 28, color: colors.textPrimary },
+  h2: { fontFamily: fonts.display, fontSize: 22, color: colors.textPrimary },
+  h3: { fontFamily: fonts.display, fontSize: 18, color: colors.textPrimary },
+  body: { fontFamily: fonts.body, fontSize: 16, color: colors.textPrimary },
+  bodyBold: { fontFamily: fonts.bodySemibold, fontSize: 16, color: colors.textPrimary },
+  caption: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textSecondary },
   label: {
-    fontSize: 12,
-    fontWeight: '700' as const,
+    fontFamily: fonts.monoSemibold,
+    fontSize: 11,
     color: colors.textSecondary,
-    letterSpacing: 0.3,
+    letterSpacing: 1.1,
     textTransform: 'uppercase' as const,
+  },
+  code: {
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: colors.textPrimary,
+    letterSpacing: 0.2,
   },
 };
 
 export const shadow = {
-  // react-native-web wants a CSS boxShadow string; native (iOS/Android) only
-  // understands the shadow*/elevation props — same visual result either way.
   card: Platform.select({
-    web: { boxShadow: '0px 3px 10px rgba(15, 23, 42, 0.06)' },
+    web: { boxShadow: '0px 4px 16px rgba(27,33,29,0.07)', borderWidth: 1, borderColor: colors.border },
     default: {
-      shadowColor: '#0F172A',
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 3 },
-      elevation: 2,
+      shadowColor: '#1B211D',
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
   }),
 };

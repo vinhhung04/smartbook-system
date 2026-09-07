@@ -15,7 +15,7 @@ import { ApiError, useAuth } from '../../../../src/auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/haptics';
 import { ScanField } from '../../../../src/scanner/ScanField';
 import type { PickingTaskDetail, PickingTaskType } from '../../../../src/types/picking';
-import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
 
 export default function TaskDetailScreen() {
   const { taskType, taskId } = useLocalSearchParams<{ taskType: PickingTaskType; taskId: string }>();
@@ -271,8 +271,9 @@ const styles = StyleSheet.create({
   },
   repickBadgeText: {
     color: colors.warning,
-    fontWeight: '700',
+    fontFamily: fonts.monoSemibold,
     fontSize: 10,
+    letterSpacing: 0.4,
   },
   shortageButton: {
     backgroundColor: colors.warningSoft,
@@ -339,8 +340,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   scanButtonText: {
+    fontFamily: fonts.displayBold,
     color: colors.onPrimary,
-    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
   doneBox: {
     padding: spacing.lg,
@@ -379,7 +382,8 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   lineRowQty: {
+    ...typography.code,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 14,
   },
 });

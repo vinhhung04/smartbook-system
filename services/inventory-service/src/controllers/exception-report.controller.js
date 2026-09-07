@@ -33,6 +33,7 @@ async function createExceptionReport(req, res) {
     actual_qty,
     note,
     evidence_notes,
+    evidence_photo_url,
   } = req.body;
 
   if (!warehouse_id) return res.status(400).json({ message: 'warehouse_id is required' });
@@ -44,6 +45,16 @@ async function createExceptionReport(req, res) {
     return res.status(400).json({ message: `exception_type must be one of: ${VALID_EXCEPTION_TYPES.join(', ')}` });
   }
   if (!note || !note.trim()) return res.status(400).json({ message: 'note is required' });
+
+  let photoUrl = null;
+  if (evidence_photo_url !== undefined && evidence_photo_url !== null && evidence_photo_url !== '') {
+    const ref = String(evidence_photo_url).trim();
+    const isValidRef = ref.startsWith('data:image/') || ref.startsWith('http://') || ref.startsWith('https://');
+    if (!isValidRef) {
+      return res.status(400).json({ message: 'evidence_photo_url must be a data:image/ URL or an http(s) URL' });
+    }
+    photoUrl = ref;
+  }
 
   const userRoles = (req.user?.roles || []).map((r) => String(r).toUpperCase());
   const isManager = req.user?.is_superuser || userRoles.some((r) => ['WAREHOUSE_MANAGER', 'ADMIN'].includes(r));
@@ -110,6 +121,7 @@ async function createExceptionReport(req, res) {
         actual_qty: actual_qty !== undefined ? Number(actual_qty) : null,
         note: note.trim(),
         evidence_notes: evidence_notes || null,
+        evidence_photo_url: photoUrl,
         status: 'OPEN',
       },
     });

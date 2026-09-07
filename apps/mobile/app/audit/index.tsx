@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import * as stockAuditApi from '../../src/api/stockAudit';
 import { ApiError } from '../../src/auth/auth-context';
 import type { StockAuditSummary } from '../../src/types/stockAudit';
-import { colors, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
 export default function StockAuditListScreen() {
   const [audits, setAudits] = useState<StockAuditSummary[]>([]);
@@ -127,8 +127,10 @@ const styles = StyleSheet.create({
   },
   varianceBadgeText: {
     color: colors.danger,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontFamily: fonts.monoSemibold,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   chevron: {
     fontSize: 22,
