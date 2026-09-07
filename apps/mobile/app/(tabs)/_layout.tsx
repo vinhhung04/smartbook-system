@@ -27,28 +27,28 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Trang chủ',
-          tabBarIcon: ({ focused }) => <TabBarIcon label="TC" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabBarIcon name="home" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="tasks"
         options={{
           title: 'Việc của tôi',
-          tabBarIcon: ({ focused }) => <TabBarIcon label="VC" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabBarIcon name="clipboard" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="scan"
         options={{
           title: 'Quét',
-          tabBarIcon: ({ focused }) => <TabBarIcon label="QT" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabBarIcon name="scan" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Cá nhân',
-          tabBarIcon: ({ focused }) => <TabBarIcon label="CN" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabBarIcon name="person-circle" focused={focused} />,
         }}
       />
     </Tabs>

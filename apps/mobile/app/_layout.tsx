@@ -20,6 +20,7 @@ import {
 import { AuthProvider, useAuth } from '../src/auth/auth-context';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { colors } from '../src/theme/tokens';
+import { colors as loginColors } from '../src/theme/loginTokens';
 
 function RootNavigation() {
   const { user, isLoading } = useAuth();
@@ -29,18 +30,28 @@ function RootNavigation() {
   useEffect(() => {
     if (isLoading) return;
     const onLoginScreen = segments[0] === 'login';
+    const isCustomer = user?.roles.includes('CUSTOMER') ?? false;
+    const inCustomerArea = segments[0] === 'customer';
 
     if (!user && !onLoginScreen) {
       router.replace('/login');
     } else if (user && onLoginScreen) {
+      router.replace(isCustomer ? '/customer' : '/');
+    } else if (user && isCustomer && !inCustomerArea) {
+      // Warehouse-staff routes assume staff permissions a customer JWT doesn't
+      // have — keep customer sessions confined to /customer even on a deep link.
+      router.replace('/customer');
+    } else if (user && !isCustomer && inCustomerArea) {
       router.replace('/');
     }
   }, [isLoading, user, segments, router]);
 
   if (isLoading) {
+    // Role isn't known yet at this point (same moment login.tsx has to stay
+    // neutral for) — use the neutral login palette, not staff green.
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: loginColors.paperBottom }}>
+        <ActivityIndicator color={loginColors.accent} />
       </View>
     );
   }
@@ -66,8 +77,8 @@ export default function RootLayout() {
 
   if (!soraLoaded || !manropeLoaded || !robotoMonoLoaded) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: loginColors.paperBottom }}>
+        <ActivityIndicator color={loginColors.accent} />
       </View>
     );
   }

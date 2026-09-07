@@ -39,6 +39,7 @@ type ApiFetchOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   skipAuth?: boolean;
+  headers?: Record<string, string>;
 };
 
 function sleep(ms: number) {
@@ -56,7 +57,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 }
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers };
 
   if (!options.skipAuth) {
     const token = await getToken();
