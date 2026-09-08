@@ -51,6 +51,10 @@ export interface LocationNode {
   barcode?: string | null;
   capacity_qty?: number | null;
   available?: number | null;
+  zone?: string | null;
+  aisle?: string | null;
+  shelf?: string | null;
+  bin?: string | null;
   children?: LocationNode[];
 }
 
