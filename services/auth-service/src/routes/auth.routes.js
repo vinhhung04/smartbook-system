@@ -15,7 +15,12 @@ const { authenticateToken } = require('../middlewares/auth.middleware');
 const { createRateLimiter } = require('@smartbook/shared/runtime');
 
 const router = express.Router();
-const authRateLimit = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+// Overridable so CI can run many scripted logins in one 15-minute window without
+// weakening the production default (10) — unset locally/in prod, it's a no-op.
+const authRateLimit = createRateLimiter({
+  max: Number(process.env.AUTH_LOGIN_RATE_LIMIT_MAX) || 10,
+  windowMs: 15 * 60 * 1000,
+});
 const resetRateLimit = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
 
 // Public endpoints

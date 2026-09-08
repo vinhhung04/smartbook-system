@@ -85,3 +85,63 @@ jobs:
       - run: cp .env.example .env
 
       - run: docker compose config -q
+
+  integration:
+    name: Integration flows (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Generate local .env
+        run: |
+          node scripts/init-demo-env.mjs
+          # scripts/*.mjs collectively log in as several roles across 7 flows in one
+          # run — well over the production default of 10 logins per 15 minutes.
+          echo "AUTH_LOGIN_RATE_LIMIT_MAX=1000" >> .env
+
+      - name: Start core stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: Seed demo data
+        run: pnpm demo:seed
+
+      # No npm dependencies — each script only uses Node built-ins, so they run
+      # directly against the gateway at http://localhost:3000 without `pnpm install`.
+      # A few scripts self-sign a JWT for a synthetic test actor instead of calling
+      # /auth/login, and fall back to a hardcoded secret when JWT_SECRET isn't set —
+      # that fallback never matches the random secret init-demo-env.mjs generated,
+      # so it must be forwarded explicitly here or those scripts get 403s.
+      - name: Run integration flows
+        run: |
+          set -e
+          export JWT_SECRET="$(grep -m1 '^JWT_SECRET=' .env | cut -d= -f2-)"
+          for f in \
+            rbac-role-access-integration.mjs \
+            purchase-supplier-receiving-integration.mjs \
+            borrow-phase2-integration.mjs \
+            reservation-pickup-loan-return-integration.mjs \
+            supplier-portal-integration.mjs \
+            admin-user-management-integration.mjs \
+            analytics-integration.mjs \
+          ; do
+            echo "::group::$f"
+            node "scripts/$f"
+            echo "::endgroup::"
+          done
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
