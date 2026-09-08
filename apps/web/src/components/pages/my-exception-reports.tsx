@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { AlertTriangle, Plus, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, ImagePlus, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { SectionCard } from "@/components/ui/section-card";
@@ -77,8 +77,23 @@ const emptyForm: ExceptionReportCreateInput = {
   expected_qty: undefined,
   actual_qty: undefined,
   evidence_notes: "",
+  evidence_photo_url: undefined,
   goods_receipt_id: undefined,
 };
+
+const MAX_EVIDENCE_PHOTO_BYTES = 4 * 1024 * 1024; // keep base64 payload comfortably under the gateway's JSON body limit
+// Raster types only — matches the backend allowlist in exception-report.controller.js. SVG is
+// excluded because it can carry executable script that would run when rendered via <img src>.
+const ALLOWED_EVIDENCE_PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 export function MyExceptionReportsPage() {
   const [searchParams] = useSearchParams();
@@ -187,6 +202,26 @@ export function MyExceptionReportsPage() {
     }));
   };
 
+  const handlePhotoSelect = async (file: File | undefined) => {
+    if (!file) return;
+    if (!ALLOWED_EVIDENCE_PHOTO_TYPES.includes(file.type)) {
+      // Reject SVG (and any other non-raster type) client-side: an inline SVG can carry
+      // executable script and would run when later rendered via <img src>.
+      toast.error("Vui lòng chọn ảnh PNG, JPEG, WEBP hoặc GIF");
+      return;
+    }
+    if (file.size > MAX_EVIDENCE_PHOTO_BYTES) {
+      toast.error("Ảnh quá lớn (tối đa 4MB). Vui lòng chọn ảnh nhỏ hơn hoặc nén ảnh trước khi tải lên.");
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setForm((f) => ({ ...f, evidence_photo_url: dataUrl }));
+    } catch {
+      toast.error("Không đọc được tệp ảnh, vui lòng thử lại");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.warehouse_id) { toast.error("Vui lòng chọn kho"); return; }
@@ -204,6 +239,7 @@ export function MyExceptionReportsPage() {
         expected_qty: form.expected_qty !== undefined && form.expected_qty !== null ? Number(form.expected_qty) : undefined,
         actual_qty: form.actual_qty !== undefined && form.actual_qty !== null ? Number(form.actual_qty) : undefined,
         evidence_notes: form.evidence_notes || undefined,
+        evidence_photo_url: form.evidence_photo_url || undefined,
         goods_receipt_id: form.goods_receipt_id || undefined,
       };
       await exceptionReportService.createReport(payload);
@@ -501,6 +537,38 @@ export function MyExceptionReportsPage() {
                     value={form.evidence_notes || ""}
                     onChange={(e) => setForm((f) => ({ ...f, evidence_notes: e.target.value }))}
                   />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium mb-1">Ảnh bằng chứng</label>
+                  {form.evidence_photo_url ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={form.evidence_photo_url}
+                        alt="Ảnh bằng chứng"
+                        className="h-20 w-20 rounded-md border border-border object-cover"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setForm((f) => ({ ...f, evidence_photo_url: undefined }))}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Xóa ảnh
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground hover:border-primary/40 hover:text-foreground">
+                      <ImagePlus className="h-3.5 w-3.5" />
+                      Chọn ảnh (tối đa 4MB)
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) => void handlePhotoSelect(e.target.files?.[0])}
+                      />
+                    </label>
+                  )}
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={closeForm}>Hủy</Button>

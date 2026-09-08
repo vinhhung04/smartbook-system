@@ -130,6 +130,7 @@ module.exports = {
   SHORT_PICK_MARKER,
   normalizeCode,
   appendOrderNote,
+  encodeMetaValue,
   buildMarkerLine,
   parseMarkerPayload,
   upsertMarkerLine,

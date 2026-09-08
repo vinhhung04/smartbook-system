@@ -5,7 +5,6 @@ import { ClipboardCheck, ArrowRight, Package, UserCheck, Clock } from "lucide-re
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
-import { goodsReceiptService } from "@/services/goods-receipt";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { authService } from "@/services/auth";
 import { canManageReceiving } from "@/lib/rbac";
@@ -124,7 +123,7 @@ export function PutawayPage() {
     }
     setAssigningId(receiptId);
     try {
-      await goodsReceiptService.assign(receiptId, staffId);
+      await putawayService.assignStaff(receiptId, staffId);
       toast.success("Đã giao putaway task cho nhân viên");
       const data = await putawayService.getReadyReceipts();
       setReceipts(Array.isArray(data) ? data : []);

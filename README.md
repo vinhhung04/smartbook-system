@@ -812,6 +812,36 @@ Pickup code docker test: 19/19 passed
 
 </details>
 
+### ✅ Reservation → Pickup code/QR → Loan → Return integration
+
+![reservation-pickup-loan-return](https://img.shields.io/badge/reservation--pickup--loan--return-10%2F10%20PASS-brightgreen)
+
+<details>
+<summary>Xem lệnh chạy &amp; kết quả</summary>
+
+Script tái lập được cho flow quan trọng nhất của thư viện (mục [1. Đặt sách → mượn sách → trả sách](#1-đặt-sách--mượn-sách--trả-sách) và [2. Pickup code / QR code](#2-pickup-code--qr-code)), qua API Gateway:
+
+- ✅ Tạo reservation ở trạng thái `PENDING`.
+- ✅ Staff confirm → `CONFIRMED` → `READY_FOR_PICKUP`, sinh pickup code.
+- ✅ Convert trực tiếp bằng id khi đang `READY_FOR_PICKUP` bị chặn (bắt buộc dùng pickup code).
+- ✅ Convert bằng QR payload (`SMARTBOOK:PICKUP:PU-XXXX-XXXX`) tạo loan `BORROWED`.
+- ✅ Reservation được đánh dấu `CONVERTED_TO_LOAN` và `pickup_code_used_at`.
+- ✅ Gửi lại cùng pickup code là idempotent (trả về đúng loan cũ, không tạo loan trùng).
+- ✅ Pickup code không tồn tại bị từ chối (404).
+- ✅ Return loan → trạng thái `RETURNED`.
+
+```powershell
+node scripts\reservation-pickup-loan-return-integration.mjs
+```
+
+Expected summary:
+
+```text
+PASS=10 TOTAL=10
+```
+
+</details>
+
 ## 🗃️ Cấu Trúc Thư Mục
 
 ```text

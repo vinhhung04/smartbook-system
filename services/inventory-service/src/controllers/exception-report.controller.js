@@ -33,6 +33,7 @@ async function createExceptionReport(req, res) {
     actual_qty,
     note,
     evidence_notes,
+    evidence_photo_url,
   } = req.body;
 
   if (!warehouse_id) return res.status(400).json({ message: 'warehouse_id is required' });
@@ -44,6 +45,20 @@ async function createExceptionReport(req, res) {
     return res.status(400).json({ message: `exception_type must be one of: ${VALID_EXCEPTION_TYPES.join(', ')}` });
   }
   if (!note || !note.trim()) return res.status(400).json({ message: 'note is required' });
+
+  let photoUrl = null;
+  if (evidence_photo_url !== undefined && evidence_photo_url !== null && evidence_photo_url !== '') {
+    const ref = String(evidence_photo_url).trim();
+    // Only allow raster image types as base64 data URLs — reject data:image/svg+xml (and any
+    // non-base64 data URL), since an inline SVG can carry executable script and would run when
+    // later rendered via <img src>. http(s) URLs are still allowed as-is.
+    const isValidDataUrl = /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(ref);
+    const isValidHttpUrl = ref.startsWith('http://') || ref.startsWith('https://');
+    if (!isValidDataUrl && !isValidHttpUrl) {
+      return res.status(400).json({ message: 'evidence_photo_url must be a base64 data:image/{png,jpeg,webp,gif} URL or an http(s) URL' });
+    }
+    photoUrl = ref;
+  }
 
   const userRoles = (req.user?.roles || []).map((r) => String(r).toUpperCase());
   const isManager = req.user?.is_superuser || userRoles.some((r) => ['WAREHOUSE_MANAGER', 'ADMIN'].includes(r));
@@ -110,6 +125,7 @@ async function createExceptionReport(req, res) {
         actual_qty: actual_qty !== undefined ? Number(actual_qty) : null,
         note: note.trim(),
         evidence_notes: evidence_notes || null,
+        evidence_photo_url: photoUrl,
         status: 'OPEN',
       },
     });

@@ -1,4 +1,4 @@
-import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun, Search } from "lucide-react";
+import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun, Search, UserCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -279,6 +279,9 @@ export function Topbar() {
                   <p className="text-[13px]" style={{ fontWeight: 650 }}>{user?.full_name || user?.username || t('topbar.user_fallback')}</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">{user?.email || ""}</p>
                 </div>
+                <NavLink to="/account" onClick={() => setProfileOpen(false)} className="w-full px-4 py-2.5 text-left text-[12px] text-foreground hover:bg-muted/60 transition-colors flex items-center gap-2" style={{ fontWeight: 550 }}>
+                  <UserCircle className="w-3.5 h-3.5" /> Tài khoản của tôi
+                </NavLink>
                 <button onClick={() => void handleLogout()} className="w-full px-4 py-2.5 text-left text-[12px] text-rose-600 hover:bg-rose-50/60 transition-colors flex items-center gap-2" style={{ fontWeight: 550 }}>
                   <LogOut className="w-3.5 h-3.5" /> {t('topbar.logout')}
                 </button>

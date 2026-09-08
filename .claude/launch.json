@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "mobile-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@smartbook/mobile", "web"],
+      "port": 8081
+    },
+    {
       "name": "web-dev",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "web", "exec", "vite", "--port", "5174"],
