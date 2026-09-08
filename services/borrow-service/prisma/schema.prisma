@@ -130,6 +130,7 @@ model loan_transactions {
 
   @@index([customer_id, status], map: "idx_loan_transactions_customer_id")
   @@index([due_date, status], map: "idx_loan_transactions_due_date")
+  @@index([borrow_date], map: "idx_loan_transactions_borrow_date")
 }
 
 model loan_items {
@@ -153,6 +154,7 @@ model loan_items {
   loan_transactions       loan_transactions  @relation(fields: [loan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([loan_id, status], map: "idx_loan_items_loan_status")
+  @@index([due_date, return_date], map: "idx_loan_items_due_return")
 }
 
 model loan_renewals {

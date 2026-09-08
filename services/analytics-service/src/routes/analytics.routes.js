@@ -26,6 +26,9 @@ function authenticateInternalOrUser(req, res, next) {
 
 router.get('/aging-inventory', authenticateInternalOrUser, analyticsController.getAgingInventory);
 router.get('/book-turnover', authenticateInternalOrUser, analyticsController.getBookTurnover);
+// The borrow-service due-soon reminder job calls this with the internal
+// service key, not a user JWT - same convention as the two routes above.
+router.get('/late-return-risk', authenticateInternalOrUser, analyticsController.getLateReturnRisk);
 
 router.use(authenticateToken, readAnalytics);
 
@@ -38,5 +41,7 @@ router.get('/warehouse-stock-risk', analyticsController.getWarehouseStockRisk);
 router.get('/reorder-suggestions', analyticsController.getReorderSuggestions);
 router.get('/reservation-funnel', analyticsController.getReservationFunnel);
 router.get('/weeding-suggestions', analyticsController.getWeedingSuggestions);
+router.get('/forecast-accuracy', analyticsController.getForecastAccuracy);
+router.get('/reservation-no-show-risk', analyticsController.getReservationNoShowRisk);
 
 module.exports = router;

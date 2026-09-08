@@ -52,7 +52,14 @@ function metricSummary(actual, predicted) {
   const absolute = actual.reduce((sum, value, index) => sum + Math.abs(value - predicted[index]), 0);
   const squared = actual.reduce((sum, value, index) => sum + (value - predicted[index]) ** 2, 0);
   const totalActual = actual.reduce((sum, value) => sum + Math.abs(value), 0);
-  const mapeValues = actual.filter((value) => value > 0).map((value, index) => Math.abs(value - predicted[index]) / value);
+  // Index-preserving: .filter().map() would re-index after filtering out
+  // zero-demand days, misaligning predicted[index] with the actual it was
+  // supposed to pair with - wrong on any sparse series (the normal case for
+  // per-title daily borrow counts).
+  const mapeValues = [];
+  for (let i = 0; i < actual.length; i += 1) {
+    if (actual[i] > 0) mapeValues.push(Math.abs(actual[i] - predicted[i]) / actual[i]);
+  }
   return { mae: absolute / samples, rmse: Math.sqrt(squared / samples), wape: totalActual ? absolute / totalActual : null, mape: mapeValues.length ? mapeValues.reduce((sum, value) => sum + value, 0) / mapeValues.length : null, mapeSamples: mapeValues.length, samples };
 }
 

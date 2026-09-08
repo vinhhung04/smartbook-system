@@ -8,10 +8,13 @@ const {
   round,
 } = require('../utils/date-range');
 const { findSeasonalEvent } = require('../config/seasonal-events');
-const { ewma, linearTrendSlope, stdDev, projectedDemand } = require('../utils/forecast');
+const { ewma, linearTrendSlope, stdDev, projectedDemand, rollingBacktest } = require('../utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
 const { allocateBudget } = require('../utils/budget-allocation');
 const { classifyWeedingCandidate } = require('../utils/weeding');
+const { LATE_RETURN_FEATURES, NO_SHOW_FEATURES, toLateReturnSample, toNoShowSample } = require('../utils/risk-features');
+const { trainAndEvaluate, scoreRows } = require('../utils/risk-model');
+const { getOrTrain } = require('../lib/model-cache');
 
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1076,6 +1079,303 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   });
 });
 
+// Makes rollingBacktest (forecast.js) a real reported number instead of dead
+// code exercised only by test/forecast-backtest.test.js. Reuses
+// getDailyBorrowSeriesByVariant verbatim - no new SQL.
+const getForecastAccuracy = asyncHandler(async (req, res) => {
+  const days = parsePositiveInteger(req.query.days, 180, 730, 'days');
+  const horizonDays = parsePositiveInteger(req.query.horizonDays, 7, 30, 'horizonDays');
+  const minTrainDays = parsePositiveInteger(req.query.minTrainDays, 30, 365, 'minTrainDays');
+  const limit = parseLimit(req.query.limit, 20, 50);
+  const variantId = req.query.variantId ? String(req.query.variantId) : null;
+
+  const to = new Date();
+  const from = new Date(to.getTime() - days * DAY_MS);
+  const seriesByVariant = await getDailyBorrowSeriesByVariant(from, to);
+
+  let variantIds = Array.from(seriesByVariant.keys());
+  if (variantId) variantIds = variantIds.filter((id) => id === variantId);
+
+  const backtests = variantIds
+    .map((id) => ({ variant_id: id, backtest: rollingBacktest(seriesByVariant.get(id), { horizonDays, minTrainDays }) }))
+    .filter((item) => item.backtest.status === 'OK');
+
+  const windowSummary = { from: formatDateOnly(from), to: formatDateOnly(to), days, horizonDays, minTrainDays };
+
+  if (!backtests.length) {
+    return res.json({
+      data: {
+        generated_at: new Date().toISOString(),
+        window: windowSummary,
+        overall: { status: 'INSUFFICIENT_DATA', models: [], best_model: null },
+        items: [],
+      },
+    });
+  }
+
+  const bookRows = await query(
+    inventoryPool,
+    `SELECT bv.id::text AS variant_id, b.title FROM book_variants bv JOIN books b ON b.id = bv.book_id WHERE bv.id = ANY($1::uuid[])`,
+    [backtests.map((item) => item.variant_id)],
+  );
+  const titleByVariant = new Map(bookRows.map((row) => [row.variant_id, row.title]));
+
+  // Sample-weighted average per model across every variant that had enough
+  // history for a backtest - one table for "which forecast model performs
+  // best across the whole catalog", not just for a single title.
+  const modelNames = backtests[0].backtest.models.map((m) => m.model);
+  const overallByModel = new Map(modelNames.map((name) => [name, {
+    model: name, totalSamples: 0, weightedMae: 0, weightedRmse: 0, weightedWape: 0, weightedMape: 0, mapeSamples: 0,
+  }]));
+  const bestModelVotes = {};
+
+  for (const item of backtests) {
+    for (const modelResult of item.backtest.models) {
+      const acc = overallByModel.get(modelResult.model);
+      acc.totalSamples += modelResult.samples;
+      acc.weightedMae += modelResult.mae * modelResult.samples;
+      acc.weightedRmse += modelResult.rmse * modelResult.samples;
+      if (modelResult.wape !== null) acc.weightedWape += modelResult.wape * modelResult.samples;
+      if (modelResult.mape !== null) {
+        acc.weightedMape += modelResult.mape * modelResult.mapeSamples;
+        acc.mapeSamples += modelResult.mapeSamples;
+      }
+    }
+    bestModelVotes[item.backtest.bestModel] = (bestModelVotes[item.backtest.bestModel] || 0) + 1;
+  }
+
+  const overallModels = Array.from(overallByModel.values())
+    .map((acc) => ({
+      model: acc.model,
+      mae: acc.totalSamples ? round(acc.weightedMae / acc.totalSamples, 3) : null,
+      rmse: acc.totalSamples ? round(acc.weightedRmse / acc.totalSamples, 3) : null,
+      wape: acc.totalSamples ? round(acc.weightedWape / acc.totalSamples, 3) : null,
+      mape: acc.mapeSamples ? round(acc.weightedMape / acc.mapeSamples, 3) : null,
+      samples: acc.totalSamples,
+    }))
+    .sort((a, b) => a.mae - b.mae);
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      window: windowSummary,
+      overall: { status: 'OK', models: overallModels, best_model: overallModels[0]?.model || null, best_model_votes: bestModelVotes },
+      items: backtests.slice(0, limit).map((item) => ({
+        variant_id: item.variant_id,
+        title: titleByVariant.get(item.variant_id) || null,
+        status: item.backtest.status,
+        models: item.backtest.models,
+        best_model: item.backtest.bestModel,
+      })),
+    },
+  });
+});
+
+// Shared SELECT/FROM/JOIN for both the late-return training query and the
+// scoring query below - only the WHERE clause (and therefore which rows come
+// back) differs, so the feature columns risk-features.js expects are defined
+// in exactly one place.
+const LATE_RETURN_ROW_SQL = `
+  SELECT
+    li.id::text AS loan_item_id,
+    lt.borrow_date,
+    COALESCE(orig.old_due_date, li.due_date) AS original_due_date,
+    li.due_date,
+    li.return_date,
+    lt.total_items AS items_in_loan,
+    COALESCE(prior.prior_loans, 0) AS prior_loans,
+    COALESCE(prior.prior_late_count, 0) AS prior_late_count,
+    COALESCE(prior.prior_renewal_count, 0) AS prior_renewal_count,
+    c.created_at AS customer_created_at,
+    COALESCE(unpaid.amount, 0) AS unpaid_fines_at_checkout,
+    mp.max_loan_days AS plan_max_loan_days,
+    mp.fine_per_day AS plan_fine_per_day,
+    (lt.source_reservation_id IS NOT NULL) AS from_reservation,
+    (li.item_condition_on_checkout <> 'GOOD') AS condition_worn_at_checkout
+  FROM loan_items li
+  JOIN loan_transactions lt ON lt.id = li.loan_id
+  JOIN customers c ON c.id = lt.customer_id
+  LEFT JOIN LATERAL (
+    SELECT cm.plan_id FROM customer_memberships cm
+    WHERE cm.customer_id = c.id AND cm.start_date <= lt.borrow_date
+    ORDER BY cm.start_date DESC LIMIT 1
+  ) cm_at ON true
+  LEFT JOIN membership_plans mp ON mp.id = cm_at.plan_id
+  -- Original due date (pre-renewal) - see risk-features.js leakage rules.
+  LEFT JOIN LATERAL (
+    SELECT MIN(lr.old_due_date) AS old_due_date FROM loan_renewals lr WHERE lr.loan_item_id = li.id
+  ) orig ON true
+  -- Everything below is scoped to lt2.borrow_date < lt.borrow_date - only
+  -- what the customer's history looked like strictly before THIS loan.
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*) AS prior_loans,
+      COUNT(*) FILTER (WHERE li2.return_date > li2.due_date) AS prior_late_count,
+      COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM loan_renewals lr2 WHERE lr2.loan_item_id = li2.id)) AS prior_renewal_count
+    FROM loan_items li2
+    JOIN loan_transactions lt2 ON lt2.id = li2.loan_id
+    WHERE lt2.customer_id = c.id AND lt2.borrow_date < lt.borrow_date AND li2.return_date IS NOT NULL
+  ) prior ON true
+  LEFT JOIN LATERAL (
+    SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
+    WHERE f.customer_id = c.id AND f.status = 'UNPAID' AND f.issued_at < lt.borrow_date
+  ) unpaid ON true
+`;
+
+async function getLateReturnTrainingRows() {
+  return query(borrowPool, `${LATE_RETURN_ROW_SQL} WHERE li.return_date IS NOT NULL`, []);
+}
+
+async function getLateReturnScoringRows(dueWithinDays, limit) {
+  const params = [limit];
+  let where = `WHERE li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE')`;
+  if (dueWithinDays !== null) {
+    where += ` AND li.due_date <= now() + ($2 || ' days')::interval`;
+    params.push(dueWithinDays);
+  }
+  return query(borrowPool, `${LATE_RETURN_ROW_SQL} ${where} ORDER BY li.due_date ASC LIMIT $1`, params);
+}
+
+async function trainLateReturnModel() {
+  const rows = await getLateReturnTrainingRows();
+  const samples = rows.map(toLateReturnSample).filter((sample) => sample.label !== null);
+  return trainAndEvaluate(samples, { featureNames: LATE_RETURN_FEATURES });
+}
+
+function riskBand(score, evaluation) {
+  const threshold = evaluation?.best_threshold?.threshold ?? 0.5;
+  if (score >= threshold) return 'HIGH';
+  if (score >= threshold / 2) return 'MEDIUM';
+  return 'LOW';
+}
+
+const getLateReturnRisk = asyncHandler(async (req, res) => {
+  const limit = parseLimit(req.query.limit, 50, 200);
+  const dueWithinDays = req.query.dueWithinDays !== undefined
+    ? parsePositiveInteger(req.query.dueWithinDays, 3, 90, 'dueWithinDays')
+    : null;
+
+  const trained = await getOrTrain('late_return', trainLateReturnModel);
+  if (trained.status !== 'OK') {
+    return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
+  }
+
+  const scoringRows = await getLateReturnScoringRows(dueWithinDays, limit);
+  const scored = scoreRows(trained.model, scoringRows, toLateReturnSample)
+    .map((item) => ({
+      loan_item_id: item.loan_item_id,
+      borrow_date: item.borrow_date,
+      due_date: item.due_date,
+      risk_score: item.risk_score,
+      risk_band: riskBand(item.risk_score, trained.evaluation),
+      top_factors: item.top_factors,
+    }))
+    .sort((a, b) => b.risk_score - a.risk_score);
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      model: { feature_names: trained.model.feature_names, weights: trained.model.weights, bias: trained.model.bias, trained_at: new Date().toISOString(), train_size: trained.trainSize },
+      evaluation: trained.evaluation,
+      items: scored,
+    },
+  });
+});
+
+// Same shape as the late-return query above: shared row SQL, WHERE clause
+// picks training vs. scoring rows. active_loans_at_reservation reads the
+// loan's CURRENT status (not a point-in-time reconstruction) - an accepted
+// approximation, since loan_transactions has no history table.
+const NO_SHOW_ROW_SQL = `
+  SELECT
+    r.id::text AS reservation_id,
+    r.status,
+    r.reserved_at,
+    r.expires_at,
+    r.pickup_code_issued_at,
+    r.pickup_code_used_at,
+    r.quantity,
+    r.source_channel,
+    c.created_at AS customer_created_at,
+    COALESCE(prior.prior_reservations, 0) AS prior_reservations,
+    COALESCE(prior.prior_no_show_count, 0) AS prior_no_show_count,
+    COALESCE(unpaid.amount, 0) AS unpaid_fines_at_reservation,
+    COALESCE(active.active_loans, 0) AS active_loans_at_reservation
+  FROM loan_reservations r
+  JOIN customers c ON c.id = r.customer_id
+  LEFT JOIN LATERAL (
+    SELECT
+      COUNT(*) AS prior_reservations,
+      COUNT(*) FILTER (WHERE r2.pickup_code_used_at IS NULL AND r2.status = 'EXPIRED') AS prior_no_show_count
+    FROM loan_reservations r2
+    WHERE r2.customer_id = r.customer_id AND r2.reserved_at < r.reserved_at
+      AND r2.pickup_code_issued_at IS NOT NULL AND r2.status <> 'CANCELLED'
+      AND (r2.pickup_code_used_at IS NOT NULL OR r2.status = 'EXPIRED')
+  ) prior ON true
+  LEFT JOIN LATERAL (
+    SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
+    WHERE f.customer_id = r.customer_id AND f.status = 'UNPAID' AND f.issued_at < r.reserved_at
+  ) unpaid ON true
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*) AS active_loans FROM loan_transactions lt
+    WHERE lt.customer_id = r.customer_id AND lt.borrow_date < r.reserved_at AND lt.status IN ('BORROWED', 'OVERDUE')
+  ) active ON true
+`;
+
+async function getNoShowTrainingRows() {
+  return query(
+    borrowPool,
+    `${NO_SHOW_ROW_SQL} WHERE r.pickup_code_issued_at IS NOT NULL AND r.status <> 'CANCELLED'
+       AND (r.pickup_code_used_at IS NOT NULL OR r.status = 'EXPIRED')`,
+    [],
+  );
+}
+
+async function getNoShowScoringRows(limit) {
+  return query(
+    borrowPool,
+    `${NO_SHOW_ROW_SQL} WHERE r.status = 'READY_FOR_PICKUP' AND r.pickup_code_used_at IS NULL
+       ORDER BY r.pickup_code_expires_at ASC LIMIT $1`,
+    [limit],
+  );
+}
+
+async function trainNoShowModel() {
+  const rows = await getNoShowTrainingRows();
+  const samples = rows.map(toNoShowSample).filter(Boolean);
+  return trainAndEvaluate(samples, { featureNames: NO_SHOW_FEATURES });
+}
+
+const getReservationNoShowRisk = asyncHandler(async (req, res) => {
+  const limit = parseLimit(req.query.limit, 50, 200);
+
+  const trained = await getOrTrain('no_show', trainNoShowModel);
+  if (trained.status !== 'OK') {
+    return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
+  }
+
+  const scoringRows = await getNoShowScoringRows(limit);
+  const scored = scoreRows(trained.model, scoringRows, toNoShowSample)
+    .map((item) => ({
+      reservation_id: item.reservation_id,
+      reserved_at: item.reserved_at,
+      expires_at: item.expires_at,
+      risk_score: item.risk_score,
+      risk_band: riskBand(item.risk_score, trained.evaluation),
+      top_factors: item.top_factors,
+    }))
+    .sort((a, b) => b.risk_score - a.risk_score);
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      model: { feature_names: trained.model.feature_names, weights: trained.model.weights, bias: trained.model.bias, trained_at: new Date().toISOString(), train_size: trained.trainSize },
+      evaluation: trained.evaluation,
+      items: scored,
+    },
+  });
+});
+
 const getBookTurnover = asyncHandler(async (req, res) => {
   const days = parsePositiveInteger(req.query.days, 90, 365, 'days');
   const to = new Date();
@@ -1360,6 +1660,9 @@ module.exports = {
   getAgingInventory,
   getBookTurnover,
   getWeedingSuggestions,
+  getForecastAccuracy,
+  getLateReturnRisk,
+  getReservationNoShowRisk,
   // Exported for unit tests: resolves one variant's lead time from the
   // delivery history maps built by getLeadTimeHistory().
   resolveItemLeadTime,
