@@ -3,12 +3,22 @@ import { motion } from "motion/react";
 import { ClipboardList, Link2, Plus, RefreshCw, X, CheckCircle, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
+import { PageWrapper, FadeItem } from "../motion-utils";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import {
   staffTaskService,
@@ -42,6 +52,16 @@ const PRIORITY_OPTIONS = [
 ];
 
 const STATUS_FILTERS = ["ALL", "OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
+
+const STATUS_FILTER_LABELS: Record<string, string> = {
+  ALL: "Tất cả trạng thái",
+  OPEN: "Mới",
+  IN_PROGRESS: "Đang làm",
+  DONE: "Hoàn thành",
+  CANCELLED: "Đã hủy",
+};
+
+const PAGE_SIZE = 10;
 
 const ENTITY_TYPE_OPTIONS = [
   { value: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
@@ -130,6 +150,7 @@ export function StaffTasksPage() {
   const [updatingId, setUpdatingId] = useState("");
   const [entityOptions, setEntityOptions] = useState<EntityOption[]>([]);
   const [loadingEntityOptions, setLoadingEntityOptions] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async (status?: string) => {
     setLoading(true);
@@ -151,6 +172,10 @@ export function StaffTasksPage() {
   useEffect(() => { void load(statusFilter); }, [load, statusFilter]);
 
   useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  useEffect(() => {
     if (!isManager) return;
     void userService.getWarehouseStaff().then((res) => {
       setWarehouseStaff(Array.isArray(res.data) ? res.data : []);
@@ -162,6 +187,17 @@ export function StaffTasksPage() {
     for (const s of warehouseStaff) map[s.id] = s.full_name;
     return map;
   }, [warehouseStaff]);
+
+  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
+
+  const pagedTasks = useMemo(
+    () => tasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [tasks, page],
+  );
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const handleEntityTypeChange = async (entityType: string) => {
     setForm((f) => ({ ...f, related_entity_type: entityType || null, related_entity_id: null }));
@@ -229,12 +265,8 @@ export function StaffTasksPage() {
   const colSpan = isManager ? 10 : 9;
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <PageHeader
           icon={ClipboardList}
           title={isManager ? "Giao việc nhân viên" : "Task được giao"}
@@ -243,18 +275,7 @@ export function StaffTasksPage() {
           iconColor="text-violet-700 dark:text-violet-400"
           actions={
             <>
-              <select
-                className="rounded-md border border-border bg-background px-3 py-1.5 text-[13px]"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                {STATUS_FILTERS.map((s) => (
-                  <option key={s} value={s}>
-                    {s === "ALL" ? "Tất cả trạng thái" : s === "IN_PROGRESS" ? "Đang làm" : s === "DONE" ? "Hoàn thành" : s === "CANCELLED" ? "Đã hủy" : "Mới"}
-                  </option>
-                ))}
-              </select>
-              <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading}>
+              <Button type="button" variant="outline" size="sm" onClick={() => void load(statusFilter)} disabled={loading} aria-label="Làm mới">
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
                 Làm mới
               </Button>
@@ -268,10 +289,11 @@ export function StaffTasksPage() {
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
       {/* Create form — Manager only */}
       {isManager && showForm && (
+        <FadeItem>
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -401,118 +423,186 @@ export function StaffTasksPage() {
             </div>
           </SectionCard>
         </motion.div>
+        </FadeItem>
       )}
 
-      <SectionCard noPadding>
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-[15px] font-semibold">
-            {isManager ? "Danh sách task đã giao" : "Task của tôi"}
-          </h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px]">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {[
-                  "Tiêu đề",
-                  "Liên kết",
-                  "Loại",
-                  "Độ ưu tiên",
-                  ...(isManager ? ["Nhân viên"] : []),
-                  "Trạng thái",
-                  "Hạn",
-                  "Tạo lúc",
-                  "Hoàn tất",
-                  "Thao tác",
-                ].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+      <FadeItem>
+        <SectionCard noPadding>
+          <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-[15px] font-semibold">
+              {isManager ? "Danh sách task đã giao" : "Task của tôi"}
+            </h2>
+            <FilterBar
+              className="sm:w-auto"
+              filters={(
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[170px]" size="sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_FILTERS.map((s) => (
+                      <SelectItem key={s} value={s}>{STATUS_FILTER_LABELS[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          <div className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  {[
+                    "Tiêu đề",
+                    "Liên kết",
+                    "Loại",
+                    "Độ ưu tiên",
+                    ...(isManager ? ["Nhân viên"] : []),
+                    "Trạng thái",
+                    "Hạn",
+                    "Tạo lúc",
+                    "Hoàn tất",
+                    "Thao tác",
+                  ].map((h) => (
+                    <TableHead key={h} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <SkeletonTableRow columns={colSpan} rows={4} />
+                ) : tasks.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={colSpan} className="whitespace-normal px-5 py-10">
+                      <EmptyState
+                        icon={ClipboardList}
+                        title="Chưa có task nào"
+                        description={isManager ? "Tạo task để giao cho nhân viên kho." : "Quản lý chưa giao task nào cho bạn."}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : pagedTasks.map((task) => (
+                  <TableRow key={task.id} className="hover:bg-muted/30">
+                    <TableCell className="whitespace-normal text-[13px] font-medium max-w-[180px]">
+                      <span className="block truncate" title={task.title}>{task.title}</span>
+                      {task.description && (
+                        <span className="block truncate text-[11px] text-muted-foreground" title={task.description}>{task.description}</span>
+                      )}
+                    </TableCell>
+
+                    {/* Entity link column */}
+                    <TableCell className="whitespace-normal max-w-[200px]">
+                      {task.related_entity_type && task.related_entity_display ? (
+                        <div className="space-y-1">
+                          <NavLink
+                            to={getEntityNavPath(task.related_entity_type)}
+                            className="inline-flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/15"
+                          >
+                            <Link2 className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[120px]">{task.related_entity_display.ref_number}</span>
+                          </NavLink>
+                          {task.related_entity_display.details && (
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                              {task.related_entity_display.details}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[12px] text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="text-[12px]">{TASK_TYPE_LABELS[task.task_type] || task.task_type}</TableCell>
+                    <TableCell>
+                      <StatusBadge label={PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label || task.priority} variant={priorityVariant(task.priority)} dot />
+                    </TableCell>
+                    {isManager && (
+                      <TableCell className="text-[12px] text-muted-foreground">
+                        {staffById[task.assignee_user_id] || task.assignee_user_id.slice(0, 8)}
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <StatusBadge label={task.status === "IN_PROGRESS" ? "Đang làm" : task.status === "DONE" ? "Hoàn thành" : task.status === "CANCELLED" ? "Đã hủy" : "Mới"} variant={statusVariant(task.status)} dot />
+                    </TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.due_date)}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.created_at)}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</TableCell>
+                    <TableCell className="text-[12px]">
+                      {!isManager && task.status === "OPEN" && (
+                        <Button type="button" size="sm" disabled={updatingId === task.id}
+                          onClick={() => void handleUpdateStatus(task.id, "IN_PROGRESS")}
+                          className="h-7 px-2 text-[11px] bg-blue-600 hover:bg-blue-700">
+                          <PlayCircle className="h-3 w-3" /> Bắt đầu
+                        </Button>
+                      )}
+                      {!isManager && task.status === "IN_PROGRESS" && (
+                        <Button type="button" size="sm" disabled={updatingId === task.id}
+                          onClick={() => void handleUpdateStatus(task.id, "DONE")}
+                          className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
+                          <CheckCircle className="h-3 w-3" /> Hoàn thành
+                        </Button>
+                      )}
+                      {(isManager || task.status === "DONE" || task.status === "CANCELLED") && (
+                        <span className="text-[11px] text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={colSpan} rows={4} />
-              ) : tasks.length === 0 ? (
-                <tr>
-                  <td colSpan={colSpan} className="px-5 py-10">
-                    <EmptyState
-                      icon={ClipboardList}
-                      title="Chưa có task nào"
-                      description={isManager ? "Tạo task để giao cho nhân viên kho." : "Quản lý chưa giao task nào cho bạn."}
-                    />
-                  </td>
-                </tr>
-              ) : tasks.map((task) => (
-                <tr key={task.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 text-[13px] font-medium max-w-[180px]">
-                    <span className="block truncate" title={task.title}>{task.title}</span>
-                    {task.description && (
-                      <span className="block truncate text-[11px] text-muted-foreground" title={task.description}>{task.description}</span>
-                    )}
-                  </td>
+              </TableBody>
+            </Table>
+          </div>
 
-                  {/* Entity link column */}
-                  <td className="px-4 py-3 max-w-[200px]">
-                    {task.related_entity_type && task.related_entity_display ? (
-                      <div className="space-y-1">
-                        <NavLink
-                          to={getEntityNavPath(task.related_entity_type)}
-                          className="inline-flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 transition-colors dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/15"
-                        >
-                          <Link2 className="h-3 w-3 shrink-0" />
-                          <span className="truncate max-w-[120px]">{task.related_entity_display.ref_number}</span>
-                        </NavLink>
-                        {task.related_entity_display.details && (
-                          <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
-                            {task.related_entity_display.details}
-                          </p>
+          {tasks.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] text-muted-foreground">
+                Hiển thị <span className="font-medium text-foreground">{pagedTasks.length}</span> / {tasks.length} task
+              </p>
+              {totalPages > 1 && (
+                <Pagination className="mx-0 w-auto justify-end">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.max(1, current - 1));
+                        }}
+                        className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                    {getPaginationRange(page, totalPages).map((item) => (
+                      <PaginationItem key={item}>
+                        {typeof item === "number" ? (
+                          <PaginationLink
+                            isActive={item === page}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage(item);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {item}
+                          </PaginationLink>
+                        ) : (
+                          <PaginationEllipsis />
                         )}
-                      </div>
-                    ) : (
-                      <span className="text-[12px] text-muted-foreground">—</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3 text-[12px]">{TASK_TYPE_LABELS[task.task_type] || task.task_type}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge label={PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label || task.priority} variant={priorityVariant(task.priority)} dot />
-                  </td>
-                  {isManager && (
-                    <td className="px-4 py-3 text-[12px] text-muted-foreground">
-                      {staffById[task.assignee_user_id] || task.assignee_user_id.slice(0, 8)}
-                    </td>
-                  )}
-                  <td className="px-4 py-3">
-                    <StatusBadge label={task.status === "IN_PROGRESS" ? "Đang làm" : task.status === "DONE" ? "Hoàn thành" : task.status === "CANCELLED" ? "Đã hủy" : "Mới"} variant={statusVariant(task.status)} dot />
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(task.due_date)}</td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(task.created_at)}</td>
-                  <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(task.completed_at)}</td>
-                  <td className="px-4 py-3 text-[12px]">
-                    {!isManager && task.status === "OPEN" && (
-                      <Button type="button" size="sm" disabled={updatingId === task.id}
-                        onClick={() => void handleUpdateStatus(task.id, "IN_PROGRESS")}
-                        className="h-7 px-2 text-[11px] bg-blue-600 hover:bg-blue-700">
-                        <PlayCircle className="h-3 w-3" /> Bắt đầu
-                      </Button>
-                    )}
-                    {!isManager && task.status === "IN_PROGRESS" && (
-                      <Button type="button" size="sm" disabled={updatingId === task.id}
-                        onClick={() => void handleUpdateStatus(task.id, "DONE")}
-                        className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
-                        <CheckCircle className="h-3 w-3" /> Hoàn thành
-                      </Button>
-                    )}
-                    {(isManager || task.status === "DONE" || task.status === "CANCELLED") && (
-                      <span className="text-[11px] text-muted-foreground">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </div>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage((current) => Math.min(totalPages, current + 1));
+                        }}
+                        className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </div>
+          )}
+        </SectionCard>
+      </FadeItem>
+    </PageWrapper>
   );
 }

@@ -34,7 +34,7 @@ export function MetadataReadiness({
   const incomplete = signals.filter((signal) => !signal.complete);
   if (incomplete.length === 0) {
     return (
-      <div className="flex items-center gap-2 border-y border-success/25 py-3 text-[14px] text-success">
+      <div className="flex items-center gap-2 rounded-xl border border-success/25 bg-success/5 px-4 py-3.5 text-[13px] text-success">
         <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="font-medium">Metadata cốt lõi đã sẵn sàng để lưu.</span>
       </div>
@@ -42,18 +42,18 @@ export function MetadataReadiness({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-y border-warning/25 py-3 sm:flex-row sm:items-center">
-      <div className="flex items-center gap-2 text-[14px] text-warning">
+    <div className="flex flex-col gap-2 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-2 text-[13px] font-semibold text-warning">
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="font-medium">Cần bổ sung trước khi lưu:</span>
+        Cần bổ sung trước khi lưu
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
+      <div className="flex flex-wrap gap-1.5">
         {incomplete.map((signal) => (
           <button
             key={signal.label}
             type="button"
             onClick={() => onFocusField(signal.fieldId)}
-            className="cursor-pointer text-left text-[13px] font-medium text-warning underline decoration-warning/50 underline-offset-4 transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30"
+            className="inline-flex cursor-pointer items-center rounded-full border border-warning/30 bg-card px-2.5 py-1 text-[12px] font-medium text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30"
           >
             {signal.label}
           </button>

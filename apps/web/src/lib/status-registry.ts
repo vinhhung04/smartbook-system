@@ -14,7 +14,7 @@ const DOMAINS = {
   // report, reconciliation, goods receipt) — that page already reused one
   // function across all of them, so they share one domain here too.
   purchaseOrder: {
-    RECEIVED: 'success', MATCHED: 'success', FULLY_RECEIVED: 'success',
+    RECEIVED: 'success', MATCHED: 'success', FULLY_RECEIVED: 'success', RESOLVED: 'success',
     APPROVED: 'primary', SENT: 'primary', ACKNOWLEDGED: 'primary', SUPPLIER_CONFIRMED: 'primary',
     PENDING_APPROVAL: 'warning', UNDER_RECEIVED: 'warning', PARTIALLY_RECEIVED: 'warning',
     SENT_TO_SUPPLIER: 'warning', SHORTAGE_REPORTED: 'warning', SUBMITTED: 'warning', OPEN: 'warning',
@@ -30,6 +30,73 @@ const DOMAINS = {
     ACKNOWLEDGED: 'warning',
     OPEN: 'danger',
   },
+  loan: {
+    RESERVED: 'primary',
+    BORROWED: 'info',
+    RETURNED: 'success',
+    OVERDUE: 'rose',
+    LOST: 'rose',
+    DAMAGED: 'rose',
+    CANCELLED: 'neutral',
+  },
+  reservation: {
+    PENDING: 'warning',
+    CONFIRMED: 'info',
+    READY_FOR_PICKUP: 'info',
+    CONVERTED_TO_LOAN: 'success',
+    CANCELLED: 'neutral',
+    EXPIRED: 'neutral',
+  },
+  borrowCustomer: {
+    ACTIVE: 'success',
+    SUSPENDED: 'warning',
+    BLOCKED: 'danger',
+    INACTIVE: 'neutral',
+  },
+  fine: {
+    PAID: 'success',
+    WAIVED: 'neutral',
+    PARTIALLY_PAID: 'warning',
+    UNPAID: 'rose',
+  },
+  supplier: {
+    ACTIVE: 'success',
+    INACTIVE: 'neutral',
+  },
+  // AI action lifecycle (ai-assistant.tsx's inline ActionCard + the Action
+  // Center tab) — both previously hand-rolled their own, disagreeing color
+  // maps for the same statuses; this is now their one shared source.
+  aiAction: {
+    PENDING_CONFIRMATION: 'info',
+    EXECUTED: 'success',
+    CANCELLED: 'neutral',
+    EXPIRED: 'danger',
+    FAILED: 'danger',
+  },
+  pendingActionRisk: {
+    LOW: 'success',
+    MEDIUM: 'warning',
+    HIGH: 'danger',
+  },
+  // Warehouse stock health (inventory.tsx) — was a page-local stockStatusMeta()
+  // function before, exactly the drift this registry exists to prevent.
+  stockLevel: {
+    IN_STOCK: 'success',
+    LOW_STOCK: 'warning',
+    OUT_OF_STOCK: 'danger',
+  },
+  // Outbound queue/detail status (outbound.tsx) — tone only; Vietnamese labels
+  // stay local to the page since the registry doesn't localize domain labels.
+  outbound: {
+    APPROVED: 'info',
+    PICKING: 'info',
+    PARTIAL_PICKED: 'amber',
+    REPICKING: 'warning',
+    READY_FOR_OUTBOUND: 'success',
+    READY_TO_SHIP: 'success',
+    COMPLETED: 'neutral',
+    CANCELLED: 'danger',
+  },
 } satisfies Record<string, ToneMap>;
 
 export type StatusDomain = keyof typeof DOMAINS;
@@ -38,6 +105,24 @@ export function getStatusVariant(domain: StatusDomain, status: string, fallback:
   const map: ToneMap = DOMAINS[domain];
   return map[String(status || '').toUpperCase()] ?? fallback;
 }
+
+// Single source of truth for tone -> Tailwind classes, shared by status-badge.tsx
+// and the customer portal's status badge (customer-status.ts) — they previously
+// each hardcoded their own copy of this map, and had drifted (different shades,
+// and the customer-portal copy had no dark-mode classes at all).
+export const TONE_CLASSNAME: Record<Tone, string> = {
+  success: "bg-emerald-50 text-emerald-700 border-emerald-200/70 shadow-emerald-100/40 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 dark:shadow-none",
+  warning: "bg-amber-50 text-amber-700 border-amber-200/70 shadow-amber-100/40 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 dark:shadow-none",
+  danger: "bg-red-50 text-red-600 border-red-200/70 shadow-red-100/40 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:shadow-none",
+  info: "bg-sky-50 text-sky-700 border-sky-200/70 shadow-sky-100/40 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20 dark:shadow-none",
+  neutral: "bg-slate-50 text-slate-600 border-slate-200/70 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20",
+  primary: "bg-indigo-50 text-indigo-700 border-indigo-200/70 shadow-indigo-100/40 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 dark:shadow-none",
+  violet: "bg-violet-50 text-violet-700 border-violet-200/70 shadow-violet-100/40 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 dark:shadow-none",
+  cyan: "bg-cyan-50 text-cyan-700 border-cyan-200/70 shadow-cyan-100/40 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20 dark:shadow-none",
+  teal: "bg-teal-50 text-teal-700 border-teal-200/70 shadow-teal-100/40 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20 dark:shadow-none",
+  amber: "bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  rose: "bg-rose-50 text-rose-600 border-rose-200/70 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20",
+};
 
 // Ported 1:1 from picking.tsx's local `taskStatusVariant` — substring-matched
 // against the picking task status, kept here so it has one owner instead of

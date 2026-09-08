@@ -10,6 +10,7 @@ import {
   ResponsiveContainer, Cell, PieChart, Pie,
 } from "recharts";
 import { toast } from "sonner";
+import { NavLink } from "react-router";
 import { aiService, AIRecommendation } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { borrowService } from "@/services/borrow";
@@ -26,6 +27,10 @@ export function RecommendationsPage() {
   const [demandData, setDemandData] = useState<{ name: string; demand: number }[]>([]);
   const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([]);
   const [error, setError] = useState("");
+  const [personalized, setPersonalized] = useState(false);
+  // The loans endpoint is not readable by every staff role. Surfacing that is the
+  // point: an empty chart caused by a 403 must not look like "no data yet".
+  const [loansError, setLoansError] = useState("");
 
   const loadRecommendations = useCallback(async () => {
     try {
@@ -39,17 +44,19 @@ export function RecommendationsPage() {
 
       const books = booksResp.status === "fulfilled" && Array.isArray(booksResp.value) ? booksResp.value : [];
       const loans = loansResp.status === "fulfilled" ? loansResp.value?.data || [] : [];
-
-      const borrowHistory = loans.flatMap((loan: any) =>
-        (loan.loan_items || []).map((item: any) => {
-          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
-          return { title: book?.title || "Unknown", author: book?.author || "", category: book?.category || "" };
-        })
+      setLoansError(
+        loansResp.status === "rejected"
+          ? "Tài khoản của bạn không có quyền xem danh sách phiếu mượn, nên hai biểu đồ dưới đây chưa có dữ liệu."
+          : ""
       );
 
-      const catalogBooks = books.map((b: any) => ({
-        id: b.id, title: b.title, author: b.author || "", category: b.category || "", quantity: Number(b.quantity || 0),
-      }));
+      // Map a loan back to its book through variant ids. Comparing a loan item's
+      // variant_id against book.id never matches - they are different primary keys.
+      const bookByVariant = new Map<string, any>();
+      books.forEach((b: any) => {
+        const ids: string[] = Array.isArray(b.variant_ids) ? b.variant_ids : (b.variant_id ? [b.variant_id] : []);
+        ids.forEach((variantId) => bookByVariant.set(String(variantId), b));
+      });
 
       const catMap: Record<string, number> = {};
       books.forEach((b: any) => {
@@ -62,9 +69,9 @@ export function RecommendationsPage() {
 
       const bookDemand = loans.reduce((acc: Record<string, number>, loan: any) => {
         (loan.loan_items || []).forEach((item: any) => {
-          const book = books.find((b: any) => b.id === item.variant_id || b.variants?.some((v: any) => v.id === item.variant_id));
-          const title = book?.title || "Unknown";
-          acc[title] = (acc[title] || 0) + 1;
+          const book = bookByVariant.get(String(item.variant_id));
+          if (!book) return;
+          acc[book.title] = (acc[book.title] || 0) + 1;
         });
         return acc;
       }, {});
@@ -72,9 +79,10 @@ export function RecommendationsPage() {
         Object.entries(bookDemand).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 6).map(([name, demand]) => ({ name: name.length > 20 ? name.slice(0, 20) + "…" : name, demand: demand as number }))
       );
 
-      const result = await aiService.getRecommendationsAI(borrowHistory, catalogBooks);
+      const result = await aiService.getRecommendationsAI(6);
       setRecommendations(result.recommendations || []);
       setProvider(result.ai_provider || "");
+      setPersonalized(Boolean(result.personalized));
     } catch (err) {
       console.error("Failed to load recommendations:", err);
       setError("Không thể tải gợi ý. Vui lòng thử lại.");
@@ -91,8 +99,8 @@ export function RecommendationsPage() {
       <FadeItem>
         <PageHeader
           icon={Sparkles}
-          title="AI Recommendations"
-          description={`Gợi ý sách cá nhân hóa dựa trên lịch sử mượn${provider ? ` (${provider})` : ""}`}
+          title="Gợi ý & nhu cầu đọc"
+          description={`Thống kê mượn sách toàn thư viện và gợi ý đầu sách${provider ? ` (${provider})` : ""}`}
           iconBg="bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200/40 dark:from-violet-500/15 dark:to-purple-500/10 dark:border-violet-500/20"
           iconColor="text-violet-600 dark:text-violet-400"
           actions={
@@ -103,6 +111,15 @@ export function RecommendationsPage() {
           }
         />
       </FadeItem>
+
+      {loansError && (
+        <FadeItem>
+          <div className="flex items-start gap-2.5 rounded-[12px] border border-amber-200/70 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 p-3.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed">{loansError}</p>
+          </div>
+        </FadeItem>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <FadeItem>
@@ -150,8 +167,15 @@ export function RecommendationsPage() {
 
       <FadeItem>
         <h3 className="text-[14px] flex items-center gap-2 text-foreground" style={{ fontWeight: 650 }}>
-          <Sparkles className="w-4 h-4 text-violet-500 dark:text-violet-400" /> Gợi ý cho bạn
+          <Sparkles className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+          {personalized ? "Gợi ý cho bạn" : "Gợi ý theo đánh giá và mức phổ biến"}
         </h3>
+        {!personalized && (
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Tài khoản nhân viên không có lịch sử mượn cá nhân, nên đây là gợi ý chung của thư viện.
+            Bạn đọc xem gợi ý riêng của mình trong mục &quot;Gợi ý cho bạn&quot; của cổng khách hàng.
+          </p>
+        )}
       </FadeItem>
 
       {loading ? (
@@ -177,8 +201,9 @@ export function RecommendationsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {recommendations.map((rec, i) => (
-            <motion.div key={rec.book_id || i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-              className="bg-card rounded-[14px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-none transition-all group">
+            <motion.div key={rec.book_id || i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+              <NavLink to={`/book/${rec.book_id}`}
+                className="block h-full bg-card rounded-[14px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-none transition-all group">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
                   <BookOpen className="w-5 h-5 text-white" />
@@ -204,6 +229,7 @@ export function RecommendationsPage() {
                   Phù hợp {Math.round((rec.score || 0) * 100)}%
                 </span>
               </div>
+              </NavLink>
             </motion.div>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { useI18n } from "@/lib/i18n";
 import { StatusBadge } from "@/components/status-badge";
 import type { ReconciliationDraft } from "@/services/metadata-intelligence";
 import { formatQualityWarning } from "./utils";
+import { ConfidenceMeter } from "./confidence-meter";
 
 export function AuthorityReviewPanel({
   draft,
@@ -45,8 +46,10 @@ export function AuthorityReviewPanel({
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Đề xuất chuẩn hóa</p>
                           <p className="mt-0.5 truncate font-medium text-foreground">{item.normalizedValue}</p>
                         </div>
-                        <p className="text-[12px] text-muted-foreground sm:col-span-3">
-                          {item.matchedEntity?.name || t("metadata_reconciliation.new_entity")} · Tin cậy {Math.round(item.confidence * 100)}%
+                        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground sm:col-span-3">
+                          {item.matchedEntity?.name || t("metadata_reconciliation.new_entity")} · Tin cậy
+                          <ConfidenceMeter value={item.confidence} tone="violet" />
+                          {Math.round(item.confidence * 100)}%
                         </p>
                       </div>
                     ))}
@@ -55,7 +58,7 @@ export function AuthorityReviewPanel({
                 {decision === "PENDING" ? <div className="flex shrink-0 flex-wrap gap-2">
                   <button type="button" onClick={() => onDecision(row.field, "ACCEPTED")} className="min-h-10 cursor-pointer rounded-md border border-success/30 bg-success/10 px-3 text-[12px] font-semibold text-success transition-colors hover:bg-success/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success/30">{t("metadata_reconciliation.accept")}</button>
                   <button type="button" onClick={() => onDecision(row.field, "REJECTED")} className="min-h-10 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30">{t("metadata_reconciliation.reject")}</button>
-                  {row.items.some((item) => item.status === "NEW_ENTITY") ? <button type="button" onClick={() => onCreateEntity(row.field)} className="min-h-10 cursor-pointer rounded-md border border-cyan-200 bg-cyan-50 px-3 text-[12px] font-semibold text-cyan-700 transition-colors hover:bg-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300">{t("metadata_reconciliation.create_entity")}</button> : null}
+                  {row.items.some((item) => item.status === "NEW_ENTITY") ? <button type="button" onClick={() => onCreateEntity(row.field)} className="min-h-10 cursor-pointer rounded-md border border-violet-200 bg-violet-50 px-3 text-[12px] font-semibold text-violet-700 transition-colors hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300">{t("metadata_reconciliation.create_entity")}</button> : null}
                 </div> : null}
               </div>
             </div>

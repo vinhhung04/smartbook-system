@@ -151,5 +151,18 @@ class RagContextTests(unittest.TestCase):
         self.assertIn("error:500", context)
 
 
+class AnalyticsBlockExemptionTests(unittest.TestCase):
+    def test_general_query_and_book_search_are_exempt(self):
+        from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS, BOOK_SEARCH_QUERY, GENERAL_QUERY
+
+        self.assertIn(GENERAL_QUERY, ANALYTICS_BLOCK_EXEMPT_INTENTS)
+        self.assertIn(BOOK_SEARCH_QUERY, ANALYTICS_BLOCK_EXEMPT_INTENTS)
+
+    def test_low_stock_query_is_not_exempt(self):
+        from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS, LOW_STOCK_QUERY
+
+        self.assertNotIn(LOW_STOCK_QUERY, ANALYTICS_BLOCK_EXEMPT_INTENTS)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; 
   { test: (pathname) => pathname.startsWith('/customer/notifications'), title: 'Thông báo', subtitle: 'Cập nhật và nhắc nhở gần đây' },
   { test: (pathname) => pathname.startsWith('/customer/profile'), title: 'Hồ sơ', subtitle: 'Thông tin tài khoản cá nhân' },
   { test: (pathname) => pathname.startsWith('/customer/wishlist'), title: 'Yêu thích', subtitle: 'Sách bạn đã thêm vào danh sách' },
+  { test: (pathname) => pathname.startsWith('/customer/recommendations'), title: 'Gợi ý cho bạn', subtitle: 'Sách phù hợp với sở thích đọc của bạn' },
   { test: (pathname) => pathname.startsWith('/customer/reading-analytics'), title: 'Thống kê đọc sách', subtitle: 'Hành trình đọc sách của bạn' },
 ];
 
@@ -53,7 +54,7 @@ export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, is
             </button>
             <h1 className="truncate text-[18px] text-foreground" style={{ fontWeight: 700 }}>{current.title}</h1>
           </div>
-          <p className="mt-0.5 truncate text-[12px] text-slate-500">{current.subtitle}</p>
+          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{current.subtitle}</p>
         </div>
 
         <div className="flex items-center gap-2">

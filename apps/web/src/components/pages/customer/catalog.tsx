@@ -87,7 +87,7 @@ export function CustomerCatalogPage() {
         className="relative overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/15"
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-card/5 rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="relative">
           <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>Khám phá danh mục sách</h1>
           <p className="text-white/65 text-[13px] mt-1">Tìm kiếm đầu sách, xem chi tiết và đặt trước chỉ một click.</p>
@@ -102,15 +102,15 @@ export function CustomerCatalogPage() {
           { label: 'Hết sách', value: stats.unavailable, variant: 'danger' as const },
         ].map((stat) => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${
-            stat.variant === 'success' ? 'bg-emerald-50 border-emerald-100' :
-            stat.variant === 'danger' ? 'bg-rose-50 border-rose-100' :
-            'bg-indigo-50 border-indigo-100'
+            stat.variant === 'success' ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/40' :
+            stat.variant === 'danger' ? 'bg-rose-50 border-rose-100 dark:bg-rose-950/30 dark:border-rose-900/40' :
+            'bg-indigo-50 border-indigo-100 dark:bg-indigo-950/30 dark:border-indigo-900/40'
           }`}>
             <span className="text-[12px] text-muted-foreground font-medium">{stat.label}</span>
             <span className={`text-[20px] font-bold ${
-              stat.variant === 'success' ? 'text-emerald-700' :
-              stat.variant === 'danger' ? 'text-rose-700' :
-              'text-indigo-700'
+              stat.variant === 'success' ? 'text-emerald-700 dark:text-emerald-400' :
+              stat.variant === 'danger' ? 'text-rose-700 dark:text-rose-400' :
+              'text-indigo-700 dark:text-indigo-400'
             }`}>{stat.value}</span>
           </div>
         ))}
@@ -154,7 +154,7 @@ export function CustomerCatalogPage() {
           <button
             onClick={() => void loadBooks()}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-white px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
             style={{ fontWeight: 500 }}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -259,18 +259,18 @@ export function CustomerCatalogPage() {
 
             {/* Rating in drawer */}
             {ratingsMap[previewBook.id] && ratingsMap[previewBook.id].totalReviews > 0 && (
-              <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 dark:border-amber-900/40 dark:bg-amber-950/20">
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((s) => (
                     <Star
                       key={s}
                       size={13}
-                      className={s <= Math.round(ratingsMap[previewBook.id].averageRating) ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-300'}
+                      className={s <= Math.round(ratingsMap[previewBook.id].averageRating) ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-300 dark:text-slate-600'}
                     />
                   ))}
                 </div>
-                <span className="text-[12px] font-semibold text-amber-700">{ratingsMap[previewBook.id].averageRating}</span>
-                <span className="text-[11px] text-amber-600">({ratingsMap[previewBook.id].totalReviews} reviews)</span>
+                <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">{ratingsMap[previewBook.id].averageRating}</span>
+                <span className="text-[11px] text-amber-600 dark:text-amber-400">({ratingsMap[previewBook.id].totalReviews} reviews)</span>
               </div>
             )}
 

@@ -178,3 +178,25 @@ export function formatQualityWarning(warning: string): string {
   }
   return warning.replace(/_/g, " ").toLowerCase().replace(/^./, (value: string) => value.toUpperCase());
 }
+
+const DUPLICATE_CLASSIFICATION_LABELS: Record<string, string> = {
+  EXACT_DUPLICATE: "Trùng khớp hoàn toàn",
+  SAME_EDITION: "Cùng ấn bản",
+  SAME_WORK_DIFFERENT_EDITION: "Cùng tác phẩm, khác ấn bản",
+  POSSIBLE_DUPLICATE: "Có thể trùng lặp",
+  NEW_TITLE: "Đầu sách mới",
+};
+
+/** Backend classification enums (EXACT_DUPLICATE, SAME_EDITION, ...) translated for
+ *  display — falls back to a humanized version of the raw value for anything unknown. */
+export function formatDuplicateClassification(classification: string): string {
+  return DUPLICATE_CLASSIFICATION_LABELS[classification]
+    || classification.replace(/_/g, " ").toLowerCase().replace(/^./, (value: string) => value.toUpperCase());
+}
+
+/** Whether an ISBN lookup has any source evidence/status to show — shared by the
+ *  ISBN intelligence panel and the review tab's evidence card gating. */
+export function hasIsbnEvidence(lookup: LookupBookByIsbnResponse): boolean {
+  const evidenceCount = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource).length;
+  return evidenceCount > 0 || (lookup.sources || []).length > 0;
+}

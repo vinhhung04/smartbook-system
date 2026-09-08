@@ -13,6 +13,7 @@ import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { authService } from "@/services/auth";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { canManageReceiving, canViewUnitCost, canViewLocationCode } from "@/lib/rbac";
+import { exportToCsv } from "@/lib/export-utils";
 
 interface ReceiptDetailItem {
   id: string;
@@ -202,6 +203,31 @@ export function OrderDetailPage() {
     }
   };
 
+  const handleDownload = () => {
+    if (!receipt) return;
+    exportToCsv(
+      receipt.items.map((item) => ({
+        barcode: item.barcode || '',
+        book_title: item.book_title,
+        location_code: item.location_code || '',
+        quantity: item.quantity,
+        actual_quantity: item.actual_quantity ?? '',
+        unit_cost: item.unit_cost,
+        line_total: item.line_total,
+      })),
+      [
+        { header: 'Mã vạch', key: 'barcode' },
+        { header: 'Tên sách', key: 'book_title' },
+        { header: 'Vị trí', key: 'location_code' },
+        { header: 'Số lượng đặt', key: 'quantity' },
+        { header: 'Số lượng thực nhận', key: 'actual_quantity' },
+        { header: 'Đơn giá', key: 'unit_cost' },
+        { header: 'Thành tiền', key: 'line_total' },
+      ],
+      `phieu-nhap-${receipt.receipt_number}`,
+    );
+  };
+
   const totalQty = useMemo(() => receipt?.items?.reduce((s, i) => s + i.quantity, 0) || 0, [receipt]);
   const isVerified = useMemo(
     () => Boolean(receipt && receipt.items.length > 0 && receipt.items.every((i) => i.actual_quantity !== null)),
@@ -261,7 +287,7 @@ export function OrderDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge label={receipt.status} variant={receipt.status === "POSTED" ? "success" : receipt.status === "DRAFT" ? "info" : "danger"} dot />
-          <button className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
+          <button onClick={handleDownload} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
             <Download className="w-3.5 h-3.5" /> Tải xuống
           </button>
         </div>

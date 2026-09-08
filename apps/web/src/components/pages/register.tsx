@@ -54,12 +54,20 @@ export function RegisterPage() {
       title="Tạo tài khoản mới"
       subtitle="Tham gia SmartBook để quản lý thư viện và kho vận hiệu quả hơn"
       footer={
-        <div className="text-center text-[12px] text-muted-foreground mt-4">
-          Đã có tài khoản?{" "}
-          <NavLink to="/login" className="text-primary hover:opacity-80 font-semibold">
-            Đăng nhập
-          </NavLink>
-        </div>
+        <>
+          <div className="text-center text-[12px] text-muted-foreground mt-4">
+            Đã có tài khoản?{" "}
+            <NavLink to="/login" className="text-primary hover:opacity-80 font-semibold">
+              Đăng nhập
+            </NavLink>
+          </div>
+          <div className="text-center text-[12px] text-muted-foreground mt-2">
+            Bạn là bạn đọc thư viện?{" "}
+            <NavLink to="/customer/register" className="text-primary hover:opacity-80 font-semibold">
+              Tạo tài khoản khách hàng
+            </NavLink>
+          </div>
+        </>
       }
     >
       <form

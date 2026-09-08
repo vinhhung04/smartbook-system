@@ -12,6 +12,8 @@ export function Field({
   placeholder,
   className,
   required,
+  variant = "boxed",
+  inputClassName,
 }: {
   id: string;
   label: string;
@@ -21,6 +23,12 @@ export function Field({
   placeholder?: string;
   className?: string;
   required?: boolean;
+  /** "underline" trades the boxed input chrome for a thin bottom rule — used by the
+   *  Hồ sơ catalog record fields for a less generic-admin-form rhythm. Defaults to
+   *  "boxed" so every other existing call site is unaffected. */
+  variant?: "boxed" | "underline";
+  /** Extra classes merged onto the Input itself (e.g. a serif accent on one field). */
+  inputClassName?: string;
 }) {
   return (
     <div className={className}>
@@ -34,7 +42,11 @@ export function Field({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-required={required || undefined}
-        className={`${mono ? "font-mono tabular-nums" : ""} min-h-11 border-border/80 bg-muted/[0.12] text-[14px] shadow-none transition-colors focus-visible:bg-card`.trim()}
+        className={`${mono ? "font-mono tabular-nums" : ""} ${
+          variant === "underline"
+            ? "min-h-9 rounded-none border-x-0 border-t-0 border-b border-border/80 bg-transparent px-0 shadow-none focus-visible:border-b-primary focus-visible:ring-0"
+            : "min-h-11 border-border/80 bg-muted/[0.12] shadow-none focus-visible:bg-card"
+        } text-[14px] transition-colors ${inputClassName || ""}`.trim()}
       />
     </div>
   );

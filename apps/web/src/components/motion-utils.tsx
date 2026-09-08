@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
+export const EASE_STANDARD = [0.22, 1, 0.36, 1] as const;
+
 export const stagger = {
   container: {
     hidden: {},
@@ -8,18 +10,18 @@ export const stagger = {
   },
   item: {
     hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } },
+    show: { opacity: 1, y: 0, transition: { duration: 0.28, ease: EASE_STANDARD } },
   },
 };
 
 export const fadeIn = {
   hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: EASE_STANDARD } },
 };
 
 export const slideIn = {
   hidden: { opacity: 0, x: -16 },
-  show: { opacity: 1, x: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, x: 0, transition: { duration: 0.32, ease: EASE_STANDARD } },
 };
 
 export function PageWrapper({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -49,7 +51,7 @@ export function AnimatedCounter({ value, className = "" }: { value: number; clas
       className={className}
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.4, ease: EASE_STANDARD }}
     >
       {value.toLocaleString()}
     </motion.span>

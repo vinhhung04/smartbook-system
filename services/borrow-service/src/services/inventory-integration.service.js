@@ -154,10 +154,28 @@ async function returnBorrowedStock({
   });
 }
 
+async function getVariantDetails({ variantIds, authHeader }) {
+  const uniqueIds = [...new Set((variantIds || []).filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const result = await requestInventory(
+    `/api/borrow-integration/variants/details?ids=${uniqueIds.map(encodeURIComponent).join(',')}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: getInventoryAuthHeader(authHeader),
+      },
+    }
+  );
+
+  return Array.isArray(result?.data) ? result.data : [];
+}
+
 module.exports = {
   checkAvailability,
   reserveStock,
   releaseReservation,
   consumeReservation,
   returnBorrowedStock,
+  getVariantDetails,
 };

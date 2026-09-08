@@ -113,6 +113,10 @@ function mapBookSummary(book) {
     unit_cost: Number(firstVariant?.unit_cost || 0),
     cover_image_url: firstVariant?.cover_image_url || null,
     variant_id: firstVariant?.id || null,
+    // Every variant id, not just the first: callers that map a loan/movement
+    // back to its book (loan_items.variant_id) cannot do so from variant_id
+    // alone once a book has more than one variant.
+    variant_ids: variants.map((variant) => variant.id),
     default_warehouse_id: defaultLocation?.warehouse_id || null,
     default_location_id: defaultLocation?.location_id || null,
     reservable: Boolean(firstVariant?.id && defaultLocation?.warehouse_id && availableQty > 0),

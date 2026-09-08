@@ -21,8 +21,10 @@ import {
   type SupplierPortalShortageReport,
 } from "@/services/supplier-portal";
 import { getApiErrorMessage } from "@/services/api";
+import { PageWrapper, FadeItem } from "../../motion-utils";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog, WorkflowStepper, type WorkflowStep } from "@/components/ui";
 
@@ -407,43 +409,49 @@ export function SupplierPortalPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-5 px-5 py-6">
-        <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-900">
-          Supplier can only confirm orders and submit delivery documents. Stock receiving is handled by warehouse staff.
-        </div>
+      <PageWrapper className="space-y-5">
+        <FadeItem>
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-[13px] text-sky-900">
+            Supplier can only confirm orders and submit delivery documents. Stock receiving is handled by warehouse staff.
+          </div>
+        </FadeItem>
 
-        <div className="grid gap-3 md:grid-cols-6">
-          <StatBox label="PO status" value={statusLabel(order.purchase_order.status)} />
-          <StatBox label="Dispatch" value={order.dispatch.status} />
-          <StatBox label="Lines" value={summary.itemCount} />
-          <StatBox label="Ordered" value={summary.orderedQty} />
-          <StatBox label="Received" value={summary.receivedQty} />
-          <StatBox label="Remaining" value={summary.remainingQty} />
-        </div>
+        <FadeItem>
+          <div className="grid gap-3 md:grid-cols-6">
+            <StatBox label="PO status" value={statusLabel(order.purchase_order.status)} />
+            <StatBox label="Dispatch" value={order.dispatch.status} />
+            <StatBox label="Lines" value={summary.itemCount} />
+            <StatBox label="Ordered" value={summary.orderedQty} />
+            <StatBox label="Received" value={summary.receivedQty} />
+            <StatBox label="Remaining" value={summary.remainingQty} />
+          </div>
+        </FadeItem>
 
-        <nav className="flex gap-2 overflow-x-auto border-b border-slate-200">
-          {[
-            ["overview", "Overview"],
-            ["order", "Purchase Order"],
-            ["invoices", "Invoices"],
-            ["shortages", "Shortage Reports"],
-            ["redelivery", "Redelivery"],
-            ["activity", "Activity"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key as PortalTab)}
-              className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-semibold ${
-                tab === key ? "border-slate-900 text-slate-950" : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        <FadeItem>
+          <nav className="flex gap-2 overflow-x-auto border-b border-slate-200">
+            {[
+              ["overview", "Overview"],
+              ["order", "Purchase Order"],
+              ["invoices", "Invoices"],
+              ["shortages", "Shortage Reports"],
+              ["redelivery", "Redelivery"],
+              ["activity", "Activity"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key as PortalTab)}
+                className={`whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-semibold ${
+                  tab === key ? "border-slate-900 text-slate-950" : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </FadeItem>
 
         {tab === "overview" ? (
-          <div className="space-y-5">
+          <FadeItem className="space-y-5">
             <Section title="Thông tin chung" icon={PackageCheck}>
               <div className="grid gap-4 p-5 md:grid-cols-3">
                 <div>
@@ -508,39 +516,41 @@ export function SupplierPortalPage() {
                 />
               </div>
             </Section>
-          </div>
+          </FadeItem>
         ) : null}
 
         {tab === "order" ? (
-          <Section title="Purchase Order Lines" icon={Truck}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    {["Title", "ISBN/SKU", "Ordered", "Received", "Remaining", "Unit Cost"].map((heading) => (
-                      <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase text-slate-500">{heading}</th>
+          <FadeItem>
+            <Section title="Purchase Order Lines" icon={Truck}>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[900px]">
+                  <TableHeader>
+                    <TableRow className="border-slate-100 bg-slate-50">
+                      {["Title", "ISBN/SKU", "Ordered", "Received", "Remaining", "Unit Cost"].map((heading) => (
+                        <TableHead key={heading} className="px-5 py-3 text-[11px] font-semibold uppercase text-slate-500">{heading}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {order.purchase_order.items.map((item) => (
+                      <TableRow key={item.id} className="border-slate-100">
+                        <TableCell className="whitespace-normal px-5 py-3.5 text-[13px] font-semibold">{item.title || "-"}</TableCell>
+                        <TableCell className="px-5 py-3.5 font-mono text-[12px] text-slate-500">{item.isbn13 || item.sku || item.variant_id}</TableCell>
+                        <TableCell className="px-5 py-3.5 text-[13px]">{item.ordered_qty}</TableCell>
+                        <TableCell className="px-5 py-3.5 text-[13px]">{item.received_qty}</TableCell>
+                        <TableCell className="px-5 py-3.5 text-[13px]">{item.remaining_qty}</TableCell>
+                        <TableCell className="px-5 py-3.5 font-mono text-[12px]">{formatCurrency(item.unit_cost)}</TableCell>
+                      </TableRow>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.purchase_order.items.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-5 py-3.5 text-[13px] font-semibold">{item.title || "-"}</td>
-                      <td className="px-5 py-3.5 font-mono text-[12px] text-slate-500">{item.isbn13 || item.sku || item.variant_id}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{item.ordered_qty}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{item.received_qty}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{item.remaining_qty}</td>
-                      <td className="px-5 py-3.5 font-mono text-[12px]">{formatCurrency(item.unit_cost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
+                  </TableBody>
+                </Table>
+              </div>
+            </Section>
+          </FadeItem>
         ) : null}
 
         {tab === "invoices" ? (
-          <div className="space-y-5">
+          <FadeItem className="space-y-5">
             <Section title="Create Invoice / Delivery Note" icon={FileText}>
               <div className="space-y-4 p-5">
                 {!canInvoice ? (
@@ -558,25 +568,25 @@ export function SupplierPortalPage() {
                   <Button variant="outline" size="sm" onClick={() => setInvoiceQty(Object.fromEntries(order.purchase_order.items.map((item) => [item.id, 0])))}>Clear all</Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full min-w-[980px]">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50">
+                  <Table className="min-w-[980px]">
+                    <TableHeader>
+                      <TableRow className="border-slate-100 bg-slate-50">
                         {["Book", "Ordered", "Received", "Remaining", "Invoice Qty", "Unit Cost", "Note", "Status"].map((heading) => (
-                          <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase text-slate-500">{heading}</th>
+                          <TableHead key={heading} className="px-4 py-3 text-[11px] font-semibold uppercase text-slate-500">{heading}</TableHead>
                         ))}
-                      </tr>
-                    </thead>
-                    <tbody>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {order.purchase_order.items.map((item) => {
                         const qty = Number(invoiceQty[item.id] || 0);
                         const lineStatus = qty > item.remaining_qty ? "OVER_LIMIT" : qty > 0 && qty < item.remaining_qty ? "PARTIAL" : qty === item.remaining_qty && qty > 0 ? "READY" : "SKIP";
                         return (
-                          <tr key={item.id} className="border-b border-slate-100 last:border-0">
-                            <td className="px-4 py-3 text-[13px] font-semibold">{item.title || item.variant_id}</td>
-                            <td className="px-4 py-3 text-[13px]">{item.ordered_qty}</td>
-                            <td className="px-4 py-3 text-[13px]">{item.received_qty}</td>
-                            <td className="px-4 py-3 text-[13px]">{item.remaining_qty}</td>
-                            <td className="px-4 py-3">
+                          <TableRow key={item.id} className="border-slate-100">
+                            <TableCell className="whitespace-normal px-4 py-3 text-[13px] font-semibold">{item.title || item.variant_id}</TableCell>
+                            <TableCell className="px-4 py-3 text-[13px]">{item.ordered_qty}</TableCell>
+                            <TableCell className="px-4 py-3 text-[13px]">{item.received_qty}</TableCell>
+                            <TableCell className="px-4 py-3 text-[13px]">{item.remaining_qty}</TableCell>
+                            <TableCell className="px-4 py-3">
                               <input
                                 type="number"
                                 min={0}
@@ -589,17 +599,17 @@ export function SupplierPortalPage() {
                                 }}
                                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
                               />
-                            </td>
-                            <td className="px-4 py-3 font-mono text-[12px]">{formatCurrency(item.unit_cost)}</td>
-                            <td className="px-4 py-3">
+                            </TableCell>
+                            <TableCell className="px-4 py-3 font-mono text-[12px]">{formatCurrency(item.unit_cost)}</TableCell>
+                            <TableCell className="px-4 py-3">
                               <input value={invoiceNotes[item.id] || ""} onChange={(event) => setInvoiceNotes((current) => ({ ...current, [item.id]: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]" />
-                            </td>
-                            <td className="px-4 py-3"><StatusBadge label={lineStatus} variant={statusVariant(lineStatus)} /></td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="px-4 py-3"><StatusBadge label={lineStatus} variant={statusVariant(lineStatus)} /></TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
                 {invoiceTotal.partial ? (
                   <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-800">
@@ -665,7 +675,7 @@ export function SupplierPortalPage() {
                 </div>
               )}
             </Section>
-          </div>
+          </FadeItem>
         ) : null}
 
         {tab === "shortages" ? (
@@ -836,7 +846,7 @@ export function SupplierPortalPage() {
             </div>
           </Section>
         ) : null}
-      </main>
+      </PageWrapper>
 
       <ConfirmDialog
         open={confirmState.open}

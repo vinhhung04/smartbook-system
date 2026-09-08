@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
-import { AlertTriangle, ArrowRightLeft, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Filter, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FadeItem, PageWrapper } from "../motion-utils";
@@ -19,10 +19,12 @@ import { canManageReceiving } from "@/lib/rbac";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button, IconButton } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface DraftAllocationLine {
   id: string;
@@ -616,7 +618,7 @@ export function ReceivingPutawayPage() {
 
       {/* Warehouse Filter */}
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <SectionCard title="Phạm vi làm việc" subtitle="Chọn kho và khu RECEIVING đang thao tác" icon={Filter}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}</p>
@@ -654,15 +656,12 @@ export function ReceivingPutawayPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
 
       {/* Section A: Receiving -> Shelf */}
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <h2 className="text-[14px] font-semibold mb-1">A. Receiving → Shelf</h2>
-          <p className="text-[11px] text-muted-foreground mb-4">Chuyển sách từ vùng nhận hàng lên kệ</p>
-
+        <SectionCard title="A. Receiving → Shelf" subtitle="Chuyển sách từ vùng nhận hàng lên kệ" icon={ArrowRightLeft}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
@@ -743,35 +742,39 @@ export function ReceivingPutawayPage() {
           ) : null}
 
           <div className="mt-4 overflow-hidden rounded-[12px] border border-border">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-muted/30 border-b border-border">
-                    {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
-                      <th key={head} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadingCandidates ? (
-                    <tr><td colSpan={8} className="px-4 py-6 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</td></tr>
-                  ) : candidates.length === 0 ? (
-                    <tr><td colSpan={8}><EmptyState variant="no-data" title="Không có ngăn còn chỗ trống" className="py-6" /></td></tr>
-                  ) : candidates.map((candidate) => (
-                    <tr key={candidate.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-2.5 text-[12px] font-semibold">{candidate.location_code}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.zone_code}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.shelf_code}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.current_on_hand}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.max_capacity}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</td>
-                      <td className="px-4 py-2.5 text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</td>
-                    </tr>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
+                    <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</TableHead>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingCandidates ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={8} className="whitespace-normal py-6 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</TableCell>
+                  </TableRow>
+                ) : candidates.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={8} className="whitespace-normal">
+                      <EmptyState variant="no-data" title="Không có ngăn còn chỗ trống" className="py-6" />
+                    </TableCell>
+                  </TableRow>
+                ) : candidates.map((candidate) => (
+                  <TableRow key={candidate.id} className="hover:bg-muted/30">
+                    <TableCell className="text-[12px] font-semibold">{candidate.location_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.zone_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.shelf_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.current_on_hand}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.max_capacity}</TableCell>
+                    <TableCell className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
 
           <div className="flex items-center justify-between mt-4">
@@ -806,12 +809,12 @@ export function ReceivingPutawayPage() {
             >
               <div className="mb-3 flex items-center gap-3">
                 <label className="text-[12px] text-muted-foreground">Số lượng cần gợi ý:</label>
-                <input
+                <Input
                   type="number"
                   min={1}
                   value={suggestionQuantity}
                   onChange={(e) => setSuggestionQuantity(Math.max(1, Number(e.target.value)))}
-                  className="w-20 rounded-[8px] border border-border bg-background px-2 py-1.5 text-[12px]"
+                  className="h-auto w-20 py-1.5 text-[12px]"
                 />
               </div>
               <StorageSuggestionPanel
@@ -889,15 +892,12 @@ export function ReceivingPutawayPage() {
               Xác nhận chuyển lên kệ
             </Button>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>
 
       {/* Section B: Reverse — chỉ manager/admin mới thấy */}
       {isManager && <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <h2 className="text-[14px] font-semibold mb-1">B. Hoàn trả từ kệ về RECEIVING</h2>
-          <p className="text-[11px] text-muted-foreground mb-4">Trả sách từ kệ về vùng nhận hàng</p>
-
+        <SectionCard title="B. Hoàn trả từ kệ về RECEIVING" subtitle="Trả sách từ kệ về vùng nhận hàng" icon={RefreshCw}>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn nguồn</p>
@@ -985,7 +985,7 @@ export function ReceivingPutawayPage() {
               Hoàn trả về RECEIVING
             </Button>
           </div>
-        </div>
+        </SectionCard>
       </FadeItem>}
     </PageWrapper>
   );

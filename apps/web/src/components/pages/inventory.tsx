@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Package, AlertTriangle, Leaf, Download, ArrowRightLeft, BookOpen, MapPin, Clock, Check } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Package, AlertTriangle, Leaf, Download, ArrowRightLeft, ArrowRight, BookOpen, MapPin, Clock, Check, Bell, RefreshCw } from "lucide-react";
 import { StatusBadge } from "../status-badge";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { bookService } from "@/services/book";
@@ -14,6 +14,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageWrapper, FadeItem } from "@/components/motion-utils";
+import { getStatusVariant } from "@/lib/status-registry";
+import { useInventoryRealtime } from "@/hooks/useInventoryRealtime";
 
 interface InventoryLocation {
   warehouse_id?: string;
@@ -49,16 +52,56 @@ interface InventoryWarehouseRow extends InventoryBook {
   locationSummary: string;
 }
 
-function getStockStatus(quantity: number) {
-  if (quantity <= 0) return "out-of-stock";
-  if (quantity <= 5) return "low-stock";
-  return "in-stock";
+const LOW_STOCK_THRESHOLD = 5;
+
+type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
+
+const STOCK_STATUS_LABEL: Record<StockStatus, string> = {
+  IN_STOCK: "Tốt",
+  LOW_STOCK: "Sắp hết",
+  OUT_OF_STOCK: "Hết hàng",
+};
+
+function getStockStatus(quantity: number): StockStatus {
+  if (quantity <= 0) return "OUT_OF_STOCK";
+  if (quantity <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
+  return "IN_STOCK";
 }
 
-function stockStatusMeta(status: string) {
-  if (status === "in-stock") return { label: "Tốt", variant: "success" as const };
-  if (status === "low-stock") return { label: "Sắp hết", variant: "warning" as const };
-  return { label: "Hết hàng", variant: "danger" as const };
+const GAUGE_TONE_FILL: Record<StockStatus, string> = {
+  IN_STOCK: "bg-emerald-500",
+  LOW_STOCK: "bg-amber-500",
+  OUT_OF_STOCK: "bg-red-500",
+};
+
+/**
+ * A vertical bin-level gauge — fills bottom-up relative to 2x the reorder
+ * threshold, with a fixed tick at the halfway mark showing exactly where
+ * that threshold sits. Reads like a warehouse bin gauge: below the tick
+ * means "below the reorder line," at or above means clear of it.
+ */
+function StockGauge({ quantity, status }: { quantity: number; status: StockStatus }) {
+  const fillPct = Math.min(Math.max((quantity / (LOW_STOCK_THRESHOLD * 2)) * 100, 0), 100);
+  return (
+    <div
+      className="relative h-8 w-2 shrink-0 overflow-hidden rounded-full bg-muted"
+      title={`Ngưỡng cảnh báo: dưới ${LOW_STOCK_THRESHOLD} bản`}
+      aria-hidden="true"
+    >
+      <motion.div
+        className={`absolute inset-x-0 bottom-0 rounded-full ${GAUGE_TONE_FILL[status]}`}
+        initial={{ height: 0 }}
+        animate={{ height: `${fillPct}%` }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+      />
+      <div className="absolute inset-x-0 top-1/2 h-px bg-background/70" />
+    </div>
+  );
+}
+
+function csvCell(value: string | number) {
+  const str = String(value ?? "");
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
 function formatUpdatedTime(value: string) {
@@ -128,10 +171,12 @@ export function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [searchQuery, setSearchQuery] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [hasNewData, setHasNewData] = useState(false);
 
   const loadInventory = async () => {
     try {
       setLoading(true);
+      setHasNewData(false);
       const response = await bookService.getAll();
       setData((response || []) as InventoryBook[]);
     } catch (error) {
@@ -145,11 +190,50 @@ export function InventoryPage() {
     void loadInventory();
   }, []);
 
-  const handleExport = async () => {
+  const markNewData = useCallback(() => {
+    setHasNewData((prev) => prev || true);
+  }, []);
+
+  useInventoryRealtime({
+    onStockEvent: markNewData,
+    onPurchaseRequestEvent: markNewData,
+    onGoodsReceiptEvent: markNewData,
+  });
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast.error("Không có dòng tồn kho nào để xuất");
+      return;
+    }
     setExporting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      toast.success("Export started", { description: `${filtered.length} rows` });
+      const header = ["Sách", "ISBN", "Thể loại", "Kho", "Vị trí", "Số lượng", "Sẵn sàng", "Đang nhận", "Trạng thái", "Cập nhật"];
+      const rows = filtered.map((row) => {
+        const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
+        const status = getStockStatus(availQty);
+        return [
+          row.title,
+          row.isbn || "",
+          row.category || "",
+          row.warehouseName,
+          row.locationSummary,
+          row.warehouseQty,
+          availQty,
+          row.warehouseRecvQty,
+          STOCK_STATUS_LABEL[status],
+          formatUpdatedTime(row.updated_at),
+        ];
+      });
+      const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+      const csvBom = String.fromCharCode(0xfeff);
+      const blob = new Blob([csvBom + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ton-kho-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Đã xuất ${filtered.length} dòng`);
     } finally {
       setExporting(false);
     }
@@ -175,9 +259,9 @@ export function InventoryPage() {
   const filtered = whScopedRows
     .filter((row) => {
       const status = getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty));
-      if (statusFilter === "Còn hàng" && status !== "in-stock") return false;
-      if (statusFilter === "Sắp hết" && status !== "low-stock") return false;
-      if (statusFilter === "Hết hàng" && status !== "out-of-stock") return false;
+      if (statusFilter === "Còn hàng" && status !== "IN_STOCK") return false;
+      if (statusFilter === "Sắp hết" && status !== "LOW_STOCK") return false;
+      if (statusFilter === "Hết hàng" && status !== "OUT_OF_STOCK") return false;
       return true;
     })
     .filter((row) => {
@@ -187,9 +271,9 @@ export function InventoryPage() {
     });
 
   const totalUnits = whScopedRows.reduce((sum, row) => sum + Number(row.warehouseQty || 0), 0);
-  const healthyCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "in-stock").length;
-  const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "low-stock").length;
-  const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "out-of-stock").length;
+  const healthyCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "IN_STOCK").length;
+  const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "LOW_STOCK").length;
+  const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "OUT_OF_STOCK").length;
 
   const uniqueTitles = new Set(whScopedRows.map((r) => r.id)).size;
   const selectedWhLabel = warehouseOptions.find((o) => o.value === whFilterId)?.label ?? "Tất cả kho";
@@ -201,12 +285,8 @@ export function InventoryPage() {
   const tableHeaders = ["Sách", "Thể loại", "Kho / Vị trí", "Số lượng", "Trạng thái", "Cập nhật"];
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+    <PageWrapper className="space-y-6">
+      <FadeItem>
         <div className="rounded-2xl border border-border bg-gradient-to-br from-emerald-50 via-card to-card dark:from-emerald-500/[0.07] dark:via-card dark:to-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
           <PageHeader
             icon={Package}
@@ -231,13 +311,30 @@ export function InventoryPage() {
             }
           />
         </div>
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-      >
+      <AnimatePresence>
+        {hasNewData && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+              <div className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
+                <Bell className="h-4 w-4 shrink-0" />
+                Có dữ liệu mới — số liệu tồn kho bên dưới có thể đã thay đổi.
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadInventory()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-indigo-700 transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Làm mới
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <FadeItem>
         <FilterBar
           searchValue={searchQuery}
           onSearchChange={setSearchQuery}
@@ -259,13 +356,10 @@ export function InventoryPage() {
             </label>
           }
         />
-      </motion.div>
+      </FadeItem>
 
       {(lowCount > 0 || outCount > 0) && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.08 }}
+        <FadeItem
           className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-[13px] text-amber-800 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:shadow-none sm:flex-row sm:items-center"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
@@ -277,23 +371,25 @@ export function InventoryPage() {
             {lowCount > 0 && <span className="font-semibold">{lowCount} sản phẩm sắp hết</span>}
             {" "}— cần kiểm tra và bổ sung.
           </p>
-          <Button
-            size="sm"
-            variant="warning-outline"
-            className="shrink-0"
-            onClick={() => setStatusFilter(outCount > 0 ? "Hết hàng" : "Sắp hết")}
-          >
-            Xem ngay
-          </Button>
-        </motion.div>
+          <div className="flex shrink-0 items-center gap-3">
+            <NavLink
+              to="/reorder-suggestions"
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-800 underline decoration-amber-800/40 underline-offset-4 hover:opacity-80 dark:text-amber-300 dark:decoration-amber-300/40"
+            >
+              Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" />
+            </NavLink>
+            <Button
+              size="sm"
+              variant="warning-outline"
+              onClick={() => setStatusFilter(outCount > 0 ? "Hết hàng" : "Sắp hết")}
+            >
+              Xem ngay
+            </Button>
+          </div>
+        </FadeItem>
       )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-4 gap-4"
-      >
+      <FadeItem className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { key: "Tất cả", label: "Tổng bản sao", value: totalUnits, icon: Package, variant: "default" as const },
           { key: "Còn hàng", label: "Tình trạng tốt", value: healthyCount, icon: Leaf, variant: "success" as const },
@@ -318,13 +414,12 @@ export function InventoryPage() {
             </button>
           );
         })}
-      </motion.div>
+      </FadeItem>
+      <p className="-mt-2 text-[11px] text-muted-foreground">
+        Ngưỡng cảnh báo "Sắp hết": dưới {LOW_STOCK_THRESHOLD} bản mỗi kho.
+      </p>
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.15 }}
-      >
+      <FadeItem>
         <SectionCard noPadding>
           {/* Mobile cards (< md) */}
           {loading ? (
@@ -342,8 +437,6 @@ export function InventoryPage() {
                 const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
                 const recvQty = Number(row.warehouseRecvQty || 0);
                 const status = getStockStatus(availQty);
-                const healthPct = Math.min(Math.max((availQty / 5) * 100, 0), 100);
-                const meta = stockStatusMeta(status);
                 return (
                   <motion.div key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                     className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2.5">
@@ -352,7 +445,7 @@ export function InventoryPage() {
                         <p className="text-[13px] font-semibold text-foreground truncate">{row.title}</p>
                         <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{row.isbn || "-"}</p>
                       </div>
-                      <StatusBadge label={meta.label} variant={meta.variant} dot />
+                      <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{row.category || "-"}</span>
@@ -361,10 +454,8 @@ export function InventoryPage() {
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${status === "out-of-stock" ? "bg-red-500" : status === "low-stock" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${healthPct}%` }} />
-                      </div>
-                      <span className={`text-[13px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
+                      <StockGauge quantity={availQty} status={status} />
+                      <span className={`text-[13px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
                     </div>
                     {recvQty > 0 && (
                       <p className="text-[10px] text-amber-500 dark:text-amber-400">Sẵn sàng: {availQty} · Nhận: {recvQty}</p>
@@ -398,8 +489,6 @@ export function InventoryPage() {
                 const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
                 const recvQty = Number(row.warehouseRecvQty || 0);
                 const status = getStockStatus(availQty);
-                const healthPct = Math.min(Math.max((availQty / 5) * 100, 0), 100);
-                const meta = stockStatusMeta(status);
                 return (
                   <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
                     className="border-b border-border last:border-0 hover:bg-muted/40 transition-all duration-150">
@@ -425,11 +514,8 @@ export function InventoryPage() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <span className={`text-[14px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
-                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${healthPct}%` }} transition={{ duration: 0.6, ease: "easeOut", delay: i * 0.02 }}
-                            className={`h-full rounded-full ${status === "out-of-stock" ? "bg-red-500" : status === "low-stock" ? "bg-amber-500" : "bg-emerald-500"}`} />
-                        </div>
+                        <span className={`text-[14px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
+                        <StockGauge quantity={availQty} status={status} />
                       </div>
                       {recvQty > 0 && (
                         <div className="text-[10px] text-amber-500 dark:text-amber-400 leading-tight mt-1">
@@ -438,7 +524,7 @@ export function InventoryPage() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <StatusBadge label={meta.label} variant={meta.variant} dot />
+                      <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
@@ -455,7 +541,7 @@ export function InventoryPage() {
             <span>Hiển thị {filtered.length}/{whScopedRows.length} dòng ({data.length} đầu sách)</span>
           </div>
         </SectionCard>
-      </motion.div>
-    </div>
+      </FadeItem>
+    </PageWrapper>
   );
 }

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown, ChevronRight, Clock, ListChecks, MapPin, Package, QrCode, RotateCcw, ScanLine, Search, UserCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown, ChevronRight, Clock, ListChecks, MapPin, Package, QrCode, RotateCcw, ScanLine, UserCheck } from "lucide-react";
 import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
+import { useHardwareScanner } from "@/hooks/useHardwareScanner";
+import { playScanError, playScanSuccess } from "@/lib/scan-feedback";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -17,6 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/ui/stat-card";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { getPickingTaskStatusVariant } from "@/lib/status-registry";
 import { authService } from "@/services/auth";
@@ -64,6 +74,8 @@ function taskStatusVariant(status: string) {
 
 type PickingScanTarget = "presence" | "location" | "product";
 
+const PAGE_SIZE = 10;
+
 export function PickingPage() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -80,6 +92,7 @@ export function PickingPage() {
   const [tasks, setTasks] = useState<PickingTaskSummary[]>([]);
   const [query, setQuery] = useState("");
   const [taskClassFilter, setTaskClassFilter] = useState<"ALL" | "PICK" | "REPICK">("ALL");
+  const [page, setPage] = useState(1);
 
   const [selectedTaskType, setSelectedTaskType] = useState<PickingTaskType | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState("");
@@ -137,6 +150,13 @@ export function PickingPage() {
       || taskTypeLabel(task.order_type).toLowerCase().includes(keyword)
     ));
   }, [tasks, query, taskClassFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
+
+  const pagedTasks = useMemo(
+    () => filteredTasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredTasks, page],
+  );
 
   const taskStats = useMemo(() => {
     const pick = tasks.filter((task) => taskClassLabel(task.task_class) === "PICK").length;
@@ -258,6 +278,14 @@ export function PickingPage() {
     });
   }, [canManageAssignment, selectedWarehouseId]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query, taskClassFilter]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
   const handleAssignTask = async (task: PickingTaskSummary) => {
     const key = `${task.task_type}:${task.task_id}`;
     const pickerUserId = assigningPickerIdByTask[key];
@@ -316,8 +344,10 @@ export function PickingPage() {
         currentLocationInput: confirmedLocation,
       });
 
+      playScanSuccess();
       toast.success(`Đã xác nhận hiện diện tại ${res.data.location_code}`);
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Xác nhận hiện diện thất bại"));
     } finally {
       setConfirmingPresence(false);
@@ -355,6 +385,7 @@ export function PickingPage() {
         setAmbiguousMatches(res.matches || []);
         setSelectedScannedVariantId("");
         setProductVerified(false);
+        playScanError();
         toast.error("Barcode trùng nhiều SKU, vui lòng chọn đúng item");
         return;
       }
@@ -364,15 +395,18 @@ export function PickingPage() {
         if (res.selected.variant_id !== currentLine.variant_id) {
           setProductVerified(false);
           setSelectedScannedVariantId("");
+          playScanError();
           toast.error("Sai sản phẩm cho dòng hiện tại");
           return;
         }
 
         setSelectedScannedVariantId(res.selected.variant_id);
         setProductVerified(true);
+        playScanSuccess();
         toast.success(`Đã nhận diện: ${res.selected.book_title}`);
       }
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Không tra cứu được mã vạch sản phẩm"));
     } finally {
       setLoadingLookup(false);
@@ -430,6 +464,7 @@ export function PickingPage() {
         loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
       ]);
 
+      playScanSuccess();
       if (result.data.task_completed) {
         confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
         toast.success("Đã hoàn tất toàn bộ task picking");
@@ -439,6 +474,7 @@ export function PickingPage() {
         toast.success("Đã xác nhận lấy dòng thành công");
       }
     } catch (error) {
+      playScanError();
       toast.error(getApiErrorMessage(error, "Xác nhận lấy dòng thất bại"));
     } finally {
       setConfirmingLine(false);
@@ -514,12 +550,14 @@ export function PickingPage() {
       setQuantityInput(Math.max(1, Math.trunc(Number(currentLine.remaining_qty || 1))));
       setSelectedScannedVariantId("");
       setAmbiguousMatches([]);
+      playScanSuccess();
       toast.success("Đã xác nhận đúng vị trí lấy hàng");
       return;
     }
 
     setLocationVerified(false);
     setProductVerified(false);
+    playScanError();
     toast.error(`Sai vị trí. Cần đến ${currentLine.source_location_code || "vị trí được chỉ định"}`);
   };
 
@@ -541,6 +579,22 @@ export function PickingPage() {
 
     setActiveScanTarget(null);
   };
+
+  // Hardware keyboard-wedge scanner (a handheld gun, not the camera modal): the current step
+  // decides what a scan means, so staff never has to tap a field or button before scanning —
+  // scan the shelf location, then the book, one after another, hands mostly on the cart.
+  const handleHardwareScan = (code: string) => {
+    if (!detail || !currentLine) return;
+    if (!presenceConfirmed) {
+      void handleConfirmPresence(code);
+    } else if (!locationVerified) {
+      handleVerifyLocation(code);
+    } else if (!productVerified) {
+      void handleLookupProduct(code);
+    }
+  };
+
+  useHardwareScanner(handleHardwareScan);
 
   if (loading) {
     return (
@@ -608,28 +662,24 @@ export function PickingPage() {
 
                 <div className={canManageAssignment ? "md:col-span-2" : "md:col-span-3"}>
                   <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Tìm đơn</p>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Mã đơn / kho / loại đơn"
-                        className="h-auto py-2.5 pl-9"
+                  <FilterBar
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    searchPlaceholder="Mã đơn / kho / loại đơn"
+                    filters={(
+                      <SegmentedControl
+                        options={[
+                          { value: "ALL", label: "Tất cả" },
+                          { value: "PICK", label: "PICK" },
+                          { value: "REPICK", label: "REPICK" },
+                        ]}
+                        value={taskClassFilter}
+                        onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
+                        layoutId="picking-class-filter"
+                        gradientClassName="from-blue-600 to-indigo-600"
                       />
-                    </div>
-                    <SegmentedControl
-                      options={[
-                        { value: "ALL", label: "Tất cả" },
-                        { value: "PICK", label: "PICK" },
-                        { value: "REPICK", label: "REPICK" },
-                      ]}
-                      value={taskClassFilter}
-                      onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
-                      layoutId="picking-class-filter"
-                      gradientClassName="from-blue-600 to-indigo-600"
-                    />
-                  </div>
+                    )}
+                  />
                 </div>
               </div>
             </SectionCard>
@@ -638,9 +688,9 @@ export function PickingPage() {
           <FadeItem>
             <SectionCard noPadding>
               <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {[
                       "Mã đơn",
                       "Loại",
@@ -654,20 +704,20 @@ export function PickingPage() {
                       "Ngày",
                       "Thao tác",
                     ].map((head) => (
-                      <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                      <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                         {head}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTasks.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="py-10 text-center">
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedTasks.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={11} className="whitespace-normal py-10 text-center">
                         <EmptyState variant="no-data" title="Không có đơn nào sẵn sàng lấy" description="Các đơn được giao picking sẽ hiện ở đây" />
-                      </td>
-                    </tr>
-                  ) : filteredTasks.map((task) => {
+                      </TableCell>
+                    </TableRow>
+                  ) : pagedTasks.map((task) => {
                     const key = `${task.task_type}:${task.task_id}`;
                     const assignedToMe = task.assigned_picker_user_id && task.assigned_picker_user_id === currentUserId;
                     const isAssigned = Boolean(task.assigned_picker_user_id);
@@ -678,10 +728,10 @@ export function PickingPage() {
 
                     return (
                       <React.Fragment key={key}>
-                      <tr className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                        <td className="px-4 py-3 text-[12px] font-semibold">{task.order_number}</td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{taskTypeLabel(task.order_type)}</td>
-                        <td className="px-4 py-3 text-[12px]">
+                      <TableRow className="hover:bg-muted/50">
+                        <TableCell className="text-[12px] font-semibold">{task.order_number}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{taskTypeLabel(task.order_type)}</TableCell>
+                        <TableCell className="text-[12px]">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <StatusBadge
                               label={`${taskClassLabel(task.task_class)}${taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}`}
@@ -717,19 +767,19 @@ export function PickingPage() {
                               </button>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.source_warehouse_code || task.source_warehouse_name || "-"}</td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.target_warehouse_code || task.target_warehouse_name || "-"}</td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{task.source_warehouse_code || task.source_warehouse_name || "-"}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{task.target_warehouse_code || task.target_warehouse_name || "-"}</TableCell>
+                        <TableCell>
                           <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">{task.line_count}</td>
-                        <td className="px-4 py-3 text-[12px] font-semibold">{task.remaining_quantity}</td>
-                        <td className="px-4 py-3 text-[12px] text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">{task.line_count}</TableCell>
+                        <TableCell className="text-[12px] font-semibold">{task.remaining_quantity}</TableCell>
+                        <TableCell className="text-[12px] text-muted-foreground">
                           {isAssigned ? assignedPickerName : "Chưa giao"}
-                        </td>
-                        <td className="px-4 py-3 text-[11px] text-muted-foreground">{formatDate(task.requested_at)}</td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="text-[11px] text-muted-foreground">{formatDate(task.requested_at)}</TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             {!isAssigned && canManageAssignment ? (
                               <div className="flex items-center gap-2">
@@ -768,41 +818,91 @@ export function PickingPage() {
                               </Button>
                             ) : null}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                       {/* Inline REPICK children rows when expanded */}
                       {task.picking_task_id && expandedRepickTaskId === task.picking_task_id && (
                         loadingRepickChildren ? (
-                          <tr key={`${key}-loading`}>
-                            <td colSpan={11} className="pl-10 py-2 text-[11px] text-muted-foreground">Đang tải...</td>
-                          </tr>
+                          <TableRow key={`${key}-loading`}>
+                            <TableCell colSpan={11} className="pl-10 py-2 text-[11px] text-muted-foreground">Đang tải...</TableCell>
+                          </TableRow>
                         ) : repickChildren.map((child) => (
-                          <tr key={child.picking_task_id} className="border-b border-amber-50 bg-amber-50/30 dark:border-amber-500/10 dark:bg-amber-500/5">
-                            <td className="px-4 py-2 text-[11px] text-muted-foreground pl-10">
+                          <TableRow key={child.picking_task_id} className="border-b border-amber-50 bg-amber-50/30 hover:bg-amber-50/30 dark:border-amber-500/10 dark:bg-amber-500/5 dark:hover:bg-amber-500/5">
+                            <TableCell className="text-[11px] text-muted-foreground pl-10">
                               <span className="text-amber-700 dark:text-amber-400 font-semibold">↳ {child.task_number}</span>
-                            </td>
-                            <td className="px-4 py-2 text-[11px] text-muted-foreground" colSpan={2}>REPICK</td>
-                            <td className="px-4 py-2 text-[11px] text-muted-foreground" colSpan={2}>—</td>
-                            <td className="px-4 py-2 text-[11px]">
+                            </TableCell>
+                            <TableCell className="text-[11px] text-muted-foreground" colSpan={2}>REPICK</TableCell>
+                            <TableCell className="text-[11px] text-muted-foreground" colSpan={2}>—</TableCell>
+                            <TableCell className="text-[11px]">
                               <StatusBadge
                                 label={child.status}
                                 variant={child.status === "COMPLETED" ? "success" : child.status === "PICKING" ? "info" : "neutral"}
                               />
-                            </td>
-                            <td className="px-4 py-2 text-[11px] text-muted-foreground">{child.picking_task_items?.length ?? 0}</td>
-                            <td className="px-4 py-2 text-[11px] text-muted-foreground">
+                            </TableCell>
+                            <TableCell className="text-[11px] text-muted-foreground">{child.picking_task_items?.length ?? 0}</TableCell>
+                            <TableCell className="text-[11px] text-muted-foreground">
                               {child.picking_task_items?.reduce((s, i) => s + i.short_qty, 0) ?? 0}
-                            </td>
-                            <td colSpan={3} />
-                          </tr>
+                            </TableCell>
+                            <TableCell colSpan={3} />
+                          </TableRow>
                         ))
                       )}
                       </React.Fragment>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               </div>
+
+              {filteredTasks.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-muted-foreground">
+                    Hiển thị <span className="font-medium text-foreground">{pagedTasks.length}</span> / {filteredTasks.length} đơn
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-end">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(page, totalPages).map((item) => (
+                          <PaginationItem key={item}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === page}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
             </SectionCard>
           </FadeItem>
         </>
@@ -946,7 +1046,7 @@ export function PickingPage() {
                         }
                       }}
                       placeholder="Barcode hoặc mã vị trí hiện tại"
-                      className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                      className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                       disabled={presenceConfirmed}
                     />
                     <IconButton
@@ -954,15 +1054,15 @@ export function PickingPage() {
                       onClick={() => setActiveScanTarget("presence")}
                       disabled={confirmingPresence || presenceConfirmed}
                       label="Quét mã vị trí hiện tại"
-                      className="h-12 w-12 shrink-0"
+                      className="h-14 w-14 shrink-0"
                     >
-                      <ScanLine className="w-4 h-4" />
+                      <ScanLine className="w-5 h-5" />
                     </IconButton>
                     <Button
                       onClick={() => void handleConfirmPresence()}
                       disabled={presenceConfirmed}
                       loading={confirmingPresence}
-                      className={`h-12 px-4 text-[15px] ${
+                      className={`h-14 px-4 text-[15px] ${
                         presenceConfirmed
                           ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400"
                           : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
@@ -1003,20 +1103,20 @@ export function PickingPage() {
                             }
                           }}
                           placeholder="Barcode hoặc mã vị trí đích"
-                          className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                          className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                         />
                         <IconButton
                           variant="outline"
                           onClick={() => setActiveScanTarget("location")}
                           disabled={!presenceConfirmed || !currentLine}
                           label="Quét mã vị trí cần đến"
-                          className="h-12 w-12 shrink-0"
+                          className="h-14 w-14 shrink-0"
                         >
-                          <ScanLine className="w-4 h-4" />
+                          <ScanLine className="w-5 h-5" />
                         </IconButton>
                         <Button
                           onClick={() => handleVerifyLocation()}
-                          className={`h-12 px-4 text-[15px] ${
+                          className={`h-14 px-4 text-[15px] ${
                             locationVerified
                               ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400"
                               : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
@@ -1060,21 +1160,21 @@ export function PickingPage() {
                                 }
                               }}
                               placeholder="Barcode / mã nội bộ / ISBN / SKU"
-                              className="flex-1 min-w-[200px] h-12 py-3.5 text-[15px]"
+                              className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
                             />
                             <IconButton
                               variant="outline"
                               onClick={() => setActiveScanTarget("product")}
                               disabled={loadingLookup || !locationVerified}
                               label="Quét mã vạch sản phẩm"
-                              className="h-12 w-12 shrink-0"
+                              className="h-14 w-14 shrink-0"
                             >
-                              <ScanLine className="w-4 h-4" />
+                              <ScanLine className="w-5 h-5" />
                             </IconButton>
                             <Button
                               onClick={() => void handleLookupProduct()}
                               loading={loadingLookup}
-                              className="h-12 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
+                              className="h-14 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
                             >
                               Xác nhận mã
                             </Button>
@@ -1123,7 +1223,7 @@ export function PickingPage() {
                                     max={currentLine?.remaining_qty || 1}
                                     value={quantityInput}
                                     onChange={(event) => setQuantityInput(Math.max(1, Math.trunc(Number(event.target.value || 1))))}
-                                    className="w-full h-12 py-3.5 text-[15px]"
+                                    className="w-full h-14 py-3.5 text-[15px]"
                                   />
                                 </div>
                                 <div className="flex items-end justify-end">
@@ -1131,7 +1231,7 @@ export function PickingPage() {
                                     onClick={handleConfirmLine}
                                     disabled={!canConfirmLine}
                                     loading={confirmingLine}
-                                    className="h-12 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
+                                    className="h-14 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
                                   >
                                     Xác nhận lấy dòng
                                   </Button>

@@ -45,7 +45,7 @@ export function CustomerReadingAnalyticsPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3">
         <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-        <p className="text-[13px] text-slate-400">Đang phân tích dữ liệu đọc sách...</p>
+        <p className="text-[13px] text-slate-400 dark:text-slate-500">Đang phân tích dữ liệu đọc sách...</p>
       </div>
     );
   }
@@ -53,9 +53,9 @@ export function CustomerReadingAnalyticsPage() {
   if (!stats) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3">
-        <BookOpen className="w-10 h-10 text-slate-300" />
-        <p className="text-[14px] text-slate-500" style={{ fontWeight: 600 }}>Chưa có dữ liệu thống kê</p>
-        <p className="text-[12px] text-slate-400">Hãy mượn sách để bắt đầu hành trình đọc sách của bạn!</p>
+        <BookOpen className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+        <p className="text-[14px] text-muted-foreground" style={{ fontWeight: 600 }}>Chưa có dữ liệu thống kê</p>
+        <p className="text-[12px] text-slate-400 dark:text-slate-500">Hãy mượn sách để bắt đầu hành trình đọc sách của bạn!</p>
         <button onClick={() => void loadStats()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-[12px] hover:bg-indigo-700 transition-all mt-2">
           <RefreshCw className="w-3.5 h-3.5" /> Thử lại
         </button>
@@ -72,10 +72,10 @@ export function CustomerReadingAnalyticsPage() {
           </div>
           <div>
             <h1 className="text-[20px] tracking-[-0.02em]" style={{ fontWeight: 700 }}>Thống kê đọc sách</h1>
-            <p className="text-[12px] text-slate-400">Hành trình đọc sách của bạn</p>
+            <p className="text-[12px] text-slate-400 dark:text-slate-500">Hành trình đọc sách của bạn</p>
           </div>
         </div>
-        <button onClick={() => void loadStats()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] hover:bg-slate-50 transition-all">
+        <button onClick={() => void loadStats()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] hover:bg-muted transition-all">
           <RefreshCw className="w-3.5 h-3.5" /> Làm mới
         </button>
       </div>
@@ -83,17 +83,17 @@ export function CustomerReadingAnalyticsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Tổng sách đã mượn', value: stats.total_books, icon: BookOpen, color: 'from-indigo-500 to-blue-500', bg: 'bg-indigo-50' },
-          { label: 'Thời gian mượn TB', value: `${stats.avg_borrow_days} ngày`, icon: Clock, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50' },
-          { label: 'Streak liên tục', value: `${stats.streak_months} tháng`, icon: Flame, color: 'from-orange-500 to-red-500', bg: 'bg-orange-50' },
-          { label: 'Thành tựu', value: stats.badges.length, icon: Award, color: 'from-violet-500 to-purple-500', bg: 'bg-violet-50' },
+          { label: 'Tổng sách đã mượn', value: stats.total_books, icon: BookOpen, color: 'from-indigo-500 to-blue-500', bg: 'bg-indigo-50 dark:bg-indigo-950/30' },
+          { label: 'Thời gian mượn TB', value: `${stats.avg_borrow_days} ngày`, icon: Clock, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
+          { label: 'Streak liên tục', value: `${stats.streak_months} tháng`, icon: Flame, color: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+          { label: 'Thành tựu', value: stats.badges.length, icon: Award, color: 'from-violet-500 to-purple-500', bg: 'bg-violet-50 dark:bg-violet-950/30' },
         ].map((item, i) => (
           <motion.div key={item.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
             className={`${item.bg} rounded-xl border p-4 relative overflow-hidden`}>
             <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${item.color}`} />
-            <item.icon className="w-5 h-5 text-slate-400 mb-2" />
-            <p className="text-[11px] text-slate-500 mb-1" style={{ fontWeight: 550 }}>{item.label}</p>
-            <p className="text-[24px] text-slate-800" style={{ fontWeight: 700, lineHeight: 1 }}>{item.value}</p>
+            <item.icon className="w-5 h-5 text-slate-400 dark:text-slate-500 mb-2" />
+            <p className="text-[11px] text-muted-foreground mb-1" style={{ fontWeight: 550 }}>{item.label}</p>
+            <p className="text-[24px] text-slate-800 dark:text-slate-200" style={{ fontWeight: 700, lineHeight: 1 }}>{item.value}</p>
           </motion.div>
         ))}
       </div>
@@ -101,17 +101,17 @@ export function CustomerReadingAnalyticsPage() {
       {/* Badges / Achievements */}
       {stats.badges.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-          className="bg-gradient-to-br from-amber-50 to-orange-50/40 rounded-xl border border-amber-100/60 p-5">
+          className="bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/10 rounded-xl border border-amber-100/60 dark:border-amber-900/40 p-5">
           <h3 className="text-[14px] mb-3 flex items-center gap-2" style={{ fontWeight: 650 }}>
-            <Award className="w-4 h-4 text-amber-600" /> Thành tựu của bạn
+            <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" /> Thành tựu của bạn
           </h3>
           <div className="flex flex-wrap gap-3">
             {stats.badges.map((badge) => (
-              <div key={badge.id} className="flex items-center gap-2 bg-white rounded-lg border border-amber-100 px-3 py-2 shadow-sm">
+              <div key={badge.id} className="flex items-center gap-2 bg-card rounded-lg border border-amber-100 dark:border-amber-900/40 px-3 py-2 shadow-sm">
                 <span className="text-[20px]">{badge.icon}</span>
                 <div>
-                  <p className="text-[12px] text-slate-700" style={{ fontWeight: 600 }}>{badge.name}</p>
-                  <p className="text-[10px] text-slate-400">{badge.description}</p>
+                  <p className="text-[12px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>{badge.name}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{badge.description}</p>
                 </div>
               </div>
             ))}
@@ -122,7 +122,7 @@ export function CustomerReadingAnalyticsPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl border p-5 shadow-sm">
+          className="bg-card rounded-xl border p-5 shadow-sm">
           <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
             <TrendingUp className="w-4 h-4 text-indigo-500" /> Sách mượn theo tháng
           </h3>
@@ -143,12 +143,12 @@ export function CustomerReadingAnalyticsPage() {
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+            <div className="h-[220px] flex items-center justify-center text-slate-400 dark:text-slate-500 text-[13px]">Chưa có dữ liệu</div>
           )}
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-          className="bg-white rounded-xl border p-5 shadow-sm">
+          className="bg-card rounded-xl border p-5 shadow-sm">
           <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
             <BookOpen className="w-4 h-4 text-violet-500" /> Thể loại yêu thích
           </h3>
@@ -163,7 +163,7 @@ export function CustomerReadingAnalyticsPage() {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 text-[13px]">Chưa có dữ liệu</div>
+            <div className="h-[220px] flex items-center justify-center text-slate-400 dark:text-slate-500 text-[13px]">Chưa có dữ liệu</div>
           )}
         </motion.div>
       </div>
@@ -171,7 +171,7 @@ export function CustomerReadingAnalyticsPage() {
       {/* Top Authors */}
       {stats.top_authors.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl border p-5 shadow-sm">
+          className="bg-card rounded-xl border p-5 shadow-sm">
           <h3 className="text-[14px] mb-4" style={{ fontWeight: 650 }}>Tác giả hay đọc nhất</h3>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={stats.top_authors} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>

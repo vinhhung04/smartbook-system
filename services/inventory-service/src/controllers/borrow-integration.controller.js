@@ -707,6 +707,50 @@ async function returnBorrowedLoan(req, res) {
   }
 }
 
+async function getVariantDetails(req, res) {
+  const idsParam = String(req.query.ids || '').trim();
+  if (!idsParam) {
+    return res.json({ data: [] });
+  }
+
+  const ids = idsParam.split(',').map((id) => id.trim()).filter(Boolean).slice(0, 200);
+  if (ids.length === 0) {
+    return res.json({ data: [] });
+  }
+
+  try {
+    const variants = await prisma.book_variants.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        cover_image_url: true,
+        books: {
+          select: {
+            title: true,
+            book_authors: {
+              select: { authors: { select: { full_name: true } } },
+              orderBy: { author_order: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    return res.json({
+      data: variants.map((variant) => ({
+        id: variant.id,
+        title: variant.books?.title || 'Không rõ tên sách',
+        author: variant.books?.book_authors?.[0]?.authors?.full_name || null,
+        cover_image_url: variant.cover_image_url || null,
+      })),
+    });
+  } catch (error) {
+    console.error('getVariantDetails error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   searchBorrowVariants,
   listBorrowWarehouses,
@@ -715,4 +759,5 @@ module.exports = {
   releaseBorrowReservation,
   consumeBorrowReservation,
   returnBorrowedLoan,
+  getVariantDetails,
 };

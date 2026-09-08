@@ -8,38 +8,9 @@ export interface ReservationPayload {
   notes?: string;
 }
 
-export interface FinePaymentPayload {
-  fine_id: string;
-  amount?: number;
-  payment_method?: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET';
-  transaction_reference?: string;
-  note?: string;
-}
-
-export interface AccountTopupPayload {
-  amount: number;
-  note?: string;
-}
-
-export interface MomoPaymentStatus {
-  status: 'PAID' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'PENDING';
-  amount?: number;
-  message?: string;
-}
-
 export const customerBorrowService = {
   async getMyAccount() {
     const response = await gatewayAPI.get('/my/account');
-    return response.data;
-  },
-
-  async topupMyAccount(payload: AccountTopupPayload) {
-    const idempotencyKey = `c-topup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const response = await gatewayAPI.post('/my/account/topup', payload, {
-      headers: {
-        'Idempotency-Key': idempotencyKey,
-      },
-    });
     return response.data;
   },
 
@@ -91,16 +62,6 @@ export const customerBorrowService = {
   async getMyFines() {
     const response = await gatewayAPI.get('/my/fines');
     return response.data;
-  },
-
-  async payFine(payload: FinePaymentPayload) {
-    const response = await gatewayAPI.post('/my/fines/payments', payload);
-    return response.data;
-  },
-
-  async getMomoPaymentStatus(orderId: string) {
-    const response = await gatewayAPI.get(`/my/payments/momo/${orderId}`);
-    return response.data as { data: MomoPaymentStatus };
   },
 
   async getMyNotifications(params?: { page?: number; pageSize?: number }) {

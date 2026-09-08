@@ -5,6 +5,7 @@ const {
   getCustomerById,
   updateCustomer,
   getActiveMembership,
+  renewMembership,
   getMyProfile,
   updateMyProfile,
   getMyMembership,
@@ -22,5 +23,6 @@ router.post('/', authorizeBorrowAdminWrite, createCustomer);
 router.get('/:id', authorizeBorrowAdminRead, getCustomerById);
 router.patch('/:id', authorizeBorrowAdminWrite, updateCustomer);
 router.get('/:id/membership/active', authorizeBorrowAdminRead, getActiveMembership);
+router.post('/:id/membership/renew', authorizeBorrowAdminWrite, renewMembership);
 
 module.exports = router;

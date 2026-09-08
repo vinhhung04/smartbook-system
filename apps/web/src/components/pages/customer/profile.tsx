@@ -68,8 +68,8 @@ export function CustomerProfilePage() {
     <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
       {/* Hero */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-50 flex items-center justify-center border border-indigo-200/40">
-          <User className="w-5 h-5 text-indigo-600" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40">
+          <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
         </div>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Hồ sơ của tôi</h1>
@@ -82,8 +82,8 @@ export function CustomerProfilePage() {
         subtitle={`Mã KH: ${profile.customer_code || '—'} | Cập nhật thông tin liên lạc của bạn.`}
       >
         {/* Email notice */}
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-[12px] text-amber-700">
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
+          <p className="text-[12px] text-amber-700 dark:text-amber-400">
             <strong>Lưu ý:</strong> Email được quản lý bởi tài khoản đăng nhập và không thể chỉnh sửa ở đây. Liên hệ hỗ trợ để đổi email.
           </p>
         </div>
@@ -171,7 +171,7 @@ function NotificationPreferencesSection() {
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
     <button type="button" onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-muted'}`}>
-      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow-sm transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
   );
 
