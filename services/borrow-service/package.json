@@ -8,6 +8,7 @@
     "dev": "node --watch src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "pretest": "prisma generate",
     "test": "node --test test/*.test.js"
   },
   "keywords": [],
