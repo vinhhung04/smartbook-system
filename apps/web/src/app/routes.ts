@@ -3,7 +3,6 @@ import { createBrowserRouter, type LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authService } from "@/services/auth";
 import { canAccess, getHomePathForUser, ROUTE_ACCESS, type RouteAccessMeta } from "@/lib/rbac";
-import { RouteErrorBoundary } from "@/components/pages/route-error-boundary";
 
 async function requireAuthLoader() {
   const user = await authService.hydrateCurrentUser();
@@ -131,7 +130,6 @@ export const router = createBrowserRouter([
     path: '/customer',
     loader: requireCustomerAuthLoader,
     lazy: { Component: async () => (await import("@/components/pages/customer/layout")).CustomerLayout },
-    errorElement: createElement(RouteErrorBoundary),
     children: [
       { index: true, lazy: { Component: async () => (await import("@/components/pages/customer/dashboard")).CustomerDashboardPage } },
       { path: 'profile', lazy: { Component: async () => (await import("@/components/pages/customer/profile")).CustomerProfilePage } },
@@ -154,14 +152,12 @@ export const router = createBrowserRouter([
   {
     path: "/supplier",
     loader: requireSupplierAuthLoader,
-    errorElement: createElement(RouteErrorBoundary),
     lazy: { Component: async () => (await import("@/components/pages/supplier/supplier-account")).SupplierAccountPage },
   },
   {
     path: "/",
     loader: requireAuthLoader,
     hydrateFallbackElement,
-    errorElement: createElement(RouteErrorBoundary),
     lazy: { Component: async () => (await import("@/components/layout")).AppLayout },
     children: [
       { index: true, lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
