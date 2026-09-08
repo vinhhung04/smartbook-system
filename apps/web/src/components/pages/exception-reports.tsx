@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, RefreshCw, CheckCircle, X, UserCheck } from "lucide-react";
+import { AlertTriangle, ImageIcon, RefreshCw, CheckCircle, X, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ export function ExceptionReportsPage() {
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [assignState, setAssignState] = useState<Record<string, string>>({});
   const [assigningId, setAssigningId] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const load = async (status?: string) => {
     setLoading(true);
@@ -174,7 +175,19 @@ export function ExceptionReportsPage() {
                     <td className="px-4 py-3 text-[13px]">{r.expected_qty ?? "-"}</td>
                     <td className="px-4 py-3 text-[13px]">{r.actual_qty ?? "-"}</td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground max-w-[200px]">
-                      <span className="block truncate" title={r.note}>{r.note}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="block truncate" title={r.note}>{r.note}</span>
+                        {r.evidence_photo_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewUrl(r.evidence_photo_url)}
+                            title="Xem ảnh bằng chứng"
+                            className="shrink-0 text-muted-foreground hover:text-primary"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
@@ -251,6 +264,28 @@ export function ExceptionReportsPage() {
           </table>
         </div>
       </SectionCard>
+
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <img
+            src={previewUrl}
+            alt="Ảnh bằng chứng sự cố"
+            className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setPreviewUrl(null)}
+            aria-label="Đóng"
+            className="absolute right-6 top-6 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

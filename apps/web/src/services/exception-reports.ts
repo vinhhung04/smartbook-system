@@ -14,6 +14,7 @@ export interface ExceptionReport {
   actual_qty: number | null;
   note: string;
   evidence_notes: string | null;
+  evidence_photo_url: string | null;
   status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "DISMISSED" | string;
   resolved_by_user_id: string | null;
   resolved_at: string | null;
@@ -41,6 +42,7 @@ export interface ExceptionReportCreateInput {
   actual_qty?: number;
   note: string;
   evidence_notes?: string;
+  evidence_photo_url?: string;
 }
 
 export const exceptionReportService = {
