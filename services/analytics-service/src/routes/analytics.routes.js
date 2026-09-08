@@ -37,5 +37,6 @@ router.get('/fine-summary', analyticsController.getFineSummary);
 router.get('/warehouse-stock-risk', analyticsController.getWarehouseStockRisk);
 router.get('/reorder-suggestions', analyticsController.getReorderSuggestions);
 router.get('/reservation-funnel', analyticsController.getReservationFunnel);
+router.get('/weeding-suggestions', analyticsController.getWeedingSuggestions);
 
 module.exports = router;

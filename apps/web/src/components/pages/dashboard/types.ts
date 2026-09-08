@@ -70,6 +70,7 @@ export const emptyReorderSummary: ReorderSuggestionsData['summary'] = {
   medium_priority: 0,
   low_priority: 0,
   estimated_total_reorder_qty: 0,
+  estimated_total_cost: 0,
 };
 
 export const DECISION_COLORS = {

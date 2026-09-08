@@ -100,11 +100,18 @@ async def get_reorder_suggestions(
     limit: int | None = None,
     lead_time_days: int | None = None,
     priority: str | None = None,
+    budget_vnd: float | None = None,
 ) -> dict:
     return await _get(
         "/analytics/reorder-suggestions",
         auth_header,
-        {"days": days, "limit": limit, "leadTimeDays": lead_time_days, "priority": priority},
+        {
+            "days": days,
+            "limit": limit,
+            "leadTimeDays": lead_time_days,
+            "priority": priority,
+            "budgetVnd": budget_vnd,
+        },
     )
 
 
@@ -226,6 +233,14 @@ async def get_aging_inventory(
     return await _get("/analytics/aging-inventory", auth_header, {"days": days, "limit": limit})
 
 
+async def get_weeding_suggestions(
+    auth_header: str | None = None,
+    days: int | None = None,
+    limit: int | None = None,
+) -> dict:
+    return await _get("/analytics/weeding-suggestions", auth_header, {"days": days, "limit": limit})
+
+
 TOOL_FUNCTIONS: dict[str, Callable[..., Awaitable[dict]]] = {
     "get_dashboard_kpis": get_dashboard_kpis,
     "get_borrow_trends": get_borrow_trends,
@@ -237,6 +252,7 @@ TOOL_FUNCTIONS: dict[str, Callable[..., Awaitable[dict]]] = {
     "get_reservation_funnel": get_reservation_funnel,
     "search_books": search_books,
     "get_aging_inventory": get_aging_inventory,
+    "get_weeding_suggestions": get_weeding_suggestions,
 }
 
 
@@ -327,8 +343,11 @@ ANALYTICS_TOOLS: list[dict] = [
                 "số lượng đề xuất (suggested_reorder_qty) và lý do (reason) từng đầu sách. Mỗi sách còn có "
                 "lead_time_days (thời gian chờ hàng dùng để tính toán), lead_time_source (LEARNED = trung vị "
                 "lịch sử giao hàng thực tế, SUPPLIER_DECLARED = cam kết của nhà cung cấp, DEFAULT = giá trị "
-                "mặc định, REQUESTED = do người hỏi chỉ định) và lead_time_samples (số lần giao đã đo). Công "
-                "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên."
+                "mặc định, REQUESTED = do người hỏi chỉ định) và lead_time_samples (số lần giao đã đo). Mỗi "
+                "sách còn có estimated_cost (chi phí ước tính = số lượng đề xuất × đơn giá). Nếu truyền "
+                "budget_vnd, hệ thống chỉ đánh dấu within_budget=true cho các sách vừa ngân sách (ưu tiên cao "
+                "hơn được xét trước) và trả thêm tổng chi phí đã duyệt/còn lại trong ngân sách. Công "
+                "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên, hoặc nên nhập gì trong một ngân sách cụ thể."
             ),
             "parameters": {
                 "type": "object",
@@ -341,6 +360,7 @@ ANALYTICS_TOOLS: list[dict] = [
                         "enum": ["ALL", "HIGH", "MEDIUM", "LOW"],
                         "description": "Lọc theo mức độ ưu tiên, mặc định ALL",
                     },
+                    "budget_vnd": {"type": "number", "description": "Ngân sách nhập hàng (VNĐ). Nếu người hỏi nêu một số tiền cụ thể, truyền vào đây để biết sách nào nằm trong ngân sách"},
                 },
                 "required": [],
             },
@@ -388,6 +408,27 @@ ANALYTICS_TOOLS: list[dict] = [
                 "type": "object",
                 "properties": {
                     "days": {"type": "integer", "description": "Ngưỡng số ngày không hoạt động, 1-365, mặc định 90"},
+                    "limit": {"type": "integer", "description": "Số lượng đầu sách tối đa, 1-200, mặc định 50"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weeding_suggestions",
+            "description": (
+                "Gợi ý thanh lý hoặc chuyển kho cho sách tồn kho lâu ngày không hoạt động: severity "
+                "(HIGH/CRITICAL theo số ngày không hoạt động), suggested_action (LIQUIDATE = nên thanh lý vì "
+                "không đầu sách nào của tựa này còn nhu cầu, REDISTRIBUTE = nên chuyển sang kho khác vì cùng "
+                "tựa sách vẫn đang có nhu cầu ở nơi khác), và tied_up_value (giá trị tồn kho đang bị chôn ở "
+                "đó). Dùng khi hỏi nên thanh lý sách nào, sách nào đang chiếm vốn mà không sinh lợi."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "Ngưỡng số ngày không hoạt động để coi là ứng viên thanh lý, 1-365, mặc định 180"},
                     "limit": {"type": "integer", "description": "Số lượng đầu sách tối đa, 1-200, mặc định 50"},
                 },
                 "required": [],

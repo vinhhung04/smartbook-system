@@ -1,0 +1,114 @@
+[
+  {
+    "question": "Tình hình thư viện hiện nay thế nào?",
+    "expected_tools": ["get_dashboard_kpis"]
+  },
+  {
+    "question": "Cho tôi xem KPI tổng quan tháng này",
+    "expected_tools": ["get_dashboard_kpis"]
+  },
+  {
+    "question": "Xu hướng mượn sách 30 ngày qua ra sao?",
+    "expected_tools": ["get_borrow_trends"]
+  },
+  {
+    "question": "Lượt mượn trả sách theo tháng trong quý vừa rồi như thế nào?",
+    "expected_tools": ["get_borrow_trends"]
+  },
+  {
+    "question": "Top 10 sách được mượn nhiều nhất là gì?",
+    "expected_tools": ["get_top_books"]
+  },
+  {
+    "question": "Sách nào đang hot nhất thư viện hiện tại?",
+    "expected_tools": ["get_top_books"]
+  },
+  {
+    "question": "Hiện có bao nhiêu phiếu mượn đang quá hạn?",
+    "expected_tools": ["get_overdue_summary"]
+  },
+  {
+    "question": "Danh sách các khoản mượn trễ hạn lâu nhất là gì?",
+    "expected_tools": ["get_overdue_summary"]
+  },
+  {
+    "question": "Tổng số tiền phạt chưa thu là bao nhiêu?",
+    "expected_tools": ["get_fine_summary"]
+  },
+  {
+    "question": "Phân loại tiền phạt theo loại (quá hạn, mất sách, hư sách) thế nào?",
+    "expected_tools": ["get_fine_summary"]
+  },
+  {
+    "question": "Kho nào đang có rủi ro hết hàng cao nhất?",
+    "expected_tools": ["get_warehouse_stock_risk"]
+  },
+  {
+    "question": "Tồn kho thấp đang tập trung ở kho nào?",
+    "expected_tools": ["get_warehouse_stock_risk"]
+  },
+  {
+    "question": "Nên nhập thêm sách gì trong tuần này?",
+    "expected_tools": ["get_reorder_suggestions"]
+  },
+  {
+    "question": "Gợi ý nhập hàng ưu tiên cao là những sách nào?",
+    "expected_tools": ["get_reorder_suggestions"]
+  },
+  {
+    "question": "Với ngân sách 50 triệu đồng thì nên nhập những sách nào?",
+    "expected_tools": ["get_reorder_suggestions"]
+  },
+  {
+    "question": "Tỷ lệ chuyển đổi từ đặt sách sang mượn sách là bao nhiêu phần trăm?",
+    "expected_tools": ["get_reservation_funnel"]
+  },
+  {
+    "question": "Có bao nhiêu đơn đặt sách đang chờ xác nhận?",
+    "expected_tools": ["get_reservation_funnel"]
+  },
+  {
+    "question": "Tìm sách viết về kỹ năng sống cho trẻ em",
+    "expected_tools": ["search_books"]
+  },
+  {
+    "question": "Có sách nào của tác giả Nguyễn Nhật Ánh trong thư viện không?",
+    "expected_tools": ["search_books"]
+  },
+  {
+    "question": "Sách nào đang tồn kho lâu ngày không ai mượn?",
+    "expected_tools": ["get_aging_inventory"]
+  },
+  {
+    "question": "Hàng nào nằm im trong kho hơn 90 ngày rồi?",
+    "expected_tools": ["get_aging_inventory"]
+  },
+  {
+    "question": "Nên thanh lý những sách nào để giải phóng kho?",
+    "expected_tools": ["get_weeding_suggestions"]
+  },
+  {
+    "question": "Sách nào đang chiếm vốn mà không sinh ra lượt mượn nào, nên xử lý thế nào?",
+    "expected_tools": ["get_weeding_suggestions"]
+  },
+  {
+    "question": "So sánh tình hình tồn kho rủi ro và gợi ý nhập hàng để tôi quyết định nhập thêm sách gì",
+    "expected_tools": ["get_warehouse_stock_risk", "get_reorder_suggestions"]
+  },
+  {
+    "question": "Cho tôi bức tranh tổng thể: KPI hiện tại và các khoản quá hạn cần xử lý gấp",
+    "expected_tools": ["get_dashboard_kpis", "get_overdue_summary"]
+  },
+  {
+    "question": "Xin chào, bạn có thể giúp tôi những việc gì?",
+    "expected_tools": []
+  },
+  {
+    "question": "Cảm ơn bạn nhiều nhé",
+    "expected_tools": []
+  },
+  {
+    "question": "1 cộng 1 bằng mấy?",
+    "expected_tools": []
+  }
+]

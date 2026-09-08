@@ -10,6 +10,8 @@ const {
 const { findSeasonalEvent } = require('../config/seasonal-events');
 const { ewma, linearTrendSlope, stdDev, projectedDemand } = require('../utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
+const { allocateBudget } = require('../utils/budget-allocation');
+const { classifyWeedingCandidate } = require('../utils/weeding');
 
 const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,6 +51,17 @@ function parsePositiveInteger(value, defaultValue, maxValue, fieldName) {
   const parsed = Number(value || defaultValue);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > maxValue) {
     throw createHttpError(400, `${fieldName} must be an integer from 1 to ${maxValue}`);
+  }
+  return parsed;
+}
+
+// budgetVnd is optional: absent means "no budget constraint", which must stay
+// distinguishable from an explicit ?budgetVnd=0 (fund nothing).
+function parseOptionalBudget(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw createHttpError(400, 'budgetVnd must be a non-negative number');
   }
   return parsed;
 }
@@ -716,7 +729,8 @@ async function getInventorySnapshot() {
       COALESCE(SUM(sb.on_hand_qty), 0) AS on_hand_qty,
       COALESCE(SUM(sb.reserved_qty), 0) AS reserved_qty,
       COALESCE(SUM(sb.borrowed_qty), 0) AS borrowed_qty,
-      COALESCE(MAX(sb.reorder_point), 0) AS reorder_point
+      COALESCE(MAX(sb.reorder_point), 0) AS reorder_point,
+      bv.unit_cost
     FROM book_variants bv
     JOIN books b ON b.id = bv.book_id
     LEFT JOIN LATERAL (
@@ -746,7 +760,8 @@ async function getInventorySnapshot() {
       bv.isbn13,
       bv.isbn10,
       bv.internal_barcode,
-      bv.sku
+      bv.sku,
+      bv.unit_cost
     `,
   );
 }
@@ -888,6 +903,9 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     suggestedReorderQty = 3;
   }
 
+  const unitCost = number(row.unit_cost);
+  const estimatedCost = round(suggestedReorderQty * unitCost, 2);
+
   const item = {
     book_id: row.book_id,
     variant_id: row.variant_id,
@@ -921,6 +939,8 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     lead_time_days: leadTimeDays,
     lead_time_source: resolvedLeadTime.source,
     lead_time_samples: resolvedLeadTime.samples,
+    unit_cost: unitCost,
+    estimated_cost: estimatedCost,
   };
 
   return {
@@ -950,6 +970,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   const limit = parseLimit(req.query.limit, 20, 100);
   const priority = String(req.query.priority || 'ALL').toUpperCase();
   const includeLowDemand = parseBoolean(req.query.includeLowDemand, false);
+  const budgetVnd = parseOptionalBudget(req.query.budgetVnd);
 
   if (!REORDER_PRIORITIES.has(priority)) {
     throw createHttpError(400, 'priority must be one of ALL, HIGH, MEDIUM, LOW');
@@ -1010,6 +1031,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   const summary = candidates.reduce((acc, item) => {
     acc.total_candidates += 1;
     acc.estimated_total_reorder_qty += item.suggested_reorder_qty;
+    acc.estimated_total_cost = round(acc.estimated_total_cost + item.estimated_cost, 2);
     if (item.priority === 'HIGH') acc.high_priority += 1;
     if (item.priority === 'MEDIUM') acc.medium_priority += 1;
     if (item.priority === 'LOW') acc.low_priority += 1;
@@ -1020,7 +1042,23 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     medium_priority: 0,
     low_priority: 0,
     estimated_total_reorder_qty: 0,
+    estimated_total_cost: 0,
   });
+
+  // Budget is applied over the full sorted candidate set (not just the page
+  // being returned) so within_budget reflects the real priority order, then
+  // the same page slice is taken as usual.
+  let resultItems = candidates;
+  let budget = null;
+  if (budgetVnd !== null) {
+    const allocation = allocateBudget(candidates, budgetVnd);
+    resultItems = allocation.items;
+    budget = {
+      budget_vnd: budgetVnd,
+      funded_cost: allocation.funded_cost,
+      remaining_vnd: allocation.remaining_vnd,
+    };
+  }
 
   res.json({
     data: {
@@ -1032,7 +1070,8 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         leadTimeDays: ranges.leadTimeDays,
       },
       summary,
-      items: candidates.slice(0, limit),
+      budget,
+      items: resultItems.slice(0, limit),
     },
   });
 });
@@ -1137,6 +1176,141 @@ const getAgingInventory = asyncHandler(async (req, res) => {
   });
 });
 
+// Weeding (liquidation) candidates: same "no activity" signal as aging
+// inventory, plus unit_cost to size the value tied up and a per-book demand
+// check so a copy that is merely misallocated (another warehouse/variant of
+// the same title is still moving) is flagged for REDISTRIBUTE rather than
+// LIQUIDATE. Deliberately a separate query from getAgingInventory - the two
+// endpoints answer different questions and evolve independently.
+const getWeedingSuggestions = asyncHandler(async (req, res) => {
+  const days = parsePositiveInteger(req.query.days, 180, 365, 'days');
+  const limit = parseLimit(req.query.limit, 50, 200);
+  const cutoff = new Date(Date.now() - days * DAY_MS);
+  const now = new Date();
+
+  const [stockRows, lastBorrowRows, lastMovementRows, inventorySnapshot, borrowByVariantInWindow] = await Promise.all([
+    query(
+      inventoryPool,
+      `
+      SELECT
+        sb.variant_id::text AS variant_id,
+        sb.warehouse_id::text AS warehouse_id,
+        b.id::text AS book_id,
+        b.title,
+        w.name AS warehouse_name,
+        SUM(sb.on_hand_qty) AS on_hand_qty,
+        bv.unit_cost
+      FROM stock_balances sb
+      JOIN book_variants bv ON bv.id = sb.variant_id
+      JOIN books b ON b.id = bv.book_id
+      JOIN warehouses w ON w.id = sb.warehouse_id
+      WHERE bv.is_active = true AND b.is_active = true
+      GROUP BY sb.variant_id, sb.warehouse_id, b.id, b.title, w.name, bv.unit_cost
+      HAVING SUM(sb.on_hand_qty) > 0
+      `,
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT li.variant_id::text AS variant_id, MAX(lt.borrow_date) AS last_borrowed_at
+      FROM loan_items li
+      JOIN loan_transactions lt ON lt.id = li.loan_id
+      GROUP BY li.variant_id
+      `,
+    ),
+    query(
+      inventoryPool,
+      `
+      SELECT variant_id::text AS variant_id, warehouse_id::text AS warehouse_id, MAX(created_at) AS last_movement_at
+      FROM stock_movements
+      GROUP BY variant_id, warehouse_id
+      `,
+    ),
+    getInventorySnapshot(),
+    getBorrowDemandByVariant(cutoff, now),
+  ]);
+
+  // A book_id's total borrow count across all its variants in the window. A
+  // candidate row's own variant is guaranteed 0 here (otherwise it would not
+  // be idle long enough to be a candidate at all), so any count above 0
+  // means a different variant/warehouse of the same title is moving.
+  const bookIdByVariant = new Map(inventorySnapshot.map((row) => [row.variant_id, row.book_id]));
+  const borrowCountByBook = new Map();
+  for (const [variantId, count] of borrowByVariantInWindow.entries()) {
+    const bookId = bookIdByVariant.get(variantId);
+    if (!bookId) continue;
+    borrowCountByBook.set(bookId, (borrowCountByBook.get(bookId) || 0) + count);
+  }
+
+  const lastBorrowByVariant = new Map(lastBorrowRows.map((row) => [row.variant_id, row.last_borrowed_at]));
+  const lastMovementByVariantWarehouse = new Map(
+    lastMovementRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_movement_at]),
+  );
+
+  const items = stockRows
+    .map((row) => {
+      const lastBorrowedAt = lastBorrowByVariant.get(row.variant_id) || null;
+      const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
+      const lastActivityAt = [lastBorrowedAt, lastMovementAt]
+        .filter(Boolean)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+      const daysSinceLastActivity = lastActivityAt
+        ? Math.floor((Date.now() - new Date(lastActivityAt).getTime()) / DAY_MS)
+        : null;
+
+      const classification = classifyWeedingCandidate({
+        daysSinceLastActivity,
+        thresholdDays: days,
+        onHandQty: number(row.on_hand_qty),
+        unitCost: number(row.unit_cost),
+        hasDemandElsewhere: (borrowCountByBook.get(row.book_id) || 0) > 0,
+      });
+      if (!classification) return null;
+
+      return {
+        variant_id: row.variant_id,
+        book_id: row.book_id,
+        title: row.title,
+        warehouse_id: row.warehouse_id,
+        warehouse_name: row.warehouse_name,
+        on_hand_qty: number(row.on_hand_qty),
+        unit_cost: number(row.unit_cost),
+        last_activity_at: toIso(lastActivityAt),
+        days_since_last_activity: daysSinceLastActivity,
+        ...classification,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.tied_up_value - a.tied_up_value);
+
+  const summary = items.reduce((acc, item) => {
+    acc.total_items += 1;
+    acc.total_tied_up_value = round(acc.total_tied_up_value + item.tied_up_value, 2);
+    if (item.severity === 'CRITICAL') acc.critical_count += 1;
+    if (item.severity === 'HIGH') acc.high_count += 1;
+    if (item.suggested_action === 'REDISTRIBUTE') acc.redistribute_count += 1;
+    if (item.suggested_action === 'LIQUIDATE') acc.liquidate_count += 1;
+    return acc;
+  }, {
+    total_items: 0,
+    total_tied_up_value: 0,
+    critical_count: 0,
+    high_count: 0,
+    redistribute_count: 0,
+    liquidate_count: 0,
+  });
+
+  res.json({
+    data: {
+      generated_at: new Date().toISOString(),
+      threshold_days: days,
+      cutoff: cutoff.toISOString(),
+      summary,
+      items: items.slice(0, limit),
+    },
+  });
+});
+
 const getReservationFunnel = asyncHandler(async (_req, res) => {
   const rows = await query(
     borrowPool,
@@ -1174,6 +1348,7 @@ module.exports = {
   getReservationFunnel,
   getAgingInventory,
   getBookTurnover,
+  getWeedingSuggestions,
   // Exported for unit tests: resolves one variant's lead time from the
   // delivery history maps built by getLeadTimeHistory().
   resolveItemLeadTime,

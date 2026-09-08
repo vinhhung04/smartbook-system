@@ -19,3 +19,4 @@ scripts/reports/integration-report.html
 *.sqlite
 services/ai-service/.faq_embeddings_cache.json
 services/ai-service/.book_index_cache.json
+services/ai-service/eval/reports/
