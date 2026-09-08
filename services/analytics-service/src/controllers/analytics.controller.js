@@ -1120,10 +1120,10 @@ const getAgingInventory = asyncHandler(async (req, res) => {
     query(
       borrowPool,
       `
-      SELECT li.variant_id::text AS variant_id, MAX(lt.borrow_date) AS last_borrowed_at
+      SELECT li.variant_id::text AS variant_id, lt.warehouse_id::text AS warehouse_id, MAX(lt.borrow_date) AS last_borrowed_at
       FROM loan_items li
       JOIN loan_transactions lt ON lt.id = li.loan_id
-      GROUP BY li.variant_id
+      GROUP BY li.variant_id, lt.warehouse_id
       `,
     ),
     query(
@@ -1136,14 +1136,19 @@ const getAgingInventory = asyncHandler(async (req, res) => {
     ),
   ]);
 
-  const lastBorrowByVariant = new Map(lastBorrowRows.map((row) => [row.variant_id, row.last_borrowed_at]));
+  // Keyed by variant+warehouse, not variant alone - a borrow fulfilled from
+  // warehouse A must not mask warehouse B's copy of the same title as
+  // "recently active" when it has sat untouched.
+  const lastBorrowByVariantWarehouse = new Map(
+    lastBorrowRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_borrowed_at]),
+  );
   const lastMovementByVariantWarehouse = new Map(
     lastMovementRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_movement_at]),
   );
 
   const items = stockRows
     .map((row) => {
-      const lastBorrowedAt = lastBorrowByVariant.get(row.variant_id) || null;
+      const lastBorrowedAt = lastBorrowByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastActivityAt = [lastBorrowedAt, lastMovementAt]
         .filter(Boolean)
@@ -1212,10 +1217,10 @@ const getWeedingSuggestions = asyncHandler(async (req, res) => {
     query(
       borrowPool,
       `
-      SELECT li.variant_id::text AS variant_id, MAX(lt.borrow_date) AS last_borrowed_at
+      SELECT li.variant_id::text AS variant_id, lt.warehouse_id::text AS warehouse_id, MAX(lt.borrow_date) AS last_borrowed_at
       FROM loan_items li
       JOIN loan_transactions lt ON lt.id = li.loan_id
-      GROUP BY li.variant_id
+      GROUP BY li.variant_id, lt.warehouse_id
       `,
     ),
     query(
@@ -1230,10 +1235,11 @@ const getWeedingSuggestions = asyncHandler(async (req, res) => {
     getBorrowDemandByVariant(cutoff, now),
   ]);
 
-  // A book_id's total borrow count across all its variants in the window. A
-  // candidate row's own variant is guaranteed 0 here (otherwise it would not
-  // be idle long enough to be a candidate at all), so any count above 0
-  // means a different variant/warehouse of the same title is moving.
+  // A book_id's total borrow count across all its variants/warehouses in the
+  // window. Because last-borrowed-at below is scoped per warehouse, a
+  // candidate row's own (variant, warehouse) is guaranteed 0 here - so any
+  // count above 0 means the same title is moving at a different variant or
+  // warehouse, which is exactly the REDISTRIBUTE signal.
   const bookIdByVariant = new Map(inventorySnapshot.map((row) => [row.variant_id, row.book_id]));
   const borrowCountByBook = new Map();
   for (const [variantId, count] of borrowByVariantInWindow.entries()) {
@@ -1242,14 +1248,19 @@ const getWeedingSuggestions = asyncHandler(async (req, res) => {
     borrowCountByBook.set(bookId, (borrowCountByBook.get(bookId) || 0) + count);
   }
 
-  const lastBorrowByVariant = new Map(lastBorrowRows.map((row) => [row.variant_id, row.last_borrowed_at]));
+  // Keyed by variant+warehouse, not variant alone - a borrow fulfilled from
+  // warehouse A must not mask warehouse B's copy of the same title as
+  // "recently active" when it has sat untouched (see getAgingInventory).
+  const lastBorrowByVariantWarehouse = new Map(
+    lastBorrowRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_borrowed_at]),
+  );
   const lastMovementByVariantWarehouse = new Map(
     lastMovementRows.map((row) => [`${row.variant_id}:${row.warehouse_id}`, row.last_movement_at]),
   );
 
   const items = stockRows
     .map((row) => {
-      const lastBorrowedAt = lastBorrowByVariant.get(row.variant_id) || null;
+      const lastBorrowedAt = lastBorrowByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastActivityAt = [lastBorrowedAt, lastMovementAt]
         .filter(Boolean)

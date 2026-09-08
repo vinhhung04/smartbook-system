@@ -15,7 +15,7 @@ import hashlib
 import html as _html_module
 import time
 from html.parser import HTMLParser
-from cache import assistant_response_cache, response_cache, rate_limiter, summary_cache
+from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -2502,8 +2502,23 @@ def _build_source_statuses(result: dict, started_at: float) -> dict:
     }
 
 
+def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
+    """None for an ISBN that fails validation - never cache those, let normal
+    error handling run every time."""
+    isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
+    if error or not isbn13:
+        return None
+    return f"{isbn13}:{bool(req.generateVietnameseSummary)}"
+
+
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    cache_key = _isbn_lookup_cache_key(req)
+    if cache_key:
+        cached = isbn_lookup_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
@@ -2519,6 +2534,9 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         result["categories"] = result["categories"] or []
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+
+    if cache_key and result.get("found"):
+        isbn_lookup_cache.set(cache_key, result)
     return result
 
 
