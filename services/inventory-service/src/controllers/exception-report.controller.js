@@ -49,9 +49,13 @@ async function createExceptionReport(req, res) {
   let photoUrl = null;
   if (evidence_photo_url !== undefined && evidence_photo_url !== null && evidence_photo_url !== '') {
     const ref = String(evidence_photo_url).trim();
-    const isValidRef = ref.startsWith('data:image/') || ref.startsWith('http://') || ref.startsWith('https://');
-    if (!isValidRef) {
-      return res.status(400).json({ message: 'evidence_photo_url must be a data:image/ URL or an http(s) URL' });
+    // Only allow raster image types as base64 data URLs — reject data:image/svg+xml (and any
+    // non-base64 data URL), since an inline SVG can carry executable script and would run when
+    // later rendered via <img src>. http(s) URLs are still allowed as-is.
+    const isValidDataUrl = /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(ref);
+    const isValidHttpUrl = ref.startsWith('http://') || ref.startsWith('https://');
+    if (!isValidDataUrl && !isValidHttpUrl) {
+      return res.status(400).json({ message: 'evidence_photo_url must be a base64 data:image/{png,jpeg,webp,gif} URL or an http(s) URL' });
     }
     photoUrl = ref;
   }

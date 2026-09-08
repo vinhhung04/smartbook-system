@@ -82,6 +82,9 @@ const emptyForm: ExceptionReportCreateInput = {
 };
 
 const MAX_EVIDENCE_PHOTO_BYTES = 4 * 1024 * 1024; // keep base64 payload comfortably under the gateway's JSON body limit
+// Raster types only — matches the backend allowlist in exception-report.controller.js. SVG is
+// excluded because it can carry executable script that would run when rendered via <img src>.
+const ALLOWED_EVIDENCE_PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -201,8 +204,10 @@ export function MyExceptionReportsPage() {
 
   const handlePhotoSelect = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Vui lòng chọn tệp hình ảnh");
+    if (!ALLOWED_EVIDENCE_PHOTO_TYPES.includes(file.type)) {
+      // Reject SVG (and any other non-raster type) client-side: an inline SVG can carry
+      // executable script and would run when later rendered via <img src>.
+      toast.error("Vui lòng chọn ảnh PNG, JPEG, WEBP hoặc GIF");
       return;
     }
     if (file.size > MAX_EVIDENCE_PHOTO_BYTES) {
@@ -558,7 +563,7 @@ export function MyExceptionReportsPage() {
                       Chọn ảnh (tối đa 4MB)
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
                         className="hidden"
                         onChange={(e) => void handlePhotoSelect(e.target.files?.[0])}
                       />
