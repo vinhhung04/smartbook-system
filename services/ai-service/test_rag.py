@@ -10,7 +10,7 @@ from intent import (
     detect_intent,
     normalize_text,
 )
-from rag import build_rag_context
+from rag import build_rag_context, merge_grounding_context, verify_numeric_grounding
 from agent_planner import _wants_action, _is_all_warehouses_intent
 
 
@@ -149,6 +149,44 @@ class RagContextTests(unittest.TestCase):
         self.assertIn("[RAG CONTEXT]", context)
         self.assertIn("Catalog Books", context)
         self.assertIn("error:500", context)
+
+
+class MergeGroundingContextTests(unittest.TestCase):
+    """merge_grounding_context is what lets a CUSTOMER/SUPPLIER reply get a
+    real numeric-grounding check: ANALYTICS_BLOCKED_ROLES zeroes out
+    `retrieval` for them, but their own loans/fines/tasks still reach the
+    prompt via `personal` (build_user_personal_context) - without merging,
+    verify_numeric_grounding never sees that data at all."""
+
+    def test_retrieval_with_no_ok_source_plus_personal_with_one_is_no_longer_ungroundable(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [], "warnings": []}
+        personal = {"summary": "Bạn có 2 khoản vay đang mở.", "sources": [{"name": "my-loans", "status": "ok"}]}
+
+        # Before merging: no "ok" source anywhere, so grounding gives up early.
+        self.assertIsNone(verify_numeric_grounding("Bạn có 2 khoản vay.", retrieval))
+
+        merged = merge_grounding_context(retrieval, personal)
+        # After merging: an "ok" source exists, so the check actually runs -
+        # and the number 2 is present in personal's summary, so it is NOT flagged.
+        self.assertIsNone(verify_numeric_grounding("Bạn có 2 khoản vay.", merged))
+
+    def test_a_number_present_only_in_personal_summary_is_not_flagged(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        personal = {"summary": "Tổng tiền phạt của bạn là 50000 đồng.", "sources": [{"name": "my-fines", "status": "ok"}]}
+        merged = merge_grounding_context(retrieval, personal)
+        self.assertIsNone(verify_numeric_grounding("Bạn còn nợ 50000 đồng tiền phạt.", merged))
+
+    def test_a_number_in_neither_source_is_still_flagged(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        personal = {"summary": "Bạn có 2 khoản vay.", "sources": [{"name": "my-loans", "status": "ok"}]}
+        merged = merge_grounding_context(retrieval, personal)
+        warning = verify_numeric_grounding("Bạn có 999 khoản vay.", merged)
+        self.assertIsNotNone(warning)
+
+    def test_no_personal_context_leaves_retrieval_unchanged(self):
+        retrieval = {"summary": "s", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        self.assertEqual(merge_grounding_context(retrieval, None), retrieval)
+        self.assertEqual(merge_grounding_context(retrieval, {"summary": "", "sources": []}), retrieval)
 
 
 class AnalyticsBlockExemptionTests(unittest.TestCase):

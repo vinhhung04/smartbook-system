@@ -100,6 +100,30 @@
     "expected_tools": ["get_dashboard_kpis", "get_overdue_summary"]
   },
   {
+    "question": "Tổng số tiền phạt chưa thu và tỷ lệ chuyển đổi đặt sách sang mượn sách hiện nay là bao nhiêu?",
+    "expected_tools": ["get_fine_summary", "get_reservation_funnel"]
+  },
+  {
+    "question": "Top sách được mượn nhiều nhất, và xu hướng mượn trả 30 ngày qua thế nào?",
+    "expected_tools": ["get_top_books", "get_borrow_trends"]
+  },
+  {
+    "question": "Sách nào đang tồn kho lâu ngày, và sách nào nên thanh lý để giải phóng kho?",
+    "expected_tools": ["get_aging_inventory", "get_weeding_suggestions"]
+  },
+  {
+    "question": "Cho tôi biết tình hình mượn quá hạn, đồng thời tổng tiền phạt chưa thu hiện tại là bao nhiêu",
+    "expected_tools": ["get_overdue_summary", "get_fine_summary"]
+  },
+  {
+    "question": "Tình hình thư viện hiện nay thế nào, và kho nào đang có rủi ro hết hàng cao nhất?",
+    "expected_tools": ["get_dashboard_kpis", "get_warehouse_stock_risk"]
+  },
+  {
+    "question": "Có bao nhiêu đơn đặt sách đang chờ xác nhận, và sách nào đang tồn kho lâu ngày không ai mượn?",
+    "expected_tools": ["get_reservation_funnel", "get_aging_inventory"]
+  },
+  {
     "question": "Xin chào, bạn có thể giúp tôi những việc gì?",
     "expected_tools": []
   },

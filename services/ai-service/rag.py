@@ -145,6 +145,32 @@ def verify_numeric_grounding(reply: str, retrieval: dict) -> str | None:
     )
 
 
+def merge_grounding_context(retrieval: dict, personal: dict | None) -> dict:
+    """Combines `retrieval` (system-wide analytics) with `personal` (the
+    caller's own data, from user_personal_context.build_user_personal_context)
+    into one {summary, raw, sources} envelope for ensure_source_line /
+    verify_numeric_grounding to check a reply against.
+
+    Without this, CUSTOMER/SUPPLIER get zero grounding: ANALYTICS_BLOCKED_ROLES
+    zeroes out `retrieval` for them, but their own loans/fines/tasks are still
+    injected into the prompt via `personal` - so a customer-facing answer that
+    quotes a number from their own data was never checked against anything,
+    and never got a "Nguồn dữ liệu:" citation either. `personal` carries no
+    `raw` JSON (only prose `summary`), so `raw` here is retrieval's alone;
+    `summary` and `sources` are merged.
+    """
+    personal_summary = (personal or {}).get("summary") or ""
+    personal_sources = (personal or {}).get("sources") or []
+    if not personal_summary and not personal_sources:
+        return retrieval
+
+    return {
+        **retrieval,
+        "summary": "\n\n".join(filter(None, [retrieval.get("summary"), personal_summary])),
+        "sources": [*(retrieval.get("sources") or []), *personal_sources],
+    }
+
+
 def build_fallback_reply(intent_info: dict, retrieval: dict, used_legacy: bool = False) -> str:
     warnings = retrieval.get("warnings") or []
     summary = retrieval.get("summary") or ""

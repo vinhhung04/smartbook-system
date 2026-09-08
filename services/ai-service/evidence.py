@@ -125,6 +125,91 @@ def _evidence_search_books(result: dict) -> list[dict]:
     return items
 
 
+def _evidence_borrow_trends(result: list) -> list[dict]:
+    days = [row for row in result if isinstance(row, dict) and "date" in row]
+    if not days:
+        return []
+    total_loans = sum(row.get("loans") or 0 for row in days)
+    total_returns = sum(row.get("returns") or 0 for row in days)
+    peak = max(days, key=lambda row: row.get("loans") or 0)
+    items = [
+        _item("Tổng lượt mượn trong khoảng thời gian", "get_borrow_trends", "total_loans", total_loans, "lượt"),
+        _item("Tổng lượt trả trong khoảng thời gian", "get_borrow_trends", "total_returns", total_returns, "lượt"),
+    ]
+    if (peak.get("loans") or 0) > 0:
+        items.append(_item(f"Ngày cao điểm: {peak['date']}", "get_borrow_trends", "loans", peak["loans"], "lượt"))
+    return items
+
+
+def _evidence_fine_summary(result: dict) -> list[dict]:
+    items = []
+    if "total_unpaid" in result:
+        items.append(_item("Tổng tiền phạt chưa thu", "get_fine_summary", "total_unpaid", result["total_unpaid"], "đ"))
+    if "total_paid" in result:
+        items.append(_item("Tổng tiền phạt đã thu", "get_fine_summary", "total_paid", result["total_paid"], "đ"))
+    by_type = [row for row in (result.get("by_type") or []) if isinstance(row, dict)]
+    if by_type:
+        largest = max(by_type, key=lambda row: row.get("amount") or 0)
+        items.append(_item(
+            f"Loại phạt lớn nhất: {largest.get('fine_type', 'N/A')}", "get_fine_summary", "amount",
+            largest.get("amount"), "đ", description=f"{largest.get('count', 0)} khoản phạt",
+        ))
+    return items
+
+
+def _evidence_reservation_funnel(result: dict) -> list[dict]:
+    items = []
+    if "total" in result:
+        items.append(_item("Tổng số reservation", "get_reservation_funnel", "total", result["total"], "reservation"))
+    if "converted_to_loan" in result:
+        items.append(_item(
+            "Đã chuyển thành phiếu mượn", "get_reservation_funnel", "converted_to_loan",
+            result["converted_to_loan"], "reservation",
+        ))
+    if "conversion_rate" in result:
+        items.append(_item("Tỷ lệ chuyển đổi", "get_reservation_funnel", "conversion_rate", result["conversion_rate"], "%"))
+    return items
+
+
+def _evidence_aging_inventory(result: dict) -> list[dict]:
+    items = []
+    rows = [row for row in (result.get("items") or []) if isinstance(row, dict) and "title" in row]
+    if not rows:
+        return []
+    items.append(_item("Số sách tồn kho lâu không hoạt động", "get_aging_inventory", "count", len(rows), "đầu sách"))
+    ranked = sorted(rows, key=lambda row: row.get("days_since_last_activity") or 0, reverse=True)
+    for row in ranked[:2]:
+        items.append(_item(
+            f"Tồn lâu nhất: {row['title']}", "get_aging_inventory", "days_since_last_activity",
+            row.get("days_since_last_activity"), "ngày", description=row.get("warehouse_name", ""),
+        ))
+    return items
+
+
+def _evidence_weeding_suggestions(result: dict) -> list[dict]:
+    items = []
+    summary = result.get("summary") or {}
+    if "total_items" in summary:
+        items.append(_item(
+            "Số sách nên xem xét thanh lý/chuyển kho", "get_weeding_suggestions", "total_items",
+            summary["total_items"], "đầu sách",
+        ))
+    if "total_tied_up_value" in summary:
+        items.append(_item(
+            "Tổng giá trị tồn đọng", "get_weeding_suggestions", "total_tied_up_value",
+            summary["total_tied_up_value"], "đ",
+        ))
+    rows = [row for row in (result.get("items") or []) if isinstance(row, dict) and "title" in row]
+    ranked = sorted(rows, key=lambda row: row.get("tied_up_value") or 0, reverse=True)
+    for row in ranked[:2]:
+        items.append(_item(
+            f"Giá trị tồn đọng lớn nhất: {row['title']}", "get_weeding_suggestions", "tied_up_value",
+            row.get("tied_up_value"), "đ",
+            description=f"{row.get('severity', 'N/A')} — đề xuất {row.get('suggested_action', 'N/A')}",
+        ))
+    return items
+
+
 _EXTRACTORS = {
     "get_dashboard_kpis": (_evidence_dashboard_kpis, dict),
     "get_top_books": (_evidence_top_books, list),
@@ -132,6 +217,11 @@ _EXTRACTORS = {
     "get_warehouse_stock_risk": (_evidence_warehouse_stock_risk, list),
     "get_reorder_suggestions": (_evidence_reorder_suggestions, dict),
     "search_books": (_evidence_search_books, dict),
+    "get_borrow_trends": (_evidence_borrow_trends, list),
+    "get_fine_summary": (_evidence_fine_summary, dict),
+    "get_reservation_funnel": (_evidence_reservation_funnel, dict),
+    "get_aging_inventory": (_evidence_aging_inventory, dict),
+    "get_weeding_suggestions": (_evidence_weeding_suggestions, dict),
 }
 
 
