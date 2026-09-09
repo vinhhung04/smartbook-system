@@ -114,6 +114,7 @@ services:
       - PORT=3005
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - GATEWAY_URL=http://api-gateway:3000
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
@@ -199,6 +200,24 @@ services:
       borrow-service:
         condition: service_healthy
 
+  # Synthetic 24-month loan/reservation history (Area A risk-prediction models
+  # need hundreds of labelled examples; the hand-written demo-seed-borrow
+  # fixture above has ~8). Deterministic, idempotent - see
+  # services/borrow-service/prisma/seed-history.js. Run after demo-seed-borrow.
+  demo-seed-borrow-history:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: services/borrow-service/Dockerfile
+    command: node prisma/seed-history.js
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+    depends_on:
+      borrow-service:
+        condition: service_healthy
+
   ai-service:
     profiles: ["ai"]
     build: ./services/ai-service
@@ -218,6 +237,10 @@ services:
       # llava là vision model riêng, không phù hợp cho tóm tắt văn bản
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
+      # "ollama" (default, offline) or "anthropic" (opt-in, for an eval A/B comparison
+      # against the local model - requires ANTHROPIC_API_KEY below).
+      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-ollama}
+      - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
       # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
       # from ASSISTANT_MODEL/SUMMARY_MODEL since it is a dedicated embedding model, not a chat model.
       - FAQ_EMBED_MODEL=${FAQ_EMBED_MODEL:-nomic-embed-text}
@@ -229,7 +252,7 @@ services:
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
       # Anthropic Claude LLM — nếu không set, sẽ fallback về Ollama local
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
       - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-20}

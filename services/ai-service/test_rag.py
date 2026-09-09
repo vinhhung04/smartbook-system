@@ -10,7 +10,7 @@ from intent import (
     detect_intent,
     normalize_text,
 )
-from rag import build_rag_context
+from rag import build_rag_context, merge_grounding_context, unverified_numbers, verify_numeric_grounding
 from agent_planner import _wants_action, _is_all_warehouses_intent
 
 
@@ -149,6 +149,98 @@ class RagContextTests(unittest.TestCase):
         self.assertIn("[RAG CONTEXT]", context)
         self.assertIn("Catalog Books", context)
         self.assertIn("error:500", context)
+
+
+class MergeGroundingContextTests(unittest.TestCase):
+    """merge_grounding_context is what lets a CUSTOMER/SUPPLIER reply get a
+    real numeric-grounding check: ANALYTICS_BLOCKED_ROLES zeroes out
+    `retrieval` for them, but their own loans/fines/tasks still reach the
+    prompt via `personal` (build_user_personal_context) - without merging,
+    verify_numeric_grounding never sees that data at all."""
+
+    def test_retrieval_with_no_ok_source_plus_personal_with_one_is_no_longer_ungroundable(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [], "warnings": []}
+        personal = {"summary": "Bạn có 2 khoản vay đang mở.", "sources": [{"name": "my-loans", "status": "ok"}]}
+
+        # Before merging: no "ok" source anywhere, so grounding gives up early.
+        self.assertIsNone(verify_numeric_grounding("Bạn có 2 khoản vay.", retrieval))
+
+        merged = merge_grounding_context(retrieval, personal)
+        # After merging: an "ok" source exists, so the check actually runs -
+        # and the number 2 is present in personal's summary, so it is NOT flagged.
+        self.assertIsNone(verify_numeric_grounding("Bạn có 2 khoản vay.", merged))
+
+    def test_a_number_present_only_in_personal_summary_is_not_flagged(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        personal = {"summary": "Tổng tiền phạt của bạn là 50000 đồng.", "sources": [{"name": "my-fines", "status": "ok"}]}
+        merged = merge_grounding_context(retrieval, personal)
+        self.assertIsNone(verify_numeric_grounding("Bạn còn nợ 50000 đồng tiền phạt.", merged))
+
+    def test_a_number_in_neither_source_is_still_flagged(self):
+        retrieval = {"summary": "", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        personal = {"summary": "Bạn có 2 khoản vay.", "sources": [{"name": "my-loans", "status": "ok"}]}
+        merged = merge_grounding_context(retrieval, personal)
+        warning = verify_numeric_grounding("Bạn có 999 khoản vay.", merged)
+        self.assertIsNotNone(warning)
+
+    def test_no_personal_context_leaves_retrieval_unchanged(self):
+        retrieval = {"summary": "s", "raw": {}, "sources": [{"name": "sys", "status": "ok"}]}
+        self.assertEqual(merge_grounding_context(retrieval, None), retrieval)
+        self.assertEqual(merge_grounding_context(retrieval, {"summary": "", "sources": []}), retrieval)
+
+
+class VerifyNumericGroundingTests(unittest.TestCase):
+    """verify_numeric_grounding used to do digit-substring matching over a
+    9000-char-truncated JSON dump; it now does value-and-tolerance matching
+    over the full raw payload (number_grounding.py), shared with
+    eval/scoring.py's stricter hallucinated_numbers check."""
+
+    def test_a_value_present_in_raw_json_is_not_flagged_even_reformatted(self):
+        retrieval = {"summary": "", "raw": {"total_overdue_loans": 27}, "sources": [{"status": "ok"}]}
+        # "27" in the reply vs 27 (int) in raw JSON - value match, not string match.
+        self.assertIsNone(verify_numeric_grounding("Có 27 phiếu quá hạn.", retrieval))
+
+    def test_a_decimal_value_within_tolerance_is_not_flagged(self):
+        retrieval = {"summary": "", "raw": {"average_overdue_days": 5.2}, "sources": [{"status": "ok"}]}
+        self.assertIsNone(verify_numeric_grounding("Trung bình quá hạn 5,2 ngày.", retrieval))
+
+    def test_a_value_absent_from_raw_json_is_flagged(self):
+        retrieval = {"summary": "", "raw": {"total_overdue_loans": 27}, "sources": [{"status": "ok"}]}
+        warning = verify_numeric_grounding("Có 9999 phiếu quá hạn.", retrieval)
+        self.assertIsNotNone(warning)
+        self.assertIn("9999", warning)
+
+    def test_a_number_echoed_from_the_question_is_not_flagged(self):
+        # Regression: assistant_answers_20260908_180847.md flagged "30" and "7"
+        # purely because the model repeated the time window the user asked
+        # about ("30 ngày qua") - not a fabrication.
+        retrieval = {"summary": "", "raw": {"trend": "tăng nhẹ"}, "sources": [{"status": "ok"}]}
+        question = "Xu hướng mượn trả sách 30 ngày qua như thế nào?"
+        self.assertIsNone(
+            verify_numeric_grounding("Trong 30 ngày qua, xu hướng mượn trả tăng nhẹ.", retrieval, question)
+        )
+
+    def test_question_echo_exclusion_does_not_mask_other_bad_numbers(self):
+        retrieval = {"summary": "", "raw": {"trend": "tăng nhẹ"}, "sources": [{"status": "ok"}]}
+        question = "Xu hướng mượn trả sách 30 ngày qua như thế nào?"
+        warning = verify_numeric_grounding("Trong 30 ngày qua, có 9999 lượt mượn mới.", retrieval, question)
+        self.assertIsNotNone(warning)
+        self.assertIn("9999", warning)
+
+    def test_unverified_numbers_is_usable_directly_for_a_correction_message(self):
+        retrieval = {"summary": "", "raw": {"total_paid": 500000}, "sources": [{"status": "ok"}]}
+        unverified = unverified_numbers("Bạn đã trả 500000 và còn nợ 999999.", retrieval)
+        self.assertEqual(unverified, [999999.0])
+
+    def test_a_vietnamese_formatted_number_is_not_flagged_via_its_own_english_misreading(self):
+        # Found live while testing the grounding retry: "500.000" (VN 500,000)
+        # also parses as 500.0 under the EN convention. The corrected answer
+        # after a retry wrote "500.000 VND" and was incorrectly re-flagged
+        # because that second, unintended reading matched nothing.
+        retrieval = {"summary": "", "raw": {"total_paid": 500000}, "sources": [{"status": "ok"}]}
+        self.assertIsNone(
+            verify_numeric_grounding("Tổng tiền phạt đã thu được là 500.000 VND.", retrieval)
+        )
 
 
 class AnalyticsBlockExemptionTests(unittest.TestCase):

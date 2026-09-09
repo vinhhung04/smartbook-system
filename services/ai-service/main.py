@@ -9,13 +9,14 @@ import json
 import re
 import logging
 import asyncio
+import functools
 import inspect
 import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
 from html.parser import HTMLParser
-from cache import assistant_response_cache, response_cache, rate_limiter, summary_cache
+from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -37,6 +38,7 @@ from rag import (
     build_no_data_context,
     build_rag_context,
     ensure_source_line,
+    merge_grounding_context,
     verify_numeric_grounding,
 )
 from retrieval import retrieve_context
@@ -74,6 +76,14 @@ from db import init_db, get_session
 from db_models import PendingActionRow
 from evidence import extract_evidence
 import conversation_store
+from assistant_loop import (
+    TOOL_LOOP_EXHAUSTED_MESSAGE,
+    execute_tool_round,
+    retry_once_if_ungrounded,
+    seed_fast_path,
+)
+from llm_provider import get_llm_provider
+from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 
@@ -139,13 +149,19 @@ AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATI
 # Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+# claude-sonnet-5 is the current Sonnet generation (cheaper and stronger than the
+# previous claude-sonnet-4-6 default this used to be — $2/$10 per MTok vs $3/$15).
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
 # Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
+# Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
+# loop - "ollama" (default, fully offline) or "anthropic" (opt-in, for an eval A/B comparison
+# against the local model; requires ANTHROPIC_API_KEY). See llm_provider.py.
+ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "ollama").strip().lower()
 # Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
 # partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
 # desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
@@ -158,6 +174,12 @@ ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS",
 # recommendation, not hold the page open.
 RECOMMENDATION_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDATION_TIMEOUT_SECONDS", "10"))
 ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
+# num_predict is a cap, not a target: a tool-selection round stops at the
+# tool call regardless of this value, so one constant costs nothing on those
+# rounds. The previous 200-token cap on round 0 was meant for that case but
+# also silently truncated a correct direct answer (no tool needed) at 200
+# tokens - the one case where the model is actually generating prose there.
+ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
 
 
 @app.on_event("startup")
@@ -2502,8 +2524,23 @@ def _build_source_statuses(result: dict, started_at: float) -> dict:
     }
 
 
+def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
+    """None for an ISBN that fails validation - never cache those, let normal
+    error handling run every time."""
+    isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
+    if error or not isbn13:
+        return None
+    return f"{isbn13}:{bool(req.generateVietnameseSummary)}"
+
+
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    cache_key = _isbn_lookup_cache_key(req)
+    if cache_key:
+        cached = isbn_lookup_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
@@ -2519,6 +2556,9 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         result["categories"] = result["categories"] or []
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+
+    if cache_key and result.get("found"):
+        isbn_lookup_cache.set(cache_key, result)
     return result
 
 
@@ -3102,7 +3142,9 @@ ASSISTANT_SYSTEM_PROMPT = (
     "forecast, priority, reason...), không nói chung chung.\n"
     "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (thông tin cá nhân khách hàng, thời tiết, chứng khoán, "
     "tin tức...), từ chối lịch sự, ngắn gọn, KHÔNG bịa câu trả lời và KHÔNG gọi tool nào.\n"
-    "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n\n"
+    "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n"
+    "- Nếu câu hỏi chứa NHIỀU yêu cầu dữ liệu khác nhau, hãy gọi TẤT CẢ tool cần thiết TRONG CÙNG MỘT LƯỢT.\n"
+    "- Ví dụ: \"KPI hiện tại và các khoản quá hạn\" → gọi đồng thời get_dashboard_kpis VÀ get_overdue_summary.\n\n"
 
     "## Kiến thức nghiệp vụ\n"
     "- Reservation: PENDING → CONFIRMED → READY_FOR_PICKUP → CONVERTED_TO_LOAN / CANCELLED / EXPIRED.\n"
@@ -3112,7 +3154,14 @@ ASSISTANT_SYSTEM_PROMPT = (
 
     "## Trình bày\n"
     "- Luôn trả lời tiếng Việt, ngắn gọn, chuyên nghiệp, đi thẳng khuyến nghị.\n"
-    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n"
+    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n\n"
+
+    "## Quy tắc số liệu bắt buộc\n"
+    "- Đơn vị tiền tệ LUÔN là đồng Việt Nam, viết dạng \"1.234.567 ₫\". TUYỆT ĐỐI không dùng \"$\" hay bất kỳ "
+    "ký hiệu tiền tệ nào khác.\n"
+    "- Chép số liệu NGUYÊN VẸN từ kết quả tool. Không tự quy đổi đơn vị, không nhân/chia, không làm tròn lại.\n"
+    "- KHÔNG BAO GIỜ mô tả cấu trúc dữ liệu, không liệt kê tên trường JSON, không viết code. Chỉ trả lời "
+    "thẳng câu hỏi bằng tiếng Việt.\n"
 )
 
 
@@ -3216,6 +3265,10 @@ class AssistantResponse(BaseModel):
     pending_action: dict | None = None
     evidence: list[dict] = []
     retrieval_warnings: list[str] = []
+    # Per-round {provider, model, latency_ms, prompt_tokens, completion_tokens,
+    # tool_call_count} for every LLM call this turn made - see llm_provider.py.
+    # Additive/optional so existing clients that don't read it are unaffected.
+    debug: dict | None = None
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3459,6 +3512,11 @@ async def chat(request: Request, req: ChatRequest):
     else:
         context_block = build_no_data_context(intent_info)
 
+    # CUSTOMER/SUPPLIER get `retrieval` zeroed out above, but their own data
+    # still reaches the prompt via `personal` - merge both so citation and
+    # numeric grounding see it too, not just system-wide analytics.
+    grounding_context = merge_grounding_context(retrieval, personal)
+
     metadata = {
         "intent": intent_info.get("intent"),
         "context_sources": retrieval.get("sources") or [],
@@ -3539,7 +3597,7 @@ async def chat(request: Request, req: ChatRequest):
     reply, anthropic_ok = await _chat_with_anthropic(messages)
     if anthropic_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, retrieval)
+        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
@@ -3553,7 +3611,7 @@ async def chat(request: Request, req: ChatRequest):
     reply, ollama_ok = await _chat_with_ollama(messages)
     if ollama_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, retrieval)
+        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
@@ -3593,6 +3651,29 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
     if tool_fn is None:
         return name, {"error": f"Unknown tool: {name}"}
     return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+
+
+@functools.lru_cache(maxsize=1)
+def _get_assistant_provider():
+    """Cached: the same provider instance (and, for Anthropic, its underlying
+    HTTP client) is reused across requests instead of rebuilt per-request."""
+    return get_llm_provider(
+        ASSISTANT_PROVIDER,
+        ollama_host=OLLAMA_HOST,
+        ollama_model=ASSISTANT_MODEL,
+        anthropic_api_key=ANTHROPIC_API_KEY,
+        anthropic_base_url=ANTHROPIC_BASE_URL,
+        anthropic_model=ANTHROPIC_MODEL,
+    )
+
+
+def _render_tool_result(name: str, tool_result: dict) -> str:
+    """Text placed in the "tool" role message sent back to the model for one
+    tool call - the single seam both /assistant and /assistant/stream's tool
+    loop call into, instead of the two independent json.dumps() call sites
+    they used to have. See tool_context.py for why this compacts the payload
+    instead of dumping it whole."""
+    return _compact_tool_result(name, tool_result)
 
 
 _FAST_PATH_INTENT_TOOL = {
@@ -3646,6 +3727,68 @@ def _fast_path_tool(message: str) -> tuple[str, dict] | None:
     return tool_name, _fast_path_tool_args(tool_name, rule_result)
 
 
+# Splits a compound question into clauses so each can be intent-classified on
+# its own - "va"/"dong thoi" and punctuation, matched on normalize_text()
+# output (accent-stripped, lowercased) so accented "và"/"đồng thời" match too.
+_ASSISTANT_CLAUSE_SPLIT_RE = re.compile(r"[,;:]|\bva\b|\bdong thoi\b")
+
+
+def _multi_intent_tools(message: str) -> list[tuple[str, dict]]:
+    """Detects a compound question needing MULTIPLE tools in one round, e.g.
+    "KPI hiện tại và các khoản quá hạn cần xử lý gấp" -> both
+    get_dashboard_kpis and get_overdue_summary. Reuses detect_intent()
+    unchanged, per clause, rather than duplicating its keyword tables.
+
+    Returns [] unless at least two clauses each independently clear the
+    fast-path confidence bar for a DIFFERENT tool - a single-tool result here
+    is not a compound question, just noise from splitting a one-idea sentence
+    on a comma, and must fall through to the unchanged single-tool path."""
+    normalized = normalize_text(message)
+    clauses = [c.strip() for c in _ASSISTANT_CLAUSE_SPLIT_RE.split(normalized) if len(c.strip().split()) >= 3]
+    if len(clauses) < 2:
+        return []
+
+    picks: list[tuple[str, dict]] = []
+    seen_tools: set[str] = set()
+    for clause in clauses:
+        rule_result = detect_intent(clause)
+        tool_name = _FAST_PATH_INTENT_TOOL.get(rule_result.get("intent"))
+        if tool_name is None or tool_name in seen_tools:
+            continue
+        min_confidence = _FAST_PATH_MIN_CONFIDENCE.get(rule_result.get("intent"), _FAST_PATH_DEFAULT_MIN_CONFIDENCE)
+        if rule_result.get("confidence", 0.35) < min_confidence:
+            continue
+        picks.append((tool_name, _fast_path_tool_args(tool_name, rule_result)))
+        seen_tools.add(tool_name)
+
+    return picks if len(picks) >= 2 else []
+
+
+def _fast_path_tools(message: str) -> list[tuple[str, dict]]:
+    """Entry point for /assistant's rule-based fast path. Returns a list of
+    (tool_name, tool_args) to seed round 0 with, or [] to fall through to
+    normal LLM-driven tool selection.
+
+    - An action-surface message ("tạo phiếu nhập...") never takes the fast
+      path at all - it must reach the LLM + agent-planning layer.
+    - A compound question that clears _multi_intent_tools returns ALL of its
+      tools.
+    - Otherwise falls through to the original single-tool _fast_path_tool,
+      byte-for-byte unchanged - a single-tool question behaves exactly as
+      it did before this function existed.
+    """
+    normalized = normalize_text(message)
+    if _has_action_surface(normalized):
+        return []
+
+    multi = _multi_intent_tools(message)
+    if multi:
+        return multi
+
+    single = _fast_path_tool(message)
+    return [single] if single else []
+
+
 def _fast_path_tool_args(tool_name: str, rule_result: dict) -> dict:
     """Only use fields detect_intent() already extracted — never invent limit/priority/
     days, so the tool call behaves exactly like an LLM-driven call with no arguments."""
@@ -3668,19 +3811,24 @@ def _fast_path_tool_args(tool_name: str, rule_result: dict) -> dict:
     return {}
 
 
-async def _run_fast_path_tool(message: str, auth_header: str | None) -> dict | None:
-    """If the rule classifier is confident, execute that tool right away — returns the
-    pieces needed to seed the tool-calling loop as if round 1 already happened, or None
-    to fall through to the unchanged LLM-driven tool selection."""
-    fast_pick = _fast_path_tool(message)
-    if fast_pick is None:
-        return None
-    tool_name, tool_args = fast_pick
-    tool_fn = TOOL_FUNCTIONS.get(tool_name)
-    if tool_fn is None:
-        return None
-    tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, tool_args))
-    return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
+async def _run_fast_path_tool(message: str, auth_header: str | None) -> list[dict]:
+    """If the rule classifier is confident (see _fast_path_tools), executes every
+    picked tool concurrently and returns the pieces needed to seed the tool-calling
+    loop as if round 1 already happened - one entry per tool, in pick order.
+    Empty list means fall through to the unchanged LLM-driven tool selection."""
+    picks = _fast_path_tools(message)
+    if not picks:
+        return []
+
+    async def _run_one(tool_name: str, tool_args: dict) -> dict | None:
+        tool_fn = TOOL_FUNCTIONS.get(tool_name)
+        if tool_fn is None:
+            return None
+        tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, tool_args))
+        return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
+
+    results = await asyncio.gather(*(_run_one(name, args) for name, args in picks))
+    return [result for result in results if result is not None]
 
 
 def _assistant_cache_key(conversation_id: str, message: str) -> str:
@@ -3691,14 +3839,17 @@ def _assistant_cache_key(conversation_id: str, message: str) -> str:
     return f"assistant:{conversation_id}:{normalize_text(message.strip())[:200]}"
 
 
-def _grounding_check(answer: str, collected_data: dict) -> str | None:
+def _grounding_check(answer: str, collected_data: dict, question: str | None = None) -> str | None:
     """Adapt /assistant's flat collected_data (tool-name -> raw result) into the
     {summary, raw, sources} envelope rag.verify_numeric_grounding() expects. A single
     sources=[{"status": "ok"}] sentinel satisfies its "was there any real data at all"
-    gate — that function never reads source name/endpoint, only status."""
+    gate — that function never reads source name/endpoint, only status. `question` lets
+    verify_numeric_grounding exclude numbers the user's own question supplied."""
     if not collected_data:
         return None
-    return verify_numeric_grounding(answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]})
+    return verify_numeric_grounding(
+        answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]}, question,
+    )
 
 
 async def _build_assistant_pending_action(
@@ -3802,12 +3953,37 @@ def _collect_retrieval_warnings(collected_data: dict) -> list[str]:
 
 async def _load_conversation_messages(conversation) -> list[dict]:
     """Replay the last few human-readable turns (user/assistant text only — not tool
-    calls/results, to keep the prompt short) as context for the next round."""
+    calls/results, to keep the prompt short) as context for the next round.
+
+    Callers MUST call this before persisting the current turn's user message
+    (conversation_store.append_message) - otherwise that message is already the
+    last row in the DB and comes back here too, duplicating it in the prompt
+    once _assistant_prompt_messages appends it again."""
     recent = await conversation_store.get_recent_messages(conversation.id)
     return [
         {"role": m.role, "content": m.content or ""}
         for m in recent
         if m.role in ("user", "assistant") and m.content
+    ]
+
+
+def _assistant_prompt_messages(history: list[dict], message_text: str) -> list[dict]:
+    """System prompt + prior turns + the current question, exactly once.
+
+    Callers should load `history` before persisting the current turn (see
+    _load_conversation_messages), so it should never already end with this
+    same message. As a defense-in-depth safety net against that ordering
+    mistake creeping back in, a trailing history entry that is a user message
+    with this exact content is dropped: in normal conversation flow the
+    assistant always replies before the next user turn, so two consecutive
+    user messages with identical content is never a legitimate case - only
+    the accidental-duplicate one."""
+    if history and history[-1].get("role") == "user" and history[-1].get("content") == message_text:
+        history = history[:-1]
+    return [
+        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        *history,
+        {"role": "user", "content": message_text},
     ]
 
 
@@ -3832,12 +4008,12 @@ async def assistant(request: Request, req: AssistantRequest):
         req.conversation_id, user_ctx, first_message=message_text
     )
     conversation_id_str = str(conversation.conversation_id)
-    await conversation_store.append_message(conversation.id, role="user", content=message_text)
 
     cache_key = _assistant_cache_key(conversation_id_str, message_text)
     cached = assistant_response_cache.get(cache_key)
     if cached is not None:
         evidence = cached.get("evidence") or _collect_evidence(cached["data"])
+        await conversation_store.append_message(conversation.id, role="user", content=message_text)
         await conversation_store.append_message(
             conversation.id,
             role="assistant",
@@ -3849,72 +4025,38 @@ async def assistant(request: Request, req: AssistantRequest):
         return AssistantResponse(**{**cached, "evidence": evidence, "conversation_id": conversation_id_str})
 
     history = await _load_conversation_messages(conversation)
-    messages: list[dict] = [
-        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
-        *history,
-        {"role": "user", "content": message_text},
-    ]
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+    messages: list[dict] = _assistant_prompt_messages(history, message_text)
 
-    tools_used: list[dict] = []
-    collected_data: dict = {}
     answer = ""
     answered_normally = False
+    call_usage: list[dict] = []
 
-    fast = await _run_fast_path_tool(message_text, auth_header)
-    start_round = 0
-    if fast is not None:
-        tools_used.append({"name": fast["tool_name"], "arguments": fast["tool_args"]})
-        collected_data[fast["tool_name"]] = fast["tool_result"]
-        messages.append({
-            "role": "assistant", "content": "",
-            "tool_calls": [{"function": {"name": fast["tool_name"], "arguments": fast["tool_args"]}}],
-        })
-        messages.append({
-            "role": "tool", "tool_name": fast["tool_name"],
-            "content": json.dumps(fast["tool_result"], ensure_ascii=False),
-        })
-        start_round = 1
+    tools_used, collected_data, start_round = await seed_fast_path(
+        message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+    )
 
-    client = ollama.Client(host=OLLAMA_HOST)
+    provider = _get_assistant_provider()
     try:
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
-            predict_cap = 200 if (_round == start_round and start_round == 0) else 700
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.chat,
-                    model=ASSISTANT_MODEL,
-                    messages=messages,
-                    tools=ANALYTICS_TOOLS,
-                    options={"temperature": 0.2, "num_predict": predict_cap},
-                ),
-                timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+            result = await provider.chat(
+                messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
             )
-            message = response["message"]
-            messages.append(message)
-            tool_calls = message.get("tool_calls") or []
+            call_usage.append(result.usage.as_dict())
+            messages.append(result.assistant_message)
+            tool_calls = result.tool_calls
 
             if not tool_calls:
-                answer = (message.get("content") or "").strip()
+                answer = result.text
                 answered_normally = True
                 break
 
-            calls = [
-                (call["function"]["name"], dict(call["function"]["arguments"] or {}))
-                for call in tool_calls
-            ]
-            tools_used.extend({"name": name, "arguments": args} for name, args in calls)
-            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently. gather()
-            # preserves input order, so results still line up with `calls` for pairing.
-            results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
-            for name, tool_result in results:
-                collected_data[name] = tool_result
-                messages.append({
-                    "role": "tool",
-                    "tool_name": name,
-                    "content": json.dumps(tool_result, ensure_ascii=False),
-                })
+            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently.
+            await execute_tool_round(
+                tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
+            )
         else:
-            answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+            answer = TOOL_LOOP_EXHAUSTED_MESSAGE
     except Exception:
         logger.exception("Assistant tool-calling failed")
         raise HTTPException(
@@ -3925,7 +4067,16 @@ async def assistant(request: Request, req: AssistantRequest):
     if not answer:
         answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
-    grounding_warning = _grounding_check(answer, collected_data)
+    grounding_warning = _grounding_check(answer, collected_data, message_text)
+    if grounding_warning and answered_normally:
+        answer, retry_usage = await retry_once_if_ungrounded(
+            messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
+            ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+        )
+        if retry_usage:
+            call_usage.append(retry_usage)
+        grounding_warning = _grounding_check(answer, collected_data, message_text)
+
     evidence = _collect_evidence(collected_data)
     retrieval_warnings = _collect_retrieval_warnings(collected_data)
 
@@ -3963,24 +4114,12 @@ async def assistant(request: Request, req: AssistantRequest):
         pending_action=pending_action_data,
         evidence=evidence,
         retrieval_warnings=retrieval_warnings,
+        debug={"llm_calls": call_usage},
     )
 
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-async def _iter_with_timeout(async_iterable, timeout: float):
-    """Wrap an async iterator so each individual `__anext__()` call is time-bounded,
-    rather than the whole stream. Long-running-but-progressing generation (normal for
-    this CPU-only model) keeps going; a genuine stall between chunks still raises."""
-    iterator = async_iterable.__aiter__()
-    while True:
-        try:
-            item = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
-        except StopAsyncIteration:
-            return
-        yield item
 
 
 @app.post("/assistant/stream")
@@ -4010,7 +4149,6 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         req.conversation_id, user_ctx, first_message=message_text
     )
     conversation_id_str = str(conversation.conversation_id)
-    await conversation_store.append_message(conversation.id, role="user", content=message_text)
 
     cache_key = _assistant_cache_key(conversation_id_str, message_text)
     cached = assistant_response_cache.get(cache_key)
@@ -4019,6 +4157,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
         async def cached_event_generator():
             yield _sse("token", {"text": cached["answer"]})
+            await conversation_store.append_message(conversation.id, role="user", content=message_text)
             await conversation_store.append_message(
                 conversation.id,
                 role="assistant",
@@ -4040,87 +4179,48 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
 
     history = await _load_conversation_messages(conversation)
-    messages: list[dict] = [
-        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
-        *history,
-        {"role": "user", "content": message_text},
-    ]
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+    messages: list[dict] = _assistant_prompt_messages(history, message_text)
 
     async def event_generator():
-        tools_used: list[dict] = []
-        collected_data: dict = {}
         answer = ""
         answered_normally = False
-        client = ollama.AsyncClient(host=OLLAMA_HOST)
+        call_usage: list[dict] = []
+        provider = _get_assistant_provider()
 
-        fast = await _run_fast_path_tool(message_text, auth_header)
-        start_round = 0
-        if fast is not None:
-            tools_used.append({"name": fast["tool_name"], "arguments": fast["tool_args"]})
-            collected_data[fast["tool_name"]] = fast["tool_result"]
-            messages.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{"function": {"name": fast["tool_name"], "arguments": fast["tool_args"]}}],
-            })
-            messages.append({
-                "role": "tool", "tool_name": fast["tool_name"],
-                "content": json.dumps(fast["tool_result"], ensure_ascii=False),
-            })
-            start_round = 1
+        tools_used, collected_data, start_round = await seed_fast_path(
+            message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+        )
 
         try:
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
-                predict_cap = 200 if (_round == start_round and start_round == 0) else 700
-                stream = await client.chat(
-                    model=ASSISTANT_MODEL,
-                    messages=messages,
-                    tools=ANALYTICS_TOOLS,
-                    stream=True,
-                    options={"temperature": 0.2, "num_predict": predict_cap},
-                )
+                final_chunk = None
+                async for chunk in provider.chat_stream(
+                    messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                ):
+                    if chunk.delta:
+                        answer += chunk.delta
+                        yield _sse("token", {"text": chunk.delta})
+                    if chunk.done:
+                        final_chunk = chunk
 
-                last_message = None
-                # Ollama sends the parsed tool call on the chunk that decides it, then a
-                # separate final "done" sentinel chunk whose own tool_calls is always None —
-                # naively keeping only the *last* chunk's tool_calls silently drops the call.
-                accumulated_tool_calls = None
-                async for chunk in _iter_with_timeout(stream, ASSISTANT_LLM_TIMEOUT_SECONDS):
-                    last_message = chunk.message
-                    if chunk.message.tool_calls:
-                        accumulated_tool_calls = chunk.message.tool_calls
-                    delta = chunk.message.content or ""
-                    if delta:
-                        answer += delta
-                        yield _sse("token", {"text": delta})
-
-                if last_message is None:
+                if final_chunk is None or final_chunk.assistant_message is None:
                     break
 
-                tool_calls = accumulated_tool_calls or []
-                messages.append(
-                    {"role": "assistant", "content": "", "tool_calls": tool_calls} if tool_calls else last_message
-                )
+                call_usage.append(final_chunk.usage.as_dict())
+                messages.append(final_chunk.assistant_message)
+                tool_calls = final_chunk.tool_calls
 
                 if not tool_calls:
                     answered_normally = True
                     break
 
-                calls = [
-                    (call["function"]["name"], dict(call["function"]["arguments"] or {}))
-                    for call in tool_calls
-                ]
-                tools_used.extend({"name": name, "arguments": args} for name, args in calls)
-                results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
-                for name, tool_result in results:
-                    collected_data[name] = tool_result
-                    messages.append({
-                        "role": "tool",
-                        "tool_name": name,
-                        "content": json.dumps(tool_result, ensure_ascii=False),
-                    })
+                await execute_tool_round(
+                    tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
+                )
             else:
                 if not answer:
-                    answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+                    answer = TOOL_LOOP_EXHAUSTED_MESSAGE
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
@@ -4141,7 +4241,16 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         if not answer:
             answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
-        grounding_warning = _grounding_check(answer, collected_data)
+        grounding_warning = _grounding_check(answer, collected_data, message_text)
+        if grounding_warning and answered_normally:
+            answer, retry_usage = await retry_once_if_ungrounded(
+                messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
+                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            )
+            if retry_usage:
+                call_usage.append(retry_usage)
+            grounding_warning = _grounding_check(answer, collected_data, message_text)
+
         evidence = _collect_evidence(collected_data)
         retrieval_warnings = _collect_retrieval_warnings(collected_data)
 
@@ -4179,6 +4288,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             "pending_action": pending_action_data,
             "evidence": evidence,
             "retrieval_warnings": retrieval_warnings,
+            "debug": {"llm_calls": call_usage},
         })
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -4244,6 +4354,9 @@ async def chat_stream(request: Request, req: ChatRequest):
         context_block = build_rag_context(intent_info, retrieval)
     else:
         context_block = build_no_data_context(intent_info)
+
+    # See the identical comment in /chat above.
+    grounding_context = merge_grounding_context(retrieval, personal)
 
     metadata = {
         "intent": intent_info.get("intent"),
@@ -4340,7 +4453,7 @@ async def chat_stream(request: Request, req: ChatRequest):
 
         reply_with_sources = ensure_source_line(full_text, retrieval.get("sources") or [])
         grounding_warning = (
-            verify_numeric_grounding(reply_with_sources, retrieval) if provider != "fallback" else None
+            verify_numeric_grounding(reply_with_sources, grounding_context) if provider != "fallback" else None
         )
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
 

@@ -127,3 +127,12 @@ summary_cache = SummaryCache(max_size=200, ttl_seconds=3600)
 # unlike book summaries which summary_cache's 1h TTL is fine for).
 assistant_response_cache = SummaryCache(max_size=200, ttl_seconds=60)
 
+# ── ISBN Lookup Cache ────────────────────────────────────────────────────────────
+
+# Long TTL: once published, a book's title/authors/publisher/year practically
+# never change, and this is the most expensive, most rate-limited call in the
+# service (Google Books/Open Library/marketplace scraping all hit per lookup).
+# Only "found" results are cached (see main.py) - a not-found result may just be
+# a transient provider outage or rate limit, so it is always retried.
+isbn_lookup_cache = SummaryCache(max_size=1000, ttl_seconds=7 * 24 * 3600)
+

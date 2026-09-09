@@ -1,4 +1,6 @@
+import evidence
 from evidence import extract_evidence
+import assistant_tools
 
 
 def test_dashboard_kpis_extracts_key_metrics():
@@ -82,6 +84,78 @@ def test_search_books_extracts_results():
     items = extract_evidence("search_books", result)
     assert items[0]["label"] == "Sách D"
     assert items[0]["value"] == 4
+
+
+def test_borrow_trends_extracts_totals_and_peak_day():
+    result = [
+        {"date": "2026-09-01", "loans": 5, "returns": 3, "reservations": 1},
+        {"date": "2026-09-02", "loans": 12, "returns": 4, "reservations": 2},
+    ]
+    items = extract_evidence("get_borrow_trends", result)
+    metrics = {item["metric"]: item["value"] for item in items}
+    assert metrics["total_loans"] == 17
+    assert metrics["total_returns"] == 7
+    assert any(item["label"].startswith("Ngày cao điểm: 2026-09-02") for item in items)
+
+
+def test_borrow_trends_empty_when_no_valid_rows():
+    assert extract_evidence("get_borrow_trends", [{"not_a_date_row": True}]) == []
+
+
+def test_fine_summary_extracts_totals_and_largest_type():
+    result = {
+        "total_unpaid": 500000, "total_paid": 200000,
+        "by_type": [{"fine_type": "OVERDUE", "amount": 500000, "count": 10}, {"fine_type": "LOST", "amount": 100000, "count": 1}],
+    }
+    items = extract_evidence("get_fine_summary", result)
+    metrics = {item["metric"]: item["value"] for item in items}
+    assert metrics["total_unpaid"] == 500000
+    assert any(item["label"].startswith("Loại phạt lớn nhất: OVERDUE") for item in items)
+
+
+def test_reservation_funnel_extracts_core_metrics():
+    result = {"total": 100, "converted_to_loan": 68, "conversion_rate": 68.5}
+    items = extract_evidence("get_reservation_funnel", result)
+    metrics = {item["metric"]: item["value"] for item in items}
+    assert metrics["total"] == 100
+    assert metrics["converted_to_loan"] == 68
+    assert metrics["conversion_rate"] == 68.5
+
+
+def test_aging_inventory_extracts_count_and_oldest():
+    result = {"items": [
+        {"title": "Sách cũ", "days_since_last_activity": 200, "warehouse_name": "Kho A"},
+        {"title": "Sách mới hơn", "days_since_last_activity": 100, "warehouse_name": "Kho B"},
+    ]}
+    items = extract_evidence("get_aging_inventory", result)
+    assert any(item["metric"] == "count" and item["value"] == 2 for item in items)
+    assert items[1]["label"].startswith("Tồn lâu nhất: Sách cũ")
+
+
+def test_aging_inventory_empty_when_no_items():
+    assert extract_evidence("get_aging_inventory", {"items": []}) == []
+
+
+def test_weeding_suggestions_extracts_summary_and_top_value():
+    result = {
+        "summary": {"total_items": 5, "total_tied_up_value": 1000000},
+        "items": [
+            {"title": "Sách A", "tied_up_value": 700000, "severity": "CRITICAL", "suggested_action": "LIQUIDATE"},
+            {"title": "Sách B", "tied_up_value": 300000, "severity": "HIGH", "suggested_action": "REDISTRIBUTE"},
+        ],
+    }
+    items = extract_evidence("get_weeding_suggestions", result)
+    metrics = {item["metric"]: item["value"] for item in items}
+    assert metrics["total_items"] == 5
+    assert metrics["total_tied_up_value"] == 1000000
+    assert any(item["label"].startswith("Giá trị tồn đọng lớn nhất: Sách A") for item in items)
+
+
+def test_every_tool_has_an_evidence_extractor():
+    # Guards against a future tool being added to assistant_tools without a
+    # matching evidence extractor - previously only 6 of 11 tools had one,
+    # and nothing would have caught it if a 12th tool shipped the same way.
+    assert set(evidence._EXTRACTORS.keys()) == set(assistant_tools.TOOL_FUNCTIONS.keys())
 
 
 def test_unknown_tool_returns_empty():

@@ -8,7 +8,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
-import { analyticsService, type AgingInventoryItem, type ReorderSuggestionItem, type ReorderSuggestionsData } from '@/services/analytics';
+import { analyticsService, type WeedingSuggestionItem, type ReorderSuggestionItem, type ReorderSuggestionsData } from '@/services/analytics';
 import { getApiErrorMessage } from '@/services/api';
 
 type PriorityFilter = 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -27,23 +27,41 @@ function formatStockoutDays(value: number | null) {
   return `${value.toLocaleString('vi-VN')} ngày`;
 }
 
+function formatVnd(value: number) {
+  return `${Math.round(value).toLocaleString('vi-VN')} đ`;
+}
+
+function severityVariant(severity: WeedingSuggestionItem['severity']) {
+  return severity === 'CRITICAL' ? 'danger' : 'warning';
+}
+
+function actionLabel(action: WeedingSuggestionItem['suggested_action']) {
+  return action === 'REDISTRIBUTE' ? 'Chuyển kho' : 'Thanh lý';
+}
+
 export function ReorderSuggestionsPage() {
   const [days, setDays] = useState(30);
   const [priority, setPriority] = useState<PriorityFilter>('ALL');
   const [limit, setLimit] = useState(20);
+  const [budgetVnd, setBudgetVnd] = useState<number | ''>('');
   const [data, setData] = useState<ReorderSuggestionsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [agingItems, setAgingItems] = useState<AgingInventoryItem[]>([]);
-  const [agingLoading, setAgingLoading] = useState(true);
-  const [agingError, setAgingError] = useState<string | null>(null);
+  const [weedingItems, setWeedingItems] = useState<WeedingSuggestionItem[]>([]);
+  const [weedingLoading, setWeedingLoading] = useState(true);
+  const [weedingError, setWeedingError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await analyticsService.getReorderSuggestions({ days, priority, limit });
+      const response = await analyticsService.getReorderSuggestions({
+        days,
+        priority,
+        limit,
+        budgetVnd: budgetVnd === '' ? undefined : budgetVnd,
+      });
       setData(response);
     } catch (err) {
       const message = getApiErrorMessage(err, 'Không thể tải gợi ý nhập thêm sách');
@@ -52,18 +70,18 @@ export function ReorderSuggestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [days, priority, limit]);
+  }, [days, priority, limit, budgetVnd]);
 
-  const loadAgingInventory = useCallback(async () => {
+  const loadWeedingSuggestions = useCallback(async () => {
     try {
-      setAgingLoading(true);
-      setAgingError(null);
-      const response = await analyticsService.getAgingInventory({ days: 90, limit: 50 });
-      setAgingItems(response.items.filter((item) => item.days_since_last_activity !== null));
+      setWeedingLoading(true);
+      setWeedingError(null);
+      const response = await analyticsService.getWeedingSuggestions({ days: 180, limit: 50 });
+      setWeedingItems(response.items);
     } catch (err) {
-      setAgingError(getApiErrorMessage(err, 'Không thể tải danh sách tồn kho lâu không hoạt động'));
+      setWeedingError(getApiErrorMessage(err, 'Không thể tải danh sách sách nên thanh lý'));
     } finally {
-      setAgingLoading(false);
+      setWeedingLoading(false);
     }
   }, []);
 
@@ -72,8 +90,8 @@ export function ReorderSuggestionsPage() {
   }, [loadData]);
 
   useEffect(() => {
-    void loadAgingInventory();
-  }, [loadAgingInventory]);
+    void loadWeedingSuggestions();
+  }, [loadWeedingSuggestions]);
 
   const summary = data?.summary;
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
@@ -169,6 +187,20 @@ export function ReorderSuggestionsPage() {
               className="h-9 w-20 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
             />
           </label>
+          <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            Ngân sách (đ)
+            <input
+              type="number"
+              min={0}
+              placeholder="Không giới hạn"
+              value={budgetVnd}
+              onChange={(event) => {
+                const raw = event.target.value;
+                setBudgetVnd(raw === '' ? '' : Math.max(0, Number(raw) || 0));
+              }}
+              className="h-9 w-36 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
+            />
+          </label>
         </div>
       </SectionCard>
 
@@ -177,6 +209,10 @@ export function ReorderSuggestionsPage() {
         <StatCard label="High priority" value={summary?.high_priority ?? 0} icon={AlertTriangle} variant="danger" />
         <StatCard label="Medium priority" value={summary?.medium_priority ?? 0} icon={TrendingUp} variant="warning" />
         <StatCard label="Suggested qty" value={summary?.estimated_total_reorder_qty ?? 0} icon={PackagePlus} variant="success" />
+        <StatCard label="Estimated cost" value={formatVnd(summary?.estimated_total_cost ?? 0)} icon={PackagePlus} variant="primary" />
+        {data?.budget ? (
+          <StatCard label="Ngân sách còn lại" value={formatVnd(data.budget.remaining_vnd)} icon={AlertTriangle} variant={data.budget.remaining_vnd <= 0 ? 'danger' : 'success'} />
+        ) : null}
       </div>
 
       <SectionCard
@@ -212,7 +248,7 @@ export function ReorderSuggestionsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] text-left text-[13px]">
+            <table className="w-full min-w-[1180px] text-left text-[13px]">
               <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Title</th>
@@ -224,6 +260,7 @@ export function ReorderSuggestionsPage() {
                   <th className="px-3 py-3 font-semibold">Stockout</th>
                   <th className="px-3 py-3 font-semibold">Priority</th>
                   <th className="px-3 py-3 font-semibold">Suggested</th>
+                  <th className="px-3 py-3 font-semibold">Cost</th>
                   <th className="px-5 py-3 font-semibold">Reason</th>
                 </tr>
               </thead>
@@ -256,6 +293,16 @@ export function ReorderSuggestionsPage() {
                       <StatusBadge label={item.priority} variant={priorityVariant(item.priority)} dot />
                     </td>
                     <td className="px-3 py-4 font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty}</td>
+                    <td className="px-3 py-4">
+                      <p className="font-semibold text-foreground">{formatVnd(item.estimated_cost)}</p>
+                      {data?.budget ? (
+                        <StatusBadge
+                          label={item.within_budget ? 'Trong ngân sách' : 'Vượt ngân sách'}
+                          variant={item.within_budget ? 'success' : 'danger'}
+                          dot
+                        />
+                      ) : null}
+                    </td>
                     <td className="px-5 py-4">
                       <p className="max-w-[420px] text-[12px] leading-relaxed text-muted-foreground">{item.reason}</p>
                     </td>
@@ -268,55 +315,65 @@ export function ReorderSuggestionsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Tồn kho lâu không hoạt động"
-        subtitle="Sách còn tồn kho nhưng không có lượt mượn hoặc di chuyển kho trong 90 ngày gần đây"
+        title="Gợi ý thanh lý / chuyển kho"
+        subtitle="Sách còn tồn kho, không có lượt mượn hoặc di chuyển kho trong 180 ngày gần đây — xếp theo giá trị tồn đọng"
         icon={Archive}
         noPadding
       >
-        {agingLoading ? (
+        {weedingLoading ? (
           <div className="flex min-h-[160px] items-center justify-center">
             <LoadingSpinner message="Đang kiểm tra tồn kho lâu..." />
           </div>
-        ) : agingError ? (
+        ) : weedingError ? (
           <EmptyState
             variant="error"
             title="Không thể tải dữ liệu"
-            description={agingError}
+            description={weedingError}
             action={(
               <button
                 type="button"
-                onClick={() => void loadAgingInventory()}
+                onClick={() => void loadWeedingSuggestions()}
                 className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white"
               >
                 Thử lại
               </button>
             )}
           />
-        ) : agingItems.length === 0 ? (
+        ) : weedingItems.length === 0 ? (
           <EmptyState
-            title="Không có sách nào tồn kho lâu"
-            description="Tất cả sách còn tồn kho đều có hoạt động mượn/di chuyển trong 90 ngày gần đây."
+            title="Không có sách nào cần thanh lý"
+            description="Tất cả sách còn tồn kho đều có hoạt động mượn/di chuyển trong 180 ngày gần đây."
             icon={Archive}
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
               <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Title</th>
                   <th className="px-3 py-3 font-semibold">Kho</th>
                   <th className="px-3 py-3 font-semibold">Tồn kho</th>
                   <th className="px-3 py-3 font-semibold">Không hoạt động</th>
+                  <th className="px-3 py-3 font-semibold">Giá trị tồn đọng</th>
+                  <th className="px-3 py-3 font-semibold">Đề xuất</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {agingItems.map((item) => (
+                {weedingItems.map((item) => (
                   <tr key={`${item.variant_id}-${item.warehouse_id}`} className="align-top transition hover:bg-muted/40">
                     <td className="px-5 py-4 font-semibold text-foreground">{item.title}</td>
                     <td className="px-3 py-4">{item.warehouse_name}</td>
                     <td className="px-3 py-4">{item.on_hand_qty}</td>
                     <td className="px-3 py-4">
-                      <StatusBadge label={`${item.days_since_last_activity} ngày`} variant={item.days_since_last_activity! >= 180 ? 'danger' : 'warning'} dot />
+                      <StatusBadge
+                        label={item.days_since_last_activity === null ? 'Chưa từng' : `${item.days_since_last_activity} ngày`}
+                        variant={severityVariant(item.severity)}
+                        dot
+                      />
+                    </td>
+                    <td className="px-3 py-4 font-semibold">{formatVnd(item.tied_up_value)}</td>
+                    <td className="px-3 py-4">
+                      <StatusBadge label={actionLabel(item.suggested_action)} variant={item.suggested_action === 'REDISTRIBUTE' ? 'info' : 'danger'} dot />
                     </td>
                   </tr>
                 ))}

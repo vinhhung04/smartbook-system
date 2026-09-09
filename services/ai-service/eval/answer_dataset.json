@@ -1,0 +1,195 @@
+[
+  {
+    "id": "ANS_001",
+    "question": "Tổng số đầu sách và số phiếu mượn đang mở hiện nay là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_dashboard_kpis.total_titles", "tolerance": 0 },
+      { "field": "get_dashboard_kpis.active_loans", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_002",
+    "question": "Hiện có bao nhiêu phiếu mượn đang quá hạn trong KPI tổng quan?",
+    "required_numbers": [
+      { "field": "get_dashboard_kpis.overdue_loans", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_003",
+    "question": "Xu hướng mượn trả sách 30 ngày qua như thế nào?",
+    "required_facts": [["xu huong", "muon"]],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_004",
+    "question": "7 ngày gần đây tình hình mượn sách ra sao?",
+    "required_facts": [["muon", "ngay"]],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_005",
+    "question": "Sách được mượn nhiều nhất hiện tại được mượn bao nhiêu lượt?",
+    "required_numbers": [
+      { "field": "get_top_books.0.borrow_count", "tolerance": 0 }
+    ]
+  },
+  {
+    "id": "ANS_006",
+    "question": "Top sách được mượn nhiều nhất thư viện là những cuốn nào?",
+    "required_facts": [["muon nhieu nhat", "top"]]
+  },
+  {
+    "id": "ANS_007",
+    "question": "Hiện có bao nhiêu phiếu mượn quá hạn và trung bình quá hạn bao nhiêu ngày?",
+    "required_numbers": [
+      { "field": "get_overdue_summary.total_overdue_loans", "tolerance": 0 },
+      { "field": "get_overdue_summary.average_overdue_days", "tolerance": 0.05 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_008",
+    "question": "Tổng tiền phạt chưa thu hiện tại là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_fine_summary.total_unpaid", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_009",
+    "question": "Tổng tiền phạt đã thu được tính đến hiện tại là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_fine_summary.total_paid", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_010",
+    "question": "Kho nào đang có rủi ro tồn kho thấp hoặc hết hàng cao nhất?",
+    "required_facts": [["kho", "ton", "rui ro"]],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_011",
+    "question": "Có bao nhiêu đầu sách cần xem xét nhập thêm theo gợi ý hiện tại?",
+    "required_numbers": [
+      { "field": "get_reorder_suggestions.summary.total_candidates", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_012",
+    "question": "Với ngân sách 50 triệu đồng, tổng số lượng sách nên nhập thêm ước tính là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_reorder_suggestions.summary.estimated_total_reorder_qty", "tolerance": 0 }
+    ]
+  },
+  {
+    "id": "ANS_013",
+    "question": "Tổng số reservation và tỷ lệ chuyển đổi sang phiếu mượn hiện nay là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_reservation_funnel.total", "tolerance": 0 },
+      { "field": "get_reservation_funnel.conversion_rate", "tolerance": 0.05 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_014",
+    "question": "Có bao nhiêu đơn đặt sách đang chờ xác nhận?",
+    "required_numbers": [
+      { "field": "get_reservation_funnel.pending", "tolerance": 0 }
+    ]
+  },
+  {
+    "id": "ANS_015",
+    "question": "Có sách nào của tác giả Nguyễn Nhật Ánh trong thư viện không?",
+    "required_facts": [["nguyen nhat anh"]]
+  },
+  {
+    "id": "ANS_016",
+    "question": "Sách nào đang tồn kho lâu ngày không có hoạt động mượn/xuất nhập?",
+    "required_facts": [["ton kho", "khong hoat dong"]]
+  },
+  {
+    "id": "ANS_017",
+    "question": "Có bao nhiêu đầu sách nên xem xét thanh lý và tổng giá trị tồn đọng là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_weeding_suggestions.summary.total_items", "tolerance": 0 },
+      { "field": "get_weeding_suggestions.summary.total_tied_up_value", "tolerance": 0 }
+    ],
+    "must_cite": true
+  },
+  {
+    "id": "ANS_018",
+    "question": "Sách nào đang chiếm vốn tồn kho nhiều nhất mà không sinh ra lượt mượn nào?",
+    "required_facts": [["ton dong", "thanh ly"]]
+  },
+  {
+    "id": "ANS_019",
+    "question": "Cho tôi bức tranh tổng thể: KPI hiện tại và các khoản quá hạn cần xử lý gấp",
+    "required_numbers": [
+      { "field": "get_dashboard_kpis.total_titles", "tolerance": 0 },
+      { "field": "get_overdue_summary.total_overdue_loans", "tolerance": 0 }
+    ]
+  },
+  {
+    "id": "ANS_020",
+    "question": "So sánh tình hình tồn kho rủi ro và gợi ý nhập hàng để tôi quyết định nhập thêm sách gì",
+    "required_facts": [["kho"], ["nhap"]]
+  },
+  {
+    "id": "ANS_021",
+    "question": "Tổng số tiền phạt chưa thu và tổng số reservation hiện nay là bao nhiêu?",
+    "required_numbers": [
+      { "field": "get_fine_summary.total_unpaid", "tolerance": 0 },
+      { "field": "get_reservation_funnel.total", "tolerance": 0 }
+    ]
+  },
+  {
+    "id": "ANS_022",
+    "question": "Sách nào đang tồn kho lâu ngày, và sách nào nên thanh lý để giải phóng kho?",
+    "required_facts": [["ton kho"], ["thanh ly"]]
+  },
+  {
+    "id": "ANS_023",
+    "question": "Thời tiết Hà Nội hôm nay thế nào?",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_024",
+    "question": "Giá cổ phiếu VNM hôm nay bao nhiêu?",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_025",
+    "question": "Số điện thoại của khách hàng Nguyễn Văn A là gì?",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_026",
+    "question": "Viết giúp tôi một bài thơ về mùa thu",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_027",
+    "question": "Doanh thu quý sau của thư viện sẽ là bao nhiêu?",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_028",
+    "question": "Năm sau thư viện có nên mở thêm chi nhánh mới không?",
+    "must_refuse": true
+  },
+  {
+    "id": "ANS_029",
+    "question": "Kho Đà Nẵng hiện có bao nhiêu sách tồn thấp?",
+    "note": "Hallucination probe: no warehouse named 'Đà Nẵng' exists in the seed catalog (real warehouses are District 1/3, Kho HCM Chính, Kho Hà Nội). The answer must not invent a specific stock count for it — checked automatically via hallucinated_numbers, not a fixed assertion here."
+  },
+  {
+    "id": "ANS_030",
+    "question": "Tổng doanh thu bán sách của thư viện trong tháng này là bao nhiêu?",
+    "note": "Hallucination probe: this is a lending library with no sales-revenue endpoint. The answer must not invent a currency figure — checked automatically via hallucinated_numbers."
+  }
+]

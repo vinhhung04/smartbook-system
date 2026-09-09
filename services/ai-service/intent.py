@@ -219,7 +219,7 @@ def detect_intent(message: str) -> dict:
             "query": message.strip(),
         }
 
-    if _contains_any(normalized, ["dashboard", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "system summary", "bao cao", "tao bao cao", "lap bao cao"]):
+    if _contains_any(normalized, ["dashboard", "kpi", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "system summary", "bao cao", "tao bao cao", "lap bao cao"]):
         return {
             "intent": DASHBOARD_SUMMARY_QUERY,
             "confidence": 0.84,

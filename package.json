@@ -16,6 +16,7 @@
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build && pnpm test:workspace-config && pnpm test:node && pnpm test:ai",
     "demo:env": "node scripts/init-demo-env.mjs",
     "demo:seed": "docker compose --profile demo run --rm demo-seed-auth && docker compose --profile demo run --rm demo-seed-inventory && docker compose --profile demo run --rm demo-seed-borrow",
+    "demo:seed:history": "docker compose --profile demo run --rm demo-seed-borrow-history",
     "demo:status": "docker compose ps && node -e \"fetch('http://localhost:3000/ready').then(async r=>{console.log(await r.text());process.exit(r.ok?0:1)}).catch(e=>{console.error(e.message);process.exit(1)})\"",
     "doctor:react": "npx -y react-doctor@latest .",
     "doctor:react:web": "pnpm --dir apps/web run doctor:react",

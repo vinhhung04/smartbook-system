@@ -37,6 +37,7 @@ export type ReorderSuggestionsParams = AnalyticsDateParams & {
   leadTimeDays?: number;
   priority?: 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
   includeLowDemand?: boolean;
+  budgetVnd?: number;
 };
 
 export type BorrowTrendItem = {
@@ -135,6 +136,9 @@ export type ReorderSuggestionItem = {
   seasonal_index: number;
   seasonal_event: string | null;
   reason: string;
+  unit_cost: number;
+  estimated_cost: number;
+  within_budget?: boolean;
 };
 
 export type ReorderSuggestionsData = {
@@ -151,7 +155,13 @@ export type ReorderSuggestionsData = {
     medium_priority: number;
     low_priority: number;
     estimated_total_reorder_qty: number;
+    estimated_total_cost: number;
   };
+  budget: {
+    budget_vnd: number;
+    funded_cost: number;
+    remaining_vnd: number;
+  } | null;
   items: ReorderSuggestionItem[];
 };
 
@@ -171,6 +181,36 @@ export type AgingInventoryData = {
   threshold_days: number;
   cutoff: string;
   items: AgingInventoryItem[];
+};
+
+export type WeedingSuggestionItem = {
+  variant_id: string;
+  book_id: string;
+  title: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  on_hand_qty: number;
+  unit_cost: number;
+  last_activity_at: string | null;
+  days_since_last_activity: number | null;
+  severity: 'HIGH' | 'CRITICAL';
+  suggested_action: 'LIQUIDATE' | 'REDISTRIBUTE';
+  tied_up_value: number;
+};
+
+export type WeedingSuggestionsData = {
+  generated_at: string;
+  threshold_days: number;
+  cutoff: string;
+  summary: {
+    total_items: number;
+    total_tied_up_value: number;
+    critical_count: number;
+    high_count: number;
+    redistribute_count: number;
+    liquidate_count: number;
+  };
+  items: WeedingSuggestionItem[];
 };
 
 async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T> {
@@ -214,6 +254,10 @@ export function getAgingInventory(params?: { days?: number; limit?: number }) {
   return unwrap<AgingInventoryData>(gatewayAPI.get('/analytics/aging-inventory', { params }));
 }
 
+export function getWeedingSuggestions(params?: { days?: number; limit?: number }) {
+  return unwrap<WeedingSuggestionsData>(gatewayAPI.get('/analytics/weeding-suggestions', { params }));
+}
+
 export const analyticsService = {
   getDashboardKpis,
   getBorrowTrends,
@@ -224,4 +268,5 @@ export const analyticsService = {
   getReservationFunnel,
   getReorderSuggestions,
   getAgingInventory,
+  getWeedingSuggestions,
 };

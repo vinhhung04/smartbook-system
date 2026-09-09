@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "pretest": "prisma generate",
+    "prisma:seed-history": "node prisma/seed-history.js",
     "test": "node --test test/*.test.js"
   },
   "keywords": [],
