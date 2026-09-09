@@ -258,18 +258,33 @@ def citation_verdict(answer: str, evidence: list, must_cite: bool) -> dict:
     return {"correct": has_citation, "reason": "cited" if has_citation else "missing citation/evidence"}
 
 
-def hallucinated_numbers(answer: str, tool_results: dict, tolerance: float = 0.01) -> list[float]:
+def hallucinated_numbers(
+    answer: str, tool_results: dict, question: str | None = None, tolerance: float = 0.01
+) -> list[float]:
     """Numbers in `answer` matching no value anywhere in the FULL tool_results
     payload. Stricter than rag.verify_numeric_grounding: value-and-tolerance
     based rather than digit-substring matching, and it sees the whole
     payload rather than a 9000-char truncated slice - this is the real
     anti-fabrication measurement for the thesis, not the production
-    endpoints' best-effort advisory warning."""
+    endpoints' best-effort advisory warning.
+
+    `question` is optional but should always be passed by callers that have
+    it: a number the user supplied in their own question (e.g. "30 ngày qua",
+    "7 ngày gần đây") and the model simply echoes back is not a fabrication -
+    without this, two questions in the 2026-09-08 answer-quality run
+    (`assistant_answers_20260908_180847.md`) were flagged for exactly this
+    reason despite passing every other check. A plain digit-echo is the only
+    case handled here; a value the model correctly *derives* from payload
+    numbers (a percentage, a sum, a rounded figure) still cannot be verified
+    by this function and is intentionally left flagged - that is a real
+    measurement limitation, not something to special-case away without
+    evidence it's actually happening for a given answer."""
     answer_numbers = parse_numbers(answer)
     if not answer_numbers:
         return []
     payload_numbers = parse_numbers(json.dumps(tool_results, ensure_ascii=False, default=str))
-    return [n for n in answer_numbers if not _numbers_match(n, payload_numbers, tolerance)]
+    grounded_numbers = payload_numbers + parse_numbers(question)
+    return [n for n in answer_numbers if not _numbers_match(n, grounded_numbers, tolerance)]
 
 
 def score_answer(entry: dict, answer: str, tool_results: dict, tools_used: list[str], evidence: list) -> dict:
@@ -281,7 +296,7 @@ def score_answer(entry: dict, answer: str, tool_results: dict, tools_used: list[
     forbidden = forbidden_hits(answer, entry.get("forbidden_facts") or [])
     refusal = refusal_verdict(answer, tools_used, entry.get("must_refuse", False))
     citation = citation_verdict(answer, evidence, entry.get("must_cite", False))
-    hallucinated = hallucinated_numbers(answer, tool_results)
+    hallucinated = hallucinated_numbers(answer, tool_results, entry.get("question"))
 
     overall_pass = (
         (numbers["recall"] is None or numbers["recall"] == 1.0)
