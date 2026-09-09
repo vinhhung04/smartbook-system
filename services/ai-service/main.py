@@ -78,6 +78,7 @@ from evidence import extract_evidence
 import conversation_store
 from assistant_loop import TOOL_LOOP_EXHAUSTED_MESSAGE, seed_fast_path, execute_tool_round
 from llm_provider import get_llm_provider
+from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 
@@ -3148,7 +3149,14 @@ ASSISTANT_SYSTEM_PROMPT = (
 
     "## Trình bày\n"
     "- Luôn trả lời tiếng Việt, ngắn gọn, chuyên nghiệp, đi thẳng khuyến nghị.\n"
-    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n"
+    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n\n"
+
+    "## Quy tắc số liệu bắt buộc\n"
+    "- Đơn vị tiền tệ LUÔN là đồng Việt Nam, viết dạng \"1.234.567 ₫\". TUYỆT ĐỐI không dùng \"$\" hay bất kỳ "
+    "ký hiệu tiền tệ nào khác.\n"
+    "- Chép số liệu NGUYÊN VẸN từ kết quả tool. Không tự quy đổi đơn vị, không nhân/chia, không làm tròn lại.\n"
+    "- KHÔNG BAO GIỜ mô tả cấu trúc dữ liệu, không liệt kê tên trường JSON, không viết code. Chỉ trả lời "
+    "thẳng câu hỏi bằng tiếng Việt.\n"
 )
 
 
@@ -3656,11 +3664,11 @@ def _get_assistant_provider():
 
 def _render_tool_result(name: str, tool_result: dict) -> str:
     """Text placed in the "tool" role message sent back to the model for one
-    tool call. Currently a straight JSON dump (unchanged behaviour); this is
-    the single seam tool_context.py's compact, evidence-based rendering hooks
-    into once it lands, instead of the two independent json.dumps() call
-    sites /assistant and /assistant/stream each used to have."""
-    return json.dumps(tool_result, ensure_ascii=False)
+    tool call - the single seam both /assistant and /assistant/stream's tool
+    loop call into, instead of the two independent json.dumps() call sites
+    they used to have. See tool_context.py for why this compacts the payload
+    instead of dumping it whole."""
+    return _compact_tool_result(name, tool_result)
 
 
 _FAST_PATH_INTENT_TOOL = {
