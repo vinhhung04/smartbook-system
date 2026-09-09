@@ -75,6 +75,7 @@ from db import init_db, get_session
 from db_models import PendingActionRow
 from evidence import extract_evidence
 import conversation_store
+from assistant_loop import TOOL_LOOP_EXHAUSTED_MESSAGE, seed_fast_path, execute_tool_round
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 
@@ -3627,6 +3628,15 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
     return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
 
 
+def _render_tool_result(name: str, tool_result: dict) -> str:
+    """Text placed in the "tool" role message sent back to the model for one
+    tool call. Currently a straight JSON dump (unchanged behaviour); this is
+    the single seam tool_context.py's compact, evidence-based rendering hooks
+    into once it lands, instead of the two independent json.dumps() call
+    sites /assistant and /assistant/stream each used to have."""
+    return json.dumps(tool_result, ensure_ascii=False)
+
+
 _FAST_PATH_INTENT_TOOL = {
     DASHBOARD_SUMMARY_QUERY: "get_dashboard_kpis",
     TOP_BORROWED_BOOKS_QUERY: "get_top_books",
@@ -3976,27 +3986,12 @@ async def assistant(request: Request, req: AssistantRequest):
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
     messages: list[dict] = _assistant_prompt_messages(history, message_text)
 
-    tools_used: list[dict] = []
-    collected_data: dict = {}
     answer = ""
     answered_normally = False
 
-    fast_results = await _run_fast_path_tool(message_text, auth_header)
-    start_round = 0
-    if fast_results:
-        tools_used.extend({"name": r["tool_name"], "arguments": r["tool_args"]} for r in fast_results)
-        for r in fast_results:
-            collected_data[r["tool_name"]] = r["tool_result"]
-        messages.append({
-            "role": "assistant", "content": "",
-            "tool_calls": [{"function": {"name": r["tool_name"], "arguments": r["tool_args"]}} for r in fast_results],
-        })
-        for r in fast_results:
-            messages.append({
-                "role": "tool", "tool_name": r["tool_name"],
-                "content": json.dumps(r["tool_result"], ensure_ascii=False),
-            })
-        start_round = 1
+    tools_used, collected_data, start_round = await seed_fast_path(
+        message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+    )
 
     client = ollama.Client(host=OLLAMA_HOST)
     try:
@@ -4020,27 +4015,12 @@ async def assistant(request: Request, req: AssistantRequest):
                 answered_normally = True
                 break
 
-            calls = [
-                (call["function"]["name"], dict(call["function"]["arguments"] or {}))
-                for call in tool_calls
-            ]
-            tools_used.extend({"name": name, "arguments": args} for name, args in calls)
-            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently. gather()
-            # preserves input order, so results still line up with `calls` for pairing.
-            results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
-            for name, tool_result in results:
-                # A tool called twice in one conversation (e.g. the model asks
-                # for two different date ranges) must not silently overwrite
-                # the first result under the same key - keep both.
-                key = name if name not in collected_data else f"{name}#2"
-                collected_data[key] = tool_result
-                messages.append({
-                    "role": "tool",
-                    "tool_name": name,
-                    "content": json.dumps(tool_result, ensure_ascii=False),
-                })
+            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently.
+            await execute_tool_round(
+                tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
+            )
         else:
-            answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+            answer = TOOL_LOOP_EXHAUSTED_MESSAGE
     except Exception:
         logger.exception("Assistant tool-calling failed")
         raise HTTPException(
@@ -4170,28 +4150,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
     messages: list[dict] = _assistant_prompt_messages(history, message_text)
 
     async def event_generator():
-        tools_used: list[dict] = []
-        collected_data: dict = {}
         answer = ""
         answered_normally = False
         client = ollama.AsyncClient(host=OLLAMA_HOST)
 
-        fast_results = await _run_fast_path_tool(message_text, auth_header)
-        start_round = 0
-        if fast_results:
-            tools_used.extend({"name": r["tool_name"], "arguments": r["tool_args"]} for r in fast_results)
-            for r in fast_results:
-                collected_data[r["tool_name"]] = r["tool_result"]
-            messages.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{"function": {"name": r["tool_name"], "arguments": r["tool_args"]}} for r in fast_results],
-            })
-            for r in fast_results:
-                messages.append({
-                    "role": "tool", "tool_name": r["tool_name"],
-                    "content": json.dumps(r["tool_result"], ensure_ascii=False),
-                })
-            start_round = 1
+        tools_used, collected_data, start_round = await seed_fast_path(
+            message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+        )
 
         try:
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
@@ -4229,23 +4194,12 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     answered_normally = True
                     break
 
-                calls = [
-                    (call["function"]["name"], dict(call["function"]["arguments"] or {}))
-                    for call in tool_calls
-                ]
-                tools_used.extend({"name": name, "arguments": args} for name, args in calls)
-                results = await asyncio.gather(*(_run_tool_call(name, args, auth_header) for name, args in calls))
-                for name, tool_result in results:
-                    key = name if name not in collected_data else f"{name}#2"
-                    collected_data[key] = tool_result
-                    messages.append({
-                        "role": "tool",
-                        "tool_name": name,
-                        "content": json.dumps(tool_result, ensure_ascii=False),
-                    })
+                await execute_tool_round(
+                    tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
+                )
             else:
                 if not answer:
-                    answer = "Xin lỗi, tôi cần quá nhiều bước tra cứu để trả lời câu này. Bạn có thể hỏi cụ thể hơn không?"
+                    answer = TOOL_LOOP_EXHAUSTED_MESSAGE
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
