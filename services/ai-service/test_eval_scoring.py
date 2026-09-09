@@ -244,6 +244,31 @@ class HallucinatedNumbersTests(unittest.TestCase):
     def test_no_numbers_in_the_answer_flags_nothing(self):
         self.assertEqual(scoring.hallucinated_numbers("không có số liệu nào", {}), [])
 
+    def test_a_number_echoed_from_the_question_is_not_flagged(self):
+        # Regression: assistant_answers_20260908_180847.md flagged "30" and "7"
+        # as hallucinated purely because the model repeated the time window
+        # the user themselves asked about ("30 ngày qua", "7 ngày gần đây").
+        question = "Xu hướng mượn trả sách 30 ngày qua như thế nào?"
+        payload = {"get_borrow_trends": {"summary": "tăng nhẹ"}}
+        hallucinated = scoring.hallucinated_numbers(
+            "Trong 30 ngày qua, xu hướng mượn trả tăng nhẹ.", payload, question
+        )
+        self.assertEqual(hallucinated, [])
+
+    def test_a_number_absent_from_both_question_and_payload_is_still_flagged(self):
+        # Echoing the question only excuses numbers that were actually in the
+        # question - it must not become a blanket pass for small numbers.
+        question = "Xu hướng mượn trả sách 30 ngày qua như thế nào?"
+        payload = {"get_borrow_trends": {"summary": "tăng nhẹ"}}
+        hallucinated = scoring.hallucinated_numbers(
+            "Trong 30 ngày qua, có 9999 lượt mượn mới.", payload, question
+        )
+        self.assertIn(9999.0, hallucinated)
+
+    def test_without_a_question_argument_behaves_as_before(self):
+        payload = {"get_overdue_summary": {"total_overdue_loans": 27}}
+        self.assertEqual(scoring.hallucinated_numbers("Có 27 phiếu quá hạn", payload), [])
+
 
 class ScoreAnswerTests(unittest.TestCase):
     def test_a_fully_correct_grounded_answer_passes_overall(self):

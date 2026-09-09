@@ -18,10 +18,12 @@ Requires the full stack running (gateway, auth-service, ai-service, Ollama)
 Usage (from services/ai-service/):
     python eval/eval_assistant_answers.py
 Env overrides: SMARTBOOK_GATEWAY_URL (default http://localhost:3000),
-ASSISTANT_EVAL_USERNAME/ASSISTANT_EVAL_PASSWORD (default manager01/123456).
+ASSISTANT_EVAL_USERNAME/ASSISTANT_EVAL_PASSWORD (default manager01/123456),
+ASSISTANT_EVAL_REQUEST_DELAY_SECONDS (default 4.5 - see below).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -38,6 +40,15 @@ REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://localhost:3000").rstrip("/")
 USERNAME = os.getenv("ASSISTANT_EVAL_USERNAME", "manager01")
 PASSWORD = os.getenv("ASSISTANT_EVAL_PASSWORD", "123456")
+# ai-service's own per-IP limiter (cache.py: 15 req/min) was sized around the
+# local Ollama model's natural ~25-70s/round pace, which never came close to
+# it. Running this eval against a fast provider (ASSISTANT_PROVIDER=anthropic)
+# hits it almost immediately - every request after the first ~15 comes back
+# 429 within the same minute. 4.5s keeps this eval under 15/min against any
+# provider without touching the limiter itself (a separate, known issue -
+# see the plan's "out of scope" notes - it's keyed by client IP, which is the
+# gateway's IP for every real caller, not just this eval script).
+ASSISTANT_EVAL_REQUEST_DELAY_SECONDS = float(os.getenv("ASSISTANT_EVAL_REQUEST_DELAY_SECONDS", "4.5"))
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_EVAL_TIMEOUT_SECONDS", "150"))
 
 
@@ -167,6 +178,8 @@ async def main() -> None:
         print(f"Running assistant answer-quality eval on {len(dataset)} questions...")
         results = []
         for index, entry in enumerate(dataset, start=1):
+            if index > 1 and ASSISTANT_EVAL_REQUEST_DELAY_SECONDS > 0:
+                await asyncio.sleep(ASSISTANT_EVAL_REQUEST_DELAY_SECONDS)
             try:
                 response = await ask_assistant(client, token, entry["question"])
             except Exception as exc:  # noqa: BLE001 - one bad question must not abort the whole eval
