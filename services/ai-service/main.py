@@ -9,6 +9,7 @@ import json
 import re
 import logging
 import asyncio
+import functools
 import inspect
 import xml.etree.ElementTree as ET
 import hashlib
@@ -76,6 +77,7 @@ from db_models import PendingActionRow
 from evidence import extract_evidence
 import conversation_store
 from assistant_loop import TOOL_LOOP_EXHAUSTED_MESSAGE, seed_fast_path, execute_tool_round
+from llm_provider import get_llm_provider
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 
@@ -141,13 +143,19 @@ AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATI
 # Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+# claude-sonnet-5 is the current Sonnet generation (cheaper and stronger than the
+# previous claude-sonnet-4-6 default this used to be — $2/$10 per MTok vs $3/$15).
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
 # Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
+# Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
+# loop - "ollama" (default, fully offline) or "anthropic" (opt-in, for an eval A/B comparison
+# against the local model; requires ANTHROPIC_API_KEY). See llm_provider.py.
+ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "ollama").strip().lower()
 # Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
 # partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
 # desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
@@ -3244,6 +3252,10 @@ class AssistantResponse(BaseModel):
     pending_action: dict | None = None
     evidence: list[dict] = []
     retrieval_warnings: list[str] = []
+    # Per-round {provider, model, latency_ms, prompt_tokens, completion_tokens,
+    # tool_call_count} for every LLM call this turn made - see llm_provider.py.
+    # Additive/optional so existing clients that don't read it are unaffected.
+    debug: dict | None = None
 
 
 async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3628,6 +3640,20 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
     return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
 
 
+@functools.lru_cache(maxsize=1)
+def _get_assistant_provider():
+    """Cached: the same provider instance (and, for Anthropic, its underlying
+    HTTP client) is reused across requests instead of rebuilt per-request."""
+    return get_llm_provider(
+        ASSISTANT_PROVIDER,
+        ollama_host=OLLAMA_HOST,
+        ollama_model=ASSISTANT_MODEL,
+        anthropic_api_key=ANTHROPIC_API_KEY,
+        anthropic_base_url=ANTHROPIC_BASE_URL,
+        anthropic_model=ANTHROPIC_MODEL,
+    )
+
+
 def _render_tool_result(name: str, tool_result: dict) -> str:
     """Text placed in the "tool" role message sent back to the model for one
     tool call. Currently a straight JSON dump (unchanged behaviour); this is
@@ -3988,30 +4014,24 @@ async def assistant(request: Request, req: AssistantRequest):
 
     answer = ""
     answered_normally = False
+    call_usage: list[dict] = []
 
     tools_used, collected_data, start_round = await seed_fast_path(
         message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
     )
 
-    client = ollama.Client(host=OLLAMA_HOST)
+    provider = _get_assistant_provider()
     try:
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.chat,
-                    model=ASSISTANT_MODEL,
-                    messages=messages,
-                    tools=ANALYTICS_TOOLS,
-                    options={"temperature": 0.2, "num_predict": ASSISTANT_NUM_PREDICT},
-                ),
-                timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+            result = await provider.chat(
+                messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
             )
-            message = response["message"]
-            messages.append(message)
-            tool_calls = message.get("tool_calls") or []
+            call_usage.append(result.usage.as_dict())
+            messages.append(result.assistant_message)
+            tool_calls = result.tool_calls
 
             if not tool_calls:
-                answer = (message.get("content") or "").strip()
+                answer = result.text
                 answered_normally = True
                 break
 
@@ -4069,24 +4089,12 @@ async def assistant(request: Request, req: AssistantRequest):
         pending_action=pending_action_data,
         evidence=evidence,
         retrieval_warnings=retrieval_warnings,
+        debug={"llm_calls": call_usage},
     )
 
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-async def _iter_with_timeout(async_iterable, timeout: float):
-    """Wrap an async iterator so each individual `__anext__()` call is time-bounded,
-    rather than the whole stream. Long-running-but-progressing generation (normal for
-    this CPU-only model) keeps going; a genuine stall between chunks still raises."""
-    iterator = async_iterable.__aiter__()
-    while True:
-        try:
-            item = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
-        except StopAsyncIteration:
-            return
-        yield item
 
 
 @app.post("/assistant/stream")
@@ -4152,7 +4160,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
     async def event_generator():
         answer = ""
         answered_normally = False
-        client = ollama.AsyncClient(host=OLLAMA_HOST)
+        call_usage: list[dict] = []
+        provider = _get_assistant_provider()
 
         tools_used, collected_data, start_round = await seed_fast_path(
             message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
@@ -4160,35 +4169,22 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
         try:
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
-                stream = await client.chat(
-                    model=ASSISTANT_MODEL,
-                    messages=messages,
-                    tools=ANALYTICS_TOOLS,
-                    stream=True,
-                    options={"temperature": 0.2, "num_predict": ASSISTANT_NUM_PREDICT},
-                )
+                final_chunk = None
+                async for chunk in provider.chat_stream(
+                    messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                ):
+                    if chunk.delta:
+                        answer += chunk.delta
+                        yield _sse("token", {"text": chunk.delta})
+                    if chunk.done:
+                        final_chunk = chunk
 
-                last_message = None
-                # Ollama sends the parsed tool call on the chunk that decides it, then a
-                # separate final "done" sentinel chunk whose own tool_calls is always None —
-                # naively keeping only the *last* chunk's tool_calls silently drops the call.
-                accumulated_tool_calls = None
-                async for chunk in _iter_with_timeout(stream, ASSISTANT_LLM_TIMEOUT_SECONDS):
-                    last_message = chunk.message
-                    if chunk.message.tool_calls:
-                        accumulated_tool_calls = chunk.message.tool_calls
-                    delta = chunk.message.content or ""
-                    if delta:
-                        answer += delta
-                        yield _sse("token", {"text": delta})
-
-                if last_message is None:
+                if final_chunk is None or final_chunk.assistant_message is None:
                     break
 
-                tool_calls = accumulated_tool_calls or []
-                messages.append(
-                    {"role": "assistant", "content": "", "tool_calls": tool_calls} if tool_calls else last_message
-                )
+                call_usage.append(final_chunk.usage.as_dict())
+                messages.append(final_chunk.assistant_message)
+                tool_calls = final_chunk.tool_calls
 
                 if not tool_calls:
                     answered_normally = True
@@ -4258,6 +4254,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             "pending_action": pending_action_data,
             "evidence": evidence,
             "retrieval_warnings": retrieval_warnings,
+            "debug": {"llm_calls": call_usage},
         })
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
