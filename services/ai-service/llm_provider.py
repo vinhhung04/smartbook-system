@@ -347,6 +347,14 @@ class AnthropicProvider:
         import anthropic
 
         self.model = model
+        # ANTHROPIC_BASE_URL's default/documented value ("https://api.anthropic.com/v1")
+        # was written for the old raw-httpx call sites (main.py's _call_anthropic etc.),
+        # which append "/messages" themselves. The SDK's own base_url is the API ROOT -
+        # it appends "/v1/messages" internally - so passing the same env var through
+        # unchanged produces "/v1/v1/messages" and every call 404s. Strip a trailing
+        # "/v1" so both conventions can share the one env var.
+        if base_url and base_url.rstrip("/").endswith("/v1"):
+            base_url = base_url.rstrip("/")[: -len("/v1")] or None
         self._client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url or None)
 
     async def chat(self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float) -> ChatResult:

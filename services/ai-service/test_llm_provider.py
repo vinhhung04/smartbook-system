@@ -143,6 +143,32 @@ class MessageFromAnthropicResponseTests(unittest.TestCase):
         self.assertEqual(message["content"], "")  # matches OllamaProvider's own convention
 
 
+class AnthropicProviderBaseUrlTests(unittest.TestCase):
+    """Regression: ANTHROPIC_BASE_URL's documented default
+    ("https://api.anthropic.com/v1") was written for the old raw-httpx call
+    sites, which append "/messages" themselves. The SDK's base_url is the
+    API root and appends "/v1/messages" internally - passing the env var
+    through unchanged 404s every real call (found running the live eval
+    against the actual endpoint, not caught by earlier isolated smoke tests
+    that never passed a base_url override)."""
+
+    def test_trailing_v1_is_stripped(self):
+        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com/v1", model="claude-sonnet-5")
+        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+
+    def test_trailing_v1_with_trailing_slash_is_stripped(self):
+        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com/v1/", model="claude-sonnet-5")
+        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+
+    def test_a_root_url_without_v1_is_left_alone(self):
+        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com", model="claude-sonnet-5")
+        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+
+    def test_none_base_url_uses_the_sdk_default(self):
+        provider = lp.AnthropicProvider(api_key="sk-fake", base_url=None, model="claude-sonnet-5")
+        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+
+
 class GetLlmProviderTests(unittest.TestCase):
     def test_default_and_unknown_values_select_ollama(self):
         for value in ["ollama", "", "  ", "something-else"]:
