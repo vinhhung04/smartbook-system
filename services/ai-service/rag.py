@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-import re
+
+from number_grounding import display_number, numbers_match, parse_number_candidates, parse_numbers
 
 
 RAG_SYSTEM_RULES = """
@@ -102,47 +103,73 @@ def ensure_source_line(reply: str, sources: list[dict]) -> str:
     return f"{reply.rstrip()}\n\nNguồn dữ liệu: {', '.join(names)}"
 
 
-_NUMBER_RE = re.compile(r"\d[\d.,]*\d|\d")
+def verify_numeric_grounding(reply: str, retrieval: dict, question: str | None = None) -> str | None:
+    """Anti-hallucination check: flag numbers in the reply with no matching
+    value (within tolerance) anywhere in the retrieved context.
 
+    This is a best-effort signal, not proof of fabrication - a number the
+    model correctly *derives* (a percentage, a sum) from grounded data can
+    still be flagged; that's a real limitation, not something silently
+    special-cased away. It exists because RAG_SYSTEM_RULES only tells the
+    LLM not to invent numbers via prompt instruction; nothing upstream
+    actually checks the model kept that promise.
 
-def _extract_numbers(text: str) -> set[str]:
-    numbers = set()
-    for match in _NUMBER_RE.findall(text or ""):
-        digits = re.sub(r"[^\d]", "", match)
-        if len(digits) >= 2:
-            numbers.add(digits)
-    return numbers
+    Value-and-tolerance matching (via number_grounding) over the FULL raw
+    payload, not digit-substring matching over a 9000-char truncated slice -
+    this used to be a materially weaker check than eval/scoring.py's
+    hallucinated_numbers, which the eval's own README flagged as a
+    deliberately deferred gap pending evidence; the 26.7% hallucinated-number
+    rate in assistant_answers_20260908_180847.md is that evidence. `question`
+    is optional but should be passed when available: a number the user's own
+    question supplied (e.g. "30 ngày qua") and the model echoes back is not a
+    fabrication - same exclusion eval/scoring.py's hallucinated_numbers
+    applies, for the same reason (see its docstring).
 
-
-def verify_numeric_grounding(reply: str, retrieval: dict) -> str | None:
-    """Heuristic anti-hallucination check: flag numbers in the reply that don't
-    appear anywhere in the retrieved context (summary text or raw JSON).
-
-    This is a best-effort signal, not proof of fabrication — dates, percentages,
-    and coincidental digit runs can trigger false positives. It exists because
-    RAG_SYSTEM_RULES only tells the LLM not to invent numbers via prompt
-    instruction; nothing upstream actually checks the model kept that promise.
-    Returns a Vietnamese caution string to surface to the user, or None if the
-    reply's numbers all show up in the retrieved data (or there was no real
-    data to check against in the first place).
+    Returns a Vietnamese caution string to surface to the user, or None if
+    the reply's numbers are all grounded (or there was no real data to check
+    against in the first place).
     """
     sources = retrieval.get("sources") or []
     if not any(source.get("status") == "ok" for source in sources):
         return None
 
-    context_text = " ".join([
-        str(retrieval.get("summary") or ""),
-        _safe_json(retrieval.get("raw") or {}),
-    ])
-    unverified = _extract_numbers(reply) - _extract_numbers(context_text)
+    unverified = unverified_numbers(reply, retrieval, question)
     if not unverified:
         return None
 
-    sample = ", ".join(sorted(unverified)[:5])
+    sample = ", ".join(display_number(n) for n in sorted(unverified)[:5])
     return (
         f"Một số con số trong câu trả lời ({sample}) không khớp trực tiếp với dữ liệu đã truy xuất — "
         "vui lòng đối chiếu lại trước khi dùng để ra quyết định."
     )
+
+
+def unverified_numbers(reply: str, retrieval: dict, question: str | None = None) -> list[float]:
+    """The number-matching core of verify_numeric_grounding, split out so a
+    caller that wants to build its own correction message (e.g. an
+    assistant_loop retry step naming the exact bad numbers) doesn't have to
+    parse them back out of the Vietnamese warning string. Does not apply
+    verify_numeric_grounding's "was there any real data at all" gate - that
+    check depends on the caller's own definition of a usable `sources` list,
+    which callers here already have and can check themselves.
+
+    Groups the reply's numbers by the token they came from
+    (parse_number_candidates) rather than checking every VN/EN
+    interpretation independently: a token is only unverified when NONE of
+    its own interpretations are grounded, so a correctly-grounded VN-style
+    "500.000" isn't flagged just because its unintended EN reading (500.0)
+    happens not to match anything.
+    """
+    candidate_groups = parse_number_candidates(reply)
+    if not candidate_groups:
+        return []
+    grounded = parse_numbers(str(retrieval.get("summary") or ""))
+    grounded += parse_numbers(json.dumps(retrieval.get("raw") or {}, ensure_ascii=False, default=str))
+    grounded += parse_numbers(question)
+    return [
+        group[0] for group in candidate_groups
+        if not any(numbers_match(value, grounded) for value in group)
+    ]
 
 
 def merge_grounding_context(retrieval: dict, personal: dict | None) -> dict:

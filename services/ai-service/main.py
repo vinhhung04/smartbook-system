@@ -76,7 +76,12 @@ from db import init_db, get_session
 from db_models import PendingActionRow
 from evidence import extract_evidence
 import conversation_store
-from assistant_loop import TOOL_LOOP_EXHAUSTED_MESSAGE, seed_fast_path, execute_tool_round
+from assistant_loop import (
+    TOOL_LOOP_EXHAUSTED_MESSAGE,
+    execute_tool_round,
+    retry_once_if_ungrounded,
+    seed_fast_path,
+)
 from llm_provider import get_llm_provider
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
@@ -3834,14 +3839,17 @@ def _assistant_cache_key(conversation_id: str, message: str) -> str:
     return f"assistant:{conversation_id}:{normalize_text(message.strip())[:200]}"
 
 
-def _grounding_check(answer: str, collected_data: dict) -> str | None:
+def _grounding_check(answer: str, collected_data: dict, question: str | None = None) -> str | None:
     """Adapt /assistant's flat collected_data (tool-name -> raw result) into the
     {summary, raw, sources} envelope rag.verify_numeric_grounding() expects. A single
     sources=[{"status": "ok"}] sentinel satisfies its "was there any real data at all"
-    gate — that function never reads source name/endpoint, only status."""
+    gate — that function never reads source name/endpoint, only status. `question` lets
+    verify_numeric_grounding exclude numbers the user's own question supplied."""
     if not collected_data:
         return None
-    return verify_numeric_grounding(answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]})
+    return verify_numeric_grounding(
+        answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]}, question,
+    )
 
 
 async def _build_assistant_pending_action(
@@ -4059,7 +4067,16 @@ async def assistant(request: Request, req: AssistantRequest):
     if not answer:
         answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
-    grounding_warning = _grounding_check(answer, collected_data)
+    grounding_warning = _grounding_check(answer, collected_data, message_text)
+    if grounding_warning and answered_normally:
+        answer, retry_usage = await retry_once_if_ungrounded(
+            messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
+            ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+        )
+        if retry_usage:
+            call_usage.append(retry_usage)
+        grounding_warning = _grounding_check(answer, collected_data, message_text)
+
     evidence = _collect_evidence(collected_data)
     retrieval_warnings = _collect_retrieval_warnings(collected_data)
 
@@ -4224,7 +4241,16 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         if not answer:
             answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
 
-        grounding_warning = _grounding_check(answer, collected_data)
+        grounding_warning = _grounding_check(answer, collected_data, message_text)
+        if grounding_warning and answered_normally:
+            answer, retry_usage = await retry_once_if_ungrounded(
+                messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
+                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            )
+            if retry_usage:
+                call_usage.append(retry_usage)
+            grounding_warning = _grounding_check(answer, collected_data, message_text)
+
         evidence = _collect_evidence(collected_data)
         retrieval_warnings = _collect_retrieval_warnings(collected_data)
 

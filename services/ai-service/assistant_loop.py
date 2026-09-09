@@ -6,11 +6,12 @@ main.py's non-streaming /assistant, one in its SSE /assistant/stream event
 generator. They had already drifted out of sync once (a fix landing in only
 one of the two copies), which is the whole reason this module exists: a fix
 to how tool results are rendered into the prompt, or to fast-path seeding,
-now lands in exactly one place.
+now lands in exactly one place. `retry_once_if_ungrounded` is the same idea
+applied to the post-loop grounding check both endpoints run.
 
-What stays out of this module, deliberately: the actual model call (sync
-`ollama.Client().chat()` for /assistant vs. streamed `ollama.AsyncClient()`
-with per-chunk token yielding for /assistant/stream) and each endpoint's own
+What stays out of this module, deliberately: each endpoint's own per-round
+model call (llm_provider's `.chat()` for /assistant, `.chat_stream()` with
+per-chunk token yielding for /assistant/stream) and its own
 `for _round in range(...)` control flow. Those two call styles are genuinely
 different - stream needs to yield SSE token events as text arrives, from
 inside an async generator - and forcing them through one shared interface
@@ -21,7 +22,7 @@ is harder to follow and to debug. See docs/superpowers/specs (or ask before
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 # Identical give-up text both endpoints used when ASSISTANT_MAX_TOOL_ROUNDS is
 # exhausted without the model producing a final answer. Was duplicated as a
@@ -108,3 +109,54 @@ async def execute_tool_round(
             "tool_name": name,
             "content": render_tool_result(name, tool_result),
         })
+
+
+# (messages, tools, *, num_predict, timeout) -> a ChatResult-shaped object with
+# .assistant_message, .tool_calls, .text, .usage - matches llm_provider's
+# ChatProvider.chat() exactly, so callers pass that method directly.
+CallModel = Callable[..., Awaitable[Any]]
+
+
+async def retry_once_if_ungrounded(
+    messages: list[dict],
+    answer: str,
+    grounding_warning: str | None,
+    call_model: CallModel,
+    tools: list[dict],
+    num_predict: int,
+    timeout: float,
+) -> tuple[str, dict | None]:
+    """One corrective turn when verify_numeric_grounding flagged a number
+    with no basis in the retrieved data: names the problem explicitly and
+    asks the model to answer again using only the tool data already in
+    context. Bounded to exactly one retry - this doubles the cost of an
+    already slow local-model turn (25-70s/round), so a persistent failure
+    surfaces as the original warning rather than looping.
+
+    `call_model` is a provider's `.chat` (non-streaming) method, even when
+    called from the streaming endpoint - a one-off correction doesn't need
+    to be token-streamed, and both endpoints already treat the "done" event
+    as the authoritative final answer that replaces what was streamed.
+
+    Returns (answer, usage_dict). `usage_dict` is None only when no retry was
+    attempted (grounding_warning was empty). If the retry itself calls a tool
+    instead of answering in text, the original answer is kept unchanged -
+    this is a text-correction nudge, not a second tool round.
+    """
+    if not grounding_warning:
+        return answer, None
+
+    messages.append({"role": "assistant", "content": answer})
+    messages.append({
+        "role": "user",
+        "content": (
+            f"Câu trả lời trước có vấn đề: {grounding_warning} "
+            "Hãy trả lời lại CHỈ dựa trên số liệu có trong kết quả tool ở trên, không suy diễn hay bịa thêm."
+        ),
+    })
+
+    result = await call_model(messages, tools, num_predict=num_predict, timeout=timeout)
+    messages.append(result.assistant_message)
+    if result.tool_calls:
+        return answer, result.usage.as_dict()
+    return (result.text or answer), result.usage.as_dict()

@@ -2,13 +2,26 @@
 evals. Pure functions - no I/O, no imports from main.py - so they are unit
 tested directly (see ../test_eval_scoring.py) and reused by both
 eval_isbn_extraction.py and eval_assistant_tools.py.
+
+Number parsing/matching (parse_numbers, _numbers_match) is imported from
+number_grounding.py, one directory up, rather than duplicated here - it's
+the same logic rag.verify_numeric_grounding uses in production. This module
+adds `sys.path` for that import itself (rather than relying on a caller to
+have set it up) since eval scripts are run standalone in more than one way
+(directly, or with only this file's own directory on sys.path).
 """
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import unicodedata
 from difflib import SequenceMatcher
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from number_grounding import numbers_match as _numbers_match  # noqa: E402
+from number_grounding import parse_number_candidates, parse_numbers  # noqa: E402
 
 # Below this ratio, two strings are considered different values rather than
 # formatting/spelling variants of the same one.
@@ -137,44 +150,6 @@ def aggregate_tool_selection_scores(verdicts: list[dict]) -> dict:
 # thesis metric: the same answer text always scores the same way.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_NUMBER_TOKEN_RE = re.compile(r"\d[\d.,]*\d|\d")
-
-
-def parse_numbers(text: str | None) -> list[float]:
-    """Extracts every plausible numeric value from Vietnamese/English text.
-
-    Vietnamese and English disagree on which of '.'/',' is the decimal point
-    ("50.000đ" = fifty thousand in VN convention, "163.4" = one hundred
-    sixty-three point four in EN convention) and an LLM's generated prose
-    mixes both unpredictably. Rather than guess, each digit token is parsed
-    under BOTH conventions and every distinct result is kept - so a
-    comparison against this list only needs any one interpretation to match,
-    trading a little precision (a token can yield a spurious second value)
-    for not silently missing genuine matches under the "wrong" convention.
-    """
-    numbers: list[float] = []
-    seen: set[float] = set()
-    for token in _NUMBER_TOKEN_RE.findall(text or ""):
-        candidates = set()
-        try:
-            candidates.add(float(token.replace(",", "")))  # ',' = thousands sep, '.' = decimal point
-        except ValueError:
-            pass
-        try:
-            candidates.add(float(token.replace(".", "").replace(",", ".")))  # '.' = thousands sep, ',' = decimal point
-        except ValueError:
-            pass
-        for value in candidates:
-            if value not in seen:
-                seen.add(value)
-                numbers.append(value)
-    return numbers
-
-
-def _numbers_match(value: float, candidates: list[float], tolerance: float) -> bool:
-    allowed = tolerance * abs(value) if 0 < tolerance < 1 else tolerance
-    allowed = max(allowed, 1e-9)
-    return any(abs(value - c) <= allowed for c in candidates)
 
 
 def number_recall(answer: str, required: list[dict]) -> dict:
@@ -262,29 +237,41 @@ def hallucinated_numbers(
     answer: str, tool_results: dict, question: str | None = None, tolerance: float = 0.01
 ) -> list[float]:
     """Numbers in `answer` matching no value anywhere in the FULL tool_results
-    payload. Stricter than rag.verify_numeric_grounding: value-and-tolerance
-    based rather than digit-substring matching, and it sees the whole
-    payload rather than a 9000-char truncated slice - this is the real
-    anti-fabrication measurement for the thesis, not the production
-    endpoints' best-effort advisory warning.
+    payload - this is the real anti-fabrication measurement for the thesis.
+
+    Shares its core matching (number_grounding.py) with
+    rag.verify_numeric_grounding, the production warning /chat and
+    /assistant surface to users; that used to be a materially weaker
+    digit-substring check over a 9000-char-truncated slice, which
+    eval/README.md flagged as a deliberately deferred gap pending evidence -
+    the 26.7% hallucinated-number rate in the 2026-09-08 run
+    (assistant_answers_20260908_180847.md) was that evidence, and production
+    now does the same value-and-tolerance check over the full payload this
+    function does. What's still unique to this function: no "was there any
+    real data at all" gate (an eval always has a real tool_results to check
+    against) and it's the raw number list, not a formatted Vietnamese
+    warning string.
 
     `question` is optional but should always be passed by callers that have
     it: a number the user supplied in their own question (e.g. "30 ngày qua",
     "7 ngày gần đây") and the model simply echoes back is not a fabrication -
-    without this, two questions in the 2026-09-08 answer-quality run
-    (`assistant_answers_20260908_180847.md`) were flagged for exactly this
-    reason despite passing every other check. A plain digit-echo is the only
-    case handled here; a value the model correctly *derives* from payload
-    numbers (a percentage, a sum, a rounded figure) still cannot be verified
-    by this function and is intentionally left flagged - that is a real
-    measurement limitation, not something to special-case away without
-    evidence it's actually happening for a given answer."""
-    answer_numbers = parse_numbers(answer)
-    if not answer_numbers:
+    without this, two questions in the 2026-09-08 run were flagged for
+    exactly this reason despite passing every other check. A plain
+    digit-echo is the only case handled here; a value the model correctly
+    *derives* from payload numbers (a percentage, a sum, a rounded figure)
+    still cannot be verified by this function and is intentionally left
+    flagged - that is a real measurement limitation, not something to
+    special-case away without evidence it's actually happening for a given
+    answer."""
+    candidate_groups = parse_number_candidates(answer)
+    if not candidate_groups:
         return []
-    payload_numbers = parse_numbers(json.dumps(tool_results, ensure_ascii=False, default=str))
-    grounded_numbers = payload_numbers + parse_numbers(question)
-    return [n for n in answer_numbers if not _numbers_match(n, grounded_numbers, tolerance)]
+    grounded_numbers = parse_numbers(json.dumps(tool_results, ensure_ascii=False, default=str))
+    grounded_numbers += parse_numbers(question)
+    return [
+        group[0] for group in candidate_groups
+        if not any(_numbers_match(value, grounded_numbers, tolerance) for value in group)
+    ]
 
 
 def score_answer(entry: dict, answer: str, tool_results: dict, tools_used: list[str], evidence: list) -> dict:

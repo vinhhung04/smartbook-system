@@ -7,7 +7,12 @@ render_tool_result callables, independent of main.py, Ollama, or the gateway.
 import asyncio
 import unittest
 
-from assistant_loop import TOOL_LOOP_EXHAUSTED_MESSAGE, execute_tool_round, seed_fast_path
+from assistant_loop import (
+    TOOL_LOOP_EXHAUSTED_MESSAGE,
+    execute_tool_round,
+    retry_once_if_ungrounded,
+    seed_fast_path,
+)
 
 
 def _run(coro):
@@ -137,6 +142,73 @@ class ExhaustedMessageTests(unittest.TestCase):
     def test_exhausted_message_is_vietnamese_and_nonempty(self):
         self.assertTrue(TOOL_LOOP_EXHAUSTED_MESSAGE)
         self.assertIn("Xin lỗi", TOOL_LOOP_EXHAUSTED_MESSAGE)
+
+
+class _FakeUsage:
+    def __init__(self, tag):
+        self.tag = tag
+
+    def as_dict(self):
+        return {"tag": self.tag}
+
+
+class _FakeChatResult:
+    def __init__(self, assistant_message, tool_calls=None, text=""):
+        self.assistant_message = assistant_message
+        self.tool_calls = tool_calls or []
+        self.text = text
+        self.usage = _FakeUsage("retry")
+
+
+class RetryOnceIfUngroundedTests(unittest.TestCase):
+    def test_no_warning_means_no_retry_and_original_answer_kept(self):
+        called = []
+
+        async def call_model(messages, tools, *, num_predict, timeout):
+            called.append(1)
+            return _FakeChatResult({"role": "assistant", "content": "should not be used"})
+
+        answer, usage = _run(retry_once_if_ungrounded(
+            [], "Có 27 phiếu.", None, call_model, [], 700, 30,
+        ))
+        self.assertEqual(answer, "Có 27 phiếu.")
+        self.assertIsNone(usage)
+        self.assertEqual(called, [])
+
+    def test_warning_triggers_one_corrective_turn_appended_to_messages(self):
+        seen_messages = []
+
+        async def call_model(messages, tools, *, num_predict, timeout):
+            seen_messages.append([dict(m) for m in messages])
+            return _FakeChatResult({"role": "assistant", "content": "Có 27 phiếu quá hạn."}, text="Có 27 phiếu quá hạn.")
+
+        messages = [{"role": "system", "content": "sys"}]
+        answer, usage = _run(retry_once_if_ungrounded(
+            messages, "Có 9999 phiếu.", "Số 9999 không khớp dữ liệu.", call_model, [], 700, 30,
+        ))
+
+        self.assertEqual(answer, "Có 27 phiếu quá hạn.")
+        self.assertEqual(usage, {"tag": "retry"})
+        # The correction turn (original answer + a user correction message)
+        # must have been appended before calling the model.
+        self.assertEqual(seen_messages[0][-2], {"role": "assistant", "content": "Có 9999 phiếu."})
+        self.assertEqual(seen_messages[0][-1]["role"], "user")
+        self.assertIn("Số 9999 không khớp dữ liệu.", seen_messages[0][-1]["content"])
+        # Retry's own reply is appended to `messages` too.
+        self.assertEqual(messages[-1], {"role": "assistant", "content": "Có 27 phiếu quá hạn."})
+
+    def test_retry_calling_a_tool_instead_of_answering_keeps_original_answer(self):
+        async def call_model(messages, tools, *, num_predict, timeout):
+            return _FakeChatResult(
+                {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "x", "arguments": {}}}]},
+                tool_calls=[{"function": {"name": "x", "arguments": {}}}],
+            )
+
+        answer, usage = _run(retry_once_if_ungrounded(
+            [], "Có 9999 phiếu.", "cảnh báo", call_model, [], 700, 30,
+        ))
+        self.assertEqual(answer, "Có 9999 phiếu.")
+        self.assertEqual(usage, {"tag": "retry"})
 
 
 if __name__ == "__main__":
