@@ -11,6 +11,7 @@ import { PageWrapper, FadeItem } from '../motion-utils';
 import { StatCard } from '@/components/ui/stat-card';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FilterBar } from '@/components/ui/filter-bar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton, SkeletonStatCards } from '@/components/ui/loading-state';
 import {
@@ -67,6 +68,28 @@ function getDateThreshold(range: DateRange): Date | null {
   return new Date(now.getTime() - days * 86_400_000);
 }
 
+/** Compact "103,9 Tr ₫" form for a stat-card headline value — the full VND amount
+ * (7+ digits once a library has a real fine backlog) doesn't fit a 5-up stat card at
+ * the fixed 30px card font, so the exact figure goes in the card's hint line instead. */
+function formatCompactCurrency(value: number): string {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+/** Short "dd/MM" tick label for chart axes — the grouping key itself stays ISO (YYYY-MM-DD) so sorting is unaffected. */
+function formatAxisDate(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+}
+
+/** "dd/MM/yyyy" table-cell date, matching the periodLabel format already used on this page. */
+function formatCellDate(value?: string | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('vi-VN');
+}
+
 function groupByDate(items: { date: string }[]): { date: string; count: number }[] {
   const map = new Map<string, number>();
   for (const item of items) {
@@ -118,6 +141,9 @@ export function ReportsPage() {
   const [movements, setMovements] = useState<any[]>([]);
   const [loansPage, setLoansPage] = useState(1);
   const [finesPage, setFinesPage] = useState(1);
+  const [loanQuery, setLoanQuery] = useState('');
+  const [fineQuery, setFineQuery] = useState('');
+  const [variantTitles, setVariantTitles] = useState<Record<string, string>>({});
 
   const loadData = async () => {
     try {
@@ -155,6 +181,8 @@ export function ReportsPage() {
 
   useEffect(() => { void loadData(); }, []);
   useEffect(() => { setLoansPage(1); setFinesPage(1); }, [range]);
+  useEffect(() => { setLoansPage(1); }, [loanQuery]);
+  useEffect(() => { setFinesPage(1); }, [fineQuery]);
 
   const threshold = useMemo(() => getDateThreshold(range), [range]);
 
@@ -197,17 +225,19 @@ export function ReportsPage() {
   }, [filteredLoans]);
 
   // --- Top borrowed books ---
-  const topBooksData = useMemo(() => {
-    const countMap = new Map<string, { title: string; count: number }>();
+  // Counts by variant_id when loan_items are present; falls back to counting by loan
+  // (labeled with the loan number) only for loans that carry no line-item detail.
+  const topBooksCounts = useMemo(() => {
+    const countMap = new Map<string, { key: string; label: string; count: number; isVariant: boolean }>();
     for (const loan of filteredLoans) {
-      if (loan.loan_items) {
+      if (loan.loan_items && loan.loan_items.length > 0) {
         for (const item of loan.loan_items) {
           const key = item.variant_id;
           const existing = countMap.get(key);
           if (existing) {
             existing.count++;
           } else {
-            countMap.set(key, { title: key, count: 1 });
+            countMap.set(key, { key, label: key, count: 1, isVariant: true });
           }
         }
       } else {
@@ -216,10 +246,7 @@ export function ReportsPage() {
         if (existing) {
           existing.count++;
         } else {
-          countMap.set(key, {
-            title: loan.loan_number || loan.id.slice(0, 8),
-            count: 1,
-          });
+          countMap.set(key, { key, label: loan.loan_number || loan.id.slice(0, 8), count: 1, isVariant: false });
         }
       }
     }
@@ -227,6 +254,29 @@ export function ReportsPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
   }, [filteredLoans]);
+
+  // Resolves the top variant_ids to real book titles via the batch lookup endpoint —
+  // the chart used to plot the raw variant_id since nothing else in the loan payload
+  // carries a title.
+  useEffect(() => {
+    const ids = topBooksCounts.filter((b) => b.isVariant && !variantTitles[b.key]).map((b) => b.key);
+    if (ids.length === 0) return;
+    borrowService.getVariantDetails({ ids: ids.join(',') })
+      .then((res) => {
+        const map: Record<string, string> = {};
+        for (const v of res.data || []) map[v.id] = v.title;
+        setVariantTitles((prev) => ({ ...prev, ...map }));
+      })
+      .catch(() => {});
+  }, [topBooksCounts, variantTitles]);
+
+  const topBooksData = useMemo(
+    () => topBooksCounts.map((b) => ({
+      title: b.isVariant ? (variantTitles[b.key] || 'Đang tải…') : b.label,
+      count: b.count,
+    })),
+    [topBooksCounts, variantTitles],
+  );
 
   // --- Fine status distribution ---
   const fineStatusData = useMemo(() => {
@@ -265,13 +315,27 @@ export function ReportsPage() {
       }));
   }, [filteredMovements]);
 
-  const loansTotalPages = Math.max(1, Math.ceil(filteredLoans.length / TABLE_PAGE_SIZE));
-  const loansCurrentPage = Math.min(loansPage, loansTotalPages);
-  const pagedLoans = filteredLoans.slice((loansCurrentPage - 1) * TABLE_PAGE_SIZE, loansCurrentPage * TABLE_PAGE_SIZE);
+  // --- Table search (narrows the 200+ page loan list / 29 page fine list down to what matters) ---
+  const searchedLoans = useMemo(() => {
+    const q = loanQuery.trim().toLowerCase();
+    if (!q) return filteredLoans;
+    return filteredLoans.filter((l) =>
+      l.loan_number?.toLowerCase().includes(q) || (l.customers?.full_name || l.customer_id || '').toLowerCase().includes(q));
+  }, [filteredLoans, loanQuery]);
 
-  const finesTotalPages = Math.max(1, Math.ceil(filteredFines.length / TABLE_PAGE_SIZE));
+  const searchedFines = useMemo(() => {
+    const q = fineQuery.trim().toLowerCase();
+    if (!q) return filteredFines;
+    return filteredFines.filter((f) => (f.customers?.full_name || f.customer_id || '').toLowerCase().includes(q));
+  }, [filteredFines, fineQuery]);
+
+  const loansTotalPages = Math.max(1, Math.ceil(searchedLoans.length / TABLE_PAGE_SIZE));
+  const loansCurrentPage = Math.min(loansPage, loansTotalPages);
+  const pagedLoans = searchedLoans.slice((loansCurrentPage - 1) * TABLE_PAGE_SIZE, loansCurrentPage * TABLE_PAGE_SIZE);
+
+  const finesTotalPages = Math.max(1, Math.ceil(searchedFines.length / TABLE_PAGE_SIZE));
   const finesCurrentPage = Math.min(finesPage, finesTotalPages);
-  const pagedFines = filteredFines.slice((finesCurrentPage - 1) * TABLE_PAGE_SIZE, finesCurrentPage * TABLE_PAGE_SIZE);
+  const pagedFines = searchedFines.slice((finesCurrentPage - 1) * TABLE_PAGE_SIZE, finesCurrentPage * TABLE_PAGE_SIZE);
 
   // --- Export handlers ---
   const loanColumns: ExportColumn[] = [
@@ -291,8 +355,8 @@ export function ReportsPage() {
     { header: 'Ngày phạt', key: 'issued_at', width: 14 },
   ];
 
-  const prepareLoanExportData = () =>
-    filteredLoans.map((l) => ({
+  const prepareLoanExportData = (data: Loan[] = filteredLoans) =>
+    data.map((l) => ({
       loan_number: l.loan_number,
       customer_name: l.customers?.full_name || l.customer_id,
       borrow_date: l.borrow_date?.slice(0, 10) || '',
@@ -301,8 +365,8 @@ export function ReportsPage() {
       total_items: l.total_items,
     }));
 
-  const prepareFineExportData = () =>
-    filteredFines.map((f) => ({
+  const prepareFineExportData = (data: Fine[] = filteredFines) =>
+    data.map((f) => ({
       customer_name: f.customers?.full_name || f.customer_id,
       fine_type: f.fine_type,
       amount: f.amount,
@@ -311,22 +375,22 @@ export function ReportsPage() {
     }));
 
   const handleExportLoansCsv = () => {
-    exportToCsv(prepareLoanExportData(), loanColumns, `bao-cao-muon-tra-${range}`);
+    exportToCsv(prepareLoanExportData(searchedLoans), loanColumns, `bao-cao-muon-tra-${range}`);
     toast.success('Đã xuất file CSV báo cáo mượn/trả');
   };
 
   const handleExportLoansPdf = () => {
-    exportToPdf(prepareLoanExportData(), loanColumns, 'Báo cáo Mượn/Trả Sách', `bao-cao-muon-tra-${range}`);
+    exportToPdf(prepareLoanExportData(searchedLoans), loanColumns, 'Báo cáo Mượn/Trả Sách', `bao-cao-muon-tra-${range}`);
     toast.success('Đã xuất file PDF báo cáo mượn/trả');
   };
 
   const handleExportFinesCsv = () => {
-    exportToCsv(prepareFineExportData(), fineColumns, `bao-cao-phat-${range}`);
+    exportToCsv(prepareFineExportData(searchedFines), fineColumns, `bao-cao-phat-${range}`);
     toast.success('Đã xuất file CSV báo cáo phạt');
   };
 
   const handleExportFinesPdf = () => {
-    exportToPdf(prepareFineExportData(), fineColumns, 'Báo cáo Phạt', `bao-cao-phat-${range}`);
+    exportToPdf(prepareFineExportData(searchedFines), fineColumns, 'Báo cáo Phạt', `bao-cao-phat-${range}`);
     toast.success('Đã xuất file PDF báo cáo phạt');
   };
 
@@ -414,7 +478,7 @@ export function ReportsPage() {
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 Báo cáo thư viện
               </p>
-              <h1 className="font-serif text-[26px] font-semibold leading-tight text-foreground">Báo cáo &amp; Thống kê</h1>
+              <h1 className="text-[26px] font-semibold tracking-tight leading-tight text-foreground">Báo cáo &amp; Thống kê</h1>
               <p className="mt-1 font-mono text-[12px] text-muted-foreground">Kỳ báo cáo: {periodLabel}</p>
             </div>
           </div>
@@ -466,7 +530,8 @@ export function ReportsPage() {
             <StatCard label="Quá hạn" value={kpi.overdueLoans} icon={AlertTriangle} variant="danger" />
             <StatCard
               label="Tổng phạt"
-              value={kpi.totalFineAmount.toLocaleString('vi-VN') + 'đ'}
+              value={formatCompactCurrency(kpi.totalFineAmount)}
+              hint={`${kpi.totalFineAmount.toLocaleString('vi-VN')}đ chính xác`}
               icon={Wallet}
               variant="warning"
             />
@@ -493,9 +558,9 @@ export function ReportsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                  <XAxis dataKey="date" tick={chartAxisTick} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={chartAxisTick} axisLine={false} tickLine={false} />
                   <YAxis tick={chartAxisTick} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
-                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Tooltip contentStyle={chartTooltipStyle} labelFormatter={formatAxisDate} />
                   <Area type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} fill="url(#borrowGrad)" name="Lượt mượn" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -530,9 +595,9 @@ export function ReportsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                  <XAxis dataKey="date" tick={chartAxisTick} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={chartAxisTick} axisLine={false} tickLine={false} />
                   <YAxis tick={chartAxisTick} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
-                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Tooltip contentStyle={chartTooltipStyle} labelFormatter={formatAxisDate} />
                   <Bar dataKey="inbound" fill="url(#rptInGrad)" radius={[4, 4, 0, 0]} name="Nhập" />
                   <Bar dataKey="outbound" fill="url(#rptOutGrad)" radius={[4, 4, 0, 0]} name="Xuất" />
                 </BarChart>
@@ -608,7 +673,7 @@ export function ReportsPage() {
         <div className="space-y-5">
           <SectionCard
             title="Danh sách Mượn/Trả"
-            subtitle={`${filteredLoans.length} phiếu mượn`}
+            subtitle={`${searchedLoans.length} phiếu mượn`}
             noPadding
             actions={
               <div className="flex items-center gap-2">
@@ -629,39 +694,48 @@ export function ReportsPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        {['Mã phiếu', 'Khách hàng', 'Ngày mượn', 'Hạn trả', 'Trạng thái', 'SL'].map((h) => (
-                          <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedLoans.map((loan) => (
-                        <tr key={loan.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                          <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.loan_number}</td>
-                          <td className="px-4 py-3 text-[13px]">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</td>
-                          <td className="px-4 py-3 text-[12px] text-muted-foreground">{loan.borrow_date?.slice(0, 10)}</td>
-                          <td className="px-4 py-3 text-[12px] text-muted-foreground">{loan.due_date?.slice(0, 10)}</td>
-                          <td className="px-4 py-3">
-                            <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
-                          </td>
-                          <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.total_items}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="border-b border-border px-5 py-3">
+                  <FilterBar searchValue={loanQuery} onSearchChange={setLoanQuery} searchPlaceholder="Tìm theo mã phiếu hoặc tên khách hàng..." />
                 </div>
-                {renderTablePagination(loansCurrentPage, loansTotalPages, setLoansPage)}
+                {searchedLoans.length === 0 ? (
+                  <EmptyState variant="no-results" title="Không tìm thấy phiếu mượn" description="Thử một mã phiếu hoặc tên khách hàng khác." />
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30">
+                            {['Mã phiếu', 'Khách hàng', 'Ngày mượn', 'Hạn trả', 'Trạng thái', 'SL'].map((h) => (
+                              <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedLoans.map((loan) => (
+                            <tr key={loan.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.loan_number}</td>
+                              <td className="px-4 py-3 text-[13px]">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</td>
+                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(loan.borrow_date)}</td>
+                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(loan.due_date)}</td>
+                              <td className="px-4 py-3">
+                                <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                              </td>
+                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.total_items}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {renderTablePagination(loansCurrentPage, loansTotalPages, setLoansPage)}
+                  </>
+                )}
               </>
             )}
           </SectionCard>
 
           <SectionCard
             title="Danh sách Phạt"
-            subtitle={`${filteredFines.length} khoản phạt`}
+            subtitle={`${searchedFines.length} khoản phạt`}
             noPadding
             actions={
               <div className="flex items-center gap-2">
@@ -682,31 +756,40 @@ export function ReportsPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        {['Khách hàng', 'Loại phạt', 'Số tiền', 'Trạng thái', 'Ngày phạt'].map((h) => (
-                          <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedFines.map((fine) => (
-                        <tr key={fine.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                          <td className="px-4 py-3 text-[13px]">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</td>
-                          <td className="px-4 py-3 text-[13px]">{fine.fine_type}</td>
-                          <td className="px-4 py-3 text-[13px] font-mono font-medium">{Number(fine.amount).toLocaleString('vi-VN')}đ</td>
-                          <td className="px-4 py-3">
-                            <StatusBadge label={FINE_STATUS_LABELS[fine.status] || fine.status} variant={getStatusVariant('fine', fine.status)} dot />
-                          </td>
-                          <td className="px-4 py-3 text-[12px] text-muted-foreground">{fine.issued_at?.slice(0, 10)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="border-b border-border px-5 py-3">
+                  <FilterBar searchValue={fineQuery} onSearchChange={setFineQuery} searchPlaceholder="Tìm theo tên khách hàng..." />
                 </div>
-                {renderTablePagination(finesCurrentPage, finesTotalPages, setFinesPage)}
+                {searchedFines.length === 0 ? (
+                  <EmptyState variant="no-results" title="Không tìm thấy khoản phạt" description="Thử một tên khách hàng khác." />
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30">
+                            {['Khách hàng', 'Loại phạt', 'Số tiền', 'Trạng thái', 'Ngày phạt'].map((h) => (
+                              <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedFines.map((fine) => (
+                            <tr key={fine.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
+                              <td className="px-4 py-3 text-[13px]">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</td>
+                              <td className="px-4 py-3 text-[13px]">{fine.fine_type}</td>
+                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{Number(fine.amount).toLocaleString('vi-VN')}đ</td>
+                              <td className="px-4 py-3">
+                                <StatusBadge label={FINE_STATUS_LABELS[fine.status] || fine.status} variant={getStatusVariant('fine', fine.status)} dot />
+                              </td>
+                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(fine.issued_at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {renderTablePagination(finesCurrentPage, finesTotalPages, setFinesPage)}
+                  </>
+                )}
               </>
             )}
           </SectionCard>

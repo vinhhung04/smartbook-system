@@ -95,6 +95,13 @@ export interface VariantLookupItem {
   internal_barcode: string | null;
 }
 
+export interface VariantDetail {
+  id: string;
+  title: string;
+  author: string | null;
+  cover_image_url: string | null;
+}
+
 export interface WarehouseLookupItem {
   id: string;
   name: string;
@@ -256,6 +263,11 @@ export const borrowService = {
   searchVariants: async (params?: Record<string, unknown>) => {
     const response = await gatewayAPI.get('/api/borrow-integration/variants/search', { params });
     return response.data as { data: VariantLookupItem[] };
+  },
+
+  getVariantDetails: async (params: { ids: string }) => {
+    const response = await gatewayAPI.get('/api/borrow-integration/variants/details', { params });
+    return response.data as { data: VariantDetail[] };
   },
 
   searchWarehouses: async (params?: Record<string, unknown>) => {
