@@ -6,9 +6,16 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCatalogGrid } from "@/components/ui/loading-state";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatFilterCard } from "@/components/ui/stat-filter-card";
 import { StatusBadge } from "@/components/status-badge";
-import { WAREHOUSE_TYPE_META, normalizeType, warehouseTypeMeta } from "./meta";
+import {
+  LOCATION_TYPE_META,
+  WAREHOUSE_TYPE_META,
+  normalizeType,
+  occupancyBandFromRatio,
+  warehouseTypeMeta,
+  type WarehouseLocationSummary,
+} from "./meta";
 
 type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
 
@@ -23,11 +30,20 @@ const TYPE_FILTER_OPTIONS = [
 interface WarehouseDirectoryProps {
   warehouses: Warehouse[];
   loading: boolean;
+  summaries: Record<string, WarehouseLocationSummary>;
+  loadingSummaryIds: Set<string>;
   onSelect: (id: string) => void;
   onCreate: () => void;
 }
 
-export function WarehouseDirectory({ warehouses, loading, onSelect, onCreate }: WarehouseDirectoryProps) {
+export function WarehouseDirectory({
+  warehouses,
+  loading,
+  summaries,
+  loadingSummaryIds,
+  onSelect,
+  onCreate,
+}: WarehouseDirectoryProps) {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
@@ -63,51 +79,33 @@ export function WarehouseDirectory({ warehouses, loading, onSelect, onCreate }: 
           transition={{ duration: 0.3 }}
           className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         >
-          <button
-            type="button"
+          <StatFilterCard
+            label="Tổng số kho"
+            value={stats.total}
+            icon={Boxes}
+            variant="primary"
+            isActive={statusFilter === "ALL"}
             onClick={() => toggleStatus("ALL")}
-            aria-pressed={statusFilter === "ALL"}
-            className="text-left rounded-xl transition-transform active:scale-[0.99]"
-          >
-            <StatCard
-              label="Tổng số kho"
-              value={stats.total}
-              icon={Boxes}
-              variant="primary"
-              animateValue
-              className={statusFilter === "ALL" ? "border-primary shadow-md" : "hover:border-muted-foreground/30"}
-            />
-          </button>
-          <button
-            type="button"
+            layoutId="warehouse-status-filter-badge"
+          />
+          <StatFilterCard
+            label="Đang hoạt động"
+            value={stats.active}
+            icon={CheckCircle2}
+            variant="success"
+            isActive={statusFilter === "ACTIVE"}
             onClick={() => toggleStatus("ACTIVE")}
-            aria-pressed={statusFilter === "ACTIVE"}
-            className="text-left rounded-xl transition-transform active:scale-[0.99]"
-          >
-            <StatCard
-              label="Đang hoạt động"
-              value={stats.active}
-              icon={CheckCircle2}
-              variant="success"
-              animateValue
-              className={statusFilter === "ACTIVE" ? "border-emerald-500 shadow-md" : "hover:border-muted-foreground/30"}
-            />
-          </button>
-          <button
-            type="button"
+            layoutId="warehouse-status-filter-badge"
+          />
+          <StatFilterCard
+            label="Ngừng hoạt động"
+            value={stats.inactive}
+            icon={XCircle}
+            variant={stats.inactive > 0 ? "danger" : "default"}
+            isActive={statusFilter === "INACTIVE"}
             onClick={() => toggleStatus("INACTIVE")}
-            aria-pressed={statusFilter === "INACTIVE"}
-            className="text-left rounded-xl transition-transform active:scale-[0.99]"
-          >
-            <StatCard
-              label="Ngừng hoạt động"
-              value={stats.inactive}
-              icon={XCircle}
-              variant={stats.inactive > 0 ? "danger" : "default"}
-              animateValue
-              className={statusFilter === "INACTIVE" ? "border-rose-500 shadow-md" : "hover:border-muted-foreground/30"}
-            />
-          </button>
+            layoutId="warehouse-status-filter-badge"
+          />
         </motion.div>
       )}
 
@@ -151,7 +149,14 @@ export function WarehouseDirectory({ warehouses, loading, onSelect, onCreate }: 
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
           {filtered.map((warehouse, index) => (
-            <WarehouseCard key={warehouse.id} warehouse={warehouse} index={index} onSelect={() => onSelect(warehouse.id)} />
+            <WarehouseCard
+              key={warehouse.id}
+              warehouse={warehouse}
+              index={index}
+              summary={summaries[warehouse.id]}
+              summaryLoading={loadingSummaryIds.has(warehouse.id)}
+              onSelect={() => onSelect(warehouse.id)}
+            />
           ))}
         </div>
       )}
@@ -162,10 +167,14 @@ export function WarehouseDirectory({ warehouses, loading, onSelect, onCreate }: 
 function WarehouseCard({
   warehouse,
   index,
+  summary,
+  summaryLoading,
   onSelect,
 }: {
   warehouse: Warehouse;
   index: number;
+  summary: WarehouseLocationSummary | undefined;
+  summaryLoading: boolean;
   onSelect: () => void;
 }) {
   const meta = warehouseTypeMeta(warehouse.warehouse_type);
@@ -180,33 +189,91 @@ function WarehouseCard({
       transition={{ duration: 0.25, delay: Math.min(index * 0.04, 0.3) }}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.99 }}
-      className="group relative flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 hover:border-transparent hover:shadow-[0_12px_28px_-8px_rgba(0,0,0,0.15)] dark:shadow-none"
+      className="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 hover:border-transparent hover:shadow-[0_12px_28px_-8px_rgba(0,0,0,0.15)] dark:shadow-none"
     >
       <div
         className={`pointer-events-none absolute -right-8 -top-8 w-32 h-32 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-25 bg-gradient-to-br ${meta.swatch}`}
       />
 
-      <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${meta.swatch} shadow-sm`}>
-        <Icon className="w-6 h-6 text-white" />
+      <div className="relative flex items-center gap-4">
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${meta.swatch} shadow-sm`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[14px] font-semibold truncate">{warehouse.name}</h3>
+          <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{warehouse.code}</p>
+          {warehouse.address_line1 && (
+            <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{warehouse.address_line1}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{meta.label}</span>
+          <StatusBadge label={isActive ? "Đang hoạt động" : "Ngừng hoạt động"} variant={isActive ? "success" : "danger"} dot />
+        </div>
+
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
       </div>
 
-      <div className="relative min-w-0 flex-1">
-        <h3 className="text-[14px] font-semibold truncate">{warehouse.name}</h3>
-        <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{warehouse.code}</p>
-        {warehouse.address_line1 && (
-          <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground truncate">
-            <MapPin className="w-3 h-3 shrink-0" />
-            <span className="truncate">{warehouse.address_line1}</span>
-          </p>
-        )}
+      <div className="relative mt-3.5 border-t border-border/70 pt-3">
+        <WarehouseSummaryRow summary={summary} loading={summaryLoading} />
       </div>
-
-      <div className="relative flex shrink-0 flex-col items-end gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{meta.label}</span>
-        <StatusBadge label={isActive ? "Đang hoạt động" : "Ngừng hoạt động"} variant={isActive ? "success" : "danger"} dot />
-      </div>
-
-      <ChevronRight className="relative w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
     </motion.button>
+  );
+}
+
+function WarehouseSummaryRow({ summary, loading }: { summary: WarehouseLocationSummary | undefined; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3" aria-label="Đang tải cấu trúc vị trí">
+        <div className="h-5 w-16 rounded-md bg-muted animate-pulse" />
+        <div className="h-5 w-16 rounded-md bg-muted animate-pulse" />
+        <div className="h-5 w-16 rounded-md bg-muted animate-pulse" />
+        <div className="ml-auto h-1.5 w-24 rounded-full bg-muted animate-pulse" />
+      </div>
+    );
+  }
+
+  if (!summary || summary.zoneCount + summary.shelfCount + summary.compartmentCount === 0) {
+    return <p className="text-[11px] text-muted-foreground">Chưa có vị trí nào trong kho này</p>;
+  }
+
+  const counts: Array<{ type: "ZONE" | "SHELF" | "SHELF_COMPARTMENT"; value: number }> = [
+    { type: "ZONE", value: summary.zoneCount },
+    { type: "SHELF", value: summary.shelfCount },
+    { type: "SHELF_COMPARTMENT", value: summary.compartmentCount },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      {counts.map(({ type, value }) => {
+        const meta = LOCATION_TYPE_META[type];
+        const TypeIcon = meta.icon;
+        return (
+          <span key={type} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <TypeIcon className={`w-3.5 h-3.5 ${meta.ink}`} />
+            <span className="font-semibold text-foreground">{value}</span> {meta.label.toLowerCase()}
+          </span>
+        );
+      })}
+
+      {summary.avgOccupancy !== null && (() => {
+        const band = occupancyBandFromRatio(summary.avgOccupancy);
+        return (
+          <div className="ml-auto flex min-w-0 items-center gap-2" title={band.label}>
+            <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
+              <span className={`block h-full rounded-full ${band.line}`} style={{ width: `${Math.round(band.ratio * 100)}%` }} />
+            </span>
+            <span className={`shrink-0 text-[11px] font-medium ${band.ink}`}>
+              {Math.round(summary.avgOccupancy * 100)}% lấp đầy
+            </span>
+          </div>
+        );
+      })()}
+    </div>
   );
 }

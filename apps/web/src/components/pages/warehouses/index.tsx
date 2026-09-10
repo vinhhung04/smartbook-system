@@ -21,7 +21,9 @@ import {
   flattenNodes,
   locationTypeMeta,
   normalizeType,
+  summarizeLocationTree,
   warehouseTypeMeta,
+  type WarehouseLocationSummary,
 } from "./meta";
 
 type WarehouseMode = "create" | "edit";
@@ -65,6 +67,9 @@ export function WarehousesPage() {
   const [locationTree, setLocationTree] = useState<LocationNode[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(true);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const [locationSummaries, setLocationSummaries] = useState<Record<string, WarehouseLocationSummary>>({});
+  const [loadingSummaryIds, setLoadingSummaryIds] = useState<Set<string>>(new Set());
+  const locationTreeCache = useRef<Map<string, LocationNode[]>>(new Map());
   const [savingWarehouse, setSavingWarehouse] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [deletingWarehouse, setDeletingWarehouse] = useState(false);
@@ -122,6 +127,18 @@ export function WarehousesPage() {
     }
   }, [selectedWarehouseId]);
 
+  // Fetches (and caches) a warehouse's location tree, refreshing its directory-card summary as a side effect.
+  const fetchLocationTree = useCallback(async (warehouseId: string, forceRefresh = false): Promise<LocationNode[]> => {
+    const cached = locationTreeCache.current.get(warehouseId);
+    if (cached && !forceRefresh) return cached;
+
+    const data = await warehouseService.getLocationTree(warehouseId);
+    const tree = Array.isArray(data?.tree) ? data.tree : [];
+    locationTreeCache.current.set(warehouseId, tree);
+    setLocationSummaries((prev) => ({ ...prev, [warehouseId]: summarizeLocationTree(tree) }));
+    return tree;
+  }, []);
+
   const loadLocationTree = useCallback(async (warehouseId: string, preferredLocationId?: string): Promise<LocationNode[]> => {
     if (!warehouseId) {
       setLocationTree([]);
@@ -131,8 +148,7 @@ export function WarehousesPage() {
 
     try {
       setLoadingLocations(true);
-      const data = await warehouseService.getLocationTree(warehouseId);
-      const tree = Array.isArray(data?.tree) ? data.tree : [];
+      const tree = await fetchLocationTree(warehouseId, true);
       setLocationTree(tree);
 
       const flat = flattenNodes(tree);
@@ -149,11 +165,32 @@ export function WarehousesPage() {
     } finally {
       setLoadingLocations(false);
     }
-  }, [selectedLocationId]);
+  }, [fetchLocationTree, selectedLocationId]);
 
   useEffect(() => {
     void loadWarehouses();
   }, [loadWarehouses]);
+
+  // Background-loads a glanceable location summary (counts + occupancy) for every warehouse card.
+  useEffect(() => {
+    const pending = warehouses.filter((warehouse) => !locationTreeCache.current.has(warehouse.id));
+    if (pending.length === 0) return;
+
+    setLoadingSummaryIds((prev) => new Set([...prev, ...pending.map((item) => item.id)]));
+    pending.forEach((warehouse) => {
+      fetchLocationTree(warehouse.id)
+        .catch(() => {
+          // Card falls back to showing no summary; the detail view will surface the real error on click-through.
+        })
+        .finally(() => {
+          setLoadingSummaryIds((prev) => {
+            const next = new Set(prev);
+            next.delete(warehouse.id);
+            return next;
+          });
+        });
+    });
+  }, [warehouses, fetchLocationTree]);
 
   useEffect(() => {
     if (!selectedWarehouse) {
@@ -435,6 +472,8 @@ export function WarehousesPage() {
         <WarehouseDirectory
           warehouses={warehouses}
           loading={loadingWarehouses}
+          summaries={locationSummaries}
+          loadingSummaryIds={loadingSummaryIds}
           onSelect={setSelectedWarehouseId}
           onCreate={startCreateWarehouse}
         />
