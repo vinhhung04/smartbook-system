@@ -99,7 +99,7 @@ function ZoneBlock({
           <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center shrink-0">
             <LayoutGrid className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
           </div>
-          <p className="text-[13px] font-semibold truncate">Khu vực {zone.zone || zone.name || zone.code}</p>
+          <p className="text-[13px] font-semibold truncate">Khu vực {zone.name || zone.code}</p>
         </div>
         {stats.total > 0 && (
           <p className="text-[11px] text-muted-foreground shrink-0">
@@ -136,7 +136,7 @@ function AisleRow({
     <div className="flex items-stretch gap-3">
       <div className="w-16 shrink-0 flex items-center">
         <span className="text-[11px] font-medium text-muted-foreground truncate">
-          Kệ {shelf.aisle || shelf.shelf || shelf.name || shelf.code}
+          Kệ {shelf.name || shelf.code}
         </span>
       </div>
       {bins.length === 0 ? (
@@ -167,7 +167,7 @@ function CompartmentTile({
   onSelect: () => void;
 }) {
   const band = occupancyBand(node.available, node.capacity_qty);
-  const label = node.bin || node.code;
+  const label = node.name || node.code;
   const fraction = band ? `${node.available ?? 0}/${node.capacity_qty}` : null;
   const titleParts = [node.code];
   if (band) titleParts.push(`${band.label} — ${fraction}`);
