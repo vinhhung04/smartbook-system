@@ -137,6 +137,7 @@ export const router = createBrowserRouter([
       { path: 'profile', lazy: { Component: async () => (await import("@/components/pages/customer/profile")).CustomerProfilePage } },
       { path: 'membership', lazy: { Component: async () => (await import("@/components/pages/customer/membership")).CustomerMembershipPage } },
       { path: 'books', lazy: { Component: async () => (await import("@/components/pages/customer/catalog")).CustomerCatalogPage } },
+      { path: 'scan-cover', lazy: { Component: async () => (await import("@/components/pages/customer/scan-cover")).CustomerScanCoverPage } },
       { path: 'books/:id', lazy: { Component: async () => (await import("@/components/pages/customer/book-detail")).CustomerBookDetailPage } },
       { path: 'reservations', lazy: { Component: async () => (await import("@/components/pages/customer/reservations")).CustomerReservationsPage } },
       { path: 'loans', lazy: { Component: async () => (await import("@/components/pages/customer/loans")).CustomerLoansPage } },

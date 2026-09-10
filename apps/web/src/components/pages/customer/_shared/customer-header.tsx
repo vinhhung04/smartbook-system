@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/theme';
 const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; subtitle: string }> = [
   { test: (pathname) => pathname === '/customer', title: 'Tổng quan', subtitle: 'Hoạt động thư viện của bạn' },
   { test: (pathname) => pathname.startsWith('/customer/books'), title: 'Danh mục sách', subtitle: 'Khám phá và đặt trước sách có sẵn' },
+  { test: (pathname) => pathname.startsWith('/customer/scan-cover'), title: 'Tìm bằng ảnh', subtitle: 'Chụp ảnh bìa để tìm sách trong thư viện' },
   { test: (pathname) => pathname.startsWith('/customer/loans'), title: 'Phiếu mượn', subtitle: 'Theo dõi hạn trả và gia hạn' },
   { test: (pathname) => pathname.startsWith('/customer/reservations'), title: 'Đặt trước', subtitle: 'Theo dõi trạng thái đặt trước' },
   { test: (pathname) => pathname.startsWith('/customer/membership'), title: 'Hội viên', subtitle: 'Thông tin gói và chính sách' },

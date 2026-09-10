@@ -259,6 +259,19 @@ services:
       - BOOK_LOOKUP_USER_AGENT=${BOOK_LOOKUP_USER_AGENT:-SmartBookBot/1.0}
       - ENABLE_FAHA_CLOAKBROWSER=${ENABLE_FAHA_CLOAKBROWSER:-false}
       - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-15}
+      # "Find book by cover photo" — CLIP visual embedding + OCR-text fusion
+      - CLIP_MODEL_NAME=${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
+      - COVER_OCR_MAX_TOKENS=${COVER_OCR_MAX_TOKENS:-200}
+      - COVER_OCR_TIMEOUT_SECONDS=${COVER_OCR_TIMEOUT_SECONDS:-90}
+      - COVER_SEARCH_VISUAL_THRESHOLD=${COVER_SEARCH_VISUAL_THRESHOLD:-0.80}
+      - COVER_SEARCH_MIN_CONFIDENCE=${COVER_SEARCH_MIN_CONFIDENCE:-0.5}
+      - COVER_SEARCH_VISUAL_WEIGHT=${COVER_SEARCH_VISUAL_WEIGHT:-0.6}
+      - COVER_SEARCH_RESULT_LIMIT=${COVER_SEARCH_RESULT_LIMIT:-5}
+    volumes:
+      # Persist the ~600MB CLIP model download across container recreation —
+      # a bind mount, matching this compose file's existing convention for
+      # model caches (see ollama's ./ollama_data:/root/.ollama below).
+      - ./ai_service_model_cache:/root/.cache/huggingface
 
   api-gateway:
     build:

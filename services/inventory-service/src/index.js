@@ -44,6 +44,7 @@ const stockAuditRoutes = require('./routes/stock-audit.routes');
 const metadataReconciliationRoutes = require('./routes/metadata-reconciliation.routes');
 const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.routes');
 const internalAuthorityRoutes = require('./routes/internal-authority.routes');
+const internalCatalogRoutes = require('./routes/internal-catalog.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
 
 const app = express();
@@ -75,6 +76,7 @@ app.get('/ready', async (_req, res) => {
 // Demo supplier portal is token-scoped and intentionally does not use internal RBAC.
 app.use('/api/supplier-portal', supplierPortalRoutes);
 app.use('/internal/authority', internalAuthorityRoutes);
+app.use('/internal/covers', internalCatalogRoutes);
 
 // Only API routes require JWT.
 app.use('/api', authenticateToken);

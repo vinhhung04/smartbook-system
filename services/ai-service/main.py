@@ -86,6 +86,7 @@ from llm_provider import get_llm_provider
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
+from routes_cover_search import router as cover_search_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -105,6 +106,7 @@ app.add_middleware(
 
 app.include_router(actions_router)
 app.include_router(conversations_router)
+app.include_router(cover_search_router)
 
 
 @app.on_event("startup")
@@ -199,6 +201,17 @@ async def _startup_warmup_assistant_model() -> None:
             logger.warning("Assistant model warm-up failed (non-fatal): %s", exc)
 
     asyncio.create_task(_warm_up())
+
+
+@app.on_event("startup")
+async def _startup_warmup_cover_model() -> None:
+    """Best-effort: load the CLIP image-embedding model before the first
+    /find-book-by-cover request pays that ~600MB download/load cost."""
+    import cover_embeddings
+
+    asyncio.create_task(cover_embeddings.warm_up())
+
+
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
 ASSISTANT_ALLOWED_PERMISSIONS = {
     "analytics.reports.view",

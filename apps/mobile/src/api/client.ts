@@ -57,7 +57,13 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 }
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers };
+  // FormData (multipart uploads, e.g. cover-photo search) must not be JSON-encoded,
+  // and must not get an explicit Content-Type — fetch sets its own multipart
+  // boundary from the FormData instance itself.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers: Record<string, string> = isFormData
+    ? { ...options.headers }
+    : { 'Content-Type': 'application/json', ...options.headers };
 
   if (!options.skipAuth) {
     const token = await getToken();
@@ -68,7 +74,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const init: RequestInit = {
     method,
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
   };
 
   const attempts = method === 'GET' ? GET_RETRY_ATTEMPTS + 1 : 1;

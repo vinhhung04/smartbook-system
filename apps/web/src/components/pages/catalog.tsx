@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, AlertCircle, Trash2, Copy, Check } from "lucide-react";
+import { Plus, BookOpen, Download, X, ScanBarcode, Camera, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, AlertCircle, Trash2, Copy, Check } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { CatalogBookThumbnail } from "./catalog-book-thumbnail";
 import { getCategoryTone } from "./catalog-book-category";
@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
 import { toast } from "sonner";
 import { BarcodeScanModal } from "../barcode-scan-modal";
+import { CoverSearchModal } from "../cover-search-modal";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 import { PageWrapper, FadeItem } from "../motion-utils";
@@ -76,6 +77,7 @@ export function CatalogPage() {
   const [sortField, setSortField] = useState<"title" | "stock" | "updatedAt">("title");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [showCoverSearchModal, setShowCoverSearchModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
   const [page, setPage] = useState(1);
@@ -365,10 +367,16 @@ export function CatalogPage() {
               </Select>
             }
             actions={
-              <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
-                <RefreshCw className="w-3.5 h-3.5" />
-                Làm mới
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowCoverSearchModal(true)}>
+                  <Camera className="w-3.5 h-3.5" />
+                  Tìm bằng ảnh
+                </Button>
+                <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Làm mới
+                </Button>
+              </>
             }
           />
         </div>
@@ -700,6 +708,11 @@ export function CatalogPage() {
           toast.success(`Đã quét mã: ${barcode}`);
         }}
         title="Quét mã vạch sách"
+      />
+
+      <CoverSearchModal
+        isOpen={showCoverSearchModal}
+        onClose={() => setShowCoverSearchModal(false)}
       />
 
       <ConfirmDialog

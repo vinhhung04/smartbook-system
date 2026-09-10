@@ -193,7 +193,11 @@ def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> l
         scored.append((0.5 * keyword_norm + 0.5 * semantic_score, compact))
 
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
-    return [item[1] for item in scored[:limit]]
+    # "score" is additive (new key, existing keys untouched) so callers that only
+    # read id/title/isbn (e.g. test_book_index.py) are unaffected. Added so callers
+    # that need a real confidence number (not just rank position) have one —
+    # e.g. routes_cover_search.py's OCR-text evidence.
+    return [{**item[1], "score": round(item[0], 3)} for item in scored[:limit]]
 
 
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:

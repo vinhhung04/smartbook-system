@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as stockAuditApi from '../../src/api/stockAudit';
+import * as coverSearchApi from '../../src/api/coverSearch';
 import { ApiError } from '../../src/auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../../src/scanner/haptics';
 import { ScanField } from '../../src/scanner/ScanField';
+import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import { StampBadge } from '../../src/components/StampBadge';
 import { ChecklistMeter } from '../../src/components/ChecklistMeter';
 import type { StockAuditDetail, StockAuditLine } from '../../src/types/stockAudit';
@@ -22,6 +25,8 @@ export default function StockAuditDetailScreen() {
   const [scanMessage, setScanMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [draftCounts, setDraftCounts] = useState<Record<string, string>>({});
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [isIdentifying, setIsIdentifying] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -79,6 +84,43 @@ export default function StockAuditDetailScreen() {
     else notifyScanError();
     setScanMessage({ text: ok ? `${line.title}: đếm được ${newQty}` : 'Lưu thất bại', ok });
     setScanInput('');
+  }
+
+  // Fallback for lines whose barcode/ISBN sticker is missing or unreadable —
+  // photograph the cover instead, matched against this audit's own expected
+  // lines by ISBN (the same identity ScanField already keys off), not the
+  // whole catalog, since only books on this audit sheet can be counted here.
+  async function handleCoverPhoto(photoDataUrl: string) {
+    setCameraOpen(false);
+    if (!audit || savingLineId) return;
+
+    setIsIdentifying(true);
+    try {
+      const result = await coverSearchApi.findBookByCover(photoDataUrl);
+      const top = result.candidates[0];
+      const isbn = top?.isbn?.toLowerCase();
+      const line = isbn ? audit.items.find((l) => l.isbn13 && l.isbn13.toLowerCase() === isbn) : undefined;
+
+      if (!top || !line) {
+        notifyScanError();
+        setScanMessage({ text: 'Ảnh chụp không khớp sách nào trong phiếu kiểm kê', ok: false });
+        return;
+      }
+
+      const newQty = (line.counted_qty ?? 0) + 1;
+      const ok = await saveCount(line, newQty);
+      if (ok) notifyScanSuccess();
+      else notifyScanError();
+      setScanMessage({
+        text: ok ? `${line.title}: đếm được ${newQty} (nhận diện ${Math.round(top.confidence * 100)}%)` : 'Lưu thất bại',
+        ok,
+      });
+    } catch (err) {
+      notifyScanError();
+      setScanMessage({ text: err instanceof ApiError ? err.message : 'Không nhận diện được ảnh', ok: false });
+    } finally {
+      setIsIdentifying(false);
+    }
   }
 
   async function handleManualEntry(line: StockAuditLine) {
@@ -140,14 +182,30 @@ export default function StockAuditDetailScreen() {
         </View>
 
         <View style={styles.scanBox}>
-          <ScanField
-            value={scanInput}
-            onChangeText={setScanInput}
-            onSubmit={handleScan}
-            placeholder="Quét mã sách để +1 số lượng đếm"
-            autoFocus
-            editable={!savingLineId}
-          />
+          <View style={styles.scanRow}>
+            <View style={styles.scanFieldWrap}>
+              <ScanField
+                value={scanInput}
+                onChangeText={setScanInput}
+                onSubmit={handleScan}
+                placeholder="Quét mã sách để +1 số lượng đếm"
+                autoFocus
+                editable={!savingLineId}
+              />
+            </View>
+            <Pressable
+              style={styles.photoButton}
+              onPress={() => setCameraOpen(true)}
+              disabled={isIdentifying}
+              accessibilityLabel="Chụp ảnh bìa để nhận diện sách"
+            >
+              {isIdentifying ? (
+                <ActivityIndicator color={colors.primary} size="small" />
+              ) : (
+                <Ionicons name="camera-outline" size={20} color={colors.primary} />
+              )}
+            </Pressable>
+          </View>
           {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.ok ? 'success' : 'danger'} /> : null}
         </View>
 
@@ -197,6 +255,8 @@ export default function StockAuditDetailScreen() {
           {isSubmitting ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.submitButtonText}>Nộp phiếu kiểm kê</Text>}
         </Pressable>
       </SafeAreaView>
+
+      <PhotoCaptureModal visible={cameraOpen} onCaptured={handleCoverPhoto} onClose={() => setCameraOpen(false)} />
     </>
   );
 }
@@ -245,6 +305,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
     gap: spacing.xs + 2,
+  },
+  scanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  scanFieldWrap: {
+    flex: 1,
+  },
+  photoButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   list: {
     paddingHorizontal: spacing.lg,
