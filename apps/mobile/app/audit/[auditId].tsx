@@ -15,6 +15,8 @@ import { ChecklistMeter } from '../../src/components/ChecklistMeter';
 import type { StockAuditDetail, StockAuditLine } from '../../src/types/stockAudit';
 import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
 
+const SLOW_HINT_AFTER_MS = 12000;
+
 export default function StockAuditDetailScreen() {
   const { auditId } = useLocalSearchParams<{ auditId: string }>();
   const [audit, setAudit] = useState<StockAuditDetail | null>(null);
@@ -22,7 +24,7 @@ export default function StockAuditDetailScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [scanInput, setScanInput] = useState('');
-  const [scanMessage, setScanMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [scanMessage, setScanMessage] = useState<{ text: string; tone: 'success' | 'danger' | 'primary' } | null>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [draftCounts, setDraftCounts] = useState<Record<string, string>>({});
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -74,7 +76,7 @@ export default function StockAuditDetailScreen() {
 
     if (!line) {
       notifyScanError();
-      setScanMessage({ text: 'Không tìm thấy sách này trong phiếu kiểm kê', ok: false });
+      setScanMessage({ text: 'Không tìm thấy sách này trong phiếu kiểm kê', tone: 'danger' });
       return;
     }
 
@@ -82,7 +84,7 @@ export default function StockAuditDetailScreen() {
     const ok = await saveCount(line, newQty);
     if (ok) notifyScanSuccess();
     else notifyScanError();
-    setScanMessage({ text: ok ? `${line.title}: đếm được ${newQty}` : 'Lưu thất bại', ok });
+    setScanMessage({ text: ok ? `${line.title}: đếm được ${newQty}` : 'Lưu thất bại', tone: ok ? 'success' : 'danger' });
     setScanInput('');
   }
 
@@ -95,6 +97,14 @@ export default function StockAuditDetailScreen() {
     if (!audit || savingLineId) return;
 
     setIsIdentifying(true);
+    // No progress signal from the server for this call — the slow leg (OCR
+    // on CPU) can run past a minute, so say so honestly instead of leaving
+    // the badge area blank while the camera button just spins.
+    setScanMessage({ text: 'Đang nhận diện ảnh bìa...', tone: 'primary' });
+    const slowHintTimer = setTimeout(() => {
+      setScanMessage({ text: 'Đang đọc chữ trên bìa — có thể mất đến 1–2 phút', tone: 'primary' });
+    }, SLOW_HINT_AFTER_MS);
+
     try {
       const result = await coverSearchApi.findBookByCover(photoDataUrl);
       const top = result.candidates[0];
@@ -103,7 +113,7 @@ export default function StockAuditDetailScreen() {
 
       if (!top || !line) {
         notifyScanError();
-        setScanMessage({ text: 'Ảnh chụp không khớp sách nào trong phiếu kiểm kê', ok: false });
+        setScanMessage({ text: 'Ảnh chụp không khớp sách nào trong phiếu kiểm kê', tone: 'danger' });
         return;
       }
 
@@ -113,12 +123,13 @@ export default function StockAuditDetailScreen() {
       else notifyScanError();
       setScanMessage({
         text: ok ? `${line.title}: đếm được ${newQty} (nhận diện ${Math.round(top.confidence * 100)}%)` : 'Lưu thất bại',
-        ok,
+        tone: ok ? 'success' : 'danger',
       });
     } catch (err) {
       notifyScanError();
-      setScanMessage({ text: err instanceof ApiError ? err.message : 'Không nhận diện được ảnh', ok: false });
+      setScanMessage({ text: err instanceof ApiError ? err.message : 'Không nhận diện được ảnh', tone: 'danger' });
     } finally {
+      clearTimeout(slowHintTimer);
       setIsIdentifying(false);
     }
   }
@@ -206,7 +217,7 @@ export default function StockAuditDetailScreen() {
               )}
             </Pressable>
           </View>
-          {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.ok ? 'success' : 'danger'} /> : null}
+          {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.tone} /> : null}
         </View>
 
         <FlatList

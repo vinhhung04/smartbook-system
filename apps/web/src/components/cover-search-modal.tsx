@@ -14,6 +14,8 @@ interface CoverSearchModalProps {
   title?: string;
 }
 
+const SLOW_HINT_AFTER_MS = 12000;
+
 /** Staff-facing version of the customer "scan cover" screen — same endpoint,
  * same ranked-candidates shape, but the destination on pick is the internal
  * book detail page (/book/:id) instead of a reserve action, since staff here
@@ -26,12 +28,16 @@ export function CoverSearchModal({ isOpen, onClose, title = "Tìm sách bằng �
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [candidates, setCandidates] = useState<CoverSearchCandidate[]>([]);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const reset = useCallback(() => {
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     setPreview(null);
     setSearching(false);
     setSearched(false);
     setCandidates([]);
+    setElapsedMs(0);
   }, []);
 
   const closeModal = useCallback(() => {
@@ -61,8 +67,13 @@ export function CoverSearchModal({ isOpen, onClose, title = "Tìm sách bằng �
     previewReader.onload = (e) => setPreview(e.target?.result as string);
     previewReader.readAsDataURL(file);
 
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     setSearching(true);
     setSearched(false);
+    setElapsedMs(0);
+    const startedAt = Date.now();
+    elapsedTimerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
+
     try {
       const resized = await resizeImageFile(file);
       const result = await coverSearchService.findByCover(resized);
@@ -74,6 +85,7 @@ export function CoverSearchModal({ isOpen, onClose, title = "Tìm sách bằng �
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Không thể tìm sách từ ảnh này"));
     } finally {
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
       setSearching(false);
     }
   }, []);
@@ -140,6 +152,12 @@ export function CoverSearchModal({ isOpen, onClose, title = "Tìm sách bằng �
               {searching ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
               {searching ? "Đang tìm..." : preview ? "Chụp/chọn ảnh khác" : "Chụp hoặc chọn ảnh bìa sách"}
             </button>
+            {searching && (
+              <p className="text-[11px] text-muted-foreground">
+                Đã chờ {Math.round(elapsedMs / 1000)}s
+                {elapsedMs >= SLOW_HINT_AFTER_MS ? ' — đang đọc chữ trên bìa, có thể mất đến 1–2 phút' : ''}
+              </p>
+            )}
           </div>
 
           {searched && (
