@@ -272,6 +272,11 @@ services:
       - COVER_SEARCH_MIN_CONFIDENCE=${COVER_SEARCH_MIN_CONFIDENCE:-0.5}
       - COVER_SEARCH_VISUAL_WEIGHT=${COVER_SEARCH_VISUAL_WEIGHT:-0.6}
       - COVER_SEARCH_RESULT_LIMIT=${COVER_SEARCH_RESULT_LIMIT:-5}
+      # "Thu thu AI truc dem" — autonomous nightly briefing agent (nightly_briefing.py)
+      - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
+      - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
+      - NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS:-60}
+      - NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS:-180}
     volumes:
       # Persist the ~600MB CLIP model download across container recreation —
       # a bind mount, matching this compose file's existing convention for

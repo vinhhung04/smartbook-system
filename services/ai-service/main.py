@@ -212,6 +212,19 @@ async def _startup_warmup_cover_model() -> None:
     asyncio.create_task(cover_embeddings.warm_up())
 
 
+@app.on_event("startup")
+async def _startup_nightly_briefing() -> None:
+    """Autonomous "Thu thu AI" agent: reviews the system every night and leaves a
+    CREATE_REPORT_DRAFT pending action for staff to confirm in the morning — see
+    nightly_briefing.py. Opt-out via ENABLE_NIGHTLY_BRIEFING for environments (e.g.
+    tests) that don't want a background loop running."""
+    if os.getenv("ENABLE_NIGHTLY_BRIEFING", "true").lower() != "true":
+        return
+    import nightly_briefing
+
+    asyncio.create_task(nightly_briefing.nightly_briefing_loop())
+
+
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
 ASSISTANT_ALLOWED_PERMISSIONS = {
     "analytics.reports.view",

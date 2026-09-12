@@ -13,6 +13,7 @@ import { getStatusVariant } from '@/lib/status-registry';
 import { AI_ACTION_TYPE_LABEL, AI_ACTION_STATUS_LABEL } from '@/lib/ai-action-labels';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { ActionCard } from '@/components/ai-action-card';
 import { aiService, type AiActionListItem, type AiActionDetail, type AiAuditLogEntry } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
@@ -42,6 +43,8 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<{ action: AiActionDetail; audit_logs: AiAuditLogEntry[] } | null>(null);
 
+  const refetch = () => aiService.getActionDetail(actionId).then(setDetail).catch(() => {});
+
   useEffect(() => {
     let cancelled = false;
     aiService
@@ -65,7 +68,7 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
   useAIActionRealtime((_event, data) => {
     const eventActionId = (data as { action_id?: string } | null)?.action_id;
     if (eventActionId !== actionId) return;
-    aiService.getActionDetail(actionId).then(setDetail).catch(() => {});
+    refetch();
   });
 
   if (loading) {
@@ -77,6 +80,15 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
 
   return (
     <div className="space-y-3 border-t border-border bg-muted/20 px-5 py-4 text-[12px]">
+      {action.status === 'PENDING_CONFIRMATION' && (
+        // Actions created outside a chat (e.g. the nightly briefing agent, conversation_id
+        // null) have nowhere else to be confirmed/cancelled — this is their only surface.
+        <ActionCard
+          action={{ ...action, intent: action.intent ?? undefined }}
+          onConfirmed={() => void refetch()}
+          onCancelled={() => void refetch()}
+        />
+      )}
       {action.error_message && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
           Lỗi: {action.error_message}
@@ -127,7 +139,13 @@ export function AIActionCenter() {
   const load = () => {
     setLoading(true);
     aiService
-      .listActions({ status: statusFilter || undefined, limit: 50 })
+      // mine:false — this is meant to be the system-wide history (see the comment
+      // above), not "actions I personally triggered". The backend still forces
+      // non-admins back to their own regardless, so this is a no-op for them and
+      // only actually widens the view for admins — but without it, an action with
+      // no creator (e.g. the nightly briefing agent, created_by_user_id null) can
+      // never match anyone's "mine" filter and silently never appears here.
+      .listActions({ status: statusFilter || undefined, limit: 50, mine: false })
       .then((res) => setItems(res.items))
       .catch((err) => toast.error(getApiErrorMessage(err, 'Không tải được danh sách hành động.')))
       .finally(() => setLoading(false));
