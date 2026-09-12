@@ -10,6 +10,7 @@ is actually pure and where a merge/ranking mistake would be easy to miss.
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import routes_cover_search as cover_search
 
@@ -38,6 +39,34 @@ class ExtractTitleAuthorTests(unittest.TestCase):
     def test_unparseable_text_falls_back_to_nulls(self):
         data = cover_search._extract_title_author("khong doc duoc chu gi tren bia")
         self.assertEqual(data, {"title": None, "author": None})
+
+
+class CleanOcrValueTests(unittest.TestCase):
+    """Regression coverage for a real bug found by
+    scripts/cover-search-integration.mjs: on a blank/unreadable image, llava
+    sometimes fills the JSON string fields with its own hedge phrase (e.g.
+    "Không tìm thấy") instead of the requested JSON null. That's still valid
+    JSON, so _extract_title_author happily returns it — the bug was treating
+    that hedge text as a real title and searching for it, producing a false
+    match with ~0.87 confidence."""
+
+    def test_strips_known_hedge_phrases(self):
+        for phrase in ("Không tìm thấy", "khong tim thay", "Unknown", "N/A", "  không rõ  "):
+            self.assertIsNone(cover_search._clean_ocr_value(phrase), msg=phrase)
+
+    def test_keeps_a_real_title(self):
+        self.assertEqual(cover_search._clean_ocr_value("Doraemon tap 1"), "Doraemon tap 1")
+
+    def test_treats_none_and_empty_string_as_none(self):
+        self.assertIsNone(cover_search._clean_ocr_value(None))
+        self.assertIsNone(cover_search._clean_ocr_value("   "))
+
+    def test_run_cover_ocr_drops_hedge_phrases_end_to_end(self):
+        fake_response = {"response": '{"title": "Không tìm thấy", "author": "Không tìm thấy"}'}
+        with patch.object(cover_search.ollama, "Client") as mock_client_cls:
+            mock_client_cls.return_value.generate.return_value = fake_response
+            result = cover_search._run_cover_ocr(b"fake-image-bytes")
+        self.assertEqual(result, {"title": None, "author": None})
 
 
 class MergeCandidatesTests(unittest.TestCase):

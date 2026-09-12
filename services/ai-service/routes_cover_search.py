@@ -60,6 +60,25 @@ PROMPT_COVER_OCR = (
     '{"title": "...", "author": "..."}. Nếu không đọc được, đặt giá trị null.'
 )
 
+# Confirmed in testing: on an image with nothing legible, llava sometimes fills
+# the JSON string fields with its own hedge phrase (e.g. "Không tìm thấy")
+# instead of the requested JSON null — still valid JSON, so it passes parsing,
+# but treating it as a real title sends nonsense into _score_and_rank_books and
+# produces a false match. Filtered the same way main.py's AUTH_FAILURE_MESSAGES-
+# style exact-phrase matching filters known non-answers elsewhere in this repo.
+_OCR_HEDGE_PHRASES = {
+    "không tìm thấy", "khong tim thay", "không rõ", "khong ro",
+    "không đọc được", "khong doc duoc", "không có", "khong co",
+    "không xác định", "khong xac dinh", "unknown", "not found", "n/a", "none",
+}
+
+
+def _clean_ocr_value(value) -> str | None:
+    text = str(value or "").strip()
+    if not text or text.lower() in _OCR_HEDGE_PHRASES:
+        return None
+    return text
+
 
 def _extract_title_author(raw: str) -> dict:
     """Local copy of main.py's _extract_json's 3-strategy parse (direct →
@@ -104,8 +123,8 @@ def _run_cover_ocr(image_bytes: bytes) -> dict:
         logger.warning("cover_search: OCR failed: %s", type(exc).__name__)
         data = {"title": None, "author": None}
 
-    title = str(data.get("title") or "").strip() or None
-    author = str(data.get("author") or "").strip() or None
+    title = _clean_ocr_value(data.get("title"))
+    author = _clean_ocr_value(data.get("author"))
     return {"title": title, "author": author}
 
 

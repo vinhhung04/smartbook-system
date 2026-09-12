@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { parseId, toInt, normalizeText, normalizeOptionalUserId } = require('../utils/validation');
+const { buildStockBalanceFilter, createAuditWithLines } = require('../services/stock-audit-creation.service');
 
 const prisma = new PrismaClient();
 
@@ -142,10 +143,7 @@ async function createStockAudit(req, res) {
 
   try {
     const balances = await prisma.stock_balances.findMany({
-      where: {
-        warehouse_id: warehouseId,
-        ...(locationIds.length ? { location_id: { in: locationIds } } : {}),
-      },
+      where: buildStockBalanceFilter(warehouseId, locationIds),
       select: { variant_id: true, location_id: true, on_hand_qty: true },
     });
 
@@ -153,30 +151,10 @@ async function createStockAudit(req, res) {
       return res.status(400).json({ message: 'Không có tồn kho nào trong phạm vi đã chọn để kiểm kê' });
     }
 
-    const baseTimestamp = Date.now();
-    const result = await prisma.$transaction(async (tx) => {
-      const audit = await tx.stock_audits.create({
-        data: {
-          audit_number: createAuditNumber(baseTimestamp),
-          warehouse_id: warehouseId,
-          status: 'DRAFT',
-          created_by_user_id: userId,
-          started_at: new Date(),
-          note,
-        },
-      });
-
-      await tx.stock_audit_lines.createMany({
-        data: balances.map((b) => ({
-          stock_audit_id: audit.id,
-          variant_id: b.variant_id,
-          location_id: b.location_id,
-          expected_qty: b.on_hand_qty,
-        })),
-      });
-
-      return audit;
-    });
+    const auditNumber = createAuditNumber(Date.now());
+    const result = await prisma.$transaction((tx) =>
+      createAuditWithLines(tx, { auditNumber, warehouseId, note, userId, balances }),
+    );
 
     return res.status(201).json({ data: { id: result.id, audit_number: result.audit_number } });
   } catch (error) {
