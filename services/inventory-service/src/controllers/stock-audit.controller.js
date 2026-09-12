@@ -334,6 +334,23 @@ async function approveStockAudit(req, res) {
           },
         });
 
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: 'STOCK_BALANCE',
+            aggregate_id: line.variant_id,
+            event_type: 'inventory.stock.changed',
+            payload: {
+              variant_id: line.variant_id,
+              location_id: line.location_id,
+              warehouse_id: audit.warehouse_id,
+              delta_qty: line.variance_qty,
+              reason_code: 'STOCK_AUDIT_ADJUSTMENT',
+              source_reference_type: 'STOCK_AUDIT',
+              source_reference_id: id,
+            },
+          },
+        });
+
         await tx.stock_audit_lines.update({
           where: { id: line.id },
           data: { adjustment_posted: true },

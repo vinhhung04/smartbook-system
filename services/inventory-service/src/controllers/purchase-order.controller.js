@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText, normalizeIsbn13 } = require("../utils/validation");
+const { claimApprovedOrderForDispatch } = require("../services/purchase-order-dispatch.service");
 
 const PO_STATUSES = {
   DRAFT: "DRAFT",
@@ -784,12 +785,31 @@ async function transitionPurchaseOrder(req, res, options) {
         },
       });
 
+      const totalOrderedQty = po.purchase_order_items.reduce((sum, item) => sum + Number(item.ordered_qty || 0), 0);
+
       await audit(tx, userId, options.actionName, id, {
         po_number: po.po_number,
         status_before: po.status,
         status_after: options.nextStatus,
-        total_ordered_qty: po.purchase_order_items.reduce((sum, item) => sum + Number(item.ordered_qty || 0), 0),
+        total_ordered_qty: totalOrderedQty,
       });
+
+      if (options.actionName === "PURCHASE_ORDER_APPROVED") {
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: "PURCHASE_ORDER",
+            aggregate_id: id,
+            event_type: "purchase_order.approved",
+            payload: {
+              purchase_order_id: id,
+              po_number: po.po_number,
+              approved_by_user_id: userId,
+              total_ordered_qty: totalOrderedQty,
+            },
+            headers: { correlation_id: req.requestId || null },
+          },
+        });
+      }
 
       return { data: updated };
     });
@@ -868,11 +888,27 @@ async function sendToSupplier(req, res) {
         },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (po.status === PO_STATUSES.SENT_TO_SUPPLIER) {
+        return { invalid: true, message: "Purchase order has already been sent to supplier" };
+      }
       if (po.status !== PO_STATUSES.APPROVED) {
         return { invalid: true, message: "Only APPROVED purchase orders can be sent to supplier" };
       }
       if (po.purchase_order_items.length === 0) {
         return { invalid: true, message: "Purchase order must have at least one item" };
+      }
+
+      // Atomic claim closes the same TOCTOU window fixed for goods-receipt
+      // posting / stock-audit approval: two concurrent sends could otherwise
+      // both pass the status check above and both create a dispatch record.
+      const dispatchedAt = new Date();
+      const claimed = await claimApprovedOrderForDispatch(tx, id, dispatchedAt);
+      if (!claimed) {
+        const current = await tx.purchase_orders.findUnique({ where: { id } });
+        if (current?.status === PO_STATUSES.SENT_TO_SUPPLIER) {
+          return { invalid: true, message: "Purchase order has already been sent to supplier" };
+        }
+        return { invalid: true, message: "Purchase order status changed while it was being sent" };
       }
 
       const portalToken = makePortalToken();
@@ -895,10 +931,7 @@ async function sendToSupplier(req, res) {
         },
       });
 
-      const updated = await tx.purchase_orders.update({
-        where: { id },
-        data: { status: PO_STATUSES.SENT_TO_SUPPLIER, updated_at: new Date() },
-      });
+      const updated = { ...po, status: PO_STATUSES.SENT_TO_SUPPLIER, updated_at: dispatchedAt };
 
       await audit(tx, userId, "PURCHASE_ORDER_SENT_TO_SUPPLIER", id, {
         po_number: po.po_number,
@@ -908,6 +941,22 @@ async function sendToSupplier(req, res) {
         dispatch_number: dispatch.dispatch_number,
         channel,
         sent_to_email: dispatch.sent_to_email,
+      });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: "PURCHASE_ORDER",
+          aggregate_id: po.id,
+          event_type: "purchase_order.sent",
+          payload: {
+            purchase_order_id: po.id,
+            po_number: po.po_number,
+            supplier_id: po.supplier_id,
+            channel,
+            dispatch_number: dispatch.dispatch_number,
+          },
+          headers: { correlation_id: req.requestId || null },
+        },
       });
 
       return { data: { po: updated, dispatch } };

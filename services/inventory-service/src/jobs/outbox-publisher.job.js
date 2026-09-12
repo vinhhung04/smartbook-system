@@ -9,7 +9,15 @@ const prisma = new PrismaClient();
 // RELEASE_RESERVATION) — mixing "retry a saga action" and "publish a domain
 // event" semantics in one job risks regressing the already-hardened
 // reconciliation logic. Start with the one event this round wires end-to-end.
-const PUBLISHABLE_EVENT_TYPES = new Set(['inventory.reservation.created']);
+const PUBLISHABLE_EVENT_TYPES = new Set([
+  'inventory.reservation.created',
+  'inventory.reservation.released',
+  'inventory.reservation.consumed',
+  'goods_receipt.posted',
+  'purchase_order.approved',
+  'purchase_order.sent',
+  'inventory.stock.changed',
+]);
 
 // After this many attempts, stop retrying silently and mark FAILED so a
 // broker outage doesn't retry forever unattended; ops can reset status to

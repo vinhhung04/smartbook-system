@@ -941,6 +941,39 @@ async function transferReceivingToShelf(req, res) {
           })),
         });
 
+        await tx.integration_outbox.createMany({
+          data: [
+            {
+              aggregate_type: 'STOCK_BALANCE',
+              aggregate_id: variantId,
+              event_type: 'inventory.stock.changed',
+              payload: {
+                variant_id: variantId,
+                location_id: sourceReceivingLocationId,
+                warehouse_id: warehouseId,
+                delta_qty: -totalQuantity,
+                reason_code: 'RECEIVING_TO_SHELF',
+                source_reference_type: 'GOODS_RECEIPT',
+                source_reference_id: goodsReceiptId,
+              },
+            },
+            ...mergedAllocations.map((allocation) => ({
+              aggregate_type: 'STOCK_BALANCE',
+              aggregate_id: variantId,
+              event_type: 'inventory.stock.changed',
+              payload: {
+                variant_id: variantId,
+                location_id: allocation.target_location_id,
+                warehouse_id: warehouseId,
+                delta_qty: allocation.quantity,
+                reason_code: 'RECEIVING_TO_SHELF',
+                source_reference_type: 'GOODS_RECEIPT',
+                source_reference_id: goodsReceiptId,
+              },
+            })),
+          ],
+        });
+
         return {
           success: true,
           moved_quantity: totalQuantity,
@@ -1165,6 +1198,39 @@ async function reverseShelfToReceiving(req, res) {
               target_receiving_location_id: targetReceivingId,
             },
           },
+        });
+
+        await tx.integration_outbox.createMany({
+          data: [
+            {
+              aggregate_type: "STOCK_BALANCE",
+              aggregate_id: variantId,
+              event_type: "inventory.stock.changed",
+              payload: {
+                variant_id: variantId,
+                location_id: sourceCompartmentId,
+                warehouse_id: warehouseId,
+                delta_qty: -quantity,
+                reason_code: "SHELF_TO_RECEIVING_REVERSAL",
+                source_reference_type: "SHELF_REVERSAL",
+                source_reference_id: null,
+              },
+            },
+            {
+              aggregate_type: "STOCK_BALANCE",
+              aggregate_id: variantId,
+              event_type: "inventory.stock.changed",
+              payload: {
+                variant_id: variantId,
+                location_id: targetReceivingId,
+                warehouse_id: warehouseId,
+                delta_qty: quantity,
+                reason_code: "SHELF_TO_RECEIVING_REVERSAL",
+                source_reference_type: "SHELF_REVERSAL",
+                source_reference_id: null,
+              },
+            },
+          ],
         });
 
         return {

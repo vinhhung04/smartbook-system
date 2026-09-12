@@ -1082,6 +1082,23 @@ async function confirmOutbound(req, res) {
             })),
           });
 
+          await tx.integration_outbox.createMany({
+            data: movementRows.map((row) => ({
+              aggregate_type: "STOCK_BALANCE",
+              aggregate_id: row.variant_id,
+              event_type: "inventory.stock.changed",
+              payload: {
+                variant_id: row.variant_id,
+                location_id: shippingLocation.id,
+                warehouse_id: order.warehouse_id,
+                delta_qty: -row.quantity,
+                reason_code: "OUTBOUND_CONFIRMED",
+                source_reference_type: "OUTBOUND_ORDER",
+                source_reference_id: order.id,
+              },
+            })),
+          });
+
           await tx.outbound_orders.update({
             where: { id: order.id },
             data: {
@@ -1344,6 +1361,23 @@ async function confirmOutbound(req, res) {
             created_by_user_id: actorUserIdOptional,
             metadata: {
               stage: "OUTBOUND_CONFIRMED",
+            },
+          })),
+        });
+
+        await tx.integration_outbox.createMany({
+          data: movementRows.map((row) => ({
+            aggregate_type: "STOCK_BALANCE",
+            aggregate_id: row.variant_id,
+            event_type: "inventory.stock.changed",
+            payload: {
+              variant_id: row.variant_id,
+              location_id: shippingLocation.id,
+              warehouse_id: order.from_warehouse_id,
+              delta_qty: -row.quantity,
+              reason_code: "TRANSFER_OUTBOUND_CONFIRMED",
+              source_reference_type: "TRANSFER_OUTBOUND",
+              source_reference_id: order.id,
             },
           })),
         });

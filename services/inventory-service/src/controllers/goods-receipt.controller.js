@@ -830,6 +830,23 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
         created_by_user_id: userId,
       })),
     });
+
+    await tx.integration_outbox.createMany({
+      data: itemsWithLocation.map((item) => ({
+        aggregate_type: "STOCK_BALANCE",
+        aggregate_id: item.variant_id,
+        event_type: "inventory.stock.changed",
+        payload: {
+          variant_id: item.variant_id,
+          location_id: item.location_id,
+          warehouse_id: goodsReceipt.warehouse_id,
+          delta_qty: item.quantity,
+          reason_code: "GOODS_RECEIPT",
+          source_reference_type: "GOODS_RECEIPT",
+          source_reference_id: goodsReceipt.id,
+        },
+      })),
+    });
   }
 
   if (itemsWithoutLocation.length > 0) {
@@ -902,6 +919,23 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
         metadata: {
           source_type: "GOODS_RECEIPT_NO_LOCATION",
           bucket: "RECEIVING_HOLD",
+        },
+      })),
+    });
+
+    await tx.integration_outbox.createMany({
+      data: aggregatedItems.map((item) => ({
+        aggregate_type: "STOCK_BALANCE",
+        aggregate_id: item.variant_id,
+        event_type: "inventory.stock.changed",
+        payload: {
+          variant_id: item.variant_id,
+          location_id: receivingLocation.id,
+          warehouse_id: goodsReceipt.warehouse_id,
+          delta_qty: item.quantity,
+          reason_code: "GOODS_RECEIPT",
+          source_reference_type: "GOODS_RECEIPT",
+          source_reference_id: goodsReceipt.id,
         },
       })),
     });
@@ -1002,6 +1036,23 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
       },
     })),
   });
+
+  await tx.integration_outbox.createMany({
+    data: aggregatedItems.map((item) => ({
+      aggregate_type: "STOCK_BALANCE",
+      aggregate_id: item.variant_id,
+      event_type: "inventory.stock.changed",
+      payload: {
+        variant_id: item.variant_id,
+        location_id: receivingLocation.id,
+        warehouse_id: goodsReceipt.warehouse_id,
+        delta_qty: item.quantity,
+        reason_code: "TRANSFER_RECEIPT",
+        source_reference_type: "GOODS_RECEIPT",
+        source_reference_id: goodsReceipt.id,
+      },
+    })),
+  });
 }
 
 async function cancelStockMovements(tx, goodsReceiptId) {
@@ -1067,6 +1118,22 @@ async function cancelStockMovements(tx, goodsReceiptId) {
           last_movement_at: new Date(),
         },
       });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: "STOCK_BALANCE",
+          aggregate_id: movement.variant_id,
+          event_type: "inventory.stock.changed",
+          payload: {
+            variant_id: movement.variant_id,
+            location_id: movement.to_location_id,
+            delta_qty: -movement.quantity,
+            reason_code: "GOODS_RECEIPT_CANCELLED",
+            source_reference_type: "GOODS_RECEIPT",
+            source_reference_id: goodsReceiptId,
+          },
+        },
+      });
     } else if (
       movement.movement_type === "OUTBOUND" &&
       movement.from_location_id
@@ -1085,6 +1152,22 @@ async function cancelStockMovements(tx, goodsReceiptId) {
             : {}),
           version: { increment: 1 },
           last_movement_at: new Date(),
+        },
+      });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: "STOCK_BALANCE",
+          aggregate_id: movement.variant_id,
+          event_type: "inventory.stock.changed",
+          payload: {
+            variant_id: movement.variant_id,
+            location_id: movement.from_location_id,
+            delta_qty: movement.quantity,
+            reason_code: "GOODS_RECEIPT_CANCELLED",
+            source_reference_type: "GOODS_RECEIPT",
+            source_reference_id: goodsReceiptId,
+          },
         },
       });
     }
@@ -1226,6 +1309,21 @@ async function updateGoodsReceipt(req, res) {
               supplier_delivery_invoice_id: updated.supplier_delivery_invoice_id,
               source_type: updated.source_type,
             },
+          },
+        });
+
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: "GOODS_RECEIPT",
+            aggregate_id: updated.id,
+            event_type: "goods_receipt.posted",
+            payload: {
+              goods_receipt_id: updated.id,
+              receipt_number: updated.receipt_number,
+              source_type: updated.source_type,
+              purchase_order_id: updated.purchase_order_id ?? null,
+            },
+            headers: { correlation_id: req.requestId || null },
           },
         });
       }

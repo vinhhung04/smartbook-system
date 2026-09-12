@@ -432,6 +432,23 @@ async function releaseBorrowReservation(req, res) {
         },
       });
 
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: 'STOCK_RESERVATION',
+          aggregate_id: reservation.id,
+          event_type: 'inventory.reservation.released',
+          payload: {
+            reservation_id,
+            source_reference_id: reservation_id,
+            variant_id: reservation.variant_id,
+            location_id: reservation.location_id,
+            quantity: reservation.quantity,
+            reason: targetStatus,
+          },
+          headers: { correlation_id: req.requestId || null },
+        },
+      });
+
       return { data: updated };
     });
 
@@ -528,6 +545,23 @@ async function consumeBorrowReservation(req, res) {
             loan_number,
             reservation_id,
           },
+        },
+      });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: 'STOCK_RESERVATION',
+          aggregate_id: reservation.id,
+          event_type: 'inventory.reservation.consumed',
+          payload: {
+            reservation_id,
+            variant_id: reservation.variant_id,
+            location_id: reservation.location_id,
+            quantity: reservation.quantity,
+            loan_id,
+            loan_number,
+          },
+          headers: { correlation_id: req.requestId || null },
         },
       });
 
