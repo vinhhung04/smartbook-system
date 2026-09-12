@@ -305,6 +305,24 @@ async function reserveFromBorrow(req, res) {
         },
       });
 
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: 'STOCK_RESERVATION',
+          aggregate_id: stockReservation.id,
+          event_type: 'inventory.reservation.created',
+          payload: {
+            reservation_id,
+            reservation_number,
+            customer_id: customer_id || null,
+            variant_id,
+            warehouse_id,
+            quantity: normalizedQuantity,
+            expires_at,
+          },
+          headers: { correlation_id: req.requestId || null },
+        },
+      });
+
       return { reservation: stockReservation };
     });
 

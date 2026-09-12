@@ -46,6 +46,7 @@ const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.rou
 const internalAuthorityRoutes = require('./routes/internal-authority.routes');
 const internalCatalogRoutes = require('./routes/internal-catalog.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
+const { startOutboxPublisherJob } = require('./jobs/outbox-publisher.job');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -551,4 +552,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Inventory Service running on http://localhost:${PORT}`);
   startAgingInventoryJob();
+  startOutboxPublisherJob();
 });

@@ -11,6 +11,7 @@ const {
 } = require("../services/packing.service");
 const { toStorageRef } = require("../services/packing-video-storage.service");
 const { verifyPackingPhoto } = require("../services/packing-evidence-ai.service");
+const { pushEvent } = require("../lib/socket-emitter");
 
 const ORDER_READY_FOR_PACKING_STATUS = ["READY_FOR_OUTBOUND", "READY_TO_SHIP"];
 
@@ -350,19 +351,41 @@ async function uploadPackingEvidence(req, res) {
     });
 
     if (evidenceType === "PHOTO" || evidenceType === "LIVE_SNAPSHOT") {
-      const items = await prisma.packing_task_items.findMany({ where: { packing_task_id: taskId } });
-      const expectedCount = items.reduce((sum, item) => sum + item.expected_qty, 0);
-      const { status, result } = await verifyPackingPhoto(ref, expectedCount);
       evidence = await prisma.packing_camera_evidence.update({
         where: { id: evidence.id },
-        data: { ai_verification_status: status, ai_verification_result: result || undefined },
+        data: { ai_verification_status: "PENDING" },
       });
+      setImmediate(() => void runPackingPhotoVerification(evidence.id, taskId, ref, task.warehouse_id));
     }
 
     return res.status(201).json({ evidence });
   } catch (error) {
     console.error("Error while uploading packing evidence:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/** Runs off the request path (verifyPackingPhoto can take up to 20s) so
+ *  POST .../evidence doesn't block staff on the AI call. verifyPackingPhoto
+ *  never throws, but this still never runs inside the request's try/catch. */
+async function runPackingPhotoVerification(evidenceId, taskId, storageRef, warehouseId) {
+  try {
+    const items = await prisma.packing_task_items.findMany({ where: { packing_task_id: taskId } });
+    const expectedCount = items.reduce((sum, item) => sum + item.expected_qty, 0);
+    const { status, result } = await verifyPackingPhoto(storageRef, expectedCount);
+
+    await prisma.packing_camera_evidence.update({
+      where: { id: evidenceId },
+      data: { ai_verification_status: status, ai_verification_result: result || undefined },
+    });
+
+    void pushEvent({
+      room: `warehouse:${warehouseId}`,
+      event: "packing:evidence_verified",
+      data: { evidence_id: evidenceId, packing_task_id: taskId, ai_verification_status: status },
+    });
+  } catch (error) {
+    console.error("Error while running background packing photo verification:", error);
   }
 }
 

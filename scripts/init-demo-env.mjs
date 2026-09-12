@@ -19,6 +19,7 @@ const replacements = {
   GENERATE_JWT_SECRET: secret(48),
   GENERATE_INTERNAL_KEY: secret(48),
   GENERATE_PGADMIN_PASSWORD: secret(24),
+  GENERATE_RABBITMQ_PASSWORD: secret(24),
 };
 
 let contents = readFileSync(resolve(root, ".env.example"), "utf8");

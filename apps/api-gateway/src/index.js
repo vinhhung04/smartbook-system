@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const { startGatewayRabbitMqConsumer } = require("./lib/rabbitmq-consumer");
 const {
   createCorsOptions,
   createRateLimiter,
@@ -61,6 +62,7 @@ const ALLOWED_EVENTS = new Set([
   "goods_receipt:created",
   "putaway:created", "putaway:completed",
   "picking:created", "picking:completed",
+  "packing:evidence_verified",
   "warehouse_task:assigned", "warehouse_task:status_changed",
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
@@ -394,4 +396,5 @@ app.use((error, req, res, _next) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`api-gateway running at http://0.0.0.0:${port} (HTTP + WebSocket)`);
+  startGatewayRabbitMqConsumer(io);
 });
