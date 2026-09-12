@@ -11,6 +11,7 @@ import {
   type ShelfCompartmentItem,
 } from "@/services/shelf";
 import { reslottingSuggestionsService, type ReslottingSuggestionItem } from "@/services/reslotting-suggestions";
+import { occupancyBandFromRatio } from "@/lib/occupancy";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
@@ -40,7 +41,7 @@ function formatDate(value: string | null): string {
 
 function UtilizationBar({ value }: { value: number | null }) {
   const width = value == null ? 0 : Math.min(Math.max(value, 0), 100);
-  const severity = width >= 90 ? "Đầy" : width >= 70 ? "Gần đầy" : "Còn chỗ";
+  const band = occupancyBandFromRatio(width / 100);
   return (
     <div className="space-y-1">
       <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
@@ -48,11 +49,11 @@ function UtilizationBar({ value }: { value: number | null }) {
           initial={{ width: 0 }}
           animate={{ width: `${width}%` }}
           transition={{ duration: 0.45, ease: "easeOut" }}
-          className={`h-full rounded-full ${width >= 90 ? "bg-red-500" : width >= 70 ? "bg-amber-500" : "bg-emerald-500"}`}
+          className={`h-full rounded-full ${band.line}`}
         />
       </div>
-      <p className={`text-[10px] font-medium ${width >= 90 ? "text-red-600 dark:text-red-400" : width >= 70 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-        {value == null ? "-" : `${value.toFixed(2)}%`} · {severity}
+      <p className={`text-[10px] font-medium ${band.ink}`}>
+        {value == null ? "-" : `${value.toFixed(2)}%`} · {band.label}
       </p>
     </div>
   );

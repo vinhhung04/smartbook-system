@@ -17,6 +17,7 @@ const notificationAdminRoutes = require('./routes/notification-admin.routes');
 const { startOverdueSweepJob } = require('./jobs/overdue.job');
 const { startReservationExpiryJob } = require('./jobs/reservation-expiry.job');
 const { startDueSoonReminderJob } = require('./jobs/due-soon-reminder.job');
+const { startReservationReconciliationJob } = require('./jobs/reservation-reconciliation.job');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -106,4 +107,5 @@ app.listen(PORT, () => {
   startOverdueSweepJob();
   startReservationExpiryJob();
   startDueSoonReminderJob();
+  startReservationReconciliationJob();
 });

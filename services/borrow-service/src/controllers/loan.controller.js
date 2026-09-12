@@ -10,6 +10,7 @@ const {
   returnBorrowedStock,
 } = require('../services/inventory-integration.service');
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('../services/account.service');
+const { queueReconciliation } = require('../services/reconciliation.service');
 const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
 const { normalizePickupCode } = require('../utils/pickup-code');
 
@@ -364,9 +365,20 @@ async function createDirectLoan(req, res) {
       if (error instanceof AccountError) {
         return res.status(409).json({ message: error.message, detail: error.detail || undefined });
       }
+      // Inventory already moved reserved_qty -> borrowed_qty for this stock.
+      // Not auto-reversed here: the correct undo (returnBorrowedStock) needs
+      // loan_item/inventory_unit ids that only exist once loan_items rows are
+      // created — which is exactly the step that just failed. Queuing instead
+      // of guessing keeps a human in the loop for the one case this repo
+      // can't safely self-heal, rather than risking a wrong stock adjustment.
       console.error('Direct loan DB transaction failed after inventory consume:', error);
+      await queueReconciliation({
+        aggregateId: loanId,
+        eventType: 'DIRECT_LOAN_CONSUME_UNRESOLVED',
+        payload: { loan_id: loanId, reservation_id: reservationId, customer_id, variant_id, warehouse_id, quantity: normalizedQuantity },
+      });
       return res.status(502).json({
-        message: 'Direct loan creation failed after inventory consume. Manual reconciliation required.',
+        message: 'Direct loan creation failed after inventory consume. Queued for manual reconciliation.',
       });
     }
   } catch (error) {
@@ -921,9 +933,24 @@ async function convertReservationToLoan(req, res) {
         });
       }
 
+      // Same shape as createDirectLoan's catch below: not auto-reversed
+      // because the correct undo needs loan_item ids that only exist once
+      // loan_items rows are created — the step that just failed.
       console.error('Borrow DB transaction failed after inventory consume:', error);
+      await queueReconciliation({
+        aggregateId: loanId,
+        eventType: 'RESERVATION_CONSUME_UNRESOLVED',
+        payload: {
+          loan_id: loanId,
+          reservation_id: reservationId,
+          customer_id: reservation.customer_id,
+          variant_id: reservation.variant_id,
+          warehouse_id: reservation.warehouse_id,
+          quantity: reservation.quantity,
+        },
+      });
       return res.status(502).json({
-        message: 'Loan creation failed after inventory consume. Manual reconciliation required.',
+        message: 'Loan creation failed after inventory consume. Queued for manual reconciliation.',
       });
     }
   } catch (error) {
@@ -1001,6 +1028,12 @@ async function returnLoan(req, res) {
     return res.status(400).json({ message: 'mark_lost requires loan_item_id for single-item processing' });
   }
 
+  // Populated only once the returnBorrowedStock loop below has actually
+  // succeeded, so the catch block below can tell "nothing changed remotely
+  // yet" apart from "remote already changed, local persistence failed" —
+  // declared outside try/catch since a const inside try isn't visible in catch.
+  let returnedLoanItemIds = [];
+
   try {
     const loan = await prisma.loan_transactions.findUnique({
       where: { id: loanId },
@@ -1041,6 +1074,7 @@ async function returnLoan(req, res) {
       });
     }
 
+    returnedLoanItemIds = targets.map((item) => item.id);
     const returnedAt = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -1136,7 +1170,23 @@ async function returnLoan(req, res) {
     if (error?.status === 409) {
       return res.status(409).json({ message: error.message });
     }
+
     console.error('Error while returning loan:', error);
+
+    if (returnedLoanItemIds.length > 0) {
+      // The returnBorrowedStock loop above already succeeded: Inventory has
+      // moved borrowed_qty -> available_qty for these items, but loan_items/
+      // loan status here never updated to match. Same "no safe automatic
+      // undo" reasoning as createDirectLoan/convertReservationToLoan: queue
+      // it instead of guessing.
+      await queueReconciliation({
+        aggregateId: loanId,
+        eventType: 'LOAN_RETURN_UNRESOLVED',
+        payload: { loan_id: loanId, loan_item_ids: returnedLoanItemIds },
+      });
+      return res.status(500).json({ message: 'Internal server error. Stock was already returned; this has been queued for reconciliation.' });
+    }
+
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
