@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { prisma } = require('../lib/prisma');
 const { resolveActiveMembership } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
+const { compensateWithRetry } = require('../services/reconciliation.service');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
 const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
@@ -289,22 +290,24 @@ async function createReservation(req, res) {
 
       return res.status(201).json({ data: created });
     } catch (error) {
-      let releaseError = null;
-      try {
-        await releaseReservation({
+      const rollbackReason = 'ROLLBACK_AFTER_BORROW_TX_FAIL';
+      const compensation = await compensateWithRetry(
+        () => releaseReservation({
           reservation_id: reservationId,
-          reason: 'ROLLBACK_AFTER_BORROW_TX_FAIL',
+          reason: rollbackReason,
           idempotency_key: `rollback:${idempotencyKey}`,
           authHeader,
-        });
-      } catch (inner) {
-        releaseError = inner;
-      }
+        }),
+        {
+          aggregateId: reservationId,
+          eventType: 'RELEASE_RESERVATION',
+          payload: { reservation_id: reservationId, reason: rollbackReason },
+        },
+      );
 
-      if (releaseError) {
-        console.error('Reservation create rollback failed:', releaseError);
+      if (!compensation.ok) {
         return res.status(502).json({
-          message: 'Reservation persistence failed and compensation release also failed. Manual reconciliation required.',
+          message: 'Reservation persistence failed; compensation queued for automatic retry (reconciliation job).',
         });
       }
 

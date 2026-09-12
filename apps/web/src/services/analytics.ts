@@ -213,6 +213,64 @@ export type WeedingSuggestionsData = {
   items: WeedingSuggestionItem[];
 };
 
+export type RiskBand = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type RiskFactor = {
+  feature: string;
+  contribution: number;
+  direction: 'increases_risk' | 'decreases_risk';
+};
+
+export type RiskModelEvaluation = {
+  samples: number;
+  positives: number;
+  base_rate: number | null;
+  auc: number | null;
+  brier: number | null;
+  best_threshold: { threshold: number; precision: number; recall: number; f1: number };
+  ece: number | null;
+  lift: { k: number; captured: number; base_rate: number; precision_at_k: number; lift: number | null }[];
+};
+
+export type RiskModelInfo = {
+  feature_names: string[];
+  weights: number[];
+  bias: number;
+  trained_at: string;
+  train_size: number;
+};
+
+export type LateReturnRiskItem = {
+  loan_item_id: string;
+  customer_name: string | null;
+  title: string | null;
+  borrow_date: string;
+  due_date: string;
+  risk_score: number;
+  risk_band: RiskBand;
+  top_factors: RiskFactor[];
+};
+
+export type ReservationNoShowRiskItem = {
+  reservation_id: string;
+  customer_name: string | null;
+  title: string | null;
+  reserved_at: string;
+  expires_at: string;
+  risk_score: number;
+  risk_band: RiskBand;
+  top_factors: RiskFactor[];
+};
+
+export type RiskModelData<TItem> = {
+  generated_at: string;
+  status?: 'INSUFFICIENT_DATA';
+  reason?: string;
+  model?: RiskModelInfo;
+  evaluation?: RiskModelEvaluation;
+  items: TItem[];
+};
+
 async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T> {
   const response = await promise;
   return response.data.data;
@@ -258,6 +316,14 @@ export function getWeedingSuggestions(params?: { days?: number; limit?: number }
   return unwrap<WeedingSuggestionsData>(gatewayAPI.get('/analytics/weeding-suggestions', { params }));
 }
 
+export function getLateReturnRisk(params?: { limit?: number; dueWithinDays?: number }) {
+  return unwrap<RiskModelData<LateReturnRiskItem>>(gatewayAPI.get('/analytics/late-return-risk', { params }));
+}
+
+export function getReservationNoShowRisk(params?: { limit?: number }) {
+  return unwrap<RiskModelData<ReservationNoShowRiskItem>>(gatewayAPI.get('/analytics/reservation-no-show-risk', { params }));
+}
+
 export const analyticsService = {
   getDashboardKpis,
   getBorrowTrends,
@@ -269,4 +335,6 @@ export const analyticsService = {
   getReorderSuggestions,
   getAgingInventory,
   getWeedingSuggestions,
+  getLateReturnRisk,
+  getReservationNoShowRisk,
 };

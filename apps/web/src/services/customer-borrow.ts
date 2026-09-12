@@ -64,6 +64,16 @@ export const customerBorrowService = {
     return response.data;
   },
 
+  async createVnpayFinePayment(fineId: string) {
+    const response = await gatewayAPI.post('/my/fines/payments/vnpay/create', { fine_id: fineId });
+    return response.data;
+  },
+
+  async getVnpayFinePaymentStatus(txnRef: string) {
+    const response = await gatewayAPI.get(`/my/fines/payments/vnpay/status/${txnRef}`);
+    return response.data;
+  },
+
   async getMyNotifications(params?: { page?: number; pageSize?: number }) {
     const response = await gatewayAPI.get('/my/notifications', { params });
     return response.data;

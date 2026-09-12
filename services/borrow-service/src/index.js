@@ -6,6 +6,7 @@ const { prisma } = require('./lib/prisma');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
 const customerInternalRoutes = require('./routes/customer-internal.routes');
+const vnpayWebhookRoutes = require('./routes/vnpay-webhook.routes');
 const myRoutes = require('./routes/my.routes');
 const reservationRoutes = require('./routes/reservation.routes');
 const loanRoutes = require('./routes/loan.routes');
@@ -17,6 +18,7 @@ const notificationAdminRoutes = require('./routes/notification-admin.routes');
 const { startOverdueSweepJob } = require('./jobs/overdue.job');
 const { startReservationExpiryJob } = require('./jobs/reservation-expiry.job');
 const { startDueSoonReminderJob } = require('./jobs/due-soon-reminder.job');
+const { startReservationReconciliationJob } = require('./jobs/reservation-reconciliation.job');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -63,6 +65,7 @@ app.get('/ready', async (_req, res) => {
 });
 
 app.use('/internal/customers', customerInternalRoutes);
+app.use('/webhooks/vnpay', vnpayWebhookRoutes);
 
 app.use('/borrow', authenticateToken);
 
@@ -106,4 +109,5 @@ app.listen(PORT, () => {
   startOverdueSweepJob();
   startReservationExpiryJob();
   startDueSoonReminderJob();
+  startReservationReconciliationJob();
 });

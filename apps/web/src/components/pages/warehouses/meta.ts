@@ -9,6 +9,7 @@ import {
   Package,
 } from "lucide-react";
 import type { LocationNode } from "@/services/warehouse";
+import { occupancyBand } from "@/lib/occupancy";
 
 export interface TypeMeta {
   icon: LucideIcon;
@@ -156,4 +157,45 @@ export function ancestorIds(nodeId: string, flat: LocationNode[]): string[] {
     current = flat.find((item) => item.id === current!.parent_location_id) || null;
   }
   return ids;
+}
+
+export type { OccupancyBand } from "@/lib/occupancy";
+export { occupancyBandFromRatio, occupancyBand } from "@/lib/occupancy";
+
+export interface WarehouseLocationSummary {
+  zoneCount: number;
+  shelfCount: number;
+  compartmentCount: number;
+  avgOccupancy: number | null;
+}
+
+/** Aggregates a location tree into per-type counts and average compartment occupancy, for a glanceable card summary. */
+export function summarizeLocationTree(tree: LocationNode[]): WarehouseLocationSummary {
+  const flat = flattenNodes(tree);
+  let zoneCount = 0;
+  let shelfCount = 0;
+  let compartmentCount = 0;
+  let ratioSum = 0;
+  let measured = 0;
+
+  flat.forEach((node) => {
+    const type = normalizeType(node.location_type);
+    if (type === "ZONE") zoneCount += 1;
+    else if (type === "SHELF") shelfCount += 1;
+    else if (type === "SHELF_COMPARTMENT") {
+      compartmentCount += 1;
+      const band = occupancyBand(node.available, node.capacity_qty);
+      if (band) {
+        ratioSum += band.ratio;
+        measured += 1;
+      }
+    }
+  });
+
+  return {
+    zoneCount,
+    shelfCount,
+    compartmentCount,
+    avgOccupancy: measured > 0 ? ratioSum / measured : null,
+  };
 }

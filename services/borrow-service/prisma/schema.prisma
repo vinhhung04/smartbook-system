@@ -187,9 +187,34 @@ model fines {
   customers         customers      @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   loan_items        loan_items?    @relation(fields: [loan_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   fine_payments     fine_payments[]
+  fine_payment_intents fine_payment_intents[]
 
   @@index([customer_id, status], map: "idx_fines_customer_status")
   @@index([loan_item_id], map: "idx_fines_loan_item_id")
+}
+
+model fine_payment_intents {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fine_id            String    @db.Uuid
+  customer_id        String    @db.Uuid
+  provider           String    @default("VNPAY") @db.VarChar(20)
+  txn_ref            String    @db.VarChar(50)
+  amount             Decimal   @db.Decimal(10, 2)
+  status             String    @default("PENDING") @db.VarChar(20)
+  vnp_order_info     String?   @db.VarChar(255)
+  vnp_response_code  String?   @db.VarChar(10)
+  vnp_transaction_no String?   @db.VarChar(50)
+  vnp_bank_code      String?   @db.VarChar(20)
+  fine_payment_id    String?   @db.Uuid
+  raw_return_params  Json?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime  @db.Timestamptz(6)
+  finalized_at       DateTime? @db.Timestamptz(6)
+  fines              fines     @relation(fields: [fine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([txn_ref], map: "uq_fine_payment_intents_txn_ref")
+  @@index([customer_id, status], map: "idx_fine_payment_intents_customer_status")
+  @@index([fine_id], map: "idx_fine_payment_intents_fine_id")
 }
 
 model fine_payments {

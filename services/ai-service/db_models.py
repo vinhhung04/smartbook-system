@@ -112,3 +112,18 @@ class ActionAuditLogRow(Base):
     payload_snapshot: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     event_metadata: Mapped[dict | None] = mapped_column("metadata", JSONType, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False, default=_now)
+
+
+class CoverEmbeddingRow(Base):
+    __tablename__ = "ai_cover_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    variant_id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True, nullable=False)
+    book_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    author: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cover_image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    model_name: Mapped[str] = mapped_column(nullable=False)
+    embedding: Mapped[list] = mapped_column(JSONType, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False, default=_now, onupdate=_now)

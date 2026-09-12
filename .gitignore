@@ -1,5 +1,6 @@
 node_modules/
 ollama_data/
+ai_service_model_cache/
 .env
 .env.smoke
 dist/

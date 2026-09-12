@@ -336,6 +336,15 @@ app.use(
 
 app.use(
   createProxyMiddleware({
+    pathFilter: "/webhooks",
+    target: borrowTarget,
+    changeOrigin: true,
+    xfwd: true,
+  }),
+);
+
+app.use(
+  createProxyMiddleware({
     pathFilter: "/analytics",
     target: analyticsTarget,
     changeOrigin: true,

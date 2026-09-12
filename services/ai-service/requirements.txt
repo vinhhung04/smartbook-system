@@ -9,3 +9,5 @@ cloakbrowser
 sqlalchemy[asyncio]
 asyncpg
 aiosqlite
+transformers
+Pillow

@@ -86,6 +86,7 @@ from llm_provider import get_llm_provider
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
+from routes_cover_search import router as cover_search_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -105,6 +106,7 @@ app.add_middleware(
 
 app.include_router(actions_router)
 app.include_router(conversations_router)
+app.include_router(cover_search_router)
 
 
 @app.on_event("startup")
@@ -199,6 +201,30 @@ async def _startup_warmup_assistant_model() -> None:
             logger.warning("Assistant model warm-up failed (non-fatal): %s", exc)
 
     asyncio.create_task(_warm_up())
+
+
+@app.on_event("startup")
+async def _startup_warmup_cover_model() -> None:
+    """Best-effort: load the CLIP image-embedding model before the first
+    /find-book-by-cover request pays that ~600MB download/load cost."""
+    import cover_embeddings
+
+    asyncio.create_task(cover_embeddings.warm_up())
+
+
+@app.on_event("startup")
+async def _startup_nightly_briefing() -> None:
+    """Autonomous "Thu thu AI" agent: reviews the system every night and leaves a
+    CREATE_REPORT_DRAFT pending action for staff to confirm in the morning — see
+    nightly_briefing.py. Opt-out via ENABLE_NIGHTLY_BRIEFING for environments (e.g.
+    tests) that don't want a background loop running."""
+    if os.getenv("ENABLE_NIGHTLY_BRIEFING", "true").lower() != "true":
+        return
+    import nightly_briefing
+
+    asyncio.create_task(nightly_briefing.nightly_briefing_loop())
+
+
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
 ASSISTANT_ALLOWED_PERMISSIONS = {
     "analytics.reports.view",

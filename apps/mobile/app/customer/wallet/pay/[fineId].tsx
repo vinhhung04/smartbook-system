@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
 import { ApiError } from '../../../../src/auth/auth-context';
 import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
-import type { Fine, FinePaymentMethod } from '../../../../src/types/borrow';
-
-const PAYMENT_METHODS: { value: FinePaymentMethod; label: string }[] = [
-  { value: 'EWALLET', label: 'Ví điện tử' },
-  { value: 'CASH', label: 'Tiền mặt tại quầy' },
-  { value: 'TRANSFER', label: 'Chuyển khoản' },
-  { value: 'CARD', label: 'Thẻ' },
-];
+import type { Fine, VnpayPaymentIntentStatus } from '../../../../src/types/borrow';
 
 function formatCurrency(amount: number): string {
   return `${amount.toLocaleString('vi-VN')} đ`;
@@ -24,15 +18,23 @@ function remainingOf(fine: Fine): number {
   return Math.max(0, fine.amount - fine.waived_amount - paid);
 }
 
+const STATUS_MESSAGES: Record<VnpayPaymentIntentStatus, string> = {
+  PENDING: 'Đang chờ xác nhận từ VNPay. Hoàn tất thanh toán trên trình duyệt rồi quay lại đây.',
+  SUCCESS: 'Thanh toán thành công! Khoản phạt đã được ghi nhận.',
+  FAILED: 'Thanh toán không thành công. Vui lòng thử lại.',
+  EXPIRED: 'Phiên thanh toán đã hết hạn. Vui lòng thử lại.',
+};
+
 export default function CustomerPayFineScreen() {
   const { fineId } = useLocalSearchParams<{ fineId: string }>();
   const [fine, setFine] = useState<Fine | null>(null);
-  const [method, setMethod] = useState<FinePaymentMethod>('EWALLET');
   const [isLoading, setIsLoading] = useState(true);
-  const [isPaying, setIsPaying] = useState(false);
+  const [isStartingPayment, setIsStartingPayment] = useState(false);
+  const [txnRef, setTxnRef] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<VnpayPaymentIntentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const loadFine = useCallback(async () => {
     setError(null);
     try {
       const result = await customerBorrowApi.getMyFines();
@@ -46,24 +48,38 @@ export default function CustomerPayFineScreen() {
 
   useEffect(() => {
     setIsLoading(true);
-    load().finally(() => setIsLoading(false));
-  }, [load]);
+    loadFine().finally(() => setIsLoading(false));
+  }, [loadFine]);
 
-  async function handlePay() {
+  // Re-check payment status whenever the user returns to this screen — e.g.
+  // after backgrounding the system browser post-VNPay. No deep link needed.
+  useFocusEffect(
+    useCallback(() => {
+      if (!txnRef) return;
+      customerBorrowApi.getVnpayFinePaymentStatus(txnRef).then((result) => {
+        setPaymentStatus(result.data.status);
+        if (result.data.status === 'SUCCESS') void loadFine();
+      }).catch(() => {});
+    }, [txnRef, loadFine]),
+  );
+
+  async function handlePayOnline() {
     if (!fine) return;
-    setIsPaying(true);
+    setIsStartingPayment(true);
     setError(null);
     try {
-      // amount omitted on purpose — backend settles the full remaining balance,
-      // the same "record payment" simulation the web customer portal uses.
-      await customerBorrowApi.payMyFine({ fine_id: fine.id, payment_method: method });
-      router.back();
+      const result = await customerBorrowApi.createVnpayFinePayment(fine.id);
+      setTxnRef(result.data.txn_ref);
+      setPaymentStatus('PENDING');
+      await Linking.openURL(result.data.payment_url);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Thanh toán thất bại, vui lòng thử lại.');
+      setError(err instanceof ApiError ? err.message : 'Không thể khởi tạo thanh toán, vui lòng thử lại.');
     } finally {
-      setIsPaying(false);
+      setIsStartingPayment(false);
     }
   }
+
+  const isSettled = paymentStatus === 'SUCCESS' || (fine ? remainingOf(fine) <= 0 : false);
 
   return (
     <>
@@ -84,40 +100,33 @@ export default function CustomerPayFineScreen() {
             <Text style={styles.summaryHint}>Số tiền còn phải trả</Text>
           </View>
 
-          <Text style={styles.sectionLabel}>Phương thức thanh toán</Text>
-          <View style={styles.methodList}>
-            {PAYMENT_METHODS.map((option) => (
-              <Pressable
-                key={option.value}
-                style={[styles.methodOption, method === option.value && styles.methodOptionActive]}
-                onPress={() => setMethod(option.value)}
-              >
-                <Text style={[styles.methodLabel, method === option.value && styles.methodLabelActive]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {paymentStatus ? (
+            <View style={[styles.statusBanner, paymentStatus === 'SUCCESS' && styles.statusBannerSuccess]}>
+              <Text style={styles.statusBannerText}>{STATUS_MESSAGES[paymentStatus]}</Text>
+            </View>
+          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable
-            style={({ pressed }) => [styles.payButton, isPaying && styles.payButtonDisabled, pressed && styles.payButtonPressed]}
-            onPress={handlePay}
-            disabled={isPaying}
-          >
-            <LinearGradient
-              colors={[colors.accentGradientStart, colors.accentGradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            {isPaying ? (
-              <ActivityIndicator color={colors.onPrimary} />
-            ) : (
-              <Text style={styles.payButtonText}>Xác nhận thanh toán</Text>
-            )}
-          </Pressable>
+          {!isSettled ? (
+            <Pressable
+              style={({ pressed }) => [styles.payButton, isStartingPayment && styles.payButtonDisabled, pressed && styles.payButtonPressed]}
+              onPress={handlePayOnline}
+              disabled={isStartingPayment}
+            >
+              <LinearGradient
+                colors={[colors.accentGradientStart, colors.accentGradientEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {isStartingPayment ? (
+                <ActivityIndicator color={colors.onPrimary} />
+              ) : (
+                <Text style={styles.payButtonText}>Thanh toán qua VNPay</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
       )}
     </>
@@ -161,30 +170,16 @@ const styles = StyleSheet.create({
     ...typography.caption,
     marginTop: spacing.xs,
   },
-  sectionLabel: {
-    ...typography.label,
-  },
-  methodList: {
-    gap: spacing.sm,
-  },
-  methodOption: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
+  statusBanner: {
     borderRadius: radius.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-  },
-  methodOptionActive: {
-    borderColor: colors.primary,
+    padding: spacing.md,
     backgroundColor: colors.primarySoft,
   },
-  methodLabel: {
-    ...typography.body,
+  statusBannerSuccess: {
+    backgroundColor: colors.surface,
   },
-  methodLabelActive: {
-    color: colors.primary,
-    fontFamily: typography.bodyBold.fontFamily,
+  statusBannerText: {
+    ...typography.body,
   },
   payButton: {
     borderRadius: radius.pill,

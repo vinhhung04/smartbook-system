@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, BookOpen, Download, X, ScanBarcode, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, Trash2, Copy, Check } from "lucide-react";
+import { Plus, BookOpen, Download, X, ScanBarcode, Camera, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, AlertCircle, Trash2, Copy, Check } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { CatalogBookThumbnail } from "./catalog-book-thumbnail";
 import { getCategoryTone } from "./catalog-book-category";
@@ -7,10 +7,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
 import { toast } from "sonner";
 import { BarcodeScanModal } from "../barcode-scan-modal";
+import { CoverSearchModal } from "../cover-search-modal";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatFilterCard } from "@/components/ui/stat-filter-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
@@ -19,7 +20,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
@@ -29,14 +29,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/components/ui/utils";
 import { getPaginationRange } from "@/lib/pagination";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
-
-const FILTERS = [
-  { value: "All", label: "Tất cả" },
-  { value: "Complete", label: "Hoàn chỉnh" },
-  { value: "Incomplete", label: "Chưa hoàn chỉnh" },
-  { value: "Low Stock", label: "Sắp hết hàng" },
-  { value: "Out of Stock", label: "Hết hàng" },
-];
 
 const PAGE_SIZE = 10;
 
@@ -85,6 +77,7 @@ export function CatalogPage() {
   const [sortField, setSortField] = useState<"title" | "stock" | "updatedAt">("title");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [showCoverSearchModal, setShowCoverSearchModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteBook, setDeleteBook] = useState<CatalogBook | null>(null);
   const [page, setPage] = useState(1);
@@ -301,36 +294,53 @@ export function CatalogPage() {
         />
       </FadeItem>
 
-      {/* Stat Cards */}
+      {/* Stat cards double as the status filter — click one to filter the table by it */}
       <FadeItem>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StatFilterCard
             label="Tổng đầu sách"
             value={books.length}
             icon={BookOpen}
             variant="default"
-            animateValue
+            isActive={activeFilter === "All"}
+            onClick={() => setActiveFilter("All")}
+            layoutId="catalog-status-filter-badge"
           />
-          <StatCard
+          <StatFilterCard
             label="Hoàn chỉnh"
             value={completeCount}
             icon={Package}
             variant="success"
-            animateValue
+            isActive={activeFilter === "Complete"}
+            onClick={() => setActiveFilter(activeFilter === "Complete" ? "All" : "Complete")}
+            layoutId="catalog-status-filter-badge"
           />
-          <StatCard
+          <StatFilterCard
+            label="Chưa hoàn chỉnh"
+            value={incompleteCount}
+            icon={AlertCircle}
+            variant="info"
+            isActive={activeFilter === "Incomplete"}
+            onClick={() => setActiveFilter(activeFilter === "Incomplete" ? "All" : "Incomplete")}
+            layoutId="catalog-status-filter-badge"
+          />
+          <StatFilterCard
             label="Sắp hết hàng"
             value={lowStockCount}
             icon={AlertTriangle}
             variant="warning"
-            animateValue
+            isActive={activeFilter === "Low Stock"}
+            onClick={() => setActiveFilter(activeFilter === "Low Stock" ? "All" : "Low Stock")}
+            layoutId="catalog-status-filter-badge"
           />
-          <StatCard
+          <StatFilterCard
             label="Hết hàng"
             value={outOfStockCount}
             icon={AlertTriangle}
             variant="danger"
-            animateValue
+            isActive={activeFilter === "Out of Stock"}
+            onClick={() => setActiveFilter(activeFilter === "Out of Stock" ? "All" : "Out of Stock")}
+            layoutId="catalog-status-filter-badge"
           />
         </div>
       </FadeItem>
@@ -343,34 +353,30 @@ export function CatalogPage() {
             onSearchChange={setSearchQuery}
             searchPlaceholder="Tìm theo tên sách, mã vạch, tác giả..."
             filters={
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category === "All" ? "Tất cả danh mục" : category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <SegmentedControl
-                  options={FILTERS}
-                  value={activeFilter}
-                  onChange={setActiveFilter}
-                  layoutId="catalog-filter"
-                  gradientClassName="from-blue-600 to-indigo-600"
-                  className="overflow-x-auto"
-                />
-              </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category === "All" ? "Tất cả danh mục" : category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             }
             actions={
-              <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
-                <RefreshCw className="w-3.5 h-3.5" />
-                Làm mới
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowCoverSearchModal(true)}>
+                  <Camera className="w-3.5 h-3.5" />
+                  Tìm bằng ảnh
+                </Button>
+                <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Làm mới
+                </Button>
+              </>
             }
           />
         </div>
@@ -382,24 +388,17 @@ export function CatalogPage() {
           {loading ? (
             <LoadingOverlay />
           ) : (
-            <div className="overflow-x-auto">
+            <div>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
-                    <TableHead className="w-12 px-5 py-3" />
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
-                      Mã vạch
-                    </TableHead>
                     <TableHead
                       className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleSort("title")}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Tên sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
-                    </TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
-                      Tác giả
                     </TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
                       Danh mục
@@ -432,7 +431,7 @@ export function CatalogPage() {
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={10} className="whitespace-normal py-10 text-center">
+                      <TableCell colSpan={7} className="whitespace-normal py-10 text-center">
                         <EmptyState
                           variant="no-results"
                           title="Không tìm thấy sách"
@@ -455,34 +454,38 @@ export function CatalogPage() {
                   ) : pagedBooks.map((book) => (
                     <TableRow key={book.id} className="group cursor-pointer">
                       <TableCell className="px-5 py-3.5">
-                        <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
-                      </TableCell>
-                      <TableCell className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">
-                        {book.barcode ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyBarcode(book.barcode!);
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded hover:text-foreground transition-colors"
-                            aria-label={`Sao chép mã vạch ${book.barcode}`}
-                          >
-                            {book.barcode}
-                            {copiedBarcode === book.barcode ? (
-                              <Check className="h-3 w-3 text-success" />
-                            ) : (
-                              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                        <div className="flex items-start gap-3">
+                          <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
+                          <div className="min-w-0 max-w-[240px]">
+                            <NavLink
+                              to={`/book/${book.id}`}
+                              className="block truncate text-[13px] group-hover:text-primary transition-colors hover:underline"
+                              style={{ fontWeight: 550 }}
+                            >
+                              {book.title}
+                            </NavLink>
+                            <p className="truncate text-[12px] text-muted-foreground">{book.author || "-"}</p>
+                            {book.barcode && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyBarcode(book.barcode!);
+                                }}
+                                className="mt-0.5 inline-flex items-center gap-1.5 rounded font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label={`Sao chép mã vạch ${book.barcode}`}
+                              >
+                                {book.barcode}
+                                {copiedBarcode === book.barcode ? (
+                                  <Check className="h-3 w-3 text-success" />
+                                ) : (
+                                  <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                                )}
+                              </button>
                             )}
-                          </button>
-                        ) : "-"}
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3.5 text-[13px] group-hover:text-primary transition-colors" style={{ fontWeight: 550 }}>
-                        <NavLink to={`/book/${book.id}`} className="hover:underline">
-                          {book.title}
-                        </NavLink>
-                      </TableCell>
-                      <TableCell className="px-5 py-3.5 text-[13px] text-muted-foreground">{book.author || "-"}</TableCell>
                       <TableCell className="px-5 py-3.5">
                         <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
                       </TableCell>
@@ -705,6 +708,11 @@ export function CatalogPage() {
           toast.success(`Đã quét mã: ${barcode}`);
         }}
         title="Quét mã vạch sách"
+      />
+
+      <CoverSearchModal
+        isOpen={showCoverSearchModal}
+        onClose={() => setShowCoverSearchModal(false)}
       />
 
       <ConfirmDialog

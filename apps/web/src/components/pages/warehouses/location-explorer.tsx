@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowLeft, ListTree, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, ListTree, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { LocationNode, Warehouse } from "@/services/warehouse";
+import { shelfService, type ShelfCompartmentItem } from "@/services/shelf";
+import { stockAuditService } from "@/services/stock-audit";
+import { authService } from "@/services/auth";
+import { getApiErrorMessage, hasPermission } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
@@ -265,6 +271,7 @@ export function LocationExplorer({
             <div className="rounded-lg border border-border bg-card p-4">
               <LocationDataPlate
                 node={selectedLocation}
+                warehouseId={warehouse.id}
                 canAddChild={canAddChild}
                 onAddChild={onCreateChildLocation}
                 onEdit={onEditLocation}
@@ -303,6 +310,7 @@ export function LocationExplorer({
             {selectedLocation ? (
               <LocationDataPlate
                 node={selectedLocation}
+                warehouseId={warehouse.id}
                 canAddChild={canAddChild}
                 onAddChild={onCreateChildLocation}
                 onEdit={onEditLocation}
@@ -360,6 +368,7 @@ export function LocationExplorer({
 
 function LocationDataPlate({
   node,
+  warehouseId,
   canAddChild,
   onAddChild,
   onEdit,
@@ -367,15 +376,69 @@ function LocationDataPlate({
   deleting,
 }: {
   node: LocationNode;
+  warehouseId: string;
   canAddChild: boolean;
   onAddChild: () => void;
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
+  const navigate = useNavigate();
   const meta = locationTypeMeta(node.location_type);
   const Icon = meta.icon;
   const isInactive = node.is_active === false;
+  const isCompartment = normalizeType(node.location_type) === "SHELF_COMPARTMENT";
+
+  const [compartment, setCompartment] = useState<ShelfCompartmentItem | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
+  const [creatingAudit, setCreatingAudit] = useState(false);
+
+  // Real per-book stock lives on the parent shelf's detail endpoint, not on
+  // LocationNode itself (which only carries an aggregate available/capacity
+  // count) — fetch it fresh whenever the selected compartment changes.
+  useEffect(() => {
+    if (!isCompartment || !node.parent_location_id) {
+      setCompartment(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingStock(true);
+    shelfService
+      .getById(node.parent_location_id)
+      .then((detail) => {
+        if (cancelled) return;
+        setCompartment(detail.compartments.find((item) => item.id === node.id) || null);
+      })
+      .catch(() => {
+        if (!cancelled) setCompartment(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStock(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCompartment, node.id, node.parent_location_id]);
+
+  const handleCreateAudit = async () => {
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) return;
+    setCreatingAudit(true);
+    try {
+      const created = await stockAuditService.create({
+        warehouse_id: warehouseId,
+        location_ids: [node.id],
+        note: `Từ sơ đồ kho — ${node.name || node.code}`,
+      });
+      await stockAuditService.assign(created.data.id, currentUser.id);
+      toast.success(`Đã tạo phiếu kiểm kê ${created.data.audit_number}`);
+      navigate(`/stock-audits/${created.data.id}`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không tạo được phiếu kiểm kê"));
+    } finally {
+      setCreatingAudit(false);
+    }
+  };
 
   return (
     <div className="relative rounded-xl border border-border bg-card p-3.5">
@@ -411,6 +474,45 @@ function LocationDataPlate({
           </Button>
         </div>
       </div>
+
+      {isCompartment && (
+        <div className="mt-3.5 border-t border-border pt-3.5">
+          <h5 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Tồn kho tại đây
+          </h5>
+
+          {loadingStock ? (
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-3/4 rounded bg-muted animate-pulse" />
+              <div className="h-3.5 w-1/2 rounded bg-muted animate-pulse" />
+            </div>
+          ) : !compartment || compartment.books.length === 0 ? (
+            <p className="text-[12px] text-muted-foreground">Ngăn kệ này chưa có sách nào.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {compartment.books.map((book) => (
+                <li key={book.variantId} className="flex items-center justify-between gap-2 text-[12px]">
+                  <span className="truncate text-foreground">{book.title}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{book.onHandQty} cuốn</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {hasPermission("inventory.stock.audit") && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleCreateAudit()}
+              disabled={creatingAudit}
+              className="mt-3 w-full justify-center"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              {creatingAudit ? "Đang tạo..." : "Tạo phiếu kiểm kê"}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

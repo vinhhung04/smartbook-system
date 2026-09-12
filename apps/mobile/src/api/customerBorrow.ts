@@ -2,13 +2,12 @@ import { apiFetch } from './client';
 import { createIdempotencyKey } from '../lib/idempotency';
 import type {
   CreateReservationPayload,
-  Fine,
   FinesResponse,
   Loan,
   PaginatedResponse,
-  PayFinePayload,
   Reservation,
   ReservationStatus,
+  VnpayPaymentIntentStatus,
 } from '../types/borrow';
 
 function idempotencyHeaders(prefix: string) {
@@ -69,13 +68,18 @@ export function getMyFines() {
   return apiFetch<{ data: FinesResponse }>('/my/fines');
 }
 
-export function payMyFine(payload: PayFinePayload) {
+export function createVnpayFinePayment(fineId: string) {
   return apiFetch<{
     message: string;
-    data: { fine_id: string; payment_id: string; paid_amount: number; remaining_balance: number; status: Fine['status'] };
-  }>('/my/fines/payments', {
+    data: { payment_url: string; txn_ref: string; amount: number; expires_at: string };
+  }>('/my/fines/payments/vnpay/create', {
     method: 'POST',
-    body: payload,
-    headers: idempotencyHeaders('fine-pay'),
+    body: { fine_id: fineId },
   });
+}
+
+export function getVnpayFinePaymentStatus(txnRef: string) {
+  return apiFetch<{
+    data: { status: VnpayPaymentIntentStatus; fine_id: string; amount: number };
+  }>(`/my/fines/payments/vnpay/status/${encodeURIComponent(txnRef)}`);
 }

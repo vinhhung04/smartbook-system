@@ -29,18 +29,20 @@ router.get('/book-turnover', authenticateInternalOrUser, analyticsController.get
 // The borrow-service due-soon reminder job calls this with the internal
 // service key, not a user JWT - same convention as the two routes above.
 router.get('/late-return-risk', authenticateInternalOrUser, analyticsController.getLateReturnRisk);
+// ai-service's nightly briefing agent (services/ai-service/nightly_briefing.py) calls
+// these six with the internal service key - same convention as the routes above.
+router.get('/overdue-summary', authenticateInternalOrUser, analyticsController.getOverdueSummary);
+router.get('/fine-summary', authenticateInternalOrUser, analyticsController.getFineSummary);
+router.get('/warehouse-stock-risk', authenticateInternalOrUser, analyticsController.getWarehouseStockRisk);
+router.get('/reorder-suggestions', authenticateInternalOrUser, analyticsController.getReorderSuggestions);
+router.get('/reservation-funnel', authenticateInternalOrUser, analyticsController.getReservationFunnel);
+router.get('/weeding-suggestions', authenticateInternalOrUser, analyticsController.getWeedingSuggestions);
 
 router.use(authenticateToken, readAnalytics);
 
 router.get('/dashboard/kpis', analyticsController.getDashboardKpis);
 router.get('/borrow-trends', analyticsController.getBorrowTrends);
 router.get('/top-books', analyticsController.getTopBooks);
-router.get('/overdue-summary', analyticsController.getOverdueSummary);
-router.get('/fine-summary', analyticsController.getFineSummary);
-router.get('/warehouse-stock-risk', analyticsController.getWarehouseStockRisk);
-router.get('/reorder-suggestions', analyticsController.getReorderSuggestions);
-router.get('/reservation-funnel', analyticsController.getReservationFunnel);
-router.get('/weeding-suggestions', analyticsController.getWeedingSuggestions);
 router.get('/forecast-accuracy', analyticsController.getForecastAccuracy);
 router.get('/reservation-no-show-risk', analyticsController.getReservationNoShowRisk);
 

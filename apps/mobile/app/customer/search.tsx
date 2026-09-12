@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, router } from 'expo-router';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as customerCatalogApi from '../../src/api/customerCatalog';
 import { ApiError } from '../../src/auth/auth-context';
@@ -41,7 +42,21 @@ export default function CustomerSearchScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Tìm kiếm' }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Tìm kiếm',
+          headerRight: () => (
+            <Pressable
+              onPress={() => router.push('/customer/scan-cover')}
+              hitSlop={8}
+              accessibilityLabel="Tìm sách bằng ảnh bìa"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+          ),
+        }}
+      />
       <View style={styles.container}>
         <TextInput
           style={styles.search}

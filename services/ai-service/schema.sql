@@ -87,3 +87,22 @@ CREATE TABLE IF NOT EXISTS ai_action_audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ai_action_audit_logs_action ON ai_action_audit_logs (action_id);
+
+-- Durable cache for "find book by cover photo" visual-embedding gallery
+-- (cover_gallery.py). One row per inventory book_variants row that has a
+-- cover_image_url. No pgvector: embedding is a plain JSONB float array,
+-- compared with the same pure-Python cosine_similarity used by book_index.py.
+CREATE TABLE IF NOT EXISTS ai_cover_embeddings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    variant_id UUID UNIQUE NOT NULL,
+    book_id UUID NOT NULL,
+    title TEXT,
+    author TEXT,
+    cover_image_url TEXT NOT NULL,
+    model_name VARCHAR(128) NOT NULL,
+    embedding JSONB NOT NULL,
+    created_at TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ(6) NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_ai_cover_embeddings_book ON ai_cover_embeddings (book_id);

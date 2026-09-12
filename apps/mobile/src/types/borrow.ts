@@ -115,13 +115,7 @@ export type FinesResponse = {
   fine_payments: FinePayment[];
 };
 
-export type PayFinePayload = {
-  fine_id: string;
-  amount?: number;
-  payment_method: FinePaymentMethod;
-  transaction_reference?: string;
-  note?: string;
-};
+export type VnpayPaymentIntentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
 
 export type PaginatedResponse<T> = {
   data: T[];

@@ -50,6 +50,17 @@ function formatDateOnly(value) {
   return value.toISOString().slice(0, 10);
 }
 
+async function getTitlesByVariantIds(variantIds) {
+  const uniqueIds = Array.from(new Set(variantIds.filter(Boolean)));
+  if (!uniqueIds.length) return new Map();
+  const rows = await query(
+    inventoryPool,
+    `SELECT bv.id::text AS variant_id, b.title FROM book_variants bv JOIN books b ON b.id = bv.book_id WHERE bv.id = ANY($1::uuid[])`,
+    [uniqueIds],
+  );
+  return new Map(rows.map((row) => [row.variant_id, row.title]));
+}
+
 function parsePositiveInteger(value, defaultValue, maxValue, fieldName) {
   const parsed = Number(value || defaultValue);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > maxValue) {
@@ -1178,6 +1189,8 @@ const getForecastAccuracy = asyncHandler(async (req, res) => {
 const LATE_RETURN_ROW_SQL = `
   SELECT
     li.id::text AS loan_item_id,
+    li.variant_id::text AS variant_id,
+    c.full_name AS customer_name,
     lt.borrow_date,
     COALESCE(orig.old_due_date, li.due_date) AS original_due_date,
     li.due_date,
@@ -1261,9 +1274,13 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
   }
 
   const scoringRows = await getLateReturnScoringRows(dueWithinDays, limit);
-  const scored = scoreRows(trained.model, scoringRows, toLateReturnSample)
+  const scoredRows = scoreRows(trained.model, scoringRows, toLateReturnSample);
+  const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
+  const scored = scoredRows
     .map((item) => ({
       loan_item_id: item.loan_item_id,
+      customer_name: item.customer_name,
+      title: titleByVariant.get(item.variant_id) || null,
       borrow_date: item.borrow_date,
       due_date: item.due_date,
       risk_score: item.risk_score,
@@ -1289,6 +1306,8 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
 const NO_SHOW_ROW_SQL = `
   SELECT
     r.id::text AS reservation_id,
+    r.variant_id::text AS variant_id,
+    c.full_name AS customer_name,
     r.status,
     r.reserved_at,
     r.expires_at,
@@ -1355,9 +1374,13 @@ const getReservationNoShowRisk = asyncHandler(async (req, res) => {
   }
 
   const scoringRows = await getNoShowScoringRows(limit);
-  const scored = scoreRows(trained.model, scoringRows, toNoShowSample)
+  const scoredRows = scoreRows(trained.model, scoringRows, toNoShowSample);
+  const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
+  const scored = scoredRows
     .map((item) => ({
       reservation_id: item.reservation_id,
+      customer_name: item.customer_name,
+      title: titleByVariant.get(item.variant_id) || null,
       reserved_at: item.reserved_at,
       expires_at: item.expires_at,
       risk_score: item.risk_score,
