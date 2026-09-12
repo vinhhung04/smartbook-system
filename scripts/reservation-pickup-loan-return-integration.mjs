@@ -131,11 +131,11 @@ async function run() {
   }
 
   // 2. Staff confirms reservation -> CONFIRMED
-  const confirmed = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'CONFIRMED' });
+  const confirmed = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'CONFIRMED' }, idemHeader());
   add('2.confirm -> CONFIRMED', confirmed.ok && confirmed.data?.data?.status === 'CONFIRMED', JSON.stringify(confirmed.data));
 
   // 3. Staff marks READY_FOR_PICKUP -> pickup code issued
-  const ready = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'READY_FOR_PICKUP' });
+  const ready = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'READY_FOR_PICKUP' }, idemHeader());
   const issuedCode = ready.data?.data?.pickup_code;
   if (ready.ok && ready.data?.data?.status === 'READY_FOR_PICKUP' && PICKUP_CODE_RE.test(issuedCode || '')) {
     pickupCode = issuedCode;

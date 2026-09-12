@@ -6,6 +6,7 @@ const {
   createRateLimiter,
   createRequestContext,
   createRequestLogger,
+  deterministicUuid,
   requireEnv,
   securityHeaders,
 } = require('../runtime/index.cjs');
@@ -71,6 +72,15 @@ test('request logger emits structured metadata without request secrets', () => {
   assert.equal(entry.request_id, 'req-1');
   assert.equal(entry.status, 401);
   assert.equal(entry.authorization, undefined);
+});
+
+test('deterministicUuid is stable for the same seed and looks like a v4 UUID', () => {
+  const a = deterministicUuid('reservation:key-1');
+  const b = deterministicUuid('reservation:key-1');
+  const c = deterministicUuid('reservation:key-2');
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
 test('rate limiter rejects requests after the configured budget', () => {

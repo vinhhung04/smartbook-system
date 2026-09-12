@@ -147,7 +147,8 @@ async function run() {
     const confirmed = await request(
       'PATCH',
       `/borrow/reservations/${reservationId}/confirm`,
-      { status: 'CONFIRMED', notes: 'integration staff confirmation' }
+      { status: 'CONFIRMED', notes: 'integration staff confirmation' },
+      { 'Idempotency-Key': crypto.randomUUID() }
     );
 
     if (!confirmed.ok) {

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
@@ -34,14 +35,6 @@ function parseIdempotencyKey(req) {
 
 function parsePickupCodeFromBody(body) {
   return normalizePickupCode(body?.pickup_code || body?.pickupCode || body?.code || body?.qr_code);
-}
-
-function deterministicUuid(seed) {
-  const hash = crypto.createHash('sha256').update(seed).digest('hex');
-  const chars = hash.slice(0, 32).split('');
-  chars[12] = '4';
-  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
-  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
 }
 
 function parsePagination(query) {

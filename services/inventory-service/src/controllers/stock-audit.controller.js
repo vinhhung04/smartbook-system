@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { parseId, toInt, normalizeText, normalizeOptionalUserId } = require('../utils/validation');
 const { buildStockBalanceFilter, createAuditWithLines } = require('../services/stock-audit-creation.service');
+const { claimSubmittedAuditForApproval } = require('../services/stock-audit-approval.service');
 
 const prisma = new PrismaClient();
 
@@ -276,24 +277,36 @@ async function submitStockAudit(req, res) {
 async function approveStockAudit(req, res) {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ message: 'Invalid stock audit id' });
+  const reviewerId = req.user?.id || req.user?.sub || null;
 
   try {
-    const audit = await prisma.stock_audits.findUnique({
-      where: { id },
-      include: { stock_audit_lines: true },
-    });
-    if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
-    if (audit.status !== 'SUBMITTED') {
+    const preCheck = await prisma.stock_audits.findUnique({ where: { id } });
+    if (!preCheck) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!['SUBMITTED', 'COMPLETED'].includes(preCheck.status)) {
       return res.status(400).json({ message: 'Chỉ có thể duyệt phiếu kiểm kê đã được nộp' });
     }
 
-    const reviewerId = req.user?.id || req.user?.sub || null;
-    const baseTimestamp = Date.now();
-    const linesToAdjust = audit.stock_audit_lines.filter(
-      (l) => l.variance_qty !== null && l.variance_qty !== 0 && !l.adjustment_posted,
-    );
-
     const result = await prisma.$transaction(async (tx) => {
+      // Claiming first (atomic CAS on status) is what prevents two concurrent
+      // approvals from both passing the pre-check and both applying the stock
+      // delta below — linesToAdjust must also be (re-)read inside the
+      // transaction, after the claim, not from data fetched before it.
+      const claimed = await claimSubmittedAuditForApproval(tx, id, reviewerId);
+      if (!claimed) {
+        const current = await tx.stock_audits.findUnique({ where: { id } });
+        if (current?.status === 'COMPLETED') {
+          return { idempotent: true, data: current };
+        }
+        return { conflict: true };
+      }
+
+      const audit = await tx.stock_audits.findUnique({ where: { id } });
+      const allLines = await tx.stock_audit_lines.findMany({ where: { stock_audit_id: id } });
+      const baseTimestamp = Date.now();
+      const linesToAdjust = allLines.filter(
+        (l) => l.variance_qty !== null && l.variance_qty !== 0 && !l.adjustment_posted,
+      );
+
       for (const [index, line] of linesToAdjust.entries()) {
         await tx.stock_balances.updateMany({
           where: { variant_id: line.variant_id, location_id: line.location_id },
@@ -327,28 +340,33 @@ async function approveStockAudit(req, res) {
         });
       }
 
-      return tx.stock_audits.update({
-        where: { id },
-        data: {
-          status: 'COMPLETED',
-          reviewed_by_user_id: reviewerId,
-          completed_at: new Date(),
-          updated_at: new Date(),
-        },
-      });
+      return { data: audit, adjustments_posted: linesToAdjust.length };
     });
+
+    if (result.conflict) {
+      return res.status(400).json({ message: 'Chỉ có thể duyệt phiếu kiểm kê đã được nộp' });
+    }
+
+    if (result.idempotent) {
+      return res.json({
+        data: { id: result.data.id, status: result.data.status, adjustments_posted: 0 },
+        idempotent: true,
+      });
+    }
 
     await prisma.inventory_audit_logs.create({
       data: {
         actor_user_id: reviewerId,
         action_name: 'STOCK_AUDIT_APPROVED',
         entity_type: 'STOCK_AUDIT',
-        entity_id: result.id,
-        after_data: { audit_number: result.audit_number, adjustments_posted: linesToAdjust.length },
+        entity_id: result.data.id,
+        after_data: { audit_number: result.data.audit_number, adjustments_posted: result.adjustments_posted },
       },
     });
 
-    return res.json({ data: { id: result.id, status: result.status, adjustments_posted: linesToAdjust.length } });
+    return res.json({
+      data: { id: result.data.id, status: 'COMPLETED', adjustments_posted: result.adjustments_posted },
+    });
   } catch (error) {
     console.error('approveStockAudit error:', error);
     return res.status(500).json({ message: 'Internal server error' });

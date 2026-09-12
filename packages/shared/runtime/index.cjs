@@ -1,4 +1,4 @@
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 
 const UNSAFE_PLACEHOLDERS = new Set([
   'change-me',
@@ -113,6 +113,14 @@ function createRateLimiter({ max = 100, windowMs = 60_000, key, now = Date.now }
   };
 }
 
+function deterministicUuid(seed) {
+  const hash = createHash('sha256').update(seed).digest('hex');
+  const chars = hash.slice(0, 32).split('');
+  chars[12] = '4';
+  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
+  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
+}
+
 function securityHeaders(_req, res, next) {
   res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -127,6 +135,7 @@ module.exports = {
   createRateLimiter,
   createRequestContext,
   createRequestLogger,
+  deterministicUuid,
   requireEnv,
   securityHeaders,
 };

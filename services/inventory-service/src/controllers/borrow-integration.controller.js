@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 
 const prisma = new PrismaClient();
 
@@ -15,8 +16,12 @@ function createMovementNumber(baseTimestamp, index) {
   return `BV-${baseTimestamp}-${index + 1}`;
 }
 
-function createFallbackIdempotencyKey(prefix, id) {
-  return `${prefix}:${id}`;
+function requireIdempotencyKey(res, idempotency_key) {
+  if (!idempotency_key || typeof idempotency_key !== 'string' || !idempotency_key.trim()) {
+    res.status(400).json({ message: 'idempotency_key is required' });
+    return null;
+  }
+  return idempotency_key.trim();
 }
 
 async function searchBorrowVariants(req, res) {
@@ -179,7 +184,6 @@ async function reserveFromBorrow(req, res) {
   } = req.body;
 
   const normalizedQuantity = parsePositiveInteger(quantity, 1);
-  const movementIdempotency = String(idempotency_key || createFallbackIdempotencyKey('reserve', reservation_id || 'unknown'));
 
   if (!reservation_id || !reservation_number || !variant_id || !warehouse_id || !normalizedQuantity || !expires_at) {
     return res.status(400).json({
@@ -190,6 +194,9 @@ async function reserveFromBorrow(req, res) {
   if (![reservation_id, variant_id, warehouse_id].every(isUuid)) {
     return res.status(400).json({ message: 'reservation_id, variant_id and warehouse_id must be valid UUID values' });
   }
+
+  const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
+  if (!movementIdempotency) return undefined;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -332,7 +339,9 @@ async function releaseBorrowReservation(req, res) {
     return res.status(400).json({ message: 'reservation_id must be a valid UUID value' });
   }
 
-  const movementIdempotency = String(idempotency_key || createFallbackIdempotencyKey('release', reservation_id));
+  const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
+  if (!movementIdempotency) return undefined;
+
   const releaseReason = String(reason || 'RELEASED').toUpperCase();
   const targetStatus = ['EXPIRED', 'CANCELLED', 'RELEASED'].includes(releaseReason) ? releaseReason : 'RELEASED';
 
@@ -366,19 +375,14 @@ async function releaseBorrowReservation(req, res) {
         throw new Error('RESERVATION_LOCATION_MISSING');
       }
 
-      await tx.stock_balances.update({
-        where: {
-          variant_id_location_id: {
-            variant_id: reservation.variant_id,
-            location_id: reservation.location_id,
-          },
-        },
-        data: {
-          available_qty: { increment: reservation.quantity },
-          reserved_qty: { decrement: reservation.quantity },
-          last_movement_at: new Date(),
-        },
+      const claimed = await releaseReservedStock(tx, {
+        variant_id: reservation.variant_id,
+        location_id: reservation.location_id,
+        quantity: reservation.quantity,
       });
+      if (!claimed) {
+        throw new Error('RESERVATION_STOCK_ALREADY_RELEASED');
+      }
 
       const updated = await tx.stock_reservations.update({
         where: { id: reservation.id },
@@ -418,6 +422,9 @@ async function releaseBorrowReservation(req, res) {
     if (error.message === 'RESERVATION_LOCATION_MISSING') {
       return res.status(409).json({ message: 'Reservation location is missing and cannot be released safely' });
     }
+    if (error.message === 'RESERVATION_STOCK_ALREADY_RELEASED') {
+      return res.status(409).json({ message: 'Reservation stock changed concurrently; retry' });
+    }
     console.error('Error while releasing borrow reservation:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -441,7 +448,8 @@ async function consumeBorrowReservation(req, res) {
     return res.status(400).json({ message: 'reservation_id, loan_id and warehouse_id must be valid UUID values' });
   }
 
-  const movementIdempotency = String(idempotency_key || createFallbackIdempotencyKey('consume', reservation_id));
+  const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
+  if (!movementIdempotency) return undefined;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -466,19 +474,14 @@ async function consumeBorrowReservation(req, res) {
         throw new Error('RESERVATION_LOCATION_MISSING');
       }
 
-      await tx.stock_balances.update({
-        where: {
-          variant_id_location_id: {
-            variant_id: reservation.variant_id,
-            location_id: reservation.location_id,
-          },
-        },
-        data: {
-          reserved_qty: { decrement: reservation.quantity },
-          borrowed_qty: { increment: reservation.quantity },
-          last_movement_at: new Date(),
-        },
+      const claimed = await consumeReservedStock(tx, {
+        variant_id: reservation.variant_id,
+        location_id: reservation.location_id,
+        quantity: reservation.quantity,
       });
+      if (!claimed) {
+        throw new Error('RESERVATION_STOCK_ALREADY_CONSUMED');
+      }
 
       await tx.stock_reservations.update({
         where: { id: reservation.id },
@@ -520,6 +523,9 @@ async function consumeBorrowReservation(req, res) {
     }
     if (error.message === 'RESERVATION_LOCATION_MISSING') {
       return res.status(409).json({ message: 'Reservation location is missing and cannot be consumed safely' });
+    }
+    if (error.message === 'RESERVATION_STOCK_ALREADY_CONSUMED') {
+      return res.status(409).json({ message: 'Reservation stock changed concurrently; retry' });
     }
     console.error('Error while consuming borrow reservation:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -566,7 +572,8 @@ async function returnBorrowedLoan(req, res) {
     return res.status(400).json({ message: 'inventory_unit_id must be a valid UUID when provided' });
   }
 
-  const movementIdempotency = String(idempotency_key || createFallbackIdempotencyKey('return', loan_item_id || loan_id));
+  const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
+  if (!movementIdempotency) return undefined;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
