@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { customerBorrowService } from '@/services/customer-borrow';
+import { getApiErrorMessage } from '@/services/api';
 import { formatCurrencyVnd, formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
 
@@ -6,10 +10,22 @@ interface FineItemProps {
 }
 
 export function FineItem({ fine }: FineItemProps) {
+  const [isStartingPayment, setIsStartingPayment] = useState(false);
   const paid = (fine?.fine_payments || []).reduce((sum: number, row: any) => sum + Number(row?.amount || 0), 0);
   const remaining = Math.max(0, Number(fine?.amount || 0) - Number(fine?.waived_amount || 0) - paid);
   const status = String(fine?.status || '').toUpperCase();
   const isHighRemaining = remaining >= 500000;
+
+  async function handlePayOnline() {
+    setIsStartingPayment(true);
+    try {
+      const result = await customerBorrowService.createVnpayFinePayment(fine.id);
+      window.location.href = result.data.payment_url;
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Không thể khởi tạo thanh toán VNPay'));
+      setIsStartingPayment(false);
+    }
+  }
 
   const toneClassName = status === 'UNPAID'
     ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20'
@@ -35,8 +51,17 @@ export function FineItem({ fine }: FineItemProps) {
       </div>
 
       {remaining > 0 ? (
-        <div className="mt-3 rounded-[10px] border border-border bg-muted px-3 py-2.5 text-[12px] text-slate-600 dark:text-slate-300">
-          Vui lòng thanh toán khoản phạt này tại quầy thư viện. Nhân viên sẽ ghi nhận thanh toán vào hệ thống.
+        <div className="mt-3 space-y-2">
+          <button
+            onClick={handlePayOnline}
+            disabled={isStartingPayment}
+            className="w-full rounded-[10px] bg-primary px-3 py-2.5 text-[12px] font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isStartingPayment ? 'Đang khởi tạo...' : 'Thanh toán online qua VNPay'}
+          </button>
+          <p className="text-center text-[11px] text-muted-foreground">
+            Hoặc thanh toán trực tiếp tại quầy thư viện — nhân viên sẽ ghi nhận vào hệ thống.
+          </p>
         </div>
       ) : null}
     </div>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { toast } from 'sonner';
 import { ReceiptText, RefreshCw, Wallet } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
@@ -10,6 +12,7 @@ import { LoadingOverlay } from '@/components/ui/loading-state';
 import { FineCard } from './_shared/fine-card';
 
 export function CustomerFinesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountSnapshot, setAccountSnapshot] = useState<any | null>(null);
@@ -38,6 +41,19 @@ export function CustomerFinesPage() {
   };
 
   useEffect(() => { void loadFines(); }, []);
+
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (payment === 'success') {
+      toast.success('Thanh toán thành công!');
+      void loadFines();
+      setSearchParams((prev) => { prev.delete('payment'); return prev; }, { replace: true });
+    } else if (payment === 'failed') {
+      toast.error('Thanh toán không thành công. Vui lòng thử lại.');
+      setSearchParams((prev) => { prev.delete('payment'); return prev; }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const totalFine = Number(data?.total_fine_balance || 0);
   const walletBalance = Number(accountSnapshot?.available_balance || 0);

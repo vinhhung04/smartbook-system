@@ -25,6 +25,10 @@ const {
   subscribeAvailabilityAlert,
   unsubscribeAvailabilityAlert,
 } = require('../controllers/wishlist.controller');
+const {
+  createVnpayFinePayment,
+  getVnpayFinePaymentStatus,
+} = require('../controllers/vnpay-payment.controller');
 
 const router = express.Router();
 
@@ -43,6 +47,8 @@ router.post('/loans/:id/renew-request', requestMyLoanRenewal);
 router.get('/account', getMyAccount);
 router.get('/account/ledger', getMyAccountLedger);
 router.get('/fines', getMyFines);
+router.post('/fines/payments/vnpay/create', createVnpayFinePayment);
+router.get('/fines/payments/vnpay/status/:txnRef', getVnpayFinePaymentStatus);
 router.get('/notifications', getMyNotifications);
 router.patch('/notifications/:id/read', async (req, res) => {
   try {

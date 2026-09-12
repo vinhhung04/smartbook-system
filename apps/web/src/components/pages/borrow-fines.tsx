@@ -46,6 +46,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CARD: 'Thẻ',
   TRANSFER: 'Chuyển khoản',
   EWALLET: 'Ví điện tử',
+  VNPAY: 'VNPay (online)',
 };
 
 const PAGE_SIZE = 20;

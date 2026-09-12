@@ -6,6 +6,7 @@ const { prisma } = require('./lib/prisma');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
 const customerInternalRoutes = require('./routes/customer-internal.routes');
+const vnpayWebhookRoutes = require('./routes/vnpay-webhook.routes');
 const myRoutes = require('./routes/my.routes');
 const reservationRoutes = require('./routes/reservation.routes');
 const loanRoutes = require('./routes/loan.routes');
@@ -64,6 +65,7 @@ app.get('/ready', async (_req, res) => {
 });
 
 app.use('/internal/customers', customerInternalRoutes);
+app.use('/webhooks/vnpay', vnpayWebhookRoutes);
 
 app.use('/borrow', authenticateToken);
 
