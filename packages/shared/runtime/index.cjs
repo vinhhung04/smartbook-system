@@ -71,6 +71,7 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
         service: serviceName,
         request_id: req.requestId || null,
         method: req.method,
+        route: req.route?.path ? `${req.baseUrl}${req.route.path}` : undefined,
         path: req.originalUrl || req.url,
         status: res.statusCode,
         latency_ms: Math.max(0, now() - startedAt),

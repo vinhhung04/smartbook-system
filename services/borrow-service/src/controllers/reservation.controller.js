@@ -213,6 +213,7 @@ async function createReservation(req, res) {
       warehouse_id,
       quantity: normalizedQuantity,
       authHeader,
+      requestId: req.requestId,
     });
 
     const reservationNumber = `RSV-${reservationId.slice(0, 8).toUpperCase()}`;
@@ -230,6 +231,7 @@ async function createReservation(req, res) {
       created_by_user_id: actorUserId,
       idempotency_key: idempotencyKey,
       authHeader,
+      requestId: req.requestId,
     });
 
     try {
@@ -289,6 +291,7 @@ async function createReservation(req, res) {
           reason: rollbackReason,
           idempotency_key: `rollback:${idempotencyKey}`,
           authHeader,
+          requestId: req.requestId,
         }),
         {
           aggregateId: reservationId,
@@ -399,6 +402,7 @@ async function cancelReservation(req, res) {
           reason: 'CANCELLED',
           idempotency_key: idempotencyKey,
           authHeader,
+          requestId: req.requestId,
         });
       } catch (error) {
         await prisma.$transaction(async (tx) => {

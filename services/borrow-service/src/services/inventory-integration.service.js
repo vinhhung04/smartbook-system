@@ -52,24 +52,30 @@ async function requestInventory(path, options = {}) {
   return payload;
 }
 
-async function checkAvailability({ variant_id, warehouse_id, quantity, authHeader }) {
+function correlationHeader(requestId) {
+  return requestId ? { 'x-request-id': requestId } : {};
+}
+
+async function checkAvailability({ variant_id, warehouse_id, quantity, authHeader, requestId }) {
   return requestInventory(
     `/api/borrow-integration/availability?variant_id=${encodeURIComponent(variant_id)}&warehouse_id=${encodeURIComponent(warehouse_id)}&quantity=${encodeURIComponent(String(quantity || 1))}`,
     {
       method: 'GET',
       headers: {
         Authorization: getInventoryAuthHeader(authHeader),
+        ...correlationHeader(requestId),
       },
     }
   );
 }
 
-async function reserveStock({ reservation_id, reservation_number, customer_id, variant_id, warehouse_id, quantity, expires_at, created_by_user_id, idempotency_key, authHeader }) {
+async function reserveStock({ reservation_id, reservation_number, customer_id, variant_id, warehouse_id, quantity, expires_at, created_by_user_id, idempotency_key, authHeader, requestId }) {
   return requestInventory('/api/borrow-integration/reservations/reserve', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
     },
     body: JSON.stringify({
       reservation_id,
@@ -85,12 +91,13 @@ async function reserveStock({ reservation_id, reservation_number, customer_id, v
   });
 }
 
-async function releaseReservation({ reservation_id, reason, idempotency_key, authHeader }) {
+async function releaseReservation({ reservation_id, reason, idempotency_key, authHeader, requestId }) {
   return requestInventory('/api/borrow-integration/reservations/release', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
     },
     body: JSON.stringify({
       reservation_id,
@@ -100,12 +107,13 @@ async function releaseReservation({ reservation_id, reason, idempotency_key, aut
   });
 }
 
-async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader }) {
+async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId }) {
   return requestInventory('/api/borrow-integration/reservations/consume', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
     },
     body: JSON.stringify({
       reservation_id,
@@ -131,12 +139,14 @@ async function returnBorrowedStock({
   idempotency_key,
   handled_by_user_id,
   authHeader,
+  requestId,
 }) {
   return requestInventory('/api/borrow-integration/loans/return', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
     },
     body: JSON.stringify({
       loan_id,
@@ -154,7 +164,7 @@ async function returnBorrowedStock({
   });
 }
 
-async function getVariantDetails({ variantIds, authHeader }) {
+async function getVariantDetails({ variantIds, authHeader, requestId }) {
   const uniqueIds = [...new Set((variantIds || []).filter(Boolean))];
   if (uniqueIds.length === 0) return [];
 
@@ -164,6 +174,7 @@ async function getVariantDetails({ variantIds, authHeader }) {
       method: 'GET',
       headers: {
         Authorization: getInventoryAuthHeader(authHeader),
+        ...correlationHeader(requestId),
       },
     }
   );

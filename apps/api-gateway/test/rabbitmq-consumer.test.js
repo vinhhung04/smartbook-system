@@ -43,6 +43,34 @@ test('handleMessage emits to the customer room and acks on a valid message', () 
   assert.equal(channel.nacked.length, 0);
 });
 
+test('handleMessage logs a structured line carrying the event\'s correlation_id (closes the trace at the WebSocket hop)', () => {
+  const channel = fakeChannel();
+  const io = fakeIo();
+  const envelope = {
+    event_id: 'e1',
+    event_type: 'inventory.reservation.created',
+    correlation_id: 'req-abc-123',
+    payload: { customer_id: 'cust-1', reservation_id: 'res-1' },
+  };
+  const msg = envelopeMessage(envelope);
+
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (line) => lines.push(line);
+  try {
+    handleMessage(channel, io, msg);
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(lines.length, 1);
+  const entry = JSON.parse(lines[0]);
+  assert.equal(entry.service, 'api-gateway');
+  assert.equal(entry.correlation_id, 'req-abc-123');
+  assert.equal(entry.event_type, 'inventory.reservation.created');
+  assert.equal(entry.room, 'customer:cust-1');
+});
+
 test('handleMessage nacks (no requeue) to the DLQ when payload.customer_id is missing', () => {
   const channel = fakeChannel();
   const io = fakeIo();

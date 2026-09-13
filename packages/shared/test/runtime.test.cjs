@@ -72,6 +72,25 @@ test('request logger emits structured metadata without request secrets', () => {
   assert.equal(entry.request_id, 'req-1');
   assert.equal(entry.status, 401);
   assert.equal(entry.authorization, undefined);
+  assert.equal(entry.route, undefined, 'no matched route on this request, must not fabricate one');
+});
+
+test('request logger reports the matched route pattern, not the raw path with real IDs', () => {
+  const lines = [];
+  let finish;
+  const req = {
+    method: 'PATCH',
+    originalUrl: '/borrow/reservations/181f0b38-87a0-4819-835c-40e764514384/confirm',
+    baseUrl: '/borrow',
+    route: { path: '/reservations/:id/confirm' },
+    requestId: 'req-2',
+  };
+  const res = { statusCode: 200, once: (_event, callback) => { finish = callback; } };
+  createRequestLogger('borrow-service', { log: (line) => lines.push(line), now: () => 10 })(req, res, () => {});
+  finish();
+  const entry = JSON.parse(lines[0]);
+  assert.equal(entry.route, '/borrow/reservations/:id/confirm');
+  assert.equal(entry.path, req.originalUrl, 'path still carries the real id for exact lookup');
 });
 
 test('deterministicUuid is stable for the same seed and looks like a v4 UUID', () => {

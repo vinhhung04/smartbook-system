@@ -202,6 +202,7 @@ async function createDirectLoan(req, res) {
       warehouse_id,
       quantity: normalizedQuantity,
       authHeader,
+      requestId: req.requestId,
     });
 
     const reservationNumber = `DLR-${reservationId.slice(0, 8).toUpperCase()}`;
@@ -244,6 +245,7 @@ async function createDirectLoan(req, res) {
       created_by_user_id: actorUserId,
       idempotency_key: `direct-reserve:${idempotencyKey}`,
       authHeader,
+      requestId: req.requestId,
     });
 
     await consumeReservation({
@@ -254,6 +256,7 @@ async function createDirectLoan(req, res) {
       idempotency_key: `direct-consume:${idempotencyKey}`,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     try {
@@ -808,6 +811,7 @@ async function convertReservationToLoan(req, res) {
       idempotency_key: idempotencyKey,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     const borrowDate = new Date();
@@ -1064,6 +1068,7 @@ async function returnLoan(req, res) {
         idempotency_key: `${idempotencyKey}:${index + 1}`,
         handled_by_user_id: actorUserId,
         authHeader,
+        requestId: req.requestId,
       });
     }
 

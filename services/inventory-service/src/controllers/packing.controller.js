@@ -355,7 +355,7 @@ async function uploadPackingEvidence(req, res) {
         where: { id: evidence.id },
         data: { ai_verification_status: "PENDING" },
       });
-      setImmediate(() => void runPackingPhotoVerification(evidence.id, taskId, ref, task.warehouse_id));
+      setImmediate(() => void runPackingPhotoVerification(evidence.id, taskId, ref, task.warehouse_id, req.requestId));
     }
 
     return res.status(201).json({ evidence });
@@ -368,11 +368,11 @@ async function uploadPackingEvidence(req, res) {
 /** Runs off the request path (verifyPackingPhoto can take up to 20s) so
  *  POST .../evidence doesn't block staff on the AI call. verifyPackingPhoto
  *  never throws, but this still never runs inside the request's try/catch. */
-async function runPackingPhotoVerification(evidenceId, taskId, storageRef, warehouseId) {
+async function runPackingPhotoVerification(evidenceId, taskId, storageRef, warehouseId, requestId) {
   try {
     const items = await prisma.packing_task_items.findMany({ where: { packing_task_id: taskId } });
     const expectedCount = items.reduce((sum, item) => sum + item.expected_qty, 0);
-    const { status, result } = await verifyPackingPhoto(storageRef, expectedCount);
+    const { status, result } = await verifyPackingPhoto(storageRef, expectedCount, requestId);
 
     await prisma.packing_camera_evidence.update({
       where: { id: evidenceId },

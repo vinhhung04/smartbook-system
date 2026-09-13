@@ -372,7 +372,7 @@ function calculateLocationScore(location, context) {
   };
 }
 
-async function generateAIExplanation(bookInfo, suggestions) {
+async function generateAIExplanation(bookInfo, suggestions, requestId) {
   const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
   const payload = {
@@ -393,6 +393,7 @@ async function generateAIExplanation(bookInfo, suggestions) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(requestId ? { 'x-request-id': requestId } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -413,7 +414,7 @@ async function generateAIExplanation(bookInfo, suggestions) {
   return null;
 }
 
-async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1, mode = 'RECEIVING') {
+async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1, mode = 'RECEIVING', requestId) {
   const cacheKey = getCacheKey(warehouseId, variantId, bookId, quantity);
 
   const cached = await getCached(cacheKey);
@@ -494,7 +495,7 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
     ...loc,
   }));
 
-  const aiExplanations = await generateAIExplanation(bookInfo, suggestions);
+  const aiExplanations = await generateAIExplanation(bookInfo, suggestions, requestId);
   if (aiExplanations) {
     suggestions = suggestions.map((s, idx) => ({
       ...s,

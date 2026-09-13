@@ -34,7 +34,7 @@ async function getSuggestions(req, res) {
 
   try {
     const parsedLimit = Math.min(100, Math.max(1, Number(limit) || 20));
-    const result = await reslottingSuggestionService.generateReslottingSuggestions(warehouse_id, parsedLimit);
+    const result = await reslottingSuggestionService.generateReslottingSuggestions(warehouse_id, parsedLimit, req.requestId);
     return res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error generating re-slotting suggestions:', error);

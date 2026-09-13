@@ -70,6 +70,15 @@ function handleMessage(channel, io, msg) {
 
     io.to(`customer:${customerId}`).emit('reservation:created', envelope.payload);
     channel.ack(msg);
+
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'api-gateway',
+      correlation_id: envelope.correlation_id || null,
+      event_type: envelope.event_type,
+      room: `customer:${customerId}`,
+    }));
   } catch (error) {
     console.error('[api-gateway][rabbitmq] failed to handle message, sending to DLQ:', error.message);
     channel.nack(msg, false, false);
