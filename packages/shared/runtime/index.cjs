@@ -1,4 +1,5 @@
 const { randomUUID, createHash } = require('node:crypto');
+const { trace } = require('@opentelemetry/api');
 
 const UNSAFE_PLACEHOLDERS = new Set([
   'change-me',
@@ -65,11 +66,14 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
   return (req, res, next) => {
     const startedAt = now();
     res.once('finish', () => {
+      const spanContext = trace.getActiveSpan()?.spanContext();
       log(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'info',
         service: serviceName,
         request_id: req.requestId || null,
+        trace_id: spanContext?.traceId || null,
+        span_id: spanContext?.spanId || null,
         method: req.method,
         route: req.route?.path ? `${req.baseUrl}${req.route.path}` : undefined,
         path: req.originalUrl || req.url,

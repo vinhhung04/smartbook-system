@@ -4,8 +4,8 @@
   "description": "SmartBook authentication service",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "start": "node -r ./src/tracing.js src/index.js",
+    "dev": "node --watch -r ./src/tracing.js src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "test": "node --test test/*.test.js"

@@ -7,9 +7,20 @@
  */
 
 const amqp = require('amqp-connection-manager');
+const { trace, propagation, context } = require('@opentelemetry/api');
 
 const EXCHANGE = 'smartbook.events';
 const DLX = 'smartbook.events.dlx';
+
+// @opentelemetry/instrumentation-amqplib can't auto-patch this amqplib
+// version: amqplib@2.x's package.json "exports" map only exposes "." and
+// "./callback_api", so the instrumentation's hook into "amqplib/lib/
+// channel_model.js" never fires (confirmed experimentally — no publish/
+// consume spans appear regardless of context propagation). Create the
+// publish span by hand instead, and inject the trace context into the
+// envelope so the gateway consumer (rabbitmq-consumer.js) can link its own
+// span as a child of this one.
+const tracer = trace.getTracer('inventory-service-rabbitmq');
 
 class RabbitMqPublisher {
   constructor() {
@@ -47,14 +58,21 @@ class RabbitMqPublisher {
    * and retry on the next poll tick.
    */
   async publishEvent(routingKey, envelope) {
-    try {
-      const channelWrapper = this.connect();
-      await channelWrapper.publish(EXCHANGE, routingKey, envelope, { persistent: true });
-      return true;
-    } catch (error) {
-      console.warn('[inventory-service][rabbitmq] publish failed:', error.message);
-      return false;
-    }
+    return tracer.startActiveSpan(`publish ${EXCHANGE}`, async (span) => {
+      try {
+        const channelWrapper = this.connect();
+        const traceContext = {};
+        propagation.inject(context.active(), traceContext);
+        await channelWrapper.publish(EXCHANGE, routingKey, { ...envelope, trace_context: traceContext }, { persistent: true });
+        return true;
+      } catch (error) {
+        span.recordException(error);
+        console.warn('[inventory-service][rabbitmq] publish failed:', error.message);
+        return false;
+      } finally {
+        span.end();
+      }
+    });
   }
 }
 

@@ -11,3 +11,7 @@ asyncpg
 aiosqlite
 transformers
 Pillow
+opentelemetry-distro
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-httpx

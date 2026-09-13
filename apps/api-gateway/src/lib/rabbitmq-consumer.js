@@ -10,6 +10,7 @@
  */
 
 const amqp = require('amqp-connection-manager');
+const { trace, propagation, context } = require('@opentelemetry/api');
 
 const EXCHANGE = 'smartbook.events';
 const DLX = 'smartbook.events.dlx';
@@ -17,6 +18,11 @@ const ROUTING_KEY = 'inventory.reservation.created';
 const QUEUE = 'gateway-push.reservation-created.queue';
 const DLQ_ROUTING_KEY = 'gateway-push.reservation-created';
 const DLQ = 'gateway-push.reservation-created.dlq';
+
+// Manual span to pair with the manual inject in inventory-service's
+// rabbitmq.js publishEvent() — @opentelemetry/instrumentation-amqplib can't
+// auto-patch this amqplib version (see comment there for why).
+const tracer = trace.getTracer('api-gateway-rabbitmq');
 
 function startGatewayRabbitMqConsumer(io) {
   const enabled = String(process.env.ENABLE_GATEWAY_RABBITMQ_CONSUMER || 'true').toLowerCase() === 'true';
@@ -60,25 +66,34 @@ function handleMessage(channel, io, msg) {
 
   try {
     const envelope = JSON.parse(msg.content.toString('utf8'));
-    const customerId = envelope.payload?.customer_id;
+    const extractedContext = propagation.extract(context.active(), envelope.trace_context || {});
 
-    if (!customerId) {
-      console.warn('[api-gateway][rabbitmq] message missing payload.customer_id, sending to DLQ', envelope.event_id);
-      channel.nack(msg, false, false);
-      return;
-    }
+    context.with(extractedContext, () => {
+      const span = tracer.startSpan(`${QUEUE} process`);
+      try {
+        const customerId = envelope.payload?.customer_id;
 
-    io.to(`customer:${customerId}`).emit('reservation:created', envelope.payload);
-    channel.ack(msg);
+        if (!customerId) {
+          console.warn('[api-gateway][rabbitmq] message missing payload.customer_id, sending to DLQ', envelope.event_id);
+          channel.nack(msg, false, false);
+          return;
+        }
 
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      service: 'api-gateway',
-      correlation_id: envelope.correlation_id || null,
-      event_type: envelope.event_type,
-      room: `customer:${customerId}`,
-    }));
+        io.to(`customer:${customerId}`).emit('reservation:created', envelope.payload);
+        channel.ack(msg);
+
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          service: 'api-gateway',
+          correlation_id: envelope.correlation_id || null,
+          event_type: envelope.event_type,
+          room: `customer:${customerId}`,
+        }));
+      } finally {
+        span.end();
+      }
+    });
   } catch (error) {
     console.error('[api-gateway][rabbitmq] failed to handle message, sending to DLQ:', error.message);
     channel.nack(msg, false, false);
