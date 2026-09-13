@@ -383,6 +383,18 @@ services:
               count: all
               capabilities: [gpu]
 
+  k6:
+    profiles: ["loadtest"]
+    image: grafana/k6:0.54.0
+    volumes:
+      - ./scripts/k6:/scripts
+    environment:
+      - BASE_URL=http://api-gateway:3000
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
