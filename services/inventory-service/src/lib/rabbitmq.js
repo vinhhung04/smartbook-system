@@ -8,6 +8,7 @@
 
 const amqp = require('amqp-connection-manager');
 const { trace, propagation, context } = require('@opentelemetry/api');
+const { rabbitmqPublishFailCounter } = require('./metrics');
 
 const EXCHANGE = 'smartbook.events';
 const DLX = 'smartbook.events.dlx';
@@ -67,6 +68,7 @@ class RabbitMqPublisher {
         return true;
       } catch (error) {
         span.recordException(error);
+        rabbitmqPublishFailCounter.add(1);
         console.warn('[inventory-service][rabbitmq] publish failed:', error.message);
         return false;
       } finally {

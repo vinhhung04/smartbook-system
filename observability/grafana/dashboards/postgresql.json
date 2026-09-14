@@ -1,0 +1,33 @@
+{
+  "title": "PostgreSQL",
+  "uid": "postgresql",
+  "description": "Client-side query duration via Prisma/pg auto-instrumentation, per service. Not a postgres_exporter dashboard — no server-level connection pool / replication metrics here.",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Query p95 duration, by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(db_client_operation_duration_seconds_bucket[5m])) by (le, service_name))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Query rate, by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(db_client_operation_duration_seconds_count[5m])) by (service_name)", "refId": "A" }
+      ]
+    }
+  ]
+}

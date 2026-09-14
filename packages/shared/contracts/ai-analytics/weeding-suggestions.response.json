@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /analytics/weeding-suggestions — 200 response",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["generated_at", "threshold_days", "cutoff", "summary", "items"],
+      "properties": {
+        "generated_at": { "type": "string" },
+        "threshold_days": { "type": "number" },
+        "cutoff": { "type": "string" },
+        "summary": { "type": "object" },
+        "items": { "type": "array" }
+      }
+    }
+  }
+}

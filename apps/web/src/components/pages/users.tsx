@@ -283,7 +283,7 @@ export function UsersPage() {
           iconBg="bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25"
           iconColor="text-white"
           actions={
-            <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }}>
+            <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }} data-testid="create-user-button">
               <Plus className="h-3.5 w-3.5" /> Tạo người dùng mới
             </Button>
           }
@@ -357,6 +357,7 @@ export function UsersPage() {
                         </button>
                         <button
                           onClick={() => void handleToggleLock(user)}
+                          data-testid="toggle-lock-user-button"
                           className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
                         >
                           {user.status === "LOCKED" ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
@@ -438,17 +439,17 @@ export function UsersPage() {
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
+                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" data-testid="new-user-username" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" data-testid="new-user-full-name" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" data-testid="new-user-email" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
                 <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" data-testid="new-user-password" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
                 <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
@@ -471,7 +472,7 @@ export function UsersPage() {
                   ) : (
                     roles.map((role) => (
                       <label key={role.id} className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-[12px]">
-                        <input type="checkbox" checked={form.role_ids.includes(role.id)} onChange={() => handleToggleRole(role.id)} />
+                        <input type="checkbox" checked={form.role_ids.includes(role.id)} onChange={() => handleToggleRole(role.id)} data-testid={`new-user-role-${role.code}`} />
                         {role.name} ({role.code})
                       </label>
                     ))
@@ -484,7 +485,7 @@ export function UsersPage() {
               <Button variant="outline" className="flex-1" onClick={closeUserModal}>
                 Hủy
               </Button>
-              <Button className="flex-1" onClick={() => void (editingUser ? handleEditUser() : handleCreateUser())} disabled={creating}>
+              <Button className="flex-1" onClick={() => void (editingUser ? handleEditUser() : handleCreateUser())} disabled={creating} data-testid="create-user-submit">
                 {creating ? "Đang xử lý..." : editingUser ? "Cập nhật" : "Tạo người dùng"}
               </Button>
             </div>

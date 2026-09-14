@@ -186,7 +186,9 @@ export function BorrowLoanDetailPage() {
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground">Trạng thái</p>
-                <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                <div data-testid="loan-status-badge">
+                  <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                </div>
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground">Ngày mượn</p>
@@ -212,7 +214,7 @@ export function BorrowLoanDetailPage() {
             <FadeItem>
               <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-border bg-card p-3">
                 <span className="mr-1 text-[12px] text-muted-foreground">Thao tác trên phiếu này:</span>
-                <Button size="sm" variant="success-outline" onClick={returnLoan}>Trả sách</Button>
+                <Button size="sm" variant="success-outline" onClick={returnLoan} data-testid="return-loan-button">Trả sách</Button>
                 <Button size="sm" variant="warning-outline" onClick={reportDamage}>Báo hư hỏng</Button>
                 <Button size="sm" variant="danger-outline" onClick={markLost}>Đánh dấu mất</Button>
               </div>

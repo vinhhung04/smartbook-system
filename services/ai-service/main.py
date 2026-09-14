@@ -87,6 +87,8 @@ from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
+from prometheus_fastapi_instrumentator import Instrumentator
+from metrics import ocr_request_duration
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -107,6 +109,8 @@ app.add_middleware(
 app.include_router(actions_router)
 app.include_router(conversations_router)
 app.include_router(cover_search_router)
+
+Instrumentator().instrument(app).expose(app)
 
 
 @app.on_event("startup")
@@ -410,7 +414,8 @@ async def scan_receipt(file: UploadFile = File(...)):
     image_bytes = _validate_and_read_image(file)
 
     try:
-        result = _scan_receipt_from_bytes(image_bytes)
+        with ocr_request_duration.time():
+            result = _scan_receipt_from_bytes(image_bytes)
 
         # Validate response structure
         if "error" in result:

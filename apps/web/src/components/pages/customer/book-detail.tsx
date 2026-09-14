@@ -365,6 +365,7 @@ export function CustomerBookDetailPage() {
             <button
               onClick={handleReserve}
               disabled={!isReservable}
+              data-testid="reserve-book-button"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-indigo-700 text-[13px] font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -477,6 +478,7 @@ export function CustomerBookDetailPage() {
                 <button
                   onClick={handleReserve}
                   disabled={!isReservable}
+                  data-testid="reserve-book-button"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ShoppingCart className="w-4 h-4" />

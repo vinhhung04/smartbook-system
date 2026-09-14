@@ -1,6 +1,7 @@
 const { NodeSDK } = require('@opentelemetry/sdk-node');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+const { PrometheusExporter } = require('@opentelemetry/exporter-prometheus');
 const { Resource } = require('@opentelemetry/resources');
 const { SEMRESATTRS_SERVICE_NAME } = require('@opentelemetry/semantic-conventions');
 const { PrismaInstrumentation } = require('@prisma/instrumentation');
@@ -14,6 +15,7 @@ function initTracing(serviceName) {
   const sdk = new NodeSDK({
     resource: new Resource({ [SEMRESATTRS_SERVICE_NAME]: serviceName }),
     traceExporter: new OTLPTraceExporter(),
+    metricReader: new PrometheusExporter({ port: 9464 }),
     instrumentations: [
       getNodeAutoInstrumentations({
         '@opentelemetry/instrumentation-fs': { enabled: false },

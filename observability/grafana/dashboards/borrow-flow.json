@@ -1,0 +1,52 @@
+{
+  "title": "Borrow Flow",
+  "uid": "borrow-flow",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Reservations created / min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(reservation_created_total[5m])) * 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Reservation conflicts / min, by reason",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(reservation_conflict_total[5m])) by (reason) * 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Stock mutation race losses (noop)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(stock_mutation_total{result=\"noop\"}[5m])) by (operation)", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "borrow-service p95 latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_bucket{service_name=\"borrow-service\"}[5m])) by (le))",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -223,10 +223,10 @@ export function PurchaseOrderDetailPage() {
                   </NavLink>
                 </Button>
               )}
-              {canSubmit && <Button size="sm" onClick={submit} disabled={working}><FileText className="h-3.5 w-3.5" />Submit</Button>}
-              {canApprove && <Button size="sm" onClick={approve} disabled={working}><CheckCircle className="h-3.5 w-3.5" />Approve</Button>}
+              {canSubmit && <Button size="sm" onClick={submit} disabled={working} data-testid="submit-po-button"><FileText className="h-3.5 w-3.5" />Submit</Button>}
+              {canApprove && <Button size="sm" onClick={approve} disabled={working} data-testid="approve-po-button"><CheckCircle className="h-3.5 w-3.5" />Approve</Button>}
               {canApprove && <Button variant="outline" size="sm" onClick={reject} disabled={working}><XCircle className="h-3.5 w-3.5" />Reject</Button>}
-              {canSendToSupplier && <Button size="sm" onClick={sendToSupplier} disabled={working}><Send className="h-3.5 w-3.5" />Send to Supplier</Button>}
+              {canSendToSupplier && <Button size="sm" onClick={sendToSupplier} disabled={working} data-testid="send-to-supplier-button"><Send className="h-3.5 w-3.5" />Send to Supplier</Button>}
               {canReceiveStock && po.status === "SUPPLIER_CONFIRMED" && latestOpenInvoice ? (
                 <Button asChild size="sm" disabled={working}>
                   <NavLink to={`/supplier-deliveries/${latestOpenInvoice.id}`}>
@@ -304,7 +304,7 @@ export function PurchaseOrderDetailPage() {
                           >
                             <Clipboard className="h-3.5 w-3.5" /> Copy Link
                           </Button>
-                          <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                          <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" data-testid="supplier-portal-link" className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
                             Open <ExternalLink className="h-3.5 w-3.5" />
                           </NavLink>
                         </div>

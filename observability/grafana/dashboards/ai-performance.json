@@ -1,0 +1,52 @@
+{
+  "title": "AI Performance",
+  "uid": "ai-performance",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "LLM call p95 latency, by provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, endpoint))", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "OCR scan-receipt p95 latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(ocr_request_duration_seconds_bucket[5m])) by (le))", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "ai-service request rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=\"ai-service\"}[5m]))", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "ai-service error rate (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{job=\"ai-service\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"ai-service\"}[5m]))",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

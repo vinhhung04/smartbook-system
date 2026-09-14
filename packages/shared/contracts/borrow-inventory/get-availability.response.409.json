@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /api/borrow-integration/availability — 409 response (insufficient stock)",
+  "type": "object",
+  "required": ["message", "data"],
+  "properties": {
+    "message": { "type": "string" },
+    "data": {
+      "type": "object",
+      "required": ["total_available", "requested_quantity"],
+      "properties": {
+        "total_available": { "type": "number" },
+        "requested_quantity": { "type": "number" }
+      }
+    }
+  }
+}

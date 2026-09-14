@@ -507,6 +507,7 @@ export function BorrowReservationsPage() {
                     }
                   }}
                   placeholder="PU-ABCD-1234 hoặc SMARTBOOK:PICKUP:..."
+                  data-testid="pickup-code-input"
                   className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
@@ -525,6 +526,7 @@ export function BorrowReservationsPage() {
                 type="button"
                 disabled={pickupConverting}
                 onClick={() => void convertPickupCode()}
+                data-testid="convert-pickup-submit"
                 className="gap-2"
               >
                 {pickupConverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -613,6 +615,7 @@ export function BorrowReservationsPage() {
                                 variant="outline"
                                 className="border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/20 dark:text-sky-400 dark:hover:bg-sky-500/10"
                                 onClick={() => void confirmReservation(reservation.id)}
+                                data-testid="confirm-reservation-button"
                               >
                                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                                 Xác nhận
@@ -630,6 +633,7 @@ export function BorrowReservationsPage() {
                                 variant="outline"
                                 className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
                                 onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
+                                data-testid="mark-ready-button"
                               >
                                 Sẵn sàng
                               </Button>

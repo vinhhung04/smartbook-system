@@ -26,6 +26,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
+from metrics import ai_request_duration
+
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -73,6 +75,7 @@ class StreamChunk:
 
 
 def _log_call(usage: ChatUsage) -> None:
+    ai_request_duration.labels(endpoint=usage.provider).observe(usage.latency_ms / 1000)
     if usage.error:
         logger.warning(
             "assistant_llm_call provider=%s model=%s latency_ms=%.0f error=%s",

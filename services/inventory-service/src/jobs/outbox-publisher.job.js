@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const rabbitmq = require('../lib/rabbitmq');
+const { setOutboxPending, outboxFailedCounter } = require('../lib/metrics');
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,7 @@ async function runOutboxPublishSweep(prismaClient = prisma, options = {}) {
     take: limit,
   });
 
+  setOutboxPending(pending.length);
   const result = { scanned: pending.length, published: 0, retried: 0, failed: 0 };
 
   for (const record of pending) {
@@ -75,6 +77,7 @@ async function runOutboxPublishSweep(prismaClient = prisma, options = {}) {
       });
       if (giveUp) {
         result.failed += 1;
+        outboxFailedCounter.add(1);
         console.error(`[inventory-service][job] outbox publish gave up after ${nextRetryCount} attempts for ${record.id}`, error.message);
       } else {
         result.retried += 1;

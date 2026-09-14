@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /analytics/warehouse-stock-risk — 200 response",
+  "description": "Unlike the other 5 analytics-service internal endpoints, 'data' here is an array, not an object.",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["warehouse_id", "warehouse_name", "low_stock_variants", "out_of_stock_variants", "reasoning"],
+        "properties": {
+          "warehouse_id": { "type": "string" },
+          "warehouse_name": { "type": "string" },
+          "low_stock_variants": { "type": "number" },
+          "out_of_stock_variants": { "type": "number" },
+          "reasoning": { "type": "string" }
+        }
+      }
+    }
+  }
+}

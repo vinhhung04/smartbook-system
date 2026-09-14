@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /analytics/reservation-funnel — 200 response",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["total", "pending", "confirmed", "ready_for_pickup", "converted_to_loan", "cancelled", "expired", "conversion_rate"],
+      "properties": {
+        "total": { "type": "number" },
+        "pending": { "type": "number" },
+        "confirmed": { "type": "number" },
+        "ready_for_pickup": { "type": "number" },
+        "converted_to_loan": { "type": "number" },
+        "cancelled": { "type": "number" },
+        "expired": { "type": "number" },
+        "conversion_rate": { "type": "number" }
+      }
+    }
+  }
+}

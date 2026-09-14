@@ -1,3 +1,5 @@
+const { recordStockMutation } = require('../lib/metrics');
+
 async function releaseReservedStock(tx, { variant_id, location_id, quantity }) {
   const result = await tx.stock_balances.updateMany({
     where: { variant_id, location_id, reserved_qty: { gte: quantity } },
@@ -8,6 +10,7 @@ async function releaseReservedStock(tx, { variant_id, location_id, quantity }) {
     },
   });
 
+  recordStockMutation('release', result.count === 1 ? 'success' : 'noop');
   return result.count === 1;
 }
 
@@ -21,6 +24,7 @@ async function consumeReservedStock(tx, { variant_id, location_id, quantity }) {
     },
   });
 
+  recordStockMutation('consume', result.count === 1 ? 'success' : 'noop');
   return result.count === 1;
 }
 

@@ -1,0 +1,102 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: smartbook-alerts
+    folder: SmartBook
+    interval: 1m
+    rules:
+      - uid: smartbook-error-rate-high
+        title: Error rate high
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (sum(rate(http_server_duration_count{http_status_code=~"5.."}[5m])) / sum(rate(http_server_duration_count[5m]))) > 0.05
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: HTTP error rate is above 5% over the last 5 minutes.
+
+      - uid: smartbook-outbox-failed
+        title: Outbox publish giving up
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: increase(outbox_failed_total[5m]) > 0
+        noDataState: OK
+        execErrState: Error
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: An outbox event gave up retrying and is now FAILED.
+
+      - uid: smartbook-reservation-conflict-spike
+        title: Reservation conflict rate abnormal
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(rate(reservation_conflict_total[5m])) * 60 > 5
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reservation conflicts exceed 5/min (demo threshold, not tuned from a real baseline)."
+
+      - uid: smartbook-db-unavailable
+        title: Database unavailable
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 60, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: db_up == bool 0
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "inventory-service's SELECT 1 healthcheck failed — the database is unreachable (no postgres_exporter installed; /health and Prometheus's own `up` don't touch the DB, so db_up is a dedicated gauge for this)."
+
+      - uid: smartbook-low-stock-critical
+        title: Low stock critical
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 60, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: inventory_low_stock_variant_count > 0
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: One or more variants are at or below their reorder point.

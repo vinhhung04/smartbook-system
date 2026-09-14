@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
+const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
 
 const prisma = new PrismaClient();
 
@@ -246,7 +247,9 @@ async function reserveFromBorrow(req, res) {
       });
 
       if (!balance) {
-        throw new Error('INSUFFICIENT_AVAILABLE_STOCK');
+        const error = new Error('INSUFFICIENT_AVAILABLE_STOCK');
+        error.reason = 'no_stock';
+        throw error;
       }
 
       const reserveUpdate = await tx.stock_balances.updateMany({
@@ -262,8 +265,12 @@ async function reserveFromBorrow(req, res) {
         },
       });
 
+      recordStockMutation('reserve', reserveUpdate.count === 1 ? 'success' : 'noop');
+
       if (reserveUpdate.count === 0) {
-        throw new Error('INSUFFICIENT_AVAILABLE_STOCK');
+        const error = new Error('INSUFFICIENT_AVAILABLE_STOCK');
+        error.reason = 'cas_conflict';
+        throw error;
       }
 
       const stockReservation = await tx.stock_reservations.create({
@@ -326,6 +333,7 @@ async function reserveFromBorrow(req, res) {
       return { reservation: stockReservation };
     });
 
+    reservationCreatedCounter.add(1, { idempotent: Boolean(result.alreadyReserved) });
     return res.status(result.alreadyReserved ? 200 : 201).json({
       data: result.reservation,
       idempotent: Boolean(result.alreadyReserved),
@@ -335,6 +343,7 @@ async function reserveFromBorrow(req, res) {
       return res.status(409).json({ message: 'Variant is not borrowable' });
     }
     if (error.message === 'INSUFFICIENT_AVAILABLE_STOCK') {
+      reservationConflictCounter.add(1, { reason: error.reason || 'unknown' });
       return res.status(409).json({ message: 'Insufficient available stock to reserve' });
     }
     if (error.code === 'P2002') {

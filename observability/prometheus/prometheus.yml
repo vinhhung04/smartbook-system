@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: node-services
+    static_configs:
+      - targets:
+          - api-gateway:9464
+          - auth-service:9464
+          - inventory-service:9464
+          - borrow-service:9464
+          - analytics-service:9464
+  - job_name: ai-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - ai-service:8000

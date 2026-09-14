@@ -401,7 +401,7 @@ export function SupplierPortalPage() {
               <RefreshCw className={`h-3.5 w-3.5 ${working ? "animate-spin" : ""}`} /> Refresh
             </Button>
             {canConfirm ? (
-              <Button size="sm" onClick={() => void confirmOrder()} disabled={working}>
+              <Button size="sm" onClick={() => void confirmOrder()} disabled={working} data-testid="supplier-confirm-order-button">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Confirm Order
               </Button>
             ) : null}
@@ -564,7 +564,7 @@ export function SupplierPortalPage() {
                   <input value={supplierNote} onChange={(event) => setSupplierNote(event.target.value)} placeholder="Supplier note" className="rounded-lg border border-slate-200 px-3 py-2 text-[13px]" />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setInvoiceQty(Object.fromEntries(order.purchase_order.items.map((item) => [item.id, item.remaining_qty])))}>Autofill remaining</Button>
+                  <Button variant="outline" size="sm" onClick={() => setInvoiceQty(Object.fromEntries(order.purchase_order.items.map((item) => [item.id, item.remaining_qty])))} data-testid="supplier-portal-autofill">Autofill remaining</Button>
                   <Button variant="outline" size="sm" onClick={() => setInvoiceQty(Object.fromEntries(order.purchase_order.items.map((item) => [item.id, 0])))}>Clear all</Button>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -618,7 +618,7 @@ export function SupplierPortalPage() {
                 ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-[13px] text-slate-600">Total qty {invoiceTotal.qty} - {formatCurrency(invoiceTotal.amount)}</p>
-                  <Button onClick={() => void submitInvoice()} disabled={!canInvoice || working || invoiceTotal.qty <= 0 || invoiceTotal.invalid}>
+                  <Button onClick={() => void submitInvoice()} disabled={!canInvoice || working || invoiceTotal.qty <= 0 || invoiceTotal.invalid} data-testid="supplier-portal-submit">
                     <Send className="h-3.5 w-3.5" /> Submit Invoice
                   </Button>
                 </div>

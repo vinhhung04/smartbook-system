@@ -14,6 +14,9 @@ const {
   requireEnv,
   securityHeaders,
 } = require("@smartbook/shared/runtime");
+const { getMeter } = require("@smartbook/shared/metrics");
+
+const websocketConnectionsCounter = getMeter("api-gateway").createUpDownCounter("websocket_connections");
 
 dotenv.config();
 
@@ -124,6 +127,7 @@ async function resolveCustomerId(userId, email) {
 }
 
 io.on("connection", async (socket) => {
+  websocketConnectionsCounter.add(1);
   const user = socket.user;
   const userId = user.id;
   const roles = Array.isArray(user.roles) ? user.roles : [];
@@ -168,6 +172,7 @@ io.on("connection", async (socket) => {
   console.log(`[ws] ${userId} (${roles.join(",") || "no-role"}) connected → rooms: ${joinedRooms.join(", ")} (socket ${socket.id})`);
 
   socket.on("disconnect", (reason) => {
+    websocketConnectionsCounter.add(-1);
     console.log(`[ws] ${socket.id} disconnected: ${reason}`);
   });
 });
