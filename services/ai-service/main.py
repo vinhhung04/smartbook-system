@@ -152,17 +152,12 @@ INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-ser
 INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
-# Anthropic Claude LLM — dùng cloud API, opt-in (đặt ANTHROPIC_API_KEY để bật).
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
-ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
-# claude-sonnet-5 is the current Sonnet generation (cheaper and stronger than the
-# previous claude-sonnet-4-6 default this used to be — $2/$10 per MTok vs $3/$15).
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
-# ── OpenRouter — default text/tool-calling backend (replaces Ollama for chat;
-# Ollama stays for the vision/OCR models and embeddings.py, which OpenRouter
-# doesn't serve). See llm_provider.OpenRouterProvider.
+# ── OpenRouter — the text/tool-calling backend (replaces Ollama for chat; Ollama
+# stays for the vision/OCR models and embeddings.py, which OpenRouter doesn't
+# serve). Anthropic and Groq were deliberately removed from this service - Qwen via
+# OpenRouter is the one cloud LLM it depends on. See llm_provider.OpenRouterProvider.
 # Model slug verified against the raw https://openrouter.ai/api/v1/models JSON on
 # 2026-09-15 ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
 # OpenRouter's own canonical_slug for this alias is qwen/qwen3.7-flash-20260727).
@@ -173,9 +168,7 @@ OPENROUTER_ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", OPENROUTER_
 OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
 # Provider for /chat, /generate-book-summary, /generate-summary-vi,
 # /enrich-book-after-isbn, /enrich-book-metadata, /explain-storage-suggestion, and
-# nightly_briefing's text generation — tried *after* Anthropic (still opt-in via
-# ANTHROPIC_API_KEY, tier 1) and before each feature's own static fallback (tier 3).
-# "openrouter" (default) | "ollama" (pre-migration, fully offline) | "anthropic".
+# nightly_briefing's text generation. "openrouter" (default) | "ollama" (fully offline).
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
@@ -183,8 +176,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
 # Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
-# loop - "openrouter" (default), "ollama" (fully offline), or "anthropic" (opt-in eval A/B
-# comparison; requires ANTHROPIC_API_KEY). See llm_provider.py.
+# loop - "openrouter" (default) or "ollama" (fully offline). See llm_provider.py.
 ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "openrouter").strip().lower()
 # Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
 # partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
@@ -210,8 +202,8 @@ ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
 async def _startup_warmup_assistant_model() -> None:
     """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
     request pays that cost. Only relevant when /assistant is actually configured to use
-    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter/Anthropic
-    have no local model to warm up. Fire-and-forget — must never delay app startup or crash
+    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter has no
+    local model to warm up. Fire-and-forget — must never delay app startup or crash
     it if Ollama isn't reachable yet (docker-compose only waits for the container to
     *start*, not for Ollama's model server to be ready)."""
     if ASSISTANT_PROVIDER != "ollama":
@@ -1564,152 +1556,10 @@ def _safe_list(values) -> list[str]:
             out.append(text)
     return out
 
-
-def _anthropic_extract_text(payload: dict) -> str:
-    content = payload.get("content") or []
-    parts: list[str] = []
-    for item in content:
-        if isinstance(item, dict) and item.get("type") == "text":
-            parts.append(str(item.get("text", "")))
-        elif isinstance(item, str):
-            parts.append(item)
-    return "".join(parts).strip()
-
-
-def _split_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
-    system_parts: list[str] = []
-    filtered: list[dict] = []
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content", "")
-        if role == "system":
-            if content:
-                system_parts.append(content)
-            continue
-        if role in {"user", "assistant"}:
-            filtered.append({"role": role, "content": content})
-    return "\n\n".join(system_parts).strip(), filtered
-
-
-async def _call_anthropic(metadata: dict) -> tuple[str | None, list[str], bool]:
-    """
-    Gọi Anthropic Claude để sinh summaryVi + keywords.
-    Trả về (summary_vi, keywords, success).
-    Chỉ gọi khi ANTHROPIC_API_KEY đã được set.
-    """
-    if not ANTHROPIC_API_KEY:
-        return None, [], False
-
-    title = _safe_text(metadata.get("title")) or "Không rõ"
-    authors = _safe_list(metadata.get("authors"))
-    author_text = authors[0] if authors else "Không rõ"
-    publisher_text = _safe_text(metadata.get("publisher")) or ""
-    categories = _safe_list(metadata.get("categories"))
-    category_text = ", ".join(categories[:3]) if categories else "không rõ"
-    description_hint = (_safe_text(metadata.get("description")) or "")[:1200]
-
-    system_prompt = (
-        "Bạn là biên tập viên nội dung sách cho một nhà sách online Việt Nam. "
-        "Nhiệm vụ của bạn là viết mô tả sách hấp dẫn, tự nhiên, đáng tin cậy, "
-        "dùng để hiển thị trên trang chi tiết sản phẩm. "
-        "Văn phong giống mô tả sách trên Fahasa/Tiki/Nhã Nam: giàu cảm xúc vừa đủ, "
-        "có tính giới thiệu, làm nổi bật giá trị của sách, "
-        "nhưng tuyệt đối không bịa thông tin."
-    )
-
-    user_prompt = f"""Dữ liệu sách:
-- Tên sách: {title}
-- Tác giả: {author_text}
-- Nhà xuất bản: {publisher_text or 'không rõ'}
-- Thể loại: {category_text}
-- Mô tả gốc/metadata: {description_hint or 'không có'}
-
-Hãy viết mô tả tiếng Việt theo yêu cầu:
-1. Độ dài khoảng 180–280 từ.
-2. Viết thành 3–5 đoạn ngắn, dễ đọc trên giao diện web.
-3. Đoạn mở đầu phải cuốn hút, giới thiệu tinh thần chính của cuốn sách.
-4. Các đoạn sau làm rõ nội dung/chủ đề/giá trị mà người đọc có thể nhận được.
-5. Có một đoạn hoặc cụm câu gợi ý nhóm độc giả phù hợp.
-6. Có thể dùng tiêu đề ngắn như "Vì sao nên đọc cuốn sách này?" nếu phù hợp.
-7. Không dùng markdown code block.
-8. Không bịa nhân vật, tình tiết, giải thưởng, số liệu, tên chương hoặc nội dung cụ thể nếu dữ liệu không cung cấp.
-9. Nếu metadata ít, hãy viết an toàn dựa trên tên sách, tác giả và thể loại; không phóng đại.
-10. Tránh các câu sáo rỗng như "cuốn sách đáng chú ý", "mở ra góc nhìn sâu sắc", "phù hợp nhiều đối tượng" nếu không giải thích cụ thể.
-
-Trả về DUY NHẤT JSON hợp lệ:
-{{
-  "summaryVi": "...",
-  "keywords": ["...", "...", "...", "...", "..."]
-}}"""
-
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
-            resp = await http_client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "temperature": 0.55,
-                    "max_tokens": 900,
-                },
-            )
-            resp.raise_for_status()
-            raw = _anthropic_extract_text(resp.json())
-
-            parsed = _extract_json(raw)
-            summary_vi = _safe_text(parsed.get("summaryVi"))
-            keywords = _safe_list(parsed.get("keywords"))
-
-            # Fallback: model không trả JSON, lấy raw text
-            if not summary_vi and raw.strip() and not raw.strip().startswith("{"):
-                summary_vi = raw.strip()
-
-            return summary_vi, keywords, bool(summary_vi)
-    except Exception as exc:
-        logger.warning("Anthropic call failed: %s", exc)
-        return None, [], False
-
-
-async def _call_anthropic_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
-    """Generic Anthropic call returning parsed JSON dict. Parse via _extract_json (no json_object mode)."""
-    if not ANTHROPIC_API_KEY:
-        return {}, False
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as client:
-            resp = await client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": max_tokens,
-                },
-            )
-            resp.raise_for_status()
-            raw = _anthropic_extract_text(resp.json())
-            return _extract_json(raw), True
-    except Exception as e:
-        logger.warning("Anthropic JSON call failed: %s", e)
-        return {}, False
-
-
 async def _call_text_llm_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
-    """Tier-2 JSON call for Pattern B (see _call_text_llm) - replaces the old
-    direct-Ollama _call_ollama_json. Parse via _extract_json, same as the
-    tier-1 Anthropic JSON call (_call_anthropic_json): no json_object mode,
-    the model's raw text isn't guaranteed valid JSON."""
+    """JSON-returning call for Pattern B (see _call_text_llm). Parse via
+    _extract_json: no json_object mode, the model's raw text isn't
+    guaranteed valid JSON."""
     raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3)
     if not ok:
         return {}, False
@@ -2452,12 +2302,8 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     keywords = []
     ai_provider = "none"
     if req.generateVietnameseSummary and _should_generate_summary(merged):
-        summary_vi, keywords, anthropic_ok = await _call_anthropic(merged)
-        if anthropic_ok:
-            ai_provider = "anthropic"
-        else:
-            summary_vi, keywords, tier2_ok = await _generate_summary_vi_and_keywords(merged)
-            ai_provider = _get_text_llm_provider().name if tier2_ok else "none"
+        summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(merged)
+        ai_provider = _get_text_llm_provider().name if ok else "none"
 
     # ── Calculate overall confidence ──────────────────────────────────────────
     all_scores = [
@@ -2644,13 +2490,9 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
 
     try:
         if not summary_vi or not keywords:
-            generated_summary, generated_keywords, anthropic_ok = await _call_anthropic(metadata)
-            if anthropic_ok:
-                provider = "anthropic"
-            else:
-                generated_summary, generated_keywords, tier2_ok = await _generate_summary_vi_and_keywords(metadata)
-                if tier2_ok:
-                    provider = _get_text_llm_provider().name
+            generated_summary, generated_keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+            if ok:
+                provider = _get_text_llm_provider().name
 
             summary_vi = summary_vi or generated_summary
             if not keywords:
@@ -2855,8 +2697,7 @@ class SummaryViRequest(BaseModel):
 @app.post("/generate-summary-vi")
 async def generate_summary_vi(req: SummaryViRequest):
     """
-    Endpoint nhẹ: chỉ sinh summaryVi + keywords.
-    Ưu tiên Anthropic, fallback Ollama local.
+    Endpoint nhẹ: chỉ sinh summaryVi + keywords, qua text LLM đã cấu hình (OpenRouter/Qwen mặc định).
     Dùng cho bước 2 trên UI — user click nút riêng sau khi đã lookup metadata.
     """
     if not req.title.strip():
@@ -2882,17 +2723,8 @@ async def generate_summary_vi(req: SummaryViRequest):
         "categories": req.categories,
     }
 
-    # Ưu tiên Anthropic
-    summary_vi, keywords, anthropic_ok = await _call_anthropic(metadata)
-    if anthropic_ok:
-        description = _normalize_bookstore_description(summary_vi or "")
-        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "anthropic"}
-        summary_cache.set(cache_key, result)
-        return result
-
-    # Fallback: tier-2 text LLM (OpenRouter by default; see LLM_PROVIDER)
-    summary_vi, keywords, tier2_ok = await _generate_summary_vi_and_keywords(metadata)
-    if tier2_ok:
+    summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+    if ok:
         description = _normalize_bookstore_description(summary_vi or "")
         result = {"summaryVi": description, "keywords": keywords, "ai_provider": _get_text_llm_provider().name}
         summary_cache.set(cache_key, result)
@@ -2931,7 +2763,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     """
     AI enrichment toolkit for book metadata.
     Modes: keywords, short_summary, normalize_description, suggest_categories, quality_check.
-    quality_check is rule-based (no AI). Others use Anthropic → Ollama fallback.
+    quality_check is rule-based (no AI). Others use the configured text LLM (OpenRouter/Qwen by default).
     Never overwrites frontend data — returns suggestions for user to apply.
     """
     title = (req.title or "").strip()
@@ -3011,19 +2843,15 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    # Try Anthropic first (tier 1, opt-in), then the configured text LLM (tier 2, OpenRouter by default)
-    data, ok = await _call_anthropic_json(SYSTEM, user_prompt)
-    ai_provider = "anthropic" if ok else "none"
-    if not ok:
-        data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
-        ai_provider = _get_text_llm_provider().name if ok else "none"
+    data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
+    ai_provider = _get_text_llm_provider().name if ok else "none"
 
     if not ok:
         return EnrichBookMetadataResponse(
             success=False,
             mode=mode,
             ai_provider="none",
-            qualityWarnings=["AI không khả dụng. Kiểm tra ANTHROPIC_API_KEY hoặc OPENROUTER_API_KEY."],
+            qualityWarnings=["AI không khả dụng. Kiểm tra OPENROUTER_API_KEY."],
         )
 
     keywords = _safe_list(data.get("keywords", []))[:15]
@@ -3062,24 +2890,8 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     try:
-        # Ưu tiên Anthropic trước
-        summary_vi, keywords, anthropic_ok = await _call_anthropic({
-            "title": req.title.strip(),
-            "author": req.author.strip(),
-            "description": web_context or "",
-            "categories": [],
-        })
-
-        if anthropic_ok:
-            description = _format_summary_description(summary_vi or "", {
-                "title": req.title.strip(),
-                "author": req.author.strip(),
-            })
-            return {"description": description, "web_context_used": bool(web_context), "ai_provider": "anthropic"}
-
-        # Fallback: tier-2 text LLM (OpenRouter by default; see LLM_PROVIDER)
-        raw_text, tier2_ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
-        if not tier2_ok:
+        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
+        if not ok:
             fallback_description = _generate_fallback_description(req.title, req.author, web_context)
             return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
 
@@ -3286,86 +3098,10 @@ class AssistantResponse(BaseModel):
     debug: dict | None = None
 
 
-async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
-    if not ANTHROPIC_API_KEY:
-        return None, False
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
-            system_prompt, filtered = _split_anthropic_messages(messages)
-            payload: dict = {
-                "model": ANTHROPIC_MODEL,
-                "messages": filtered,
-                "temperature": 0.4,
-                "max_tokens": 800,
-            }
-            if system_prompt:
-                payload["system"] = system_prompt
-            resp = await http_client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json=payload,
-            )
-            resp.raise_for_status()
-            reply = _anthropic_extract_text(resp.json())
-            return reply.strip() or None, bool(reply.strip())
-    except Exception as exc:
-        logger.warning("Anthropic chat failed: %s", exc)
-        return None, False
-
-
-async def _stream_chat_with_anthropic(messages: list[dict]):
-    """Yield text deltas from Anthropic's streaming Messages API as they arrive.
-    Raises on any failure (missing key, HTTP error, malformed stream) so the
-    caller can tell "failed before any token" apart from "failed mid-stream".
-    """
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("Anthropic API key not configured")
-    system_prompt, filtered = _split_anthropic_messages(messages)
-    payload: dict = {
-        "model": ANTHROPIC_MODEL,
-        "messages": filtered,
-        "temperature": 0.4,
-        "max_tokens": 800,
-        "stream": True,
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-    async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
-        async with http_client.stream(
-            "POST",
-            f"{ANTHROPIC_BASE_URL}/messages",
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-            },
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[len("data:"):].strip()
-                if not data:
-                    continue
-                try:
-                    event = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                if event.get("type") == "content_block_delta":
-                    delta = event.get("delta") or {}
-                    if delta.get("type") == "text_delta" and delta.get("text"):
-                        yield delta["text"]
-
-
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
-    """Tier-2 /chat reply: the full multi-turn messages list, routed through
-    the configured text LLM (OpenRouter by default; see LLM_PROVIDER) via the
-    same chat-completion interface /assistant uses - replaces the old
+    """/chat reply: the full multi-turn messages list, routed through the
+    configured text LLM (OpenRouter/Qwen by default; see LLM_PROVIDER) via
+    the same chat-completion interface /assistant uses - replaces the old
     direct-Ollama _chat_with_ollama, which collapsed the whole conversation
     into one role-labelled completion prompt instead of using a proper
     chat-messages call."""
@@ -3594,22 +3330,8 @@ async def chat(request: Request, req: ChatRequest):
 
         return reply_text, pending_action_data
 
-    reply, anthropic_ok = await _chat_with_anthropic(messages)
-    if anthropic_ok and reply:
-        reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data and not skip_cache:
-            response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": "anthropic", **metadata}
-        if grounding_warning:
-            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            result["pending_action"] = pending_action_data
-        return result
-
-    reply, tier2_ok = await _chat_with_text_llm(messages)
-    if tier2_ok and reply:
+    reply, ok = await _chat_with_text_llm(messages)
+    if ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
@@ -3655,16 +3377,13 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
 
 @functools.lru_cache(maxsize=1)
 def _get_assistant_provider():
-    """Cached: the same provider instance (and, for Anthropic/OpenRouter, its
+    """Cached: the same provider instance (and, for OpenRouter, its
     underlying HTTP client) is reused across requests instead of rebuilt
     per-request."""
     return get_llm_provider(
         ASSISTANT_PROVIDER,
         ollama_host=OLLAMA_HOST,
         ollama_model=ASSISTANT_MODEL,
-        anthropic_api_key=ANTHROPIC_API_KEY,
-        anthropic_base_url=ANTHROPIC_BASE_URL,
-        anthropic_model=ANTHROPIC_MODEL,
         openrouter_api_key=OPENROUTER_API_KEY,
         openrouter_base_url=OPENROUTER_BASE_URL,
         openrouter_model=OPENROUTER_ASSISTANT_MODEL,
@@ -3674,18 +3393,15 @@ def _get_assistant_provider():
 
 @functools.lru_cache(maxsize=1)
 def _get_text_llm_provider():
-    """Tier-2 provider (see LLM_PROVIDER) for the text-generation helpers
-    below - book summary, ISBN enrichment, /chat replies, storage-suggestion
-    explanations, nightly briefing - tried after Anthropic (tier 1, opt-in)
-    and before each feature's own static fallback (tier 3). Cached the same
-    way _get_assistant_provider() is."""
+    """Provider (see LLM_PROVIDER, default openrouter/Qwen) for the
+    text-generation helpers below: book summary, ISBN enrichment, /chat
+    replies, storage-suggestion explanations, nightly briefing - tried before
+    each feature's own static fallback. Cached the same way
+    _get_assistant_provider() is."""
     return get_llm_provider(
         LLM_PROVIDER,
         ollama_host=OLLAMA_HOST,
         ollama_model=SUMMARY_MODEL,
-        anthropic_api_key=ANTHROPIC_API_KEY,
-        anthropic_base_url=ANTHROPIC_BASE_URL,
-        anthropic_model=ANTHROPIC_MODEL,
         openrouter_api_key=OPENROUTER_API_KEY,
         openrouter_base_url=OPENROUTER_BASE_URL,
         openrouter_model=OPENROUTER_TEXT_MODEL,
@@ -4360,11 +4076,11 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 @app.post("/chat/stream")
 async def chat_stream(request: Request, req: ChatRequest):
     """Streaming twin of /chat: same prep (auth, intent, retrieval, cache,
-    agent-action layer), but the LLM reply is sent to the client as it's
-    generated instead of after the whole thing is ready. Only the Anthropic
-    path streams token-by-token; the rare Ollama/static fallback paths send
-    their whole reply as a single `token` event (not worth bridging Ollama's
-    sync generator through asyncio for a fallback that almost never runs).
+    agent-action layer). The LLM reply itself is sent as a single `token`
+    event (not per-token) - _chat_with_text_llm's underlying provider call is
+    non-streaming; the SSE shape is kept for client compatibility and so a
+    future genuinely-streaming call (OpenRouterProvider.chat_stream) can slot
+    in here without changing the endpoint's event contract.
     The final `done` event's `reply` is the source of truth (it has the
     source-line / agent-confirmation sentences appended, which streamed tokens
     don't include yet) — the client should replace, not just append, on done.
@@ -4494,20 +4210,11 @@ async def chat_stream(request: Request, req: ChatRequest):
 
         full_text = ""
         provider = "fallback"
-        try:
-            async for chunk in _stream_chat_with_anthropic(messages):
-                full_text += chunk
-                provider = "anthropic"
-                yield _sse("token", {"text": chunk})
-        except Exception as exc:
-            logger.warning("Anthropic streaming failed: %s", exc)
-
-        if not full_text:
-            reply, tier2_ok = await _chat_with_text_llm(messages)
-            if tier2_ok and reply:
-                full_text = reply
-                provider = _get_text_llm_provider().name
-                yield _sse("token", {"text": full_text})
+        reply, ok = await _chat_with_text_llm(messages)
+        if ok and reply:
+            full_text = reply
+            provider = _get_text_llm_provider().name
+            yield _sse("token", {"text": full_text})
 
         if not full_text:
             full_text = build_fallback_reply(intent_info, retrieval, used_legacy_context)
@@ -4911,13 +4618,9 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
 
     if entries:
         user_prompt = _build_recommendation_reason_prompt(entries, profile)
-        parsed, ok = await _call_anthropic_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
         if ok and parsed:
-            provider = "anthropic"
-        else:
-            parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
-            if ok and parsed:
-                provider = _get_text_llm_provider().name
+            provider = _get_text_llm_provider().name
         if ok and isinstance(parsed, dict):
             reasons = {
                 str(key): str(value).strip()
@@ -5099,7 +4802,7 @@ class StorageSuggestionRequest(BaseModel):
 async def explain_storage_suggestion(req: StorageSuggestionRequest):
     """
     Tạo câu giải thích tự nhiên cho các gợi ý vị trí lưu trữ sách.
-    Dùng Ollama hoặc Anthropic để sinh text tự nhiên.
+    Dùng text LLM đã cấu hình (OpenRouter/Qwen mặc định) để sinh text tự nhiên.
     """
     if not req.suggestions:
         return {"explanations": []}
@@ -5128,48 +4831,19 @@ Trả về JSON array với đúng {len(req.suggestions)} câu:
 
 CHỈ trả về JSON, không markdown."""
 
-    # Thử Anthropic trước
-    explanations = await _get_ai_explanations(prompt, len(req.suggestions))
-    
+    explanations, ai_provider = await _get_ai_explanations(prompt, len(req.suggestions))
+
     if explanations and len(explanations) == len(req.suggestions):
-        return {"explanations": explanations, "ai_provider": "anthropic"}
+        return {"explanations": explanations, "ai_provider": ai_provider}
 
     # Fallback: dùng rule-based explanation
     explanations = _generate_rule_based_explanation(book_title, req.suggestions)
     return {"explanations": explanations, "ai_provider": "fallback"}
 
 
-async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | None:
-    """Gọi Anthropic hoặc Ollama để sinh explanations."""
-    # Thử Anthropic
-    if ANTHROPIC_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as http_client:
-                resp = await http_client.post(
-                    f"{ANTHROPIC_BASE_URL}/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={
-                        "model": ANTHROPIC_MODEL,
-                        "system": "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3,
-                        "max_tokens": 300,
-                    },
-                )
-                resp.raise_for_status()
-                raw = _anthropic_extract_text(resp.json())
-                
-                explanations = _parse_json_array(raw)
-                if explanations and len(explanations) >= expected_count // 2:
-                    return explanations[:expected_count]
-        except Exception as exc:
-            logger.warning(f"Anthropic storage explanation failed: {exc}")
-
-    # Tier 2: text LLM đã cấu hình (OpenRouter mặc định; xem LLM_PROVIDER)
+async def _get_ai_explanations(prompt: str, expected_count: int) -> tuple[list[str] | None, str]:
+    """Gọi text LLM đã cấu hình (OpenRouter/Qwen mặc định; xem LLM_PROVIDER) để sinh
+    explanations. Trả về (explanations, provider_name_da_dung)."""
     try:
         raw, ok = await _call_text_llm(
             "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
@@ -5180,11 +4854,11 @@ async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | 
         if ok:
             explanations = _parse_json_array(raw)
             if explanations and len(explanations) >= expected_count // 2:
-                return explanations[:expected_count]
+                return explanations[:expected_count], _get_text_llm_provider().name
     except Exception as exc:
-        logger.warning(f"Tier-2 storage explanation failed: {exc}")
+        logger.warning(f"Storage explanation failed: {exc}")
 
-    return None
+    return None, "none"
 
 
 def _parse_json_array(text: str) -> list[str]:

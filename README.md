@@ -33,7 +33,7 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 | 📦 **Service lớn nhất** | Inventory Service — ~28 route file (mua hàng, nhập/xuất kho) |
 | 🗄️ **Cơ sở dữ liệu** | PostgreSQL (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
 | 🐳 **Triển khai** | Docker Compose — 11 container |
-| 🤖 **AI** | Ollama (local LLM, `llama3.1:8b-instruct-q4_0`) + fallback Anthropic Claude |
+| 🤖 **AI** | OpenRouter (Qwen `qwen3.7-flash`) cho chat/tóm tắt/tool-calling + Ollama cho vision/OCR/embedding |
 | 🔔 **Real-time** | Socket.IO qua API Gateway, theo phòng user/role |
 | 🌐 **Ngôn ngữ** | Tiếng Việt (giao diện & tài liệu) |
 
@@ -280,8 +280,8 @@ AI Service hỗ trợ tự động hóa nhập liệu:
 
 - OCR hóa đơn/phiếu giao hàng khi nhập kho (`/scan-receipt`), lookup metadata theo ISBN (Google Books, Open Library, marketplace Fahasa/Tiki/Vinabook).
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
-- Chạy local qua Ollama (model mặc định `llama3.1:8b-instruct-q4_0`, dùng chung cho `/chat` và `/assistant`) để phù hợp môi trường demo và kiểm soát dữ liệu; có thể fallback sang Anthropic Claude nếu cấu hình `ANTHROPIC_API_KEY`.
-- `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng Ollama tool-calling thật (model `ASSISTANT_MODEL`, mặc định `llama3.1:8b-instruct-q4_0`) để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể, thay vì chỉ đọc lại số liệu thô. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
+- Chạy qua OpenRouter (model mặc định `qwen/qwen3.7-flash`, dùng chung cho `/chat` và `/assistant`); có thể chuyển sang Ollama local hoàn toàn offline bằng `LLM_PROVIDER=ollama`/`ASSISTANT_PROVIDER=ollama`.
+- `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng tool-calling thật qua `llm_provider.py` (model `OPENROUTER_ASSISTANT_MODEL`, mặc định `qwen/qwen3.7-flash`) để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể, thay vì chỉ đọc lại số liệu thô. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
 
 ### 📊 Analytics
 
@@ -494,7 +494,7 @@ Quy tắc nghiệp vụ:
 **🤖 AI**
 
 - FastAPI.
-- Ollama (mặc định `llama3.1:8b-instruct-q4_0` cho text, `llava` cho ảnh), fallback Anthropic Claude.
+- OpenRouter (mặc định `qwen/qwen3.7-flash`) cho chat/tóm tắt/tool-calling; Ollama (`llava`) cho OCR ảnh và embedding.
 - OCR/metadata lookup (Google Books, Open Library, marketplace scraping).
 
 **🐳 DevOps**

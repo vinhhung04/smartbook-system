@@ -353,8 +353,7 @@ services:
       # (FAQ_EMBED_MODEL below), plus selectable via LLM_PROVIDER/ASSISTANT_PROVIDER=ollama.
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
-      # "openrouter" (default) or "ollama" (fully offline) or "anthropic" (opt-in, for an
-      # eval A/B comparison - requires ANTHROPIC_API_KEY below).
+      # "openrouter" (default) or "ollama" (fully offline).
       - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-openrouter}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
       # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
@@ -366,9 +365,6 @@ services:
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
-      # Anthropic Claude LLM — opt-in, tried before LLM_PROVIDER/ASSISTANT_PROVIDER when set
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
       - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-20}
@@ -387,7 +383,6 @@ services:
       # "Thu thu AI truc dem" — autonomous nightly briefing agent (nightly_briefing.py)
       - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
       - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
-      - NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS:-60}
       - NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS:-180}
     volumes:
       # Persist the ~600MB CLIP model download across container recreation —

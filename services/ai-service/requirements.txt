@@ -1,7 +1,6 @@
 fastapi
 uvicorn
 ollama
-anthropic
 python-multipart
 ddgs
 httpx

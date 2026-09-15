@@ -89,13 +89,9 @@ def test_run_nightly_briefing_reads_the_created_action_id_correctly(monkeypatch)
         pushed.update(event=event, action_id=action_id, action_type=action_type, user_id=user_id, extra=extra)
 
     fake_main = types.ModuleType("main")
-    fake_main.ANTHROPIC_API_KEY = ""  # falsy -> _generate_with_anthropic short-circuits, no HTTP call
-    fake_main.ANTHROPIC_BASE_URL = "https://unused.invalid"
-    fake_main.ANTHROPIC_MODEL = "unused"
-    fake_main._anthropic_extract_text = lambda payload: ""
     # No _call_text_llm on this fake module — _generate_with_text_llm's
-    # `from main import _call_text_llm` then fails too, exercising the "both
-    # tiers unreachable" fallback-text path without needing a real LLM provider.
+    # `from main import _call_text_llm` fails, exercising the "LLM unreachable"
+    # fallback-text path without needing a real LLM provider.
 
     monkeypatch.setattr(nightly_briefing, "_get_internal", fake_get_internal)
     monkeypatch.setattr(nightly_briefing, "create_pending_action", fake_create_pending_action)
@@ -147,19 +143,3 @@ def test_run_nightly_briefing_falls_back_to_tier2_with_its_own_longer_timeout(mo
     assert reply == "Bao cao gia lap tu tier 2"
     assert call_kwargs["timeout"] == nightly_briefing.NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
     assert "bat ky prompt nao" in call_kwargs["user_prompt"]
-
-
-def test_generate_with_anthropic_short_circuits_with_no_api_key(monkeypatch):
-    # No network attempt should happen when the key is blank — proven by leaving
-    # ANTHROPIC_BASE_URL pointing nowhere real; a request there would just hang/error
-    # instead of the fast None this asserts.
-    fake_main = types.ModuleType("main")
-    fake_main.ANTHROPIC_API_KEY = ""
-    fake_main.ANTHROPIC_BASE_URL = "https://unused.invalid"
-    fake_main.ANTHROPIC_MODEL = "unused"
-    fake_main._anthropic_extract_text = lambda payload: ""
-
-    monkeypatch.setitem(sys.modules, "main", fake_main)
-
-    reply = asyncio.run(nightly_briefing._generate_with_anthropic("bat ky prompt nao"))
-    assert reply is None
