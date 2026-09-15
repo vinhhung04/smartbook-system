@@ -92,6 +92,12 @@ Từ bản nâng cấp Action Center + trí nhớ hội thoại, `ai-service` c�
 | BOOK_LOOKUP_TIMEOUT_SECONDS | 15 | Timeout (giây) cho Google Books/Open Library/WorldCat |
 | BOOK_LOOKUP_MAX_WEB_RESULTS | 5 | Số kết quả DuckDuckGo tối đa mỗi query |
 | BOOK_LOOKUP_USER_AGENT | SmartBookBot/1.0 | User-Agent khi fetch trang nhà sách |
+| ENABLE_FAHA_CLOAKBROWSER | false | Bật fallback CloakBrowser (headless Chromium) cho Fahasa khi httpx thất bại |
+| BOOK_BROWSER_TIMEOUT_SECONDS | 20 | Timeout cho mỗi `page.goto()` trong CloakBrowser |
+| FAHASA_BROWSER_HARD_TIMEOUT_SECONDS | 35 | Ngưỡng cứng cho toàn bộ 1 phiên CloakBrowser (chạy trong subprocess riêng, `fahasa_browser.py`, bị SIGKILL cả process group nếu vượt quá — cần thiết vì `page.goto()`'s timeout không chặn được `launch()` bị treo) |
+| FAHASA_SEARCH_RESPONSE_WAIT_SECONDS | 8 | Thời gian tối đa poll response API tìm kiếm nội bộ của Fahasa sau khi trang bắt đầu tải |
+
+**CloakBrowser binary cache:** lần `launch()` đầu tiên tải một bản Chromium đã vá (~217MB) từ `cloakbrowser.dev` về `/root/.cloakbrowser`. Thư mục này **phải** được mount volume persistent (xem `ai_service_cloakbrowser_cache` trong `docker-compose.yml`) — nếu không, container bị xoá/tạo lại sẽ làm mất cache và phải tải lại từ đầu mỗi lần, và vì tốc độ tải quan sát được chỉ ~30KB/s trong container, một lần tải có thể mất hàng chục phút đến hơn 1 giờ, khiến mọi lookup Fahasa timeout liên tục dù đã tăng timeout.
 
 ## Chạy nhanh
 

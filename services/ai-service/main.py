@@ -15,6 +15,8 @@ import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
+import signal
+import sys
 from html.parser import HTMLParser
 from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
 from intent import (
@@ -142,12 +144,34 @@ ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() ==
 
 # ── Marketplace lookup (Fahasa / Tiki / Vinabook) ─────────────────────────────
 ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lower() == "true"
-BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "20"))
+# Bumped 20 -> 30: live testing showed a legitimate Fahasa match (correct book, real
+# Fahasa product page) taking ~26s end-to-end - right at the old 20s edge, so it would
+# fail intermittently depending on network/DDGS timing. 30s gives that case headroom
+# without making users wait drastically longer than before.
+BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "30"))
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
-BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
+BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
+# Hard ceiling on one fahasa_browser.py subprocess call (launch + navigate + evaluate),
+# enforced by _run_fahasa_browser_worker via SIGKILL on the subprocess's process group -
+# see that function's docstring. Was previously a same-process watchdog thread that
+# force-closed the browser object, but that only protects code *after* launch()
+# returns; a real hang was traced to launch() itself blocking 34+ minutes with no
+# browser process even created yet (apparently a stalled browser-binary download - no
+# timeout exists at that layer, and a thread cannot be forcibly stopped once it's
+# blocked inside it). Running the whole call in a subprocess and SIGKILLing it is the
+# only way to bound that. Left at its own env var (not tied to
+# BOOK_MARKETPLACE_TIMEOUT_SECONDS) so it can be tuned independently of the
+# already-hit request-level budget; default is comfortably above the marketplace timeout
+# so a healthy run is never cut short by it, only a hung one.
+FAHASA_BROWSER_HARD_TIMEOUT_SECONDS = float(os.getenv("FAHASA_BROWSER_HARD_TIMEOUT_SECONDS", "35"))
+# How long fahasa_browser.py's discover_url polls for the intercepted search-API
+# response after the search page starts loading (domcontentloaded), instead of waiting
+# for the page's background network chatter to go idle (see that function's comment).
+# Verified live: Fahasa's own search API typically answers in 1-3s; this just gives headroom.
+FAHASA_SEARCH_RESPONSE_WAIT_SECONDS = float(os.getenv("FAHASA_SEARCH_RESPONSE_WAIT_SECONDS", "8"))
 INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
 INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
@@ -826,10 +850,54 @@ async def _fetch_first_valid(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    """Try each URL in order; for Fahasa, fall back to CloakBrowser when httpx fails.
-    If all DDGS URLs are exhausted with no result, do a final browser-based Fahasa
-    search to discover the real product URL via the internal Elastic search API."""
+    """For Fahasa, try CloakBrowser's own-site search FIRST - it hits Fahasa's internal
+    search API directly and doesn't depend on a third-party search engine at all. The
+    DDGS-sourced candidate `urls` (httpx, then CloakBrowser-per-URL) are now the
+    fallback if that finds nothing. For every other source, `urls` is the only path.
+
+    Reordered from "DDGS first, CloakBrowser direct-search as last resort": live
+    testing found DDGS (via the ddgs/primp library) both slow against these search
+    engines from this environment (10-14s+ even when it succeeds) and unreliable (one
+    backend, Mojeek, outright 403s datacenter IPs) - neither problem applies to
+    searching Fahasa's own site directly, so that path is strictly better as the
+    primary attempt, not a last resort."""
     last_error: Exception | None = None
+
+    if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and search_code:
+        discovered_url, dom_meta = await _fahasa_discover_url_via_browser(search_code)
+        if discovered_url:
+            logger.info("Fahasa browser search found URL for %s: %s", search_code, discovered_url)
+            if dom_meta and (dom_meta.get("title") or dom_meta.get("description")):
+                metadata = {
+                    "title": dom_meta.get("title"),
+                    "subtitle": None,
+                    "authors": dom_meta.get("authors") or [],
+                    "publisher": dom_meta.get("publisher"),
+                    "publishedDate": dom_meta.get("publishedDate"),
+                    "description": dom_meta.get("description"),
+                    "categories": [],
+                    "language": dom_meta.get("language") or "vi",
+                    "pageCount": dom_meta.get("pageCount"),
+                    "thumbnail": dom_meta.get("thumbnail"),
+                    "sourceUrl": discovered_url,
+                    "sourceProvider": source_name,
+                    "sourceFetchMode": "cloakbrowser",
+                }
+                score = _metadata_completeness_score(metadata)
+                logger.info(
+                    "Browser marketplace [%s] found metadata score=%.3f from %s",
+                    source_name, score, discovered_url,
+                )
+                return metadata, score
+            # dom_meta empty or no useful fields → fallback to HTML-based parse
+            metadata, score = await _fetch_and_parse_product_page_with_browser(
+                discovered_url, source_name, search_code,
+            )
+            if metadata:
+                return metadata, score
+
+    # Fallback (or the only path for non-Fahasa sources, or when CloakBrowser is
+    # disabled): DDGS-sourced candidate URLs.
     for url in urls[:2]:
         try:
             metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
@@ -873,82 +941,77 @@ async def _fetch_first_valid(
             if metadata:
                 return metadata, score
 
-    # Last resort: use CloakBrowser to search Fahasa and extract metadata in one session
-    if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and search_code:
-        discovered_url, dom_meta = await _fahasa_discover_url_via_browser(search_code)
-        if discovered_url:
-            logger.info("Fahasa browser search found URL for %s: %s", search_code, discovered_url)
-            if dom_meta and (dom_meta.get("title") or dom_meta.get("description")):
-                metadata = {
-                    "title": dom_meta.get("title"),
-                    "subtitle": None,
-                    "authors": dom_meta.get("authors") or [],
-                    "publisher": dom_meta.get("publisher"),
-                    "publishedDate": dom_meta.get("publishedDate"),
-                    "description": dom_meta.get("description"),
-                    "categories": [],
-                    "language": dom_meta.get("language") or "vi",
-                    "pageCount": dom_meta.get("pageCount"),
-                    "thumbnail": dom_meta.get("thumbnail"),
-                    "sourceUrl": discovered_url,
-                    "sourceProvider": source_name,
-                    "sourceFetchMode": "cloakbrowser",
-                }
-                score = _metadata_completeness_score(metadata)
-                logger.info(
-                    "Browser marketplace [%s] found metadata score=%.3f from %s",
-                    source_name, score, discovered_url,
-                )
-                return metadata, score
-            # dom_meta empty or no useful fields → fallback to HTML-based parse
-            metadata, score = await _fetch_and_parse_product_page_with_browser(
-                discovered_url, source_name, search_code,
-            )
-            if metadata:
-                return metadata, score
-
     if last_error:
         raise last_error
     return None, 0.0
 
 
-# ── CloakBrowser fallback (Fahasa only) ────────────────────────────────────────
+# ── CloakBrowser fallback (Fahasa only) — runs in an isolated subprocess ───────────
+# See fahasa_browser.py for why: a real hang was traced to cloakbrowser's launch()
+# itself blocking 34+ minutes with no browser process even created yet, which nothing
+# at this (asyncio) layer can bound - only killing the OS process can.
 
-def _fetch_html_with_cloakbrowser(url: str, search_code: str | None = None) -> str | None:
-    browser = None
+async def _run_fahasa_browser_worker(mode: str, args: dict, timeout: float):
+    """Runs fahasa_browser.py's <mode> as a subprocess in its own process group, so a
+    hang anywhere inside it - including inside cloakbrowser's launch(), which has no
+    timeout of its own - can be killed from outside via SIGKILL on the whole group
+    (catching any browser child process too, not just the wrapper). asyncio.to_thread
+    + asyncio.wait_for was tried first and doesn't work for this: cancelling the
+    awaiting coroutine only stops main.py from waiting, it does NOT stop the thread
+    itself (Python threads can't be forcibly killed), so the thread - and whatever
+    browser process it started - kept running for however long the real call actually
+    took (572s, then once 34+ minutes, observed in production) long after the HTTP
+    response had already gone out as a timeout.
+
+    Raises TimeoutError (after killing the subprocess) or RuntimeError (subprocess ran
+    but reported/produced a failure) on any problem - callers catch both the same way
+    they already caught exceptions from the old in-process implementation."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fahasa_browser.py")
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, script, mode, json.dumps(args),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,  # own process group - lets us SIGKILL a browser child too
+    )
     try:
-        from cloakbrowser import launch
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        raise TimeoutError(f"fahasa_browser.py {mode} exceeded {timeout}s, killed")
+    except asyncio.CancelledError:
+        # An outer timeout (e.g. _fetch_first_valid's own asyncio.wait_for at the
+        # endpoint/marketplace-budget level) can cancel us before our OWN timeout
+        # above fires - that arrives here as CancelledError, not TimeoutError. Must
+        # still kill the subprocess (otherwise it leaks exactly like the TimeoutError
+        # case), then re-raise - never swallow CancelledError.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        raise
 
-        browser = launch(headless=True)
-        page = browser.new_page()
-        page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+    if not stdout:
+        raise RuntimeError(f"fahasa_browser.py {mode} produced no output: {stderr.decode(errors='replace')[:500]}")
+
+    payload = json.loads(stdout.decode())
+    if not payload.get("ok"):
+        raise RuntimeError(payload.get("error") or f"fahasa_browser.py {mode} failed")
+    return payload["result"]
+
+
+async def _fetch_html_with_cloakbrowser(url: str, search_code: str | None = None) -> str | None:
+    try:
+        return await _run_fahasa_browser_worker(
+            "fetch_html", {"url": url, "search_code": search_code}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
         )
-        page.wait_for_timeout(1200)
-        html_text = page.content()
-
-        if search_code and search_code not in html_text:
-            logger.debug(
-                "CloakBrowser page does not contain code %s, skipping %s",
-                search_code,
-                url,
-            )
-            return None
-
-        return html_text
-
     except Exception as exc:
         logger.warning("CloakBrowser fetch failed %s: %s", url, exc)
         return None
-
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
 
 
 async def _fetch_and_parse_product_page_with_browser(
@@ -956,7 +1019,7 @@ async def _fetch_and_parse_product_page_with_browser(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    html_text = await asyncio.to_thread(_fetch_html_with_cloakbrowser, url, search_code)
+    html_text = await _fetch_html_with_cloakbrowser(url, search_code)
 
     if not html_text:
         return None, 0.0
@@ -978,110 +1041,6 @@ async def _fetch_and_parse_product_page_with_browser(
         url,
     )
     return metadata, score
-
-
-def _evaluate_fahasa_product_metadata(page) -> dict:
-    """
-    Run JavaScript in a rendered Fahasa product page to extract book metadata
-    from the DOM. Uses multiple selector fallbacks for each field.
-    Returns a (possibly partial) dict — caller must handle empty/None values.
-    """
-    try:
-        data = page.evaluate("""() => {
-            const h1 = document.querySelector('h1.page-title span')
-                    || document.querySelector('h1.page-title')
-                    || document.querySelector('h1[itemprop="name"]')
-                    || document.querySelector('h1');
-            let title = h1 ? h1.innerText.trim() : null;
-            if (!title) {
-                title = document.title
-                    .replace(/ - FAHASA\\.COM$/i, '')
-                    .replace(/^Sách\\s+/i, '')
-                    .trim() || null;
-            }
-
-            const allImgs = Array.from(document.querySelectorAll('img'));
-            const coverImg = allImgs.find(img =>
-                img.src && img.src.includes('cdn1.fahasa.com/media/catalog/product')
-            );
-            const thumbnail = coverImg ? coverImg.src : null;
-
-            const descEl = document.querySelector('#desc_content')
-                        || document.querySelector('#product_tabs_description_contents')
-                        || document.querySelector('.product-description .value')
-                        || document.querySelector('#description .std')
-                        || document.querySelector('[itemprop="description"]')
-                        || document.querySelector('.product.description .value')
-                        || document.querySelector('.product-info-description p');
-            const description = descEl ? descEl.innerText.trim() || null : null;
-
-            const attrs = {};
-            const rows = document.querySelectorAll(
-                '.product-attribute, .product-info-attributes tr, ' +
-                'table.data.additional-attributes tr, .attributes-table tr, table tr'
-            );
-            rows.forEach(row => {
-                const labelEl = row.querySelector('.attribute-label, th, td:first-child, .label');
-                const valueEl = row.querySelector('.attribute-value, td:last-child, .value');
-                if (labelEl && valueEl) {
-                    const lbl = labelEl.innerText.trim().toLowerCase();
-                    const val = valueEl.innerText.trim();
-                    if (lbl && val) attrs[lbl] = val;
-                }
-            });
-
-            return { title, thumbnail, description, attrs };
-        }""")
-    except Exception:
-        return {}
-
-    if not isinstance(data, dict):
-        return {}
-
-    attrs = data.get("attrs") or {}
-    authors: list[str] = []
-    publisher = None
-    published_date = None
-    page_count = None
-    language = None
-
-    for lbl, val in attrs.items():
-        if not val:
-            continue
-        lbl_lower = lbl.lower()
-        if any(k in lbl_lower for k in ("tác giả", "tac gia", "author")):
-            authors = [v.strip() for v in val.replace(";", ",").split(",") if v.strip()]
-        elif any(k in lbl_lower for k in ("nhà xuất bản", "nha xuat ban", "nxb", "publisher")):
-            publisher = val.strip() or None
-        elif any(k in lbl_lower for k in ("năm xb", "năm xuất bản", "nam xuat ban", "ngày xuất bản", "year")):
-            published_date = val.strip() or None
-        elif any(k in lbl_lower for k in ("số trang", "so trang", "page")):
-            try:
-                page_count = int("".join(filter(str.isdigit, val))) or None
-            except (ValueError, TypeError):
-                pass
-        elif any(k in lbl_lower for k in ("ngôn ngữ", "ngon ngu", "language")):
-            raw_lang = val.strip().lower()
-            if "việt" in raw_lang or "viet" in raw_lang:
-                language = "vi"
-            elif "anh" in raw_lang or "english" in raw_lang:
-                language = "en"
-            else:
-                language = val.strip() or None
-
-    raw_desc = data.get("description")
-    clean_desc = _clean_fahasa_description(raw_desc, data.get("title"))
-
-    return {
-        "title": data.get("title"),
-        "thumbnail": data.get("thumbnail"),
-        "description": clean_desc,
-        "authors": authors,
-        "publisher": publisher,
-        "publishedDate": published_date,
-        "pageCount": page_count,
-        "language": language,
-    }
 
 
 def _clean_fahasa_description(desc: str | None, title: str | None) -> str | None:
@@ -1114,139 +1073,31 @@ def _clean_fahasa_description(desc: str | None, title: str | None) -> str | None
     return cleaned or desc
 
 
-def _fahasa_enhance_metadata_sync(product_url: str) -> dict:
-    """Load a known Fahasa product URL and extract full metadata via DOM evaluation."""
-    browser = None
+async def _fahasa_enhance_metadata(product_url: str) -> dict:
     try:
-        from cloakbrowser import launch
-
-        browser = launch(headless=True)
-        page = browser.new_page()
-        page.goto(
-            product_url,
-            wait_until="domcontentloaded",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+        result = await _run_fahasa_browser_worker(
+            "enhance_metadata", {"product_url": product_url}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
         )
-        page.wait_for_timeout(1500)
-        return _evaluate_fahasa_product_metadata(page)
+        return result or {}
     except Exception as exc:
         logger.warning("Fahasa metadata enhancement failed %s: %s", product_url, exc)
         return {}
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
-
-
-async def _fahasa_enhance_metadata(product_url: str) -> dict:
-    return await asyncio.to_thread(_fahasa_enhance_metadata_sync, product_url)
-
-
-def _fahasa_discover_url_sync(barcode: str) -> tuple[str | None, dict]:
-    """
-    Load Fahasa search page via CloakBrowser, intercept the internal Elastic search
-    API response to find the product URL, then navigate to that page and extract
-    metadata via DOM evaluation — all in one browser session.
-    Sync — must be called via asyncio.to_thread.
-    """
-    browser = None
-    try:
-        from cloakbrowser import launch
-
-        browser = launch(headless=True)
-        page = browser.new_page()
-        found_url: list[str] = []
-
-        def _on_response(resp):
-            if found_url:
-                return
-            if "elsearch" in resp.url and "search.json" in resp.url:
-                try:
-                    data = resp.json()
-                    for result in data.get("results") or []:
-                        sku = str((result.get("sku") or {}).get("raw", "")).strip()
-                        if sku == barcode:
-                            link = str((result.get("link") or {}).get("raw", "")).strip()
-                            if link:
-                                found_url.append("https://www.fahasa.com" + link)
-                                return
-                except Exception:
-                    pass
-
-        page.on("response", _on_response)
-        page.goto(
-            f"https://www.fahasa.com/catalogsearch/result/?q={barcode}",
-            wait_until="networkidle",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
-        )
-        page.wait_for_timeout(1000)
-
-        if not found_url:
-            return None, {}
-
-        product_url = found_url[0]
-
-        # Navigate to product page in the same browser session to extract metadata
-        page2 = browser.new_page()
-        dom_meta: dict = {}
-        try:
-            page2.goto(
-                product_url,
-                wait_until="domcontentloaded",
-                timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
-            )
-            page2.wait_for_timeout(1500)
-
-            dom_meta = _evaluate_fahasa_product_metadata(page2)
-
-            # Fallback: extract title from <title> tag if DOM gave nothing
-            if not dom_meta.get("title"):
-                html = page2.content()
-                m = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE)
-                if m:
-                    raw_title = m.group(1)
-                    raw_title = re.sub(r"\s*-\s*FAHASA\.COM\s*$", "", raw_title, flags=re.IGNORECASE).strip()
-                    raw_title = re.sub(r"^Sách\s+", "", raw_title, flags=re.IGNORECASE).strip()
-                    if raw_title:
-                        dom_meta["title"] = raw_title
-
-            # Fallback: extract CDN thumbnail from raw HTML if DOM gave nothing
-            if not dom_meta.get("thumbnail"):
-                html = page2.content()
-                m = re.search(
-                    r"(https://cdn1\.fahasa\.com/media/catalog/product/[^\s\"']+\.(?:jpg|jpeg|png|webp))",
-                    html,
-                    re.IGNORECASE,
-                )
-                if m:
-                    dom_meta["thumbnail"] = m.group(1)
-
-        except Exception as exc:
-            logger.warning("Fahasa product page extraction failed %s: %s", product_url, exc)
-        finally:
-            try:
-                page2.close()
-            except Exception:
-                pass
-
-        return product_url, dom_meta
-
-    except Exception as exc:
-        logger.warning("Fahasa browser search failed for %s: %s", barcode, exc)
-        return None, {}
-
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
 
 
 async def _fahasa_discover_url_via_browser(barcode: str) -> tuple[str | None, dict]:
-    return await asyncio.to_thread(_fahasa_discover_url_sync, barcode)
+    """Runs fahasa_browser.py's discover_url mode - loads Fahasa's search page,
+    intercepts the internal Elastic search API response to find the product URL, then
+    navigates to that page and extracts metadata via DOM evaluation, all in the
+    subprocess's own browser session. See _run_fahasa_browser_worker for why this runs
+    in a subprocess rather than in-process."""
+    try:
+        result = await _run_fahasa_browser_worker(
+            "discover_url", {"barcode": barcode}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
+        )
+        return result.get("url"), result.get("meta") or {}
+    except Exception as exc:
+        logger.warning("Fahasa browser search failed for %s: %s", barcode, exc)
+        return None, {}
 
 
 # ── 4. DuckDuckGo search (sync — each domain runs in its own thread) ─────────

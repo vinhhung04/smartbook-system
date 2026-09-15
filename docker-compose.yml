@@ -367,11 +367,18 @@ services:
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
-      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-20}
+      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-30}
       - BOOK_LOOKUP_MAX_WEB_RESULTS=${BOOK_LOOKUP_MAX_WEB_RESULTS:-5}
       - BOOK_LOOKUP_USER_AGENT=${BOOK_LOOKUP_USER_AGENT:-SmartBookBot/1.0}
       - ENABLE_FAHA_CLOAKBROWSER=${ENABLE_FAHA_CLOAKBROWSER:-false}
-      - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-15}
+      - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-20}
+      # Hard ceiling on one CloakBrowser session before a watchdog force-closes it - see
+      # main.py's FAHASA_BROWSER_HARD_TIMEOUT_SECONDS comment (one production Fahasa
+      # search navigation hung 572s despite a 20s page.goto timeout).
+      - FAHASA_BROWSER_HARD_TIMEOUT_SECONDS=${FAHASA_BROWSER_HARD_TIMEOUT_SECONDS:-35}
+      # How long to poll for Fahasa's search-API response after the page starts loading
+      # (replaces waiting for the page to go fully network-idle, which it never does).
+      - FAHASA_SEARCH_RESPONSE_WAIT_SECONDS=${FAHASA_SEARCH_RESPONSE_WAIT_SECONDS:-8}
       # "Find book by cover photo" — CLIP visual embedding + OCR-text fusion
       - CLIP_MODEL_NAME=${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
       - COVER_OCR_MAX_TOKENS=${COVER_OCR_MAX_TOKENS:-200}
@@ -389,6 +396,13 @@ services:
       # a bind mount, matching this compose file's existing convention for
       # model caches (see ollama's ./ollama_data:/root/.ollama below).
       - ./ai_service_model_cache:/root/.cache/huggingface
+      # Persist CloakBrowser's patched Chromium binary. Without this it re-downloads
+      # from scratch on every container recreate - measured at ~30KB/s from
+      # cloakbrowser.dev, so a single download can take many minutes and any
+      # timeout/restart during it discards the partial file, meaning every Fahasa
+      # lookup effectively restarted the download from zero (the true cause behind
+      # the multi-minute-to-34-minute CloakBrowser hangs, not a network block).
+      - ./ai_service_cloakbrowser_cache:/root/.cloakbrowser
 
   api-gateway:
     build:
