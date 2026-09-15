@@ -850,10 +850,14 @@ async def _fetch_first_valid(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    """For Fahasa, try CloakBrowser's own-site search FIRST - it hits Fahasa's internal
-    search API directly and doesn't depend on a third-party search engine at all. The
-    DDGS-sourced candidate `urls` (httpx, then CloakBrowser-per-URL) are now the
-    fallback if that finds nothing. For every other source, `urls` is the only path.
+    """Only called for Fahasa (source_name == "fahasa") - Tiki and Vinabook each
+    have their own direct-API function (_fetch_tiki_by_isbn_api,
+    _fetch_vinabook_by_isbn_api) and never go through this path.
+
+    Tries CloakBrowser's own-site search FIRST - it hits Fahasa's internal search
+    API directly and doesn't depend on a third-party search engine at all. The
+    DDGS-sourced candidate `urls` (httpx, then CloakBrowser-per-URL) are the
+    fallback if that finds nothing.
 
     Reordered from "DDGS first, CloakBrowser direct-search as last resort": live
     testing found DDGS (via the ddgs/primp library) both slow against these search
@@ -1275,6 +1279,131 @@ async def _fetch_tiki_by_isbn_api(
     return None, 0.0
 
 
+# ── 5b. Vinabook direct search (Shopify/Haravan storefront) ──────────────────
+
+class _PlainTextParser(HTMLParser):
+    """Strips tags from a product-description HTML fragment, keeping block-level
+    boundaries as newlines. Vinabook's `description` field (Haravan CMS output)
+    is rich HTML, not og:-tag plain text like _MetaTagParser handles."""
+
+    _BLOCK_TAGS = {"p", "br", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
+
+    def handle_data(self, data):
+        self._chunks.append(data)
+
+    def get_text(self) -> str:
+        text = "".join(self._chunks)
+        lines = [line.strip() for line in text.split("\n")]
+        return "\n".join(line for line in lines if line).strip()
+
+
+def _html_to_plain_text(html_fragment: str | None) -> str | None:
+    if not html_fragment:
+        return None
+    parser = _PlainTextParser()
+    try:
+        parser.feed(html_fragment)
+    except Exception:
+        return None
+    return parser.get_text() or None
+
+
+def _parse_vinabook_options(product: dict) -> dict:
+    """Vinabook's product-level `options` array self-describes each variant
+    dimension by Vietnamese label (e.g. "Nhà Phát Hành", "Năm XB", "Số Trang") -
+    match on label rather than position, since position isn't guaranteed stable
+    across products (some list author or cover type instead)."""
+    out: dict = {}
+    for option in product.get("options") or []:
+        name = (option.get("name") or "").strip().lower()
+        values = option.get("values") or []
+        value = (values[0] if values else "").strip()
+        if not value:
+            continue
+        if any(k in name for k in ("phát hành", "phat hanh", "nhà xuất bản", "nha xuat ban", "nxb")):
+            out.setdefault("publisher", value)
+        elif any(k in name for k in ("năm", "nam xb", "year")):
+            out.setdefault("publishedDate", value)
+        elif any(k in name for k in ("số trang", "so trang", "trang")):
+            try:
+                out.setdefault("pageCount", int("".join(filter(str.isdigit, value))) or None)
+            except (ValueError, TypeError):
+                pass
+        elif any(k in name for k in ("tác giả", "tac gia", "author")):
+            out.setdefault("authors", [v.strip() for v in value.replace(";", ",").split(",") if v.strip()])
+    return out
+
+
+async def _fetch_vinabook_by_isbn_api(
+    client: httpx.AsyncClient,
+    isbn: str,
+) -> tuple[dict | None, float]:
+    """Vinabook runs on Haravan (a Shopify-API-compatible Vietnamese storefront
+    platform): unlike Tiki, its products store the real EAN/ISBN barcode as
+    variant `sku`/`barcode`, and its built-in search (`/search?q=...`) matches
+    on it directly - verified live against real barcodes, including ones Tiki's
+    own search cannot find at all (Tiki never stores ISBN as a searchable
+    field). No DDGS/CloakBrowser needed: this is a plain, unauthenticated
+    storefront endpoint with no anti-bot gate observed.
+    """
+    logger.info("Calling vinabook-search for ISBN %s", isbn)
+    try:
+        search_resp = await client.get(
+            "https://www.vinabook.com/search",
+            params={"q": isbn, "type": "product"},
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        search_resp.raise_for_status()
+        match = re.search(r'href="(/products/[^"?]+)"', search_resp.text)
+        if not match:
+            return None, 0.0
+        product_url = "https://www.vinabook.com" + match.group(1)
+
+        product_resp = await client.get(
+            product_url + ".js",
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        product_resp.raise_for_status()
+        product = product_resp.json() or {}
+
+        variant = (product.get("variants") or [{}])[0]
+        sku = (variant.get("barcode") or variant.get("sku") or "").strip()
+        if sku != isbn:
+            # Search matched a different field (title/tags) than the barcode -
+            # don't attribute a possibly-unrelated product to this ISBN.
+            return None, 0.0
+
+        options_meta = _parse_vinabook_options(product)
+        images = product.get("images") or []
+        metadata = {
+            "title": _safe_text(product.get("title")),
+            "subtitle": None,
+            "authors": options_meta.get("authors", []),
+            "publisher": options_meta.get("publisher") or _safe_text(product.get("vendor")),
+            "publishedDate": options_meta.get("publishedDate"),
+            "description": _html_to_plain_text(product.get("description")),
+            "categories": [],
+            "language": "vi",
+            "pageCount": options_meta.get("pageCount"),
+            "thumbnail": images[0] if images else None,
+            "sourceUrl": product_url,
+        }
+        score = _metadata_completeness_score(metadata)
+        logger.info("vinabook-search returned data, score=%.3f for ISBN %s", score, isbn)
+        return metadata, score
+    except Exception as exc:
+        logger.warning("Vinabook search lookup failed for %s: %s", isbn, exc)
+        raise
+
+
 # ── 6. Orchestrate all marketplace providers ──────────────────────────────────
 
 async def _fetch_all_marketplace(
@@ -1282,38 +1411,34 @@ async def _fetch_all_marketplace(
     isbn10: str | None,
 ) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool, dict[str, str]]:
     """
-    Run Fahasa (DDGS+scrape), Tiki (API), Vinabook (DDGS+scrape) in parallel.
-    Returns metadata plus per-provider TIMEOUT/ERROR outcomes when a provider fails.
+    Run Fahasa (own-site search via CloakBrowser), Tiki (API), Vinabook (own-site
+    search API) in parallel. Returns metadata plus per-provider TIMEOUT/ERROR
+    outcomes when a provider fails.
     """
-    # Step 1: DuckDuckGo search for Fahasa + Vinabook URLs (Tiki handled via API)
-    # Run both DDGS queries in parallel threads — each in its own thread so total
-    # time = max(fahasa_query, vinabook_query) instead of sum.
+    # Step 1: DuckDuckGo search for Fahasa URLs only - it's the fallback path when
+    # CloakBrowser's own-site search finds nothing (see _fetch_first_valid). Tiki
+    # and Vinabook each have a direct API/search of their own and never needed
+    # DDGS-sourced URLs; Vinabook's DDGS-sourced path in particular was removed
+    # after live testing showed DDGS never returns the actual product page for a
+    # barcode query (generic author/category pages instead) - useless as either a
+    # primary or fallback source there, so this now only searches fahasa.com.
     fahasa_urls: list[str] = []
-    vinabook_urls: list[str] = []
     search_outcomes: dict[str, str] = {}
     try:
-        ddgs_results = await asyncio.wait_for(
-            asyncio.gather(
-                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
-                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "vinabook.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
-                return_exceptions=True,
-            ),
+        fahasa_urls = await asyncio.wait_for(
+            asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
             timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
         )
-        if not isinstance(ddgs_results[0], Exception):
-            fahasa_urls = ddgs_results[0]
-        if not isinstance(ddgs_results[1], Exception):
-            vinabook_urls = ddgs_results[1]
     except asyncio.TimeoutError:
-        logger.warning("DuckDuckGo marketplace search timed out for ISBN %s", isbn13)
-        search_outcomes = {"fahasa": "TIMEOUT", "vinabook": "TIMEOUT"}
+        logger.warning("DuckDuckGo Fahasa search timed out for ISBN %s", isbn13)
+        search_outcomes = {"fahasa": "TIMEOUT"}
     except Exception as exc:
-        logger.warning("DuckDuckGo marketplace search error for ISBN %s: %s", isbn13, exc)
-        search_outcomes = {"fahasa": "ERROR", "vinabook": "ERROR"}
+        logger.warning("DuckDuckGo Fahasa search error for ISBN %s: %s", isbn13, exc)
+        search_outcomes = {"fahasa": "ERROR"}
 
-    web_searched = bool(fahasa_urls or vinabook_urls)
+    web_searched = bool(fahasa_urls)
 
-    # Step 2: Fetch pages + Tiki API in parallel
+    # Step 2: Fetch pages + Tiki/Vinabook APIs in parallel
     mp_timeout = httpx.Timeout(BOOK_MARKETPLACE_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(timeout=mp_timeout) as client:
         logger.info("Calling marketplace providers for ISBN %s", isbn13)
@@ -1327,7 +1452,7 @@ async def _fetch_all_marketplace(
                 timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
             ),
             asyncio.wait_for(
-                _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+                _fetch_vinabook_by_isbn_api(client, isbn13),
                 timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
             ),
             return_exceptions=True,
