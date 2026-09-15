@@ -340,13 +340,22 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
-      # Dùng chung 1 model text (llama3.1, hỗ trợ tool-calling) cho cả tóm tắt/chat và /assistant —
-      # llava là vision model riêng, không phù hợp cho tóm tắt văn bản
+      # OpenRouter — default text/tool-calling backend (replaces Ollama for chat/summary/
+      # tool-calling/NLU; Ollama stays for the vision/OCR models and embeddings below).
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_TEXT_MODEL=${OPENROUTER_TEXT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_ASSISTANT_MODEL=${OPENROUTER_ASSISTANT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - NLU_PROVIDER=${NLU_PROVIDER:-}
+      # Ollama model tags — still used for vision/OCR (OLLAMA_MODEL) and embeddings
+      # (FAQ_EMBED_MODEL below), plus selectable via LLM_PROVIDER/ASSISTANT_PROVIDER=ollama.
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
-      # "ollama" (default, offline) or "anthropic" (opt-in, for an eval A/B comparison
-      # against the local model - requires ANTHROPIC_API_KEY below).
-      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-ollama}
+      # "openrouter" (default) or "ollama" (fully offline) or "anthropic" (opt-in, for an
+      # eval A/B comparison - requires ANTHROPIC_API_KEY below).
+      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-openrouter}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
       # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
       # from ASSISTANT_MODEL/SUMMARY_MODEL since it is a dedicated embedding model, not a chat model.
@@ -357,7 +366,7 @@ services:
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
-      # Anthropic Claude LLM — nếu không set, sẽ fallback về Ollama local
+      # Anthropic Claude LLM — opt-in, tried before LLM_PROVIDER/ASSISTANT_PROVIDER when set
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)

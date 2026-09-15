@@ -279,7 +279,7 @@ class TestLLMPath(unittest.TestCase):
 
     def test_llm_fail_falls_back_to_rule(self):
         with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mg, \
-             patch.object(nlu_module, "_call_ollama", new_callable=AsyncMock) as mo:
+             patch.object(nlu_module, "_call_tier2", new_callable=AsyncMock) as mo:
             mg.return_value = ({}, False)
             mo.return_value = ({}, False)
             result = _run(classify_user_message("Kho minh dang thieu dau sach nao vay"))
@@ -303,10 +303,10 @@ class TestLLMPath(unittest.TestCase):
             self.assertNotIn(key, result)
             self.assertNotIn(key, result.get("entities", {}))
 
-    def test_groq_fails_ollama_called(self):
+    def test_groq_fails_tier2_called(self):
         resp = _llm(LOW_STOCK_QUERY)
         with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mg, \
-             patch.object(nlu_module, "_call_ollama", new_callable=AsyncMock) as mo:
+             patch.object(nlu_module, "_call_tier2", new_callable=AsyncMock) as mo:
             mg.return_value = ({}, False)
             mo.return_value = (resp, True)
             result = _run(classify_user_message("Kho minh dang thieu dau sach nao vay"))

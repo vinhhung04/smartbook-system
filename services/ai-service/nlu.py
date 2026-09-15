@@ -2,13 +2,14 @@
 nlu.py — Hybrid NLU layer for SmartBook AI chatbot.
 
 Stage 1: detect_intent() rule-based (fast, deterministic).
-Stage 2: LLM classifier via Groq -> Ollama fallback (natural Vietnamese).
+Stage 2: LLM classifier via Groq -> configured tier-2 text LLM (OpenRouter by
+default; see NLU_PROVIDER/LLM_PROVIDER) fallback (natural Vietnamese).
 
 Security: Never sends auth tokens, user profiles, or business data to any LLM.
 """
 from __future__ import annotations
 
-import asyncio
+import functools
 import json
 import logging
 import os
@@ -16,9 +17,9 @@ import re
 from typing import Any
 
 import httpx
-import ollama
 
 from cache import SummaryCache
+from llm_provider import get_llm_provider
 from intent import (
     detect_intent,
     normalize_text,
@@ -54,6 +55,35 @@ _NLU_OLLAMA_MODEL = os.getenv(
 )
 _OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 _NLU_TIMEOUT = float(os.getenv("NLU_LLM_TIMEOUT_SECONDS", "5"))
+# Tier-2 fallback provider when Groq is unavailable/fails - "openrouter" (default),
+# "ollama", or "anthropic". Falls back to LLM_PROVIDER when unset, so this module
+# stays in sync with the rest of the service's default provider without needing
+# its own separate config in the common case.
+_NLU_PROVIDER = (os.getenv("NLU_PROVIDER", "").strip() or os.getenv("LLM_PROVIDER", "openrouter")).strip().lower()
+_ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+_ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
+_ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+_OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+_OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+_OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
+
+
+@functools.lru_cache(maxsize=1)
+def _get_tier2_provider():
+    """Cached provider instance for the tier-2 NLU fallback - see _NLU_PROVIDER."""
+    return get_llm_provider(
+        _NLU_PROVIDER,
+        ollama_host=_OLLAMA_HOST,
+        ollama_model=_NLU_OLLAMA_MODEL,
+        anthropic_api_key=_ANTHROPIC_API_KEY,
+        anthropic_base_url=_ANTHROPIC_BASE_URL,
+        anthropic_model=_ANTHROPIC_MODEL,
+        openrouter_api_key=_OPENROUTER_API_KEY,
+        openrouter_base_url=_OPENROUTER_BASE_URL,
+        openrouter_model=_OPENROUTER_TEXT_MODEL,
+        openrouter_fallback_model=_OPENROUTER_FALLBACK_MODEL,
+    )
 
 INTENT_ALLOWLIST: frozenset[str] = frozenset([
     DASHBOARD_SUMMARY_QUERY,
@@ -356,26 +386,28 @@ async def _call_groq(message: str, history: str) -> tuple[dict, bool]:
         return {}, False
 
 
-async def _call_ollama(message: str, history: str) -> tuple[dict, bool]:
+async def _call_tier2(message: str, history: str) -> tuple[dict, bool]:
+    """Tier-2 NLU call, used when Groq (tier 1) is unavailable or fails.
+    Routes through llm_provider (OpenRouter by default; see
+    NLU_PROVIDER/LLM_PROVIDER) instead of calling Ollama directly."""
     user_content = f"Cau nguoi dung: {message}"
     if history:
         user_content = f"Lich su:\n{history}\n\n{user_content}"
-    full_prompt = f"{_NLU_SYSTEM_PROMPT}\n\n{user_content}"
     try:
-        client = ollama.Client(host=_OLLAMA_HOST)
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.generate,
-                model=_NLU_OLLAMA_MODEL,
-                prompt=full_prompt,
-                options={"temperature": 0.1, "num_predict": 400},
-            ),
+        provider = _get_tier2_provider()
+        result = await provider.chat(
+            messages=[
+                {"role": "system", "content": _NLU_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            tools=[],
+            num_predict=400,
             timeout=_NLU_TIMEOUT,
+            temperature=0.1,
         )
-        raw = response.get("response", "")
-        return _parse_json(raw), bool(raw)
+        return _parse_json(result.text), bool(result.text)
     except Exception as exc:
-        logger.warning("Ollama NLU failed: %s", exc)
+        logger.warning("Tier-2 NLU failed: %s", exc)
         return {}, False
 
 
@@ -423,7 +455,7 @@ async def classify_user_message(
     history = _history_snippet(conversation_history)
     llm_raw, ok = await _call_groq(message, history)
     if not ok or not llm_raw:
-        llm_raw, ok = await _call_ollama(message, history)
+        llm_raw, ok = await _call_tier2(message, history)
 
     if ok and llm_raw:
         validated = _validate(llm_raw, rule_result, message)

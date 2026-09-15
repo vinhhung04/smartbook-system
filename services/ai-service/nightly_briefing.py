@@ -115,32 +115,29 @@ async def _generate_with_anthropic(prompt: str) -> str | None:
         return None
 
 
-async def _generate_with_ollama(prompt: str) -> str | None:
-    """Calls the same Ollama generation path _chat_with_ollama uses (SUMMARY_MODEL,
-    with its OLLAMA_MODEL fallback), but with NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
-    instead of that function's own chat-tuned timeout — see the constant's comment."""
+async def _generate_with_text_llm(prompt: str) -> str | None:
+    """Calls the same tier-2 text-generation path _chat_with_text_llm uses
+    (LLM_PROVIDER - OpenRouter by default; this replaces the old direct-Ollama
+    _generate_with_ollama), but with NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
+    instead of that function's own chat-tuned timeout — see the constant's
+    comment. (Env var name kept as-is for backward compatibility even though
+    it now bounds whichever provider LLM_PROVIDER resolves to, not only Ollama.)"""
     try:
-        import ollama as ollama_lib
-        from main import OLLAMA_HOST, _ollama_generate_with_summary_fallback
+        # Lazy import: main.py imports this module to schedule the startup task, so a
+        # top-of-file import here would be circular (main -> nightly_briefing -> main).
+        from main import _call_text_llm
 
-        client = ollama_lib.Client(host=OLLAMA_HOST)
-        # _chat_with_ollama wraps every prompt as "User: ...\nAssistant:" before
-        # calling this same generate helper — matching that framing here too, since
-        # the raw generate() API (no chat template) otherwise tends to answer by
-        # describing the input's structure instead of following the instruction.
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                _ollama_generate_with_summary_fallback,
-                client,
-                f"User: {prompt}\nAssistant:",
-                {"temperature": 0.4, "num_predict": 800},
-            ),
-            timeout=NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS,
+        # _chat_with_text_llm's predecessor (_chat_with_ollama) wrapped every prompt as
+        # "User: ...\nAssistant:" before calling Ollama's raw generate() API (no chat
+        # template) - kept here for the same instruction-following reason, even though
+        # this now goes through a proper chat-messages call.
+        reply, ok = await _call_text_llm(
+            "", f"User: {prompt}\nAssistant:",
+            max_tokens=800, temperature=0.4, timeout=NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS,
         )
-        reply = (response.get("response") or "").strip()
-        return reply or None
+        return (reply or None) if ok else None
     except Exception as exc:
-        logger.warning("[nightly-briefing] Ollama generate failed: %s", exc)
+        logger.warning("[nightly-briefing] Tier-2 generate failed: %s", exc)
         return None
 
 
@@ -152,7 +149,7 @@ async def run_nightly_briefing() -> None:
 
     reply = await _generate_with_anthropic(prompt)
     if not reply:
-        reply = await _generate_with_ollama(prompt)
+        reply = await _generate_with_text_llm(prompt)
     if not reply:
         reply = (
             "Khong the tao bao cao tu dong dem nay (AI khong phan hoi tu Anthropic "

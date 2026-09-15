@@ -152,7 +152,7 @@ INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-ser
 INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
-# Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
+# Anthropic Claude LLM — dùng cloud API, opt-in (đặt ANTHROPIC_API_KEY để bật).
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
 # claude-sonnet-5 is the current Sonnet generation (cheaper and stronger than the
@@ -160,14 +160,32 @@ ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
+# ── OpenRouter — default text/tool-calling backend (replaces Ollama for chat;
+# Ollama stays for the vision/OCR models and embeddings.py, which OpenRouter
+# doesn't serve). See llm_provider.OpenRouterProvider.
+# Model slug verified against the raw https://openrouter.ai/api/v1/models JSON on
+# 2026-09-15 ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
+# OpenRouter's own canonical_slug for this alias is qwen/qwen3.7-flash-20260727).
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+OPENROUTER_ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", OPENROUTER_TEXT_MODEL)
+OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
+# Provider for /chat, /generate-book-summary, /generate-summary-vi,
+# /enrich-book-after-isbn, /enrich-book-metadata, /explain-storage-suggestion, and
+# nightly_briefing's text generation — tried *after* Anthropic (still opt-in via
+# ANTHROPIC_API_KEY, tier 1) and before each feature's own static fallback (tier 3).
+# "openrouter" (default) | "ollama" (pre-migration, fully offline) | "anthropic".
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
+
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
 # Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
 # Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
-# loop - "ollama" (default, fully offline) or "anthropic" (opt-in, for an eval A/B comparison
-# against the local model; requires ANTHROPIC_API_KEY). See llm_provider.py.
-ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "ollama").strip().lower()
+# loop - "openrouter" (default), "ollama" (fully offline), or "anthropic" (opt-in eval A/B
+# comparison; requires ANTHROPIC_API_KEY). See llm_provider.py.
+ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "openrouter").strip().lower()
 # Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
 # partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
 # desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
@@ -191,9 +209,14 @@ ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
 @app.on_event("startup")
 async def _startup_warmup_assistant_model() -> None:
     """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
-    request pays that cost. Fire-and-forget — must never delay app startup or crash it if
-    Ollama isn't reachable yet (docker-compose only waits for the container to *start*,
-    not for Ollama's model server to be ready)."""
+    request pays that cost. Only relevant when /assistant is actually configured to use
+    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter/Anthropic
+    have no local model to warm up. Fire-and-forget — must never delay app startup or crash
+    it if Ollama isn't reachable yet (docker-compose only waits for the container to
+    *start*, not for Ollama's model server to be ready)."""
+    if ASSISTANT_PROVIDER != "ollama":
+        return
+
     async def _warm_up():
         try:
             await ollama.AsyncClient(host=OLLAMA_HOST).chat(
@@ -278,7 +301,13 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": OLLAMA_MODEL, "ollama_host": OLLAMA_HOST}
+    return {
+        "status": "ok",
+        "model": OLLAMA_MODEL,
+        "ollama_host": OLLAMA_HOST,
+        "llm_provider": LLM_PROVIDER,
+        "assistant_provider": ASSISTANT_PROVIDER,
+    }
 
 
 PROMPT_PACKING_VERIFY = (
@@ -1536,34 +1565,6 @@ def _safe_list(values) -> list[str]:
     return out
 
 
-def _ollama_generate_with_summary_fallback(client: ollama.Client, prompt: str, options: dict | None = None):
-    """Generate with SUMMARY_MODEL, then fallback to OLLAMA_MODEL if summary model is missing."""
-    summary_model = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
-    fallback_model = os.getenv("OLLAMA_MODEL", "llava")
-    opts = options or {}
-
-    try:
-        return client.generate(
-            model=summary_model,
-            prompt=prompt,
-            options=opts,
-        )
-    except ollama.ResponseError as exc:
-        err_text = str(getattr(exc, "error", exc) or "").lower()
-        if "not found" in err_text and fallback_model and fallback_model != summary_model:
-            logger.warning(
-                "SUMMARY_MODEL '%s' not found. Falling back to OLLAMA_MODEL '%s'.",
-                summary_model,
-                fallback_model,
-            )
-            return client.generate(
-                model=fallback_model,
-                prompt=prompt,
-                options=opts,
-            )
-        raise
-
-
 def _anthropic_extract_text(payload: dict) -> str:
     content = payload.get("content") or []
     parts: list[str] = []
@@ -1704,22 +1705,15 @@ async def _call_anthropic_json(system_prompt: str, user_prompt: str, max_tokens:
         return {}, False
 
 
-async def _call_ollama_json(system_prompt: str, user_prompt: str) -> tuple[dict, bool]:
-    """Generic Ollama call returning parsed JSON dict. Reuses _ollama_generate_with_summary_fallback."""
-    try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            full_prompt,
-            {"temperature": 0.3, "num_predict": 600},
-        )
-        raw = response.get("response", "")
-        return _extract_json(raw), True
-    except Exception as e:
-        logger.warning("Ollama JSON call failed: %s", e)
+async def _call_text_llm_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+    """Tier-2 JSON call for Pattern B (see _call_text_llm) - replaces the old
+    direct-Ollama _call_ollama_json. Parse via _extract_json, same as the
+    tier-1 Anthropic JSON call (_call_anthropic_json): no json_object mode,
+    the model's raw text isn't guaranteed valid JSON."""
+    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3)
+    if not ok:
         return {}, False
+    return _extract_json(raw), True
 
 
 def _check_book_quality(
@@ -2262,15 +2256,11 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
     if not _should_generate_summary(metadata):
         return None, [], False
 
+    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55)
+    if not called_ok:
+        return None, [], False
+
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            _build_summary_prompt(metadata),
-            {"temperature": 0.55, "num_predict": 700},
-        )
-        raw_text = response.get("response", "")
         parsed = _extract_json(raw_text)
 
         summary_vi = _safe_text(parsed.get("summaryVi"))
@@ -2294,7 +2284,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
 
         return summary_vi, keywords, bool(summary_vi or keywords)
     except Exception as exc:
-        logger.warning("Ollama summary generation failed: %s", exc)
+        logger.warning("Summary generation post-processing failed: %s", exc)
         return None, [], False
 
 
@@ -2466,8 +2456,8 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
         if anthropic_ok:
             ai_provider = "anthropic"
         else:
-            summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(merged)
-            ai_provider = "ollama" if ollama_ok else "none"
+            summary_vi, keywords, tier2_ok = await _generate_summary_vi_and_keywords(merged)
+            ai_provider = _get_text_llm_provider().name if tier2_ok else "none"
 
     # ── Calculate overall confidence ──────────────────────────────────────────
     all_scores = [
@@ -2658,9 +2648,9 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             if anthropic_ok:
                 provider = "anthropic"
             else:
-                generated_summary, generated_keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
-                if ollama_ok:
-                    provider = "ollama"
+                generated_summary, generated_keywords, tier2_ok = await _generate_summary_vi_and_keywords(metadata)
+                if tier2_ok:
+                    provider = _get_text_llm_provider().name
 
             summary_vi = summary_vi or generated_summary
             if not keywords:
@@ -2900,11 +2890,11 @@ async def generate_summary_vi(req: SummaryViRequest):
         summary_cache.set(cache_key, result)
         return result
 
-    # Fallback Ollama
-    summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
-    if ollama_ok:
+    # Fallback: tier-2 text LLM (OpenRouter by default; see LLM_PROVIDER)
+    summary_vi, keywords, tier2_ok = await _generate_summary_vi_and_keywords(metadata)
+    if tier2_ok:
         description = _normalize_bookstore_description(summary_vi or "")
-        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
+        result = {"summaryVi": description, "keywords": keywords, "ai_provider": _get_text_llm_provider().name}
         summary_cache.set(cache_key, result)
         return result
 
@@ -3021,19 +3011,19 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    # Try Anthropic first, fallback Ollama
+    # Try Anthropic first (tier 1, opt-in), then the configured text LLM (tier 2, OpenRouter by default)
     data, ok = await _call_anthropic_json(SYSTEM, user_prompt)
     ai_provider = "anthropic" if ok else "none"
     if not ok:
-        data, ok = await _call_ollama_json(SYSTEM, user_prompt)
-        ai_provider = "ollama" if ok else "none"
+        data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
+        ai_provider = _get_text_llm_provider().name if ok else "none"
 
     if not ok:
         return EnrichBookMetadataResponse(
             success=False,
             mode=mode,
             ai_provider="none",
-            qualityWarnings=["AI không khả dụng. Kiểm tra ANTHROPIC_API_KEY hoặc kết nối Ollama."],
+            qualityWarnings=["AI không khả dụng. Kiểm tra ANTHROPIC_API_KEY hoặc OPENROUTER_API_KEY."],
         )
 
     keywords = _safe_list(data.get("keywords", []))[:15]
@@ -3072,8 +3062,6 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
-
         # Ưu tiên Anthropic trước
         summary_vi, keywords, anthropic_ok = await _call_anthropic({
             "title": req.title.strip(),
@@ -3089,26 +3077,22 @@ async def _generate_book_summary(req: BookSummaryRequest):
             })
             return {"description": description, "web_context_used": bool(web_context), "ai_provider": "anthropic"}
 
-        # Fallback Ollama local
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            prompt,
-            {"temperature": 0.7, "num_predict": 400},
-        )
+        # Fallback: tier-2 text LLM (OpenRouter by default; see LLM_PROVIDER)
+        raw_text, tier2_ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
+        if not tier2_ok:
+            fallback_description = _generate_fallback_description(req.title, req.author, web_context)
+            return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
+
         description = _format_summary_description(
-            response.get("response", ""),
+            raw_text,
             {
                 "title": req.title.strip(),
                 "author": req.author.strip(),
                 "categories": [],
             },
         )
-        return {"description": description, "web_context_used": bool(web_context), "ai_provider": "ollama"}
+        return {"description": description, "web_context_used": bool(web_context), "ai_provider": _get_text_llm_provider().name}
 
-    except ollama.ResponseError as e:
-        logger.error(f"Ollama ResponseError: {e.error}")
-        raise HTTPException(status_code=502, detail=f"Ollama không disponible: {e.error}")
     except Exception as e:
         logger.error(f"Error calling LLM: {str(e)}")
         fallback_description = _generate_fallback_description(req.title, req.author, web_context)
@@ -3378,32 +3362,17 @@ async def _stream_chat_with_anthropic(messages: list[dict]):
                         yield delta["text"]
 
 
-async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
-    try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        prompt_parts = []
-        for msg in messages:
-            role_label = "User" if msg["role"] == "user" else "Assistant"
-            if msg["role"] == "system":
-                role_label = "System"
-            prompt_parts.append(f"{role_label}: {msg['content']}")
-        prompt_parts.append("Assistant:")
-        full_prompt = "\n".join(prompt_parts)
-
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                _ollama_generate_with_summary_fallback,
-                client,
-                full_prompt,
-                {"temperature": 0.4, "num_predict": 800},
-            ),
-            timeout=CHAT_LLM_TIMEOUT_SECONDS,
-        )
-        reply = (response.get("response") or "").strip()
-        return reply or None, bool(reply)
-    except Exception as exc:
-        logger.warning("Ollama chat failed: %s", exc)
-        return None, False
+async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
+    """Tier-2 /chat reply: the full multi-turn messages list, routed through
+    the configured text LLM (OpenRouter by default; see LLM_PROVIDER) via the
+    same chat-completion interface /assistant uses - replaces the old
+    direct-Ollama _chat_with_ollama, which collapsed the whole conversation
+    into one role-labelled completion prompt instead of using a proper
+    chat-messages call."""
+    reply, ok = await _call_text_llm_messages(
+        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+    )
+    return (reply or None), ok
 
 
 _AGENT_ACTION_KEYWORDS = [
@@ -3639,14 +3608,14 @@ async def chat(request: Request, req: ChatRequest):
             result["pending_action"] = pending_action_data
         return result
 
-    reply, ollama_ok = await _chat_with_ollama(messages)
-    if ollama_ok and reply:
+    reply, tier2_ok = await _chat_with_text_llm(messages)
+    if tier2_ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": "ollama", **metadata}
+        result = {"reply": reply_with_sources, "ai_provider": _get_text_llm_provider().name, **metadata}
         if grounding_warning:
             result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
         if pending_action_data:
@@ -3686,8 +3655,9 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
 
 @functools.lru_cache(maxsize=1)
 def _get_assistant_provider():
-    """Cached: the same provider instance (and, for Anthropic, its underlying
-    HTTP client) is reused across requests instead of rebuilt per-request."""
+    """Cached: the same provider instance (and, for Anthropic/OpenRouter, its
+    underlying HTTP client) is reused across requests instead of rebuilt
+    per-request."""
     return get_llm_provider(
         ASSISTANT_PROVIDER,
         ollama_host=OLLAMA_HOST,
@@ -3695,7 +3665,69 @@ def _get_assistant_provider():
         anthropic_api_key=ANTHROPIC_API_KEY,
         anthropic_base_url=ANTHROPIC_BASE_URL,
         anthropic_model=ANTHROPIC_MODEL,
+        openrouter_api_key=OPENROUTER_API_KEY,
+        openrouter_base_url=OPENROUTER_BASE_URL,
+        openrouter_model=OPENROUTER_ASSISTANT_MODEL,
+        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
     )
+
+
+@functools.lru_cache(maxsize=1)
+def _get_text_llm_provider():
+    """Tier-2 provider (see LLM_PROVIDER) for the text-generation helpers
+    below - book summary, ISBN enrichment, /chat replies, storage-suggestion
+    explanations, nightly briefing - tried after Anthropic (tier 1, opt-in)
+    and before each feature's own static fallback (tier 3). Cached the same
+    way _get_assistant_provider() is."""
+    return get_llm_provider(
+        LLM_PROVIDER,
+        ollama_host=OLLAMA_HOST,
+        ollama_model=SUMMARY_MODEL,
+        anthropic_api_key=ANTHROPIC_API_KEY,
+        anthropic_base_url=ANTHROPIC_BASE_URL,
+        anthropic_model=ANTHROPIC_MODEL,
+        openrouter_api_key=OPENROUTER_API_KEY,
+        openrouter_base_url=OPENROUTER_BASE_URL,
+        openrouter_model=OPENROUTER_TEXT_MODEL,
+        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
+    )
+
+
+async def _call_text_llm_messages(
+    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+) -> tuple[str, bool]:
+    """Tier-2 call for Pattern B's text-generation helpers: routes an
+    already-built chat message list (system/user/assistant turns) through
+    _get_text_llm_provider() (OpenRouter by default, replacing the old direct
+    `ollama.Client(...).generate(...)` calls) using the same ChatResult
+    interface /assistant already relies on. Returns (raw_text, success) -
+    callers keep their own JSON parsing (_extract_json) and tier-3 static
+    fallback unchanged; only the "how do we reach a model" plumbing moved."""
+    try:
+        provider = _get_text_llm_provider()
+        result = await provider.chat(
+            messages=messages,
+            tools=[],
+            num_predict=max_tokens,
+            timeout=timeout if timeout is not None else CHAT_LLM_TIMEOUT_SECONDS * 2,
+            temperature=temperature,
+        )
+        return result.text, bool(result.text)
+    except Exception as exc:
+        logger.warning("_call_text_llm failed: %s", exc)
+        return "", False
+
+
+async def _call_text_llm(
+    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+) -> tuple[str, bool]:
+    """Single-turn convenience wrapper over _call_text_llm_messages, for
+    callers that just have a (system_prompt, user_prompt) pair rather than a
+    full conversation history."""
+    messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
+        {"role": "user", "content": user_prompt},
+    ]
+    return await _call_text_llm_messages(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout)
 
 
 def _render_tool_result(name: str, tool_result: dict) -> str:
@@ -4067,8 +4099,8 @@ async def assistant(request: Request, req: AssistantRequest):
         message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
     )
 
-    provider = _get_assistant_provider()
     try:
+        provider = _get_assistant_provider()
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
             result = await provider.chat(
                 messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
@@ -4217,13 +4249,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         answer = ""
         answered_normally = False
         call_usage: list[dict] = []
-        provider = _get_assistant_provider()
 
         tools_used, collected_data, start_round = await seed_fast_path(
             message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
         )
 
         try:
+            provider = _get_assistant_provider()
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
                 final_chunk = None
                 async for chunk in provider.chat_stream(
@@ -4471,10 +4503,10 @@ async def chat_stream(request: Request, req: ChatRequest):
             logger.warning("Anthropic streaming failed: %s", exc)
 
         if not full_text:
-            reply, ollama_ok = await _chat_with_ollama(messages)
-            if ollama_ok and reply:
+            reply, tier2_ok = await _chat_with_text_llm(messages)
+            if tier2_ok and reply:
                 full_text = reply
-                provider = "ollama"
+                provider = _get_text_llm_provider().name
                 yield _sse("token", {"text": full_text})
 
         if not full_text:
@@ -4883,9 +4915,9 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
         if ok and parsed:
             provider = "anthropic"
         else:
-            parsed, ok = await _call_ollama_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+            parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
             if ok and parsed:
-                provider = "ollama"
+                provider = _get_text_llm_provider().name
         if ok and isinstance(parsed, dict):
             reasons = {
                 str(key): str(value).strip()
@@ -5137,20 +5169,20 @@ async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | 
         except Exception as exc:
             logger.warning(f"Anthropic storage explanation failed: {exc}")
 
-    # Thử Ollama
+    # Tier 2: text LLM đã cấu hình (OpenRouter mặc định; xem LLM_PROVIDER)
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        response = client.generate(
-            model=OLLAMA_MODEL,
-            prompt=prompt,
-            options={"temperature": 0.3, "num_predict": 200},
+        raw, ok = await _call_text_llm(
+            "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
+            prompt,
+            max_tokens=200,
+            temperature=0.3,
         )
-        raw = response.get("response", "")
-        explanations = _parse_json_array(raw)
-        if explanations and len(explanations) >= expected_count // 2:
-            return explanations[:expected_count]
+        if ok:
+            explanations = _parse_json_array(raw)
+            if explanations and len(explanations) >= expected_count // 2:
+                return explanations[:expected_count]
     except Exception as exc:
-        logger.warning(f"Ollama storage explanation failed: {exc}")
+        logger.warning(f"Tier-2 storage explanation failed: {exc}")
 
     return None
 

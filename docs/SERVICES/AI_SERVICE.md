@@ -6,7 +6,9 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 
 - Runtime: Python + FastAPI
 - Entrypoint: services/ai-service/main.py
-- Model runtime: Ollama local
+- Model runtime: OpenRouter (mặc định — text/tool-calling, xem `llm_provider.py`) + Ollama local
+  (vision/OCR và embeddings — xem `LLM_PROVIDER`/`ASSISTANT_PROVIDER` bên dưới để chạy fully-offline
+  bằng Ollama thay vì OpenRouter)
 - Vai trò: tra cứu ISBN, tạo tóm tắt tiếng Việt, OCR hóa đơn nhập kho, trợ lý ra quyết định
 
 ## Endpoint chính
@@ -43,7 +45,7 @@ Ghi chú quan trọng:
 - `/isbn-intelligence` là hợp đồng tra cứu chuẩn; `/lookup-book-by-isbn` và `lookup` của `/enrich-book-after-isbn` được mở rộng tương thích bằng `fieldEvidence`, `fieldConfidence`, `sources`, `conflicts`, `metadataQualityScore`, và `processingTimeMs`. Confidence được tính xác định từ độ tin cậy và đồng thuận dữ liệu nguồn, không dùng điểm do LLM sinh ra. Kết quả chỉ là đề xuất để nhân viên duyệt, không ghi catalog.
 - Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
-- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng Ollama tool-calling thật (`ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. Không có fallback Anthropic cho endpoint này.
+- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (mặc định OpenRouter/`OPENROUTER_ASSISTANT_MODEL`, chọn qua `ASSISTANT_PROVIDER` — có thể là `ollama`/`ASSISTANT_MODEL` hoặc `anthropic`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. `ASSISTANT_PROVIDER` chọn đúng 1 provider — không tự động fallback sang provider khác nếu provider đó lỗi.
 - **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
 - **Semantic FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. Trước đây nhánh này không truy xuất gì cả; nay `retrieval.py` gọi `faq_retrieval.find_relevant()` để tìm các mục FAQ tĩnh (`faq_data.FAQ_ENTRIES`) gần nghĩa nhất bằng cosine similarity trên embedding Ollama, rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Vector được cache ra `.faq_embeddings_cache.json` (khóa theo hash nội dung FAQ, tự dựng lại khi FAQ đổi). Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
 - **Hybrid book search**: tool `search_books` của `/assistant` chấm điểm mỗi cuốn sách theo hai tín hiệu rồi lấy trung bình — trùng từ khóa (đảm bảo ISBN/tên sách khớp chính xác vẫn thắng) và cosine similarity trên embedding của `title + author + category + description + summary_vi` (`book_index.py`). Nhờ vậy câu hỏi theo chủ đề tìm được sách dù diễn đạt khác từ ngữ trong mô tả. Index được cache ra `.book_index_cache.json`, khóa theo hash gồm cả nội dung catalog lẫn tên model embedding — catalog đổi hoặc đổi model thì index tự dựng lại. Ollama lỗi → chỉ còn phần từ khóa, đúng bằng hành vi trước đây.
@@ -64,22 +66,28 @@ Từ bản nâng cấp Action Center + trí nhớ hội thoại, `ai-service` c�
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| OLLAMA_HOST | http://ollama:11434 | Địa chỉ Ollama trong Docker network |
-| OLLAMA_MODEL | llava | Model xử lý ảnh (OCR hóa đơn, xác minh ảnh đóng gói) |
-| SUMMARY_MODEL | llama3.1:8b-instruct-q4_0 | Model tóm tắt văn bản / `/chat` |
-| ASSISTANT_MODEL | llama3.1:8b-instruct-q4_0 | Model dùng cho `/assistant` (cần hỗ trợ Ollama tool-calling) |
-| FAQ_EMBED_MODEL | nomic-embed-text | Model embedding cho semantic FAQ search của `/chat` (cần `ollama pull nomic-embed-text`) |
+| LLM_PROVIDER | openrouter | Provider cho `/chat`, tóm tắt/ISBN-enrichment, giải thích gợi ý lưu kho, nightly briefing: `openrouter` \| `ollama` \| `anthropic` |
+| OPENROUTER_API_KEY | rỗng | Bắt buộc nếu `LLM_PROVIDER`/`ASSISTANT_PROVIDER=openrouter`. Không hard-code — lấy từ env/secret |
+| OPENROUTER_BASE_URL | https://openrouter.ai/api/v1 | Base URL OpenRouter (OpenAI-compatible) |
+| OPENROUTER_TEXT_MODEL | qwen/qwen3.7-flash | Model cho tóm tắt/chat/NLU qua OpenRouter (xác thực trực tiếp trên JSON thô của `/api/v1/models` ngày 2026-09-15 — hỗ trợ `tools`/`tool_choice`, context 1M; canonical_slug nội bộ của OpenRouter là `qwen/qwen3.7-flash-20260727`) |
+| OPENROUTER_ASSISTANT_MODEL | qwen/qwen3.7-flash | Model cho `/assistant` (tool-calling) qua OpenRouter — cùng model như trên |
+| OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt |
+| NLU_PROVIDER | rỗng (dùng `LLM_PROVIDER`) | Provider cho tier-2 của phân loại intent (`nlu.py`); tier-1 luôn là Groq nếu có `GROQ_API_KEY` |
+| ASSISTANT_PROVIDER | openrouter | Provider cho vòng lặp tool-calling của `/assistant`: `openrouter` \| `ollama` \| `anthropic` |
+| OLLAMA_HOST | http://ollama:11434 | Địa chỉ Ollama trong Docker network — vẫn cần cho vision/OCR + embeddings, và khi chọn provider `ollama` |
+| OLLAMA_MODEL | llava | Model xử lý ảnh (OCR hóa đơn, xác minh ảnh đóng gói) — luôn qua Ollama, không đổi bởi `LLM_PROVIDER` |
+| SUMMARY_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `LLM_PROVIDER=ollama` (tóm tắt văn bản / `/chat`) |
+| ASSISTANT_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `ASSISTANT_PROVIDER=ollama` (cần hỗ trợ Ollama tool-calling) |
+| FAQ_EMBED_MODEL | nomic-embed-text | Model embedding (luôn qua Ollama) cho semantic FAQ + book search (cần `ollama pull nomic-embed-text`) |
 | FAQ_MATCH_THRESHOLD | 0.75 | Ngưỡng cosine similarity tối thiểu để coi một mục FAQ là khớp |
 | FAQ_TOP_K | 3 | Số mục FAQ tối đa đưa vào context mỗi lượt hỏi |
 | BOOK_SEMANTIC_THRESHOLD | 0.6 | Ngưỡng cosine tối thiểu để một cuốn sách được coi là khớp ngữ nghĩa trong `search_books` |
 | EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |
-
-> `SUMMARY_MODEL` và `ASSISTANT_MODEL` mặc định trỏ chung 1 model (`llama3.1:8b-instruct-q4_0`) để chỉ cần pull/giữ 1 model text thay vì 2 (`llama3` cũ đã bỏ vì không hỗ trợ tool-calling). Vẫn giữ 2 biến env riêng để có thể tách lại sau này nếu cần.
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
 | OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
-| ANTHROPIC_API_KEY | rỗng | Cloud LLM key (nếu không set sẽ fallback Ollama) |
-| ANTHROPIC_MODEL | claude-sonnet-4-6 | Model Anthropic dùng cho text |
+| ANTHROPIC_API_KEY | rỗng | Cloud LLM key, opt-in — được thử trước `LLM_PROVIDER`/`ASSISTANT_PROVIDER` khi có set |
+| ANTHROPIC_MODEL | claude-sonnet-5 | Model Anthropic dùng cho text |
 | ENABLE_WORLDCAT_LOOKUP | false | Bật/tắt tra cứu WorldCat |
 | ENABLE_MARKETPLACE_LOOKUP | false | Bật tra cứu Fahasa/Tiki/Vinabook |
 | BOOK_MARKETPLACE_TIMEOUT_SECONDS | 20 | Timeout (giây) cho từng marketplace lookup |

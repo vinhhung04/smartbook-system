@@ -93,9 +93,9 @@ def test_run_nightly_briefing_reads_the_created_action_id_correctly(monkeypatch)
     fake_main.ANTHROPIC_BASE_URL = "https://unused.invalid"
     fake_main.ANTHROPIC_MODEL = "unused"
     fake_main._anthropic_extract_text = lambda payload: ""
-    # No OLLAMA_HOST/_ollama_generate_with_summary_fallback on this fake module —
-    # _generate_with_ollama's `from main import ...` then fails too, exercising the
-    # "both providers unreachable" fallback-text path without needing a real Ollama.
+    # No _call_text_llm on this fake module — _generate_with_text_llm's
+    # `from main import _call_text_llm` then fails too, exercising the "both
+    # tiers unreachable" fallback-text path without needing a real LLM provider.
 
     monkeypatch.setattr(nightly_briefing, "_get_internal", fake_get_internal)
     monkeypatch.setattr(nightly_briefing, "create_pending_action", fake_create_pending_action)
@@ -112,11 +112,11 @@ def test_run_nightly_briefing_reads_the_created_action_id_correctly(monkeypatch)
     assert pushed["action_type"] == "CREATE_REPORT_DRAFT"
 
 
-def test_run_nightly_briefing_falls_back_to_ollama_with_its_own_longer_timeout(monkeypatch):
-    # Regression guard for the real bug hit in manual verification: _chat_with_ollama's
+def test_run_nightly_briefing_falls_back_to_tier2_with_its_own_longer_timeout(monkeypatch):
+    # Regression guard for the real bug hit in manual verification: _chat_with_text_llm's
     # own CHAT_LLM_TIMEOUT_SECONDS (12s, tuned for live chat) was too short for this
     # job's larger prompt, silently always falling through to the plain-text fallback.
-    # _generate_with_ollama must use NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS instead.
+    # _generate_with_text_llm must use NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS instead.
     async def fake_get_internal(_endpoint):
         return {"ok": True}
 
@@ -126,31 +126,27 @@ def test_run_nightly_briefing_falls_back_to_ollama_with_its_own_longer_timeout(m
     async def fake_push_ai_action_event(*_args, **_kwargs):
         pass
 
-    def fake_generate(_client, _prompt, _options):
-        return {"response": "Bao cao gia lap tu Ollama"}
+    call_kwargs = {}
 
-    fake_ollama_client_calls = []
-
-    class _FakeOllamaClient:
-        def __init__(self, host):
-            fake_ollama_client_calls.append(host)
+    async def fake_call_text_llm(system_prompt, user_prompt, *, max_tokens=900, temperature=0.3, timeout=None):
+        call_kwargs.update(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=max_tokens, temperature=temperature, timeout=timeout,
+        )
+        return "Bao cao gia lap tu tier 2", True
 
     fake_main = types.ModuleType("main")
-    fake_main.OLLAMA_HOST = "http://fake-ollama:11434"
-    fake_main._ollama_generate_with_summary_fallback = fake_generate
-
-    fake_ollama_module = types.ModuleType("ollama")
-    fake_ollama_module.Client = _FakeOllamaClient
+    fake_main._call_text_llm = fake_call_text_llm
 
     monkeypatch.setattr(nightly_briefing, "_get_internal", fake_get_internal)
     monkeypatch.setattr(nightly_briefing, "create_pending_action", fake_create_pending_action)
     monkeypatch.setattr(nightly_briefing, "push_ai_action_event", fake_push_ai_action_event)
     monkeypatch.setitem(sys.modules, "main", fake_main)
-    monkeypatch.setitem(sys.modules, "ollama", fake_ollama_module)
 
-    reply = asyncio.run(nightly_briefing._generate_with_ollama("bat ky prompt nao"))
-    assert reply == "Bao cao gia lap tu Ollama"
-    assert fake_ollama_client_calls == ["http://fake-ollama:11434"]
+    reply = asyncio.run(nightly_briefing._generate_with_text_llm("bat ky prompt nao"))
+    assert reply == "Bao cao gia lap tu tier 2"
+    assert call_kwargs["timeout"] == nightly_briefing.NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
+    assert "bat ky prompt nao" in call_kwargs["user_prompt"]
 
 
 def test_generate_with_anthropic_short_circuits_with_no_api_key(monkeypatch):
