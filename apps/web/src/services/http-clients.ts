@@ -115,3 +115,14 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed'):
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
+
+/** Reads the machine-readable `code` field some endpoints return alongside `message`
+ *  (e.g. RATE_LIMITED, PACKING_VIDEO_EVIDENCE_REQUIRED) — for branching on a specific
+ *  failure reason instead of matching the human-readable message text. */
+export function getApiErrorCode(error: unknown): string | undefined {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { code?: string } | undefined;
+    return data?.code;
+  }
+  return undefined;
+}

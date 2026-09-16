@@ -12,7 +12,10 @@ const {
 } = require("../controllers/supplier-portal.controller");
 
 const router = express.Router();
-router.use(createRateLimiter({ max: 60, windowMs: 15 * 60 * 1000 }));
+// trustedProxyHops: 2 — this public route is reached through nginx then api-gateway, both of
+// which append to X-Forwarded-For; trusting exactly those 2 hops recovers the real client IP
+// instead of the client-spoofable leftmost entry (see packages/shared/runtime/index.cjs).
+router.use(createRateLimiter({ max: 60, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 }));
 
 router.get("/orders/:token", getPortalOrder);
 router.post("/orders/:token/confirm", confirmPortalOrder);

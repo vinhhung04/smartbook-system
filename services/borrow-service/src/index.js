@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const { prisma } = require('./lib/prisma');
+const redis = require('./lib/redis');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
 const customerRoutes = require('./routes/customer.routes');
 const customerInternalRoutes = require('./routes/customer-internal.routes');
@@ -29,6 +30,13 @@ function validateRequiredEnv() {
 }
 
 validateRequiredEnv();
+
+// Previously never connected, so authenticateToken's blacklist/revocation checks (see
+// middlewares/auth.middleware.js) silently no-op'd — this service only ever checked
+// JWT signature/expiry, never whether the token had since been revoked.
+redis.connect().catch((err) => {
+  console.warn('[Borrow] Redis not available, running without cache/revocation checks:', err.message);
+});
 
 app.use(createRequestContext('borrow-service'));
 app.use(createRequestLogger('borrow-service'));
@@ -110,4 +118,9 @@ app.listen(PORT, () => {
   startReservationExpiryJob();
   startDueSoonReminderJob();
   startReservationReconciliationJob();
+});
+
+process.on('SIGTERM', async () => {
+  await redis.disconnect();
+  process.exit(0);
 });

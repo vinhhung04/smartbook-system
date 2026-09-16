@@ -261,6 +261,20 @@ async function createDirectLoan(req, res) {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count at line
+        // ~190 ran outside any lock, so two concurrent requests could both pass it and both
+        // reach here. If this trips, it falls through to the same catch below that already
+        // handles "inventory consumed but DB transaction failed" by queuing reconciliation.
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
+        const recheckLoanCount = await tx.loan_transactions.count({
+          where: { customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
+        });
+        if (recheckLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
+          throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
+        }
+
         let debitResult = null;
         if (borrowFeeAmount > 0) {
           debitResult = await debitBorrowFee(tx, {
@@ -819,6 +833,20 @@ async function convertReservationToLoan(req, res) {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count at line
+        // ~764 ran outside any lock, so two concurrent conversions could both pass it and both
+        // reach here. If this trips, it falls through to the same catch below that already
+        // handles "inventory consumed but DB transaction failed" by queuing reconciliation.
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${reservation.customer_id}`}, 0))`;
+        const recheckLoanCount = await tx.loan_transactions.count({
+          where: { customer_id: reservation.customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
+        });
+        if (recheckLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
+          throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
+        }
+
         let debitResult = null;
         if (borrowFeeAmount > 0) {
           debitResult = await debitBorrowFee(tx, {

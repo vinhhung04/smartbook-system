@@ -9,6 +9,11 @@ const { pushToRooms } = require("../lib/socket-emitter");
 const {
   claimDraftReceiptForPosting,
 } = require("../services/goods-receipt-posting.service");
+const {
+  getReadableWarehouseIds,
+  canWriteWarehouse,
+  requireWarehouseReadAccess,
+} = require("../utils/warehouse-scope.utils");
 
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
@@ -227,10 +232,16 @@ function canAccessAssignedReceiving(user = {}, receivedByUserId) {
 
 async function getGoodsReceipts(req, res) {
   try {
+    let where;
+    if (canViewAllReceivingTasks(req.user || {})) {
+      const readableWarehouseIds = await getReadableWarehouseIds(req.user || {});
+      where = { warehouse_id: { in: readableWarehouseIds } };
+    } else {
+      where = { received_by_user_id: req.user?.id };
+    }
+
     const receipts = await prisma.goods_receipts.findMany({
-      where: canViewAllReceivingTasks(req.user || {})
-        ? {}
-        : { received_by_user_id: req.user?.id },
+      where,
       orderBy: { created_at: "desc" },
       include: {
         warehouses: {
@@ -345,6 +356,10 @@ async function getGoodsReceiptById(req, res) {
 
     if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+    if (receipt.received_by_user_id !== req.user?.id) {
+      const canRead = await requireWarehouseReadAccess(req, res, receipt.warehouse_id);
+      if (!canRead) return;
     }
 
     const items = receipt.goods_receipt_items.map((item) => ({
@@ -549,6 +564,10 @@ async function createGoodsReceipt(req, res) {
         throw new Error("WAREHOUSE_NOT_FOUND");
       }
 
+      if (!(await canWriteWarehouse(req.user, effectiveWarehouseId))) {
+        throw new Error("WAREHOUSE_ACCESS_DENIED");
+      }
+
       const normalizedItems = [];
       for (const item of items) {
         const rawVariantId = parseId(item?.variant_id);
@@ -704,6 +723,9 @@ async function createGoodsReceipt(req, res) {
   } catch (error) {
     if (error.message === "WAREHOUSE_NOT_FOUND") {
       return res.status(404).json({ message: "Warehouse not found" });
+    }
+    if (error.message === "WAREHOUSE_ACCESS_DENIED") {
+      return res.status(403).json({ message: "You do not have write access to this warehouse" });
     }
     if (error.message === "PURCHASE_ORDER_NOT_FOUND") {
       return res.status(404).json({ message: "Purchase order not found" });
@@ -1212,6 +1234,13 @@ async function updateGoodsReceipt(req, res) {
         };
       }
 
+      if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
+        return {
+          forbidden: true,
+          message: "You do not have write access to this warehouse",
+        };
+      }
+
       if (!canManageReceiving(req.user || {}) && targetStatus === "CANCELLED") {
         return {
           forbidden: true,
@@ -1386,6 +1415,14 @@ async function assignGoodsReceipt(req, res) {
   }
 
   try {
+    const existing = await prisma.goods_receipts.findUnique({ where: { id }, select: { warehouse_id: true } });
+    if (!existing) {
+      return res.status(404).json({ message: "Goods receipt not found" });
+    }
+    if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
+      return res.status(403).json({ message: "You do not have write access to this warehouse" });
+    }
+
     const updated = await prisma.goods_receipts.update({
       where: { id },
       data: {

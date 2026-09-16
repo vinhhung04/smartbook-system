@@ -3,6 +3,11 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText } = require("../utils/validation");
+const {
+  getReadableWarehouseIds,
+  canWriteWarehouse,
+  requireWarehouseReadAccess,
+} = require("../utils/warehouse-scope.utils");
 
 const RECEIVABLE_PO_STATUSES = [
   "SENT_TO_SUPPLIER",
@@ -100,6 +105,9 @@ async function getSupplierDeliveries(req, res) {
     if (status && status.toUpperCase() !== "ALL") where.status = status.toUpperCase();
     if (purchaseOrderId) where.purchase_order_id = purchaseOrderId;
 
+    const readableWarehouseIds = await getReadableWarehouseIds(req.user || {});
+    where.purchase_orders = { warehouse_id: { in: readableWarehouseIds } };
+
     const rows = await prisma.supplier_delivery_invoices.findMany({
       where,
       include: invoiceInclude(),
@@ -123,6 +131,10 @@ async function getSupplierDeliveryById(req, res) {
       include: invoiceInclude(),
     });
     if (!invoice) return res.status(404).json({ message: "Supplier delivery invoice not found" });
+
+    const canRead = await requireWarehouseReadAccess(req, res, invoice.purchase_orders?.warehouse_id);
+    if (!canRead) return;
+
     return res.json({ data: mapInvoice(invoice) });
   } catch (error) {
     console.error("Error while fetching supplier delivery:", error);
@@ -147,6 +159,11 @@ async function createSupplierDelivery(req, res) {
         include: { purchase_order_items: true },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      if (!(await canWriteWarehouse(req.user, po.warehouse_id))) {
+        return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+      }
+
       if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(po.status)) {
         return { invalid: true, message: "Purchase order must be sent to supplier before supplier invoice can be created" };
       }
@@ -239,6 +256,11 @@ async function createGoodsReceiptFromInvoice(req, res) {
       });
       if (!invoice) return { invalid: true, statusCode: 404, message: "Supplier delivery invoice not found" };
       const po = invoice.purchase_orders;
+
+      if (!(await canWriteWarehouse(req.user, po.warehouse_id))) {
+        return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+      }
+
       if (!RECEIVABLE_PO_STATUSES.includes(po.status)) {
         return { invalid: true, message: "Purchase order is not ready for supplier receiving" };
       }

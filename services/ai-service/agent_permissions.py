@@ -66,40 +66,13 @@ def _parse_permissions(raw_perms: list | None) -> list[str]:
     return result
 
 
-async def get_user_context(auth_header: str | None) -> UserContext:
-    """Fetch the current user from Gateway /auth/me.
-
-    Falls back to unverified JWT decode if the gateway call fails.
-    The fallback is for demo resilience only — all executor calls still send the
-    original Authorization header so Gateway/service RBAC is enforced.
+def _fallback_user_context(auth_header: str) -> UserContext:
+    """Unverified JWT decode — demo resilience only for when the Gateway is
+    genuinely unreachable. Must NEVER be reached when the Gateway responded (even
+    with an error): a non-200 from /auth/me means the token itself is invalid, and
+    falling through here would let a forged/unsigned token be trusted locally with
+    whatever roles/is_superuser claims it wants to carry.
     """
-    if not auth_header:
-        raise HTTPException(status_code=401, detail="Authorization header required.")
-
-    # Primary path: call Gateway /auth/me
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(PERMISSION_TIMEOUT)) as client:
-            resp = await client.get(
-                f"{GATEWAY_URL}/auth/me",
-                headers={"Authorization": auth_header},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                user = data.get("user") or data  # some services return {user: {...}}, others return the object directly
-                roles = _parse_roles(user.get("roles") or [])
-                permissions = _parse_permissions(user.get("permissions") or [])
-                return UserContext(
-                    user_id=str(user.get("id") or user.get("user_id") or ""),
-                    username=user.get("username"),
-                    email=user.get("email"),
-                    roles=roles,
-                    permissions=permissions,
-                    is_superuser=bool(user.get("is_superuser", False)),
-                )
-    except Exception as exc:
-        logger.warning("get_user_context: /auth/me failed (%s), falling back to JWT decode", exc)
-
-    # Fallback: unverified JWT decode (demo resilience only)
     token = auth_header.removeprefix("Bearer ").removeprefix("bearer ").strip()
     payload = _decode_jwt_payload_unverified(token)
     if not payload:
@@ -115,6 +88,46 @@ async def get_user_context(auth_header: str | None) -> UserContext:
         permissions=permissions,
         is_superuser=bool(payload.get("is_superuser", False)),
     )
+
+
+async def get_user_context(auth_header: str | None) -> UserContext:
+    """Fetch the current user from Gateway /auth/me.
+
+    Falls back to unverified JWT decode only when the Gateway itself could not be
+    reached (network/timeout). A reachable Gateway that rejects the token (401/403,
+    e.g. bad signature or expired) is a hard authentication failure — it must not
+    fall through to the unverified-decode fallback, or a forged token could be
+    trusted locally with self-declared roles/is_superuser.
+    """
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+
+    # Primary path: call Gateway /auth/me
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(PERMISSION_TIMEOUT)) as client:
+            resp = await client.get(
+                f"{GATEWAY_URL}/auth/me",
+                headers={"Authorization": auth_header},
+            )
+    except Exception as exc:
+        logger.warning("get_user_context: /auth/me unreachable (%s), falling back to JWT decode", exc)
+        return _fallback_user_context(auth_header)
+
+    if resp.status_code == 200:
+        data = resp.json()
+        user = data.get("user") or data  # some services return {user: {...}}, others return the object directly
+        roles = _parse_roles(user.get("roles") or [])
+        permissions = _parse_permissions(user.get("permissions") or [])
+        return UserContext(
+            user_id=str(user.get("id") or user.get("user_id") or ""),
+            username=user.get("username"),
+            email=user.get("email"),
+            roles=roles,
+            permissions=permissions,
+            is_superuser=bool(user.get("is_superuser", False)),
+        )
+
+    raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
 
 def can_confirm_action(user_context: UserContext, action: PendingAction) -> bool:

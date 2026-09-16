@@ -107,8 +107,13 @@ export const packingService = {
     return response.data as { evidence: PackingEvidence };
   },
 
-  completeTask: async (taskId: string) => {
-    const response = await inventoryAPI.post(`/api/packing/tasks/${taskId}/complete`, {});
+  /** `overrideReason` is only honored server-side for a manager/admin — required there when
+   *  no video evidence exists for the task (e.g. camera failure). See
+   *  inventory-service packing.controller.js completePackingTask. */
+  completeTask: async (taskId: string, overrideReason?: string) => {
+    const response = await inventoryAPI.post(`/api/packing/tasks/${taskId}/complete`, {
+      ...(overrideReason ? { override_reason: overrideReason } : {}),
+    });
     return response.data as { task: PackingTask };
   },
 

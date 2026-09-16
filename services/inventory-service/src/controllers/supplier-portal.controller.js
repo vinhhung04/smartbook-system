@@ -4,8 +4,16 @@ const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText } = require("../utils/validation");
 
+// Centralizing token lookup here means every portal endpoint (read + all writes) picks up
+// the expiry check below for free. A leaked/forwarded portal link stops working once
+// expires_at (set in purchase-order.controller.js sendToSupplier) has passed.
 function getPortalTokenWhere(token) {
-  return { payload: { path: ["portal_token"], equals: token } };
+  return {
+    AND: [
+      { payload: { path: ["portal_token"], equals: token } },
+      { OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }] },
+    ],
+  };
 }
 
 function mapPortalOrder(dispatch) {

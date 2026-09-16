@@ -473,6 +473,9 @@ importers:
       prisma:
         specifier: 5.21.0
         version: 5.21.0
+      redis:
+        specifier: ^4.6.12
+        version: 4.7.1
 
   services/inventory-service:
     dependencies:

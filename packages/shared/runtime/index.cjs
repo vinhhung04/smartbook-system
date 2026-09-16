@@ -86,13 +86,31 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
   };
 }
 
-function createRateLimiter({ max = 100, windowMs = 60_000, key, now = Date.now } = {}) {
+// X-Forwarded-For is appended-to by each hop it passes through, so the entries closest to
+// the right end are the ones OUR reverse proxies added (trustworthy); anything further left
+// (including the leftmost entry) is client-supplied and trivially spoofable. `trustedProxyHops`
+// is the number of reverse proxies sitting in front of this service (e.g. 1 for api-gateway
+// behind a single nginx edge, 2 for a service sitting behind nginx + api-gateway) — we skip
+// that many entries from the right and trust the one after that as the real client IP.
+function resolveClientIp(req, trustedProxyHops = 0) {
+  const remoteAddress = req.socket?.remoteAddress || req.ip || 'unknown';
+  if (!trustedProxyHops || trustedProxyHops < 1) return remoteAddress;
+
+  const forwardedFor = String(req.headers?.['x-forwarded-for'] || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (forwardedFor.length === 0) return remoteAddress;
+
+  const index = forwardedFor.length - trustedProxyHops;
+  return index >= 0 ? forwardedFor[index] : forwardedFor[0];
+}
+
+function createRateLimiter({ max = 100, windowMs = 60_000, key, trustedProxyHops = 0, now = Date.now } = {}) {
   const buckets = new Map();
   return (req, res, next) => {
     const currentTime = now();
-    const clientKey = key
-      ? key(req)
-      : String(req.headers?.['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
+    const clientKey = key ? key(req) : resolveClientIp(req, trustedProxyHops);
     let bucket = buckets.get(clientKey);
     if (!bucket || bucket.resetAt <= currentTime) {
       bucket = { count: 0, resetAt: currentTime + windowMs };
@@ -142,5 +160,6 @@ module.exports = {
   createRequestLogger,
   deterministicUuid,
   requireEnv,
+  resolveClientIp,
   securityHeaders,
 };

@@ -5,6 +5,21 @@ const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText, normalizeIsbn13 } = require("../utils/validation");
 const { claimApprovedOrderForDispatch } = require("../services/purchase-order-dispatch.service");
+const {
+  getReadableWarehouseIds,
+  canWriteWarehouse,
+  requireWarehouseReadAccess,
+} = require("../utils/warehouse-scope.utils");
+
+// Consistent with this file's {invalid, statusCode, message} shape used inside
+// prisma.$transaction callbacks (can't call res.status() directly from in there).
+async function checkWarehouseWriteOrFail(user, warehouseId) {
+  const allowed = await canWriteWarehouse(user, warehouseId);
+  if (!allowed) {
+    return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+  }
+  return null;
+}
 
 const PO_STATUSES = {
   DRAFT: "DRAFT",
@@ -23,6 +38,8 @@ function numberValue(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
 }
+
+const SUPPLIER_PORTAL_TOKEN_TTL_DAYS = 30;
 
 function createPoNumber() {
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -542,7 +559,14 @@ async function getPurchaseOrders(req, res) {
   const where = {};
   if (status && status.toUpperCase() !== "ALL") where.status = status.toUpperCase();
   if (supplierId) where.supplier_id = supplierId;
-  if (warehouseId) where.warehouse_id = warehouseId;
+  if (warehouseId) {
+    const canRead = await requireWarehouseReadAccess(req, res, warehouseId);
+    if (!canRead) return;
+    where.warehouse_id = warehouseId;
+  } else {
+    const readableWarehouseIds = await getReadableWarehouseIds(req.user || {});
+    where.warehouse_id = { in: readableWarehouseIds };
+  }
   if (view === "my" && userId) where.ordered_by_user_id = userId;
   if (view === "approval") where.status = PO_STATUSES.PENDING_APPROVAL;
   if (search) {
@@ -586,6 +610,10 @@ async function getPurchaseOrderById(req, res) {
       include: getPurchaseOrderInclude(),
     });
     if (!po) return res.status(404).json({ message: "Purchase order not found" });
+
+    const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
+    if (!canRead) return;
+
     return res.json(mapPurchaseOrderDetail(po));
   } catch (error) {
     console.error("Error while fetching purchase order:", error);
@@ -601,6 +629,9 @@ async function createPurchaseOrder(req, res) {
     const result = await prisma.$transaction(async (tx) => {
       const payload = await normalizePurchaseOrderPayload(tx, req.body);
       if (payload.invalid) return payload;
+
+      const scopeError = await checkWarehouseWriteOrFail(req.user, payload.warehouse_id);
+      if (scopeError) return scopeError;
 
       const po = await tx.purchase_orders.create({
         data: {
@@ -659,6 +690,10 @@ async function updatePurchaseOrder(req, res) {
         include: { purchase_order_items: true },
       });
       if (!existing) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      const existingScopeError = await checkWarehouseWriteOrFail(req.user, existing.warehouse_id);
+      if (existingScopeError) return existingScopeError;
+
       if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED].includes(existing.status)) {
         return { invalid: true, message: "Only DRAFT or REJECTED purchase orders can be updated" };
       }
@@ -669,6 +704,11 @@ async function updatePurchaseOrder(req, res) {
 
       const payload = await normalizePurchaseOrderPayload(tx, req.body);
       if (payload.invalid) return payload;
+
+      if (payload.warehouse_id !== existing.warehouse_id) {
+        const newScopeError = await checkWarehouseWriteOrFail(req.user, payload.warehouse_id);
+        if (newScopeError) return newScopeError;
+      }
 
       const updated = await tx.purchase_orders.update({
         where: { id },
@@ -760,6 +800,10 @@ async function transitionPurchaseOrder(req, res, options) {
         include: { purchase_order_items: true },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
+      if (scopeError) return scopeError;
+
       if (!options.allowedFrom.includes(po.status)) {
         return {
           invalid: true,
@@ -838,6 +882,10 @@ async function cancelPurchaseOrder(req, res) {
         include: { purchase_order_items: true },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
+      if (scopeError) return scopeError;
+
       if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED, PO_STATUSES.PENDING_APPROVAL, PO_STATUSES.APPROVED].includes(po.status)) {
         return { invalid: true, message: "Purchase order cannot be cancelled in current status" };
       }
@@ -888,6 +936,10 @@ async function sendToSupplier(req, res) {
         },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
+      if (scopeError) return scopeError;
+
       if (po.status === PO_STATUSES.SENT_TO_SUPPLIER) {
         return { invalid: true, message: "Purchase order has already been sent to supplier" };
       }
@@ -913,6 +965,8 @@ async function sendToSupplier(req, res) {
 
       const portalToken = makePortalToken();
       const channel = requestedChannel || (po.suppliers?.email ? "EMAIL" : "MOCK");
+      const sentAt = new Date();
+      const expiresAt = new Date(sentAt.getTime() + SUPPLIER_PORTAL_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
       const dispatch = await tx.supplier_order_dispatches.create({
         data: {
           purchase_order_id: po.id,
@@ -921,7 +975,8 @@ async function sendToSupplier(req, res) {
           channel,
           status: "SENT",
           sent_to_email: po.suppliers?.email || null,
-          sent_at: new Date(),
+          sent_at: sentAt,
+          expires_at: expiresAt,
           payload: {
             portal_token: portalToken,
             supplier_name: po.suppliers?.name || null,
@@ -997,6 +1052,10 @@ async function supplierConfirm(req, res) {
         include: { purchase_order_items: true },
       });
       if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+
+      const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
+      if (scopeError) return scopeError;
+
       if (po.status !== PO_STATUSES.SENT_TO_SUPPLIER) {
         return { invalid: true, message: "Only SENT_TO_SUPPLIER purchase orders can be supplier-confirmed" };
       }
@@ -1050,8 +1109,11 @@ async function getSupplierDocuments(req, res) {
   if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
 
   try {
-    const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true } });
+    const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true, warehouse_id: true } });
     if (!po) return res.status(404).json({ message: "Purchase order not found" });
+
+    const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
+    if (!canRead) return;
 
     const [dispatches, invoices, shortageReports] = await Promise.all([
       prisma.supplier_order_dispatches.findMany({
@@ -1099,6 +1161,12 @@ async function getShortageReports(req, res) {
   if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
 
   try {
+    const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true, warehouse_id: true } });
+    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+
+    const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
+    if (!canRead) return;
+
     const reports = await prisma.supplier_shortage_reports.findMany({
       where: { purchase_order_id: id },
       include: {
@@ -1128,6 +1196,11 @@ async function updateShortageReportStatus(req, res, targetStatus) {
         where: { id: reportId, purchase_order_id: id },
       });
       if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+
+      const po = await tx.purchase_orders.findUnique({ where: { id }, select: { warehouse_id: true } });
+      const scopeError = await checkWarehouseWriteOrFail(req.user, po?.warehouse_id);
+      if (scopeError) return scopeError;
+
       if (targetStatus === "SENT_TO_SUPPLIER" && report.status !== "OPEN") {
         return { invalid: true, message: "Only OPEN shortage reports can be sent" };
       }
@@ -1200,6 +1273,9 @@ async function getPurchaseOrderReconciliation(req, res) {
       include: getPurchaseOrderInclude(),
     });
     if (!po) return res.status(404).json({ message: "Purchase order not found" });
+
+    const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
+    if (!canRead) return;
 
     const items = (po.purchase_order_items || []).map((item) => {
       const mapped = mapPurchaseOrderItem(item);
