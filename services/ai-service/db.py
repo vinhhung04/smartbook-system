@@ -24,7 +24,15 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
 else:
-    engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
+    # NullPool: an asyncpg connection is bound to the event loop that opened it,
+    # so a pooled (checked-in) connection reused from a *different* loop crashes
+    # with "Future attached to a different loop" (uvicorn keeps one loop for the
+    # process lifetime, so this never bites in production — it only matters for
+    # this service's own integration tests, which do multiple asyncio.run() calls
+    # in one process against this same engine, e.g. test_pgvector_store.py).
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
