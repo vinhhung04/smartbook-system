@@ -24,22 +24,31 @@ class PgVectorStoreTest(unittest.TestCase):
         importlib.reload(vector_store)
         from pg_vector_store import PgVectorStore
         self.vector_store = vector_store
+
+        async def _init_and_dispose():
+            # Each asyncio.run() call in this test file starts a fresh event
+            # loop. db.engine's default pool hands out asyncpg connections
+            # bound to whichever loop opened them — reusing one from a
+            # *previous*, now-closed loop crashes with "Future attached to a
+            # different loop". Per SQLAlchemy's own docs, dispose() belongs
+            # at the END of the coroutine that owns the engine for this loop,
+            # while the loop is still alive — not at the start of the next
+            # one trying to clean up after an already-dead loop.
+            await db.init_db()
+            await db.engine.dispose()
+
         self.store = PgVectorStore()
-        asyncio.run(db.init_db())
+        asyncio.run(_init_and_dispose())
         asyncio.run(self._clean())
 
     async def _clean(self):
         from sqlalchemy import text
         import db
-        # Each asyncio.run() call in this test file starts a fresh event loop.
-        # db.engine's default pool hands out asyncpg connections bound to
-        # whichever loop opened them — reusing one from a *previous*, now-closed
-        # loop crashes with "Future attached to a different loop". dispose()
-        # drops any pooled connections left over from the previous asyncio.run()
-        # before this loop's queries run.
-        await db.engine.dispose()
         async with db.engine.begin() as conn:
             await conn.execute(text("DELETE FROM ai_documents WHERE source_id LIKE 'test-%'"))
+        # Dispose as the last thing this coroutine does, before asyncio.run()
+        # returns and this loop closes — see the comment in setUp() above.
+        await db.engine.dispose()
 
     def _vec(self, lead: float) -> list[float]:
         vec = [0.0] * self.vector_store.EMBEDDING_DIM
@@ -47,15 +56,8 @@ class PgVectorStoreTest(unittest.TestCase):
         vec[1] = 1.0 - lead
         return vec
 
-    async def _dispose_stale_pool(self):
-        """See the comment in `_clean` above — same reason, repeated at the
-        start of every scenario() run under its own asyncio.run()."""
-        import db
-        await db.engine.dispose()
-
     def test_roundtrip_semantic_and_keyword(self):
         async def scenario():
-            await self._dispose_stale_pool()
             doc = await self.store.upsert_document(
                 corpus=self.vector_store.CORPUS_BOOK, source_id="test-b1",
                 title="Python co ban", content="Huong dan lap trinh Python",
@@ -82,6 +84,10 @@ class PgVectorStoreTest(unittest.TestCase):
             keyword_filtered = await self.store.search_keyword(
                 self.vector_store.CORPUS_BOOK, "lap trinh", k=5,
                 source_ids=["test-b1"])
+            # Dispose as the last statement of this coroutine, before this
+            # loop closes — see the comment in setUp() above.
+            import db
+            await db.engine.dispose()
             return semantic, keyword, hashes, semantic_filtered, keyword_filtered
 
         semantic, keyword, hashes, semantic_filtered, keyword_filtered = asyncio.run(scenario())
@@ -97,13 +103,16 @@ class PgVectorStoreTest(unittest.TestCase):
 
     def test_upsert_document_idempotent(self):
         async def scenario():
-            await self._dispose_stale_pool()
             first = await self.store.upsert_document(
                 corpus=self.vector_store.CORPUS_BOOK, source_id="test-b2", title="T",
                 content="C", content_hash="h1", metadata={})
             second = await self.store.upsert_document(
                 corpus=self.vector_store.CORPUS_BOOK, source_id="test-b2", title="T2",
                 content="C2", content_hash="h2", metadata={})
+            # Dispose as the last statement of this coroutine, before this
+            # loop closes — see the comment in setUp() above.
+            import db
+            await db.engine.dispose()
             return first, second
         first, second = asyncio.run(scenario())
         self.assertEqual(first, second)
@@ -111,14 +120,18 @@ class PgVectorStoreTest(unittest.TestCase):
     def test_keyword_ignores_dau(self):
         """unaccent: go khong dau van phai match noi dung co dau."""
         async def scenario():
-            await self._dispose_stale_pool()
             doc = await self.store.upsert_document(
                 corpus=self.vector_store.CORPUS_DOC, source_id="test-d1", title="Quy dinh",
                 content="Phi phạt trả sách quá hạn", content_hash="h1", metadata={})
             await self.store.upsert_chunks([self.vector_store.Chunk(
                 doc, self.vector_store.CORPUS_DOC, 0,
                 "Phi phạt trả sách quá hạn", "c1", self._vec(0.5), "test-model")])
-            return await self.store.search_keyword(self.vector_store.CORPUS_DOC, "phi phat", k=5)
+            hits = await self.store.search_keyword(self.vector_store.CORPUS_DOC, "phi phat", k=5)
+            # Dispose as the last statement of this coroutine, before this
+            # loop closes — see the comment in setUp() above.
+            import db
+            await db.engine.dispose()
+            return hits
         hits = asyncio.run(scenario())
         self.assertIn("test-d1", [hit.source_id for hit in hits])
 
