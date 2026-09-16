@@ -102,6 +102,10 @@ async function main() {
     { code: 'analytics.reports.export', module_name: 'analytics', action_name: 'read', description: 'Export analytics reports' },
     { code: 'analytics.forecast.view', module_name: 'analytics', action_name: 'read', description: 'View demand forecasts' },
     { code: 'reports.read', module_name: 'analytics', action_name: 'read', description: 'View management reports' },
+    // Gates borrow-domain analytics routes specifically (fine/overdue/reservation reports) —
+    // separate from the inventory-side analytics codes above so WAREHOUSE_MANAGER's "no borrow
+    // access" stays true for analytics too, not just for the borrow-service API itself.
+    { code: 'analytics.borrow.read', module_name: 'analytics', action_name: 'read', description: 'View borrow-domain analytics (fines, overdue, reservations)' },
 
     // Chatbot module
     { code: 'chatbot.use', module_name: 'chatbot', action_name: 'execute', description: 'Use chatbot and save reports' },

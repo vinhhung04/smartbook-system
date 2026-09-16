@@ -14,6 +14,25 @@ const { verifyPackingPhoto } = require("../services/packing-evidence-ai.service"
 
 const ORDER_READY_FOR_PACKING_STATUS = ["READY_FOR_OUTBOUND", "READY_TO_SHIP"];
 
+function isManagerOrAdmin(user) {
+  if (user?.is_superuser) return true;
+  const roles = Array.isArray(user?.roles)
+    ? user.roles.map((r) => String(r || "").toUpperCase())
+    : [];
+  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
+}
+
+// Mirrors picking.controller.js's canAccessTask: managers/admins can act on any task,
+// everyone else only on the task assigned to them.
+function canAccessTask(user, assignedPackerUserId) {
+  if (isManagerOrAdmin(user)) return true;
+  const currentUserId = parseId(user?.id);
+  if (!currentUserId) return false;
+  const assigned = parseId(assignedPackerUserId);
+  if (!assigned) return false;
+  return assigned === currentUserId;
+}
+
 function normalizeInvoiceCode(rawCode) {
   const code = normalizeText(rawCode);
   if (!code) return null;
@@ -253,6 +272,9 @@ async function scanPackingItem(req, res) {
     if (!task) {
       return res.status(404).json({ message: "Packing task not found" });
     }
+    if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     if (task.status === "COMPLETED" || task.status === "CANCELLED") {
       return res.status(400).json({ message: `Task đã ${task.status}, không thể scan thêm` });
     }
@@ -338,6 +360,9 @@ async function uploadPackingEvidence(req, res) {
     if (!task) {
       return res.status(404).json({ message: "Packing task not found" });
     }
+    if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
 
     let evidence = await prisma.packing_camera_evidence.create({
       data: {
@@ -381,6 +406,9 @@ async function attachTaskNumberForUpload(req, res, next) {
     });
     if (!task) {
       return res.status(404).json({ message: "Packing task not found" });
+    }
+    if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     req.packingTaskNumber = task.task_number;
@@ -448,6 +476,9 @@ async function completePackingTask(req, res) {
       if (!task) {
         return { invalid: true, statusCode: 404, message: "Packing task not found" };
       }
+      if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
+        return { invalid: true, statusCode: 403, message: "Forbidden" };
+      }
       if (task.status === "COMPLETED") {
         return { invalid: true, statusCode: 400, message: "Task already completed" };
       }
@@ -457,6 +488,46 @@ async function completePackingTask(req, res) {
           statusCode: 400,
           message: "Còn sách chưa scan đủ số lượng. Vui lòng scan đủ trước khi hoàn tất đóng gói.",
         };
+      }
+
+      // Require the packing session's video to have actually been uploaded — the client is
+      // expected to record continuously and upload before calling this endpoint, but nothing
+      // previously verified that server-side, so a skipped/failed upload could still complete.
+      // AI content verification (ai_verification_status) is intentionally NOT checked here yet.
+      const videoEvidenceCount = await tx.packing_camera_evidence.count({
+        where: { packing_task_id: taskId, evidence_type: "VIDEO" },
+      });
+
+      if (videoEvidenceCount === 0) {
+        const overrideReason = normalizeText(req.body?.override_reason);
+        const canOverride = isManagerOrAdmin(req.user || {});
+
+        if (!canOverride) {
+          return {
+            invalid: true,
+            statusCode: 400,
+            code: "PACKING_VIDEO_EVIDENCE_REQUIRED",
+            message: "Chưa có video bằng chứng đóng gói. Vui lòng quay video trước khi hoàn tất, hoặc liên hệ quản lý để được override.",
+          };
+        }
+        if (!overrideReason) {
+          return {
+            invalid: true,
+            statusCode: 400,
+            code: "PACKING_VIDEO_EVIDENCE_OVERRIDE_REASON_REQUIRED",
+            message: "Cần nhập lý do (override_reason) để hoàn tất đóng gói khi chưa có video bằng chứng.",
+          };
+        }
+
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: actorUserId,
+            action_name: "PACKING_TASK_COMPLETED_WITHOUT_VIDEO_EVIDENCE",
+            entity_type: "PACKING_TASK",
+            entity_id: taskId,
+            after_data: { override_reason: overrideReason },
+          },
+        });
       }
 
       const updated = await markPackingTaskCompleted(tx, {
@@ -469,7 +540,7 @@ async function completePackingTask(req, res) {
     });
 
     if (result.invalid) {
-      return res.status(result.statusCode || 400).json({ message: result.message });
+      return res.status(result.statusCode || 400).json({ message: result.message, code: result.code });
     }
 
     return res.json({ task: result.task });

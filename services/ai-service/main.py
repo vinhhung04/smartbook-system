@@ -4531,6 +4531,14 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     # (`confirm: false`) also records who cancelled it in the audit log.
     user_ctx = await get_user_context(auth_header)
 
+    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
+    # without it, any user whose role satisfies require_can_confirm_action below could
+    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
+    # its action_id (broadcast over the ai_action:* websocket events to other staff).
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
+
     if not req.confirm:
         await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
         asyncio.ensure_future(push_ai_action_event(

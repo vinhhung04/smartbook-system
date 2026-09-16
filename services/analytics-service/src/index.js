@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createCorsOptions, createRateLimiter, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const analyticsRoutes = require('./routes/analytics.routes');
 const { closePools, pingDatabases } = require('./lib/db');
 
@@ -16,6 +16,12 @@ app.use(createRequestLogger('analytics-service'));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json());
+// No rate limiting previously existed here; several endpoints (getReorderSuggestions,
+// getInventorySnapshot, getDashboardKpis) run unbounded multi-query aggregates on every
+// call, so a low-privilege authenticated caller could loop them to exhaust the two DB
+// pools (max 5 connections each, see lib/db.js). trustedProxyHops: 2 — same nginx +
+// api-gateway chain as auth-service/supplier-portal (see packages/shared/runtime).
+app.use(createRateLimiter({ max: 600, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 }));
 
 app.get('/health', (_req, res) => {
   res.json({ service: 'analytics-service', status: 'ok', version: '1.0.0' });

@@ -14,6 +14,11 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  // Whichever stopActiveSession() call is currently waiting on this session's upload — set
+  // right before recorder.stop(), consumed by the recorder's onstop handler once the upload
+  // (started there) settles. Needed because recorder.onstop is registered once in startSession,
+  // long before the eventual stopActiveSession() call supplies its own callbacks.
+  const pendingStopRef = useRef<{ onStopped?: () => void; onUploadFailed?: () => void } | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -30,28 +35,50 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
     };
   }, []);
 
-  const uploadSessionBlob = useCallback((sessionId: string, blob: Blob) => {
-    if (blob.size === 0) return;
-    void packingService
-      .uploadVideoEvidence(sessionId, blob)
-      .then(() => {
-        if (mountedRef.current) {
-          setSavedCount((count) => count + 1);
-          toast.success("Đã lưu video đóng gói");
-        }
-      })
-      .catch((error) => {
-        if (mountedRef.current) {
-          toast.error(getApiErrorMessage(error, "Không thể lưu video đóng gói"));
-        }
-      });
+  // Only runs the pending callbacks once the video has actually finished uploading — calling
+  // the "stopped" callback (e.g. finalizeComplete, which calls the complete API) right after
+  // recorder.stop() raced ahead of this upload, so a slow network could complete the packing
+  // task before its own required evidence was saved (inventory-service now rejects that, but
+  // the race existed regardless and only surfaced as a confusing failure).
+  const uploadSessionBlob = useCallback(async (sessionId: string, blob: Blob) => {
+    const pending = pendingStopRef.current;
+    pendingStopRef.current = null;
+
+    if (blob.size === 0) {
+      if (mountedRef.current) {
+        toast.error("Không ghi được video cho phiên đóng gói này. Vui lòng quay lại danh sách và mở lại đơn để quay video lại từ đầu.");
+      }
+      pending?.onUploadFailed?.();
+      return;
+    }
+
+    try {
+      await packingService.uploadVideoEvidence(sessionId, blob);
+      if (mountedRef.current) {
+        setSavedCount((count) => count + 1);
+        toast.success("Đã lưu video đóng gói");
+      }
+      pending?.onStopped?.();
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          getApiErrorMessage(error, "Không thể lưu video đóng gói. Đơn chưa được hoàn tất — vui lòng quay lại danh sách và mở lại đơn để quay video lại từ đầu."),
+        );
+      }
+      // Do NOT call onStopped(): completing without the video actually saved would just hit
+      // inventory-service's own evidence check and fail there anyway, less clearly.
+      pending?.onUploadFailed?.();
+    }
   }, []);
 
   /** Stop whatever is currently recording. `expectedSessionId`, if given, guards against a
    *  delayed caller (e.g. a 15s grace-period timer) stopping a DIFFERENT session that has since
-   *  taken over — in that case this is a silent no-op and `onStopped` is not called. */
+   *  taken over — in that case this is a silent no-op and neither callback is called.
+   *  `onStopped` fires only after the video finishes uploading successfully; `onUploadFailed`
+   *  fires instead if the upload fails (or nothing was actually recorded), so callers can reset
+   *  their own "finalizing" UI state and let staff retry. */
   const stopActiveSession = useCallback(
-    (expectedSessionId?: string, onStopped?: () => void) => {
+    (expectedSessionId?: string, onStopped?: () => void, onUploadFailed?: () => void) => {
       if (expectedSessionId && activeSessionIdRef.current !== expectedSessionId) return;
 
       const recorder = recorderRef.current;
@@ -61,11 +88,19 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
       setIsRecording(false);
       setActiveSessionId(null);
 
-      if (!recorder || !sessionId) return;
-      if (recorder.state !== "inactive") {
-        recorder.stop(); // onstop (registered in startSession) uploads this session's own chunks
+      if (!recorder || !sessionId) {
+        onStopped?.(); // nothing was recording — nothing to wait for
+        return;
       }
-      onStopped?.();
+
+      if (recorder.state !== "inactive") {
+        pendingStopRef.current = { onStopped, onUploadFailed };
+        recorder.stop(); // onstop (registered in startSession) uploads this session's chunks, then runs the pending callback above
+      } else {
+        // Already inactive (e.g. the underlying track ended on its own) — onstop already ran
+        // once and won't fire again, so there is nothing left to wait on for this session.
+        onStopped?.();
+      }
     },
     [],
   );
@@ -89,7 +124,7 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
           if (event.data.size > 0) chunks.push(event.data);
         };
         recorder.onstop = () => {
-          uploadSessionBlob(sessionId, new Blob(chunks, { type: "video/webm" }));
+          void uploadSessionBlob(sessionId, new Blob(chunks, { type: "video/webm" }));
         };
         recorder.start();
         recorderRef.current = recorder;

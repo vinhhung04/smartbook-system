@@ -52,18 +52,23 @@ async function getWritableWarehouseIds(user) {
   // user_warehouse_scopes table may not exist yet — grant full access as fallback
   if (!prisma.user_warehouse_scopes) return getAllActiveWarehouseIds();
 
+  // Fetch ALL of the user's scope rows first (not just FULL/WRITE ones) so the "no entries"
+  // check below reflects whether they have ANY warehouse-scope configuration at all, not
+  // whether that configuration happens to grant write. Filtering access_level in the WHERE
+  // clause here previously made a user configured with READ-only scope everywhere look
+  // identical to a user with zero scope rows — both returned an empty `scopes` array — which
+  // wrongly triggered the "ungoverned user, grant everything" fallback and handed them
+  // unrestricted write access despite being deliberately scoped to read-only (see
+  // getReadableWarehouseIds below, which already fetches unfiltered and filters in memory).
   const scopes = await prisma.user_warehouse_scopes.findMany({
-    where: {
-      user_id: user?.id,
-      access_level: { in: ['FULL', 'WRITE'] },
-    },
-    select: { warehouse_id: true },
+    where: { user_id: user?.id },
+    select: { warehouse_id: true, access_level: true },
   });
 
-  // If user has no scope entries, grant access to all warehouses
+  // If user has no scope entries at all, grant access to all warehouses
   if (!scopes.length) return getAllActiveWarehouseIds();
 
-  return scopes.map((s) => s.warehouse_id);
+  return scopes.filter((s) => ['FULL', 'WRITE'].includes(s.access_level)).map((s) => s.warehouse_id);
 }
 
 /**

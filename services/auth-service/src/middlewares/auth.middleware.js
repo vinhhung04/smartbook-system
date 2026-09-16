@@ -29,6 +29,16 @@ async function authenticateToken(req, res, next) {
       }
     }
 
+    // Bulk revocation: password change / admin status change writes this cutoff (see
+    // auth.controller.js changePassword and iam.controller.js updateUser), invalidating
+    // every token issued before it in one write instead of tracking each jti individually.
+    if (payload.sub && payload.iat) {
+      const validAfter = await redis.get(`user:tokens-valid-after:${payload.sub}`);
+      if (validAfter !== null && payload.iat < Number(validAfter)) {
+        return res.status(401).json({ message: 'Token has been revoked' });
+      }
+    }
+
     req.auth = payload;
     return next();
   } catch (error) {

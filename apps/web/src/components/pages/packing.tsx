@@ -7,6 +7,7 @@ import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { PackingCameraPanel } from "@/components/packing-camera-panel";
 import { getApiErrorMessage } from "@/services/api.ts";
+import { getApiErrorCode } from "@/services/http-clients";
 import { packingService, type PackingEvidence, type PackingTask } from "@/services/packing";
 import { usePackingCamera } from "@/hooks/usePackingCamera";
 import { usePackingRecordingSession } from "@/hooks/usePackingRecordingSession";
@@ -154,7 +155,28 @@ export function PackingPage() {
       if (finalizingRef.current) return;
       finalizingRef.current = true;
       try {
-        const result = await packingService.completeTask(taskId);
+        let result: { task: PackingTask };
+        try {
+          result = await packingService.completeTask(taskId);
+        } catch (error) {
+          // Server already decided whether this user is allowed to override (manager/admin) —
+          // this code only comes back when they are, just missing the required reason. A
+          // regular staff member instead gets PACKING_VIDEO_EVIDENCE_REQUIRED with no way to
+          // override, so no prompt is shown for that case.
+          if (getApiErrorCode(error) !== "PACKING_VIDEO_EVIDENCE_OVERRIDE_REASON_REQUIRED") {
+            throw error;
+          }
+          const reason = window
+            .prompt(
+              "Chưa có video bằng chứng đóng gói cho đơn này. Nhập lý do để hoàn tất mà không cần video (vd: camera hỏng) — lý do sẽ được ghi lại:",
+            )
+            ?.trim();
+          if (!reason) {
+            toast.error("Đã hủy hoàn tất — cần nhập lý do khi chưa có video bằng chứng.");
+            return;
+          }
+          result = await packingService.completeTask(taskId, reason);
+        }
         setTask((current) => (current && current.id === taskId ? (result.task as ActivePackingTask) : current));
         toast.success(`Đã hoàn tất đóng gói đơn ${result.task.outbound_orders?.outbound_number || ""}.`);
         void loadQueue();
@@ -167,6 +189,15 @@ export function PackingPage() {
     },
     [loadQueue],
   );
+
+  // The packing video failed to upload (see usePackingRecordingSession) — finalizeComplete was
+  // never called for this session, so nothing will otherwise clear the "finalizing" state.
+  // Recording has already stopped by this point, so simply retrying "Hoàn tất đóng gói ngay"
+  // would just hit the same "no video" rejection from the server — staff needs to go back to
+  // the queue and reopen this task first, which starts a fresh recording (see refreshTask).
+  const handleVideoUploadFailed = useCallback((taskId: string) => {
+    setFinalizingTaskId((current) => (current === taskId ? null : current));
+  }, []);
 
   // All items scanned — camera keeps recording for a grace period so staff can finish boxing
   // (tape, final check) before the packing session is actually marked complete.
@@ -186,14 +217,18 @@ export function PackingPage() {
             }
             countdownTaskIdRef.current = null;
             setFinalizingTaskId(taskId);
-            stopActiveSession(taskId, () => void finalizeComplete(taskId));
+            stopActiveSession(
+              taskId,
+              () => void finalizeComplete(taskId),
+              () => handleVideoUploadFailed(taskId),
+            );
             return null;
           }
           return seconds - 1;
         });
       }, 1000);
     },
-    [stopActiveSession, finalizeComplete],
+    [stopActiveSession, finalizeComplete, handleVideoUploadFailed],
   );
 
   // A different order is about to become active — cut the previous order's recording session
@@ -209,12 +244,16 @@ export function PackingPage() {
 
       if (wasCountingDown) {
         setFinalizingTaskId(oldTaskId);
-        stopActiveSession(oldTaskId, () => void finalizeComplete(oldTaskId));
+        stopActiveSession(
+          oldTaskId,
+          () => void finalizeComplete(oldTaskId),
+          () => handleVideoUploadFailed(oldTaskId),
+        );
       } else {
         stopActiveSession(oldTaskId);
       }
     },
-    [activeSessionId, clearRecordCountdown, stopActiveSession, finalizeComplete],
+    [activeSessionId, clearRecordCountdown, stopActiveSession, finalizeComplete, handleVideoUploadFailed],
   );
 
   const refreshTask = useCallback(
@@ -350,8 +389,12 @@ export function PackingPage() {
     if (!task || !allVerified) return;
     clearRecordCountdown();
     setFinalizingTaskId(task.id);
-    stopActiveSession(task.id, () => void finalizeComplete(task.id));
-  }, [task, allVerified, clearRecordCountdown, stopActiveSession, finalizeComplete]);
+    stopActiveSession(
+      task.id,
+      () => void finalizeComplete(task.id),
+      () => handleVideoUploadFailed(task.id),
+    );
+  }, [task, allVerified, clearRecordCountdown, stopActiveSession, finalizeComplete, handleVideoUploadFailed]);
 
   const steps: WorkflowStep[] = useMemo(
     () => [

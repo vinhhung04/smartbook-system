@@ -35,6 +35,15 @@ async function upsertFine(tx, input) {
     return null;
   }
 
+  // Serialize concurrent upserts for the same (loan_item, fine_type) — e.g. the overdue sweep
+  // and a manual return happening at the same moment — so the findFirst-then-create below can't
+  // race into two UNPAID fine rows for the same loan item. Transaction-scoped, auto-released on
+  // commit/rollback; there's no natural unique key on `fines` to upsert() against instead.
+  // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+  // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'") —
+  // $executeRaw only needs the statement to execute, never parses a result set.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine:${loanItemId}:${fineType}`}, 0))`;
+
   const existing = await tx.fines.findFirst({
     where: {
       customer_id: customerId,

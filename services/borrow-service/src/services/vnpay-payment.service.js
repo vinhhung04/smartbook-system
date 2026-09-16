@@ -23,6 +23,20 @@ async function finalizeVnpayPayment(prismaClient, verifiedParams) {
       return { outcome: 'ALREADY_FINALIZED', intent };
     }
 
+    // Atomically claim the intent before doing any work: the Return-URL handler and the IPN
+    // handler can legitimately race to finalize the same txn_ref (see comment above). An
+    // UPDATE ... WHERE status = 'PENDING' takes a row lock, so a concurrent claim blocks until
+    // this transaction commits, then correctly sees 0 rows matched instead of double-processing
+    // the same payment (mirrors claimDraftReceiptForPosting in goods-receipt-posting.service.js).
+    const claim = await tx.fine_payment_intents.updateMany({
+      where: { id: intent.id, status: 'PENDING' },
+      data: { status: 'PROCESSING' },
+    });
+    if (claim.count !== 1) {
+      const current = await tx.fine_payment_intents.findUnique({ where: { id: intent.id } });
+      return { outcome: 'ALREADY_FINALIZED', intent: current };
+    }
+
     const expectedVnpAmount = Math.round(normalizeMoney(intent.amount) * 100);
     if (vnpAmount !== expectedVnpAmount) {
       const updated = await tx.fine_payment_intents.update({

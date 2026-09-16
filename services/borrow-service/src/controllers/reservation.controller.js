@@ -242,6 +242,27 @@ async function createReservation(req, res) {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count above
+        // ran outside any lock, so two concurrent requests could both pass it and both reach
+        // here. Throwing past the limit here (instead of only at line ~191) is caught by the
+        // catch block below, which already releases the real stock hold taken by reserveStock().
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
+        const [recheckLoanCount, recheckReservationCount] = await Promise.all([
+          tx.loan_transactions.count({
+            where: { customer_id, status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] } },
+          }),
+          tx.loan_reservations.count({
+            where: { customer_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
+          }),
+        ]);
+        if (recheckLoanCount + recheckReservationCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
+          const limitError = new Error('Customer exceeded max active loans limit by membership plan');
+          limitError.status = 409;
+          throw limitError;
+        }
+
         const reservation = await tx.loan_reservations.create({
           data: {
             id: reservationId,

@@ -253,7 +253,9 @@ app.use(createRequestContext("api-gateway"));
 app.use(createRequestLogger("api-gateway"));
 app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
-app.use(createRateLimiter({ max: 600, windowMs: 15 * 60 * 1000 }));
+// One nginx reverse proxy sits in front of api-gateway in production, appending the real
+// client IP as the last X-Forwarded-For entry — trust exactly that one hop.
+app.use(createRateLimiter({ max: 600, windowMs: 15 * 60 * 1000, trustedProxyHops: 1 }));
 app.use((req, res, next) => {
   const maxBytes = Number(process.env.GATEWAY_MAX_REQUEST_BYTES || 8 * 1024 * 1024);
   const contentLength = Number(req.headers["content-length"] || 0);

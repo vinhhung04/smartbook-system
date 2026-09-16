@@ -46,12 +46,20 @@ const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.rou
 const internalAuthorityRoutes = require('./routes/internal-authority.routes');
 const internalCatalogRoutes = require('./routes/internal-catalog.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
+const redis = require('./lib/redis');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '8mb';
 
 requireEnv(process.env, ['DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
+
+// Was previously never connected, so authenticateToken's blacklist/revocation checks
+// (see middlewares/auth.middleware.js) silently no-op'd — this service only ever
+// checked JWT signature/expiry, never whether the token had since been revoked.
+redis.connect().catch((err) => {
+  console.warn('[Inventory] Redis not available, running without cache/revocation checks:', err.message);
+});
 
 app.use(createRequestContext('inventory-service'));
 app.use(createRequestLogger('inventory-service'));
@@ -551,4 +559,9 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Inventory Service running on http://localhost:${PORT}`);
   startAgingInventoryJob();
+});
+
+process.on('SIGTERM', async () => {
+  await redis.disconnect();
+  process.exit(0);
 });

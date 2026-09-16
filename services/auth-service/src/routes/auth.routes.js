@@ -17,11 +17,15 @@ const { createRateLimiter } = require('@smartbook/shared/runtime');
 const router = express.Router();
 // Overridable so CI can run many scripted logins in one 15-minute window without
 // weakening the production default (10) — unset locally/in prod, it's a no-op.
+// trustedProxyHops: 2 — requests reach this service through nginx then api-gateway, both of
+// which append to X-Forwarded-For; trusting exactly those 2 hops recovers the real client IP
+// instead of the client-spoofable leftmost entry (see packages/shared/runtime/index.cjs).
 const authRateLimit = createRateLimiter({
   max: Number(process.env.AUTH_LOGIN_RATE_LIMIT_MAX) || 10,
   windowMs: 15 * 60 * 1000,
+  trustedProxyHops: 2,
 });
-const resetRateLimit = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+const resetRateLimit = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
 
 // Public endpoints
 router.post('/register', authRateLimit, register);

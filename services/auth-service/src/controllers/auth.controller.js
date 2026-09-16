@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const redis = require('../lib/redis');
 const { sendEmail } = require('../lib/email-sender');
+const { revokeUserTokensIssuedBefore } = require('../lib/token-revocation');
 
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -474,6 +475,11 @@ async function changePassword(req, res) {
 
     const newHash = await bcrypt.hash(new_password, BCRYPT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { password_hash: newHash } });
+
+    // Revoke every token issued before now for this user (not just the one used to make
+    // this request) — otherwise a stolen token kept working for up to JWT_EXPIRES_IN after
+    // the account "secured" itself. See auth.middleware.js authenticateToken.
+    await revokeUserTokensIssuedBefore(userId);
 
     return res.json({ message: 'Password changed successfully' });
   } catch (error) {
