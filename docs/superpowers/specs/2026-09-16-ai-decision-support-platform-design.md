@@ -214,13 +214,41 @@ Hai file cache JSON cũ trở thành rác — xoá, và bỏ code đọc/ghi ch�
 
 ## 4. Phase B — Embedding Provider Hybrid
 
-**Lấp gap:** `embeddings.py` chỉ gọi Ollama.
+**Lấp gap:** `embeddings.py` chỉ gọi Ollama, không có fallback khi Ollama chết.
 
-- Tách `embeddings.py` thành provider protocol, theo đúng khuôn `llm_provider.py` đã làm cho chat (cùng dataclass usage: provider, model, latency, error).
-- `OllamaEmbedder` (mặc định, chạy offline được) + `CloudEmbedder` (fallback).
-- **Circuit breaker:** 3 lỗi liên tiếp → mở mạch, chuyển cloud trong 60s, rồi thử lại Ollama bằng một request thăm dò (`EMBED_BREAKER_THRESHOLD`, `EMBED_BREAKER_COOLDOWN_SECONDS`). Hiện tại mỗi lần Ollama chết là mỗi request tự ăn trọn `EMBED_TIMEOUT_SECONDS=30`.
-- **Vấn đề khác chiều vector:** nếu provider fallback trả chiều khác 768, **không** ghi đè vector cũ. Ghi kèm `embedding_model`, và query chỉ đọc chunk có `embedding_model` khớp model đang hoạt động (AD-3). Chuyển model = reindex có kiểm soát, không phải corrupt dần.
-- Giữ nguyên hành vi "degrade gracefully": embedding hỏng → không có tín hiệu semantic → keyword vẫn chạy. Không raise.
+### AD-6: Cloud fallback qua OpenRouter (`qwen/qwen3-embedding-8b`), không vendor mới
+
+**Chọn:** `CloudEmbedder` gọi `POST {OPENROUTER_BASE_URL}/embeddings` (OpenAI-compatible, đã xác nhận tồn tại — không phải `/chat/completions`), model `qwen/qwen3-embedding-8b`, tham số `"dimensions": 768` để cắt đúng khớp cột `vector(768)` hiện có.
+
+**Đã cân nhắc và loại:**
+- OpenAI `text-embedding-3-small` — cũng hỗ trợ `dimensions`, nhưng thêm một vendor/API key mới ngoài OpenRouter đã có.
+- `qwen/qwen3-embedding-4b` — đắt hơn 8B ($0.02 vs $0.01/1M token, xác nhận trên trang pricing OpenRouter) *và* chất lượng thấp hơn (8B đứng đầu MTEB multilingual lúc ra mắt). Không có lý do chọn 4B.
+- Tự host qua Ollama — model 8B tham số quá nặng cho một fallback ít khi kích hoạt; đây là lý do CÓ cloud fallback ngay từ đầu.
+
+**Lý do chọn OpenRouter:** `OPENROUTER_API_KEY`/`OPENROUTER_BASE_URL` đã cấu hình sẵn cho chat (`llm_provider.py`). Không cần vendor, không cần secret mới. `.env.example`'s comment "OpenRouter doesn't serve this [embeddings]" đã lỗi thời — xác nhận trực tiếp qua tài liệu OpenRouter (`/docs/api/api-reference/embeddings/create-embeddings`) rằng endpoint `/embeddings` tồn tại và nhận `dimensions`.
+
+### AD-7: `embed_batch`/`embed_text` trả kèm tên model đã dùng — không còn đọc `EMBED_MODEL` tĩnh khi query
+
+**Vấn đề:** `pg_vector_store.py::search_semantic` hiện lọc `embedding_model = :embedding_model` bằng cách đọc thẳng hằng số module-level `embeddings.EMBED_MODEL` (giá trị đọc một lần từ env lúc import). Khi circuit breaker chuyển sang cloud giữa chừng, hằng số này **không đổi** — nó vẫn là `"nomic-embed-text"` dù vector vừa được cloud embed. Hệ quả nếu không sửa: chunk mới embed bằng cloud bị gắn nhãn sai (hoặc filter dùng sai model), search có thể trả về rỗng một cách khó hiểu thay vì rõ ràng "đang chạy dưới model khác, chưa có dữ liệu khớp."
+
+**Chọn:** `embed_batch`/`embed_text` đổi kiểu trả về thành `EmbedResult(vectors, model, provider)` (namedtuple nhẹ, không dùng dataclass đầy đủ như `ChatUsage` vì không cần token count) thay vì `list[float] | None`. Mọi call site (`book_index.semantic_scores`, `assistant_tools._score_and_rank_books`, `faq_retrieval._find_relevant_async`, `ingestion._ingest_one`) nhận và truyền tiếp `result.model` xuống đúng chỗ cần gắn nhãn hoặc lọc:
+- `ingestion.py`: `Chunk.embedding_model = result.model` (đã đúng hướng, chỉ đổi nguồn đọc).
+- `pg_vector_store.search_semantic`: thêm tham số bắt buộc `embedding_model: str`, bỏ việc tự đọc `embeddings.EMBED_MODEL` bên trong. Caller (book_index, faq_retrieval) truyền `result.model` từ **chính lần embed query đó** — không phải hằng số tĩnh.
+- `vector_store.VectorStore` protocol: `search_semantic` thêm tham số này (áp dụng cho cả `InMemoryVectorStore`).
+
+**Hệ quả đúng đắn của thiết kế này:** khi breaker mở (Ollama chết), query mới embed bằng cloud model → search chỉ thấy chunk đã ingest bằng cloud model → **rỗng** cho tới khi đủ dữ liệu re-ingest dưới model đó, hoặc Ollama hồi phục. Đây là hành vi **đúng như AD-3 mô tả** ("reindex có kiểm soát, không phải corrupt dần"), không phải bug — nhưng chỉ đúng nếu embedding_model được truyền động, không đọc hằng số tĩnh.
+
+### Circuit breaker
+
+- 3 lỗi liên tiếp (`EMBED_BREAKER_THRESHOLD`, mặc định 3) → mở mạch, mọi call tiếp theo đi thẳng cloud trong 60s (`EMBED_BREAKER_COOLDOWN_SECONDS`), sau đó thử lại Ollama bằng một request thăm dò trước khi đóng mạch lại.
+- State máy: `CLOSED` (Ollama) → `OPEN` (cloud, đếm cooldown) → `HALF_OPEN` (1 request thăm dò Ollama) → `CLOSED` nếu thành công / `OPEN` lại nếu vẫn lỗi.
+- Hiện tại mỗi lần Ollama chết là mỗi request tự ăn trọn `EMBED_TIMEOUT_SECONDS=30` — breaker cắt việc này sau lần lỗi thứ 3, không phải chờ timeout mỗi lần.
+
+### Giữ nguyên
+
+- Interface đồng bộ: `embed_batch`/`embed_text` **vẫn là hàm sync**, gọi qua `asyncio.to_thread` từ caller — không đổi sang async, vì Phase B là thêm circuit breaker + fallback, không phải viết lại toàn bộ call chain. `CloudEmbedder` dùng `httpx.Client` đồng bộ (không phải `AsyncClient`), khớp cách `OllamaProvider`/`ollama.Client` đang chạy.
+- Hành vi "degrade gracefully": embedding hỏng ở **cả hai** provider → không có tín hiệu semantic, keyword vẫn chạy. Không raise — giữ đúng convention hiện tại của `embeddings.py`.
+- Tách `embeddings.py` thành provider protocol, theo đúng khuôn `llm_provider.py` đã làm cho chat (cùng quy ước: log 1 dòng structured mỗi lần gọi, có latency/provider/model).
 
 ---
 
