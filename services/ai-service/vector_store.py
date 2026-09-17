@@ -59,7 +59,7 @@ class VectorStore(Protocol):
         ...
 
     async def search_semantic(
-        self, corpus: str, query_vec: list[float], k: int,
+        self, corpus: str, query_vec: list[float], k: int, embedding_model: str,
         source_ids: list[str] | None = None,
     ) -> list[Hit]: ...
 
@@ -129,12 +129,13 @@ class InMemoryVectorStore:
         )
 
     async def search_semantic(
-        self, corpus: str, query_vec: list[float], k: int,
+        self, corpus: str, query_vec: list[float], k: int, embedding_model: str,
         source_ids: list[str] | None = None,
     ) -> list[Hit]:
         hits = [
             self._hit(doc, row, embeddings.cosine_similarity(query_vec, row["embedding"]))
             for doc, row in self._candidates(corpus, source_ids)
+            if row["embedding_model"] == embedding_model
         ]
         hits.sort(key=lambda hit: (-hit.score, hit.source_id))
         return hits[:k]

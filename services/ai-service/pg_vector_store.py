@@ -1,8 +1,11 @@
 """pgvector-backed VectorStore. Chi duoc dung khi DATABASE_URL la Postgres —
 vector_store.get_store() lo viec chon.
 
-Moi query loc theo embedding_model dang hoat dong: chunk embed bang model cu
-nam trong khong gian vector khac, dung lan se cho ket qua sai im lang (AD-3).
+Moi query semantic loc theo embedding_model CALLER TRUYEN VAO (khong tu doc
+hang so tinh) — model nao vua embed cau query thi loc dung model do, vi
+circuit breaker (embeddings.py) co the da chuyen sang provider khac giua
+chung (AD-7). Chunk embed boi model cu nam trong khong gian vector khac,
+dung lan se cho ket qua sai im lang.
 """
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import db
-import embeddings
 from vector_store import Chunk, Hit
 
 logger = logging.getLogger("uvicorn.error")
@@ -127,7 +129,7 @@ class PgVectorStore:
         ]
 
     async def search_semantic(
-        self, corpus: str, query_vec: list[float], k: int,
+        self, corpus: str, query_vec: list[float], k: int, embedding_model: str,
         source_ids: list[str] | None = None,
     ) -> list[Hit]:
         if not query_vec:
@@ -148,7 +150,7 @@ class PgVectorStore:
         """)
         return await self._search(sql, {
             "corpus": corpus, "query_vec": _to_vector_literal(query_vec),
-            "embedding_model": embeddings.EMBED_MODEL, "k": k,
+            "embedding_model": embedding_model, "k": k,
             "filter_sources": source_ids is not None,
             "source_ids": list(source_ids or []),
         })

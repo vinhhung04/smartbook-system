@@ -76,13 +76,14 @@ class PgVectorStoreTest(unittest.TestCase):
                 doc2, self.vector_store.CORPUS_BOOK, 0,
                 "Huong dan lap trinh Java", "c1", self._vec(1.0), embeddings.EMBED_MODEL)])
             semantic = await self.store.search_semantic(
-                self.vector_store.CORPUS_BOOK, self._vec(1.0), k=5)
+                self.vector_store.CORPUS_BOOK, self._vec(1.0), k=5,
+                embedding_model=embeddings.EMBED_MODEL)
             keyword = await self.store.search_keyword(
                 self.vector_store.CORPUS_BOOK, "python", k=5)
             hashes = await self.store.existing_chunk_hashes(doc)
             semantic_filtered = await self.store.search_semantic(
                 self.vector_store.CORPUS_BOOK, self._vec(1.0), k=5,
-                source_ids=["test-b1"])
+                embedding_model=embeddings.EMBED_MODEL, source_ids=["test-b1"])
             keyword_filtered = await self.store.search_keyword(
                 self.vector_store.CORPUS_BOOK, "lap trinh", k=5,
                 source_ids=["test-b1"])
