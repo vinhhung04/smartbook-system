@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import unittest
 
 import assistant_tools
 import book_index
+
+
+def run(coro):
+    return asyncio.run(coro)
 
 
 BOOKS = [
@@ -89,7 +94,7 @@ class BookIndexTests(unittest.TestCase):
 
     def test_semantic_scores_rank_the_topically_closest_book_highest(self):
         client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-        scores = book_index.semantic_scores(BOOKS, self.query, client=client)
+        scores = run(book_index.semantic_scores(BOOKS, self.query, client=client))
         self.assertEqual(len(scores), len(BOOKS))
         self.assertEqual(scores.index(max(scores)), 1)
         self.assertAlmostEqual(scores[1], 1.0, places=6)
@@ -114,7 +119,7 @@ class BookIndexTests(unittest.TestCase):
         self.assertEqual(client.calls, 2, "changed catalog must invalidate the cached index")
 
     def test_embedding_failure_yields_no_semantic_signal(self):
-        self.assertEqual(book_index.semantic_scores(BOOKS, self.query, client=FailingOllamaClient()), [])
+        self.assertEqual(run(book_index.semantic_scores(BOOKS, self.query, client=FailingOllamaClient())), [])
         self.assertIsNone(book_index.build_index(BOOKS, client=FailingOllamaClient()))
 
 
@@ -133,7 +138,7 @@ class HybridSearchTests(unittest.TestCase):
 
         # Keyword-only would return nothing useful here: no book title contains
         # these words, and only book 2's summary_vi does.
-        results = assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client)
+        results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b2")
 
@@ -142,14 +147,14 @@ class HybridSearchTests(unittest.TestCase):
         self.vectors[query] = [0.0, 0.0, 0.0]
         client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
 
-        results = assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client)
+        results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client))
         self.assertTrue(results)
         self.assertEqual(results[0]["isbn"], "9786041111111")
 
     def test_degrades_to_keyword_only_when_ollama_is_down(self):
-        results = assistant_tools._score_and_rank_books(
+        results = run(assistant_tools._score_and_rank_books(
             BOOKS, "Python", 5, client=FailingOllamaClient()
-        )
+        ))
         self.assertEqual([book["id"] for book in results], ["b1"])
 
     def test_unrelated_query_returns_nothing(self):
@@ -160,7 +165,7 @@ class HybridSearchTests(unittest.TestCase):
         self.vectors[query] = [0.0, 0.0, 0.0]
         client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
 
-        self.assertEqual(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client), [])
+        self.assertEqual(run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client)), [])
 
 
 if __name__ == "__main__":

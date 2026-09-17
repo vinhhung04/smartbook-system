@@ -247,8 +247,8 @@ async def find_book_by_cover(request: Request, file: UploadFile = File(...)):
     ocr_query = " ".join(filter(None, [ocr_data.get("title"), ocr_data.get("author")])).strip()
     ocr_matches: list[dict] = []
     if ocr_query and books:
-        ocr_matches = await asyncio.to_thread(
-            assistant_tools._score_and_rank_books, books, ocr_query, COVER_SEARCH_RESULT_LIMIT
+        ocr_matches = await assistant_tools._score_and_rank_books(
+            books, ocr_query, COVER_SEARCH_RESULT_LIMIT
         )
 
     candidates = _merge_candidates(books, ocr_matches, visual_matches)

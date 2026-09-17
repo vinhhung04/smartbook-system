@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import re
 from typing import Any, Awaitable, Callable
@@ -153,7 +152,7 @@ def _keyword_score(compact: dict, normalized_query: str, tokens: list[str]) -> i
     return score
 
 
-def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
+async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
     """Hybrid ranking: keyword overlap fused with cosine similarity over the
     book's own text.
 
@@ -164,7 +163,8 @@ def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> l
     (Ollama down, model not pulled) the semantic half is simply absent and this
     degrades to exactly the previous keyword-only ranking.
 
-    Blocking: calls Ollama. Callers on the event loop must use asyncio.to_thread.
+    Async: book_index.semantic_scores cham DB/Ollama va tu lo viec khong chan
+    event loop. Caller await truc tiep, khong boc asyncio.to_thread nua.
     """
     normalized_query = normalize_text(query)
     tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
@@ -179,7 +179,7 @@ def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> l
     keyword = [_keyword_score(compact, normalized_query, tokens) for compact in compacts]
     max_keyword = max(keyword)
 
-    semantic = book_index.semantic_scores(valid_books, query, client=client)
+    semantic = await book_index.semantic_scores(valid_books, query, client=client)
     if len(semantic) != len(valid_books):
         semantic = [0.0] * len(valid_books)
 
@@ -221,11 +221,7 @@ async def search_books(auth_header: str | None = None, query: str = "") -> dict:
         return {"error": "/api/books het thoi gian cho phan hoi"}
     except Exception as exc:
         return {"error": f"/api/books that bai: {type(exc).__name__}"}
-    # _score_and_rank_books embeds via Ollama (blocking network call), so it
-    # must run off the event loop - same convention as main.py's _chat_with_ollama.
-    results = await asyncio.to_thread(
-        _score_and_rank_books, books, query, SEARCH_BOOKS_RESULT_LIMIT
-    )
+    results = await _score_and_rank_books(books, query, SEARCH_BOOKS_RESULT_LIMIT)
     return {"query": query, "results": results}
 
 

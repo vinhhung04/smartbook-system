@@ -11,6 +11,7 @@ scores and the caller keeps its keyword-only behavior.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -77,23 +78,27 @@ def build_index(books: list[dict], client: ollama.Client | None = None) -> list[
     return vectors
 
 
-def semantic_scores(
+async def semantic_scores(
     books: list[dict],
     query: str,
     client: ollama.Client | None = None,
 ) -> list[float]:
     """Cosine similarity of `query` against each book, aligned with `books`.
     Returns [] (not zeros) when embeddings are unavailable, so callers can tell
-    "no semantic signal" apart from "semantically unrelated"."""
+    "no semantic signal" apart from "semantically unrelated".
+
+    Async vi Task 8 doi ruot sang vector_store (query DB). Phan than ham o buoc
+    nay van la code cu chay trong thread — doi shape truoc, doi backend sau.
+    """
     query = (query or "").strip()
     if not query or not books:
         return []
 
-    query_vector = embeddings.embed_text(query, client=client)
+    query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
     if not query_vector:
         return []
 
-    vectors = build_index(books, client=client)
+    vectors = await asyncio.to_thread(build_index, books, client)
     if not vectors or len(vectors) != len(books):
         return []
 

@@ -4628,11 +4628,7 @@ async def get_recommendations(request: Request, req: RecommendationRequest):
     semantic: list[float] = []
     profile_text = (signals["profile"].get("text") or "").strip()
     if candidates and profile_text:
-        # Blocking Ollama call; keep it off the event loop like every other
-        # embedding caller in this service.
-        semantic = await asyncio.to_thread(
-            book_index.semantic_scores, candidates, profile_text
-        )
+        semantic = await book_index.semantic_scores(candidates, profile_text)
 
     entries = recommendation.rank_candidates(
         candidates,
