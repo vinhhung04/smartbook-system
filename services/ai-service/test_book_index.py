@@ -135,6 +135,26 @@ class HybridSearchTest(unittest.TestCase):
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b1")
 
+    def test_isbn_match_inside_natural_language_sentence(self):
+        # Real queries wrap the isbn in a sentence ("Tim sach ISBN <isbn>"),
+        # not the bare isbn alone — the short-circuit must still fire via
+        # substring containment, not exact string equality.
+        query = "Tim sach ISBN 9786041234567 con hang khong?"
+        with mock.patch.object(embeddings, "embed_text", return_value=[0.0, 1.0]):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
+        self.assertTrue(results)
+        self.assertEqual(results[0]["id"], "b1")
+        self.assertEqual(results[0]["score"], 1.0)
+
+    def test_isbn_short_circuit_ignores_empty_isbn_field(self):
+        # An empty/missing isbn must never match as a substring of every query
+        # (walrus-guard regression: "" is a substring of any string in Python).
+        books_no_isbn = [{**BOOKS[1], "isbn": ""}, BOOKS[2]]
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            results = run(assistant_tools._score_and_rank_books(
+                books_no_isbn, "Lich su the gioi", 5))
+        self.assertEqual([book["id"] for book in results], ["b3"])
+
     def test_degrades_to_keyword_only_when_embedding_is_unavailable(self):
         with mock.patch.object(embeddings, "embed_text", return_value=None):
             results = run(assistant_tools._score_and_rank_books(BOOKS, "Python", 5))

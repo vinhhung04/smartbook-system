@@ -142,7 +142,7 @@ async def ingest_books(books: list[dict]) -> dict:
 
 async def ingest_internal_docs(directory: str = CORPUS_DIR) -> dict:
     """Moi file .md trong corpus/ la mot document; source_id la ten file khong
-    duoi. Noi dung review qua git nhu code — cung triet ly faq_data.py cu,
+    duoi. Noi dung review qua git nhu code — cung triet ly module FAQ tinh cu,
     nhung khong hardcode trong .py."""
     store = vector_store.get_store()
     documents = embedded = skipped = 0

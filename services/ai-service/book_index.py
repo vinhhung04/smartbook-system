@@ -1,7 +1,7 @@
 """Diem semantic cho catalog sach, doc tu vector store.
 
-Truoc day module nay tu dung index rieng trong mot file JSON tren dia
-(.book_index_cache.json) va rebuild toan bo khi content hash cua CA catalog doi.
+Truoc day module nay tu dung index rieng trong mot file cache JSON tren dia
+va rebuild toan bo khi content hash cua CA catalog doi.
 Gio vector nam trong ai_document_chunks; ingestion.py lo viec dong bo incremental.
 
 Giu nguyen hop dong cu: semantic_scores tra ve list cung do dai voi `books`, va

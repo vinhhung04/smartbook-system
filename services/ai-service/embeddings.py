@@ -69,21 +69,3 @@ def content_hash(payload) -> str:
     content is detected and rebuilt instead of silently reused."""
     text = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def read_cache(path: str) -> dict | None:
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def write_cache(path: str, payload: dict) -> None:
-    try:
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle)
-    except OSError:
-        logger.warning("embeddings: could not write vector cache to %s", path)

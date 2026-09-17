@@ -11,6 +11,8 @@ import asyncio
 import os
 import unittest
 
+import embeddings
+
 TEST_DSN = os.getenv("TEST_PG_DSN", "")
 
 
@@ -64,7 +66,7 @@ class PgVectorStoreTest(unittest.TestCase):
                 content_hash="h1", metadata={"author": "A"})
             await self.store.upsert_chunks([self.vector_store.Chunk(
                 doc, self.vector_store.CORPUS_BOOK, 0,
-                "Huong dan lap trinh Python", "c1", self._vec(1.0), "test-model")])
+                "Huong dan lap trinh Python", "c1", self._vec(1.0), embeddings.EMBED_MODEL)])
             # Second book, so source_ids filtering below actually excludes something.
             doc2 = await self.store.upsert_document(
                 corpus=self.vector_store.CORPUS_BOOK, source_id="test-b3",
@@ -72,7 +74,7 @@ class PgVectorStoreTest(unittest.TestCase):
                 content_hash="h1", metadata={"author": "B"})
             await self.store.upsert_chunks([self.vector_store.Chunk(
                 doc2, self.vector_store.CORPUS_BOOK, 0,
-                "Huong dan lap trinh Java", "c1", self._vec(1.0), "test-model")])
+                "Huong dan lap trinh Java", "c1", self._vec(1.0), embeddings.EMBED_MODEL)])
             semantic = await self.store.search_semantic(
                 self.vector_store.CORPUS_BOOK, self._vec(1.0), k=5)
             keyword = await self.store.search_keyword(
@@ -125,7 +127,7 @@ class PgVectorStoreTest(unittest.TestCase):
                 content="Phi phạt trả sách quá hạn", content_hash="h1", metadata={})
             await self.store.upsert_chunks([self.vector_store.Chunk(
                 doc, self.vector_store.CORPUS_DOC, 0,
-                "Phi phạt trả sách quá hạn", "c1", self._vec(0.5), "test-model")])
+                "Phi phạt trả sách quá hạn", "c1", self._vec(0.5), embeddings.EMBED_MODEL)])
             hits = await self.store.search_keyword(self.vector_store.CORPUS_DOC, "phi phat", k=5)
             # Dispose as the last statement of this coroutine, before this
             # loop closes — see the comment in setUp() above.

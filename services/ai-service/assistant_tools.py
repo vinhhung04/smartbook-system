@@ -148,6 +148,12 @@ def _isbn_key(value: Any) -> str:
     return "".join(ch for ch in str(value or "").strip().upper() if ch.isalnum())
 
 
+# ISBN-10/13 (digits only, sau khi chuan hoa) luon >= 10 ky tu. Nguong nay
+# chan false-positive tu isbn rong/qua ngan bi coi la substring cua bat ky
+# query nao (vd "" luon la substring cua moi chuoi).
+_MIN_ISBN_KEY_LEN = 10
+
+
 async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
     """Hybrid ranking qua vector store, hop nhat bang RRF.
 
@@ -164,6 +170,11 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
     ngu tu nhien; tokenize full-text cho ISBN de vo vi dau gach ngang/dinh dang).
     Nen ca semantic lan keyword deu khong "thay" isbn. Match isbn chinh xac phai
     thang tuyet doi — quyen do len hang 1 du tin hieu vector con lai yeu/khong co.
+
+    Query thuc te thuong la ca cau ("Tim sach ISBN 9786041234567"), khong phai
+    isbn tran — nen kiem tra isbn cua sach co xuat hien nhu MOT SUBSTRING trong
+    query da chuan hoa, khong doi hoi bang tuyet doi ca chuoi (van khop truong
+    hop query dung la isbn tran, vi mot chuoi luon la substring cua chinh no).
     """
     query = (query or "").strip()
     if not query:
@@ -178,7 +189,11 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
 
     query_isbn = _isbn_key(query)
     isbn_hit = next(
-        (book for book in valid_books if query_isbn and _isbn_key(book.get("isbn")) == query_isbn),
+        (
+            book for book in valid_books
+            if len(book_isbn := _isbn_key(book.get("isbn"))) >= _MIN_ISBN_KEY_LEN
+            and book_isbn in query_isbn
+        ),
         None,
     )
 

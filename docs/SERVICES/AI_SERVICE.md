@@ -47,8 +47,8 @@ Ghi chú quan trọng:
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
 - `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (mặc định OpenRouter/`OPENROUTER_ASSISTANT_MODEL`, chọn qua `ASSISTANT_PROVIDER` — có thể là `ollama`/`ASSISTANT_MODEL` để chạy fully-offline) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. `ASSISTANT_PROVIDER` chọn đúng 1 provider — không tự động fallback sang provider khác nếu provider đó lỗi.
 - **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
-- **Semantic FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. Trước đây nhánh này không truy xuất gì cả; nay `retrieval.py` gọi `faq_retrieval.find_relevant()` để tìm các mục FAQ tĩnh (`faq_data.FAQ_ENTRIES`) gần nghĩa nhất bằng cosine similarity trên embedding Ollama, rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Vector được cache ra `.faq_embeddings_cache.json` (khóa theo hash nội dung FAQ, tự dựng lại khi FAQ đổi). Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
-- **Hybrid book search**: tool `search_books` của `/assistant` chấm điểm mỗi cuốn sách theo hai tín hiệu rồi lấy trung bình — trùng từ khóa (đảm bảo ISBN/tên sách khớp chính xác vẫn thắng) và cosine similarity trên embedding của `title + author + category + description + summary_vi` (`book_index.py`). Nhờ vậy câu hỏi theo chủ đề tìm được sách dù diễn đạt khác từ ngữ trong mô tả. Index được cache ra `.book_index_cache.json`, khóa theo hash gồm cả nội dung catalog lẫn tên model embedding — catalog đổi hoặc đổi model thì index tự dựng lại. Ollama lỗi → chỉ còn phần từ khóa, đúng bằng hành vi trước đây.
+- **Semantic FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
+- **Hybrid book search**: tool `search_books` của `/assistant` truy vấn corpus `BOOK_METADATA` trong pgvector theo hai tín hiệu — semantic (cosine similarity trên embedding của `title + author + category + description + summary_vi`, `book_index.py`) và keyword (Postgres full-text, bỏ dấu bằng `unaccent`) — rồi hợp nhất bằng Reciprocal Rank Fusion (`fusion.py`, không còn trung bình cộng hai thang điểm khác bản chất). Riêng ISBN được xử lý TRƯỚC RRF bằng một short-circuit khớp chính xác (so khớp isbn đã chuẩn hoá — bỏ dấu gạch ngang/khoảng trắng — dưới dạng SUBSTRING của câu hỏi đã chuẩn hoá, không đòi hỏi câu hỏi chỉ gồm mỗi ISBN) vì ISBN cố ý không nằm trong nội dung embed/tsv (một mã định danh có cấu trúc, không phải ngôn ngữ tự nhiên). Ollama lỗi → chỉ còn tín hiệu keyword, đúng tinh thần hành vi trước đây (degrade, không lỗi).
 - **Evidence-first**: `evidence` được sinh best-effort từ kết quả tool (xem `evidence.py`) — nếu tool trả `{"error": ...}` hoặc hình dạng dữ liệu không khớp, extractor tương ứng chỉ trả `[]`, không lỗi.
 - **AI Action Center + audit log**: `agent_store.py` không còn lưu action trong RAM — mỗi pending action được lưu trong bảng `ai_pending_actions` (Postgres, DB `ai_db`), và mọi bước trong vòng đời (CREATED/CONFIRMED/EXECUTED/CANCELLED/FAILED/EXPIRED) được ghi vào `ai_action_audit_logs`. Danh sách/chi tiết xem qua `GET /assistant/actions` và `GET /assistant/actions/{id}`. Denylist hành động nguy hiểm (`agent_actions.DANGEROUS_ACTION_DENYLIST`) không đổi.
 
@@ -61,6 +61,88 @@ Từ bản nâng cấp Action Center + trí nhớ hội thoại, `ai-service` c�
 - **Bảng**: `ai_pending_actions`, `ai_action_audit_logs`, `ai_conversations`, `ai_messages` — chi tiết cột xem `schema.sql`/`db_models.py`.
 - **Biến môi trường**: `DATABASE_URL=postgresql+asyncpg://<user>:<pass>@db:5432/ai_db` (xem `docker-compose.yml`), `AI_DB_NAME` (mặc định `ai_db`, khai báo trong `.env`).
 - **Test**: `test_agent_store.py`/`test_conversation_store.py` chạy trên SQLite in-memory (`aiosqlite`), không cần Postgres thật để test đơn vị.
+
+## Vector store / RAG (pgvector)
+
+Từ Phase A, `search_books` và `faq_retrieval.find_relevant()` (dùng bởi `/chat` và `/assistant`)
+không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_embeddings_cache.json`,
+`faq_data.py` — đã xoá) — cả hai đọc/ghi qua pgvector trong `ai_db`, cùng DB Postgres của service
+(xem mục Database ở trên).
+
+- **Hai corpus** (cột `corpus` trong `ai_documents`/`ai_document_chunks`, hằng số
+  `vector_store.CORPUS_BOOK`/`vector_store.CORPUS_DOC`):
+  - `BOOK_METADATA` — mỗi document là một cuốn sách (`source_id` = book id thật từ
+    `inventory-service`), nội dung là `book_index.book_text()` (title/author/category/
+    description/summary_vi — cố ý không gồm ISBN, xem phần "Hybrid book search" ở trên).
+  - `INTERNAL_DOC` — mỗi document là một file Markdown trong `services/ai-service/corpus/`
+    (`source_id` = tên file không có đuôi `.md`, dòng đầu tiên là câu hỏi/heading, phần còn lại
+    là nội dung trả lời).
+- **Bảng** (`schema.sql`):
+  - `ai_documents(id, corpus, source_id, title, content, content_hash, metadata, updated_at)`
+    — `UNIQUE (corpus, source_id)`, một document logic (một sách hoặc một file corpus).
+  - `ai_document_chunks(id, document_id, corpus, chunk_index, content, content_hash, embedding
+    vector(768), embedding_model, tsv, created_at)` — mỗi chunk có vector embedding riêng (HNSW
+    index, `vector_cosine_ops`) và một cột `tsv` (full-text, GIN index) cho keyword search. Mọi
+    truy vấn semantic đều lọc thêm `embedding_model = <model đang cấu hình>` (AD-3: đổi model thì
+    vector cũ không lẫn vào kết quả mới cho tới khi ingest lại).
+- **Ingestion** (`ingestion.py`, incremental theo `content_hash` từng chunk — nội dung không đổi
+  thì không gọi lại Ollama):
+  - `ingestion.ingest_internal_docs()` — đọc toàn bộ `services/ai-service/corpus/*.md`, chạy tự
+    động ở mỗi lần khởi động service (`main.py`'s `_startup_ingest_corpus`, không phụ thuộc auth,
+    không chặn startup).
+  - `ingestion.ingest_books(books)` — nhận list book dict (shape của `/api/books`) và ingest vào
+    `BOOK_METADATA`. **Không tự chạy được lúc khởi động** — `_startup_ingest_corpus` gọi
+    `/api/books` không kèm token, bị gateway trả 401 nên no-op im lặng (theo dõi ở follow-up
+    `task_5448fb5f`). Cách chạy thủ công với JWT thật:
+    ```bash
+    docker compose -p smartbook-system exec ai-service python -c "
+    import asyncio, httpx, ingestion
+    async def main():
+        token = '<JWT tu POST /auth/login>'
+        async with httpx.AsyncClient() as c:
+            books = (await c.get('http://api-gateway:3000/api/books',
+                headers={'Authorization': f'Bearer {token}'})).json()
+        print(await ingestion.ingest_books(books))
+    asyncio.run(main())
+    "
+    ```
+  - Kiểm tra số chunk theo corpus: `docker compose -p smartbook-system exec db psql -U <user> -d
+    ai_db -c "SELECT corpus, count(*) FROM ai_document_chunks GROUP BY corpus;"`.
+- **Biến môi trường mới**: xem `INGEST_MAX_CHUNK_CHARS`, `ENABLE_CORPUS_INGEST` trong bảng dưới.
+
+### Kết quả eval RAG: baseline (trước Phase A) so với sau Phase A
+
+Đo bằng `eval/eval_rag.py` trên cùng bộ 100 câu (`eval/rag_dataset.json`, 60 `BOOK_METADATA` + 40
+`INTERNAL_DOC`) chạy thẳng vào tầng retrieval (`assistant_tools.search_books`/
+`faq_retrieval.find_relevant`), không qua HTTP. Baseline đo trước khi đổi sang pgvector
+(`eval/reports/rag_baseline_20260916_072855.md`); "sau" đo sau khi toàn bộ Phase A hoàn tất
+(`eval/reports/rag_after_20260917_025751.md`).
+
+| Metric | Baseline (trước) | Sau Phase A | Chênh lệch |
+|---|---|---|---|
+| Recall@1 | 0.5136 | 0.5736 | +0.0600 |
+| Recall@3 | 0.6331 | 0.7147 | +0.0816 |
+| Recall@5 | 0.7086 | 0.7267 | +0.0181 |
+| MRR | 0.601 | 0.6667 | +0.0657 |
+| Case không đáp án trả đúng rỗng | 1/10 | 2/10 | +1 |
+
+**Tiêu chí chấp nhận (Recall@5 không thấp hơn baseline): ĐẠT** — 0.7267 ≥ 0.7086.
+
+Theo corpus (sau Phase A): `BOOK_METADATA` (60 case) R@1 0.5394, R@3 0.6912, R@5 0.7111, MRR
+0.6611; `INTERNAL_DOC` (40 case) R@1 0.625, R@3 0.75, R@5 0.75, MRR 0.675.
+
+Lần đo đầu tiên sau khi hoàn tất Task 7–9 (trước khi phát hiện và sửa bug bên dưới) cho Recall@5
+0.6167 — **thấp hơn** baseline. Điều tra "Case truot" cho thấy gần như toàn bộ phần giảm đến từ
+11/15 case ISBN (`bm-001`…`bm-015`, dạng câu hỏi thật "Tìm sách ISBN `<isbn>`", không phải ISBN
+trần): short-circuit ISBN mới thêm ở Task 8 so khớp CHÍNH XÁC TOÀN BỘ chuỗi câu hỏi đã chuẩn hoá
+với ISBN sách, nên không khớp khi ISBN chỉ là một phần của câu — trong khi cơ chế keyword cũ (bị
+thay thế) từng chấm điểm theo từng token nên vẫn khớp được. Đã sửa: so khớp ISBN sách như một
+SUBSTRING của câu hỏi đã chuẩn hoá (thay vì bằng tuyệt đối cả chuỗi), có ngưỡng độ dài tối thiểu để
+tránh false-positive từ ISBN rỗng/quá ngắn — xem `assistant_tools._score_and_rank_books`,
+`test_book_index.py::test_isbn_match_inside_natural_language_sentence`. Sau khi sửa, Recall@5 tăng
+lên 0.7267 như bảng trên. Các case tụt hạng còn lại sau khi sửa (`bm-023`, `bm-040`, `doc-001`) là
+case ngữ nghĩa khó (diễn đạt lại không trùng từ khoá, một fact đơn lẻ) — không lệch hệ thống, và số
+case cải thiện nhờ pgvector (`bm-038`, `doc-005`, `doc-014`, `doc-021`) nhiều hơn số case tụt mới.
 
 ## Biến môi trường đặc thù
 
@@ -83,6 +165,8 @@ Từ bản nâng cấp Action Center + trí nhớ hội thoại, `ai-service` c�
 | FAQ_TOP_K | 3 | Số mục FAQ tối đa đưa vào context mỗi lượt hỏi |
 | BOOK_SEMANTIC_THRESHOLD | 0.6 | Ngưỡng cosine tối thiểu để một cuốn sách được coi là khớp ngữ nghĩa trong `search_books` |
 | EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |
+| INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
+| ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền lúc khởi động (`ingest_internal_docs`/`ingest_books`) — tắt trong môi trường test e2e không cần semantic |
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
 | OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |
