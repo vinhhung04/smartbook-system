@@ -62,6 +62,27 @@ class FindRelevantTest(unittest.TestCase):
     def test_empty_query_returns_empty(self):
         self.assertEqual(faq_retrieval.find_relevant("   "), [])
 
+    def test_keyword_arm_surfaces_entry_semantic_arm_cannot(self):
+        """I3: INTERNAL_DOC la hybrid, khong con semantic-only.
+
+        Vector cua query khop TUYET DOI entry SAI ("quy-dinh-muon-tra") va la
+        entry duy nhat vuot nguong, nen nhanh semantic mot minh khong bao gio
+        tra ve "phi-phat". Nhung cau hoi trung tung chu voi noi dung cua
+        "phi-phat" ("phi phat ... qua han") va khong token nao cham vao entry
+        kia — chi nhanh keyword dua duoc no vao ket qua.
+        """
+        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+            matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.5)
+        self.assertIn("phi-phat", [match.entry["id"] for match in matches])
+
+    def test_keyword_arm_alone_matches_when_semantic_below_threshold(self):
+        """Nguong ap len diem cosine cua nhanh semantic TRUOC fusion, khong ap
+        len diem RRF: semantic bi loai sach ma keyword van khop thi van co
+        ket qua (cung quy uoc voi gate keyword ben _score_and_rank_books)."""
+        with mock.patch.object(embeddings, "embed_text", return_value=[0.6, 0.8]):
+            matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.99)
+        self.assertEqual([match.entry["id"] for match in matches], ["phi-phat"])
+
 
 if __name__ == "__main__":
     unittest.main()

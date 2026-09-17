@@ -10,6 +10,7 @@ import json
 import logging
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import db
 import embeddings
@@ -25,6 +26,23 @@ def _to_vector_literal(values: list[float]) -> str:
 
 
 class PgVectorStore:
+    def __init__(self, engine: AsyncEngine | None = None) -> None:
+        """engine=None (mac dinh) -> dung db.engine dung chung, y het truoc day.
+
+        Truyen engine RIENG khi caller chay tren mot event loop khac voi loop
+        cua service (vd faq_retrieval.find_relevant chay trong worker thread va
+        tu mo loop moi moi lan goi): ket noi asyncpg bi rang buoc voi loop da
+        tao ra no, nen dung chung mot pool giua hai loop se hong — va dispose()
+        pool dung chung tu loop phu con keo sap ca ket noi cua loop chinh.
+        """
+        self._session_factory = (
+            async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+            if engine is not None else None
+        )
+
+    def _session(self) -> AsyncSession:
+        return self._session_factory() if self._session_factory is not None else db.get_session()
+
     async def upsert_document(
         self, corpus: str, source_id: str, title: str | None,
         content: str, content_hash: str, metadata: dict,
@@ -40,7 +58,7 @@ class PgVectorStore:
                     updated_at = now()
             RETURNING id
         """)
-        async with db.get_session() as session:
+        async with self._session() as session:
             result = await session.execute(sql, {
                 "corpus": corpus, "source_id": source_id, "title": title,
                 "content": content, "content_hash": content_hash,
@@ -69,7 +87,7 @@ class PgVectorStore:
                     embedding_model = EXCLUDED.embedding_model,
                     tsv = EXCLUDED.tsv
         """)
-        async with db.get_session() as session:
+        async with self._session() as session:
             for chunk in chunks:
                 await session.execute(sql, {
                     "document_id": chunk.document_id, "corpus": chunk.corpus,
@@ -85,13 +103,13 @@ class PgVectorStore:
             SELECT chunk_index, content_hash FROM ai_document_chunks
             WHERE document_id = CAST(:document_id AS UUID)
         """)
-        async with db.get_session() as session:
+        async with self._session() as session:
             rows = (await session.execute(sql, {"document_id": document_id})).all()
         return {int(row[0]): str(row[1]) for row in rows}
 
     async def _search(self, sql: text, params: dict) -> list[Hit]:
         try:
-            async with db.get_session() as session:
+            async with self._session() as session:
                 rows = (await session.execute(sql, params)).mappings().all()
         except Exception as exc:
             # Khong raise: caller phai giu duoc hanh vi cu (keyword-only, hoac
