@@ -114,6 +114,46 @@ class OllamaEmbedder:
             return None
 
 
+class CloudEmbedder:
+    """Fallback qua OpenRouter khi Ollama chet. `dimensions` LUON gui trong
+    request de cat vector ve dung 768 chieu, khop cot vector(768) da co —
+    khong duoc bo, model qwen3-embedding-8b mac dinh tra 4096 chieu."""
+
+    name = "openrouter"
+
+    def __init__(
+        self, api_key: str, base_url: str, model: str, dimensions: int, timeout: float,
+    ) -> None:
+        self._api_key = api_key
+        self._base_url = (base_url or "https://openrouter.ai/api/v1").rstrip("/")
+        self._model = model
+        self._dimensions = dimensions
+        self._timeout = timeout
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]] | None:
+        if not texts:
+            return []
+        import httpx
+
+        try:
+            with httpx.Client(timeout=self._timeout) as client:
+                response = client.post(
+                    f"{self._base_url}/embeddings",
+                    headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                    json={"model": self._model, "input": texts, "dimensions": self._dimensions},
+                )
+                response.raise_for_status()
+                data = response.json()
+            vectors = [item["embedding"] for item in data.get("data", [])]
+            if len(vectors) != len(texts):
+                logger.warning("embeddings: openrouter expected %d vectors, got %d", len(texts), len(vectors))
+                return None
+            return vectors
+        except Exception as exc:
+            logger.warning("embeddings: openrouter embedding failed: %s", type(exc).__name__)
+            return None
+
+
 def embed_batch(texts: list[str], client: ollama.Client | None = None) -> list[list[float]] | None:
     """Embed multiple strings in one Ollama call. Returns None on any failure —
     callers must degrade gracefully, never raise."""

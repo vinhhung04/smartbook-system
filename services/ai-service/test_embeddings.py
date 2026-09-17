@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import embeddings
 
@@ -120,6 +121,54 @@ class OllamaEmbedderTest(unittest.TestCase):
                 return FakeEmbedResponse(embeddings=[[1.0, 0.0]])  # 1 vector cho 2 text
         embedder = embeddings.OllamaEmbedder()
         self.assertIsNone(embedder.embed_batch(["a", "b"], client=ShortResponseClient()))
+
+
+class CloudEmbedderTest(unittest.TestCase):
+    def _embedder(self):
+        return embeddings.CloudEmbedder(
+            api_key="test-key", base_url="https://openrouter.ai/api/v1",
+            model="qwen/qwen3-embedding-8b", dimensions=768, timeout=10,
+        )
+
+    def test_sends_dimensions_param_and_parses_response(self):
+        fake_response = mock.Mock()
+        fake_response.raise_for_status = mock.Mock()
+        fake_response.json.return_value = {
+            "data": [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]
+        }
+        fake_client = mock.MagicMock()
+        fake_client.__enter__.return_value = fake_client
+        fake_client.post.return_value = fake_response
+
+        with mock.patch("httpx.Client", return_value=fake_client):
+            result = self._embedder().embed_batch(["a", "b"])
+
+        self.assertEqual(result, [[0.1, 0.2], [0.3, 0.4]])
+        call_kwargs = fake_client.post.call_args.kwargs
+        self.assertEqual(call_kwargs["json"]["dimensions"], 768)
+        self.assertEqual(call_kwargs["json"]["model"], "qwen/qwen3-embedding-8b")
+        self.assertEqual(call_kwargs["json"]["input"], ["a", "b"])
+        self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer test-key")
+
+    def test_empty_input_returns_empty_list(self):
+        self.assertEqual(self._embedder().embed_batch([]), [])
+
+    def test_http_error_returns_none_not_raise(self):
+        fake_client = mock.MagicMock()
+        fake_client.__enter__.return_value = fake_client
+        fake_client.post.side_effect = ConnectionError("network down")
+        with mock.patch("httpx.Client", return_value=fake_client):
+            self.assertIsNone(self._embedder().embed_batch(["a"]))
+
+    def test_mismatched_vector_count_returns_none(self):
+        fake_response = mock.Mock()
+        fake_response.raise_for_status = mock.Mock()
+        fake_response.json.return_value = {"data": [{"embedding": [0.1, 0.2]}]}  # 1 cho 2 text
+        fake_client = mock.MagicMock()
+        fake_client.__enter__.return_value = fake_client
+        fake_client.post.return_value = fake_response
+        with mock.patch("httpx.Client", return_value=fake_client):
+            self.assertIsNone(self._embedder().embed_batch(["a", "b"]))
 
 
 if __name__ == "__main__":
