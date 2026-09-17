@@ -95,8 +95,15 @@ async def _ingest_one(
     if not todo:
         return 0, len(texts)
 
-    vectors = await asyncio.to_thread(embeddings.embed_batch, [texts[i] for i in todo])
-    if vectors is None:
+    # allow_cloud_fallback=False: duong GHI chi dung Ollama. Chunk embed bang
+    # model cloud se bi tag embedding_model khac, trong khi content_hash van
+    # tinh theo hang so EMBED_MODEL — lan ingest sau thay hash trung nen bo qua,
+    # va vector cloud khong bao gio duoc thay -> tai lieu mat hut khoi semantic
+    # search vinh vien. Bo qua tai lieu (nhu truoc Phase B) thi lan ingest sau,
+    # khi Ollama khoe lai, se nhat no len sach se.
+    embed_result = await asyncio.to_thread(
+        embeddings.embed_batch, [texts[i] for i in todo], allow_cloud_fallback=False)
+    if embed_result is None:
         logger.warning("ingestion: embed that bai cho %s/%s, bo qua", corpus, source_id)
         return 0, len(texts)
 
@@ -104,9 +111,9 @@ async def _ingest_one(
         Chunk(
             document_id=document_id, corpus=corpus, chunk_index=index,
             content=texts[index], content_hash=chunk_hash(texts[index]),
-            embedding=vector, embedding_model=embeddings.EMBED_MODEL,
+            embedding=vector, embedding_model=embed_result.model,
         )
-        for index, vector in zip(todo, vectors)
+        for index, vector in zip(todo, embed_result.vectors)
     ])
     return len(todo), len(texts) - len(todo)
 

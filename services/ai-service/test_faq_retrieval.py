@@ -35,14 +35,14 @@ class FindRelevantTest(unittest.TestCase):
         vector_store.set_store(None)
 
     def test_returns_match_above_threshold(self):
-        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
             matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
         self.assertTrue(matches)
         self.assertEqual(matches[0].entry["id"], "quy-dinh-muon-tra")
 
     def test_entry_shape_unchanged(self):
         """AD-5: retrieval.py doc entry['question'] va entry['answer']."""
-        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
             matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
         self.assertIn("id", matches[0].entry)
         self.assertIn("question", matches[0].entry)
@@ -52,7 +52,7 @@ class FindRelevantTest(unittest.TestCase):
         # [0.6, 0.8] is a real unit vector giving cosine 0.6 against the seeded
         # [1.0, 0.0] entry — a genuine similarity that still clears no bar this
         # high, unlike an exact-match vector which would always score 1.0.
-        with mock.patch.object(embeddings, "embed_text", return_value=[0.6, 0.8]):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
             self.assertEqual(faq_retrieval.find_relevant("bat ky", threshold=0.99), [])
 
     def test_embedding_unavailable_returns_empty(self):
@@ -71,7 +71,7 @@ class FindRelevantTest(unittest.TestCase):
         "phi-phat" ("phi phat ... qua han") va khong token nao cham vao entry
         kia — chi nhanh keyword dua duoc no vao ket qua.
         """
-        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
             matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.5)
         self.assertIn("phi-phat", [match.entry["id"] for match in matches])
 
@@ -79,7 +79,7 @@ class FindRelevantTest(unittest.TestCase):
         """Nguong ap len diem cosine cua nhanh semantic TRUOC fusion, khong ap
         len diem RRF: semantic bi loai sach ma keyword van khop thi van co
         ket qua (cung quy uoc voi gate keyword ben _score_and_rank_books)."""
-        with mock.patch.object(embeddings, "embed_text", return_value=[0.6, 0.8]):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
             matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.99)
         self.assertEqual([match.entry["id"] for match in matches], ["phi-phat"])
 

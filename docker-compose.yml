@@ -359,6 +359,11 @@ services:
       # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
       # from ASSISTANT_MODEL/SUMMARY_MODEL since it is a dedicated embedding model, not a chat model.
       - FAQ_EMBED_MODEL=${FAQ_EMBED_MODEL:-nomic-embed-text}
+      - EMBED_BREAKER_THRESHOLD=${EMBED_BREAKER_THRESHOLD:-3}
+      - EMBED_BREAKER_COOLDOWN_SECONDS=${EMBED_BREAKER_COOLDOWN_SECONDS:-60}
+      - CLOUD_EMBED_MODEL=${CLOUD_EMBED_MODEL:-qwen/qwen3-embedding-8b}
+      - CLOUD_EMBED_DIMENSIONS=${CLOUD_EMBED_DIMENSIONS:-768}
+      - CLOUD_EMBED_TIMEOUT_SECONDS=${CLOUD_EMBED_TIMEOUT_SECONDS:-30}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}

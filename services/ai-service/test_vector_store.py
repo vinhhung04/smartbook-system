@@ -39,19 +39,27 @@ class InMemoryVectorStoreTest(unittest.TestCase):
 
     def test_search_semantic_ranks_by_cosine(self):
         self._seed()
-        hits = run(self.store.search_semantic(vector_store.CORPUS_BOOK, [1.0, 0.0], k=2))
+        hits = run(self.store.search_semantic(vector_store.CORPUS_BOOK, [1.0, 0.0], k=2, embedding_model="m"))
         self.assertEqual([hit.source_id for hit in hits], ["b1", "b2"])
         self.assertAlmostEqual(hits[0].score, 1.0)
 
     def test_search_semantic_restricted_to_source_ids(self):
         self._seed()
         hits = run(self.store.search_semantic(
-            vector_store.CORPUS_BOOK, [1.0, 0.0], k=5, source_ids=["b2"]))
+            vector_store.CORPUS_BOOK, [1.0, 0.0], k=5, embedding_model="m", source_ids=["b2"]))
         self.assertEqual([hit.source_id for hit in hits], ["b2"])
 
     def test_search_semantic_isolates_corpus(self):
         self._seed()
-        hits = run(self.store.search_semantic(vector_store.CORPUS_DOC, [1.0, 0.0], k=5))
+        hits = run(self.store.search_semantic(vector_store.CORPUS_DOC, [1.0, 0.0], k=5, embedding_model="m"))
+        self.assertEqual(hits, [])
+
+    def test_search_semantic_filters_by_embedding_model(self):
+        """Chunk embed boi model khac phai bi loai — khong duoc tron hai khong
+        gian vector khac nhau (AD-3/AD-7)."""
+        self._seed()  # _seed dung embedding_model="m" mac dinh
+        hits = run(self.store.search_semantic(
+            vector_store.CORPUS_BOOK, [1.0, 0.0], k=5, embedding_model="model-khac"))
         self.assertEqual(hits, [])
 
     def test_search_keyword_matches_tokens(self):
