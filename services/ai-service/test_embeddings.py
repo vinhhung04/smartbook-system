@@ -171,5 +171,66 @@ class CloudEmbedderTest(unittest.TestCase):
             self.assertIsNone(self._embedder().embed_batch(["a", "b"]))
 
 
+class EmbedBatchDispatchTest(unittest.TestCase):
+    def setUp(self):
+        # Moi test bat dau voi mach dong (Ollama), khong ke thua state tu test truoc.
+        embeddings._breaker = embeddings.EmbedCircuitBreaker(
+            threshold=embeddings.EMBED_BREAKER_THRESHOLD,
+            cooldown_seconds=embeddings.EMBED_BREAKER_COOLDOWN_SECONDS,
+        )
+
+    def test_uses_ollama_when_healthy(self):
+        client = FakeOllamaClient({"a": [1.0, 0.0]})
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            result = embeddings.embed_batch(["a"], client=client)
+        self.assertEqual(result.vectors, [[1.0, 0.0]])
+        self.assertEqual(result.provider, "ollama")
+        self.assertEqual(result.model, embeddings.EMBED_MODEL)
+        fake_cloud.embed_batch.assert_not_called()
+
+    def test_falls_back_to_cloud_when_ollama_fails(self):
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            fake_cloud.embed_batch.return_value = [[0.5, 0.5]]
+            result = embeddings.embed_batch(["a"], client=FailingOllamaClient())
+        self.assertEqual(result.vectors, [[0.5, 0.5]])
+        self.assertEqual(result.provider, "openrouter")
+        self.assertEqual(result.model, embeddings.CLOUD_EMBED_MODEL)
+
+    def test_breaker_opens_after_threshold_and_skips_ollama(self):
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            fake_cloud.embed_batch.return_value = [[0.0, 0.0]]
+            failing = FailingOllamaClient()
+            for _ in range(embeddings.EMBED_BREAKER_THRESHOLD):
+                embeddings.embed_batch(["a"], client=failing)
+            # Mach da mo — lan goi tiep theo KHONG duoc dung client (se raise
+            # neu bi goi, chung minh Ollama bi bo qua hoan toan).
+            class RaisingIfCalledClient:
+                def embed(self, model, input):
+                    raise AssertionError("Ollama khong duoc goi khi mach dang mo")
+            embeddings.embed_batch(["a"], client=RaisingIfCalledClient())
+
+    def test_both_providers_fail_returns_none(self):
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            fake_cloud.embed_batch.return_value = None
+            self.assertIsNone(embeddings.embed_batch(["a"], client=FailingOllamaClient()))
+
+    def test_empty_input_returns_empty_result_without_calling_any_provider(self):
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            result = embeddings.embed_batch([], client=FakeOllamaClient({}))
+        self.assertEqual(result.vectors, [])
+        fake_cloud.embed_batch.assert_not_called()
+
+    def test_embed_text_wraps_single_vector(self):
+        client = FakeOllamaClient({"a": [1.0, 0.0]})
+        result = embeddings.embed_text("a", client=client)
+        self.assertEqual(result.vector, [1.0, 0.0])
+        self.assertEqual(result.provider, "ollama")
+
+    def test_embed_text_returns_none_when_both_fail(self):
+        with mock.patch.object(embeddings, "_cloud_embedder") as fake_cloud:
+            fake_cloud.embed_batch.return_value = None
+            self.assertIsNone(embeddings.embed_text("a", client=FailingOllamaClient()))
+
+
 if __name__ == "__main__":
     unittest.main()

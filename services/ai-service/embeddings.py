@@ -1,9 +1,10 @@
-"""Shared Ollama embedding + on-disk vector cache primitives.
+"""Embedding co circuit breaker: Ollama la provider chinh (chay offline duoc),
+OpenRouter (qwen3-embedding-8b) la fallback khi Ollama loi lien tiep.
 
-Used by faq_retrieval.py (static FAQ set) and book_index.py (catalog search).
-Every function here degrades gracefully: embedding failures return None rather
-than raising, because both callers must fall back to non-semantic behavior
-instead of failing the user's request.
+Dung boi book_index.py (tim sach), faq_retrieval.py (tim tai lieu noi bo),
+ingestion.py (dong bo vector store). Moi ham o day khong bao gio raise —
+ca hai provider loi tra None, caller phai tu degrade (vd bo tin hieu
+semantic, chi con keyword search).
 """
 from __future__ import annotations
 
@@ -90,6 +91,11 @@ EMBED_MODEL = os.getenv("EMBED_MODEL") or os.getenv("FAQ_EMBED_MODEL", "nomic-em
 # after a catalog change could block an assistant turn indefinitely on a
 # CPU-only Ollama; a timeout just means no semantic signal for that turn.
 EMBED_TIMEOUT_SECONDS = float(os.getenv("EMBED_TIMEOUT_SECONDS", "30"))
+CLOUD_EMBED_MODEL = os.getenv("CLOUD_EMBED_MODEL", "qwen/qwen3-embedding-8b")
+CLOUD_EMBED_DIMENSIONS = int(os.getenv("CLOUD_EMBED_DIMENSIONS", "768"))
+CLOUD_EMBED_TIMEOUT_SECONDS = float(os.getenv("CLOUD_EMBED_TIMEOUT_SECONDS", "30"))
+EMBED_BREAKER_THRESHOLD = int(os.getenv("EMBED_BREAKER_THRESHOLD", "3"))
+EMBED_BREAKER_COOLDOWN_SECONDS = float(os.getenv("EMBED_BREAKER_COOLDOWN_SECONDS", "60"))
 
 
 class OllamaEmbedder:
@@ -154,29 +160,42 @@ class CloudEmbedder:
             return None
 
 
-def embed_batch(texts: list[str], client: ollama.Client | None = None) -> list[list[float]] | None:
-    """Embed multiple strings in one Ollama call. Returns None on any failure —
-    callers must degrade gracefully, never raise."""
+_OLLAMA_EMBEDDER = OllamaEmbedder()
+# Instance nay duoc mock trong test (mock.patch.object(embeddings, "_cloud_embedder"))
+# thay vi mock ham/HTTP truc tiep — de test khong phu thuoc httpx.
+_cloud_embedder = CloudEmbedder(
+    api_key=os.getenv("OPENROUTER_API_KEY", ""),
+    base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+    model=CLOUD_EMBED_MODEL, dimensions=CLOUD_EMBED_DIMENSIONS, timeout=CLOUD_EMBED_TIMEOUT_SECONDS,
+)
+_breaker = EmbedCircuitBreaker(threshold=EMBED_BREAKER_THRESHOLD, cooldown_seconds=EMBED_BREAKER_COOLDOWN_SECONDS)
+
+
+def embed_batch(texts: list[str], client: "ollama.Client | None" = None) -> BatchEmbedResult | None:
+    """Dieu phoi qua breaker: Ollama khi mach dong, cloud khi mach mo hoac
+    Ollama vua that bai. Khong bao gio raise — ca hai provider loi tra None,
+    giu dung hop dong cu."""
     if not texts:
-        return []
-    try:
-        active_client = client or ollama.Client(host=OLLAMA_HOST, timeout=EMBED_TIMEOUT_SECONDS)
-        response = active_client.embed(model=EMBED_MODEL, input=texts)
-        vectors = response.embeddings
-        if len(vectors) != len(texts):
-            logger.warning("embeddings: expected %d vectors, got %d", len(texts), len(vectors))
-            return None
-        return [list(vector) for vector in vectors]
-    except Exception as exc:
-        logger.warning("embeddings: embedding failed: %s", type(exc).__name__)
-        return None
+        return BatchEmbedResult(vectors=[], model=EMBED_MODEL, provider="none")
+
+    if _breaker.should_try_primary():
+        vectors = _OLLAMA_EMBEDDER.embed_batch(texts, client=client)
+        if vectors is not None:
+            _breaker.record_success()
+            return BatchEmbedResult(vectors=vectors, model=EMBED_MODEL, provider="ollama")
+        _breaker.record_failure()
+
+    vectors = _cloud_embedder.embed_batch(texts)
+    if vectors is not None:
+        return BatchEmbedResult(vectors=vectors, model=CLOUD_EMBED_MODEL, provider="openrouter")
+    return None
 
 
-def embed_text(text: str, client: ollama.Client | None = None) -> list[float] | None:
-    vectors = embed_batch([text], client=client)
-    if not vectors:
+def embed_text(text: str, client: "ollama.Client | None" = None) -> EmbedResult | None:
+    result = embed_batch([text], client=client)
+    if not result or not result.vectors:
         return None
-    return vectors[0]
+    return EmbedResult(vector=result.vectors[0], model=result.model, provider=result.provider)
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
