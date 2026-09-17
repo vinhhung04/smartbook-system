@@ -47,7 +47,7 @@ Ghi chú quan trọng:
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
 - `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (mặc định OpenRouter/`OPENROUTER_ASSISTANT_MODEL`, chọn qua `ASSISTANT_PROVIDER` — có thể là `ollama`/`ASSISTANT_MODEL` để chạy fully-offline) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. `ASSISTANT_PROVIDER` chọn đúng 1 provider — không tự động fallback sang provider khác nếu provider đó lỗi.
 - **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
-- **Semantic FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
+- **Hybrid FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON) theo hai nhánh như `search_books`: semantic (cosine, phải vượt `FAQ_MATCH_THRESHOLD` mới được tính) và keyword (Postgres full-text bỏ dấu — bắt được câu hỏi gần trùng từng chữ với heading của FAQ mà vector một mình bỏ lỡ), hợp nhất bằng RRF (`fusion.py`), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
 - **Hybrid book search**: tool `search_books` của `/assistant` truy vấn corpus `BOOK_METADATA` trong pgvector theo hai tín hiệu — semantic (cosine similarity trên embedding của `title + author + category + description + summary_vi`, `book_index.py`) và keyword (Postgres full-text, bỏ dấu bằng `unaccent`) — rồi hợp nhất bằng Reciprocal Rank Fusion (`fusion.py`, không còn trung bình cộng hai thang điểm khác bản chất). Riêng ISBN được xử lý TRƯỚC RRF bằng một short-circuit khớp chính xác (so khớp isbn đã chuẩn hoá — bỏ dấu gạch ngang/khoảng trắng — dưới dạng SUBSTRING của câu hỏi đã chuẩn hoá, không đòi hỏi câu hỏi chỉ gồm mỗi ISBN) vì ISBN cố ý không nằm trong nội dung embed/tsv (một mã định danh có cấu trúc, không phải ngôn ngữ tự nhiên). Ollama lỗi → chỉ còn tín hiệu keyword, đúng tinh thần hành vi trước đây (degrade, không lỗi).
 - **Evidence-first**: `evidence` được sinh best-effort từ kết quả tool (xem `evidence.py`) — nếu tool trả `{"error": ...}` hoặc hình dạng dữ liệu không khớp, extractor tương ứng chỉ trả `[]`, không lỗi.
 - **AI Action Center + audit log**: `agent_store.py` không còn lưu action trong RAM — mỗi pending action được lưu trong bảng `ai_pending_actions` (Postgres, DB `ai_db`), và mọi bước trong vòng đời (CREATED/CONFIRMED/EXECUTED/CANCELLED/FAILED/EXPIRED) được ghi vào `ai_action_audit_logs`. Danh sách/chi tiết xem qua `GET /assistant/actions` và `GET /assistant/actions/{id}`. Denylist hành động nguy hiểm (`agent_actions.DANGEROUS_ACTION_DENYLIST`) không đổi.
@@ -110,26 +110,53 @@ không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_em
     ai_db -c "SELECT corpus, count(*) FROM ai_document_chunks GROUP BY corpus;"`.
 - **Biến môi trường mới**: xem `INGEST_MAX_CHUNK_CHARS`, `ENABLE_CORPUS_INGEST` trong bảng dưới.
 
+### Upgrade notes: đổi image Postgres sang `pgvector/pgvector:pg15`
+
+Phase A đổi image của service `db` trong `docker-compose.yml` từ `postgres:15-alpine` sang
+`pgvector/pgvector:pg15` để có extension `vector`. Hai image này **khác thư viện C**: Alpine dùng
+musl, `pgvector/pgvector:pg15` dựa trên Debian nên dùng glibc. Collation của kiểu `text` do thư
+viện C cung cấp, nên đổi provider bên dưới một **data directory đã tồn tại** có thể làm các btree
+index phụ thuộc collation (và các unique constraint dựa trên chúng) lệch âm thầm: index tưởng là
+sorted theo thứ tự cũ trong khi Postgres mới so sánh theo thứ tự mới → lookup trượt, unique
+constraint không còn chặn được trùng. Volume `postgres_data` ở đây dùng chung cho cả bốn database
+`inventory_db`, `auth_db`, `borrow_db`, `ai_db`, và cả bốn đều có unique constraint trên cột text
+(email, ISBN, slug…), nên rủi ro không chỉ nằm ở `ai_db`.
+
+Khi nâng cấp một deployment **đã có dữ liệu**, sau khi đổi image phải reindex từng database:
+
+```bash
+for db_name in inventory_db auth_db borrow_db ai_db; do
+  docker compose -p smartbook-system exec db psql -U <user> -d "$db_name" -c "REINDEX DATABASE $db_name;"
+done
+```
+
+Nếu chấp nhận mất dữ liệu (môi trường dev, seed lại được), cách thay thế là dựng mới hoàn toàn:
+`docker compose -p smartbook-system down -v` rồi `up -d` và seed lại. Deployment mới tinh (volume
+chưa từng được `postgres:15-alpine` khởi tạo) không bị ảnh hưởng và không cần làm gì.
+
 ### Kết quả eval RAG: baseline (trước Phase A) so với sau Phase A
 
 Đo bằng `eval/eval_rag.py` trên cùng bộ 100 câu (`eval/rag_dataset.json`, 60 `BOOK_METADATA` + 40
 `INTERNAL_DOC`) chạy thẳng vào tầng retrieval (`assistant_tools.search_books`/
 `faq_retrieval.find_relevant`), không qua HTTP. Baseline đo trước khi đổi sang pgvector
-(`eval/reports/rag_baseline_20260916_072855.md`); "sau" đo sau khi toàn bộ Phase A hoàn tất
-(`eval/reports/rag_after_20260917_025751.md`).
+(`eval/reports/rag_baseline_20260916_072855.md`); "sau Phase A" đo sau khi 10 task hoàn tất
+(`eval/reports/rag_after_20260917_025751.md`); "sau fix wave" đo lại sau đợt sửa của review cuối
+nhánh (`eval/reports/rag_final_fixes_20260917_061603.md`).
 
-| Metric | Baseline (trước) | Sau Phase A | Chênh lệch |
-|---|---|---|---|
-| Recall@1 | 0.5136 | 0.5736 | +0.0600 |
-| Recall@3 | 0.6331 | 0.7147 | +0.0816 |
-| Recall@5 | 0.7086 | 0.7267 | +0.0181 |
-| MRR | 0.601 | 0.6667 | +0.0657 |
-| Case không đáp án trả đúng rỗng | 1/10 | 2/10 | +1 |
+| Metric | Baseline (trước) | Sau Phase A | Sau fix wave | Chênh lệch vs baseline |
+|---|---|---|---|---|
+| Recall@1 | 0.5136 | 0.5736 | 0.5836 | +0.0700 |
+| Recall@3 | 0.6331 | 0.7147 | 0.7247 | +0.0916 |
+| Recall@5 | 0.7086 | 0.7267 | 0.7367 | +0.0281 |
+| MRR | 0.601 | 0.6667 | 0.6767 | +0.0757 |
+| Case không đáp án trả đúng rỗng | 1/10 | 2/10 | 2/10 | +1 |
 
-**Tiêu chí chấp nhận (Recall@5 không thấp hơn baseline): ĐẠT** — 0.7267 ≥ 0.7086.
+**Tiêu chí chấp nhận (Recall@5 không thấp hơn baseline): ĐẠT** — 0.7367 ≥ 0.7086.
 
-Theo corpus (sau Phase A): `BOOK_METADATA` (60 case) R@1 0.5394, R@3 0.6912, R@5 0.7111, MRR
-0.6611; `INTERNAL_DOC` (40 case) R@1 0.625, R@3 0.75, R@5 0.75, MRR 0.675.
+Theo corpus (sau fix wave): `BOOK_METADATA` (60 case) R@1 0.5394, R@3 0.6912, R@5 0.7111, MRR
+0.6611 (không đổi so với "sau Phase A" — đợt sửa không chạm vào thứ tự xếp hạng phía sách);
+`INTERNAL_DOC` (40 case) R@1 0.65, R@3 0.775, R@5 0.775, MRR 0.7 (mỗi chỉ số +0.025 = đúng 1
+case, `doc-001`, hồi phục nhờ fix engine-per-call của `faq_retrieval`).
 
 Lần đo đầu tiên sau khi hoàn tất Task 7–9 (trước khi phát hiện và sửa bug bên dưới) cho Recall@5
 0.6167 — **thấp hơn** baseline. Điều tra "Case truot" cho thấy gần như toàn bộ phần giảm đến từ

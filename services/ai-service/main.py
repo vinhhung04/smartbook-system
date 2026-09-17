@@ -285,8 +285,18 @@ async def _startup_ingest_corpus() -> None:
         try:
             await ingestion.ingest_internal_docs()
             books = await assistant_tools._get("/api/books", None)
-            if isinstance(books, list):
-                await ingestion.ingest_books(books)
+            stats = await ingestion.ingest_books(books) if isinstance(books, list) else {}
+            if not stats.get("documents"):
+                # Khong im lang cho truong hop no-op: /api/books doi JWT nguoi dung
+                # that va hook nay khong co token nao, nen duong nay HIEN DANG
+                # khong chay duoc — phai nhin thay trong log, khong phai suy ra tu
+                # viec search_books tra ve rong (task_5448fb5f).
+                logger.warning(
+                    "startup ingest: 0 book documents ingested — corpus BOOK_METADATA rong, "
+                    "search_books se khong tra ve ket qua nao cho den khi duoc khac phuc "
+                    "(xem task_5448fb5f); phan hoi /api/books: %s",
+                    books if not isinstance(books, list) else f"{len(books)} muc",
+                )
         except Exception as exc:
             logger.warning("startup ingest that bai: %s", type(exc).__name__)
 
