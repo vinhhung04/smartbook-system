@@ -56,14 +56,15 @@ async def semantic_scores(
     if not query or not books:
         return []
 
-    query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
-    if not query_vector:
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
+    if not embed_result:
         return []
 
     source_ids = [str(book.get("id") or "") for book in books]
     hits = await vector_store.get_store().search_semantic(
-        vector_store.CORPUS_BOOK, query_vector,
-        k=len(source_ids), source_ids=[sid for sid in source_ids if sid],
+        vector_store.CORPUS_BOOK, embed_result.vector, k=len(source_ids),
+        embedding_model=embed_result.model,
+        source_ids=[sid for sid in source_ids if sid],
     )
     if not hits:
         return []

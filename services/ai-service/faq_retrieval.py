@@ -83,8 +83,8 @@ def _per_call_store():
 
 
 async def _find_relevant_async(query: str, top_k: int, threshold: float, client) -> list[FAQMatch]:
-    query_vector = await asyncio.to_thread(embed_text, query, client)
-    if not query_vector:
+    embed_result = await asyncio.to_thread(embed_text, query, client)
+    if not embed_result:
         return []
     store, engine = _per_call_store()
     try:
@@ -95,7 +95,8 @@ async def _find_relevant_async(query: str, top_k: int, threshold: float, client)
         # _score_and_rank_books ben phia sach).
         semantic = [
             hit for hit in await store.search_semantic(
-                vector_store.CORPUS_DOC, query_vector, k=top_k)
+                vector_store.CORPUS_DOC, embed_result.vector, k=top_k,
+                embedding_model=embed_result.model)
             if hit.score >= threshold
         ]
         keyword = await store.search_keyword(vector_store.CORPUS_DOC, query, k=top_k)

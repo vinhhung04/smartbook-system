@@ -83,7 +83,8 @@ class IngestBooksResilienceTest(unittest.TestCase):
         vector_store.set_store(self.store)
         self.embed_patcher = mock.patch.object(
             embeddings, "embed_batch",
-            side_effect=lambda texts, client=None: [[0.1, 0.2] for _ in texts],
+            side_effect=lambda texts, client=None: embeddings.BatchEmbedResult(
+                vectors=[[0.1, 0.2] for _ in texts], model="test-model", provider="ollama"),
         )
         self.embed_patcher.start()
 

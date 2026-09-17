@@ -95,8 +95,8 @@ async def _ingest_one(
     if not todo:
         return 0, len(texts)
 
-    vectors = await asyncio.to_thread(embeddings.embed_batch, [texts[i] for i in todo])
-    if vectors is None:
+    embed_result = await asyncio.to_thread(embeddings.embed_batch, [texts[i] for i in todo])
+    if embed_result is None:
         logger.warning("ingestion: embed that bai cho %s/%s, bo qua", corpus, source_id)
         return 0, len(texts)
 
@@ -104,9 +104,9 @@ async def _ingest_one(
         Chunk(
             document_id=document_id, corpus=corpus, chunk_index=index,
             content=texts[index], content_hash=chunk_hash(texts[index]),
-            embedding=vector, embedding_model=embeddings.EMBED_MODEL,
+            embedding=vector, embedding_model=embed_result.model,
         )
-        for index, vector in zip(todo, vectors)
+        for index, vector in zip(todo, embed_result.vectors)
     ])
     return len(todo), len(texts) - len(todo)
 

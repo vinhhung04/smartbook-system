@@ -216,14 +216,15 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         None,
     )
 
-    query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
     semantic = (
         [
             hit for hit in await store.search_semantic(
-                vector_store.CORPUS_BOOK, query_vector, k=limit * 3, source_ids=source_ids)
+                vector_store.CORPUS_BOOK, embed_result.vector, k=limit * 3,
+                embedding_model=embed_result.model, source_ids=source_ids)
             if hit.score >= book_index.BOOK_SEMANTIC_THRESHOLD
         ]
-        if query_vector else []
+        if embed_result else []
     )
     keyword = await store.search_keyword(
         vector_store.CORPUS_BOOK, query, k=limit * 3, source_ids=source_ids)
