@@ -238,10 +238,30 @@ Hai file cache JSON cũ trở thành rác — xoá, và bỏ code đọc/ghi ch�
 
 **Hệ quả đúng đắn của thiết kế này:** khi breaker mở (Ollama chết), query mới embed bằng cloud model → search chỉ thấy chunk đã ingest bằng cloud model → **rỗng** cho tới khi đủ dữ liệu re-ingest dưới model đó, hoặc Ollama hồi phục. Đây là hành vi **đúng như AD-3 mô tả** ("reindex có kiểm soát, không phải corrupt dần"), không phải bug — nhưng chỉ đúng nếu embedding_model được truyền động, không đọc hằng số tĩnh.
 
+### AD-8: Cloud fallback là cơ chế READ-PATH — không dùng ở write path (ingestion)
+
+**Phát hiện (từ final review Phase B, tái hiện được sống):** AD-7 mô tả đúng cho đường ĐỌC (query), nhưng sai cho đường GHI (ingest) — và hai đường này chạm nhau theo cách phá vỡ chính lời hứa "Ollama hồi phục thì tự sửa" của AD-7.
+
+**Cơ chế lỗi:** `ingestion.py::chunk_hash` cố ý dùng hằng số tĩnh `embeddings.EMBED_MODEL` (quyết định "có cần re-embed theo cấu hình hiện tại", khác câu hỏi "model nào vừa thực sự embed" — xem AD-7). Nhưng `_ingest_one` lại gắn `Chunk.embedding_model = result.model` (model THỰC SỰ dùng — đúng theo AD-7). Khi hai điều này gặp nhau:
+
+1. Ollama chết lúc ingest → chunk được embed qua cloud, lưu với `embedding_model='qwen/qwen3-embedding-8b'`, nhưng `content_hash` vẫn tính theo `nomic-embed-text` (hằng số tĩnh, không đổi).
+2. Ollama hồi phục.
+3. Ingest lại: `plan_chunks` so `content_hash` đã lưu với `chunk_hash(content)` mới — cả hai đều tính theo nomic — **khớp** → chunk bị **bỏ qua**, vector cloud không bao giờ bị thay.
+4. Mọi query sau đó embed qua Ollama, lọc `embedding_model='nomic-embed-text'` → tài liệu đó **biến mất khỏi semantic search vĩnh viễn**, không lỗi, không log.
+
+Tình huống dễ xảy ra nhất: cold start — `docker-compose.yml` khai `ai-service` phụ thuộc `ollama: condition: service_started` (không phải `service_healthy`), và service cố tình lên được cả khi Ollama chưa sẵn sàng. Ingest lúc khởi động chạy qua cloud cho toàn bộ corpus → Ollama ấm lên sau đó → semantic search chết lặng lẽ cho **toàn bộ** corpus.
+
+**Chọn:** cloud fallback chỉ áp dụng ở READ path (mọi query-time call: `book_index.semantic_scores`, `assistant_tools._score_and_rank_books`, `faq_retrieval._find_relevant_async`). WRITE path (`ingestion._ingest_one`) tắt cloud fallback hoàn toàn — `embed_batch`/`embed_text` nhận thêm tham số `allow_cloud_fallback: bool = True`, `ingestion.py` gọi với `allow_cloud_fallback=False`. Khi Ollama lỗi và không được phép dùng cloud, hàm trả `None` như hành vi trước Phase B — tài liệu bị bỏ qua, **tự sửa được** ở lần ingest kế tiếp khi Ollama khỏe (đúng tính chất tự phục hồi mà Phase A/B luôn giữ).
+
+**Không chọn:** làm `plan_chunks` nhận biết model (so cả `embedding_model` đã lưu với model đang hoạt động, coi lệch model là "cần re-embed") — về nguyên tắc là cơ chế reindex có kiểm soát đầy đủ hơn (khớp đúng lời hứa gốc của AD-7), nhưng là thay đổi lớn hơn (đổi `existing_chunk_hashes`'s kiểu trả về, đổi logic `plan_chunks`). Ghi lại như việc cần làm sau — xem mục "Chưa làm, cần theo dõi" cuối AD-8.
+
+**Chưa làm, cần theo dõi:** không có công cụ reindex chủ động cho corpus đã bị lệch model (vd đổi `CLOUD_EMBED_MODEL` sau này, hoặc breaker từng mở một thời gian trước khi AD-8 được áp dụng). Việc sửa duy nhất hiện tại là SQL thủ công. AD-7's "reindex có kiểm soát" vẫn là ý định thiết kế, chưa có cơ chế thực thi.
+
 ### Circuit breaker
 
-- 3 lỗi liên tiếp (`EMBED_BREAKER_THRESHOLD`, mặc định 3) → mở mạch, mọi call tiếp theo đi thẳng cloud trong 60s (`EMBED_BREAKER_COOLDOWN_SECONDS`), sau đó thử lại Ollama bằng một request thăm dò trước khi đóng mạch lại.
-- State máy: `CLOSED` (Ollama) → `OPEN` (cloud, đếm cooldown) → `HALF_OPEN` (1 request thăm dò Ollama) → `CLOSED` nếu thành công / `OPEN` lại nếu vẫn lỗi.
+- 3 lỗi liên tiếp (`EMBED_BREAKER_THRESHOLD`, mặc định 3) → mở mạch. **Cloud chỉ được dùng khi mạch đã thực sự MỞ** (đủ `threshold` lỗi liên tiếp), không phải ngay từ lỗi đầu tiên — một lỗi Ollama đơn lẻ dưới ngưỡng trả `None` (giữ đúng nghĩa "circuit breaker": ngắt khi xác nhận hỏng, không phải cứu hộ mọi lần trục trặc thoáng qua), sau đó thử lại Ollama bằng một request thăm dò khi hết cooldown (`EMBED_BREAKER_COOLDOWN_SECONDS`, mặc định 60) trước khi đóng mạch lại.
+- State máy: `CLOSED` (Ollama, dưới ngưỡng lỗi → không cloud) → `OPEN` (cloud, đếm cooldown) → `HALF_OPEN` (1 request thăm dò Ollama) → `CLOSED` nếu thành công / `OPEN` lại nếu vẫn lỗi.
+- **Nhiều request đồng thời trong cửa sổ HALF_OPEN:** chỉ MỘT request được thăm dò Ollama; các request khác đến cùng lúc phải đi thẳng cloud (hoặc lỗi nếu `allow_cloud_fallback=False`), không được cùng thăm dò — nếu không, một đợt tải đồng thời lúc mạch vừa hết cooldown sẽ cùng dội vào Ollama đang chết, đúng hiệu ứng "thundering herd" mà circuit breaker sinh ra để ngăn. `EmbedCircuitBreaker` cần đồng bộ hoá (lock) vì `embed_batch` chạy qua `asyncio.to_thread` — nhiều lời gọi thực sự chạy song song trên các OS thread khác nhau, không phải nhường nhau như coroutine.
 - Hiện tại mỗi lần Ollama chết là mỗi request tự ăn trọn `EMBED_TIMEOUT_SECONDS=30` — breaker cắt việc này sau lần lỗi thứ 3, không phải chờ timeout mỗi lần.
 
 ### Giữ nguyên
