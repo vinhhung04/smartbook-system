@@ -57,10 +57,19 @@ async def _find_relevant_async(query: str, top_k: int, threshold: float, client)
         return []
     hits = await vector_store.get_store().search_semantic(
         vector_store.CORPUS_DOC, query_vector, k=top_k)
-    return [
+    result = [
         FAQMatch(entry=_entry_from_hit(hit), score=hit.score)
         for hit in hits if hit.score >= threshold
     ]
+    # find_relevant() goi asyncio.run() moi lan — khi store la PgVectorStore,
+    # ket noi asyncpg lay tu db.engine (pool dung chung, song suot process) bi
+    # rang buoc voi vong lap tao ra no. Dispose o CUOI coroutine nay, truoc khi
+    # asyncio.run() dong vong lap, de lan goi ke tiep khong nhan lai ket noi
+    # rang buoc voi mot vong lap da chet (giong fix cua Task 4 trong
+    # test_pgvector_store.py).
+    import db
+    await db.engine.dispose()
+    return result
 
 
 def find_relevant(
