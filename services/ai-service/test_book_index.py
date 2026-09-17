@@ -114,6 +114,27 @@ class HybridSearchTest(unittest.TestCase):
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b3")
 
+    def test_exact_isbn_wins_even_when_vector_signals_are_absent(self):
+        # isbn is deliberately not part of the embedded/tsv content
+        # (book_index.book_text never includes it), so neither semantic nor keyword
+        # search can surface a book by isbn on their own: the mocked embedding here
+        # is aimed at book 2 (unrelated to book 1), and book 1's isbn string never
+        # appears in any book's indexed text either. The isbn short-circuit in
+        # _score_and_rank_books must still put book 1 at rank 1.
+        query = BOOKS[0]["isbn"]
+        with mock.patch.object(embeddings, "embed_text", return_value=[0.0, 1.0]):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
+        self.assertTrue(results)
+        self.assertEqual(results[0]["id"], "b1")
+        self.assertEqual(results[0]["score"], 1.0)
+
+    def test_exact_isbn_match_ignores_hyphens_and_case(self):
+        hyphenated = "978-604-1234-567"  # same digits as BOOKS[0]["isbn"], reformatted
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, hyphenated, 5))
+        self.assertTrue(results)
+        self.assertEqual(results[0]["id"], "b1")
+
     def test_degrades_to_keyword_only_when_embedding_is_unavailable(self):
         with mock.patch.object(embeddings, "embed_text", return_value=None):
             results = run(assistant_tools._score_and_rank_books(BOOKS, "Python", 5))

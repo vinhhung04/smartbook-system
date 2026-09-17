@@ -142,6 +142,12 @@ def _compact_book_with_content(book: dict) -> dict:
     }
 
 
+def _isbn_key(value: Any) -> str:
+    """Chi giu chu/so, in hoa, de so sanh isbn khong phu thuoc dau gach ngang/khoang
+    trang (vd "978-604-..." voi "9786041234567")."""
+    return "".join(ch for ch in str(value or "").strip().upper() if ch.isalnum())
+
+
 async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
     """Hybrid ranking qua vector store, hop nhat bang RRF.
 
@@ -151,6 +157,13 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
 
     Van degrade dung nhu cu: vector store hong thi search_semantic/search_keyword
     tra ve [], RRF cua hai list rong la list rong, ham tra ve [].
+
+    Isbn la mot truong hop rieng, xu ly TRUOC ca RRF: ingestion.py dung
+    book_index.book_text() lam noi dung embed VA lam noi dung tsv full-text —
+    text do co chu y khong gom isbn (mot ma dinh danh co cau truc, khong phai ngon
+    ngu tu nhien; tokenize full-text cho ISBN de vo vi dau gach ngang/dinh dang).
+    Nen ca semantic lan keyword deu khong "thay" isbn. Match isbn chinh xac phai
+    thang tuyet doi — quyen do len hang 1 du tin hieu vector con lai yeu/khong co.
     """
     query = (query or "").strip()
     if not query:
@@ -163,6 +176,12 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
     source_ids = list(by_id.keys())
     store = vector_store.get_store()
 
+    query_isbn = _isbn_key(query)
+    isbn_hit = next(
+        (book for book in valid_books if query_isbn and _isbn_key(book.get("isbn")) == query_isbn),
+        None,
+    )
+
     query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
     semantic = (
         await store.search_semantic(
@@ -173,11 +192,20 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         vector_store.CORPUS_BOOK, query, k=limit * 3, source_ids=source_ids)
 
     fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=limit)
-    return [
+    results = [
         {**_compact_book_with_content(by_id[hit.source_id]), "score": round(hit.score, 3)}
         for hit in fused
         if hit.source_id in by_id
     ]
+
+    if isbn_hit is not None:
+        isbn_id = isbn_hit["id"]
+        results = [result for result in results if result["id"] != isbn_id]
+        # 1.0 la ngoai thang diem RRF thong thuong (luon < 1/RRF_K), de ro rang day la
+        # thang do identity chu khong phai xep hang.
+        results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
+
+    return results[:limit]
 
 
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:
