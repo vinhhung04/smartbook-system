@@ -120,7 +120,11 @@ Embedding cho semantic FAQ + book search (`faq_retrieval.find_relevant()` và `s
 **Circuit breaker có 3 trạng thái:**
 - `CLOSED` (mặc định): sử dụng Ollama, log warning nếu lỗi nhưng không chuyển sang cloud ngay
 - `OPEN`: sau `EMBED_BREAKER_THRESHOLD` lỗi Ollama liên tục (mặc định 3), chuyển hoàn toàn sang OpenRouter để truy vấn tiếp theo
-- `HALF_OPEN`: sau `EMBED_BREAKER_COOLDOWN_SECONDS` giây tắt (mặc định 60), thử lại Ollama một lần; nếu thành công quay về CLOSED, nếu lỗi quay về OPEN
+- `HALF_OPEN`: sau `EMBED_BREAKER_COOLDOWN_SECONDS` giây tắt (mặc định 60), thử lại Ollama **đúng một lần** (caller đầu tiên giành được lần thử đó; mọi caller song song khác đi thẳng sang cloud, tránh cả loạt request cùng đâm vào một Ollama đang chết); nếu thành công quay về CLOSED, nếu lỗi quay về OPEN
+
+**Fallback chỉ áp dụng cho đường ĐỌC (truy vấn).** `ingestion.py` gọi `embeddings.embed_batch(..., allow_cloud_fallback=False)`: Ollama lỗi thì bỏ qua tài liệu đó và ghi log, lần ingest sau (khi Ollama khỏe lại) nhặt nó lên sạch sẽ. Nếu cho phép ghi bằng model cloud, chunk sẽ mang `embedding_model` cloud trong khi `content_hash` vẫn tính theo `FAQ_EMBED_MODEL` (Ollama) — lần ingest sau thấy hash trùng nên bỏ qua, vector cloud không bao giờ được thay, và tài liệu đó biến mất vĩnh viễn khỏi semantic search.
+
+**`OPENROUTER_API_KEY` rỗng = tắt hẳn fallback**: `CloudEmbedder` dừng ngay và log warning, không gửi request nào (không để nội dung truy vấn/tài liệu rời máy trên đường mà operator tin là "chỉ Ollama").
 
 **Quan trọng: `dimensions:768` là bắt buộc** — `ai_document_chunks.embedding` được định nghĩa cố định là `vector(768)` trong schema (xem `schema.sql`). Model OpenRouter `qwen/qwen3-embedding-8b` mặc định trả embedding 4096 chiều, nên **luôn gửi `dimensions: 768`** trong request để model trả 768 chiều trực tiếp (không cần post-process truncate hay project lại, tránh mất mát semantics). Không thay đổi column schema được mà không migrate toàn bộ vector cũ — dùng mặc định 768 trên cả hai provider để không cần việc đó.
 
@@ -203,11 +207,16 @@ case cải thiện nhờ pgvector (`bm-038`, `doc-005`, `doc-014`, `doc-021`) nh
 | OLLAMA_MODEL | llava | Model xử lý ảnh (OCR hóa đơn, xác minh ảnh đóng gói) — luôn qua Ollama, không đổi bởi `LLM_PROVIDER` |
 | SUMMARY_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `LLM_PROVIDER=ollama` (tóm tắt văn bản / `/chat`) |
 | ASSISTANT_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `ASSISTANT_PROVIDER=ollama` (cần hỗ trợ Ollama tool-calling) |
-| FAQ_EMBED_MODEL | nomic-embed-text | Model embedding (luôn qua Ollama) cho semantic FAQ + book search (cần `ollama pull nomic-embed-text`) |
+| FAQ_EMBED_MODEL | nomic-embed-text | Model embedding chính (Ollama) cho semantic FAQ + book search; khi Ollama lỗi liên tục, **chỉ đường đọc (truy vấn)** mới rơi sang OpenRouter `CLOUD_EMBED_MODEL`, còn ingestion luôn chỉ dùng Ollama (cần `ollama pull nomic-embed-text`) |
 | FAQ_MATCH_THRESHOLD | 0.75 | Ngưỡng cosine similarity tối thiểu để coi một mục FAQ là khớp |
 | FAQ_TOP_K | 3 | Số mục FAQ tối đa đưa vào context mỗi lượt hỏi |
 | BOOK_SEMANTIC_THRESHOLD | 0.6 | Ngưỡng cosine tối thiểu để một cuốn sách được coi là khớp ngữ nghĩa trong `search_books` |
 | EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |
+| EMBED_BREAKER_THRESHOLD | 3 | Số lỗi Ollama liên tiếp trước khi mở mạch và chuyển sang cloud |
+| EMBED_BREAKER_COOLDOWN_SECONDS | 60 | Cooldown (giây) khi mạch đang mở, trước khi thử lại Ollama một lần (HALF_OPEN) |
+| CLOUD_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding fallback qua OpenRouter (dùng chung `OPENROUTER_API_KEY`); key rỗng = tắt fallback |
+| CLOUD_EMBED_DIMENSIONS | 768 | Số chiều gửi kèm trong request OpenRouter để khớp cột `vector(768)` trong `ai_document_chunks` — model này mặc định trả 4096 chiều, không được bỏ |
+| CLOUD_EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding qua OpenRouter |
 | INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
 | ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền lúc khởi động (`ingest_internal_docs`/`ingest_books`) — tắt trong môi trường test e2e không cần semantic |
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
