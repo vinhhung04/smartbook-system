@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 
+import book_index
 import embeddings
 import fusion
 import vector_store
@@ -153,6 +154,13 @@ def _isbn_key(value: Any) -> str:
 # query nao (vd "" luon la substring cua moi chuoi).
 _MIN_ISBN_KEY_LEN = 10
 
+# Diem RRF toi da cho HAI bang xep hang: cung mot tai lieu dung hang 1 o ca hai
+# nhanh -> 2/(RRF_K+1). Chia cho no de dua `score` ve lai thang 0..1 ma caller
+# ngoai module nay van doc nhu "do tin cay" (routes_cover_search.py loc o 0.5).
+# Hieu ung calibration co y: mot cu khop chi mot nhanh, hang 1, thanh dung 0.5 —
+# bang san keyword-only cua cong thuc cu (keyword_norm*0.5 + semantic*0.5).
+_RRF_MAX_SCORE = 2.0 / (fusion.RRF_K + 1)
+
 
 async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
     """Hybrid ranking qua vector store, hop nhat bang RRF.
@@ -163,6 +171,17 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
 
     Van degrade dung nhu cu: vector store hong thi search_semantic/search_keyword
     tra ve [], RRF cua hai list rong la list rong, ham tra ve [].
+
+    Cong "hai tin hieu" cu duoc giu nguyen: search_semantic chi tra ve k quyen
+    GAN nhat theo cosine, khong biet "gan" den dau, nen nhanh semantic con phai
+    qua nguong book_index.BOOK_SEMANTIC_THRESHOLD truoc khi vao RRF — neu khong,
+    mot cau hoi khong co dap an van keo ve quyen "gan nhat trong so nhung gi co".
+    Nhanh keyword khong co nguong: khop full-text da tu no la tin hieu co nghia
+    (gate cu cung chi doi keyword_score > 0).
+
+    `score` tra ra da chuan hoa ve 0..1 (chia cho _RRF_MAX_SCORE) chu khong phai
+    diem RRF tho: routes_cover_search.py doc truong nay nhu confidence va loc o
+    0.5, nen thang do phai giu nguyen y nghia cu.
 
     Isbn la mot truong hop rieng, xu ly TRUOC ca RRF: ingestion.py dung
     book_index.book_text() lam noi dung embed VA lam noi dung tsv full-text —
@@ -199,8 +218,11 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
 
     query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
     semantic = (
-        await store.search_semantic(
-            vector_store.CORPUS_BOOK, query_vector, k=limit * 3, source_ids=source_ids)
+        [
+            hit for hit in await store.search_semantic(
+                vector_store.CORPUS_BOOK, query_vector, k=limit * 3, source_ids=source_ids)
+            if hit.score >= book_index.BOOK_SEMANTIC_THRESHOLD
+        ]
         if query_vector else []
     )
     keyword = await store.search_keyword(
@@ -208,7 +230,10 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
 
     fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=limit)
     results = [
-        {**_compact_book_with_content(by_id[hit.source_id]), "score": round(hit.score, 3)}
+        {
+            **_compact_book_with_content(by_id[hit.source_id]),
+            "score": round(hit.score / _RRF_MAX_SCORE, 3),
+        }
         for hit in fused
         if hit.source_id in by_id
     ]
