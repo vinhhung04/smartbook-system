@@ -79,5 +79,48 @@ class EmbedCircuitBreakerTest(unittest.TestCase):
         self.assertTrue(breaker.should_try_primary())  # CLOSED, khong con phu thuoc cooldown
 
 
+class FakeEmbedResponse:
+    def __init__(self, embeddings):
+        self.embeddings = embeddings
+
+
+class FakeOllamaClient:
+    def __init__(self, vectors: dict, default=None):
+        self._vectors = vectors
+        self._default = default
+
+    def embed(self, model, input):
+        texts = [input] if isinstance(input, str) else list(input)
+        return FakeEmbedResponse(embeddings=[self._vectors.get(t, self._default) for t in texts])
+
+
+class FailingOllamaClient:
+    def embed(self, model, input):
+        raise ConnectionError("ollama unreachable")
+
+
+class OllamaEmbedderTest(unittest.TestCase):
+    def test_embeds_batch_via_client(self):
+        client = FakeOllamaClient({"a": [1.0, 0.0], "b": [0.0, 1.0]})
+        embedder = embeddings.OllamaEmbedder()
+        result = embedder.embed_batch(["a", "b"], client=client)
+        self.assertEqual(result, [[1.0, 0.0], [0.0, 1.0]])
+
+    def test_empty_input_returns_empty_list(self):
+        embedder = embeddings.OllamaEmbedder()
+        self.assertEqual(embedder.embed_batch([], client=FakeOllamaClient({})), [])
+
+    def test_failure_returns_none_not_raise(self):
+        embedder = embeddings.OllamaEmbedder()
+        self.assertIsNone(embedder.embed_batch(["a"], client=FailingOllamaClient()))
+
+    def test_mismatched_vector_count_returns_none(self):
+        class ShortResponseClient:
+            def embed(self, model, input):
+                return FakeEmbedResponse(embeddings=[[1.0, 0.0]])  # 1 vector cho 2 text
+        embedder = embeddings.OllamaEmbedder()
+        self.assertIsNone(embedder.embed_batch(["a", "b"], client=ShortResponseClient()))
+
+
 if __name__ == "__main__":
     unittest.main()

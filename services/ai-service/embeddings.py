@@ -92,6 +92,28 @@ EMBED_MODEL = os.getenv("EMBED_MODEL") or os.getenv("FAQ_EMBED_MODEL", "nomic-em
 EMBED_TIMEOUT_SECONDS = float(os.getenv("EMBED_TIMEOUT_SECONDS", "30"))
 
 
+class OllamaEmbedder:
+    """Provider mac dinh, chay offline duoc. Logic y het embed_batch cu truoc
+    Phase B — chi chuyen vao class de dung chung interface voi CloudEmbedder."""
+
+    name = "ollama"
+
+    def embed_batch(self, texts: list[str], client: "ollama.Client | None" = None) -> list[list[float]] | None:
+        if not texts:
+            return []
+        try:
+            active_client = client or ollama.Client(host=OLLAMA_HOST, timeout=EMBED_TIMEOUT_SECONDS)
+            response = active_client.embed(model=EMBED_MODEL, input=texts)
+            vectors = response.embeddings
+            if len(vectors) != len(texts):
+                logger.warning("embeddings: expected %d vectors, got %d", len(texts), len(vectors))
+                return None
+            return [list(vector) for vector in vectors]
+        except Exception as exc:
+            logger.warning("embeddings: ollama embedding failed: %s", type(exc).__name__)
+            return None
+
+
 def embed_batch(texts: list[str], client: ollama.Client | None = None) -> list[list[float]] | None:
     """Embed multiple strings in one Ollama call. Returns None on any failure —
     callers must degrade gracefully, never raise."""
