@@ -1,12 +1,18 @@
-"""Semantic search over the static FAQ set (faq_data.FAQ_ENTRIES).
+"""Semantic search tren corpus tai lieu noi bo (INTERNAL_DOC).
 
-Backs the /chat GENERAL_QUERY branch: when a message matches none of the 11
-fixed intents, retrieval.py asks this module for related FAQ entries instead of
-returning an empty context. Never raises — an Ollama outage just means no match,
-and the caller keeps its previous fallback behavior.
+Backs the /chat GENERAL_QUERY branch: khi mot cau hoi khong khop intent nao
+trong 11 intent co dinh, retrieval.py hoi module nay thay vi tra context rong.
+
+Truoc day noi dung nam hardcode trong mot module Python rieng va vector nam
+trong mot file JSON tren dia. Gio noi dung la file Markdown trong corpus/ (van
+review qua git nhu code) va vector nam trong ai_document_chunks.
+
+Chu ky find_relevant KHONG doi: retrieval.py va test_retrieval.py phu thuoc vao
+no (AD-5). Never raises — khong co ket qua thi caller giu hanh vi fallback cu.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import NamedTuple
@@ -14,7 +20,7 @@ from typing import NamedTuple
 import ollama
 
 import embeddings
-from faq_data import FAQ_ENTRIES
+import vector_store
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -22,57 +28,39 @@ FAQ_EMBED_MODEL = embeddings.EMBED_MODEL
 FAQ_MATCH_THRESHOLD = float(os.getenv("FAQ_MATCH_THRESHOLD", "0.75"))
 FAQ_TOP_K = int(os.getenv("FAQ_TOP_K", "3"))
 
-_CACHE_PATH = os.path.join(os.path.dirname(__file__), ".faq_embeddings_cache.json")
-
-_faq_vectors: list[tuple[dict, list[float]]] | None = None
-
 
 class FAQMatch(NamedTuple):
     entry: dict
     score: float
 
 
-def _content_hash() -> str:
-    # The model name is part of the key: vectors from a different embedding model
-    # have a different dimensionality, and cosine_similarity scores mismatched
-    # lengths as 0.0 - so a model swap would silently return "nothing matches"
-    # forever instead of rebuilding the index.
-    return embeddings.content_hash({
-        "model": embeddings.EMBED_MODEL,
-        "entries": [{"id": e["id"], "question": e["question"], "answer": e["answer"]} for e in FAQ_ENTRIES],
-    })
-
-
 def embed_text(text: str, client: ollama.Client | None = None) -> list[float] | None:
     return embeddings.embed_text(text, client=client)
 
 
-def _load_faq_vectors(client: ollama.Client | None = None) -> list[tuple[dict, list[float]]]:
-    global _faq_vectors
-    if _faq_vectors is not None:
-        return _faq_vectors
+def _entry_from_hit(hit) -> dict:
+    """Shape cu: {id, question, answer}. Chunk Markdown co dang
+    "## <heading>\n<body>" — heading la question, phan con lai la answer."""
+    lines = hit.content.splitlines()
+    if lines and lines[0].lstrip().startswith("#"):
+        question = lines[0].lstrip("# ").strip()
+        answer = "\n".join(lines[1:]).strip()
+    else:
+        question = ""
+        answer = hit.content.strip()
+    return {"id": hit.source_id, "question": question, "answer": answer}
 
-    current_hash = _content_hash()
-    cached = embeddings.read_cache(_CACHE_PATH)
-    if (
-        cached
-        and cached.get("hash") == current_hash
-        and len(cached.get("vectors") or []) == len(FAQ_ENTRIES)
-    ):
-        _faq_vectors = list(zip(FAQ_ENTRIES, cached["vectors"]))
-        return _faq_vectors
 
-    vectors = embeddings.embed_batch([entry["question"] for entry in FAQ_ENTRIES], client=client)
-    if vectors is None:
-        # Deliberately not memoized: a transient Ollama outage at the first
-        # query must not disable FAQ search for the rest of the process's life.
-        # Return "no vectors" for this call only; the next call retries.
-        logger.warning("faq_retrieval: FAQ embedding load failed, will retry on next query")
-        return [(entry, []) for entry in FAQ_ENTRIES]
-
-    embeddings.write_cache(_CACHE_PATH, {"hash": current_hash, "vectors": vectors})
-    _faq_vectors = list(zip(FAQ_ENTRIES, vectors))
-    return _faq_vectors
+async def _find_relevant_async(query: str, top_k: int, threshold: float, client) -> list[FAQMatch]:
+    query_vector = await asyncio.to_thread(embed_text, query, client)
+    if not query_vector:
+        return []
+    hits = await vector_store.get_store().search_semantic(
+        vector_store.CORPUS_DOC, query_vector, k=top_k)
+    return [
+        FAQMatch(entry=_entry_from_hit(hit), score=hit.score)
+        for hit in hits if hit.score >= threshold
+    ]
 
 
 def find_relevant(
@@ -81,22 +69,14 @@ def find_relevant(
     threshold: float = FAQ_MATCH_THRESHOLD,
     client: ollama.Client | None = None,
 ) -> list[FAQMatch]:
-    """Semantic search over the static FAQ set. Never raises: returns [] if
-    Ollama is unreachable or nothing clears the similarity threshold — callers
-    fall back to the existing GENERAL_QUERY behavior in that case."""
+    """Chu ky sync giu nguyen (AD-5): retrieval.py:254 goi ham nay qua
+    asyncio.to_thread, nen no chay trong mot thread KHONG co event loop —
+    asyncio.run() o day la hop le, khong phai nested loop."""
     query = (query or "").strip()
     if not query:
         return []
-
-    query_vector = embed_text(query, client=client)
-    if not query_vector:
+    try:
+        return asyncio.run(_find_relevant_async(query, top_k, threshold, client))
+    except Exception as exc:
+        logger.warning("faq_retrieval: tim kiem that bai: %s", type(exc).__name__)
         return []
-
-    matches = [
-        FAQMatch(entry=entry, score=embeddings.cosine_similarity(query_vector, vector))
-        for entry, vector in _load_faq_vectors(client=client)
-        if vector
-    ]
-    matches = [match for match in matches if match.score >= threshold]
-    matches.sort(key=lambda match: match.score, reverse=True)
-    return matches[:top_k]
