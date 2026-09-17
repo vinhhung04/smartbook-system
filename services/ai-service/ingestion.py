@@ -122,12 +122,17 @@ async def ingest_books(books: list[dict]) -> dict:
         text = book_index.book_text(book)
         if not text.strip():
             continue
-        done, skip = await _ingest_one(
-            store, vector_store.CORPUS_BOOK, str(book["id"]),
-            str(book.get("title") or ""), text, [text],
-            {"author": book.get("author"), "category": book.get("category"),
-             "isbn": book.get("isbn"), "quantity": book.get("quantity")},
-        )
+        try:
+            done, skip = await _ingest_one(
+                store, vector_store.CORPUS_BOOK, str(book["id"]),
+                str(book.get("title") or ""), text, [text],
+                {"author": book.get("author"), "category": book.get("category"),
+                 "isbn": book.get("isbn"), "quantity": book.get("quantity")},
+            )
+        except Exception as exc:
+            logger.warning(
+                "ingestion: loi khi ingest book %s, bo qua: %s", book.get("id"), type(exc).__name__)
+            continue
         documents += 1
         embedded += done
         skipped += skip
@@ -156,10 +161,15 @@ async def ingest_internal_docs(directory: str = CORPUS_DIR) -> dict:
             continue
         source_id = filename[:-3]
         title = texts[0].splitlines()[0].lstrip("# ").strip()
-        done, skip = await _ingest_one(
-            store, vector_store.CORPUS_DOC, source_id, title, content, texts,
-            {"filename": filename},
-        )
+        try:
+            done, skip = await _ingest_one(
+                store, vector_store.CORPUS_DOC, source_id, title, content, texts,
+                {"filename": filename},
+            )
+        except Exception as exc:
+            logger.warning(
+                "ingestion: loi khi ingest file %s, bo qua: %s", filename, type(exc).__name__)
+            continue
         documents += 1
         embedded += done
         skipped += skip
