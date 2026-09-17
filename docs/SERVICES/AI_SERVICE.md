@@ -110,6 +110,22 @@ không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_em
     ai_db -c "SELECT corpus, count(*) FROM ai_document_chunks GROUP BY corpus;"`.
 - **Biến môi trường mới**: xem `INGEST_MAX_CHUNK_CHARS`, `ENABLE_CORPUS_INGEST` trong bảng dưới.
 
+### Embedding Provider: Circuit Breaker (Ollama ↔ OpenRouter)
+
+Embedding cho semantic FAQ + book search (`faq_retrieval.find_relevant()` và `search_books` tool trong `/assistant`) hỗ trợ hai provider với tự động chuyển đổi (circuit breaker):
+
+- **Provider chính**: Ollama local (offline được, `FAQ_EMBED_MODEL=nomic-embed-text`)
+- **Provider dự phòng**: OpenRouter cloud (`CLOUD_EMBED_MODEL=qwen/qwen3-embedding-8b`) — thử khi Ollama bị lỗi liên tục
+
+**Circuit breaker có 3 trạng thái:**
+- `CLOSED` (mặc định): sử dụng Ollama, log warning nếu lỗi nhưng không chuyển sang cloud ngay
+- `OPEN`: sau `EMBED_BREAKER_THRESHOLD` lỗi Ollama liên tục (mặc định 3), chuyển hoàn toàn sang OpenRouter để truy vấn tiếp theo
+- `HALF_OPEN`: sau `EMBED_BREAKER_COOLDOWN_SECONDS` giây tắt (mặc định 60), thử lại Ollama một lần; nếu thành công quay về CLOSED, nếu lỗi quay về OPEN
+
+**Quan trọng: `dimensions:768` là bắt buộc** — `ai_document_chunks.embedding` được định nghĩa cố định là `vector(768)` trong schema (xem `schema.sql`). Model OpenRouter `qwen/qwen3-embedding-8b` mặc định trả embedding 4096 chiều, nên **luôn gửi `dimensions: 768`** trong request để model trả 768 chiều trực tiếp (không cần post-process truncate hay project lại, tránh mất mát semantics). Không thay đổi column schema được mà không migrate toàn bộ vector cũ — dùng mặc định 768 trên cả hai provider để không cần việc đó.
+
+**Debug circuit breaker**: khi provider lỗi, xem log từ `embeddings.py` (ví dụ: "Ollama embedding failed: <type(exc).__name__>: ...") để xác định provider nào fail và trạng thái hiện tại của breaker. Log cũng ghi lúc chuyển sang OPEN hoặc khi thử lại từ HALF_OPEN.
+
 ### Upgrade notes: đổi image Postgres sang `pgvector/pgvector:pg15`
 
 Phase A đổi image của service `db` trong `docker-compose.yml` từ `postgres:15-alpine` sang
