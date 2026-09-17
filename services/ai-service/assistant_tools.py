@@ -224,7 +224,7 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
                 embedding_model=embed_result.model, source_ids=source_ids)
             if hit.score >= book_index.BOOK_SEMANTIC_THRESHOLD
         ]
-        if embed_result else []
+        if embed_result is not None else []
     )
     keyword = await store.search_keyword(
         vector_store.CORPUS_BOOK, query, k=limit * 3, source_ids=source_ids)

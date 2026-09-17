@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import threading
 import time
 from typing import Callable, NamedTuple
 
@@ -47,6 +48,15 @@ class EmbedCircuitBreaker:
     cong / OPEN lai neu van loi.
 
     now_fn injectable de test khong phu thuoc thoi gian thuc troi qua that.
+
+    Thread-safe: ca 4 call site goi embed_batch/embed_text qua asyncio.to_thread,
+    tuc la chay song song tren OS thread that chu khong phai coroutine luan phien.
+    Moi truy cap _state deu di qua _lock, va lan thu HALF_OPEN duoc TIEU THU boi
+    dung MOT caller — caller nao lat OPEN -> HALF_OPEN thi nhan True, moi caller
+    con lai nhan False cho toi khi record_success/record_failure giai quyet lan
+    thu do. Neu khong, ca N request dong thoi cung dam vao mot Ollama dang chet
+    moi chu ky cooldown (thundering herd) — dung thu ma circuit breaker sinh ra
+    de tranh.
     """
 
     def __init__(
@@ -59,27 +69,38 @@ class EmbedCircuitBreaker:
         self._consecutive_failures = 0
         self._state = _BreakerState.CLOSED
         self._opened_at: float | None = None
+        self._lock = threading.Lock()
 
     def should_try_primary(self) -> bool:
-        if self._state == _BreakerState.CLOSED:
-            return True
-        if self._state == _BreakerState.OPEN:
-            if self._opened_at is not None and self._now() - self._opened_at >= self._cooldown:
-                self._state = _BreakerState.HALF_OPEN
+        with self._lock:
+            if self._state == _BreakerState.CLOSED:
                 return True
+            if self._state == _BreakerState.OPEN:
+                if self._opened_at is not None and self._now() - self._opened_at >= self._cooldown:
+                    self._state = _BreakerState.HALF_OPEN
+                    return True  # caller nay gianh duoc lan thu duy nhat
+                return False
+            # HALF_OPEN: lan thu da co caller khac gianh, chua nga ngu -> di cloud.
             return False
-        return True  # HALF_OPEN: cho phep dung mot lan thu
+
+    def is_open(self) -> bool:
+        """Doc thuan, khong doi state. Khac should_try_primary() (co side effect
+        lat OPEN -> HALF_OPEN). Dung de biet co duoc phep goi cloud hay khong."""
+        with self._lock:
+            return self._state == _BreakerState.OPEN
 
     def record_success(self) -> None:
-        self._consecutive_failures = 0
-        self._state = _BreakerState.CLOSED
-        self._opened_at = None
+        with self._lock:
+            self._consecutive_failures = 0
+            self._state = _BreakerState.CLOSED
+            self._opened_at = None
 
     def record_failure(self) -> None:
-        self._consecutive_failures += 1
-        if self._state == _BreakerState.HALF_OPEN or self._consecutive_failures >= self._threshold:
-            self._state = _BreakerState.OPEN
-            self._opened_at = self._now()
+        with self._lock:
+            self._consecutive_failures += 1
+            if self._state == _BreakerState.HALF_OPEN or self._consecutive_failures >= self._threshold:
+                self._state = _BreakerState.OPEN
+                self._opened_at = self._now()
 
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
@@ -139,6 +160,13 @@ class CloudEmbedder:
     def embed_batch(self, texts: list[str]) -> list[list[float]] | None:
         if not texts:
             return []
+        if not self._api_key:
+            # Khong co key thi request chac chan 401 — nhung van gui di la day
+            # nguyen van query/tai lieu cua nguoi dung ra ngoai, tren dung cai
+            # duong ma operator tin la "chi Ollama" vi ho chua bao gio cau hinh
+            # key. Dung lai truoc khi mo bat ky ket noi nao.
+            logger.warning("embeddings: OPENROUTER_API_KEY not set, cloud fallback disabled")
+            return None
         import httpx
 
         try:
@@ -153,6 +181,14 @@ class CloudEmbedder:
             vectors = [item["embedding"] for item in data.get("data", [])]
             if len(vectors) != len(texts):
                 logger.warning("embeddings: openrouter expected %d vectors, got %d", len(texts), len(vectors))
+                return None
+            wrong_dim = next((len(v) for v in vectors if len(v) != self._dimensions), None)
+            if wrong_dim is not None:
+                # Neu lot qua day, loi chi lo ra rat muon duoi dang loi Postgres
+                # "CAST ... AS vector" bi nuot — bao ngay tai day de dung.
+                logger.warning(
+                    "embeddings: openrouter expected %d dimensions, got %d",
+                    self._dimensions, wrong_dim)
                 return None
             return vectors
         except Exception as exc:
@@ -171,10 +207,21 @@ _cloud_embedder = CloudEmbedder(
 _breaker = EmbedCircuitBreaker(threshold=EMBED_BREAKER_THRESHOLD, cooldown_seconds=EMBED_BREAKER_COOLDOWN_SECONDS)
 
 
-def embed_batch(texts: list[str], client: "ollama.Client | None" = None) -> BatchEmbedResult | None:
-    """Dieu phoi qua breaker: Ollama khi mach dong, cloud khi mach mo hoac
-    Ollama vua that bai. Khong bao gio raise — ca hai provider loi tra None,
-    giu dung hop dong cu."""
+def embed_batch(
+    texts: list[str], client: "ollama.Client | None" = None,
+    allow_cloud_fallback: bool = True,
+) -> BatchEmbedResult | None:
+    """Dieu phoi qua breaker: Ollama khi mach dong, cloud CHI khi mach da thuc
+    su mo. Khong bao gio raise — ca hai provider loi tra None, giu dung hop
+    dong cu.
+
+    allow_cloud_fallback=False (ingestion.py dung) => Ollama-only: Ollama loi
+    thi tra None ngay, khong dung toi cloud du mach dang o trang thai nao. Ghi
+    mot chunk bang model cloud se lam content_hash (tinh theo hang so EMBED_MODEL)
+    lech voi embedding_model da luu, va lan ingest sau se bo qua chunk do vi hash
+    trung — tai lieu bien mat vinh vien khoi semantic search. Bo qua tai lieu roi
+    ingest lai sau (dung hanh vi truoc Phase B) thi tu chua lanh duoc.
+    """
     if not texts:
         return BatchEmbedResult(vectors=[], model=EMBED_MODEL, provider="none")
 
@@ -184,6 +231,17 @@ def embed_batch(texts: list[str], client: "ollama.Client | None" = None) -> Batc
             _breaker.record_success()
             return BatchEmbedResult(vectors=vectors, model=EMBED_MODEL, provider="ollama")
         _breaker.record_failure()
+        # Chi leo len cloud neu chinh lan loi nay lam mach MO (cham threshold).
+        # Mot lan loi le te duoi threshold thi that bai luon, dung theo thu tu
+        # spec mo ta ("3 loi lien tiep -> mo mach, chuyen cloud" — chuyen cloud
+        # SAU khi mo mach, khong phai moi lan chop tat).
+        if not allow_cloud_fallback or not _breaker.is_open():
+            return None
+    else:
+        # Mach da mo tu truoc (hoac lan thu HALF_OPEN da co caller khac gianh)
+        # -> di thang cloud.
+        if not allow_cloud_fallback:
+            return None
 
     vectors = _cloud_embedder.embed_batch(texts)
     if vectors is not None:
@@ -191,8 +249,11 @@ def embed_batch(texts: list[str], client: "ollama.Client | None" = None) -> Batc
     return None
 
 
-def embed_text(text: str, client: "ollama.Client | None" = None) -> EmbedResult | None:
-    result = embed_batch([text], client=client)
+def embed_text(
+    text: str, client: "ollama.Client | None" = None,
+    allow_cloud_fallback: bool = True,
+) -> EmbedResult | None:
+    result = embed_batch([text], client=client, allow_cloud_fallback=allow_cloud_fallback)
     if not result or not result.vectors:
         return None
     return EmbedResult(vector=result.vectors[0], model=result.model, provider=result.provider)

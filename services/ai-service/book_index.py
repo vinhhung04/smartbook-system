@@ -57,7 +57,7 @@ async def semantic_scores(
         return []
 
     embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
-    if not embed_result:
+    if embed_result is None:
         return []
 
     source_ids = [str(book.get("id") or "") for book in books]

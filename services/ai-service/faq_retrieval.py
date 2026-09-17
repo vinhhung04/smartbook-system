@@ -84,7 +84,7 @@ def _per_call_store():
 
 async def _find_relevant_async(query: str, top_k: int, threshold: float, client) -> list[FAQMatch]:
     embed_result = await asyncio.to_thread(embed_text, query, client)
-    if not embed_result:
+    if embed_result is None:
         return []
     store, engine = _per_call_store()
     try:
