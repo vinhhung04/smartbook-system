@@ -12,10 +12,74 @@ import json
 import logging
 import math
 import os
+import time
+from typing import Callable, NamedTuple
 
 import ollama
 
 logger = logging.getLogger("uvicorn.error")
+
+
+class EmbedResult(NamedTuple):
+    vector: list[float]
+    model: str
+    provider: str
+
+
+class BatchEmbedResult(NamedTuple):
+    vectors: list[list[float]]
+    model: str
+    provider: str
+
+
+class _BreakerState:
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class EmbedCircuitBreaker:
+    """State may thuan cho viec chon Ollama hay cloud, khong tu goi provider nao.
+
+    CLOSED (Ollama) -> [threshold loi lien tiep] -> OPEN (cloud, dem cooldown)
+    -> [het cooldown] -> HALF_OPEN (cho mot lan thu Ollama) -> CLOSED neu thanh
+    cong / OPEN lai neu van loi.
+
+    now_fn injectable de test khong phu thuoc thoi gian thuc troi qua that.
+    """
+
+    def __init__(
+        self, threshold: int, cooldown_seconds: float,
+        now_fn: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._threshold = threshold
+        self._cooldown = cooldown_seconds
+        self._now = now_fn
+        self._consecutive_failures = 0
+        self._state = _BreakerState.CLOSED
+        self._opened_at: float | None = None
+
+    def should_try_primary(self) -> bool:
+        if self._state == _BreakerState.CLOSED:
+            return True
+        if self._state == _BreakerState.OPEN:
+            if self._opened_at is not None and self._now() - self._opened_at >= self._cooldown:
+                self._state = _BreakerState.HALF_OPEN
+                return True
+            return False
+        return True  # HALF_OPEN: cho phep dung mot lan thu
+
+    def record_success(self) -> None:
+        self._consecutive_failures = 0
+        self._state = _BreakerState.CLOSED
+        self._opened_at = None
+
+    def record_failure(self) -> None:
+        self._consecutive_failures += 1
+        if self._state == _BreakerState.HALF_OPEN or self._consecutive_failures >= self._threshold:
+            self._state = _BreakerState.OPEN
+            self._opened_at = self._now()
+
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 # Dedicated embedding model, separate from the chat models (SUMMARY_MODEL /
