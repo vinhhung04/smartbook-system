@@ -1,13 +1,12 @@
-"""Semantic index over the book catalog, backing the hybrid search in
-assistant_tools.search_books.
+"""Diem semantic cho catalog sach, doc tu vector store.
 
-Vectors are held in list order, aligned 1:1 with the catalog list handed in by
-the caller, and invalidated by a content hash covering both the embedded text
-and the embedding model name. That hash is the correctness mechanism: if the
-catalog or the model changes, the cache misses and the index is rebuilt.
+Truoc day module nay tu dung index rieng trong mot file JSON tren dia
+(.book_index_cache.json) va rebuild toan bo khi content hash cua CA catalog doi.
+Gio vector nam trong ai_document_chunks; ingestion.py lo viec dong bo incremental.
 
-Like faq_retrieval, nothing here raises - an Ollama outage yields no semantic
-scores and the caller keeps its keyword-only behavior.
+Giu nguyen hop dong cu: semantic_scores tra ve list cung do dai voi `books`, va
+[] (khong phai list toan 0) khi khong co tin hieu semantic — caller phan biet
+duoc "khong co embedding" voi "khong lien quan".
 """
 from __future__ import annotations
 
@@ -18,23 +17,17 @@ import os
 import ollama
 
 import embeddings
+import vector_store
 
 logger = logging.getLogger("uvicorn.error")
 
-# Minimum cosine similarity for a book to be considered a semantic hit at all.
-# Below this, only a keyword match can pull the book into the result set.
+# Nguong cosine toi thieu de mot quyen duoc tinh la trung ve ngu nghia.
 BOOK_SEMANTIC_THRESHOLD = float(os.getenv("BOOK_SEMANTIC_THRESHOLD", "0.6"))
-
-_CACHE_PATH = os.path.join(os.path.dirname(__file__), ".book_index_cache.json")
-
-# (content_hash, vectors) for the most recently built index.
-_index: tuple[str, list[list[float]]] | None = None
 
 
 def book_text(book: dict) -> str:
-    """The text embedded for one book. Includes description and summary_vi so a
-    question about what a book is *about* can match, which is exactly what plain
-    title/author keyword matching cannot do."""
+    """Text duoc embed cho mot quyen. Co description va summary_vi de cau hoi
+    ve NOI DUNG sach match duoc — dieu keyword tren title/author khong lam duoc."""
     parts = [
         str(book.get("title") or ""),
         str(book.get("author") or ""),
@@ -45,50 +38,19 @@ def book_text(book: dict) -> str:
     return " ".join(part.strip() for part in parts if part and part.strip())
 
 
-def _content_hash(texts: list[str]) -> str:
-    return embeddings.content_hash({"model": embeddings.EMBED_MODEL, "texts": texts})
-
-
-def build_index(books: list[dict], client: ollama.Client | None = None) -> list[list[float]] | None:
-    """Return one vector per book, in the same order. None if embedding failed."""
-    global _index
-
-    texts = [book_text(book) for book in books]
-    if not texts:
-        return []
-
-    current_hash = _content_hash(texts)
-    if _index is not None and _index[0] == current_hash:
-        return _index[1]
-
-    cached = embeddings.read_cache(_CACHE_PATH)
-    if cached and cached.get("hash") == current_hash and len(cached.get("vectors") or []) == len(texts):
-        _index = (current_hash, cached["vectors"])
-        return _index[1]
-
-    vectors = embeddings.embed_batch(texts, client=client)
-    if vectors is None:
-        # Not memoized: a transient Ollama outage must not disable semantic
-        # search for the rest of the process's life. Next call retries.
-        logger.warning("book_index: catalog embedding failed, falling back to keyword search")
-        return None
-
-    embeddings.write_cache(_CACHE_PATH, {"hash": current_hash, "vectors": vectors})
-    _index = (current_hash, vectors)
-    return vectors
-
-
 async def semantic_scores(
     books: list[dict],
     query: str,
     client: ollama.Client | None = None,
 ) -> list[float]:
-    """Cosine similarity of `query` against each book, aligned with `books`.
-    Returns [] (not zeros) when embeddings are unavailable, so callers can tell
-    "no semantic signal" apart from "semantically unrelated".
+    """Cosine similarity cua `query` voi tung quyen, xep thang hang voi `books`.
 
-    Async vi Task 8 doi ruot sang vector_store (query DB). Phan than ham o buoc
-    nay van la code cu chay trong thread — doi shape truoc, doi backend sau.
+    Loc theo source_ids thay vi tim top-k toan corpus: caller da co san danh sach
+    ung vien (vd recommendation.py da loc theo lich su muon) va can diem cho DUNG
+    nhung quyen do, dung thu tu do.
+
+    Quyen chua duoc ingest vao vector store nhan diem 0.0 — khong phai loi, chi
+    la chua co tin hieu semantic cho no.
     """
     query = (query or "").strip()
     if not query or not books:
@@ -98,8 +60,13 @@ async def semantic_scores(
     if not query_vector:
         return []
 
-    vectors = await asyncio.to_thread(build_index, books, client)
-    if not vectors or len(vectors) != len(books):
+    source_ids = [str(book.get("id") or "") for book in books]
+    hits = await vector_store.get_store().search_semantic(
+        vector_store.CORPUS_BOOK, query_vector,
+        k=len(source_ids), source_ids=[sid for sid in source_ids if sid],
+    )
+    if not hits:
         return []
 
-    return [embeddings.cosine_similarity(query_vector, vector) for vector in vectors]
+    by_source = {hit.source_id: hit.score for hit in hits}
+    return [by_source.get(source_id, 0.0) for source_id in source_ids]

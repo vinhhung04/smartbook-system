@@ -45,6 +45,7 @@ from rag import (
 )
 from retrieval import retrieve_context
 from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
+import assistant_tools
 from source_reliability import reliability
 import book_index
 import recommendation
@@ -266,6 +267,30 @@ async def _startup_nightly_briefing() -> None:
     import nightly_briefing
 
     asyncio.create_task(nightly_briefing.nightly_briefing_loop())
+
+
+@app.on_event("startup")
+async def _startup_ingest_corpus() -> None:
+    """Dong bo vector store nen o background. Khong chan startup: service phai
+    len duoc ngay ca khi Ollama chua san sang — retrieval se degrade xuong
+    keyword-only cho den khi ingest xong.
+
+    Tat bang ENABLE_CORPUS_INGEST=false (vd trong test e2e khong can semantic).
+    """
+    if os.getenv("ENABLE_CORPUS_INGEST", "true").strip().lower() in ("false", "0", "no"):
+        return
+
+    async def _run() -> None:
+        import ingestion
+        try:
+            await ingestion.ingest_internal_docs()
+            books = await assistant_tools._get("/api/books", None)
+            if isinstance(books, list):
+                await ingestion.ingest_books(books)
+        except Exception as exc:
+            logger.warning("startup ingest that bai: %s", type(exc).__name__)
+
+    asyncio.create_task(_run())
 
 
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}

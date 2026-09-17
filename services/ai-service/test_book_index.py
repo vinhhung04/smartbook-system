@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import unittest
+from unittest import mock
 
 import assistant_tools
 import book_index
+import embeddings
 
 
 def run(coro):
@@ -46,126 +47,85 @@ BOOKS = [
 ]
 
 
-class FakeEmbedResponse:
-    def __init__(self, embeddings):
-        self.embeddings = embeddings
+class HybridSearchTest(unittest.TestCase):
+    """search_books gio hop nhat semantic va keyword qua vector_store + RRF.
 
+    Vector cua sach khong con den tu viec embed lai text qua client Ollama gia —
+    ruot moi cua semantic_scores/_score_and_rank_books chi doc tu vector store
+    (da duoc ingestion.py dong bo tu truoc), nen moi test o day tu seed
+    InMemoryVectorStore truc tiep bang upsert_document/upsert_chunks.
+    """
 
-class CountingOllamaClient:
-    """Returns a fixed vector per text and counts how many embed() calls happen,
-    so cache reuse can be asserted rather than assumed."""
-
-    def __init__(self, vectors: dict, default):
-        self._vectors = vectors
-        self._default = default
-        self.calls = 0
-
-    def embed(self, model, input):
-        self.calls += 1
-        texts = [input] if isinstance(input, str) else list(input)
-        return FakeEmbedResponse(embeddings=[self._vectors.get(t, self._default) for t in texts])
-
-
-class FailingOllamaClient:
-    def embed(self, model, input):
-        raise ConnectionError("ollama unreachable")
-
-
-def _reset_index():
-    book_index._index = None
-    if os.path.exists(book_index._CACHE_PATH):
-        os.remove(book_index._CACHE_PATH)
-
-
-def _one_hot(position: int, size: int = 3) -> list[float]:
-    return [1.0 if i == position else 0.0 for i in range(size)]
-
-
-class BookIndexTests(unittest.TestCase):
     def setUp(self):
-        _reset_index()
-        # Each book gets its own axis; the query is aimed at book 2 (index 1).
-        self.vectors = {book_index.book_text(book): _one_hot(i) for i, book in enumerate(BOOKS)}
-        self.query = "sach day tre ky nang song"
-        self.vectors[self.query] = _one_hot(1)
+        import vector_store
+        from vector_store import Chunk
+        self.vector_store = vector_store
+        self.store = vector_store.InMemoryVectorStore()
+        vector_store.set_store(self.store)
+        for book, vec in zip(BOOKS, ([1.0, 0.0], [0.0, 1.0], [0.7, 0.7])):
+            doc = run(self.store.upsert_document(
+                corpus=vector_store.CORPUS_BOOK, source_id=book["id"],
+                title=book["title"], content=book_index.book_text(book),
+                content_hash="h-" + book["id"], metadata={}))
+            run(self.store.upsert_chunks([Chunk(
+                doc, vector_store.CORPUS_BOOK, 0, book_index.book_text(book),
+                "c-" + book["id"], vec, "test-model")]))
 
     def tearDown(self):
-        _reset_index()
+        self.vector_store.set_store(None)
 
-    def test_semantic_scores_rank_the_topically_closest_book_highest(self):
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-        scores = run(book_index.semantic_scores(BOOKS, self.query, client=client))
+    def test_semantic_scores_aligned_with_input_order(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+            scores = run(book_index.semantic_scores(BOOKS, "lap trinh"))
         self.assertEqual(len(scores), len(BOOKS))
-        self.assertEqual(scores.index(max(scores)), 1)
-        self.assertAlmostEqual(scores[1], 1.0, places=6)
+        self.assertAlmostEqual(scores[0], 1.0)
+        self.assertAlmostEqual(scores[1], 0.0)
 
-    def test_index_reused_from_cache_when_catalog_unchanged(self):
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-        book_index.build_index(BOOKS, client=client)
-        self.assertEqual(client.calls, 1)
+    def test_semantic_scores_empty_when_embedding_unavailable(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            self.assertEqual(run(book_index.semantic_scores(BOOKS, "bat ky")), [])
 
-        book_index._index = None
-        # A failing client proves the vectors came from the on-disk cache.
-        vectors = book_index.build_index(BOOKS, client=FailingOllamaClient())
-        self.assertEqual(len(vectors), len(BOOKS))
+    def test_book_not_in_index_scores_zero_not_crash(self):
+        extra = BOOKS + [{"id": "b-unknown", "title": "Chua ingest", "author": "",
+                          "category": "", "isbn": "", "quantity": 0,
+                          "description": "", "summary_vi": ""}]
+        with mock.patch.object(embeddings, "embed_text", return_value=[1.0, 0.0]):
+            scores = run(book_index.semantic_scores(extra, "lap trinh"))
+        self.assertEqual(len(scores), len(extra))
+        self.assertEqual(scores[-1], 0.0)
 
-    def test_index_rebuilt_when_catalog_changes(self):
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-        book_index.build_index(BOOKS, client=client)
-        self.assertEqual(client.calls, 1)
-
-        changed = BOOKS + [{"id": "b4", "title": "Sach moi", "author": "", "category": "", "isbn": ""}]
-        book_index.build_index(changed, client=client)
-        self.assertEqual(client.calls, 2, "changed catalog must invalidate the cached index")
-
-    def test_embedding_failure_yields_no_semantic_signal(self):
-        self.assertEqual(run(book_index.semantic_scores(BOOKS, self.query, client=FailingOllamaClient())), [])
-        self.assertIsNone(book_index.build_index(BOOKS, client=FailingOllamaClient()))
-
-
-class HybridSearchTests(unittest.TestCase):
-    def setUp(self):
-        _reset_index()
-        self.vectors = {book_index.book_text(book): _one_hot(i) for i, book in enumerate(BOOKS)}
-
-    def tearDown(self):
-        _reset_index()
-
-    def test_semantic_hit_found_without_any_shared_keyword(self):
-        query = "sach day tre ky nang song"
-        self.vectors[query] = _one_hot(1)
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-
-        # Keyword-only would return nothing useful here: no book title contains
-        # these words, and only book 2's summary_vi does.
-        results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client))
+    def test_semantic_hit_found_via_topical_embedding_match(self):
+        # Book 2's stored vector is [0.0, 1.0]; mocking embed_text to return the
+        # same vector simulates a query that is topically aligned with book 2
+        # regardless of shared keywords, proving the semantic half of the fusion
+        # can surface a result on its own.
+        with mock.patch.object(embeddings, "embed_text", return_value=[0.0, 1.0]):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, "sach day tre ky nang song", 5))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b2")
 
-    def test_exact_isbn_still_wins_when_embeddings_are_unrelated(self):
-        query = "9786041111111"
-        self.vectors[query] = [0.0, 0.0, 0.0]
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-
-        results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client))
+    def test_exact_title_keyword_wins_when_embeddings_are_unrelated(self):
+        # A zero query vector is equally (un)related to every book, so this
+        # isolates the keyword half: book 3's title is a direct hit, nothing
+        # else in the catalog shares any token with the query.
+        query = "Lich su the gioi"
+        with mock.patch.object(embeddings, "embed_text", return_value=[0.0, 0.0]):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
         self.assertTrue(results)
-        self.assertEqual(results[0]["isbn"], "9786041111111")
+        self.assertEqual(results[0]["id"], "b3")
 
-    def test_degrades_to_keyword_only_when_ollama_is_down(self):
-        results = run(assistant_tools._score_and_rank_books(
-            BOOKS, "Python", 5, client=FailingOllamaClient()
-        ))
+    def test_degrades_to_keyword_only_when_embedding_is_unavailable(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, "Python", 5))
         self.assertEqual([book["id"] for book in results], ["b1"])
 
     def test_unrelated_query_returns_nothing(self):
-        # "xe dap dien" shares no substring with any book text - the pre-existing
-        # keyword scorer matches substrings, not whole words, so a query has to be
-        # chosen deliberately to have zero keyword signal.
-        query = "xe dap dien"
-        self.vectors[query] = [0.0, 0.0, 0.0]
-        client = CountingOllamaClient(self.vectors, default=[0.0, 0.0, 0.0])
-
-        self.assertEqual(run(assistant_tools._score_and_rank_books(BOOKS, query, 5, client=client)), [])
+        # No embedding signal (Ollama down) and a query that shares no token
+        # with any book's indexed content: both rankings come back empty, so
+        # the RRF fusion of two empty lists must also be empty.
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            results = run(assistant_tools._score_and_rank_books(BOOKS, "xe dap dien", 5))
+        self.assertEqual(results, [])
 
 
 if __name__ == "__main__":

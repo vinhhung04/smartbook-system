@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import os
-import re
 from typing import Any, Awaitable, Callable
 
 import httpx
 
-import book_index
-from intent import normalize_text
+import embeddings
+import fusion
+import vector_store
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 ASSISTANT_TOOL_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_TOOL_TIMEOUT_SECONDS", "8"))
@@ -141,71 +142,53 @@ def _compact_book_with_content(book: dict) -> dict:
     }
 
 
-def _keyword_score(compact: dict, normalized_query: str, tokens: list[str]) -> int:
-    haystack = normalize_text(" ".join([
-        compact["title"], compact["author"], str(compact["category"]),
-        str(compact["isbn"]), compact["description"], compact["summary_vi"],
-    ]))
-    score = sum(1 for token in tokens if token in haystack)
-    if normalized_query and normalized_query in haystack:
-        score += 3
-    return score
-
-
 async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
-    """Hybrid ranking: keyword overlap fused with cosine similarity over the
-    book's own text.
+    """Hybrid ranking qua vector store, hop nhat bang RRF.
 
-    Keyword scoring alone cannot match a topical question ("sach day tre ky nang
-    song") against a book whose description says the same thing in other words;
-    embeddings alone are unreliable for exact identifiers like an ISBN. Both are
-    scored, normalised to 0..1, and averaged. When embeddings are unavailable
-    (Ollama down, model not pulled) the semantic half is simply absent and this
-    degrades to exactly the previous keyword-only ranking.
+    Truoc day ham nay tu cham diem keyword trong Python roi trung binh cong voi
+    cosine. Gio ca hai tin hieu deu do Postgres tra ve da xep hang, va RRF gop
+    theo THU HANG — khong con phai chuan hoa hai thang diem khac ban chat.
 
-    Async: book_index.semantic_scores cham DB/Ollama va tu lo viec khong chan
-    event loop. Caller await truc tiep, khong boc asyncio.to_thread nua.
+    Van degrade dung nhu cu: vector store hong thi search_semantic/search_keyword
+    tra ve [], RRF cua hai list rong la list rong, ham tra ve [].
     """
-    normalized_query = normalize_text(query)
-    tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
-    if not tokens:
+    query = (query or "").strip()
+    if not query:
         return []
-
-    valid_books = [book for book in books if isinstance(book, dict)]
+    valid_books = [book for book in books if isinstance(book, dict) and book.get("id")]
     if not valid_books:
         return []
 
-    compacts = [_compact_book_with_content(book) for book in valid_books]
-    keyword = [_keyword_score(compact, normalized_query, tokens) for compact in compacts]
-    max_keyword = max(keyword)
+    by_id = {str(book["id"]): book for book in valid_books}
+    source_ids = list(by_id.keys())
+    store = vector_store.get_store()
 
-    semantic = await book_index.semantic_scores(valid_books, query, client=client)
-    if len(semantic) != len(valid_books):
-        semantic = [0.0] * len(valid_books)
+    query_vector = await asyncio.to_thread(embeddings.embed_text, query, client)
+    semantic = (
+        await store.search_semantic(
+            vector_store.CORPUS_BOOK, query_vector, k=limit * 3, source_ids=source_ids)
+        if query_vector else []
+    )
+    keyword = await store.search_keyword(
+        vector_store.CORPUS_BOOK, query, k=limit * 3, source_ids=source_ids)
 
-    scored = []
-    for compact, keyword_score, semantic_score in zip(compacts, keyword, semantic):
-        # A book enters the result set on either signal: any keyword hit, or a
-        # semantic score clearing the threshold.
-        if keyword_score <= 0 and semantic_score < book_index.BOOK_SEMANTIC_THRESHOLD:
-            continue
-        keyword_norm = (keyword_score / max_keyword) if max_keyword else 0.0
-        scored.append((0.5 * keyword_norm + 0.5 * semantic_score, compact))
-
-    scored.sort(key=lambda item: (-item[0], item[1]["title"]))
-    # "score" is additive (new key, existing keys untouched) so callers that only
-    # read id/title/isbn (e.g. test_book_index.py) are unaffected. Added so callers
-    # that need a real confidence number (not just rank position) have one —
-    # e.g. routes_cover_search.py's OCR-text evidence.
-    return [{**item[1], "score": round(item[0], 3)} for item in scored[:limit]]
+    fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=limit)
+    return [
+        {**_compact_book_with_content(by_id[hit.source_id]), "score": round(hit.score, 3)}
+        for hit in fused
+        if hit.source_id in by_id
+    ]
 
 
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:
-    """Tìm sách theo từ khóa tự do, kể cả nội dung mô tả — không dùng /api/books?search=
-    vì backend chỉ lọc theo title/author/category/publisher/isbn, không lọc description/
-    summary_vi. Lấy toàn bộ catalog rồi chấm điểm cục bộ theo hai tín hiệu: trùng từ khóa
-    (khớp chính xác ISBN/tên sách) và cosine similarity trên embedding của chính nội dung
-    sách (câu hỏi theo chủ đề). Nếu Ollama không sẵn sàng, chỉ còn phần từ khóa."""
+    """Tìm sách theo từ khóa tự do, kể cả nội dung mô tả — không dùng
+    /api/books?search= vì backend chỉ lọc title/author/category/publisher/isbn.
+
+    Hybrid qua vector store: semantic (pgvector cosine) và keyword (Postgres
+    full-text, bỏ dấu bằng unaccent) chạy song song rồi hợp nhất bằng RRF.
+    Catalog vẫn lấy từ /api/books để có dữ liệu hiển thị (tồn kho, ISBN) và để
+    giữ đúng ràng buộc AI không truy cập DB nghiệp vụ trực tiếp.
+    """
     query = (query or "").strip()
     if not query:
         return {"error": "query khong duoc de trong"}
@@ -221,6 +204,7 @@ async def search_books(auth_header: str | None = None, query: str = "") -> dict:
         return {"error": "/api/books het thoi gian cho phan hoi"}
     except Exception as exc:
         return {"error": f"/api/books that bai: {type(exc).__name__}"}
+
     results = await _score_and_rank_books(books, query, SEARCH_BOOKS_RESULT_LIMIT)
     return {"query": query, "results": results}
 
