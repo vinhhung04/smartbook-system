@@ -46,6 +46,7 @@ const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.rou
 const internalAuthorityRoutes = require('./routes/internal-authority.routes');
 const internalCatalogRoutes = require('./routes/internal-catalog.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
+const { startOutboxPublisherJob } = require('./jobs/outbox-publisher.job');
 const redis = require('./lib/redis');
 
 const app = express();
@@ -559,6 +560,12 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Inventory Service running on http://localhost:${PORT}`);
   startAgingInventoryJob();
+  startOutboxPublisherJob();
+});
+
+process.on('SIGTERM', async () => {
+  await redis.disconnect();
+  process.exit(0);
 });
 
 process.on('SIGTERM', async () => {

@@ -28,6 +28,8 @@
     "dev:gateway": "pnpm --filter api-gateway dev"
   },
   "dependencies": {
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

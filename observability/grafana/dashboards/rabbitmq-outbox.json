@@ -1,0 +1,40 @@
+{
+  "title": "RabbitMQ / Outbox",
+  "uid": "rabbitmq-outbox",
+  "description": "App-level view of the outbox publisher and RabbitMQ publish path (no broker-level exporter installed, so no queue depth/consumer lag here).",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Outbox pending (app-level)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "outbox_pending_total", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Outbox failed / 5m",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "increase(outbox_failed_total[5m])", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RabbitMQ publish failures / 5m",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "rate(rabbitmq_publish_fail_total[5m])", "refId": "A" }
+      ]
+    }
+  ]
+}

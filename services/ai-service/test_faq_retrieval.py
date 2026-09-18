@@ -1,140 +1,87 @@
 from __future__ import annotations
 
-import os
+import asyncio
 import unittest
+from unittest import mock
 
+import embeddings
 import faq_retrieval
-from faq_data import FAQ_ENTRIES
+import vector_store
+from vector_store import Chunk
 
 
-class FAQDataTests(unittest.TestCase):
-    def test_entries_have_required_fields(self):
-        for entry in FAQ_ENTRIES:
-            with self.subTest(entry=entry.get("id")):
-                self.assertTrue(entry.get("id"))
-                self.assertTrue(entry.get("category"))
-                self.assertTrue(entry.get("question"))
-                self.assertTrue(entry.get("answer"))
-
-    def test_ids_are_unique(self):
-        ids = [entry["id"] for entry in FAQ_ENTRIES]
-        self.assertEqual(len(ids), len(set(ids)))
-
-    def test_has_at_least_ten_entries(self):
-        self.assertGreaterEqual(len(FAQ_ENTRIES), 10)
+def run(coro):
+    return asyncio.run(coro)
 
 
-class FakeEmbedResponse:
-    def __init__(self, embeddings):
-        self.embeddings = embeddings
+ENTRIES = [
+    ("quy-dinh-muon-tra", "## Muon toi da bao nhieu quyen?\nMoi the muon toi da 5 quyen.", [1.0, 0.0]),
+    ("phi-phat", "## Tra tre bi phat bao nhieu?\nPhi phat 5000d moi ngay qua han.", [0.0, 1.0]),
+]
 
 
-class FakeOllamaClient:
-    """Deterministic fake: maps known text -> fixed vector, so cosine
-    similarity in assertions is exact and doesn't depend on a real model."""
-
-    def __init__(self, vectors: dict, default=None):
-        self._vectors = vectors
-        self._default = default
-
-    def embed(self, model, input):
-        texts = [input] if isinstance(input, str) else list(input)
-        result = []
-        for text in texts:
-            vector = self._vectors.get(text, self._default)
-            if vector is None:
-                raise RuntimeError(f"no fake vector configured for: {text!r}")
-            result.append(vector)
-        return FakeEmbedResponse(embeddings=result)
-
-
-class FailingOllamaClient:
-    def embed(self, model, input):
-        raise ConnectionError("ollama unreachable")
-
-
-def _reset_module_state():
-    faq_retrieval._faq_vectors = None
-    if os.path.exists(faq_retrieval._CACHE_PATH):
-        os.remove(faq_retrieval._CACHE_PATH)
-
-
-class FindRelevantTests(unittest.TestCase):
+class FindRelevantTest(unittest.TestCase):
     def setUp(self):
-        _reset_module_state()
-        # One-hot vectors per FAQ question so similarity is unambiguous: a
-        # query vector equal to entry N's vector matches only entry N.
-        self.vectors = {
-            entry["question"]: [1.0 if i == idx else 0.0 for i in range(len(FAQ_ENTRIES))]
-            for idx, entry in enumerate(FAQ_ENTRIES)
-        }
-        self.first_entry = FAQ_ENTRIES[0]
+        self.store = vector_store.InMemoryVectorStore()
+        vector_store.set_store(self.store)
+        for source_id, content, vec in ENTRIES:
+            doc = run(self.store.upsert_document(
+                corpus=vector_store.CORPUS_DOC, source_id=source_id,
+                title=source_id, content=content, content_hash="h-" + source_id, metadata={}))
+            run(self.store.upsert_chunks([Chunk(
+                doc, vector_store.CORPUS_DOC, 0, content, "c-" + source_id, vec, "test-model")]))
 
     def tearDown(self):
-        _reset_module_state()
+        vector_store.set_store(None)
 
-    def test_query_matching_first_faq_returns_it_above_threshold(self):
-        client = FakeOllamaClient(self.vectors, default=self.vectors[self.first_entry["question"]])
-        matches = faq_retrieval.find_relevant("cau hoi bat ky", client=client)
+    def test_returns_match_above_threshold(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+            matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
         self.assertTrue(matches)
-        self.assertEqual(matches[0].entry["id"], self.first_entry["id"])
-        self.assertGreaterEqual(matches[0].score, faq_retrieval.FAQ_MATCH_THRESHOLD)
+        self.assertEqual(matches[0].entry["id"], "quy-dinh-muon-tra")
 
-    def test_unrelated_query_returns_no_match(self):
-        orthogonal = [0.0] * len(FAQ_ENTRIES)
-        client = FakeOllamaClient(self.vectors, default=orthogonal)
-        matches = faq_retrieval.find_relevant("cau hoi khong lien quan gi ca", client=client)
-        self.assertEqual(matches, [])
+    def test_entry_shape_unchanged(self):
+        """AD-5: retrieval.py doc entry['question'] va entry['answer']."""
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+            matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
+        self.assertIn("id", matches[0].entry)
+        self.assertIn("question", matches[0].entry)
+        self.assertIn("answer", matches[0].entry)
 
-    def test_ollama_failure_returns_empty_list_not_exception(self):
-        matches = faq_retrieval.find_relevant("bat ky cau hoi nao", client=FailingOllamaClient())
-        self.assertEqual(matches, [])
+    def test_below_threshold_returns_empty(self):
+        # [0.6, 0.8] is a real unit vector giving cosine 0.6 against the seeded
+        # [1.0, 0.0] entry — a genuine similarity that still clears no bar this
+        # high, unlike an exact-match vector which would always score 1.0.
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
+            self.assertEqual(faq_retrieval.find_relevant("bat ky", threshold=0.99), [])
 
-    def test_cache_reused_on_second_load_without_reembedding(self):
-        client = FakeOllamaClient(self.vectors, default=self.vectors[self.first_entry["question"]])
-        first_load = faq_retrieval._load_faq_vectors(client=client)
-        self.assertEqual(len(first_load), len(FAQ_ENTRIES))
-        self.assertTrue(os.path.exists(faq_retrieval._CACHE_PATH))
+    def test_embedding_unavailable_returns_empty(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            self.assertEqual(faq_retrieval.find_relevant("bat ky"), [])
 
-        faq_retrieval._faq_vectors = None
-        # FailingOllamaClient would raise on any embed() call — if this still
-        # returns full vectors, they came from the on-disk cache, not a
-        # fresh embedding call.
-        second_load = faq_retrieval._load_faq_vectors(client=FailingOllamaClient())
-        self.assertEqual(len(second_load), len(FAQ_ENTRIES))
-        self.assertTrue(all(vector for _, vector in second_load))
+    def test_empty_query_returns_empty(self):
+        self.assertEqual(faq_retrieval.find_relevant("   "), [])
 
+    def test_keyword_arm_surfaces_entry_semantic_arm_cannot(self):
+        """I3: INTERNAL_DOC la hybrid, khong con semantic-only.
 
-class CacheKeyTests(unittest.TestCase):
-    """A cached index built by one embedding model must not be reused by another:
-    the vectors have different dimensions, and cosine similarity scores mismatched
-    lengths as 0.0, which looks like "nothing is relevant" rather than an error."""
+        Vector cua query khop TUYET DOI entry SAI ("quy-dinh-muon-tra") va la
+        entry duy nhat vuot nguong, nen nhanh semantic mot minh khong bao gio
+        tra ve "phi-phat". Nhung cau hoi trung tung chu voi noi dung cua
+        "phi-phat" ("phi phat ... qua han") va khong token nao cham vao entry
+        kia — chi nhanh keyword dua duoc no vao ket qua.
+        """
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+            matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.5)
+        self.assertIn("phi-phat", [match.entry["id"] for match in matches])
 
-    def setUp(self):
-        _reset_module_state()
-        self.original_model = faq_retrieval.embeddings.EMBED_MODEL
-
-    def tearDown(self):
-        faq_retrieval.embeddings.EMBED_MODEL = self.original_model
-        _reset_module_state()
-
-    def test_cache_key_changes_when_the_embedding_model_changes(self):
-        first = faq_retrieval._content_hash()
-        faq_retrieval.embeddings.EMBED_MODEL = self.original_model + "-other"
-        self.assertNotEqual(first, faq_retrieval._content_hash())
-
-    def test_index_is_rebuilt_after_an_embedding_model_swap(self):
-        small = {entry["question"]: [1.0, 0.0] for entry in FAQ_ENTRIES}
-        client = FakeOllamaClient(small, default=[1.0, 0.0])
-        faq_retrieval._load_faq_vectors(client=client)
-        self.assertTrue(os.path.exists(faq_retrieval._CACHE_PATH))
-
-        faq_retrieval.embeddings.EMBED_MODEL = self.original_model + "-other"
-        faq_retrieval._faq_vectors = None
-        wide = {entry["question"]: [0.0, 1.0, 0.0, 0.0] for entry in FAQ_ENTRIES}
-        rebuilt = faq_retrieval._load_faq_vectors(client=FakeOllamaClient(wide, default=[0.0, 1.0, 0.0, 0.0]))
-        self.assertTrue(all(len(vector) == 4 for _, vector in rebuilt),
-                        "stale 2-dim vectors were reused after the model changed")
+    def test_keyword_arm_alone_matches_when_semantic_below_threshold(self):
+        """Nguong ap len diem cosine cua nhanh semantic TRUOC fusion, khong ap
+        len diem RRF: semantic bi loai sach ma keyword van khop thi van co
+        ket qua (cung quy uoc voi gate keyword ben _score_and_rank_books)."""
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
+            matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.99)
+        self.assertEqual([match.entry["id"] for match in matches], ["phi-phat"])
 
 
 if __name__ == "__main__":

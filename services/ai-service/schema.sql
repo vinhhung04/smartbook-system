@@ -106,3 +106,42 @@ CREATE TABLE IF NOT EXISTS ai_cover_embeddings (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ai_cover_embeddings_book ON ai_cover_embeddings (book_id);
+
+-- Vector store (Phase A). Extension tao o day chu khong chi trong db-init/ vi
+-- db-init chi chay tren volume trong; schema.sql chay moi lan service khoi dong
+-- nen day la duong duy nhat co tac dung voi database dang ton tai.
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
+CREATE TABLE IF NOT EXISTS ai_documents (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    corpus        VARCHAR(32)  NOT NULL,
+    source_id     VARCHAR(128) NOT NULL,
+    title         TEXT,
+    content       TEXT         NOT NULL,
+    content_hash  VARCHAR(64)  NOT NULL,
+    metadata      JSONB        NOT NULL DEFAULT '{}',
+    updated_at    TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    UNIQUE (corpus, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS ai_document_chunks (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID NOT NULL REFERENCES ai_documents (id) ON DELETE CASCADE,
+    corpus          VARCHAR(32)  NOT NULL,
+    chunk_index     INT          NOT NULL,
+    content         TEXT         NOT NULL,
+    content_hash    VARCHAR(64)  NOT NULL,
+    embedding       vector(768)  NOT NULL,
+    embedding_model VARCHAR(64)  NOT NULL,
+    tsv             tsvector,
+    created_at      TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    UNIQUE (document_id, chunk_index)
+);
+
+CREATE INDEX IF NOT EXISTS ix_ai_chunks_embedding
+    ON ai_document_chunks USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS ix_ai_chunks_tsv
+    ON ai_document_chunks USING gin (tsv);
+CREATE INDEX IF NOT EXISTS ix_ai_chunks_corpus_model
+    ON ai_document_chunks (corpus, embedding_model);

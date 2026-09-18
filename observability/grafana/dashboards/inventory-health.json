@@ -1,0 +1,62 @@
+{
+  "title": "Inventory Health",
+  "uid": "inventory-health",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Outbox pending",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "outbox_pending_total", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Outbox failed (1h increase)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "increase(outbox_failed_total[1h])", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RabbitMQ publish failures / min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(rabbitmq_publish_fail_total[5m])) * 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "inventory-service error rate (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_server_duration_count{service_name=\"inventory-service\",http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_duration_count{service_name=\"inventory-service\"}[5m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Low stock variants",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "inventory_low_stock_variant_count", "refId": "A" }
+      ]
+    }
+  ]
+}

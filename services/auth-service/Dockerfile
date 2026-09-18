@@ -20,4 +20,4 @@ COPY --from=builder /app ./
 RUN node_modules/.bin/prisma generate
 
 EXPOSE 3002
-CMD ["node", "src/index.js"]
+CMD ["node", "-r", "./src/tracing.js", "src/index.js"]

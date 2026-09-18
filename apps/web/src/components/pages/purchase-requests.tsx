@@ -266,6 +266,7 @@ export function PurchaseRequestsPage() {
                         {req.status === "PENDING" && (
                           <div className="flex gap-1.5">
                             <Button type="button" size="sm" disabled={acting} onClick={() => setApproveTarget(req)}
+                              data-testid="approve-purchase-request-button"
                               className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700">
                               <Check className="h-3 w-3" /> Duyệt
                             </Button>
@@ -279,6 +280,7 @@ export function PurchaseRequestsPage() {
                         {req.status === "APPROVED" && !req.purchase_order_id && (
                           <Button type="button" size="sm" disabled={acting}
                             onClick={() => setRowAction(rowAction?.id === req.id && rowAction.type === "convert" ? null : { type: "convert", id: req.id, value: "" })}
+                            data-testid="convert-request-to-po-button"
                             className="h-7 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700">
                             <ArrowRight className="h-3 w-3" /> Chuyển thành PO
                           </Button>
@@ -342,6 +344,7 @@ export function PurchaseRequestsPage() {
                                       value={variantQuery}
                                       onChange={(e) => setVariantQuery(e.target.value)}
                                       autoFocus
+                                      data-testid="convert-po-variant-search"
                                     />
                                   </div>
                                   {variantQuery.length >= 2 && (
@@ -377,6 +380,7 @@ export function PurchaseRequestsPage() {
                               className="flex-1 max-w-xs rounded-md border border-indigo-200 bg-card px-3 py-1.5 text-[13px] dark:border-indigo-500/20"
                               value={rowAction.value}
                               onChange={(e) => setRowAction({ ...rowAction, value: e.target.value })}
+                              data-testid="convert-po-supplier-select"
                             >
                               <option value="">-- Chọn nhà cung cấp --</option>
                               {suppliers.map((s) => (
@@ -387,6 +391,7 @@ export function PurchaseRequestsPage() {
                               type="button" size="sm"
                               disabled={acting || !rowAction.value || (!req.book_variant_id && !rowAction.variantId)}
                               onClick={() => void handleConvert()}
+                              data-testid="create-po-from-request-button"
                               className="bg-indigo-600 hover:bg-indigo-700 h-7 px-3 text-[11px]">
                               Tạo đơn đặt hàng
                             </Button>

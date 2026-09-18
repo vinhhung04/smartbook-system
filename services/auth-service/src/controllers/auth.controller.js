@@ -212,6 +212,7 @@ async function register(req, res) {
         headers: {
           'Content-Type': 'application/json',
           'x-internal-service-key': INTERNAL_SERVICE_KEY,
+          ...(req.requestId ? { 'x-request-id': req.requestId } : {}),
         },
         body: JSON.stringify({
           user_id: createdUser.id,

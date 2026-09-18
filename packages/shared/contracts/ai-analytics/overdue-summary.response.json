@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /analytics/overdue-summary — 200 response",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["total_overdue_items", "total_overdue_loans", "average_overdue_days", "oldest_overdue_days", "items"],
+      "properties": {
+        "total_overdue_items": { "type": "number" },
+        "total_overdue_loans": { "type": "number" },
+        "average_overdue_days": { "type": "number" },
+        "oldest_overdue_days": { "type": "number" },
+        "items": { "type": "array" }
+      }
+    }
+  }
+}

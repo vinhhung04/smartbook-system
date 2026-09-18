@@ -169,7 +169,7 @@ class TestFastPath(unittest.TestCase):
 
     def test_overdue_no_action_signal_uses_rule(self):
         # "sach qua han hom nay" -> OVERDUE_LOAN_QUERY confidence=0.92, 4 words, no action signal
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = ({}, False)
             result = _run(classify_user_message("sach qua han hom nay"))
         self.assertEqual(result["source"], "rule_based")
@@ -177,7 +177,7 @@ class TestFastPath(unittest.TestCase):
         mock.assert_not_called()
 
     def test_fine_query_fast_path(self):
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = ({}, False)
             result = _run(classify_user_message("tien phat chua thu thang nay"))
         self.assertEqual(result["source"], "rule_based")
@@ -185,7 +185,7 @@ class TestFastPath(unittest.TestCase):
 
     def test_fast_path_wants_action_is_false(self):
         # Fast path never sets wants_action=True
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = ({}, False)
             result = _run(classify_user_message("sach qua han hom nay"))
         self.assertFalse(result["wants_action"])
@@ -209,7 +209,7 @@ class TestLLMPath(unittest.TestCase):
             action_type=CREATE_RESERVATION_DRAFT,
             entities={**_empty_entities(), "book_title": "Clean Code"},
         )
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Giu giup toi cuon Clean Code"))
         self.assertEqual(result["intent"], RESERVATION_QUERY)
@@ -220,7 +220,7 @@ class TestLLMPath(unittest.TestCase):
 
     def test_low_stock_natural_vietnamese(self):
         resp = _llm(LOW_STOCK_QUERY, wants_action=False, action_type=None)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Kho minh dang thieu dau sach nao vay"))
         self.assertEqual(result["intent"], LOW_STOCK_QUERY)
@@ -230,7 +230,7 @@ class TestLLMPath(unittest.TestCase):
     def test_reorder_query_only_no_action(self):
         """'Nen nhap them sach nao?' - data query, not action creation."""
         resp = _llm(REORDER_SUGGESTION_QUERY, wants_action=False, action_type=None)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Nen nhap them sach nao"))
         self.assertEqual(result["intent"], REORDER_SUGGESTION_QUERY)
@@ -240,7 +240,7 @@ class TestLLMPath(unittest.TestCase):
     def test_reorder_explicit_create_action(self):
         """'Tao phieu nhap cho sach can bo sung' - explicit action."""
         resp = _llm(REORDER_SUGGESTION_QUERY, wants_action=True, action_type=CREATE_REORDER_DRAFT)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Tao phieu nhap cho sach can bo sung"))
         self.assertEqual(result["action_type"], CREATE_REORDER_DRAFT)
@@ -249,7 +249,7 @@ class TestLLMPath(unittest.TestCase):
     def test_reservation_query_only_no_action(self):
         """'Tinh trang dat sach cua toi?' - status query, not draft creation."""
         resp = _llm(RESERVATION_QUERY, wants_action=False, action_type=None)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Tinh trang dat sach cua toi"))
         self.assertEqual(result["intent"], RESERVATION_QUERY)
@@ -258,7 +258,7 @@ class TestLLMPath(unittest.TestCase):
 
     def test_dual_intent_secondary(self):
         resp = _llm(LOW_STOCK_QUERY, secondary=[TOP_BORROWED_BOOKS_QUERY])
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Nhung dau sach noi bat nhung co ve sap thieu"))
         mock.assert_awaited_once()
@@ -271,17 +271,15 @@ class TestLLMPath(unittest.TestCase):
             action_type=CREATE_REORDER_DRAFT,
             entities={**_empty_entities(), "warehouse_hint": "HCM"},
         )
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             result = _run(classify_user_message("Nhap them sach o kho HCM giup toi"))
         self.assertEqual(result["entities"]["warehouse_hint"], "HCM")
         self.assertEqual(result["action_type"], CREATE_REORDER_DRAFT)
 
     def test_llm_fail_falls_back_to_rule(self):
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mg, \
-             patch.object(nlu_module, "_call_ollama", new_callable=AsyncMock) as mo:
-            mg.return_value = ({}, False)
-            mo.return_value = ({}, False)
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
+            mock.return_value = ({}, False)
             result = _run(classify_user_message("Kho minh dang thieu dau sach nao vay"))
         self.assertEqual(result["source"], "fallback")
         self.assertFalse(result["wants_action"])
@@ -290,7 +288,7 @@ class TestLLMPath(unittest.TestCase):
         nlu_module._nlu_cache.clear()
         msg = "sach qua han thang nay nen lam gi vay"
         resp = _llm(OVERDUE_LOAN_QUERY)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mock:
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
             mock.return_value = (resp, True)
             _run(classify_user_message(msg))
             _run(classify_user_message(msg))
@@ -302,17 +300,6 @@ class TestLLMPath(unittest.TestCase):
         for key in sensitive:
             self.assertNotIn(key, result)
             self.assertNotIn(key, result.get("entities", {}))
-
-    def test_groq_fails_ollama_called(self):
-        resp = _llm(LOW_STOCK_QUERY)
-        with patch.object(nlu_module, "_call_groq", new_callable=AsyncMock) as mg, \
-             patch.object(nlu_module, "_call_ollama", new_callable=AsyncMock) as mo:
-            mg.return_value = ({}, False)
-            mo.return_value = (resp, True)
-            result = _run(classify_user_message("Kho minh dang thieu dau sach nao vay"))
-        self.assertEqual(result["source"], "llm")
-        mo.assert_called_once()
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -42,11 +42,11 @@ USERNAME = os.getenv("ASSISTANT_EVAL_USERNAME", "manager01")
 PASSWORD = os.getenv("ASSISTANT_EVAL_PASSWORD", "123456")
 # ai-service's own per-IP limiter (cache.py: 15 req/min) was sized around the
 # local Ollama model's natural ~25-70s/round pace, which never came close to
-# it. Running this eval against a fast provider (ASSISTANT_PROVIDER=anthropic)
-# hits it almost immediately - every request after the first ~15 comes back
-# 429 within the same minute. 4.5s keeps this eval under 15/min against any
-# provider without touching the limiter itself (a separate, known issue -
-# see the plan's "out of scope" notes - it's keyed by client IP, which is the
+# it. Running this eval against a fast cloud provider (OpenRouter/Qwen) hits it
+# almost immediately - every request after the first ~15 comes back 429 within
+# the same minute. 4.5s keeps this eval under 15/min against any provider
+# without touching the limiter itself (a separate, known issue - see the
+# plan's "out of scope" notes - it's keyed by client IP, which is the
 # gateway's IP for every real caller, not just this eval script).
 ASSISTANT_EVAL_REQUEST_DELAY_SECONDS = float(os.getenv("ASSISTANT_EVAL_REQUEST_DELAY_SECONDS", "4.5"))
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_EVAL_TIMEOUT_SECONDS", "150"))

@@ -27,7 +27,7 @@ async function fetchImageBytes(storageRef) {
 // pack quantity, via ai-service's vision model. Never throws — a failed AI
 // call must not block the packing flow, so callers get an UNAVAILABLE result
 // instead of an exception.
-async function verifyPackingPhoto(storageRef, expectedCount) {
+async function verifyPackingPhoto(storageRef, expectedCount, requestId) {
   try {
     const { contentType, buffer } = await fetchImageBytes(storageRef);
 
@@ -38,6 +38,7 @@ async function verifyPackingPhoto(storageRef, expectedCount) {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(20000),
+      headers: requestId ? { 'x-request-id': requestId } : undefined,
     });
 
     if (!response.ok) {

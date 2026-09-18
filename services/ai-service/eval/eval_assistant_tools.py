@@ -1,32 +1,34 @@
 """Labeled tool-selection accuracy eval for the AI assistant (/assistant).
 
-Drives one Ollama tool-calling round directly - same model, system prompt and
-tool schemas the real /assistant endpoint uses (imported from main.py) - but
-skips the auth/conversation/caching layers around it, since only the model's
-tool choice is under test here, not the whole endpoint.
+Drives one tool-calling round directly - same provider (via
+_get_assistant_provider), model, system prompt and tool schemas the real
+/assistant endpoint uses (imported from main.py) - but skips the
+auth/conversation/caching layers around it, since only the model's tool
+choice is under test here, not the whole endpoint.
 
-Requires a running Ollama with ASSISTANT_MODEL pulled (defaults to
-llama3.1:8b-instruct-q4_0). No auth token, no gateway, no other services
-needed - set OLLAMA_HOST if Ollama isn't at the in-Docker default.
+Provider-agnostic: set ASSISTANT_PROVIDER (and, for "openrouter",
+OPENROUTER_API_KEY/OPENROUTER_ASSISTANT_MODEL) the same way main.py reads
+them - this is exactly how you A/B a candidate model (e.g. Qwen via
+OpenRouter) against the current default before flipping it in .env. No auth
+token, no gateway, no other services needed beyond the configured provider.
 
 Usage (from services/ai-service/):
     python eval/eval_assistant_tools.py
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import sys
 from datetime import datetime, timezone
 
-import ollama
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # ai-service root, for `import main`
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # this dir, for `import scoring`
 
 import scoring  # noqa: E402
-from main import ANALYTICS_TOOLS, ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_MODEL, ASSISTANT_SYSTEM_PROMPT, OLLAMA_HOST  # noqa: E402
+from main import (  # noqa: E402
+    ANALYTICS_TOOLS, ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_SYSTEM_PROMPT, _get_assistant_provider,
+)
 
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "assistant_dataset.json")
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
@@ -36,58 +38,39 @@ LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
 async def ask_once(question: str) -> list[str]:
     """Runs a single tool-calling round and returns the tool names the model
     chose (empty list if it answered directly without calling any tool)."""
-    client = ollama.Client(host=OLLAMA_HOST)
+    provider = _get_assistant_provider()
     messages = [
         {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
-    response = await asyncio.wait_for(
-        asyncio.to_thread(
-            client.chat,
-            model=ASSISTANT_MODEL,
-            messages=messages,
-            tools=ANALYTICS_TOOLS,
-            options={"temperature": 0.2, "num_predict": 200},
-        ),
-        timeout=LLM_TIMEOUT_SECONDS,
-    )
-    tool_calls = response["message"].get("tool_calls") or []
-    return [call["function"]["name"] for call in tool_calls]
+    result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=200, timeout=LLM_TIMEOUT_SECONDS)
+    return [call["function"]["name"] for call in result.tool_calls]
 
 
 async def ask_multi_round(question: str, max_rounds: int = ASSISTANT_MAX_TOOL_ROUNDS) -> list[str]:
-    """Same model/prompt/tools as ask_once, but continues the tool-calling loop
-    up to `max_rounds`, feeding back a fixed stub tool result after each round
-    so the model has the chance to call MORE tools in a later round - this is
-    what /assistant's real loop supports (up to ASSISTANT_MAX_TOOL_ROUNDS) but
-    ask_once alone never exercises, since it stops after round 1.
+    """Same provider/model/prompt/tools as ask_once, but continues the
+    tool-calling loop up to `max_rounds`, feeding back a fixed stub tool
+    result after each round so the model has the chance to call MORE tools in
+    a later round - this is what /assistant's real loop supports (up to
+    ASSISTANT_MAX_TOOL_ROUNDS) but ask_once alone never exercises, since it
+    stops after round 1.
 
     Returns the union of every distinct tool name called across all rounds, in
     first-called order. Tool results are never actually executed (a fixed
-    stub is fed back instead) so this still needs only Ollama - no gateway,
-    no other services, matching this script's existing "no other services
-    needed" property.
+    stub is fed back instead) so this still needs only the configured
+    provider - no gateway, no other services, matching this script's existing
+    "no other services needed" property.
     """
-    client = ollama.Client(host=OLLAMA_HOST)
+    provider = _get_assistant_provider()
     messages = [
         {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
     called: list[str] = []
     for _round in range(max_rounds):
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.chat,
-                model=ASSISTANT_MODEL,
-                messages=messages,
-                tools=ANALYTICS_TOOLS,
-                options={"temperature": 0.2, "num_predict": 200},
-            ),
-            timeout=LLM_TIMEOUT_SECONDS,
-        )
-        message = response["message"]
-        messages.append(message)
-        tool_calls = message.get("tool_calls") or []
+        result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=200, timeout=LLM_TIMEOUT_SECONDS)
+        messages.append(result.assistant_message)
+        tool_calls = result.tool_calls
         if not tool_calls:
             break
         for call in tool_calls:
@@ -106,7 +89,8 @@ def render_report(round1_results: list[dict], round1_summary: dict, multi_result
         "# Assistant tool-selection eval",
         "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
-        f"Model: {ASSISTANT_MODEL}",
+        f"Provider: {_get_assistant_provider().name}",
+        f"Model: {_get_assistant_provider().model}",
         f"Total questions: {round1_summary['total']}",
         "",
         "## Summary — round 1 only",
@@ -144,7 +128,9 @@ async def main() -> None:
     with open(DATASET_PATH, encoding="utf-8") as f:
         dataset = json.load(f)
 
-    print(f"Running assistant tool-selection eval on {len(dataset)} questions (model={ASSISTANT_MODEL})...")
+    provider = _get_assistant_provider()
+    print(f"Running assistant tool-selection eval on {len(dataset)} questions "
+          f"(provider={provider.name}, model={provider.model})...")
     round1_results = []
     multi_results = []
     for index, entry in enumerate(dataset, start=1):

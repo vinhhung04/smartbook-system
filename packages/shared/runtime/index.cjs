@@ -1,4 +1,5 @@
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
+const { trace } = require('@opentelemetry/api');
 
 const UNSAFE_PLACEHOLDERS = new Set([
   'change-me',
@@ -65,12 +66,16 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
   return (req, res, next) => {
     const startedAt = now();
     res.once('finish', () => {
+      const spanContext = trace.getActiveSpan()?.spanContext();
       log(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'info',
         service: serviceName,
         request_id: req.requestId || null,
+        trace_id: spanContext?.traceId || null,
+        span_id: spanContext?.spanId || null,
         method: req.method,
+        route: req.route?.path ? `${req.baseUrl}${req.route.path}` : undefined,
         path: req.originalUrl || req.url,
         status: res.statusCode,
         latency_ms: Math.max(0, now() - startedAt),
@@ -131,6 +136,14 @@ function createRateLimiter({ max = 100, windowMs = 60_000, key, trustedProxyHops
   };
 }
 
+function deterministicUuid(seed) {
+  const hash = createHash('sha256').update(seed).digest('hex');
+  const chars = hash.slice(0, 32).split('');
+  chars[12] = '4';
+  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
+  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
+}
+
 function securityHeaders(_req, res, next) {
   res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -145,6 +158,7 @@ module.exports = {
   createRateLimiter,
   createRequestContext,
   createRequestLogger,
+  deterministicUuid,
   requireEnv,
   resolveClientIp,
   securityHeaders,

@@ -2520,6 +2520,39 @@ async function confirmPickingLine(req, res) {
             },
           });
 
+          await tx.integration_outbox.createMany({
+            data: [
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: expectedLocation.id,
+                  warehouse_id: order.warehouse_id,
+                  delta_qty: -quantity,
+                  reason_code: "PICKING_CONFIRMED",
+                  source_reference_type: "OUTBOUND_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: shippingLocation.id,
+                  warehouse_id: order.warehouse_id,
+                  delta_qty: quantity,
+                  reason_code: "PICKING_CONFIRMED",
+                  source_reference_type: "OUTBOUND_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+            ],
+          });
+
           await tx.outbound_order_items.update({
             where: { id: line.id },
             data: {
@@ -3093,6 +3126,39 @@ async function confirmPickingLine(req, res) {
           },
         });
 
+        await tx.integration_outbox.createMany({
+          data: [
+            {
+              aggregate_type: "STOCK_BALANCE",
+              aggregate_id: line.variant_id,
+              event_type: "inventory.stock.changed",
+              payload: {
+                variant_id: line.variant_id,
+                location_id: expectedLocation.id,
+                warehouse_id: order.from_warehouse_id,
+                delta_qty: -quantity,
+                reason_code: "PICKING_CONFIRMED",
+                source_reference_type: "TRANSFER_ORDER",
+                source_reference_id: order.id,
+              },
+            },
+            {
+              aggregate_type: "STOCK_BALANCE",
+              aggregate_id: line.variant_id,
+              event_type: "inventory.stock.changed",
+              payload: {
+                variant_id: line.variant_id,
+                location_id: shippingLocation.id,
+                warehouse_id: order.from_warehouse_id,
+                delta_qty: quantity,
+                reason_code: "PICKING_CONFIRMED",
+                source_reference_type: "TRANSFER_ORDER",
+                source_reference_id: order.id,
+              },
+            },
+          ],
+        });
+
         await tx.transfer_order_items.update({
           where: { id: line.id },
           data: {
@@ -3408,6 +3474,39 @@ async function cancelTransferReturn(req, res) {
             },
           });
 
+          await tx.integration_outbox.createMany({
+            data: [
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: shippingLocation.id,
+                  warehouse_id: order.from_warehouse_id,
+                  delta_qty: -qty,
+                  reason_code: "TRANSFER_RETURN_CANCELLED",
+                  source_reference_type: "TRANSFER_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: receivingLocation.id,
+                  warehouse_id: order.from_warehouse_id,
+                  delta_qty: qty,
+                  reason_code: "TRANSFER_RETURN_CANCELLED",
+                  source_reference_type: "TRANSFER_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+            ],
+          });
+
           await tx.transfer_order_items.update({
             where: { id: line.id },
             data: {
@@ -3670,6 +3769,39 @@ async function cancelOutboundReturn(req, res) {
               version: 1,
               last_movement_at: new Date(),
             },
+          });
+
+          await tx.integration_outbox.createMany({
+            data: [
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: shippingLocation.id,
+                  warehouse_id: order.warehouse_id,
+                  delta_qty: -qty,
+                  reason_code: "OUTBOUND_RETURN_CANCELLED",
+                  source_reference_type: "OUTBOUND_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+              {
+                aggregate_type: "STOCK_BALANCE",
+                aggregate_id: line.variant_id,
+                event_type: "inventory.stock.changed",
+                payload: {
+                  variant_id: line.variant_id,
+                  location_id: receivingLocation.id,
+                  warehouse_id: order.warehouse_id,
+                  delta_qty: qty,
+                  reason_code: "OUTBOUND_RETURN_CANCELLED",
+                  source_reference_type: "OUTBOUND_ORDER",
+                  source_reference_id: order.id,
+                },
+              },
+            ],
           });
 
           await tx.outbound_order_items.update({

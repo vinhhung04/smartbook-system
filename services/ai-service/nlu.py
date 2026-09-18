@@ -2,23 +2,23 @@
 nlu.py — Hybrid NLU layer for SmartBook AI chatbot.
 
 Stage 1: detect_intent() rule-based (fast, deterministic).
-Stage 2: LLM classifier via Groq -> Ollama fallback (natural Vietnamese).
+Stage 2: LLM classifier via the configured text LLM (OpenRouter/Qwen by
+default; see NLU_PROVIDER/LLM_PROVIDER) for natural Vietnamese entity
+extraction.
 
 Security: Never sends auth tokens, user profiles, or business data to any LLM.
 """
 from __future__ import annotations
 
-import asyncio
+import functools
 import json
 import logging
 import os
 import re
 from typing import Any
 
-import httpx
-import ollama
-
 from cache import SummaryCache
+from llm_provider import get_llm_provider
 from intent import (
     detect_intent,
     normalize_text,
@@ -44,9 +44,6 @@ from agent_actions import (
 
 logger = logging.getLogger("uvicorn.error")
 
-_GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-_GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-_GROQ_MODEL = os.getenv("GROQ_SUMMARY_MODEL", "llama-3.3-70b-versatile")
 # Ollama model priority for NLU text classification: NLU_MODEL -> SUMMARY_MODEL -> OLLAMA_MODEL -> "llama3"
 _NLU_OLLAMA_MODEL = os.getenv(
     "NLU_MODEL",
@@ -54,6 +51,28 @@ _NLU_OLLAMA_MODEL = os.getenv(
 )
 _OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 _NLU_TIMEOUT = float(os.getenv("NLU_LLM_TIMEOUT_SECONDS", "5"))
+# Provider for NLU intent classification - "openrouter" (default) or "ollama". Falls
+# back to LLM_PROVIDER when unset, so this module stays in sync with the rest of the
+# service's default provider without needing its own separate config in the common case.
+_NLU_PROVIDER = (os.getenv("NLU_PROVIDER", "").strip() or os.getenv("LLM_PROVIDER", "openrouter")).strip().lower()
+_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+_OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+_OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+_OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
+
+
+@functools.lru_cache(maxsize=1)
+def _get_nlu_provider():
+    """Cached provider instance for NLU intent classification - see _NLU_PROVIDER."""
+    return get_llm_provider(
+        _NLU_PROVIDER,
+        ollama_host=_OLLAMA_HOST,
+        ollama_model=_NLU_OLLAMA_MODEL,
+        openrouter_api_key=_OPENROUTER_API_KEY,
+        openrouter_base_url=_OPENROUTER_BASE_URL,
+        openrouter_model=_OPENROUTER_TEXT_MODEL,
+        openrouter_fallback_model=_OPENROUTER_FALLBACK_MODEL,
+    )
 
 INTENT_ALLOWLIST: frozenset[str] = frozenset([
     DASHBOARD_SUMMARY_QUERY,
@@ -324,58 +343,27 @@ def _history_snippet(conversation_history: list | None) -> str:
     return "\n".join(lines)
 
 
-async def _call_groq(message: str, history: str) -> tuple[dict, bool]:
-    if not _GROQ_API_KEY:
-        return {}, False
+async def _call_llm(message: str, history: str) -> tuple[dict, bool]:
+    """NLU classification call. Routes through llm_provider (OpenRouter/Qwen
+    by default; see NLU_PROVIDER/LLM_PROVIDER)."""
     user_content = f"Cau nguoi dung: {message}"
     if history:
         user_content = f"Lich su:\n{history}\n\n{user_content}"
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(_NLU_TIMEOUT)) as client:
-            resp = await client.post(
-                f"{_GROQ_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {_GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": _GROQ_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _NLU_SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content},
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 400,
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"]
-            return _parse_json(raw), True
-    except Exception as exc:
-        logger.warning("Groq NLU failed: %s", exc)
-        return {}, False
-
-
-async def _call_ollama(message: str, history: str) -> tuple[dict, bool]:
-    user_content = f"Cau nguoi dung: {message}"
-    if history:
-        user_content = f"Lich su:\n{history}\n\n{user_content}"
-    full_prompt = f"{_NLU_SYSTEM_PROMPT}\n\n{user_content}"
-    try:
-        client = ollama.Client(host=_OLLAMA_HOST)
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.generate,
-                model=_NLU_OLLAMA_MODEL,
-                prompt=full_prompt,
-                options={"temperature": 0.1, "num_predict": 400},
-            ),
+        provider = _get_nlu_provider()
+        result = await provider.chat(
+            messages=[
+                {"role": "system", "content": _NLU_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            tools=[],
+            num_predict=400,
             timeout=_NLU_TIMEOUT,
+            temperature=0.1,
         )
-        raw = response.get("response", "")
-        return _parse_json(raw), bool(raw)
+        return _parse_json(result.text), bool(result.text)
     except Exception as exc:
-        logger.warning("Ollama NLU failed: %s", exc)
+        logger.warning("NLU LLM call failed: %s", exc)
         return {}, False
 
 
@@ -421,9 +409,7 @@ async def classify_user_message(
 
     # LLM path
     history = _history_snippet(conversation_history)
-    llm_raw, ok = await _call_groq(message, history)
-    if not ok or not llm_raw:
-        llm_raw, ok = await _call_ollama(message, history)
+    llm_raw, ok = await _call_llm(message, history)
 
     if ok and llm_raw:
         validated = _validate(llm_raw, rule_result, message)

@@ -6,6 +6,7 @@ const {
   createRateLimiter,
   createRequestContext,
   createRequestLogger,
+  deterministicUuid,
   requireEnv,
   securityHeaders,
 } = require('../runtime/index.cjs');
@@ -71,6 +72,34 @@ test('request logger emits structured metadata without request secrets', () => {
   assert.equal(entry.request_id, 'req-1');
   assert.equal(entry.status, 401);
   assert.equal(entry.authorization, undefined);
+  assert.equal(entry.route, undefined, 'no matched route on this request, must not fabricate one');
+});
+
+test('request logger reports the matched route pattern, not the raw path with real IDs', () => {
+  const lines = [];
+  let finish;
+  const req = {
+    method: 'PATCH',
+    originalUrl: '/borrow/reservations/181f0b38-87a0-4819-835c-40e764514384/confirm',
+    baseUrl: '/borrow',
+    route: { path: '/reservations/:id/confirm' },
+    requestId: 'req-2',
+  };
+  const res = { statusCode: 200, once: (_event, callback) => { finish = callback; } };
+  createRequestLogger('borrow-service', { log: (line) => lines.push(line), now: () => 10 })(req, res, () => {});
+  finish();
+  const entry = JSON.parse(lines[0]);
+  assert.equal(entry.route, '/borrow/reservations/:id/confirm');
+  assert.equal(entry.path, req.originalUrl, 'path still carries the real id for exact lookup');
+});
+
+test('deterministicUuid is stable for the same seed and looks like a v4 UUID', () => {
+  const a = deterministicUuid('reservation:key-1');
+  const b = deterministicUuid('reservation:key-1');
+  const c = deterministicUuid('reservation:key-2');
+  assert.equal(a, b);
+  assert.notEqual(a, c);
+  assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
 
 test('rate limiter rejects requests after the configured budget', () => {

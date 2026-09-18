@@ -1,0 +1,1371 @@
+[
+  {
+    "id": "bm-001",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234567",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "expected_facts": [
+      [
+        "So do"
+      ]
+    ],
+    "note": "Exact ISBN — keyword phai thang"
+  },
+  {
+    "id": "bm-002",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234570",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "expected_facts": [
+      [
+        "Xuan Dieu"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-003",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234572",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "expected_facts": [
+      [
+        "Ngo Tat Lu"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-004",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9780060883287",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "Marquez"
+      ]
+    ],
+    "note": "Exact ISBN, sach nuoc ngoai"
+  },
+  {
+    "id": "bm-005",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9781400079278",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "expected_facts": [
+      [
+        "Murakami"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-006",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234574",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "expected_facts": [
+      [
+        "tam ly"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-007",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786042389001",
+    "expected_ids": [
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "expected_facts": [
+      [
+        "thieu nhi"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-008",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9780593135204",
+    "expected_ids": [
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "expected_facts": [
+      [
+        "science-fiction",
+        "sinh ton"
+      ]
+    ],
+    "note": "Exact ISBN, sach khong dau tieng Viet trong mo ta"
+  },
+  {
+    "id": "bm-009",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách có tựa đề 'Nhà Giả Kim' của Paulo Coelho",
+    "expected_ids": [
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+    ],
+    "expected_facts": [
+      [
+        "Paulo Coelho"
+      ]
+    ],
+    "note": "Exact title + author, sach khong co description trong catalog"
+  },
+  {
+    "id": "bm-010",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách 'Mắt Biếc' của Nguyễn Nhật Ánh còn không?",
+    "expected_ids": [
+      "cb780777-916e-4d15-a3d7-a321436d9ea9"
+    ],
+    "expected_facts": [
+      [
+        "Nguyen Nhat Anh"
+      ]
+    ],
+    "note": "Exact title"
+  },
+  {
+    "id": "bm-011",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách 'Dune - Xứ Cát' của Frank Herbert",
+    "expected_ids": [
+      "8702650d-2a96-42fc-8e5c-9872ad55400e"
+    ],
+    "expected_facts": [
+      [
+        "Frank Herbert"
+      ]
+    ],
+    "note": "Exact title"
+  },
+  {
+    "id": "bm-012",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935235244603",
+    "expected_ids": [
+      "646f7364-013d-4848-aa62-b1f2b2099544"
+    ],
+    "expected_facts": [
+      [
+        "Yann Martel"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-013",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935086855348",
+    "expected_ids": [
+      "26a9abaf-f277-496d-b082-374983ede77a"
+    ],
+    "expected_facts": [
+      [
+        "Frankl"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-014",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách 'Người Đàn Ông Mang Tên OVE' của Fredrik Backman",
+    "expected_ids": [
+      "9d889004-907e-45bb-9a20-31fb7e74bf32"
+    ],
+    "expected_facts": [
+      [
+        "Backman"
+      ]
+    ],
+    "note": "Exact title"
+  },
+  {
+    "id": "bm-015",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935235244177",
+    "expected_ids": [
+      "efc23f75-42c5-488b-9f9f-6238a083c737"
+    ],
+    "expected_facts": [
+      [
+        "Higashino Keigo"
+      ]
+    ],
+    "note": "Exact ISBN"
+  },
+  {
+    "id": "bm-016",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào viết về đói nghèo và bất công xã hội thời phong kiến không?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "expected_facts": [
+      [
+        "phong kien"
+      ]
+    ],
+    "note": "Chi match qua description, khong trung title"
+  },
+  {
+    "id": "bm-017",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một nhân vật nông thôn cố thoát khỏi cuộc sống nghèo khó nhưng cuối cùng thất bại?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "expected_facts": [
+      [
+        "that bai"
+      ]
+    ],
+    "note": "Dien dat lai noi dung mo ta, khong trung title"
+  },
+  {
+    "id": "bm-018",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể một bí mật đau lòng trong một gia đình Việt Nam trước cách mạng?",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "expected_facts": [
+      [
+        "gia dinh"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-019",
+    "corpus": "BOOK_METADATA",
+    "question": "Truyện ngắn nào nói về một gia đình phải đối mặt với sự thật đau lòng về chính mình?",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "expected_facts": [
+      [
+        "su that dau long"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-020",
+    "corpus": "BOOK_METADATA",
+    "question": "Tập thơ nào viết về tình yêu và quê hương đất nước?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "expected_facts": [
+      [
+        "tinh yeu",
+        "que huong"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-021",
+    "corpus": "BOOK_METADATA",
+    "question": "Có tập thơ nào nói về đời sống và con người Việt Nam không?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "expected_facts": [
+      [
+        "doi song"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-022",
+    "corpus": "BOOK_METADATA",
+    "question": "Câu chuyện cổ tích Việt Nam nào nói về hóa thân và giấc mơ sau khi chết?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "expected_facts": [
+      [
+        "bieu tuong",
+        "giac mo"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-023",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể sự tích cổ tích với motif tình yêu bị trả thù?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "expected_facts": [
+      [
+        "tinh yeu"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-024",
+    "corpus": "BOOK_METADATA",
+    "question": "Cuốn sách nào kể về tuổi thơ nông thôn Việt Nam đầy biến động, gia đình và hy vọng?",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "expected_facts": [
+      [
+        "gia dinh",
+        "hy vong"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-025",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào nói về đời sống nông thôn với nhiều biến động về tình yêu?",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "expected_facts": [
+      [
+        "bien doi"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-026",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào lấy bối cảnh Tokyo cuối thập niên 1960, kể về tình yêu và mất mát của một chàng trai?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "expected_facts": [
+      [
+        "Tokyo"
+      ]
+    ],
+    "note": "Chi match qua description tieng Anh"
+  },
+  {
+    "id": "bm-027",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về hành trình trưởng thành của một chàng trai tên Toru Watanabe?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "expected_facts": [
+      [
+        "Watanabe"
+      ]
+    ],
+    "note": "Chi match qua description, khong trung title"
+  },
+  {
+    "id": "bm-028",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một gia tộc trải qua bảy thế hệ ở một thị trấn hư cấu tên Macondo?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "Macondo"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-029",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm văn học nào nói về gia đình Buendia?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "Buendia"
+      ]
+    ],
+    "note": "Chi match qua description, khong trung title"
+  },
+  {
+    "id": "bm-030",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào viết về tuổi học trò với nhiều sự trớ trêu và hạnh phúc?",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "expected_facts": [
+      [
+        "troi ngang"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-031",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào kể về thanh niên sống ở đô thị với những kỷ niệm vui buồn?",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "expected_facts": [
+      [
+        "thanh thi"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-032",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào phân tích tâm lý và tính cách của người Việt trong đời sống hiện đại?",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "expected_facts": [
+      [
+        "tam ly"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-033",
+    "corpus": "BOOK_METADATA",
+    "question": "Có cuốn sách nào nghiên cứu về hành vi và tính cách con người Việt Nam không?",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "expected_facts": [
+      [
+        "hanh vi",
+        "tinh cach"
+      ]
+    ],
+    "note": "Dien dat lai, khong trung title"
+  },
+  {
+    "id": "bm-034",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào có một cậu bé tên Nakata có thể nói chuyện với mèo?",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "expected_facts": [
+      [
+        "Nakata"
+      ]
+    ],
+    "note": "Chi match qua description"
+  },
+  {
+    "id": "bm-035",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một ông già hay ăn cắp vặt tên Hoshino?",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "expected_facts": [
+      [
+        "Hoshino"
+      ]
+    ],
+    "note": "Chi match qua description, khong trung title"
+  },
+  {
+    "id": "bm-036",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của tác giả Nam Cao?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "expected_facts": [
+      [
+        "Nam Cao"
+      ]
+    ],
+    "note": "Author fan-out — 4 sach cung gan author Nam Cao trong catalog thuc te (du du lieu bi gan sai so voi thuc te)"
+  },
+  {
+    "id": "bm-037",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm nào của Xuân Diệu?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "c3b888e3-9a25-408d-91e9-4639c2d82f1c"
+    ],
+    "expected_facts": [
+      [
+        "Xuan Dieu"
+      ]
+    ],
+    "note": "Author fan-out — 2 sach"
+  },
+  {
+    "id": "bm-038",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của nhà văn Tô Hoài?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "expected_facts": [
+      [
+        "To Hoai"
+      ]
+    ],
+    "note": "Author fan-out — 2 sach"
+  },
+  {
+    "id": "bm-039",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của Haruki Murakami?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "5b1493c9-fc87-4fb9-b29d-e71242f0243e"
+    ],
+    "expected_facts": [
+      [
+        "Murakami"
+      ]
+    ],
+    "note": "Author fan-out — 3 sach"
+  },
+  {
+    "id": "bm-040",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm đoạt giải Nobel Văn học của Gabriel Garcia Marquez là gì?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "Buendia"
+      ]
+    ],
+    "note": "Author + fact rieng, 1 sach duy nhat"
+  },
+  {
+    "id": "bm-041",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của nhà văn Nguyễn Nhật Ánh?",
+    "expected_ids": [
+      "d736b4be-0e40-4157-ae69-8322c83a2c39",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "cb780777-916e-4d15-a3d7-a321436d9ea9",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "expected_facts": [
+      [
+        "Nguyen Nhat Anh"
+      ]
+    ],
+    "note": "Author fan-out lon — 9 sach (ca ban co dau va khong dau) — do recall theo phan so"
+  },
+  {
+    "id": "bm-042",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của tác giả Fredrik Backman?",
+    "expected_ids": [
+      "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+      "463658e9-cf90-4e53-9536-852cd550fbb1",
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "9d889004-907e-45bb-9a20-31fb7e74bf32"
+    ],
+    "expected_facts": [
+      [
+        "Backman"
+      ]
+    ],
+    "note": "Author fan-out — 6 sach"
+  },
+  {
+    "id": "bm-043",
+    "corpus": "BOOK_METADATA",
+    "question": "Có tuyển tập thơ nào trong thư viện không?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "expected_facts": [
+      [
+        "tho"
+      ]
+    ],
+    "note": "Genre: the loai tho, chi 1 sach trong catalog"
+  },
+  {
+    "id": "bm-044",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào là truyện cổ tích dân gian Việt Nam không?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "expected_facts": [
+      [
+        "co tich"
+      ]
+    ],
+    "note": "Genre: co tich dan gian"
+  },
+  {
+    "id": "bm-045",
+    "corpus": "BOOK_METADATA",
+    "question": "Cuốn nào được xem là kiệt tác (masterpiece) của văn học hiện thực huyền ảo Mỹ Latinh?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "masterpiece"
+      ]
+    ],
+    "note": "Genre: hien thuc huyen ao, tu 'masterpiece' co trong description"
+  },
+  {
+    "id": "bm-046",
+    "corpus": "BOOK_METADATA",
+    "question": "sach nao viet ve doi ngheo bat cong thoi phong kien",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "expected_facts": [
+      [
+        "phong kien"
+      ]
+    ],
+    "note": "Khong dau, dien dat lai — normalize_text phai xu ly"
+  },
+  {
+    "id": "bm-047",
+    "corpus": "BOOK_METADATA",
+    "question": "tim sach chiec la cuoi cung",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "expected_facts": [
+      [
+        "Nam Cao"
+      ]
+    ],
+    "note": "Khong dau, ten sach"
+  },
+  {
+    "id": "bm-048",
+    "corpus": "BOOK_METADATA",
+    "question": "tho xuan dieu noi ve tinh yeu que huong",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "expected_facts": [
+      [
+        "tinh yeu"
+      ]
+    ],
+    "note": "Khong dau"
+  },
+  {
+    "id": "bm-049",
+    "corpus": "BOOK_METADATA",
+    "question": "chuyen co tich tam cam",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "expected_facts": [
+      [
+        "co tich"
+      ]
+    ],
+    "note": "Khong dau, ten sach"
+  },
+  {
+    "id": "bm-050",
+    "corpus": "BOOK_METADATA",
+    "question": "sach ke chuyen tuoi tho o vung que day hy vong",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "expected_facts": [
+      [
+        "hy vong"
+      ]
+    ],
+    "note": "Khong dau; tranh dung 'nhan vat ten Chinh' vi trung voi ca Chiec la cuoi cung trong description that"
+  },
+  {
+    "id": "bm-051",
+    "corpus": "BOOK_METADATA",
+    "question": "haruki murakami tieu thuyet ve tokyo nhung nam 1960",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "expected_facts": [
+      [
+        "Tokyo"
+      ]
+    ],
+    "note": "Khong dau, ten tac gia + chu de"
+  },
+  {
+    "id": "bm-052",
+    "corpus": "BOOK_METADATA",
+    "question": "sach ke gia toc bay doi qua thi tran hu cau macondo",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "expected_facts": [
+      [
+        "Macondo"
+      ]
+    ],
+    "note": "Khong dau"
+  },
+  {
+    "id": "bm-053",
+    "corpus": "BOOK_METADATA",
+    "question": "tieu thuyet nguyen nhat anh ve tuoi hoc tro thanh thi",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "expected_facts": [
+      [
+        "Nguyen Nhat Anh"
+      ]
+    ],
+    "note": "Khong dau"
+  },
+  {
+    "id": "bm-054",
+    "corpus": "BOOK_METADATA",
+    "question": "sach phan tich tam ly tinh cach nguoi viet",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "expected_facts": [
+      [
+        "tam ly"
+      ]
+    ],
+    "note": "Khong dau"
+  },
+  {
+    "id": "bm-055",
+    "corpus": "BOOK_METADATA",
+    "question": "tieu thuyet co cau be ten nakata noi chuyen duoc voi meo",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "expected_facts": [
+      [
+        "Nakata"
+      ]
+    ],
+    "note": "Khong dau"
+  },
+  {
+    "id": "bm-056",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào dạy lập trình Python cơ bản không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach ky thuat/CNTT — phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-057",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn nấu ăn món Việt truyền thống không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach am thuc"
+  },
+  {
+    "id": "bm-058",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn nuôi dạy con kiểu Nhật Bản không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach nuoi day con"
+  },
+  {
+    "id": "bm-059",
+    "corpus": "BOOK_METADATA",
+    "question": "Có truyện tranh nào dành cho trẻ em 5 tuổi không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co truyen tranh thieu nhi (De Men la van xuoi, khong phai truyen tranh)"
+  },
+  {
+    "id": "bm-060",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn kỹ thuật vẽ tranh sơn dầu cho người mới bắt đầu không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach huong dan hoi hoa/nghe thuat thuc hanh"
+  },
+  {
+    "id": "doc-001",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mỗi hạng thành viên được mượn tối đa bao nhiêu quyển sách?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "expected_facts": [
+      [
+        "hang thanh vien"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-002",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thẻ Đọc được mượn tối đa mấy cuốn sách và trong bao lâu?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "expected_facts": [
+      [
+        "basic"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep, hang cu the"
+  },
+  {
+    "id": "doc-003",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng Thượng Đế (VIP) được mượn tối đa bao nhiêu sách?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "expected_facts": [
+      [
+        "vip"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep, hang cu the"
+  },
+  {
+    "id": "doc-004",
+    "corpus": "INTERNAL_DOC",
+    "question": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "expected_facts": [
+      [
+        "phi phat"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-005",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mức phạt mỗi ngày trễ hạn của hạng Bạc Sĩ là bao nhiêu?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "expected_facts": [
+      [
+        "Bac Si"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep, hang cu the"
+  },
+  {
+    "id": "doc-006",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trả sách trễ hạn có bị phạt tiền không?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "expected_facts": [
+      [
+        "phi phat"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-007",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi có thể gia hạn sách đã mượn không?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "expected_facts": [
+      [
+        "gia han"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-008",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng Vàng Hoàng được gia hạn sách tối đa mấy lần?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "expected_facts": [
+      [
+        "gia han"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep, hang cu the"
+  },
+  {
+    "id": "doc-009",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mỗi lần gia hạn sách kéo dài thêm bao lâu?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "expected_facts": [
+      [
+        "gia han"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-010",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đặt trước sách xong thì giữ chỗ trong bao lâu?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "expected_facts": [
+      [
+        "giu cho"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-011",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng thành viên nào được giữ chỗ sách đặt trước lâu nhất?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "expected_facts": [
+      [
+        "giu cho"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-012",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm mất sách đang mượn thì phải đền bao nhiêu?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "expected_facts": [
+      [
+        "sach mat"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-013",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hệ số đền bù sách mất của hạng Thẻ Đọc là bao nhiêu?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "expected_facts": [
+      [
+        "hang thanh vien"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep, hang cu the"
+  },
+  {
+    "id": "doc-014",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đền sách mất có tính theo giá trị sách không?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "expected_facts": [
+      [
+        "gia tri sach"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-015",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quy trình nhập kho khi hàng từ nhà cung cấp về hoạt động như thế nào?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "expected_facts": [
+      [
+        "goods receipt"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-016",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tồn kho có tự động cộng khi hàng về kho không?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "expected_facts": [
+      [
+        "post"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-017",
+    "corpus": "INTERNAL_DOC",
+    "question": "Purchase request và purchase order khác nhau như thế nào?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "expected_facts": [
+      [
+        "purchase request"
+      ],
+      [
+        "purchase order"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-018",
+    "corpus": "INTERNAL_DOC",
+    "question": "Khi tồn kho thấp thì nhân viên phải làm gì trước khi đặt hàng?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "expected_facts": [
+      [
+        "purchase request"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-019",
+    "corpus": "INTERNAL_DOC",
+    "question": "Purchase order được gửi cho ai xác nhận?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "expected_facts": [
+      [
+        "nha cung cap"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-020",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhà cung cấp xác nhận đơn hàng bằng cách nào nếu chưa có tài khoản?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "expected_facts": [
+      [
+        "Supplier Portal"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-021",
+    "corpus": "INTERNAL_DOC",
+    "question": "Supplier Portal có cần đăng nhập không?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "expected_facts": [
+      [
+        "Supplier Portal"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-022",
+    "corpus": "INTERNAL_DOC",
+    "question": "AI hỗ trợ gợi ý vị trí lưu trữ sách trong kho như thế nào?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "expected_facts": [
+      [
+        "vi tri luu tru"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-023",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hệ thống có gợi ý tái sắp xếp kệ sách hiện có không?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "expected_facts": [
+      [
+        "tai sap xep"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-024",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trợ lý AI (chatbot) trong hệ thống hỗ trợ được những gì?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "expected_facts": [
+      [
+        "chatbot"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-025",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chatbot có thể tra cứu tồn kho và sách quá hạn không?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "expected_facts": [
+      [
+        "ton kho",
+        "qua han"
+      ]
+    ],
+    "note": "Hoi chinh sach truc tiep"
+  },
+  {
+    "id": "doc-026",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi là thành viên mới, được ôm về nhà bao nhiêu cuốn sách một lúc vậy?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "expected_facts": [
+      [
+        "hang thanh vien"
+      ]
+    ],
+    "note": "Dien dat dan da, khong dung tu 'muon toi da'"
+  },
+  {
+    "id": "doc-027",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trả sách trễ thì bị sao?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "expected_facts": [
+      [
+        "phi phat"
+      ]
+    ],
+    "note": "Dien dat dan da cua chinh sach phi phat"
+  },
+  {
+    "id": "doc-028",
+    "corpus": "INTERNAL_DOC",
+    "question": "Sách sắp hết hạn mà chưa đọc xong thì làm sao mượn thêm được nữa?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "expected_facts": [
+      [
+        "gia han"
+      ]
+    ],
+    "note": "Dien dat vong vo cua chinh sach gia han"
+  },
+  {
+    "id": "doc-029",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đặt sách online rồi thì bao lâu phải ra lấy?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "expected_facts": [
+      [
+        "giu cho"
+      ]
+    ],
+    "note": "Dien dat dan da cua chinh sach giu cho"
+  },
+  {
+    "id": "doc-030",
+    "corpus": "INTERNAL_DOC",
+    "question": "Lỡ làm thất lạc sách của thư viện thì phải bồi thường thế nào?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "expected_facts": [
+      [
+        "sach mat"
+      ]
+    ],
+    "note": "Dien dat dan da, 'that lac' thay vi 'mat'"
+  },
+  {
+    "id": "doc-031",
+    "corpus": "INTERNAL_DOC",
+    "question": "Sách mới nhập về kho thì khi nào mới hiện lên là còn hàng?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "expected_facts": [
+      [
+        "post"
+      ]
+    ],
+    "note": "Dien dat vong vo cua quy trinh nhap kho"
+  },
+  {
+    "id": "doc-032",
+    "corpus": "INTERNAL_DOC",
+    "question": "Khi sách trong kho sắp hết thì quy trình đặt hàng thêm diễn ra ra sao?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "expected_facts": [
+      [
+        "purchase request"
+      ]
+    ],
+    "note": "Dien dat vong vo"
+  },
+  {
+    "id": "doc-033",
+    "corpus": "INTERNAL_DOC",
+    "question": "Bên cung cấp sách chưa có tài khoản trên hệ thống thì xác nhận đơn hàng kiểu gì?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "expected_facts": [
+      [
+        "Supplier Portal"
+      ]
+    ],
+    "note": "Dien dat vong vo"
+  },
+  {
+    "id": "doc-034",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên kho sắp xếp sách lên kệ có được hệ thống gợi ý chỗ để không?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "expected_facts": [
+      [
+        "vi tri luu tru"
+      ]
+    ],
+    "note": "Dien dat vong vo"
+  },
+  {
+    "id": "doc-035",
+    "corpus": "INTERNAL_DOC",
+    "question": "Con bot chat trong hệ thống này làm được những việc gì?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "expected_facts": [
+      [
+        "chatbot"
+      ]
+    ],
+    "note": "Dien dat dan da, 'bot chat' thay vi 'tro ly AI'"
+  },
+  {
+    "id": "doc-036",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có bán cà phê hay đồ ăn nhẹ không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi FAQ noi bo — phai tra rong"
+  },
+  {
+    "id": "doc-037",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có dịch vụ giao sách tận nhà không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi FAQ noi bo"
+  },
+  {
+    "id": "doc-038",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có wifi miễn phí cho khách không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi FAQ noi bo"
+  },
+  {
+    "id": "doc-039",
+    "corpus": "INTERNAL_DOC",
+    "question": "Giờ mở cửa của thư viện là mấy giờ?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi FAQ noi bo"
+  },
+  {
+    "id": "doc-040",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể đổi trả sách đã mua tại quầy sách không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi FAQ noi bo (FAQ chi noi ve muon/tra, khong noi ve mua ban)"
+  }
+]

@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -41,11 +41,93 @@ services:
       timeout: 3s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3200/ready >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3100:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+
   inventory-service:
     build:
       context: .
       dockerfile: services/inventory-service/Dockerfile
-    command: sh -c "npx prisma migrate deploy && node src/index.js"
+    command: sh -c "npx prisma migrate deploy && node -r ./src/tracing.js src/index.js"
     environment:
       - PORT=3001
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
@@ -57,12 +139,18 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     volumes:
       - packing_evidence_data:/app/evidence/packing
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     restart: on-failure
     healthcheck:
@@ -92,10 +180,13 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.vn>}
       - AUTH_LOGIN_RATE_LIMIT_MAX=${AUTH_LOGIN_RATE_LIMIT_MAX:-10}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     restart: on-failure
     healthcheck:
@@ -129,8 +220,11 @@ services:
       - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-}
       - VNPAY_PAYMENT_URL=${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
       - VNPAY_RETURN_URL=${VNPAY_RETURN_URL:-http://localhost:3000/webhooks/vnpay/return}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     restart: on-failure
     healthcheck:
@@ -152,8 +246,11 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     restart: on-failure
     healthcheck:
@@ -231,40 +328,63 @@ services:
         condition: service_started
       db:
         condition: service_healthy
+      tempo:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AI_DB_NAME:-ai_db}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - OTEL_SERVICE_NAME=ai-service
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
-      # Dùng chung 1 model text (llama3.1, hỗ trợ tool-calling) cho cả tóm tắt/chat và /assistant —
-      # llava là vision model riêng, không phù hợp cho tóm tắt văn bản
+      # OpenRouter — default text/tool-calling backend (replaces Ollama for chat/summary/
+      # tool-calling/NLU; Ollama stays for the vision/OCR models and embeddings below).
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_TEXT_MODEL=${OPENROUTER_TEXT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_ASSISTANT_MODEL=${OPENROUTER_ASSISTANT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - NLU_PROVIDER=${NLU_PROVIDER:-}
+      # Ollama model tags — still used for vision/OCR (OLLAMA_MODEL) and embeddings
+      # (FAQ_EMBED_MODEL below), plus selectable via LLM_PROVIDER/ASSISTANT_PROVIDER=ollama.
       - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
       - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
-      # "ollama" (default, offline) or "anthropic" (opt-in, for an eval A/B comparison
-      # against the local model - requires ANTHROPIC_API_KEY below).
-      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-ollama}
+      # "openrouter" (default) or "ollama" (fully offline).
+      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-openrouter}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
       # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
       # from ASSISTANT_MODEL/SUMMARY_MODEL since it is a dedicated embedding model, not a chat model.
       - FAQ_EMBED_MODEL=${FAQ_EMBED_MODEL:-nomic-embed-text}
+      - EMBED_BREAKER_THRESHOLD=${EMBED_BREAKER_THRESHOLD:-3}
+      - EMBED_BREAKER_COOLDOWN_SECONDS=${EMBED_BREAKER_COOLDOWN_SECONDS:-60}
+      - CLOUD_EMBED_MODEL=${CLOUD_EMBED_MODEL:-qwen/qwen3-embedding-8b}
+      - CLOUD_EMBED_DIMENSIONS=${CLOUD_EMBED_DIMENSIONS:-768}
+      - CLOUD_EMBED_TIMEOUT_SECONDS=${CLOUD_EMBED_TIMEOUT_SECONDS:-30}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
       - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
-      # Anthropic Claude LLM — nếu không set, sẽ fallback về Ollama local
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       # Marketplace lookup (Fahasa / Tiki / Vinabook)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
-      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-20}
+      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-30}
       - BOOK_LOOKUP_MAX_WEB_RESULTS=${BOOK_LOOKUP_MAX_WEB_RESULTS:-5}
       - BOOK_LOOKUP_USER_AGENT=${BOOK_LOOKUP_USER_AGENT:-SmartBookBot/1.0}
       - ENABLE_FAHA_CLOAKBROWSER=${ENABLE_FAHA_CLOAKBROWSER:-false}
-      - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-15}
+      - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-20}
+      # Hard ceiling on one CloakBrowser session before a watchdog force-closes it - see
+      # main.py's FAHASA_BROWSER_HARD_TIMEOUT_SECONDS comment (one production Fahasa
+      # search navigation hung 572s despite a 20s page.goto timeout).
+      - FAHASA_BROWSER_HARD_TIMEOUT_SECONDS=${FAHASA_BROWSER_HARD_TIMEOUT_SECONDS:-35}
+      # How long to poll for Fahasa's search-API response after the page starts loading
+      # (replaces waiting for the page to go fully network-idle, which it never does).
+      - FAHASA_SEARCH_RESPONSE_WAIT_SECONDS=${FAHASA_SEARCH_RESPONSE_WAIT_SECONDS:-8}
       # "Find book by cover photo" — CLIP visual embedding + OCR-text fusion
       - CLIP_MODEL_NAME=${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
       - COVER_OCR_MAX_TOKENS=${COVER_OCR_MAX_TOKENS:-200}
@@ -276,13 +396,19 @@ services:
       # "Thu thu AI truc dem" — autonomous nightly briefing agent (nightly_briefing.py)
       - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
       - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
-      - NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS:-60}
       - NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS:-180}
     volumes:
       # Persist the ~600MB CLIP model download across container recreation —
       # a bind mount, matching this compose file's existing convention for
       # model caches (see ollama's ./ollama_data:/root/.ollama below).
       - ./ai_service_model_cache:/root/.cache/huggingface
+      # Persist CloakBrowser's patched Chromium binary. Without this it re-downloads
+      # from scratch on every container recreate - measured at ~30KB/s from
+      # cloakbrowser.dev, so a single download can take many minutes and any
+      # timeout/restart during it discards the partial file, meaning every Fahasa
+      # lookup effectively restarted the download from zero (the true cause behind
+      # the multi-minute-to-34-minute CloakBrowser hangs, not a network block).
+      - ./ai_service_cloakbrowser_cache:/root/.cloakbrowser
 
   api-gateway:
     build:
@@ -301,6 +427,8 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       auth-service:
         condition: service_healthy
@@ -309,6 +437,10 @@ services:
       borrow-service:
         condition: service_healthy
       analytics-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
@@ -361,7 +493,20 @@ services:
               count: all
               capabilities: [gpu]
 
+  k6:
+    profiles: ["loadtest"]
+    image: grafana/k6:0.54.0
+    volumes:
+      - ./scripts/k6:/scripts
+    environment:
+      - BASE_URL=http://api-gateway:3000
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
   packing_evidence_data:

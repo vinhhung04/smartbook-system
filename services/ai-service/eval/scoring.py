@@ -333,3 +333,48 @@ def aggregate_answer_scores(verdicts: list[dict]) -> dict:
         "hallucinated_number_rate": round(with_hallucination / total, 3),
         "overall_pass_rate": round(sum(1 for v in verdicts if v["overall_pass"]) / total, 3),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retrieval-quality scoring (eval_rag.py). Measures whether the right document
+# came back at all, independent of whether the generated answer used it well -
+# the retrieval layer and the answer-quality layer above can regress
+# independently, so they're scored independently.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def recall_at_k(retrieved_ids: list[str], expected_ids: list[str], k: int) -> float:
+    """Tỷ lệ tài liệu đúng nằm trong top-k. 0.0 khi không có expected nào —
+    một case không có ground truth là lỗi dataset, không phải điểm tuyệt đối."""
+    if not expected_ids:
+        return 0.0
+    top = set(retrieved_ids[:k])
+    found = sum(1 for doc_id in set(expected_ids) if doc_id in top)
+    return found / len(set(expected_ids))
+
+
+def mean_reciprocal_rank(retrieved_ids: list[str], expected_ids: list[str]) -> float:
+    """1/rank của tài liệu đúng ĐẦU TIÊN. Đo "người dùng phải đọc qua bao nhiêu
+    kết quả sai", thứ recall@k không phân biệt được."""
+    expected = set(expected_ids)
+    for position, doc_id in enumerate(retrieved_ids, start=1):
+        if doc_id in expected:
+            return 1.0 / position
+    return 0.0
+
+
+def aggregate_retrieval_scores(results: list[dict]) -> dict:
+    if not results:
+        return {"count": 0, "recall_at_1": 0.0, "recall_at_3": 0.0, "recall_at_5": 0.0, "mrr": 0.0}
+    total = len(results)
+
+    def mean(values):
+        return sum(values) / total
+
+    return {
+        "count": total,
+        "recall_at_1": round(mean([recall_at_k(r["retrieved_ids"], r["expected_ids"], 1) for r in results]), 4),
+        "recall_at_3": round(mean([recall_at_k(r["retrieved_ids"], r["expected_ids"], 3) for r in results]), 4),
+        "recall_at_5": round(mean([recall_at_k(r["retrieved_ids"], r["expected_ids"], 5) for r in results]), 4),
+        "mrr": round(mean([mean_reciprocal_rank(r["retrieved_ids"], r["expected_ids"]) for r in results]), 4),
+    }

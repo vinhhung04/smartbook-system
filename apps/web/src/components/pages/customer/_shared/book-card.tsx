@@ -68,6 +68,7 @@ export function BookCard({ book, onView, onReserve, reserving = false, ratingInf
         <button
           disabled={!canReserve || reserving}
           onClick={() => onReserve(book)}
+          data-testid="reserve-book-button"
           className="flex-1 rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground"
           style={{ fontWeight: 600 }}
         >

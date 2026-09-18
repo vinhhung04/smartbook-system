@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "POST /api/borrow-integration/reservations/release — 200 response",
+  "description": "TODO follow-up (SB-11): 'idempotent' is present on the two idempotent-replay/not-found branches but absent on the plain success branch — a real shape inconsistency, locked here as-is rather than fixed, per this round's scope (contract tests lock current behavior, they don't change business logic).",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {},
+    "idempotent": { "type": "boolean" }
+  }
+}

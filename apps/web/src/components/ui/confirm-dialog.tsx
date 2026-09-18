@@ -67,6 +67,7 @@ export function ConfirmDialog({
           <AlertDialogAction
             onClick={handleConfirm}
             disabled={isLoading}
+            data-testid="confirm-dialog-action"
             className={cn(
               variant === "destructive"
                 ? buttonVariants({ variant: "destructive" })

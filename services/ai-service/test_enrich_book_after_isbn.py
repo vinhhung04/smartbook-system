@@ -1,5 +1,6 @@
 import unittest
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from main import (
@@ -190,11 +191,12 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
                  "normalized": {"title": "Clean Code", "authors": ["Robert C. Martin"], "publisher": "Prentice Hall", "categories": ["Programming"], "description": "A handbook of agile software craftsmanship."},
                  "authorNormalization": [{"status": "AUTO_MATCH"}], "publisherNormalization": {"status": "AUTO_MATCH"}, "categoryNormalization": [{"status": "AUTO_MATCH"}], "authorityMatches": {}, "qualityWarnings": [],
              }, None))), \
-             patch("main._call_anthropic", new=AsyncMock(return_value=("Tóm tắt tiếng Việt", ["clean code", "lập trình"], True))), \
-             patch("main._call_anthropic_json", new=AsyncMock(side_effect=[
+             patch("main._generate_summary_vi_and_keywords", new=AsyncMock(return_value=("Tóm tắt tiếng Việt", ["clean code", "lập trình"], True))), \
+             patch("main._call_text_llm_json", new=AsyncMock(side_effect=[
                  ({"normalizedDescription": "Mô tả đã chuẩn hóa"}, True),
                  ({"suggestedCategories": ["Công nghệ"]}, True),
-             ])):
+             ])), \
+             patch("main._get_text_llm_provider", return_value=SimpleNamespace(name="openrouter")):
             result = await enrich_book_after_isbn(
                 EnrichBookAfterIsbnRequest(isbn="9780132350884", existingCategories=["Công nghệ", "Kinh tế"])
             )
@@ -204,7 +206,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["aiSuggestions"]["summaryVi"], "Tóm tắt tiếng Việt")
         self.assertEqual(result["aiSuggestions"]["keywords"], ["clean code", "lập trình"])
         self.assertEqual(result["aiSuggestions"]["categories"], ["Công nghệ"])
-        self.assertEqual(result["aiSuggestions"]["provider"], "anthropic")
+        self.assertEqual(result["aiSuggestions"]["provider"], "openrouter")
         self.assertGreater(result["aiSuggestions"]["confidence"], 0)
         self.assertEqual(result["authorNormalization"][0]["status"], "AUTO_MATCH")
 
@@ -246,7 +248,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
              patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, "Authority normalization unavailable; staff review is required before catalog changes."))), \
-             patch("main._call_anthropic", new=AsyncMock(side_effect=RuntimeError("AI down"))):
+             patch("main._generate_summary_vi_and_keywords", new=AsyncMock(side_effect=RuntimeError("AI down"))):
             result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn="9780132350884"))
 
         self.assertEqual(result["lookup"], lookup)

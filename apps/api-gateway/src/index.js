@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const { startGatewayRabbitMqConsumer } = require("./lib/rabbitmq-consumer");
 const {
   createCorsOptions,
   createRateLimiter,
@@ -13,6 +14,9 @@ const {
   requireEnv,
   securityHeaders,
 } = require("@smartbook/shared/runtime");
+const { getMeter } = require("@smartbook/shared/metrics");
+
+const websocketConnectionsCounter = getMeter("api-gateway").createUpDownCounter("websocket_connections");
 
 dotenv.config();
 
@@ -61,6 +65,7 @@ const ALLOWED_EVENTS = new Set([
   "goods_receipt:created",
   "putaway:created", "putaway:completed",
   "picking:created", "picking:completed",
+  "packing:evidence_verified",
   "warehouse_task:assigned", "warehouse_task:status_changed",
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
@@ -122,6 +127,7 @@ async function resolveCustomerId(userId, email) {
 }
 
 io.on("connection", async (socket) => {
+  websocketConnectionsCounter.add(1);
   const user = socket.user;
   const userId = user.id;
   const roles = Array.isArray(user.roles) ? user.roles : [];
@@ -166,6 +172,7 @@ io.on("connection", async (socket) => {
   console.log(`[ws] ${userId} (${roles.join(",") || "no-role"}) connected → rooms: ${joinedRooms.join(", ")} (socket ${socket.id})`);
 
   socket.on("disconnect", (reason) => {
+    websocketConnectionsCounter.add(-1);
     console.log(`[ws] ${socket.id} disconnected: ${reason}`);
   });
 });
@@ -396,4 +403,5 @@ app.use((error, req, res, _next) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`api-gateway running at http://0.0.0.0:${port} (HTTP + WebSocket)`);
+  startGatewayRabbitMqConsumer(io);
 });

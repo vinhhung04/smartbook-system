@@ -503,6 +503,7 @@ export function OrderDetailPage() {
                 </button>
                 <NavLink
                   to={`/putaway/${receipt.id}`}
+                  data-testid="go-to-putaway-link"
                   className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
                     receipt.status === "POSTED"
                       ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
@@ -514,6 +515,7 @@ export function OrderDetailPage() {
                 <button
                   disabled={!showManageReceiving || receipt.status !== "DRAFT" || isUpdatingStatus}
                   onClick={() => void handleUpdateStatus("POSTED")}
+                  data-testid="approve-goods-receipt-button"
                   className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
                     showManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
                       ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
@@ -561,7 +563,7 @@ export function OrderDetailPage() {
                     className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
                     <ScanBarcode className="h-4 w-4" /> Camera
                   </button>
-                  <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
+                  <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems} data-testid="save-received-count-button"
                     className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
                     <Save className="h-4 w-4" />
                     {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
@@ -667,7 +669,7 @@ export function OrderDetailPage() {
                   className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
                   <ScanBarcode className="h-4 w-4" /> Camera
                 </button>
-                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems}
+                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems} data-testid="save-received-count-button"
                   className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
                   <Save className="h-4 w-4" />
                   {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}

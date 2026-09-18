@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
@@ -34,14 +35,6 @@ function parseIdempotencyKey(req) {
 
 function parsePickupCodeFromBody(body) {
   return normalizePickupCode(body?.pickup_code || body?.pickupCode || body?.code || body?.qr_code);
-}
-
-function deterministicUuid(seed) {
-  const hash = crypto.createHash('sha256').update(seed).digest('hex');
-  const chars = hash.slice(0, 32).split('');
-  chars[12] = '4';
-  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
-  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
 }
 
 function parsePagination(query) {
@@ -209,6 +202,7 @@ async function createDirectLoan(req, res) {
       warehouse_id,
       quantity: normalizedQuantity,
       authHeader,
+      requestId: req.requestId,
     });
 
     const reservationNumber = `DLR-${reservationId.slice(0, 8).toUpperCase()}`;
@@ -251,6 +245,7 @@ async function createDirectLoan(req, res) {
       created_by_user_id: actorUserId,
       idempotency_key: `direct-reserve:${idempotencyKey}`,
       authHeader,
+      requestId: req.requestId,
     });
 
     await consumeReservation({
@@ -261,6 +256,7 @@ async function createDirectLoan(req, res) {
       idempotency_key: `direct-consume:${idempotencyKey}`,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     try {
@@ -829,6 +825,7 @@ async function convertReservationToLoan(req, res) {
       idempotency_key: idempotencyKey,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     const borrowDate = new Date();
@@ -1099,6 +1096,7 @@ async function returnLoan(req, res) {
         idempotency_key: `${idempotencyKey}:${index + 1}`,
         handled_by_user_id: actorUserId,
         authHeader,
+        requestId: req.requestId,
       });
     }
 

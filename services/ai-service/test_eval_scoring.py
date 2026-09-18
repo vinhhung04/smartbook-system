@@ -322,5 +322,38 @@ class AggregateAnswerScoresTests(unittest.TestCase):
         self.assertEqual(summary["overall_pass_rate"], 0.5)
 
 
+class RetrievalMetricsTest(unittest.TestCase):
+    def test_recall_at_k_counts_any_expected_in_top_k(self):
+        self.assertEqual(scoring.recall_at_k(["a", "b", "c"], ["c"], 3), 1.0)
+        self.assertEqual(scoring.recall_at_k(["a", "b", "c"], ["c"], 2), 0.0)
+
+    def test_recall_at_k_is_fraction_of_expected_found(self):
+        self.assertEqual(scoring.recall_at_k(["a", "b"], ["a", "z"], 2), 0.5)
+
+    def test_recall_at_k_empty_expected_is_zero(self):
+        self.assertEqual(scoring.recall_at_k(["a"], [], 3), 0.0)
+
+    def test_mrr_uses_rank_of_first_expected_hit(self):
+        self.assertAlmostEqual(scoring.mean_reciprocal_rank(["x", "a"], ["a"]), 0.5)
+        self.assertAlmostEqual(scoring.mean_reciprocal_rank(["a", "x"], ["a"]), 1.0)
+
+    def test_mrr_zero_when_no_hit(self):
+        self.assertEqual(scoring.mean_reciprocal_rank(["x", "y"], ["a"]), 0.0)
+
+    def test_aggregate_retrieval_scores(self):
+        results = [
+            {"retrieved_ids": ["a", "b", "c"], "expected_ids": ["a"]},
+            {"retrieved_ids": ["x", "y", "b"], "expected_ids": ["b"]},
+        ]
+        agg = scoring.aggregate_retrieval_scores(results)
+        self.assertEqual(agg["count"], 2)
+        self.assertAlmostEqual(agg["recall_at_1"], 0.5)
+        self.assertAlmostEqual(agg["recall_at_3"], 1.0)
+        # aggregate_retrieval_scores rounds to 4 decimal places for report
+        # readability, so compare at that precision (default assertAlmostEqual
+        # is 7 places and would fail on the rounding itself, not the logic).
+        self.assertAlmostEqual(agg["mrr"], (1.0 + 1 / 3) / 2, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()
