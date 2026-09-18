@@ -186,7 +186,7 @@ flowchart LR
     AI --> OLLAMA["🦙 Ollama :11434"]
     PGADMIN["🛠️ pgAdmin :8080"] --> PG
 
-    GW -. WebSocket Socket.IO .-> UI
+    GW -. "WebSocket (Socket.IO)" .-> UI
 
     AUTH -. traces .-> TEMPO["📈 Tempo/Prometheus/Grafana"]
     INV -. traces .-> TEMPO
