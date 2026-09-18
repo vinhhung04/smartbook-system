@@ -25,13 +25,12 @@ logger = logging.getLogger("uvicorn.error")
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
 NIGHTLY_BRIEFING_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_TIMEOUT_SECONDS", "15"))
-# Deliberately NOT reusing _chat_with_ollama/_chat_with_anthropic's own timeout
-# (CHAT_LLM_TIMEOUT_SECONDS, 12s default) — that's tuned for a live chat UI where a
-# person is waiting. Nobody is waiting on this background job, and its prompt (6
-# analytics sections of JSON, up to 800 output tokens) is larger than a normal chat
-# turn — verified live: even Anthropic (normally fast) exceeded 12s on this prompt
-# and silently fell through to Ollama every time until this was split out.
-NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS", "60"))
+# Deliberately NOT reusing _chat_with_text_llm's own timeout (CHAT_LLM_TIMEOUT_SECONDS,
+# 12s default) — that's tuned for a live chat UI where a person is waiting. Nobody is
+# waiting on this background job, and its prompt (6 analytics sections of JSON, up to
+# 800 output tokens) is larger than a normal chat turn — verified live: even a normally-fast
+# cloud provider exceeded 12s on this prompt and silently fell through every time until
+# this was split out into its own longer budget.
 NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS", "180"))
 # A staff member reads this "this morning", not within minutes like a chat action —
 # the store's DEFAULT_TTL_SECONDS (600s) would expire it long before anyone looks.
@@ -81,66 +80,29 @@ def _build_prompt(today: str, sections: dict) -> str:
     )
 
 
-async def _generate_with_anthropic(prompt: str) -> str | None:
-    """Same Anthropic call _chat_with_anthropic makes, but with
-    NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS instead of that function's own
-    chat-tuned timeout — see the constant's comment."""
+async def _generate_with_text_llm(prompt: str) -> str | None:
+    """Calls the same text-generation path _chat_with_text_llm uses
+    (LLM_PROVIDER - OpenRouter/Qwen by default), but with
+    NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS instead of that function's own
+    chat-tuned timeout — see the constant's comment. (Env var name kept as-is
+    for backward compatibility even though it now bounds whichever provider
+    LLM_PROVIDER resolves to, not only Ollama.)"""
     try:
         # Lazy import: main.py imports this module to schedule the startup task, so a
         # top-of-file import here would be circular (main -> nightly_briefing -> main).
-        from main import ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL, _anthropic_extract_text
+        from main import _call_text_llm
 
-        if not ANTHROPIC_API_KEY:
-            return None
-        async with httpx.AsyncClient(timeout=httpx.Timeout(NIGHTLY_BRIEFING_ANTHROPIC_TIMEOUT_SECONDS)) as client:
-            response = await client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.4,
-                    "max_tokens": 800,
-                },
-            )
-            response.raise_for_status()
-            reply = _anthropic_extract_text(response.json())
-            return reply or None
-    except Exception as exc:
-        logger.warning("[nightly-briefing] Anthropic generate failed: %s", exc)
-        return None
-
-
-async def _generate_with_ollama(prompt: str) -> str | None:
-    """Calls the same Ollama generation path _chat_with_ollama uses (SUMMARY_MODEL,
-    with its OLLAMA_MODEL fallback), but with NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
-    instead of that function's own chat-tuned timeout — see the constant's comment."""
-    try:
-        import ollama as ollama_lib
-        from main import OLLAMA_HOST, _ollama_generate_with_summary_fallback
-
-        client = ollama_lib.Client(host=OLLAMA_HOST)
-        # _chat_with_ollama wraps every prompt as "User: ...\nAssistant:" before
-        # calling this same generate helper — matching that framing here too, since
-        # the raw generate() API (no chat template) otherwise tends to answer by
-        # describing the input's structure instead of following the instruction.
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                _ollama_generate_with_summary_fallback,
-                client,
-                f"User: {prompt}\nAssistant:",
-                {"temperature": 0.4, "num_predict": 800},
-            ),
-            timeout=NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS,
+        # _chat_with_text_llm's predecessor (_chat_with_ollama) wrapped every prompt as
+        # "User: ...\nAssistant:" before calling Ollama's raw generate() API (no chat
+        # template) - kept here for the same instruction-following reason, even though
+        # this now goes through a proper chat-messages call.
+        reply, ok = await _call_text_llm(
+            "", f"User: {prompt}\nAssistant:",
+            max_tokens=800, temperature=0.4, timeout=NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS,
         )
-        reply = (response.get("response") or "").strip()
-        return reply or None
+        return (reply or None) if ok else None
     except Exception as exc:
-        logger.warning("[nightly-briefing] Ollama generate failed: %s", exc)
+        logger.warning("[nightly-briefing] Generate failed: %s", exc)
         return None
 
 
@@ -150,13 +112,11 @@ async def run_nightly_briefing() -> None:
     today = datetime.now(VN_TZ).strftime("%d/%m/%Y")
     prompt = _build_prompt(today, sections)
 
-    reply = await _generate_with_anthropic(prompt)
-    if not reply:
-        reply = await _generate_with_ollama(prompt)
+    reply = await _generate_with_text_llm(prompt)
     if not reply:
         reply = (
-            "Khong the tao bao cao tu dong dem nay (AI khong phan hoi tu Anthropic "
-            "lan Ollama). Vui long xem truc tiep cac trang phan tich."
+            "Khong the tao bao cao tu dong dem nay (AI khong phan hoi). "
+            "Vui long xem truc tiep cac trang phan tich."
         )
 
     report_title = f"Bao cao thu thu AI - {today}"

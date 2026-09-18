@@ -869,6 +869,7 @@ export function ReceivingPutawayPage() {
                       value={line.reason}
                       onChange={(event) => updateLine(line.id, { reason: event.target.value })}
                       placeholder="Ví dụ: sắp xếp lại"
+                      data-testid="putaway-reason-input"
                       className="h-auto py-2.5"
                     />
                   </div>
@@ -887,6 +888,7 @@ export function ReceivingPutawayPage() {
               onClick={handleConfirmTransfer}
               disabled={draftLines.length === 0}
               loading={savingTransfer}
+              data-testid="putaway-confirm-button"
               className="bg-gradient-to-r from-violet-600 to-purple-600 hover:opacity-90"
             >
               Xác nhận chuyển lên kệ

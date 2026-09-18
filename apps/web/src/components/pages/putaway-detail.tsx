@@ -99,6 +99,7 @@ export function PutawayDetailPage() {
                 },
               })}
               disabled={detail.remaining_quantity <= 0}
+              data-testid="start-putaway-button"
               className="inline-flex items-center gap-2 rounded-[10px] bg-violet-600 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
             >
               <PackageCheck className="w-3.5 h-3.5" /> Nhập hàng
@@ -155,6 +156,7 @@ export function PutawayDetailPage() {
                               maxQuantity: item.remaining_quantity,
                             },
                           })}
+                          data-testid="start-putaway-button"
                           className="inline-flex items-center gap-1.5 rounded-[8px] border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-3 py-1.5 text-violet-700 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/15"
                           style={{ fontWeight: 600 }}
                         >

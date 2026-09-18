@@ -1,88 +1,36 @@
-"""Unit tests for llm_provider.py's pure logic: the Ollama<->Anthropic message
-and tool-schema adapters, response parsing, and the provider factory. No
-network calls - AnthropicProvider/OllamaProvider's actual chat()/chat_stream()
-methods talk to real services and are exercised by the live eval scripts
-instead (see eval/README.md), not here.
+"""Unit tests for llm_provider.py's pure logic: the OpenRouter message/tool-call
+adapters and the provider factory. No network calls - OllamaProvider/
+OpenRouterProvider's actual chat()/chat_stream() methods talk to real services
+and are exercised by the live eval scripts instead (see eval/README.md), not
+here.
 """
 import unittest
-from types import SimpleNamespace
 
 import llm_provider as lp
 
 
-class ToAnthropicToolsTests(unittest.TestCase):
-    def test_unwraps_the_openai_style_function_wrapper(self):
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "get_overdue_summary",
-                "description": "Lay tong so phieu qua han.",
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            },
-        }]
-        converted = lp._to_anthropic_tools(tools)
-        self.assertEqual(converted, [{
-            "name": "get_overdue_summary",
-            "description": "Lay tong so phieu qua han.",
-            "input_schema": {"type": "object", "properties": {}, "required": []},
-        }])
-
-    def test_missing_parameters_falls_back_to_empty_object_schema(self):
-        tools = [{"type": "function", "function": {"name": "x"}}]
-        converted = lp._to_anthropic_tools(tools)
-        self.assertEqual(converted[0]["input_schema"], {"type": "object", "properties": {}})
-
-
-class ToAnthropicMessagesTests(unittest.TestCase):
-    def test_system_messages_are_pulled_out_of_the_list(self):
+class ToOpenrouterMessagesTests(unittest.TestCase):
+    def test_system_and_user_messages_pass_through_inline(self):
         messages = [{"role": "system", "content": "You are helpful."}, {"role": "user", "content": "hi"}]
-        system, converted = lp.to_anthropic_messages(messages)
-        self.assertEqual(system, "You are helpful.")
-        self.assertEqual(converted, [{"role": "user", "content": "hi"}])
-
-    def test_multiple_system_messages_are_joined(self):
-        messages = [
-            {"role": "system", "content": "Part one."},
-            {"role": "system", "content": "Part two."},
+        converted = lp.to_openrouter_messages(messages)
+        self.assertEqual(converted, [
+            {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "hi"},
-        ]
-        system, _ = lp.to_anthropic_messages(messages)
-        self.assertEqual(system, "Part one.\n\nPart two.")
+        ])
 
-    def test_assistant_tool_calls_become_tool_use_blocks_with_generated_ids(self):
+    def test_assistant_tool_calls_get_an_id_and_json_string_arguments(self):
         messages = [{
             "role": "assistant", "content": "",
-            "tool_calls": [{"function": {"name": "get_dashboard_kpis", "arguments": {}}}],
+            "tool_calls": [{"function": {"name": "get_dashboard_kpis", "arguments": {"days": 7}}}],
         }]
-        _, converted = lp.to_anthropic_messages(messages)
-        self.assertEqual(len(converted), 1)
-        block = converted[0]["content"][0]
-        self.assertEqual(block["type"], "tool_use")
-        self.assertEqual(block["name"], "get_dashboard_kpis")
-        self.assertTrue(block["id"])
+        converted = lp.to_openrouter_messages(messages)
+        tool_call = converted[0]["tool_calls"][0]
+        self.assertEqual(tool_call["type"], "function")
+        self.assertTrue(tool_call["id"])
+        self.assertEqual(tool_call["function"]["name"], "get_dashboard_kpis")
+        self.assertEqual(tool_call["function"]["arguments"], '{"days": 7}')
 
-    def test_consecutive_tool_messages_are_grouped_into_one_user_message(self):
-        messages = [
-            {"role": "user", "content": "kpi va qua han?"},
-            {
-                "role": "assistant", "content": "",
-                "tool_calls": [
-                    {"function": {"name": "get_dashboard_kpis", "arguments": {}}},
-                    {"function": {"name": "get_overdue_summary", "arguments": {}}},
-                ],
-            },
-            {"role": "tool", "tool_name": "get_dashboard_kpis", "content": "{\"a\": 1}"},
-            {"role": "tool", "tool_name": "get_overdue_summary", "content": "{\"b\": 2}"},
-        ]
-        _, converted = lp.to_anthropic_messages(messages)
-        # user, assistant(tool_use x2), user(tool_result x2) - not two separate user messages.
-        self.assertEqual(len(converted), 3)
-        tool_result_message = converted[2]
-        self.assertEqual(tool_result_message["role"], "user")
-        self.assertEqual(len(tool_result_message["content"]), 2)
-        self.assertEqual(tool_result_message["content"][0]["type"], "tool_result")
-
-    def test_tool_result_ids_match_the_preceding_tool_use_ids_in_order(self):
+    def test_tool_result_ids_match_the_preceding_tool_calls_in_order(self):
         messages = [
             {
                 "role": "assistant", "content": "",
@@ -94,17 +42,10 @@ class ToAnthropicMessagesTests(unittest.TestCase):
             {"role": "tool", "tool_name": "tool_a", "content": "A"},
             {"role": "tool", "tool_name": "tool_b", "content": "B"},
         ]
-        _, converted = lp.to_anthropic_messages(messages)
-        assistant_msg, tool_result_msg = converted
-        ids_used = [b["id"] for b in assistant_msg["content"]]
-        ids_referenced = [b["tool_use_id"] for b in tool_result_msg["content"]]
-        self.assertEqual(ids_used, ids_referenced)
-        self.assertEqual([b["content"] for b in tool_result_msg["content"]], ["A", "B"])
-
-    def test_plain_assistant_text_message_round_trips(self):
-        messages = [{"role": "assistant", "content": "Xin chao."}]
-        _, converted = lp.to_anthropic_messages(messages)
-        self.assertEqual(converted, [{"role": "assistant", "content": [{"type": "text", "text": "Xin chao."}]}])
+        converted = lp.to_openrouter_messages(messages)
+        assistant_msg, tool_msg_a, tool_msg_b = converted
+        ids_used = [c["id"] for c in assistant_msg["tool_calls"]]
+        self.assertEqual(ids_used, [tool_msg_a["tool_call_id"], tool_msg_b["tool_call_id"]])
 
     def test_second_round_of_tool_calls_gets_fresh_ids_not_reused(self):
         messages = [
@@ -113,60 +54,45 @@ class ToAnthropicMessagesTests(unittest.TestCase):
             {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "b", "arguments": {}}}]},
             {"role": "tool", "tool_name": "b", "content": "2"},
         ]
-        _, converted = lp.to_anthropic_messages(messages)
-        first_id = converted[0]["content"][0]["id"]
-        second_id = converted[2]["content"][0]["id"]
+        converted = lp.to_openrouter_messages(messages)
+        first_id = converted[0]["tool_calls"][0]["id"]
+        second_id = converted[2]["tool_calls"][0]["id"]
         self.assertNotEqual(first_id, second_id)
 
-
-class MessageFromAnthropicResponseTests(unittest.TestCase):
-    def test_text_only_response(self):
-        blocks = [SimpleNamespace(type="text", text="Xin chao")]
-        message, tool_calls, text = lp._message_from_anthropic_response(blocks)
-        self.assertEqual(tool_calls, [])
-        self.assertEqual(text, "Xin chao")
-        self.assertEqual(message, {"role": "assistant", "content": "Xin chao"})
-
-    def test_tool_use_response(self):
-        blocks = [SimpleNamespace(type="tool_use", name="get_top_books", input={"limit": 5}, id="toolu_1")]
-        message, tool_calls, text = lp._message_from_anthropic_response(blocks)
-        self.assertEqual(tool_calls, [{"function": {"name": "get_top_books", "arguments": {"limit": 5}}}])
-        self.assertEqual(message["tool_calls"], tool_calls)
-
-    def test_mixed_text_and_tool_use_keeps_only_tool_calls_in_message(self):
-        blocks = [
-            SimpleNamespace(type="text", text="Đang tra cứu..."),
-            SimpleNamespace(type="tool_use", name="get_fine_summary", input={}, id="toolu_2"),
-        ]
-        message, tool_calls, text = lp._message_from_anthropic_response(blocks)
-        self.assertEqual(len(tool_calls), 1)
-        self.assertEqual(message["content"], "")  # matches OllamaProvider's own convention
+    def test_plain_assistant_text_message_round_trips(self):
+        messages = [{"role": "assistant", "content": "Xin chao."}]
+        converted = lp.to_openrouter_messages(messages)
+        self.assertEqual(converted, [{"role": "assistant", "content": "Xin chao."}])
 
 
-class AnthropicProviderBaseUrlTests(unittest.TestCase):
-    """Regression: ANTHROPIC_BASE_URL's documented default
-    ("https://api.anthropic.com/v1") was written for the old raw-httpx call
-    sites, which append "/messages" themselves. The SDK's base_url is the
-    API root and appends "/v1/messages" internally - passing the env var
-    through unchanged 404s every real call (found running the live eval
-    against the actual endpoint, not caught by earlier isolated smoke tests
-    that never passed a base_url override)."""
+class OpenrouterToolCallsTests(unittest.TestCase):
+    def test_none_or_empty_returns_empty_list(self):
+        self.assertEqual(lp._openrouter_tool_calls(None), [])
+        self.assertEqual(lp._openrouter_tool_calls([]), [])
 
-    def test_trailing_v1_is_stripped(self):
-        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com/v1", model="claude-sonnet-5")
-        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+    def test_json_string_arguments_are_parsed_into_a_dict(self):
+        raw = [{"id": "call_1", "type": "function", "function": {"name": "get_top_books", "arguments": '{"limit": 5}'}}]
+        converted = lp._openrouter_tool_calls(raw)
+        self.assertEqual(converted, [{"function": {"name": "get_top_books", "arguments": {"limit": 5}}}])
 
-    def test_trailing_v1_with_trailing_slash_is_stripped(self):
-        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com/v1/", model="claude-sonnet-5")
-        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+    def test_malformed_arguments_json_falls_back_to_empty_dict(self):
+        raw = [{"function": {"name": "x", "arguments": "not json"}}]
+        converted = lp._openrouter_tool_calls(raw)
+        self.assertEqual(converted[0]["function"]["arguments"], {})
 
-    def test_a_root_url_without_v1_is_left_alone(self):
-        provider = lp.AnthropicProvider(api_key="sk-fake", base_url="https://api.anthropic.com", model="claude-sonnet-5")
-        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
 
-    def test_none_base_url_uses_the_sdk_default(self):
-        provider = lp.AnthropicProvider(api_key="sk-fake", base_url=None, model="claude-sonnet-5")
-        self.assertEqual(str(provider._client.base_url).rstrip("/"), "https://api.anthropic.com")
+class OpenRouterProviderBaseUrlTests(unittest.TestCase):
+    def test_trailing_slash_is_stripped(self):
+        provider = lp.OpenRouterProvider(api_key="sk-fake", base_url="https://openrouter.ai/api/v1/", model="qwen/qwen3.7-flash")
+        self.assertEqual(provider._base_url, "https://openrouter.ai/api/v1")
+
+    def test_empty_fallback_model_normalizes_to_none(self):
+        provider = lp.OpenRouterProvider(api_key="sk-fake", base_url="https://openrouter.ai/api/v1", model="m", fallback_model="  ")
+        self.assertIsNone(provider._fallback_model)
+
+    def test_fallback_model_is_kept_when_set(self):
+        provider = lp.OpenRouterProvider(api_key="sk-fake", base_url="https://openrouter.ai/api/v1", model="m", fallback_model="qwen/other")
+        self.assertEqual(provider._fallback_model, "qwen/other")
 
 
 class GetLlmProviderTests(unittest.TestCase):
@@ -179,17 +105,25 @@ class GetLlmProviderTests(unittest.TestCase):
         provider = lp.get_llm_provider("  Ollama  ", ollama_host="http://x:1", ollama_model="m")
         self.assertIsInstance(provider, lp.OllamaProvider)
 
-    def test_anthropic_without_api_key_raises(self):
+    def test_openrouter_without_api_key_raises(self):
         with self.assertRaises(ValueError):
-            lp.get_llm_provider("anthropic", ollama_host="h", ollama_model="m", anthropic_api_key="")
+            lp.get_llm_provider("openrouter", ollama_host="h", ollama_model="m", openrouter_api_key="")
 
-    def test_anthropic_with_api_key_builds_anthropic_provider(self):
+    def test_openrouter_with_api_key_builds_openrouter_provider(self):
         provider = lp.get_llm_provider(
-            "anthropic", ollama_host="h", ollama_model="m",
-            anthropic_api_key="sk-fake", anthropic_model="claude-sonnet-5",
+            "openrouter", ollama_host="h", ollama_model="m",
+            openrouter_api_key="sk-fake", openrouter_model="qwen/qwen3.7-flash",
+            openrouter_fallback_model="qwen/other",
         )
-        self.assertIsInstance(provider, lp.AnthropicProvider)
-        self.assertEqual(provider.model, "claude-sonnet-5")
+        self.assertIsInstance(provider, lp.OpenRouterProvider)
+        self.assertEqual(provider.model, "qwen/qwen3.7-flash")
+        self.assertEqual(provider._fallback_model, "qwen/other")
+
+    def test_openrouter_default_base_url(self):
+        provider = lp.get_llm_provider(
+            "openrouter", ollama_host="h", ollama_model="m", openrouter_api_key="sk-fake", openrouter_model="m2",
+        )
+        self.assertEqual(provider._base_url, "https://openrouter.ai/api/v1")
 
 
 if __name__ == "__main__":

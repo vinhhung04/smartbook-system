@@ -15,6 +15,8 @@ import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
+import signal
+import sys
 from html.parser import HTMLParser
 from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
 from intent import (
@@ -43,6 +45,7 @@ from rag import (
 )
 from retrieval import retrieve_context
 from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
+import assistant_tools
 from source_reliability import reliability
 import book_index
 import recommendation
@@ -87,6 +90,8 @@ from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
+from prometheus_fastapi_instrumentator import Instrumentator
+from metrics import ocr_request_duration
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -107,6 +112,8 @@ app.add_middleware(
 app.include_router(actions_router)
 app.include_router(conversations_router)
 app.include_router(cover_search_router)
+
+Instrumentator().instrument(app).expose(app)
 
 
 @app.on_event("startup")
@@ -138,32 +145,64 @@ ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() ==
 
 # ── Marketplace lookup (Fahasa / Tiki / Vinabook) ─────────────────────────────
 ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lower() == "true"
-BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "20"))
+# Bumped 20 -> 30: live testing showed a legitimate Fahasa match (correct book, real
+# Fahasa product page) taking ~26s end-to-end - right at the old 20s edge, so it would
+# fail intermittently depending on network/DDGS timing. 30s gives that case headroom
+# without making users wait drastically longer than before.
+BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "30"))
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
-BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "15"))
+BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
+# Hard ceiling on one fahasa_browser.py subprocess call (launch + navigate + evaluate),
+# enforced by _run_fahasa_browser_worker via SIGKILL on the subprocess's process group -
+# see that function's docstring. Was previously a same-process watchdog thread that
+# force-closed the browser object, but that only protects code *after* launch()
+# returns; a real hang was traced to launch() itself blocking 34+ minutes with no
+# browser process even created yet (apparently a stalled browser-binary download - no
+# timeout exists at that layer, and a thread cannot be forcibly stopped once it's
+# blocked inside it). Running the whole call in a subprocess and SIGKILLing it is the
+# only way to bound that. Left at its own env var (not tied to
+# BOOK_MARKETPLACE_TIMEOUT_SECONDS) so it can be tuned independently of the
+# already-hit request-level budget; default is comfortably above the marketplace timeout
+# so a healthy run is never cut short by it, only a hung one.
+FAHASA_BROWSER_HARD_TIMEOUT_SECONDS = float(os.getenv("FAHASA_BROWSER_HARD_TIMEOUT_SECONDS", "35"))
+# How long fahasa_browser.py's discover_url polls for the intercepted search-API
+# response after the search page starts loading (domcontentloaded), instead of waiting
+# for the page's background network chatter to go idle (see that function's comment).
+# Verified live: Fahasa's own search API typically answers in 1-3s; this just gives headroom.
+FAHASA_SEARCH_RESPONSE_WAIT_SECONDS = float(os.getenv("FAHASA_SEARCH_RESPONSE_WAIT_SECONDS", "8"))
 INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
 INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
-# Anthropic Claude LLM — dùng cloud API. Nếu không set key sẽ fallback Ollama local.
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
-ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
-# claude-sonnet-5 is the current Sonnet generation (cheaper and stronger than the
-# previous claude-sonnet-4-6 default this used to be — $2/$10 per MTok vs $3/$15).
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
+
+# ── OpenRouter — the text/tool-calling backend (replaces Ollama for chat; Ollama
+# stays for the vision/OCR models and embeddings.py, which OpenRouter doesn't
+# serve). Anthropic and Groq were deliberately removed from this service - Qwen via
+# OpenRouter is the one cloud LLM it depends on. See llm_provider.OpenRouterProvider.
+# Model slug verified against the raw https://openrouter.ai/api/v1/models JSON on
+# 2026-09-15 ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
+# OpenRouter's own canonical_slug for this alias is qwen/qwen3.7-flash-20260727).
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+OPENROUTER_ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", OPENROUTER_TEXT_MODEL)
+OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
+# Provider for /chat, /generate-book-summary, /generate-summary-vi,
+# /enrich-book-after-isbn, /enrich-book-metadata, /explain-storage-suggestion, and
+# nightly_briefing's text generation. "openrouter" (default) | "ollama" (fully offline).
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
 # Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
 # needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
 ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
 # Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
-# loop - "ollama" (default, fully offline) or "anthropic" (opt-in, for an eval A/B comparison
-# against the local model; requires ANTHROPIC_API_KEY). See llm_provider.py.
-ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "ollama").strip().lower()
+# loop - "openrouter" (default) or "ollama" (fully offline). See llm_provider.py.
+ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "openrouter").strip().lower()
 # Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
 # partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
 # desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
@@ -187,9 +226,14 @@ ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
 @app.on_event("startup")
 async def _startup_warmup_assistant_model() -> None:
     """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
-    request pays that cost. Fire-and-forget — must never delay app startup or crash it if
-    Ollama isn't reachable yet (docker-compose only waits for the container to *start*,
-    not for Ollama's model server to be ready)."""
+    request pays that cost. Only relevant when /assistant is actually configured to use
+    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter has no
+    local model to warm up. Fire-and-forget — must never delay app startup or crash
+    it if Ollama isn't reachable yet (docker-compose only waits for the container to
+    *start*, not for Ollama's model server to be ready)."""
+    if ASSISTANT_PROVIDER != "ollama":
+        return
+
     async def _warm_up():
         try:
             await ollama.AsyncClient(host=OLLAMA_HOST).chat(
@@ -223,6 +267,40 @@ async def _startup_nightly_briefing() -> None:
     import nightly_briefing
 
     asyncio.create_task(nightly_briefing.nightly_briefing_loop())
+
+
+@app.on_event("startup")
+async def _startup_ingest_corpus() -> None:
+    """Dong bo vector store nen o background. Khong chan startup: service phai
+    len duoc ngay ca khi Ollama chua san sang — retrieval se degrade xuong
+    keyword-only cho den khi ingest xong.
+
+    Tat bang ENABLE_CORPUS_INGEST=false (vd trong test e2e khong can semantic).
+    """
+    if os.getenv("ENABLE_CORPUS_INGEST", "true").strip().lower() in ("false", "0", "no"):
+        return
+
+    async def _run() -> None:
+        import ingestion
+        try:
+            await ingestion.ingest_internal_docs()
+            books = await assistant_tools._get("/api/books", None)
+            stats = await ingestion.ingest_books(books) if isinstance(books, list) else {}
+            if not stats.get("documents"):
+                # Khong im lang cho truong hop no-op: /api/books doi JWT nguoi dung
+                # that va hook nay khong co token nao, nen duong nay HIEN DANG
+                # khong chay duoc — phai nhin thay trong log, khong phai suy ra tu
+                # viec search_books tra ve rong (task_5448fb5f).
+                logger.warning(
+                    "startup ingest: 0 book documents ingested — corpus BOOK_METADATA rong, "
+                    "search_books se khong tra ve ket qua nao cho den khi duoc khac phuc "
+                    "(xem task_5448fb5f); phan hoi /api/books: %s",
+                    books if not isinstance(books, list) else f"{len(books)} muc",
+                )
+        except Exception as exc:
+            logger.warning("startup ingest that bai: %s", type(exc).__name__)
+
+    asyncio.create_task(_run())
 
 
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
@@ -274,7 +352,13 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": OLLAMA_MODEL, "ollama_host": OLLAMA_HOST}
+    return {
+        "status": "ok",
+        "model": OLLAMA_MODEL,
+        "ollama_host": OLLAMA_HOST,
+        "llm_provider": LLM_PROVIDER,
+        "assistant_provider": ASSISTANT_PROVIDER,
+    }
 
 
 PROMPT_PACKING_VERIFY = (
@@ -410,7 +494,8 @@ async def scan_receipt(file: UploadFile = File(...)):
     image_bytes = _validate_and_read_image(file)
 
     try:
-        result = _scan_receipt_from_bytes(image_bytes)
+        with ocr_request_duration.time():
+            result = _scan_receipt_from_bytes(image_bytes)
 
         # Validate response structure
         if "error" in result:
@@ -800,10 +885,58 @@ async def _fetch_first_valid(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    """Try each URL in order; for Fahasa, fall back to CloakBrowser when httpx fails.
-    If all DDGS URLs are exhausted with no result, do a final browser-based Fahasa
-    search to discover the real product URL via the internal Elastic search API."""
+    """Only called for Fahasa (source_name == "fahasa") - Tiki and Vinabook each
+    have their own direct-API function (_fetch_tiki_by_isbn_api,
+    _fetch_vinabook_by_isbn_api) and never go through this path.
+
+    Tries CloakBrowser's own-site search FIRST - it hits Fahasa's internal search
+    API directly and doesn't depend on a third-party search engine at all. The
+    DDGS-sourced candidate `urls` (httpx, then CloakBrowser-per-URL) are the
+    fallback if that finds nothing.
+
+    Reordered from "DDGS first, CloakBrowser direct-search as last resort": live
+    testing found DDGS (via the ddgs/primp library) both slow against these search
+    engines from this environment (10-14s+ even when it succeeds) and unreliable (one
+    backend, Mojeek, outright 403s datacenter IPs) - neither problem applies to
+    searching Fahasa's own site directly, so that path is strictly better as the
+    primary attempt, not a last resort."""
     last_error: Exception | None = None
+
+    if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and search_code:
+        discovered_url, dom_meta = await _fahasa_discover_url_via_browser(search_code)
+        if discovered_url:
+            logger.info("Fahasa browser search found URL for %s: %s", search_code, discovered_url)
+            if dom_meta and (dom_meta.get("title") or dom_meta.get("description")):
+                metadata = {
+                    "title": dom_meta.get("title"),
+                    "subtitle": None,
+                    "authors": dom_meta.get("authors") or [],
+                    "publisher": dom_meta.get("publisher"),
+                    "publishedDate": dom_meta.get("publishedDate"),
+                    "description": dom_meta.get("description"),
+                    "categories": [],
+                    "language": dom_meta.get("language") or "vi",
+                    "pageCount": dom_meta.get("pageCount"),
+                    "thumbnail": dom_meta.get("thumbnail"),
+                    "sourceUrl": discovered_url,
+                    "sourceProvider": source_name,
+                    "sourceFetchMode": "cloakbrowser",
+                }
+                score = _metadata_completeness_score(metadata)
+                logger.info(
+                    "Browser marketplace [%s] found metadata score=%.3f from %s",
+                    source_name, score, discovered_url,
+                )
+                return metadata, score
+            # dom_meta empty or no useful fields → fallback to HTML-based parse
+            metadata, score = await _fetch_and_parse_product_page_with_browser(
+                discovered_url, source_name, search_code,
+            )
+            if metadata:
+                return metadata, score
+
+    # Fallback (or the only path for non-Fahasa sources, or when CloakBrowser is
+    # disabled): DDGS-sourced candidate URLs.
     for url in urls[:2]:
         try:
             metadata, score = await _fetch_and_parse_product_page(client, url, source_name, search_code)
@@ -847,82 +980,77 @@ async def _fetch_first_valid(
             if metadata:
                 return metadata, score
 
-    # Last resort: use CloakBrowser to search Fahasa and extract metadata in one session
-    if source_name == "fahasa" and ENABLE_FAHA_CLOAKBROWSER and search_code:
-        discovered_url, dom_meta = await _fahasa_discover_url_via_browser(search_code)
-        if discovered_url:
-            logger.info("Fahasa browser search found URL for %s: %s", search_code, discovered_url)
-            if dom_meta and (dom_meta.get("title") or dom_meta.get("description")):
-                metadata = {
-                    "title": dom_meta.get("title"),
-                    "subtitle": None,
-                    "authors": dom_meta.get("authors") or [],
-                    "publisher": dom_meta.get("publisher"),
-                    "publishedDate": dom_meta.get("publishedDate"),
-                    "description": dom_meta.get("description"),
-                    "categories": [],
-                    "language": dom_meta.get("language") or "vi",
-                    "pageCount": dom_meta.get("pageCount"),
-                    "thumbnail": dom_meta.get("thumbnail"),
-                    "sourceUrl": discovered_url,
-                    "sourceProvider": source_name,
-                    "sourceFetchMode": "cloakbrowser",
-                }
-                score = _metadata_completeness_score(metadata)
-                logger.info(
-                    "Browser marketplace [%s] found metadata score=%.3f from %s",
-                    source_name, score, discovered_url,
-                )
-                return metadata, score
-            # dom_meta empty or no useful fields → fallback to HTML-based parse
-            metadata, score = await _fetch_and_parse_product_page_with_browser(
-                discovered_url, source_name, search_code,
-            )
-            if metadata:
-                return metadata, score
-
     if last_error:
         raise last_error
     return None, 0.0
 
 
-# ── CloakBrowser fallback (Fahasa only) ────────────────────────────────────────
+# ── CloakBrowser fallback (Fahasa only) — runs in an isolated subprocess ───────────
+# See fahasa_browser.py for why: a real hang was traced to cloakbrowser's launch()
+# itself blocking 34+ minutes with no browser process even created yet, which nothing
+# at this (asyncio) layer can bound - only killing the OS process can.
 
-def _fetch_html_with_cloakbrowser(url: str, search_code: str | None = None) -> str | None:
-    browser = None
+async def _run_fahasa_browser_worker(mode: str, args: dict, timeout: float):
+    """Runs fahasa_browser.py's <mode> as a subprocess in its own process group, so a
+    hang anywhere inside it - including inside cloakbrowser's launch(), which has no
+    timeout of its own - can be killed from outside via SIGKILL on the whole group
+    (catching any browser child process too, not just the wrapper). asyncio.to_thread
+    + asyncio.wait_for was tried first and doesn't work for this: cancelling the
+    awaiting coroutine only stops main.py from waiting, it does NOT stop the thread
+    itself (Python threads can't be forcibly killed), so the thread - and whatever
+    browser process it started - kept running for however long the real call actually
+    took (572s, then once 34+ minutes, observed in production) long after the HTTP
+    response had already gone out as a timeout.
+
+    Raises TimeoutError (after killing the subprocess) or RuntimeError (subprocess ran
+    but reported/produced a failure) on any problem - callers catch both the same way
+    they already caught exceptions from the old in-process implementation."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fahasa_browser.py")
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, script, mode, json.dumps(args),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,  # own process group - lets us SIGKILL a browser child too
+    )
     try:
-        from cloakbrowser import launch
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        raise TimeoutError(f"fahasa_browser.py {mode} exceeded {timeout}s, killed")
+    except asyncio.CancelledError:
+        # An outer timeout (e.g. _fetch_first_valid's own asyncio.wait_for at the
+        # endpoint/marketplace-budget level) can cancel us before our OWN timeout
+        # above fires - that arrives here as CancelledError, not TimeoutError. Must
+        # still kill the subprocess (otherwise it leaks exactly like the TimeoutError
+        # case), then re-raise - never swallow CancelledError.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+        raise
 
-        browser = launch(headless=True)
-        page = browser.new_page()
-        page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+    if not stdout:
+        raise RuntimeError(f"fahasa_browser.py {mode} produced no output: {stderr.decode(errors='replace')[:500]}")
+
+    payload = json.loads(stdout.decode())
+    if not payload.get("ok"):
+        raise RuntimeError(payload.get("error") or f"fahasa_browser.py {mode} failed")
+    return payload["result"]
+
+
+async def _fetch_html_with_cloakbrowser(url: str, search_code: str | None = None) -> str | None:
+    try:
+        return await _run_fahasa_browser_worker(
+            "fetch_html", {"url": url, "search_code": search_code}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
         )
-        page.wait_for_timeout(1200)
-        html_text = page.content()
-
-        if search_code and search_code not in html_text:
-            logger.debug(
-                "CloakBrowser page does not contain code %s, skipping %s",
-                search_code,
-                url,
-            )
-            return None
-
-        return html_text
-
     except Exception as exc:
         logger.warning("CloakBrowser fetch failed %s: %s", url, exc)
         return None
-
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
 
 
 async def _fetch_and_parse_product_page_with_browser(
@@ -930,7 +1058,7 @@ async def _fetch_and_parse_product_page_with_browser(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    html_text = await asyncio.to_thread(_fetch_html_with_cloakbrowser, url, search_code)
+    html_text = await _fetch_html_with_cloakbrowser(url, search_code)
 
     if not html_text:
         return None, 0.0
@@ -952,110 +1080,6 @@ async def _fetch_and_parse_product_page_with_browser(
         url,
     )
     return metadata, score
-
-
-def _evaluate_fahasa_product_metadata(page) -> dict:
-    """
-    Run JavaScript in a rendered Fahasa product page to extract book metadata
-    from the DOM. Uses multiple selector fallbacks for each field.
-    Returns a (possibly partial) dict — caller must handle empty/None values.
-    """
-    try:
-        data = page.evaluate("""() => {
-            const h1 = document.querySelector('h1.page-title span')
-                    || document.querySelector('h1.page-title')
-                    || document.querySelector('h1[itemprop="name"]')
-                    || document.querySelector('h1');
-            let title = h1 ? h1.innerText.trim() : null;
-            if (!title) {
-                title = document.title
-                    .replace(/ - FAHASA\\.COM$/i, '')
-                    .replace(/^Sách\\s+/i, '')
-                    .trim() || null;
-            }
-
-            const allImgs = Array.from(document.querySelectorAll('img'));
-            const coverImg = allImgs.find(img =>
-                img.src && img.src.includes('cdn1.fahasa.com/media/catalog/product')
-            );
-            const thumbnail = coverImg ? coverImg.src : null;
-
-            const descEl = document.querySelector('#desc_content')
-                        || document.querySelector('#product_tabs_description_contents')
-                        || document.querySelector('.product-description .value')
-                        || document.querySelector('#description .std')
-                        || document.querySelector('[itemprop="description"]')
-                        || document.querySelector('.product.description .value')
-                        || document.querySelector('.product-info-description p');
-            const description = descEl ? descEl.innerText.trim() || null : null;
-
-            const attrs = {};
-            const rows = document.querySelectorAll(
-                '.product-attribute, .product-info-attributes tr, ' +
-                'table.data.additional-attributes tr, .attributes-table tr, table tr'
-            );
-            rows.forEach(row => {
-                const labelEl = row.querySelector('.attribute-label, th, td:first-child, .label');
-                const valueEl = row.querySelector('.attribute-value, td:last-child, .value');
-                if (labelEl && valueEl) {
-                    const lbl = labelEl.innerText.trim().toLowerCase();
-                    const val = valueEl.innerText.trim();
-                    if (lbl && val) attrs[lbl] = val;
-                }
-            });
-
-            return { title, thumbnail, description, attrs };
-        }""")
-    except Exception:
-        return {}
-
-    if not isinstance(data, dict):
-        return {}
-
-    attrs = data.get("attrs") or {}
-    authors: list[str] = []
-    publisher = None
-    published_date = None
-    page_count = None
-    language = None
-
-    for lbl, val in attrs.items():
-        if not val:
-            continue
-        lbl_lower = lbl.lower()
-        if any(k in lbl_lower for k in ("tác giả", "tac gia", "author")):
-            authors = [v.strip() for v in val.replace(";", ",").split(",") if v.strip()]
-        elif any(k in lbl_lower for k in ("nhà xuất bản", "nha xuat ban", "nxb", "publisher")):
-            publisher = val.strip() or None
-        elif any(k in lbl_lower for k in ("năm xb", "năm xuất bản", "nam xuat ban", "ngày xuất bản", "year")):
-            published_date = val.strip() or None
-        elif any(k in lbl_lower for k in ("số trang", "so trang", "page")):
-            try:
-                page_count = int("".join(filter(str.isdigit, val))) or None
-            except (ValueError, TypeError):
-                pass
-        elif any(k in lbl_lower for k in ("ngôn ngữ", "ngon ngu", "language")):
-            raw_lang = val.strip().lower()
-            if "việt" in raw_lang or "viet" in raw_lang:
-                language = "vi"
-            elif "anh" in raw_lang or "english" in raw_lang:
-                language = "en"
-            else:
-                language = val.strip() or None
-
-    raw_desc = data.get("description")
-    clean_desc = _clean_fahasa_description(raw_desc, data.get("title"))
-
-    return {
-        "title": data.get("title"),
-        "thumbnail": data.get("thumbnail"),
-        "description": clean_desc,
-        "authors": authors,
-        "publisher": publisher,
-        "publishedDate": published_date,
-        "pageCount": page_count,
-        "language": language,
-    }
 
 
 def _clean_fahasa_description(desc: str | None, title: str | None) -> str | None:
@@ -1088,139 +1112,31 @@ def _clean_fahasa_description(desc: str | None, title: str | None) -> str | None
     return cleaned or desc
 
 
-def _fahasa_enhance_metadata_sync(product_url: str) -> dict:
-    """Load a known Fahasa product URL and extract full metadata via DOM evaluation."""
-    browser = None
+async def _fahasa_enhance_metadata(product_url: str) -> dict:
     try:
-        from cloakbrowser import launch
-
-        browser = launch(headless=True)
-        page = browser.new_page()
-        page.goto(
-            product_url,
-            wait_until="domcontentloaded",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
+        result = await _run_fahasa_browser_worker(
+            "enhance_metadata", {"product_url": product_url}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
         )
-        page.wait_for_timeout(1500)
-        return _evaluate_fahasa_product_metadata(page)
+        return result or {}
     except Exception as exc:
         logger.warning("Fahasa metadata enhancement failed %s: %s", product_url, exc)
         return {}
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
-
-
-async def _fahasa_enhance_metadata(product_url: str) -> dict:
-    return await asyncio.to_thread(_fahasa_enhance_metadata_sync, product_url)
-
-
-def _fahasa_discover_url_sync(barcode: str) -> tuple[str | None, dict]:
-    """
-    Load Fahasa search page via CloakBrowser, intercept the internal Elastic search
-    API response to find the product URL, then navigate to that page and extract
-    metadata via DOM evaluation — all in one browser session.
-    Sync — must be called via asyncio.to_thread.
-    """
-    browser = None
-    try:
-        from cloakbrowser import launch
-
-        browser = launch(headless=True)
-        page = browser.new_page()
-        found_url: list[str] = []
-
-        def _on_response(resp):
-            if found_url:
-                return
-            if "elsearch" in resp.url and "search.json" in resp.url:
-                try:
-                    data = resp.json()
-                    for result in data.get("results") or []:
-                        sku = str((result.get("sku") or {}).get("raw", "")).strip()
-                        if sku == barcode:
-                            link = str((result.get("link") or {}).get("raw", "")).strip()
-                            if link:
-                                found_url.append("https://www.fahasa.com" + link)
-                                return
-                except Exception:
-                    pass
-
-        page.on("response", _on_response)
-        page.goto(
-            f"https://www.fahasa.com/catalogsearch/result/?q={barcode}",
-            wait_until="networkidle",
-            timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
-        )
-        page.wait_for_timeout(1000)
-
-        if not found_url:
-            return None, {}
-
-        product_url = found_url[0]
-
-        # Navigate to product page in the same browser session to extract metadata
-        page2 = browser.new_page()
-        dom_meta: dict = {}
-        try:
-            page2.goto(
-                product_url,
-                wait_until="domcontentloaded",
-                timeout=int(BOOK_BROWSER_TIMEOUT_SECONDS * 1000),
-            )
-            page2.wait_for_timeout(1500)
-
-            dom_meta = _evaluate_fahasa_product_metadata(page2)
-
-            # Fallback: extract title from <title> tag if DOM gave nothing
-            if not dom_meta.get("title"):
-                html = page2.content()
-                m = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE)
-                if m:
-                    raw_title = m.group(1)
-                    raw_title = re.sub(r"\s*-\s*FAHASA\.COM\s*$", "", raw_title, flags=re.IGNORECASE).strip()
-                    raw_title = re.sub(r"^Sách\s+", "", raw_title, flags=re.IGNORECASE).strip()
-                    if raw_title:
-                        dom_meta["title"] = raw_title
-
-            # Fallback: extract CDN thumbnail from raw HTML if DOM gave nothing
-            if not dom_meta.get("thumbnail"):
-                html = page2.content()
-                m = re.search(
-                    r"(https://cdn1\.fahasa\.com/media/catalog/product/[^\s\"']+\.(?:jpg|jpeg|png|webp))",
-                    html,
-                    re.IGNORECASE,
-                )
-                if m:
-                    dom_meta["thumbnail"] = m.group(1)
-
-        except Exception as exc:
-            logger.warning("Fahasa product page extraction failed %s: %s", product_url, exc)
-        finally:
-            try:
-                page2.close()
-            except Exception:
-                pass
-
-        return product_url, dom_meta
-
-    except Exception as exc:
-        logger.warning("Fahasa browser search failed for %s: %s", barcode, exc)
-        return None, {}
-
-    finally:
-        if browser:
-            try:
-                browser.close()
-            except Exception:
-                pass
 
 
 async def _fahasa_discover_url_via_browser(barcode: str) -> tuple[str | None, dict]:
-    return await asyncio.to_thread(_fahasa_discover_url_sync, barcode)
+    """Runs fahasa_browser.py's discover_url mode - loads Fahasa's search page,
+    intercepts the internal Elastic search API response to find the product URL, then
+    navigates to that page and extracts metadata via DOM evaluation, all in the
+    subprocess's own browser session. See _run_fahasa_browser_worker for why this runs
+    in a subprocess rather than in-process."""
+    try:
+        result = await _run_fahasa_browser_worker(
+            "discover_url", {"barcode": barcode}, FAHASA_BROWSER_HARD_TIMEOUT_SECONDS,
+        )
+        return result.get("url"), result.get("meta") or {}
+    except Exception as exc:
+        logger.warning("Fahasa browser search failed for %s: %s", barcode, exc)
+        return None, {}
 
 
 # ── 4. DuckDuckGo search (sync — each domain runs in its own thread) ─────────
@@ -1398,6 +1314,131 @@ async def _fetch_tiki_by_isbn_api(
     return None, 0.0
 
 
+# ── 5b. Vinabook direct search (Shopify/Haravan storefront) ──────────────────
+
+class _PlainTextParser(HTMLParser):
+    """Strips tags from a product-description HTML fragment, keeping block-level
+    boundaries as newlines. Vinabook's `description` field (Haravan CMS output)
+    is rich HTML, not og:-tag plain text like _MetaTagParser handles."""
+
+    _BLOCK_TAGS = {"p", "br", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
+
+    def handle_data(self, data):
+        self._chunks.append(data)
+
+    def get_text(self) -> str:
+        text = "".join(self._chunks)
+        lines = [line.strip() for line in text.split("\n")]
+        return "\n".join(line for line in lines if line).strip()
+
+
+def _html_to_plain_text(html_fragment: str | None) -> str | None:
+    if not html_fragment:
+        return None
+    parser = _PlainTextParser()
+    try:
+        parser.feed(html_fragment)
+    except Exception:
+        return None
+    return parser.get_text() or None
+
+
+def _parse_vinabook_options(product: dict) -> dict:
+    """Vinabook's product-level `options` array self-describes each variant
+    dimension by Vietnamese label (e.g. "Nhà Phát Hành", "Năm XB", "Số Trang") -
+    match on label rather than position, since position isn't guaranteed stable
+    across products (some list author or cover type instead)."""
+    out: dict = {}
+    for option in product.get("options") or []:
+        name = (option.get("name") or "").strip().lower()
+        values = option.get("values") or []
+        value = (values[0] if values else "").strip()
+        if not value:
+            continue
+        if any(k in name for k in ("phát hành", "phat hanh", "nhà xuất bản", "nha xuat ban", "nxb")):
+            out.setdefault("publisher", value)
+        elif any(k in name for k in ("năm", "nam xb", "year")):
+            out.setdefault("publishedDate", value)
+        elif any(k in name for k in ("số trang", "so trang", "trang")):
+            try:
+                out.setdefault("pageCount", int("".join(filter(str.isdigit, value))) or None)
+            except (ValueError, TypeError):
+                pass
+        elif any(k in name for k in ("tác giả", "tac gia", "author")):
+            out.setdefault("authors", [v.strip() for v in value.replace(";", ",").split(",") if v.strip()])
+    return out
+
+
+async def _fetch_vinabook_by_isbn_api(
+    client: httpx.AsyncClient,
+    isbn: str,
+) -> tuple[dict | None, float]:
+    """Vinabook runs on Haravan (a Shopify-API-compatible Vietnamese storefront
+    platform): unlike Tiki, its products store the real EAN/ISBN barcode as
+    variant `sku`/`barcode`, and its built-in search (`/search?q=...`) matches
+    on it directly - verified live against real barcodes, including ones Tiki's
+    own search cannot find at all (Tiki never stores ISBN as a searchable
+    field). No DDGS/CloakBrowser needed: this is a plain, unauthenticated
+    storefront endpoint with no anti-bot gate observed.
+    """
+    logger.info("Calling vinabook-search for ISBN %s", isbn)
+    try:
+        search_resp = await client.get(
+            "https://www.vinabook.com/search",
+            params={"q": isbn, "type": "product"},
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        search_resp.raise_for_status()
+        match = re.search(r'href="(/products/[^"?]+)"', search_resp.text)
+        if not match:
+            return None, 0.0
+        product_url = "https://www.vinabook.com" + match.group(1)
+
+        product_resp = await client.get(
+            product_url + ".js",
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        product_resp.raise_for_status()
+        product = product_resp.json() or {}
+
+        variant = (product.get("variants") or [{}])[0]
+        sku = (variant.get("barcode") or variant.get("sku") or "").strip()
+        if sku != isbn:
+            # Search matched a different field (title/tags) than the barcode -
+            # don't attribute a possibly-unrelated product to this ISBN.
+            return None, 0.0
+
+        options_meta = _parse_vinabook_options(product)
+        images = product.get("images") or []
+        metadata = {
+            "title": _safe_text(product.get("title")),
+            "subtitle": None,
+            "authors": options_meta.get("authors", []),
+            "publisher": options_meta.get("publisher") or _safe_text(product.get("vendor")),
+            "publishedDate": options_meta.get("publishedDate"),
+            "description": _html_to_plain_text(product.get("description")),
+            "categories": [],
+            "language": "vi",
+            "pageCount": options_meta.get("pageCount"),
+            "thumbnail": images[0] if images else None,
+            "sourceUrl": product_url,
+        }
+        score = _metadata_completeness_score(metadata)
+        logger.info("vinabook-search returned data, score=%.3f for ISBN %s", score, isbn)
+        return metadata, score
+    except Exception as exc:
+        logger.warning("Vinabook search lookup failed for %s: %s", isbn, exc)
+        raise
+
+
 # ── 6. Orchestrate all marketplace providers ──────────────────────────────────
 
 async def _fetch_all_marketplace(
@@ -1405,38 +1446,34 @@ async def _fetch_all_marketplace(
     isbn10: str | None,
 ) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool, dict[str, str]]:
     """
-    Run Fahasa (DDGS+scrape), Tiki (API), Vinabook (DDGS+scrape) in parallel.
-    Returns metadata plus per-provider TIMEOUT/ERROR outcomes when a provider fails.
+    Run Fahasa (own-site search via CloakBrowser), Tiki (API), Vinabook (own-site
+    search API) in parallel. Returns metadata plus per-provider TIMEOUT/ERROR
+    outcomes when a provider fails.
     """
-    # Step 1: DuckDuckGo search for Fahasa + Vinabook URLs (Tiki handled via API)
-    # Run both DDGS queries in parallel threads — each in its own thread so total
-    # time = max(fahasa_query, vinabook_query) instead of sum.
+    # Step 1: DuckDuckGo search for Fahasa URLs only - it's the fallback path when
+    # CloakBrowser's own-site search finds nothing (see _fetch_first_valid). Tiki
+    # and Vinabook each have a direct API/search of their own and never needed
+    # DDGS-sourced URLs; Vinabook's DDGS-sourced path in particular was removed
+    # after live testing showed DDGS never returns the actual product page for a
+    # barcode query (generic author/category pages instead) - useless as either a
+    # primary or fallback source there, so this now only searches fahasa.com.
     fahasa_urls: list[str] = []
-    vinabook_urls: list[str] = []
     search_outcomes: dict[str, str] = {}
     try:
-        ddgs_results = await asyncio.wait_for(
-            asyncio.gather(
-                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
-                asyncio.to_thread(_ddgs_search_one_domain, isbn13, "vinabook.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
-                return_exceptions=True,
-            ),
+        fahasa_urls = await asyncio.wait_for(
+            asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
             timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
         )
-        if not isinstance(ddgs_results[0], Exception):
-            fahasa_urls = ddgs_results[0]
-        if not isinstance(ddgs_results[1], Exception):
-            vinabook_urls = ddgs_results[1]
     except asyncio.TimeoutError:
-        logger.warning("DuckDuckGo marketplace search timed out for ISBN %s", isbn13)
-        search_outcomes = {"fahasa": "TIMEOUT", "vinabook": "TIMEOUT"}
+        logger.warning("DuckDuckGo Fahasa search timed out for ISBN %s", isbn13)
+        search_outcomes = {"fahasa": "TIMEOUT"}
     except Exception as exc:
-        logger.warning("DuckDuckGo marketplace search error for ISBN %s: %s", isbn13, exc)
-        search_outcomes = {"fahasa": "ERROR", "vinabook": "ERROR"}
+        logger.warning("DuckDuckGo Fahasa search error for ISBN %s: %s", isbn13, exc)
+        search_outcomes = {"fahasa": "ERROR"}
 
-    web_searched = bool(fahasa_urls or vinabook_urls)
+    web_searched = bool(fahasa_urls)
 
-    # Step 2: Fetch pages + Tiki API in parallel
+    # Step 2: Fetch pages + Tiki/Vinabook APIs in parallel
     mp_timeout = httpx.Timeout(BOOK_MARKETPLACE_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(timeout=mp_timeout) as client:
         logger.info("Calling marketplace providers for ISBN %s", isbn13)
@@ -1450,7 +1487,7 @@ async def _fetch_all_marketplace(
                 timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
             ),
             asyncio.wait_for(
-                _fetch_first_valid(client, vinabook_urls, "vinabook", isbn13),
+                _fetch_vinabook_by_isbn_api(client, isbn13),
                 timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
             ),
             return_exceptions=True,
@@ -1530,191 +1567,14 @@ def _safe_list(values) -> list[str]:
             out.append(text)
     return out
 
-
-def _ollama_generate_with_summary_fallback(client: ollama.Client, prompt: str, options: dict | None = None):
-    """Generate with SUMMARY_MODEL, then fallback to OLLAMA_MODEL if summary model is missing."""
-    summary_model = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
-    fallback_model = os.getenv("OLLAMA_MODEL", "llava")
-    opts = options or {}
-
-    try:
-        return client.generate(
-            model=summary_model,
-            prompt=prompt,
-            options=opts,
-        )
-    except ollama.ResponseError as exc:
-        err_text = str(getattr(exc, "error", exc) or "").lower()
-        if "not found" in err_text and fallback_model and fallback_model != summary_model:
-            logger.warning(
-                "SUMMARY_MODEL '%s' not found. Falling back to OLLAMA_MODEL '%s'.",
-                summary_model,
-                fallback_model,
-            )
-            return client.generate(
-                model=fallback_model,
-                prompt=prompt,
-                options=opts,
-            )
-        raise
-
-
-def _anthropic_extract_text(payload: dict) -> str:
-    content = payload.get("content") or []
-    parts: list[str] = []
-    for item in content:
-        if isinstance(item, dict) and item.get("type") == "text":
-            parts.append(str(item.get("text", "")))
-        elif isinstance(item, str):
-            parts.append(item)
-    return "".join(parts).strip()
-
-
-def _split_anthropic_messages(messages: list[dict]) -> tuple[str, list[dict]]:
-    system_parts: list[str] = []
-    filtered: list[dict] = []
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content", "")
-        if role == "system":
-            if content:
-                system_parts.append(content)
-            continue
-        if role in {"user", "assistant"}:
-            filtered.append({"role": role, "content": content})
-    return "\n\n".join(system_parts).strip(), filtered
-
-
-async def _call_anthropic(metadata: dict) -> tuple[str | None, list[str], bool]:
-    """
-    Gọi Anthropic Claude để sinh summaryVi + keywords.
-    Trả về (summary_vi, keywords, success).
-    Chỉ gọi khi ANTHROPIC_API_KEY đã được set.
-    """
-    if not ANTHROPIC_API_KEY:
-        return None, [], False
-
-    title = _safe_text(metadata.get("title")) or "Không rõ"
-    authors = _safe_list(metadata.get("authors"))
-    author_text = authors[0] if authors else "Không rõ"
-    publisher_text = _safe_text(metadata.get("publisher")) or ""
-    categories = _safe_list(metadata.get("categories"))
-    category_text = ", ".join(categories[:3]) if categories else "không rõ"
-    description_hint = (_safe_text(metadata.get("description")) or "")[:1200]
-
-    system_prompt = (
-        "Bạn là biên tập viên nội dung sách cho một nhà sách online Việt Nam. "
-        "Nhiệm vụ của bạn là viết mô tả sách hấp dẫn, tự nhiên, đáng tin cậy, "
-        "dùng để hiển thị trên trang chi tiết sản phẩm. "
-        "Văn phong giống mô tả sách trên Fahasa/Tiki/Nhã Nam: giàu cảm xúc vừa đủ, "
-        "có tính giới thiệu, làm nổi bật giá trị của sách, "
-        "nhưng tuyệt đối không bịa thông tin."
-    )
-
-    user_prompt = f"""Dữ liệu sách:
-- Tên sách: {title}
-- Tác giả: {author_text}
-- Nhà xuất bản: {publisher_text or 'không rõ'}
-- Thể loại: {category_text}
-- Mô tả gốc/metadata: {description_hint or 'không có'}
-
-Hãy viết mô tả tiếng Việt theo yêu cầu:
-1. Độ dài khoảng 180–280 từ.
-2. Viết thành 3–5 đoạn ngắn, dễ đọc trên giao diện web.
-3. Đoạn mở đầu phải cuốn hút, giới thiệu tinh thần chính của cuốn sách.
-4. Các đoạn sau làm rõ nội dung/chủ đề/giá trị mà người đọc có thể nhận được.
-5. Có một đoạn hoặc cụm câu gợi ý nhóm độc giả phù hợp.
-6. Có thể dùng tiêu đề ngắn như "Vì sao nên đọc cuốn sách này?" nếu phù hợp.
-7. Không dùng markdown code block.
-8. Không bịa nhân vật, tình tiết, giải thưởng, số liệu, tên chương hoặc nội dung cụ thể nếu dữ liệu không cung cấp.
-9. Nếu metadata ít, hãy viết an toàn dựa trên tên sách, tác giả và thể loại; không phóng đại.
-10. Tránh các câu sáo rỗng như "cuốn sách đáng chú ý", "mở ra góc nhìn sâu sắc", "phù hợp nhiều đối tượng" nếu không giải thích cụ thể.
-
-Trả về DUY NHẤT JSON hợp lệ:
-{{
-  "summaryVi": "...",
-  "keywords": ["...", "...", "...", "...", "..."]
-}}"""
-
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as http_client:
-            resp = await http_client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "temperature": 0.55,
-                    "max_tokens": 900,
-                },
-            )
-            resp.raise_for_status()
-            raw = _anthropic_extract_text(resp.json())
-
-            parsed = _extract_json(raw)
-            summary_vi = _safe_text(parsed.get("summaryVi"))
-            keywords = _safe_list(parsed.get("keywords"))
-
-            # Fallback: model không trả JSON, lấy raw text
-            if not summary_vi and raw.strip() and not raw.strip().startswith("{"):
-                summary_vi = raw.strip()
-
-            return summary_vi, keywords, bool(summary_vi)
-    except Exception as exc:
-        logger.warning("Anthropic call failed: %s", exc)
-        return None, [], False
-
-
-async def _call_anthropic_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
-    """Generic Anthropic call returning parsed JSON dict. Parse via _extract_json (no json_object mode)."""
-    if not ANTHROPIC_API_KEY:
+async def _call_text_llm_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+    """JSON-returning call for Pattern B (see _call_text_llm). Parse via
+    _extract_json: no json_object mode, the model's raw text isn't
+    guaranteed valid JSON."""
+    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3)
+    if not ok:
         return {}, False
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(25.0)) as client:
-            resp = await client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": ANTHROPIC_MODEL,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": max_tokens,
-                },
-            )
-            resp.raise_for_status()
-            raw = _anthropic_extract_text(resp.json())
-            return _extract_json(raw), True
-    except Exception as e:
-        logger.warning("Anthropic JSON call failed: %s", e)
-        return {}, False
-
-
-async def _call_ollama_json(system_prompt: str, user_prompt: str) -> tuple[dict, bool]:
-    """Generic Ollama call returning parsed JSON dict. Reuses _ollama_generate_with_summary_fallback."""
-    try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            full_prompt,
-            {"temperature": 0.3, "num_predict": 600},
-        )
-        raw = response.get("response", "")
-        return _extract_json(raw), True
-    except Exception as e:
-        logger.warning("Ollama JSON call failed: %s", e)
-        return {}, False
+    return _extract_json(raw), True
 
 
 def _check_book_quality(
@@ -2257,15 +2117,11 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
     if not _should_generate_summary(metadata):
         return None, [], False
 
+    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55)
+    if not called_ok:
+        return None, [], False
+
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            _build_summary_prompt(metadata),
-            {"temperature": 0.55, "num_predict": 700},
-        )
-        raw_text = response.get("response", "")
         parsed = _extract_json(raw_text)
 
         summary_vi = _safe_text(parsed.get("summaryVi"))
@@ -2289,7 +2145,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
 
         return summary_vi, keywords, bool(summary_vi or keywords)
     except Exception as exc:
-        logger.warning("Ollama summary generation failed: %s", exc)
+        logger.warning("Summary generation post-processing failed: %s", exc)
         return None, [], False
 
 
@@ -2457,12 +2313,8 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     keywords = []
     ai_provider = "none"
     if req.generateVietnameseSummary and _should_generate_summary(merged):
-        summary_vi, keywords, anthropic_ok = await _call_anthropic(merged)
-        if anthropic_ok:
-            ai_provider = "anthropic"
-        else:
-            summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(merged)
-            ai_provider = "ollama" if ollama_ok else "none"
+        summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(merged)
+        ai_provider = _get_text_llm_provider().name if ok else "none"
 
     # ── Calculate overall confidence ──────────────────────────────────────────
     all_scores = [
@@ -2649,13 +2501,9 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
 
     try:
         if not summary_vi or not keywords:
-            generated_summary, generated_keywords, anthropic_ok = await _call_anthropic(metadata)
-            if anthropic_ok:
-                provider = "anthropic"
-            else:
-                generated_summary, generated_keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
-                if ollama_ok:
-                    provider = "ollama"
+            generated_summary, generated_keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+            if ok:
+                provider = _get_text_llm_provider().name
 
             summary_vi = summary_vi or generated_summary
             if not keywords:
@@ -2860,8 +2708,7 @@ class SummaryViRequest(BaseModel):
 @app.post("/generate-summary-vi")
 async def generate_summary_vi(req: SummaryViRequest):
     """
-    Endpoint nhẹ: chỉ sinh summaryVi + keywords.
-    Ưu tiên Anthropic, fallback Ollama local.
+    Endpoint nhẹ: chỉ sinh summaryVi + keywords, qua text LLM đã cấu hình (OpenRouter/Qwen mặc định).
     Dùng cho bước 2 trên UI — user click nút riêng sau khi đã lookup metadata.
     """
     if not req.title.strip():
@@ -2887,19 +2734,10 @@ async def generate_summary_vi(req: SummaryViRequest):
         "categories": req.categories,
     }
 
-    # Ưu tiên Anthropic
-    summary_vi, keywords, anthropic_ok = await _call_anthropic(metadata)
-    if anthropic_ok:
+    summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+    if ok:
         description = _normalize_bookstore_description(summary_vi or "")
-        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "anthropic"}
-        summary_cache.set(cache_key, result)
-        return result
-
-    # Fallback Ollama
-    summary_vi, keywords, ollama_ok = await _generate_summary_vi_and_keywords(metadata)
-    if ollama_ok:
-        description = _normalize_bookstore_description(summary_vi or "")
-        result = {"summaryVi": description, "keywords": keywords, "ai_provider": "ollama"}
+        result = {"summaryVi": description, "keywords": keywords, "ai_provider": _get_text_llm_provider().name}
         summary_cache.set(cache_key, result)
         return result
 
@@ -2936,7 +2774,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     """
     AI enrichment toolkit for book metadata.
     Modes: keywords, short_summary, normalize_description, suggest_categories, quality_check.
-    quality_check is rule-based (no AI). Others use Anthropic → Ollama fallback.
+    quality_check is rule-based (no AI). Others use the configured text LLM (OpenRouter/Qwen by default).
     Never overwrites frontend data — returns suggestions for user to apply.
     """
     title = (req.title or "").strip()
@@ -3016,19 +2854,15 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    # Try Anthropic first, fallback Ollama
-    data, ok = await _call_anthropic_json(SYSTEM, user_prompt)
-    ai_provider = "anthropic" if ok else "none"
-    if not ok:
-        data, ok = await _call_ollama_json(SYSTEM, user_prompt)
-        ai_provider = "ollama" if ok else "none"
+    data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
+    ai_provider = _get_text_llm_provider().name if ok else "none"
 
     if not ok:
         return EnrichBookMetadataResponse(
             success=False,
             mode=mode,
             ai_provider="none",
-            qualityWarnings=["AI không khả dụng. Kiểm tra ANTHROPIC_API_KEY hoặc kết nối Ollama."],
+            qualityWarnings=["AI không khả dụng. Kiểm tra OPENROUTER_API_KEY."],
         )
 
     keywords = _safe_list(data.get("keywords", []))[:15]
@@ -3067,43 +2901,21 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
+        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
+        if not ok:
+            fallback_description = _generate_fallback_description(req.title, req.author, web_context)
+            return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
 
-        # Ưu tiên Anthropic trước
-        summary_vi, keywords, anthropic_ok = await _call_anthropic({
-            "title": req.title.strip(),
-            "author": req.author.strip(),
-            "description": web_context or "",
-            "categories": [],
-        })
-
-        if anthropic_ok:
-            description = _format_summary_description(summary_vi or "", {
-                "title": req.title.strip(),
-                "author": req.author.strip(),
-            })
-            return {"description": description, "web_context_used": bool(web_context), "ai_provider": "anthropic"}
-
-        # Fallback Ollama local
-        response = await asyncio.to_thread(
-            _ollama_generate_with_summary_fallback,
-            client,
-            prompt,
-            {"temperature": 0.7, "num_predict": 400},
-        )
         description = _format_summary_description(
-            response.get("response", ""),
+            raw_text,
             {
                 "title": req.title.strip(),
                 "author": req.author.strip(),
                 "categories": [],
             },
         )
-        return {"description": description, "web_context_used": bool(web_context), "ai_provider": "ollama"}
+        return {"description": description, "web_context_used": bool(web_context), "ai_provider": _get_text_llm_provider().name}
 
-    except ollama.ResponseError as e:
-        logger.error(f"Ollama ResponseError: {e.error}")
-        raise HTTPException(status_code=502, detail=f"Ollama không disponible: {e.error}")
     except Exception as e:
         logger.error(f"Error calling LLM: {str(e)}")
         fallback_description = _generate_fallback_description(req.title, req.author, web_context)
@@ -3297,108 +3109,17 @@ class AssistantResponse(BaseModel):
     debug: dict | None = None
 
 
-async def _chat_with_anthropic(messages: list[dict]) -> tuple[str | None, bool]:
-    if not ANTHROPIC_API_KEY:
-        return None, False
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
-            system_prompt, filtered = _split_anthropic_messages(messages)
-            payload: dict = {
-                "model": ANTHROPIC_MODEL,
-                "messages": filtered,
-                "temperature": 0.4,
-                "max_tokens": 800,
-            }
-            if system_prompt:
-                payload["system"] = system_prompt
-            resp = await http_client.post(
-                f"{ANTHROPIC_BASE_URL}/messages",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json=payload,
-            )
-            resp.raise_for_status()
-            reply = _anthropic_extract_text(resp.json())
-            return reply.strip() or None, bool(reply.strip())
-    except Exception as exc:
-        logger.warning("Anthropic chat failed: %s", exc)
-        return None, False
-
-
-async def _stream_chat_with_anthropic(messages: list[dict]):
-    """Yield text deltas from Anthropic's streaming Messages API as they arrive.
-    Raises on any failure (missing key, HTTP error, malformed stream) so the
-    caller can tell "failed before any token" apart from "failed mid-stream".
-    """
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("Anthropic API key not configured")
-    system_prompt, filtered = _split_anthropic_messages(messages)
-    payload: dict = {
-        "model": ANTHROPIC_MODEL,
-        "messages": filtered,
-        "temperature": 0.4,
-        "max_tokens": 800,
-        "stream": True,
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-    async with httpx.AsyncClient(timeout=httpx.Timeout(CHAT_LLM_TIMEOUT_SECONDS)) as http_client:
-        async with http_client.stream(
-            "POST",
-            f"{ANTHROPIC_BASE_URL}/messages",
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-            },
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[len("data:"):].strip()
-                if not data:
-                    continue
-                try:
-                    event = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                if event.get("type") == "content_block_delta":
-                    delta = event.get("delta") or {}
-                    if delta.get("type") == "text_delta" and delta.get("text"):
-                        yield delta["text"]
-
-
-async def _chat_with_ollama(messages: list[dict]) -> tuple[str | None, bool]:
-    try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        prompt_parts = []
-        for msg in messages:
-            role_label = "User" if msg["role"] == "user" else "Assistant"
-            if msg["role"] == "system":
-                role_label = "System"
-            prompt_parts.append(f"{role_label}: {msg['content']}")
-        prompt_parts.append("Assistant:")
-        full_prompt = "\n".join(prompt_parts)
-
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                _ollama_generate_with_summary_fallback,
-                client,
-                full_prompt,
-                {"temperature": 0.4, "num_predict": 800},
-            ),
-            timeout=CHAT_LLM_TIMEOUT_SECONDS,
-        )
-        reply = (response.get("response") or "").strip()
-        return reply or None, bool(reply)
-    except Exception as exc:
-        logger.warning("Ollama chat failed: %s", exc)
-        return None, False
+async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
+    """/chat reply: the full multi-turn messages list, routed through the
+    configured text LLM (OpenRouter/Qwen by default; see LLM_PROVIDER) via
+    the same chat-completion interface /assistant uses - replaces the old
+    direct-Ollama _chat_with_ollama, which collapsed the whole conversation
+    into one role-labelled completion prompt instead of using a proper
+    chat-messages call."""
+    reply, ok = await _call_text_llm_messages(
+        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+    )
+    return (reply or None), ok
 
 
 _AGENT_ACTION_KEYWORDS = [
@@ -3620,28 +3341,14 @@ async def chat(request: Request, req: ChatRequest):
 
         return reply_text, pending_action_data
 
-    reply, anthropic_ok = await _chat_with_anthropic(messages)
-    if anthropic_ok and reply:
+    reply, ok = await _chat_with_text_llm(messages)
+    if ok and reply:
         reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
         grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
         reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
         if not pending_action_data and not skip_cache:
             response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": "anthropic", **metadata}
-        if grounding_warning:
-            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            result["pending_action"] = pending_action_data
-        return result
-
-    reply, ollama_ok = await _chat_with_ollama(messages)
-    if ollama_ok and reply:
-        reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data and not skip_cache:
-            response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": "ollama", **metadata}
+        result = {"reply": reply_with_sources, "ai_provider": _get_text_llm_provider().name, **metadata}
         if grounding_warning:
             result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
         if pending_action_data:
@@ -3681,16 +3388,73 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
 
 @functools.lru_cache(maxsize=1)
 def _get_assistant_provider():
-    """Cached: the same provider instance (and, for Anthropic, its underlying
-    HTTP client) is reused across requests instead of rebuilt per-request."""
+    """Cached: the same provider instance (and, for OpenRouter, its
+    underlying HTTP client) is reused across requests instead of rebuilt
+    per-request."""
     return get_llm_provider(
         ASSISTANT_PROVIDER,
         ollama_host=OLLAMA_HOST,
         ollama_model=ASSISTANT_MODEL,
-        anthropic_api_key=ANTHROPIC_API_KEY,
-        anthropic_base_url=ANTHROPIC_BASE_URL,
-        anthropic_model=ANTHROPIC_MODEL,
+        openrouter_api_key=OPENROUTER_API_KEY,
+        openrouter_base_url=OPENROUTER_BASE_URL,
+        openrouter_model=OPENROUTER_ASSISTANT_MODEL,
+        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
     )
+
+
+@functools.lru_cache(maxsize=1)
+def _get_text_llm_provider():
+    """Provider (see LLM_PROVIDER, default openrouter/Qwen) for the
+    text-generation helpers below: book summary, ISBN enrichment, /chat
+    replies, storage-suggestion explanations, nightly briefing - tried before
+    each feature's own static fallback. Cached the same way
+    _get_assistant_provider() is."""
+    return get_llm_provider(
+        LLM_PROVIDER,
+        ollama_host=OLLAMA_HOST,
+        ollama_model=SUMMARY_MODEL,
+        openrouter_api_key=OPENROUTER_API_KEY,
+        openrouter_base_url=OPENROUTER_BASE_URL,
+        openrouter_model=OPENROUTER_TEXT_MODEL,
+        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
+    )
+
+
+async def _call_text_llm_messages(
+    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+) -> tuple[str, bool]:
+    """Tier-2 call for Pattern B's text-generation helpers: routes an
+    already-built chat message list (system/user/assistant turns) through
+    _get_text_llm_provider() (OpenRouter by default, replacing the old direct
+    `ollama.Client(...).generate(...)` calls) using the same ChatResult
+    interface /assistant already relies on. Returns (raw_text, success) -
+    callers keep their own JSON parsing (_extract_json) and tier-3 static
+    fallback unchanged; only the "how do we reach a model" plumbing moved."""
+    try:
+        provider = _get_text_llm_provider()
+        result = await provider.chat(
+            messages=messages,
+            tools=[],
+            num_predict=max_tokens,
+            timeout=timeout if timeout is not None else CHAT_LLM_TIMEOUT_SECONDS * 2,
+            temperature=temperature,
+        )
+        return result.text, bool(result.text)
+    except Exception as exc:
+        logger.warning("_call_text_llm failed: %s", exc)
+        return "", False
+
+
+async def _call_text_llm(
+    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+) -> tuple[str, bool]:
+    """Single-turn convenience wrapper over _call_text_llm_messages, for
+    callers that just have a (system_prompt, user_prompt) pair rather than a
+    full conversation history."""
+    messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
+        {"role": "user", "content": user_prompt},
+    ]
+    return await _call_text_llm_messages(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout)
 
 
 def _render_tool_result(name: str, tool_result: dict) -> str:
@@ -4062,8 +3826,8 @@ async def assistant(request: Request, req: AssistantRequest):
         message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
     )
 
-    provider = _get_assistant_provider()
     try:
+        provider = _get_assistant_provider()
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
             result = await provider.chat(
                 messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
@@ -4212,13 +3976,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         answer = ""
         answered_normally = False
         call_usage: list[dict] = []
-        provider = _get_assistant_provider()
 
         tools_used, collected_data, start_round = await seed_fast_path(
             message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
         )
 
         try:
+            provider = _get_assistant_provider()
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
                 final_chunk = None
                 async for chunk in provider.chat_stream(
@@ -4323,11 +4087,11 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 @app.post("/chat/stream")
 async def chat_stream(request: Request, req: ChatRequest):
     """Streaming twin of /chat: same prep (auth, intent, retrieval, cache,
-    agent-action layer), but the LLM reply is sent to the client as it's
-    generated instead of after the whole thing is ready. Only the Anthropic
-    path streams token-by-token; the rare Ollama/static fallback paths send
-    their whole reply as a single `token` event (not worth bridging Ollama's
-    sync generator through asyncio for a fallback that almost never runs).
+    agent-action layer). The LLM reply itself is sent as a single `token`
+    event (not per-token) - _chat_with_text_llm's underlying provider call is
+    non-streaming; the SSE shape is kept for client compatibility and so a
+    future genuinely-streaming call (OpenRouterProvider.chat_stream) can slot
+    in here without changing the endpoint's event contract.
     The final `done` event's `reply` is the source of truth (it has the
     source-line / agent-confirmation sentences appended, which streamed tokens
     don't include yet) — the client should replace, not just append, on done.
@@ -4457,20 +4221,11 @@ async def chat_stream(request: Request, req: ChatRequest):
 
         full_text = ""
         provider = "fallback"
-        try:
-            async for chunk in _stream_chat_with_anthropic(messages):
-                full_text += chunk
-                provider = "anthropic"
-                yield _sse("token", {"text": chunk})
-        except Exception as exc:
-            logger.warning("Anthropic streaming failed: %s", exc)
-
-        if not full_text:
-            reply, ollama_ok = await _chat_with_ollama(messages)
-            if ollama_ok and reply:
-                full_text = reply
-                provider = "ollama"
-                yield _sse("token", {"text": full_text})
+        reply, ok = await _chat_with_text_llm(messages)
+        if ok and reply:
+            full_text = reply
+            provider = _get_text_llm_provider().name
+            yield _sse("token", {"text": full_text})
 
         if not full_text:
             full_text = build_fallback_reply(intent_info, retrieval, used_legacy_context)
@@ -4530,6 +4285,14 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     # Resolved up-front (not only on the confirm path) so a cancel-via-confirm
     # (`confirm: false`) also records who cancelled it in the audit log.
     user_ctx = await get_user_context(auth_header)
+
+    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
+    # without it, any user whose role satisfies require_can_confirm_action below could
+    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
+    # its action_id (broadcast over the ai_action:* websocket events to other staff).
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if not req.confirm:
         await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
@@ -4874,13 +4637,9 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
 
     if entries:
         user_prompt = _build_recommendation_reason_prompt(entries, profile)
-        parsed, ok = await _call_anthropic_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
         if ok and parsed:
-            provider = "anthropic"
-        else:
-            parsed, ok = await _call_ollama_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
-            if ok and parsed:
-                provider = "ollama"
+            provider = _get_text_llm_provider().name
         if ok and isinstance(parsed, dict):
             reasons = {
                 str(key): str(value).strip()
@@ -4912,11 +4671,7 @@ async def get_recommendations(request: Request, req: RecommendationRequest):
     semantic: list[float] = []
     profile_text = (signals["profile"].get("text") or "").strip()
     if candidates and profile_text:
-        # Blocking Ollama call; keep it off the event loop like every other
-        # embedding caller in this service.
-        semantic = await asyncio.to_thread(
-            book_index.semantic_scores, candidates, profile_text
-        )
+        semantic = await book_index.semantic_scores(candidates, profile_text)
 
     entries = recommendation.rank_candidates(
         candidates,
@@ -5062,7 +4817,7 @@ class StorageSuggestionRequest(BaseModel):
 async def explain_storage_suggestion(req: StorageSuggestionRequest):
     """
     Tạo câu giải thích tự nhiên cho các gợi ý vị trí lưu trữ sách.
-    Dùng Ollama hoặc Anthropic để sinh text tự nhiên.
+    Dùng text LLM đã cấu hình (OpenRouter/Qwen mặc định) để sinh text tự nhiên.
     """
     if not req.suggestions:
         return {"explanations": []}
@@ -5091,63 +4846,34 @@ Trả về JSON array với đúng {len(req.suggestions)} câu:
 
 CHỈ trả về JSON, không markdown."""
 
-    # Thử Anthropic trước
-    explanations = await _get_ai_explanations(prompt, len(req.suggestions))
-    
+    explanations, ai_provider = await _get_ai_explanations(prompt, len(req.suggestions))
+
     if explanations and len(explanations) == len(req.suggestions):
-        return {"explanations": explanations, "ai_provider": "anthropic"}
+        return {"explanations": explanations, "ai_provider": ai_provider}
 
     # Fallback: dùng rule-based explanation
     explanations = _generate_rule_based_explanation(book_title, req.suggestions)
     return {"explanations": explanations, "ai_provider": "fallback"}
 
 
-async def _get_ai_explanations(prompt: str, expected_count: int) -> list[str] | None:
-    """Gọi Anthropic hoặc Ollama để sinh explanations."""
-    # Thử Anthropic
-    if ANTHROPIC_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as http_client:
-                resp = await http_client.post(
-                    f"{ANTHROPIC_BASE_URL}/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={
-                        "model": ANTHROPIC_MODEL,
-                        "system": "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
-                        "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3,
-                        "max_tokens": 300,
-                    },
-                )
-                resp.raise_for_status()
-                raw = _anthropic_extract_text(resp.json())
-                
-                explanations = _parse_json_array(raw)
-                if explanations and len(explanations) >= expected_count // 2:
-                    return explanations[:expected_count]
-        except Exception as exc:
-            logger.warning(f"Anthropic storage explanation failed: {exc}")
-
-    # Thử Ollama
+async def _get_ai_explanations(prompt: str, expected_count: int) -> tuple[list[str] | None, str]:
+    """Gọi text LLM đã cấu hình (OpenRouter/Qwen mặc định; xem LLM_PROVIDER) để sinh
+    explanations. Trả về (explanations, provider_name_da_dung)."""
     try:
-        client = ollama.Client(host=OLLAMA_HOST)
-        response = client.generate(
-            model=OLLAMA_MODEL,
-            prompt=prompt,
-            options={"temperature": 0.3, "num_predict": 200},
+        raw, ok = await _call_text_llm(
+            "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
+            prompt,
+            max_tokens=200,
+            temperature=0.3,
         )
-        raw = response.get("response", "")
-        explanations = _parse_json_array(raw)
-        if explanations and len(explanations) >= expected_count // 2:
-            return explanations[:expected_count]
+        if ok:
+            explanations = _parse_json_array(raw)
+            if explanations and len(explanations) >= expected_count // 2:
+                return explanations[:expected_count], _get_text_llm_provider().name
     except Exception as exc:
-        logger.warning(f"Ollama storage explanation failed: {exc}")
+        logger.warning(f"Storage explanation failed: {exc}")
 
-    return None
+    return None, "none"
 
 
 def _parse_json_array(text: str) -> list[str]:

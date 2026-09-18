@@ -18,4 +18,4 @@ WORKDIR /app
 COPY --from=builder /app ./
 
 EXPOSE 3000
-CMD ["node", "src/index.js"]
+CMD ["node", "-r", "./src/tracing.js", "src/index.js"]

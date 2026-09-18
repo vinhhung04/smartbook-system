@@ -9,6 +9,11 @@ const { pushToRooms } = require("../lib/socket-emitter");
 const {
   claimDraftReceiptForPosting,
 } = require("../services/goods-receipt-posting.service");
+const {
+  getReadableWarehouseIds,
+  canWriteWarehouse,
+  requireWarehouseReadAccess,
+} = require("../utils/warehouse-scope.utils");
 
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
@@ -227,10 +232,16 @@ function canAccessAssignedReceiving(user = {}, receivedByUserId) {
 
 async function getGoodsReceipts(req, res) {
   try {
+    let where;
+    if (canViewAllReceivingTasks(req.user || {})) {
+      const readableWarehouseIds = await getReadableWarehouseIds(req.user || {});
+      where = { warehouse_id: { in: readableWarehouseIds } };
+    } else {
+      where = { received_by_user_id: req.user?.id };
+    }
+
     const receipts = await prisma.goods_receipts.findMany({
-      where: canViewAllReceivingTasks(req.user || {})
-        ? {}
-        : { received_by_user_id: req.user?.id },
+      where,
       orderBy: { created_at: "desc" },
       include: {
         warehouses: {
@@ -345,6 +356,10 @@ async function getGoodsReceiptById(req, res) {
 
     if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+    if (receipt.received_by_user_id !== req.user?.id) {
+      const canRead = await requireWarehouseReadAccess(req, res, receipt.warehouse_id);
+      if (!canRead) return;
     }
 
     const items = receipt.goods_receipt_items.map((item) => ({
@@ -549,6 +564,10 @@ async function createGoodsReceipt(req, res) {
         throw new Error("WAREHOUSE_NOT_FOUND");
       }
 
+      if (!(await canWriteWarehouse(req.user, effectiveWarehouseId))) {
+        throw new Error("WAREHOUSE_ACCESS_DENIED");
+      }
+
       const normalizedItems = [];
       for (const item of items) {
         const rawVariantId = parseId(item?.variant_id);
@@ -705,6 +724,9 @@ async function createGoodsReceipt(req, res) {
     if (error.message === "WAREHOUSE_NOT_FOUND") {
       return res.status(404).json({ message: "Warehouse not found" });
     }
+    if (error.message === "WAREHOUSE_ACCESS_DENIED") {
+      return res.status(403).json({ message: "You do not have write access to this warehouse" });
+    }
     if (error.message === "PURCHASE_ORDER_NOT_FOUND") {
       return res.status(404).json({ message: "Purchase order not found" });
     }
@@ -830,6 +852,23 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
         created_by_user_id: userId,
       })),
     });
+
+    await tx.integration_outbox.createMany({
+      data: itemsWithLocation.map((item) => ({
+        aggregate_type: "STOCK_BALANCE",
+        aggregate_id: item.variant_id,
+        event_type: "inventory.stock.changed",
+        payload: {
+          variant_id: item.variant_id,
+          location_id: item.location_id,
+          warehouse_id: goodsReceipt.warehouse_id,
+          delta_qty: item.quantity,
+          reason_code: "GOODS_RECEIPT",
+          source_reference_type: "GOODS_RECEIPT",
+          source_reference_id: goodsReceipt.id,
+        },
+      })),
+    });
   }
 
   if (itemsWithoutLocation.length > 0) {
@@ -902,6 +941,23 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
         metadata: {
           source_type: "GOODS_RECEIPT_NO_LOCATION",
           bucket: "RECEIVING_HOLD",
+        },
+      })),
+    });
+
+    await tx.integration_outbox.createMany({
+      data: aggregatedItems.map((item) => ({
+        aggregate_type: "STOCK_BALANCE",
+        aggregate_id: item.variant_id,
+        event_type: "inventory.stock.changed",
+        payload: {
+          variant_id: item.variant_id,
+          location_id: receivingLocation.id,
+          warehouse_id: goodsReceipt.warehouse_id,
+          delta_qty: item.quantity,
+          reason_code: "GOODS_RECEIPT",
+          source_reference_type: "GOODS_RECEIPT",
+          source_reference_id: goodsReceipt.id,
         },
       })),
     });
@@ -1002,6 +1058,23 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
       },
     })),
   });
+
+  await tx.integration_outbox.createMany({
+    data: aggregatedItems.map((item) => ({
+      aggregate_type: "STOCK_BALANCE",
+      aggregate_id: item.variant_id,
+      event_type: "inventory.stock.changed",
+      payload: {
+        variant_id: item.variant_id,
+        location_id: receivingLocation.id,
+        warehouse_id: goodsReceipt.warehouse_id,
+        delta_qty: item.quantity,
+        reason_code: "TRANSFER_RECEIPT",
+        source_reference_type: "GOODS_RECEIPT",
+        source_reference_id: goodsReceipt.id,
+      },
+    })),
+  });
 }
 
 async function cancelStockMovements(tx, goodsReceiptId) {
@@ -1067,6 +1140,22 @@ async function cancelStockMovements(tx, goodsReceiptId) {
           last_movement_at: new Date(),
         },
       });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: "STOCK_BALANCE",
+          aggregate_id: movement.variant_id,
+          event_type: "inventory.stock.changed",
+          payload: {
+            variant_id: movement.variant_id,
+            location_id: movement.to_location_id,
+            delta_qty: -movement.quantity,
+            reason_code: "GOODS_RECEIPT_CANCELLED",
+            source_reference_type: "GOODS_RECEIPT",
+            source_reference_id: goodsReceiptId,
+          },
+        },
+      });
     } else if (
       movement.movement_type === "OUTBOUND" &&
       movement.from_location_id
@@ -1085,6 +1174,22 @@ async function cancelStockMovements(tx, goodsReceiptId) {
             : {}),
           version: { increment: 1 },
           last_movement_at: new Date(),
+        },
+      });
+
+      await tx.integration_outbox.create({
+        data: {
+          aggregate_type: "STOCK_BALANCE",
+          aggregate_id: movement.variant_id,
+          event_type: "inventory.stock.changed",
+          payload: {
+            variant_id: movement.variant_id,
+            location_id: movement.from_location_id,
+            delta_qty: movement.quantity,
+            reason_code: "GOODS_RECEIPT_CANCELLED",
+            source_reference_type: "GOODS_RECEIPT",
+            source_reference_id: goodsReceiptId,
+          },
         },
       });
     }
@@ -1126,6 +1231,13 @@ async function updateGoodsReceipt(req, res) {
         return {
           forbidden: true,
           message: "Goods receipt must be assigned to current warehouse staff",
+        };
+      }
+
+      if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
+        return {
+          forbidden: true,
+          message: "You do not have write access to this warehouse",
         };
       }
 
@@ -1228,6 +1340,21 @@ async function updateGoodsReceipt(req, res) {
             },
           },
         });
+
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: "GOODS_RECEIPT",
+            aggregate_id: updated.id,
+            event_type: "goods_receipt.posted",
+            payload: {
+              goods_receipt_id: updated.id,
+              receipt_number: updated.receipt_number,
+              source_type: updated.source_type,
+              purchase_order_id: updated.purchase_order_id ?? null,
+            },
+            headers: { correlation_id: req.requestId || null },
+          },
+        });
       }
 
       if (targetStatus === "CANCELLED" && existing.status === "POSTED") {
@@ -1288,6 +1415,14 @@ async function assignGoodsReceipt(req, res) {
   }
 
   try {
+    const existing = await prisma.goods_receipts.findUnique({ where: { id }, select: { warehouse_id: true } });
+    if (!existing) {
+      return res.status(404).json({ message: "Goods receipt not found" });
+    }
+    if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
+      return res.status(403).json({ message: "You do not have write access to this warehouse" });
+    }
+
     const updated = await prisma.goods_receipts.update({
       where: { id },
       data: {

@@ -6,8 +6,20 @@ function makeFakePrisma({ intent, fine, customer }) {
   const state = { intent: { ...intent }, fine: { ...fine }, customer: { ...customer }, payments: [], notifications: [], audits: [] };
   const tx = {
     fine_payment_intents: {
-      findUnique: async ({ where }) => (where.txn_ref === state.intent.txn_ref ? state.intent : null),
+      findUnique: async ({ where }) => {
+        if (where.txn_ref !== undefined) return where.txn_ref === state.intent.txn_ref ? state.intent : null;
+        return where.id === state.intent.id ? state.intent : null;
+      },
       update: async ({ data }) => { Object.assign(state.intent, data); return state.intent; },
+      // Mirrors Prisma's real updateMany: only applies (and reports count 1) when every
+      // `where` field matches the current row — used by the atomic claim-before-processing
+      // step in vnpay-payment.service.js to guard against the Return-URL/IPN race.
+      updateMany: async ({ where, data }) => {
+        const matches = Object.entries(where).every(([key, value]) => state.intent[key] === value);
+        if (!matches) return { count: 0 };
+        Object.assign(state.intent, data);
+        return { count: 1 };
+      },
     },
     fines: {
       findUnique: async () => ({ ...state.fine, fine_payments: state.payments }),

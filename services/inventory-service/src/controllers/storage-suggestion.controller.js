@@ -63,7 +63,8 @@ async function getSuggestions(req, res) {
       book_id || null,
       variant_id || null,
       quantity || 1,
-      mode || 'RECEIVING'
+      mode || 'RECEIVING',
+      req.requestId
     );
 
     return res.json(result);

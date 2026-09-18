@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GET /api/borrow-integration/availability — 200 response",
+  "type": "object",
+  "required": ["data"],
+  "properties": {
+    "data": {
+      "type": "object",
+      "required": ["variant_id", "warehouse_id", "total_available", "requested_quantity", "suggested_location_id"],
+      "properties": {
+        "variant_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "total_available": { "type": "number" },
+        "requested_quantity": { "type": "number" },
+        "suggested_location_id": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

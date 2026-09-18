@@ -19,6 +19,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- For ai_db
 \c ai_db
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- Back to inventory (default)
 \c inventory

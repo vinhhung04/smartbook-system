@@ -938,6 +938,23 @@ async function confirmPutaway(req, res) {
         })),
       });
 
+      await tx.integration_outbox.createMany({
+        data: aggregatedBalanceEntries.map((entry) => ({
+          aggregate_type: 'STOCK_BALANCE',
+          aggregate_id: entry.variant_id,
+          event_type: 'inventory.stock.changed',
+          payload: {
+            variant_id: entry.variant_id,
+            location_id: entry.location_id,
+            warehouse_id: receipt.warehouse_id,
+            delta_qty: entry.quantity,
+            reason_code: 'PUTAWAY_CONFIRMED',
+            source_reference_type: 'GOODS_RECEIPT',
+            source_reference_id: receiptId,
+          },
+        })),
+      });
+
       return {
         success: true,
         allocated_line_count: finalItems.filter((item) => Boolean(item.location_id)).length,

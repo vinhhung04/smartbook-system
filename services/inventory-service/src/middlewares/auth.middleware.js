@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const redis = require('../lib/redis');
 
 const LEGACY_ROLE_MAP = {
   MANAGER: 'WAREHOUSE_MANAGER',
@@ -11,7 +12,7 @@ function normalizeRoles(roles = []) {
   return roles.map((r) => LEGACY_ROLE_MAP[r] || r);
 }
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -26,6 +27,22 @@ function authenticateToken(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Mirrors auth-service's authenticateToken: same Redis instance, same key
+    // conventions, so a logout / password change / admin lock there is honored here too.
+    if (payload.jti) {
+      const blacklisted = await redis.get(`blacklist:token:${payload.jti}`);
+      if (blacklisted !== null) {
+        return res.status(401).json({ message: 'Token has been revoked' });
+      }
+    }
+    if (payload.sub && payload.iat) {
+      const validAfter = await redis.get(`user:tokens-valid-after:${payload.sub}`);
+      if (validAfter !== null && payload.iat < Number(validAfter)) {
+        return res.status(401).json({ message: 'Token has been revoked' });
+      }
+    }
+
     req.user = {
       ...payload,
       id: payload.id || payload.sub,

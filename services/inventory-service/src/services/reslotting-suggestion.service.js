@@ -34,10 +34,13 @@ function computeAccessibilityScore(location) {
   return extractOrdinal(location.aisle) * 10000 + extractOrdinal(location.shelf) * 100 + extractOrdinal(location.bin);
 }
 
-async function fetchBookTurnover(days = TURNOVER_LOOKBACK_DAYS) {
+async function fetchBookTurnover(days = TURNOVER_LOOKBACK_DAYS, requestId) {
   const response = await fetch(`${ANALYTICS_SERVICE_URL}/analytics/book-turnover?days=${days}`, {
     signal: AbortSignal.timeout(15000),
-    headers: { 'x-internal-service-key': INTERNAL_SERVICE_KEY },
+    headers: {
+      'x-internal-service-key': INTERNAL_SERVICE_KEY,
+      ...(requestId ? { 'x-request-id': requestId } : {}),
+    },
   });
   if (!response.ok) {
     throw new Error(`analytics-service responded ${response.status}`);
@@ -47,7 +50,7 @@ async function fetchBookTurnover(days = TURNOVER_LOOKBACK_DAYS) {
   return new Map(items.map((item) => [item.variant_id, item.borrow_count]));
 }
 
-async function generateReslottingSuggestions(warehouseId, limit = 20) {
+async function generateReslottingSuggestions(warehouseId, limit = 20, requestId) {
   const balances = await prisma.stock_balances.findMany({
     where: {
       warehouse_id: warehouseId,
@@ -64,7 +67,7 @@ async function generateReslottingSuggestions(warehouseId, limit = 20) {
     return { warehouse_id: warehouseId, generated_at: new Date().toISOString(), items: [] };
   }
 
-  const turnoverByVariant = await fetchBookTurnover();
+  const turnoverByVariant = await fetchBookTurnover(TURNOVER_LOOKBACK_DAYS, requestId);
 
   const placements = balances
     .filter((b) => b.locations)

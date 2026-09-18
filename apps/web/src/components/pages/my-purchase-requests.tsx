@@ -341,7 +341,7 @@ export function MyPurchaseRequestsPage() {
                   <div>
                     <label className="block text-[12px] font-medium mb-1">Kho *</label>
                     <Select value={form.warehouse_id} onValueChange={(v) => setForm((f) => ({ ...f, warehouse_id: v }))}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" data-testid="new-pr-warehouse-select">
                         <SelectValue placeholder="-- Chọn kho --" />
                       </SelectTrigger>
                       <SelectContent>
@@ -369,6 +369,7 @@ export function MyPurchaseRequestsPage() {
                       placeholder="Nhập tên sách hoặc ISBN nếu có"
                       value={form.book_title_hint || ""}
                       onChange={(e) => setForm((f) => ({ ...f, book_title_hint: e.target.value }))}
+                      data-testid="new-pr-book-title"
                     />
                   </div>
                   <div>
@@ -379,6 +380,7 @@ export function MyPurchaseRequestsPage() {
                       value={form.quantity_requested}
                       onChange={(e) => setForm((f) => ({ ...f, quantity_requested: Number(e.target.value) }))}
                       required
+                      data-testid="new-pr-quantity"
                     />
                   </div>
                 </div>
@@ -395,7 +397,7 @@ export function MyPurchaseRequestsPage() {
                   <Button type="button" variant="outline" size="sm" onClick={() => setForm(emptyForm)}>
                     Đặt lại
                   </Button>
-                  <Button type="submit" size="sm" disabled={submitting} loading={submitting}>
+                  <Button type="submit" size="sm" disabled={submitting} loading={submitting} data-testid="new-pr-submit">
                     Gửi yêu cầu
                   </Button>
                 </div>

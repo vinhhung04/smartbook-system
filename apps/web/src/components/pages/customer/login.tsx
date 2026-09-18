@@ -169,7 +169,7 @@ export function CustomerLoginPage() {
             </div>
 
             {/* Submit */}
-            <motion.button type="submit" disabled={isSubmitting}
+            <motion.button type="submit" data-testid="customer-login-submit" disabled={isSubmitting}
               whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
               className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-[14px] font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
               {isSubmitting ? (

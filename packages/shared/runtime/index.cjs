@@ -1,4 +1,5 @@
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
+const { trace } = require('@opentelemetry/api');
 
 const UNSAFE_PLACEHOLDERS = new Set([
   'change-me',
@@ -65,12 +66,16 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
   return (req, res, next) => {
     const startedAt = now();
     res.once('finish', () => {
+      const spanContext = trace.getActiveSpan()?.spanContext();
       log(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'info',
         service: serviceName,
         request_id: req.requestId || null,
+        trace_id: spanContext?.traceId || null,
+        span_id: spanContext?.spanId || null,
         method: req.method,
+        route: req.route?.path ? `${req.baseUrl}${req.route.path}` : undefined,
         path: req.originalUrl || req.url,
         status: res.statusCode,
         latency_ms: Math.max(0, now() - startedAt),
@@ -81,13 +86,31 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
   };
 }
 
-function createRateLimiter({ max = 100, windowMs = 60_000, key, now = Date.now } = {}) {
+// X-Forwarded-For is appended-to by each hop it passes through, so the entries closest to
+// the right end are the ones OUR reverse proxies added (trustworthy); anything further left
+// (including the leftmost entry) is client-supplied and trivially spoofable. `trustedProxyHops`
+// is the number of reverse proxies sitting in front of this service (e.g. 1 for api-gateway
+// behind a single nginx edge, 2 for a service sitting behind nginx + api-gateway) — we skip
+// that many entries from the right and trust the one after that as the real client IP.
+function resolveClientIp(req, trustedProxyHops = 0) {
+  const remoteAddress = req.socket?.remoteAddress || req.ip || 'unknown';
+  if (!trustedProxyHops || trustedProxyHops < 1) return remoteAddress;
+
+  const forwardedFor = String(req.headers?.['x-forwarded-for'] || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (forwardedFor.length === 0) return remoteAddress;
+
+  const index = forwardedFor.length - trustedProxyHops;
+  return index >= 0 ? forwardedFor[index] : forwardedFor[0];
+}
+
+function createRateLimiter({ max = 100, windowMs = 60_000, key, trustedProxyHops = 0, now = Date.now } = {}) {
   const buckets = new Map();
   return (req, res, next) => {
     const currentTime = now();
-    const clientKey = key
-      ? key(req)
-      : String(req.headers?.['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
+    const clientKey = key ? key(req) : resolveClientIp(req, trustedProxyHops);
     let bucket = buckets.get(clientKey);
     if (!bucket || bucket.resetAt <= currentTime) {
       bucket = { count: 0, resetAt: currentTime + windowMs };
@@ -113,6 +136,14 @@ function createRateLimiter({ max = 100, windowMs = 60_000, key, now = Date.now }
   };
 }
 
+function deterministicUuid(seed) {
+  const hash = createHash('sha256').update(seed).digest('hex');
+  const chars = hash.slice(0, 32).split('');
+  chars[12] = '4';
+  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
+  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
+}
+
 function securityHeaders(_req, res, next) {
   res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -127,6 +158,8 @@ module.exports = {
   createRateLimiter,
   createRequestContext,
   createRequestLogger,
+  deterministicUuid,
   requireEnv,
+  resolveClientIp,
   securityHeaders,
 };

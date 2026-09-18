@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
 from typing import Any, Awaitable, Callable
 
 import httpx
 
 import book_index
-from intent import normalize_text
+import embeddings
+import fusion
+import vector_store
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 ASSISTANT_TOOL_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_TOOL_TIMEOUT_SECONDS", "8"))
@@ -142,70 +143,121 @@ def _compact_book_with_content(book: dict) -> dict:
     }
 
 
-def _keyword_score(compact: dict, normalized_query: str, tokens: list[str]) -> int:
-    haystack = normalize_text(" ".join([
-        compact["title"], compact["author"], str(compact["category"]),
-        str(compact["isbn"]), compact["description"], compact["summary_vi"],
-    ]))
-    score = sum(1 for token in tokens if token in haystack)
-    if normalized_query and normalized_query in haystack:
-        score += 3
-    return score
+def _isbn_key(value: Any) -> str:
+    """Chi giu chu/so, in hoa, de so sanh isbn khong phu thuoc dau gach ngang/khoang
+    trang (vd "978-604-..." voi "9786041234567")."""
+    return "".join(ch for ch in str(value or "").strip().upper() if ch.isalnum())
 
 
-def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
-    """Hybrid ranking: keyword overlap fused with cosine similarity over the
-    book's own text.
+# ISBN-10/13 (digits only, sau khi chuan hoa) luon >= 10 ky tu. Nguong nay
+# chan false-positive tu isbn rong/qua ngan bi coi la substring cua bat ky
+# query nao (vd "" luon la substring cua moi chuoi).
+_MIN_ISBN_KEY_LEN = 10
 
-    Keyword scoring alone cannot match a topical question ("sach day tre ky nang
-    song") against a book whose description says the same thing in other words;
-    embeddings alone are unreliable for exact identifiers like an ISBN. Both are
-    scored, normalised to 0..1, and averaged. When embeddings are unavailable
-    (Ollama down, model not pulled) the semantic half is simply absent and this
-    degrades to exactly the previous keyword-only ranking.
+# Diem RRF toi da cho HAI bang xep hang: cung mot tai lieu dung hang 1 o ca hai
+# nhanh -> 2/(RRF_K+1). Chia cho no de dua `score` ve lai thang 0..1 ma caller
+# ngoai module nay van doc nhu "do tin cay" (routes_cover_search.py loc o 0.5).
+# Hieu ung calibration co y: mot cu khop chi mot nhanh, hang 1, thanh dung 0.5 —
+# bang san keyword-only cua cong thuc cu (keyword_norm*0.5 + semantic*0.5).
+_RRF_MAX_SCORE = 2.0 / (fusion.RRF_K + 1)
 
-    Blocking: calls Ollama. Callers on the event loop must use asyncio.to_thread.
+
+async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
+    """Hybrid ranking qua vector store, hop nhat bang RRF.
+
+    Truoc day ham nay tu cham diem keyword trong Python roi trung binh cong voi
+    cosine. Gio ca hai tin hieu deu do Postgres tra ve da xep hang, va RRF gop
+    theo THU HANG — khong con phai chuan hoa hai thang diem khac ban chat.
+
+    Van degrade dung nhu cu: vector store hong thi search_semantic/search_keyword
+    tra ve [], RRF cua hai list rong la list rong, ham tra ve [].
+
+    Cong "hai tin hieu" cu duoc giu nguyen: search_semantic chi tra ve k quyen
+    GAN nhat theo cosine, khong biet "gan" den dau, nen nhanh semantic con phai
+    qua nguong book_index.BOOK_SEMANTIC_THRESHOLD truoc khi vao RRF — neu khong,
+    mot cau hoi khong co dap an van keo ve quyen "gan nhat trong so nhung gi co".
+    Nhanh keyword khong co nguong: khop full-text da tu no la tin hieu co nghia
+    (gate cu cung chi doi keyword_score > 0).
+
+    `score` tra ra da chuan hoa ve 0..1 (chia cho _RRF_MAX_SCORE) chu khong phai
+    diem RRF tho: routes_cover_search.py doc truong nay nhu confidence va loc o
+    0.5, nen thang do phai giu nguyen y nghia cu.
+
+    Isbn la mot truong hop rieng, xu ly TRUOC ca RRF: ingestion.py dung
+    book_index.book_text() lam noi dung embed VA lam noi dung tsv full-text —
+    text do co chu y khong gom isbn (mot ma dinh danh co cau truc, khong phai ngon
+    ngu tu nhien; tokenize full-text cho ISBN de vo vi dau gach ngang/dinh dang).
+    Nen ca semantic lan keyword deu khong "thay" isbn. Match isbn chinh xac phai
+    thang tuyet doi — quyen do len hang 1 du tin hieu vector con lai yeu/khong co.
+
+    Query thuc te thuong la ca cau ("Tim sach ISBN 9786041234567"), khong phai
+    isbn tran — nen kiem tra isbn cua sach co xuat hien nhu MOT SUBSTRING trong
+    query da chuan hoa, khong doi hoi bang tuyet doi ca chuoi (van khop truong
+    hop query dung la isbn tran, vi mot chuoi luon la substring cua chinh no).
     """
-    normalized_query = normalize_text(query)
-    tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
-    if not tokens:
+    query = (query or "").strip()
+    if not query:
         return []
-
-    valid_books = [book for book in books if isinstance(book, dict)]
+    valid_books = [book for book in books if isinstance(book, dict) and book.get("id")]
     if not valid_books:
         return []
 
-    compacts = [_compact_book_with_content(book) for book in valid_books]
-    keyword = [_keyword_score(compact, normalized_query, tokens) for compact in compacts]
-    max_keyword = max(keyword)
+    by_id = {str(book["id"]): book for book in valid_books}
+    source_ids = list(by_id.keys())
+    store = vector_store.get_store()
 
-    semantic = book_index.semantic_scores(valid_books, query, client=client)
-    if len(semantic) != len(valid_books):
-        semantic = [0.0] * len(valid_books)
+    query_isbn = _isbn_key(query)
+    isbn_hit = next(
+        (
+            book for book in valid_books
+            if len(book_isbn := _isbn_key(book.get("isbn"))) >= _MIN_ISBN_KEY_LEN
+            and book_isbn in query_isbn
+        ),
+        None,
+    )
 
-    scored = []
-    for compact, keyword_score, semantic_score in zip(compacts, keyword, semantic):
-        # A book enters the result set on either signal: any keyword hit, or a
-        # semantic score clearing the threshold.
-        if keyword_score <= 0 and semantic_score < book_index.BOOK_SEMANTIC_THRESHOLD:
-            continue
-        keyword_norm = (keyword_score / max_keyword) if max_keyword else 0.0
-        scored.append((0.5 * keyword_norm + 0.5 * semantic_score, compact))
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
+    semantic = (
+        [
+            hit for hit in await store.search_semantic(
+                vector_store.CORPUS_BOOK, embed_result.vector, k=limit * 3,
+                embedding_model=embed_result.model, source_ids=source_ids)
+            if hit.score >= book_index.BOOK_SEMANTIC_THRESHOLD
+        ]
+        if embed_result is not None else []
+    )
+    keyword = await store.search_keyword(
+        vector_store.CORPUS_BOOK, query, k=limit * 3, source_ids=source_ids)
 
-    scored.sort(key=lambda item: (-item[0], item[1]["title"]))
-    # "score" is additive (new key, existing keys untouched) so callers that only
-    # read id/title/isbn (e.g. test_book_index.py) are unaffected. Added so callers
-    # that need a real confidence number (not just rank position) have one —
-    # e.g. routes_cover_search.py's OCR-text evidence.
-    return [{**item[1], "score": round(item[0], 3)} for item in scored[:limit]]
+    fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=limit)
+    results = [
+        {
+            **_compact_book_with_content(by_id[hit.source_id]),
+            "score": round(hit.score / _RRF_MAX_SCORE, 3),
+        }
+        for hit in fused
+        if hit.source_id in by_id
+    ]
+
+    if isbn_hit is not None:
+        isbn_id = isbn_hit["id"]
+        results = [result for result in results if result["id"] != isbn_id]
+        # 1.0 la ngoai thang diem RRF thong thuong (luon < 1/RRF_K), de ro rang day la
+        # thang do identity chu khong phai xep hang.
+        results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
+
+    return results[:limit]
 
 
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:
-    """Tìm sách theo từ khóa tự do, kể cả nội dung mô tả — không dùng /api/books?search=
-    vì backend chỉ lọc theo title/author/category/publisher/isbn, không lọc description/
-    summary_vi. Lấy toàn bộ catalog rồi chấm điểm cục bộ theo hai tín hiệu: trùng từ khóa
-    (khớp chính xác ISBN/tên sách) và cosine similarity trên embedding của chính nội dung
-    sách (câu hỏi theo chủ đề). Nếu Ollama không sẵn sàng, chỉ còn phần từ khóa."""
+    """Tìm sách theo từ khóa tự do, kể cả nội dung mô tả — không dùng
+    /api/books?search= vì backend chỉ lọc title/author/category/publisher/isbn.
+
+    Hybrid qua vector store: semantic (pgvector cosine) và keyword (Postgres
+    full-text, bỏ dấu bằng unaccent) chạy song song rồi hợp nhất bằng RRF.
+    Catalog vẫn lấy từ /api/books để có dữ liệu hiển thị (tồn kho, ISBN) và để
+    giữ đúng ràng buộc AI không truy cập DB nghiệp vụ trực tiếp.
+    """
     query = (query or "").strip()
     if not query:
         return {"error": "query khong duoc de trong"}
@@ -221,11 +273,8 @@ async def search_books(auth_header: str | None = None, query: str = "") -> dict:
         return {"error": "/api/books het thoi gian cho phan hoi"}
     except Exception as exc:
         return {"error": f"/api/books that bai: {type(exc).__name__}"}
-    # _score_and_rank_books embeds via Ollama (blocking network call), so it
-    # must run off the event loop - same convention as main.py's _chat_with_ollama.
-    results = await asyncio.to_thread(
-        _score_and_rank_books, books, query, SEARCH_BOOKS_RESULT_LIMIT
-    )
+
+    results = await _score_and_rank_books(books, query, SEARCH_BOOKS_RESULT_LIMIT)
     return {"query": query, "results": results}
 
 

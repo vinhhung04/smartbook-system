@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { resolveActiveMembership } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
@@ -29,14 +29,6 @@ function parseIdempotencyKey(req) {
   const header = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
   const value = String(header || '').trim();
   return value || null;
-}
-
-function deterministicUuid(seed) {
-  const hash = crypto.createHash('sha256').update(seed).digest('hex');
-  const chars = hash.slice(0, 32).split('');
-  chars[12] = '4';
-  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
-  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
 }
 
 async function listReservations(req, res) {
@@ -221,6 +213,7 @@ async function createReservation(req, res) {
       warehouse_id,
       quantity: normalizedQuantity,
       authHeader,
+      requestId: req.requestId,
     });
 
     const reservationNumber = `RSV-${reservationId.slice(0, 8).toUpperCase()}`;
@@ -238,10 +231,32 @@ async function createReservation(req, res) {
       created_by_user_id: actorUserId,
       idempotency_key: idempotencyKey,
       authHeader,
+      requestId: req.requestId,
     });
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count above
+        // ran outside any lock, so two concurrent requests could both pass it and both reach
+        // here. Throwing past the limit here (instead of only at line ~191) is caught by the
+        // catch block below, which already releases the real stock hold taken by reserveStock().
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
+        const [recheckLoanCount, recheckReservationCount] = await Promise.all([
+          tx.loan_transactions.count({
+            where: { customer_id, status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] } },
+          }),
+          tx.loan_reservations.count({
+            where: { customer_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
+          }),
+        ]);
+        if (recheckLoanCount + recheckReservationCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
+          const limitError = new Error('Customer exceeded max active loans limit by membership plan');
+          limitError.status = 409;
+          throw limitError;
+        }
+
         const reservation = await tx.loan_reservations.create({
           data: {
             id: reservationId,
@@ -297,6 +312,7 @@ async function createReservation(req, res) {
           reason: rollbackReason,
           idempotency_key: `rollback:${idempotencyKey}`,
           authHeader,
+          requestId: req.requestId,
         }),
         {
           aggregateId: reservationId,
@@ -327,6 +343,10 @@ async function cancelReservation(req, res) {
   const id = parseId(req.params.id);
   const actorUserId = req.user?.id || null;
   const authHeader = req.headers.authorization;
+  // A status transition has no request payload to compare against a stored copy,
+  // so dedup here is the existing-status short-circuit below, not a key lookup.
+  // The key is still required and forwarded to inventory's releaseReservation,
+  // whose own stock_movements.idempotency_key uniqueness makes that retry-safe.
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!id || !isUuid(id)) {
@@ -403,6 +423,7 @@ async function cancelReservation(req, res) {
           reason: 'CANCELLED',
           idempotency_key: idempotencyKey,
           authHeader,
+          requestId: req.requestId,
         });
       } catch (error) {
         await prisma.$transaction(async (tx) => {
@@ -448,9 +469,14 @@ async function confirmReservation(req, res) {
   const actorUserId = req.user?.id || null;
   const nextStatus = String(req.body?.status || 'CONFIRMED').trim().toUpperCase();
   const note = String(req.body?.notes || '').trim() || null;
+  const idempotencyKey = parseIdempotencyKey(req);
 
   if (!id || !isUuid(id)) {
     return res.status(400).json({ message: 'Invalid reservation id' });
+  }
+
+  if (!idempotencyKey) {
+    return res.status(400).json({ message: 'Idempotency-Key header is required for reservation confirmation' });
   }
 
   if (!['CONFIRMED', 'READY_FOR_PICKUP'].includes(nextStatus)) {
@@ -459,6 +485,10 @@ async function confirmReservation(req, res) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Row lock closes the race where two concurrent confirms both read PENDING
+      // before either commits, which would otherwise double-write audit/notification
+      // rows and race on which pickup_code wins.
+      await tx.$queryRawUnsafe('SELECT id FROM loan_reservations WHERE id::text = $1 FOR UPDATE', id);
       const existing = await tx.loan_reservations.findUnique({ where: { id } });
       if (!existing) {
         return { code: 404, payload: { message: 'Reservation not found' } };
@@ -515,7 +545,10 @@ async function confirmReservation(req, res) {
         entity_type: 'LOAN_RESERVATION',
         entity_id: reservation.id,
         before_data: existing,
-        after_data: reservation,
+        after_data: {
+          ...reservation,
+          idempotency_key: idempotencyKey,
+        },
       });
 
       await createNotificationRecord(tx, {

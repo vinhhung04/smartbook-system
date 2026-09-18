@@ -294,8 +294,10 @@ export const borrowService = {
     return response.data as { data: Reservation };
   },
 
-  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }) => {
-    const response = await gatewayAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {});
+  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }, idempotencyKey?: string) => {
+    const response = await gatewayAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {}, {
+      headers: createIdempotencyHeaders(idempotencyKey),
+    });
     return response.data as { data: Reservation; idempotent?: boolean };
   },
 

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const BCRYPT_ROUNDS = 12;
 const prisma = require('../lib/prisma');
+const { revokeUserTokensIssuedBefore } = require('../lib/token-revocation');
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -184,7 +185,9 @@ async function createUser(req, res) {
     const phone = normalizeText(req.body?.phone) || null;
     const password = String(req.body?.password || '');
     const status = normalizeText(req.body?.status).toUpperCase() || 'ACTIVE';
-    const isSuperuser = Boolean(req.body?.is_superuser);
+    // Only an existing superuser may mint another one — otherwise any account holding
+    // auth.users.write could self-escalate by setting this flag on a new user.
+    const isSuperuser = req.user?.is_superuser === true ? Boolean(req.body?.is_superuser) : false;
     const primaryWarehouseId = normalizeText(req.body?.primary_warehouse_id) || null;
 
     if (!username) {
@@ -423,6 +426,13 @@ async function updateUser(req, res) {
 
       return getUserWithRoles(tx, userId);
     });
+
+    // Locking/deactivating an account should end its existing sessions too, not just
+    // block future logins — otherwise a token issued before this stays usable until it
+    // naturally expires. See auth.middleware.js authenticateToken in every service.
+    if (nextStatus && nextStatus !== 'ACTIVE') {
+      await revokeUserTokensIssuedBefore(userId);
+    }
 
     return res.json({ message: 'User updated', data: updatedUser });
   } catch (error) {

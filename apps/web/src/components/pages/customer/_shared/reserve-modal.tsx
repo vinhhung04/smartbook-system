@@ -154,6 +154,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
             <button
               onClick={() => void handleConfirm()}
               disabled={!effectiveWarehouseId || submitting}
+              data-testid="confirm-reserve-button"
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground transition-colors"
               style={{ fontWeight: 600 }}
             >

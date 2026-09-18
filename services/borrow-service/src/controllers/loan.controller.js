@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
@@ -34,14 +35,6 @@ function parseIdempotencyKey(req) {
 
 function parsePickupCodeFromBody(body) {
   return normalizePickupCode(body?.pickup_code || body?.pickupCode || body?.code || body?.qr_code);
-}
-
-function deterministicUuid(seed) {
-  const hash = crypto.createHash('sha256').update(seed).digest('hex');
-  const chars = hash.slice(0, 32).split('');
-  chars[12] = '4';
-  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
-  return `${chars.slice(0, 8).join('')}-${chars.slice(8, 12).join('')}-${chars.slice(12, 16).join('')}-${chars.slice(16, 20).join('')}-${chars.slice(20, 32).join('')}`;
 }
 
 function parsePagination(query) {
@@ -209,6 +202,7 @@ async function createDirectLoan(req, res) {
       warehouse_id,
       quantity: normalizedQuantity,
       authHeader,
+      requestId: req.requestId,
     });
 
     const reservationNumber = `DLR-${reservationId.slice(0, 8).toUpperCase()}`;
@@ -251,6 +245,7 @@ async function createDirectLoan(req, res) {
       created_by_user_id: actorUserId,
       idempotency_key: `direct-reserve:${idempotencyKey}`,
       authHeader,
+      requestId: req.requestId,
     });
 
     await consumeReservation({
@@ -261,10 +256,25 @@ async function createDirectLoan(req, res) {
       idempotency_key: `direct-consume:${idempotencyKey}`,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count at line
+        // ~190 ran outside any lock, so two concurrent requests could both pass it and both
+        // reach here. If this trips, it falls through to the same catch below that already
+        // handles "inventory consumed but DB transaction failed" by queuing reconciliation.
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
+        const recheckLoanCount = await tx.loan_transactions.count({
+          where: { customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
+        });
+        if (recheckLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
+          throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
+        }
+
         let debitResult = null;
         if (borrowFeeAmount > 0) {
           debitResult = await debitBorrowFee(tx, {
@@ -815,6 +825,7 @@ async function convertReservationToLoan(req, res) {
       idempotency_key: idempotencyKey,
       handled_by_user_id: actorUserId,
       authHeader,
+      requestId: req.requestId,
     });
 
     const borrowDate = new Date();
@@ -822,6 +833,20 @@ async function convertReservationToLoan(req, res) {
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        // Re-check the membership limit atomically, serialized per customer: the count at line
+        // ~764 ran outside any lock, so two concurrent conversions could both pass it and both
+        // reach here. If this trips, it falls through to the same catch below that already
+        // handles "inventory consumed but DB transaction failed" by queuing reconciliation.
+        // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
+        // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${reservation.customer_id}`}, 0))`;
+        const recheckLoanCount = await tx.loan_transactions.count({
+          where: { customer_id: reservation.customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
+        });
+        if (recheckLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
+          throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
+        }
+
         let debitResult = null;
         if (borrowFeeAmount > 0) {
           debitResult = await debitBorrowFee(tx, {
@@ -1071,6 +1096,7 @@ async function returnLoan(req, res) {
         idempotency_key: `${idempotencyKey}:${index + 1}`,
         handled_by_user_id: actorUserId,
         authHeader,
+        requestId: req.requestId,
       });
     }
 

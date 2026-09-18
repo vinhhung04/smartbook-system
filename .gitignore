@@ -1,6 +1,7 @@
 node_modules/
 ollama_data/
 ai_service_model_cache/
+ai_service_cloakbrowser_cache/
 .env
 .env.smoke
 dist/
@@ -18,6 +19,6 @@ scripts/reports/integration-report.html
 *.gz
 *.db
 *.sqlite
-services/ai-service/.faq_embeddings_cache.json
-services/ai-service/.book_index_cache.json
 services/borrow-service/prisma/seed-history-truth.json
+
+.worktrees/

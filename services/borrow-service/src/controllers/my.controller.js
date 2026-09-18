@@ -53,6 +53,7 @@ async function getMyReservations(req, res) {
       const variants = await getVariantDetails({
         variantIds: items.map((item) => item.variant_id),
         authHeader: req.headers.authorization,
+        requestId: req.requestId,
       });
       variantById = new Map(variants.map((v) => [v.id, v]));
     } catch (enrichError) {
@@ -154,7 +155,7 @@ async function getMyLoans(req, res) {
     let variantById = new Map();
     try {
       const allVariantIds = items.flatMap((loan) => loan.loan_items.map((li) => li.variant_id));
-      const variants = await getVariantDetails({ variantIds: allVariantIds, authHeader: req.headers.authorization });
+      const variants = await getVariantDetails({ variantIds: allVariantIds, authHeader: req.headers.authorization, requestId: req.requestId });
       variantById = new Map(variants.map((v) => [v.id, v]));
     } catch (enrichError) {
       console.error('getMyLoans: failed to enrich book titles:', enrichError);
@@ -213,7 +214,7 @@ async function getMyLoanById(req, res) {
     let variantById = new Map();
     try {
       const variantIds = loan.loan_items.map((li) => li.variant_id);
-      const variants = await getVariantDetails({ variantIds, authHeader: req.headers.authorization });
+      const variants = await getVariantDetails({ variantIds, authHeader: req.headers.authorization, requestId: req.requestId });
       variantById = new Map(variants.map((v) => [v.id, v]));
     } catch (enrichError) {
       console.error('getMyLoanById: failed to enrich book titles:', enrichError);

@@ -938,6 +938,7 @@ export function GoodsReceiptPage() {
               <button
                 onClick={() => void handleCreateDraftReceipt()}
                 disabled={isSaving}
+                data-testid="manual-receipt-confirm-button"
                 className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

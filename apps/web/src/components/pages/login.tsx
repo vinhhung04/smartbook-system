@@ -152,7 +152,7 @@ export function LoginPage() {
           <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-input accent-primary" />
           <span className="text-[12px] text-muted-foreground">Ghi nhớ đăng nhập</span>
         </label>
-        <motion.button type="submit" disabled={isSubmitting} whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+        <motion.button type="submit" data-testid="login-submit" disabled={isSubmitting} whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-[10px] bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] font-semibold shadow-lg shadow-indigo-600/20 hover:shadow-xl transition-all mb-4 disabled:opacity-70 disabled:cursor-not-allowed">
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}

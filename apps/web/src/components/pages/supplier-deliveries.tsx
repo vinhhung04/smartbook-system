@@ -534,7 +534,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                 <div className="flex-1">
                   <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Nhân viên kho thực hiện kiểm đếm</label>
                   <Select value={selectedStaffId || "none"} onValueChange={(v) => setSelectedStaffId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" data-testid="goods-receipt-assign-staff-select">
                       <SelectValue placeholder="Chọn nhân viên kho" />
                     </SelectTrigger>
                     <SelectContent>
@@ -562,6 +562,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                   onClick={() => void createAndAssign()}
                   disabled={!selectedStaffId || totals.planned <= 0}
                   loading={saving}
+                  data-testid="goods-receipt-submit"
                 >
                   <ClipboardCheck className="h-4 w-4" />
                   Tạo phiếu và giao cho nhân viên
