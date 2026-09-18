@@ -29,11 +29,14 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 
 | | |
 |---|---|
-| 🧩 **Kiến trúc** | Microservices — 5 service nghiệp vụ + API Gateway + Web UI |
+| 🧩 **Kiến trúc** | Microservices — 5 service nghiệp vụ + API Gateway + Web UI + App di động |
 | 📦 **Service lớn nhất** | Inventory Service — ~28 route file (mua hàng, nhập/xuất kho) |
-| 🗄️ **Cơ sở dữ liệu** | PostgreSQL (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
-| 🐳 **Triển khai** | Docker Compose — 11 container |
-| 🤖 **AI** | OpenRouter (Qwen `qwen3.7-flash`) cho chat/tóm tắt/tool-calling + Ollama cho vision/OCR/embedding |
+| 🗄️ **Cơ sở dữ liệu** | PostgreSQL + pgvector (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
+| 🐳 **Triển khai** | Docker Compose — 14 container mặc định (AI, pgAdmin, seed demo, k6 là profile tùy chọn) |
+| 🤖 **AI** | OpenRouter (Qwen) là cloud LLM duy nhất (đã bỏ Anthropic/Groq) cho chat/tóm tắt/tool-calling; Ollama cho vision/OCR + embedding local, có circuit breaker tự chuyển sang cloud embedding khi Ollama lỗi; tìm kiếm hybrid semantic (pgvector) + keyword qua RRF |
+| 📱 **Mobile** | Expo/React Native — app cho nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán) |
+| 📨 **Event-driven** | RabbitMQ + transactional outbox (Inventory Service phát sự kiện, API Gateway relay qua Socket.IO) |
+| 📈 **Observability** | OpenTelemetry tracing (Tempo), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log tập trung) |
 | 🔔 **Real-time** | Socket.IO qua API Gateway, theo phòng user/role |
 | 🌐 **Ngôn ngữ** | Tiếng Việt (giao diện & tài liệu) |
 
@@ -47,11 +50,13 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 
 - 🔐 Đăng nhập, JWT, phân quyền theo role/permission
 - 🔎 Duyệt catalog, xem chi tiết sách
+- 📷 Tìm sách bằng ảnh bìa (chụp/upload → khớp CLIP + OCR)
 - 🗓️ Đặt sách, giữ tồn kho thật (không giữ chỗ ảo)
 - 📲 Pickup code / QR code khi nhận sách
 - 📖 Mượn, gia hạn, trả sách
-- 💸 Sinh phí phạt khi quá hạn / mất / hư sách
+- 💸 Sinh phí phạt khi quá hạn / mất / hư sách; 💳 thanh toán phạt online qua VNPay
 - ❤️ Wishlist, review, thông báo cho khách hàng
+- 📱 App di động cho khách hàng (Expo/React Native)
 
 </td>
 <td width="50%" valign="top">
@@ -62,9 +67,11 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 - 🚚 Supplier Portal (token công khai) + Supplier Account (đăng nhập)
 - 📥 Goods Receipt — chỉ cộng tồn khi **post**
 - 🗂️ Putaway — gợi ý vị trí kệ trống
-- 🧺 Picking & Packing có bằng chứng ảnh/video
+- 🧺 Picking & Packing có bằng chứng ảnh/video (manager có thể override kèm lý do khi thiếu video)
 - 🧮 Stock Audit, Exception Report, Reslotting
 - ⚠️ Shortage report & giao bù (redelivery)
+- 🔐 Phân quyền đọc/ghi theo từng kho (warehouse scope)
+- 📱 App di động cho nhân viên kho (picking/putaway/outbound/audit)
 
 </td>
 </tr>
@@ -91,6 +98,7 @@ Mở **http://localhost:5173**, đăng nhập bằng tài khoản demo `hung` / 
 - [🗂️ Phạm vi hệ thống](#phạm-vi-hệ-thống)
 - [🏗️ Kiến trúc tổng quan](#kiến-trúc-tổng-quan)
 - [🧭 Các domain nghiệp vụ](#các-domain-nghiệp-vụ)
+- [📨 Kiến trúc hướng sự kiện & Observability](#kiến-trúc-hướng-sự-kiện--observability)
 - [🔁 Luồng nghiệp vụ chính](#luồng-nghiệp-vụ-chính)
 - [🧱 Service catalog](#service-catalog)
 - [🛠️ Công nghệ sử dụng](#công-nghệ-sử-dụng)
@@ -141,17 +149,21 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 
 ### 🧰 Nền Tảng Dùng Chung
 
-- 🤖 AI Service: tra cứu thông tin sách theo ISBN, OCR hóa đơn nhập kho, metadata enrichment, chat/agent và trợ lý ra quyết định hỗ trợ nghiệp vụ.
+- 🤖 AI Service: tra cứu thông tin sách theo ISBN, tìm sách bằng ảnh bìa, OCR hóa đơn nhập kho, metadata enrichment, chat/agent, trợ lý ra quyết định và báo cáo tổng hợp mỗi đêm (nightly briefing).
 - 📊 Analytics Service: tổng hợp KPI/báo cáo thật từ dữ liệu thư viện lẫn kho vận.
 - 🔔 Real-time: API Gateway phát sự kiện qua WebSocket (Socket.IO) cho cả hai phía thư viện và kho vận.
+- 📨 Event bus: RabbitMQ + transactional outbox — Inventory Service ghi sự kiện nghiệp vụ (đặt/nhả/tiêu tồn kho, duyệt/gửi PO, post goods receipt) vào cùng transaction rồi publish bất đồng bộ; API Gateway consume để đẩy realtime.
+- 📈 Observability: OpenTelemetry tracing (Tempo) cho các service Node.js, metric (Prometheus) + dashboard (Grafana), log tập trung (Loki/Promtail).
 - 🖥️ Web UI: giao diện quản trị, kho vận và customer portal trên React/Vite.
-- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, services, gateway, web, pgAdmin, Ollama.
+- 📱 Mobile App: ứng dụng Expo/React Native — một app dùng chung cho cả nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán).
+- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, RabbitMQ, services, gateway, web, bộ observability, pgAdmin, Ollama.
 
 ## 🏗️ Kiến Trúc Tổng Quan
 
 ```mermaid
 flowchart LR
     UI["🖥️ Web UI :5173"] --> GW["🚪 API Gateway :3000"]
+    MOB["📱 Mobile App (Expo)"] --> GW
 
     GW --> AUTH["🔐 Auth Service :3002"]
     GW --> INV["📦 Inventory Service :3001"]
@@ -159,18 +171,26 @@ flowchart LR
     GW --> AI["🤖 AI Service :8000"]
     GW --> ANA["📊 Analytics Service :3006"]
 
-    AUTH --> PG[("🐘 PostgreSQL :5432")]
+    AUTH --> PG[("🐘 PostgreSQL + pgvector :5432")]
     INV --> PG
     BORROW --> PG
     ANA --> PG
+    AI --> PG
 
     AUTH --> REDIS["⚡ Redis :6379"]
     INV --> REDIS
+
+    INV -. publish outbox .-> MQ["🐰 RabbitMQ"]
+    MQ -. consume .-> GW
 
     AI --> OLLAMA["🦙 Ollama :11434"]
     PGADMIN["🛠️ pgAdmin :8080"] --> PG
 
     GW -. WebSocket Socket.IO .-> UI
+
+    AUTH -. traces .-> TEMPO["📈 Tempo/Prometheus/Grafana"]
+    INV -. traces .-> TEMPO
+    BORROW -. traces .-> TEMPO
 ```
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
@@ -211,19 +231,33 @@ Borrow Service là domain lưu thông sách:
 - Fine lifecycle: sinh fine, thanh toán, waive/reduce.
 - Notification và audit log cho các nghiệp vụ quan trọng.
 - Account/wallet ledger cho phí mượn/phí phạt.
+- 💳 **Thanh toán phạt online qua VNPay** (sandbox mặc định): khách tạo payment intent (`POST /my/fines/payments/vnpay/create`, bảng `fine_payment_intents`, hết hạn sau 15 phút) → chuyển sang VNPay → VNPay gọi lại `GET /webhooks/vnpay/return` và/hoặc `GET /webhooks/vnpay/ipn` → hệ thống xác minh chữ ký HMAC-SHA512 rồi mới finalize khoản phạt (`SUCCESS`/`AMOUNT_MISMATCH`/`PAYMENT_FAILED`/...). Cần cấu hình `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_PAYMENT_URL`, `VNPAY_RETURN_URL`; thiếu cấu hình thì endpoint trả 503 thay vì lỗi mập mờ.
 
 ### 🙋 Customer Portal
 
 Customer Portal là phần trải nghiệm khách hàng:
 
 - Xem catalog và chi tiết sách, đặt sách.
+- 📷 Tìm sách bằng cách chụp ảnh bìa (xem mục [🤖 AI](#-ai)).
 - Theo dõi reservation, hạn nhận sách, xem pickup code/QR khi sách sẵn sàng nhận.
-- Xem loan, yêu cầu gia hạn, xem fine, thanh toán fine.
+- Xem loan, yêu cầu gia hạn, xem fine, thanh toán fine (online qua VNPay hoặc tại quầy).
 - Wishlist, review, notification, preference.
+
+### 📱 Mobile App
+
+Một app Expo/React Native duy nhất (`apps/mobile`, tên hiển thị "SmartBook Picking") phục vụ hai nhóm người dùng khác nhau:
+
+- **Nhân viên kho**: đăng nhập, danh sách task (`(tabs)/tasks`), quét barcode, picking theo task, putaway theo kho/phiếu nhập, outbound (quét xuất kho + lịch sử theo phiên), stock audit, báo cáo exception, tra cứu nhanh (`lookup`).
+- **Khách hàng** (dưới `app/customer/`): duyệt catalog, tìm sách bằng ảnh bìa (`customer/scan-cover.tsx`), xem sách đang mượn/đặt, quản lý ví và **thanh toán phạt qua VNPay ngay trên app** (`customer/wallet/pay/[fineId].tsx`).
+
+Dùng `expo-camera` để quét mã vạch/QR và chụp ảnh bìa, `expo-secure-store` để lưu token đăng nhập.
 
 ### 📦 Kho vận & Mua hàng (Inventory Service)
 
 Đây là service lớn nhất hệ thống (gần 30 route file), quản lý toàn bộ vòng đời hàng hóa từ lúc đặt mua đến lúc xuất kho.
+
+> [!NOTE]
+> **Phân quyền theo từng kho (warehouse scope).** Ngoài role/permission chung, mỗi user còn có thể bị giới hạn theo danh sách kho cụ thể (`user_warehouse_scopes`, `access_level`: `FULL`/`READ_ONLY`/`READ`/`WRITE`) qua `warehouse-scope.utils.js`. Superuser luôn bypass; user chưa có scope nào thì mặc định thấy được mọi kho đang hoạt động (không bị khoá "trắng"). Hầu hết action ghi dữ liệu (tạo/duyệt PO, gửi hàng, xử lý shortage...) đều kiểm tra quyền ghi theo đúng `warehouse_id` của bản ghi trước khi thực thi.
 
 **🏷️ Catalog & tồn kho cơ bản** (`/api/books`, `/api/warehouses`, `/api/locations`, `/api/shelves`, `/api/stock-balances`, `/api/stock-movements`, `/api/stock-alerts`)
 
@@ -248,7 +282,7 @@ Customer Portal là phần trải nghiệm khách hàng:
 
 - Order Request: tạo yêu cầu xuất kho (outbound) hoặc chuyển kho (transfer), cần approve/reject trước khi thực thi.
 - Picking: danh sách task lấy hàng theo `taskType`/`taskId`, nhận task, xử lý repick khi thiếu hàng, xem theo cây (picking-tasks/children).
-- Packing: quét hóa đơn để bắt đầu đóng gói, nhận task, quét từng item, upload bằng chứng (ảnh/ghi hình), hoàn tất hoặc hủy task, xem lịch sử.
+- Packing: quét hóa đơn để bắt đầu đóng gói, nhận task, quét từng item, upload bằng chứng (ảnh/ghi hình), hoàn tất hoặc hủy task, xem lịch sử. Bằng chứng ảnh còn được AI xác minh (`ai_verification_status`: `MATCH`/`MISMATCH`) để đối chiếu số lượng/tên sách phát hiện được. Hoàn tất task **bắt buộc có video bằng chứng**; nếu thiếu, nhân viên thường bị chặn hẳn (`PACKING_VIDEO_EVIDENCE_REQUIRED`), còn manager/admin được phép override kèm lý do bắt buộc (`PACKING_VIDEO_EVIDENCE_OVERRIDE_REASON_REQUIRED`) — lý do này được ghi vào audit log.
 - Outbound: hàng đợi xuất kho, gán/nhận task, xác nhận xuất.
 
 **🧮 Vận hành kho (Warehouse Operations)** (`/api/stock-audits`, `/api/exception-reports`, `/api/storage-suggestions`, `/api/reslotting-suggestions`, `/api/staff-tasks`, `/api/my-warehouse-tasks`)
@@ -276,12 +310,16 @@ Cả hai kênh chỉ cho phép: xác nhận đơn hàng, nộp hóa đơn/phiế
 
 ### 🤖 AI
 
-AI Service hỗ trợ tự động hóa nhập liệu:
+AI Service hỗ trợ tự động hóa nhập liệu và ra quyết định:
 
 - OCR hóa đơn/phiếu giao hàng khi nhập kho (`/scan-receipt`), lookup metadata theo ISBN (Google Books, Open Library, marketplace Fahasa/Tiki/Vinabook).
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
-- Chạy qua OpenRouter (model mặc định `qwen/qwen3.7-flash`, dùng chung cho `/chat` và `/assistant`); có thể chuyển sang Ollama local hoàn toàn offline bằng `LLM_PROVIDER=ollama`/`ASSISTANT_PROVIDER=ollama`.
-- `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng tool-calling thật qua `llm_provider.py` (model `OPENROUTER_ASSISTANT_MODEL`, mặc định `qwen/qwen3.7-flash`) để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể, thay vì chỉ đọc lại số liệu thô. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
+- `llm_provider.py` **đã bỏ hẳn Anthropic và Groq** — OpenRouter (Qwen) là cloud provider duy nhất cho `/chat` và `/assistant`, chọn qua `LLM_PROVIDER=openrouter|ollama`; Ollama chỉ còn dùng cho local dev offline và cho vision/OCR.
+- `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng tool-calling thật qua `llm_provider.py` để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
+- 🌙 **Nightly briefing** — job chạy mỗi đêm (`nightly_briefing.py`, bật bằng `ENABLE_NIGHTLY_BRIEFING`), tự gọi 6 endpoint `/analytics/*` (quá hạn, phạt, rủi ro tồn kho, gợi ý nhập hàng, funnel reservation, gợi ý thanh lý), tóm tắt bằng LLM rồi tạo sẵn một **pending action** (`CREATE_REPORT_DRAFT`) để staff duyệt vào sáng hôm sau — không tự động publish gì cả.
+- 📷 **Tìm sách bằng ảnh bìa** — `POST /find-book-by-cover`: kết hợp visual embedding (CLIP) so khớp với gallery bìa sách đã index sẵn (`ai_cover_embeddings`) và OCR (Ollama vision) đọc tên sách/tác giả rồi so khớp catalog, trả về danh sách candidate kèm độ tin cậy (`confidence`) và bằng chứng từng tín hiệu (`evidence`). Dùng chung ở cả Web (modal cho staff) và Mobile (màn hình quét bìa cho khách hàng).
+- 🔎 **Tìm kiếm hybrid** — `pg_vector_store.py` (semantic qua pgvector) kết hợp `search_keyword` (full-text, không phân biệt dấu) qua **Reciprocal Rank Fusion (RRF)** trong `faq_retrieval.py`, thay vì chỉ semantic hoặc chỉ keyword.
+- 🧯 **Circuit breaker cho embedding** (`embeddings.py`) — mặc định dùng Ollama local để embed; nếu Ollama lỗi liên tiếp quá ngưỡng (`EMBED_BREAKER_THRESHOLD`) thì tự động chuyển sang `CloudEmbedder` (OpenRouter) trong thời gian cooldown (`EMBED_BREAKER_COOLDOWN_SECONDS`), rồi thử lại Ollama sau đó — đảm bảo AI service không "đứng hình" khi Ollama tạm thời không phản hồi.
 
 ### 📊 Analytics
 
@@ -333,6 +371,34 @@ API Gateway giữ một kết nối Socket.IO dùng chung cho cả hai phía. Cl
 - 📖 Phía thư viện: `loan:*`, `reservation:*`, `fine:*`, `notification:new`.
 - 📦 Phía kho vận: `stock:*`, `purchase_request:*`, `purchase_order:*`, `goods_receipt:created`, `putaway:*`, `picking:*`, `warehouse_task:*`, `exception_report:*`.
 - 🤖 Phía AI: `ai_action:*` (tạo/duyệt/thực thi/hủy một hành động do AI đề xuất).
+
+## 📨 Kiến Trúc Hướng Sự Kiện & Observability
+
+### 🐰 RabbitMQ / Transactional Outbox
+
+Inventory Service không publish thẳng lên RabbitMQ trong lúc xử lý request — nó ghi sự kiện vào bảng `integration_outbox` **trong cùng transaction** với thao tác nghiệp vụ (đặt/nhả/tiêu tồn kho, post goods receipt, duyệt/gửi purchase order), rồi một job nền (`outbox-publisher.job.js`) quét và publish bất đồng bộ. Cách này đảm bảo sự kiện không bao giờ "biến mất" nếu publish thất bại giữa chừng — job tự retry tối đa 10 lần trước khi đánh dấu `FAILED`.
+
+- Loại sự kiện phát ra: `inventory.reservation.created|released|consumed`, `goods_receipt.posted`, `purchase_order.approved|sent`, `inventory.stock.changed`.
+- API Gateway là consumer duy nhất hiện tại (`rabbitmq-consumer.js`): lắng nghe `inventory.reservation.created` qua exchange `smartbook.events`, có dead-letter queue riêng khi xử lý lỗi, rồi relay sự kiện vào đúng phòng Socket.IO của khách hàng.
+- Quản lý hàng đợi tại http://localhost:15672.
+
+> [!NOTE]
+> Borrow Service cũng có một bảng dạng outbox (`reservation-reconciliation.job.js`) nhưng dùng cho mục đích khác — retry các hành động bù trừ (saga compensating action) như tự động nhả reservation, không phải để phát sự kiện liên service.
+
+### 📈 Observability
+
+Toàn bộ stack có thể quan sát được qua ba trụ cột kinh điển, không cần đăng nhập vào từng container để xem log:
+
+| Trụ cột | Công cụ | Vai trò |
+|---|---|---|
+| 🔍 Trace | OpenTelemetry → **Tempo** | Theo dấu 1 request đi qua bao nhiêu service, mất bao lâu ở mỗi bước (`services/*/src/tracing.js`, các service Node.js) |
+| 📊 Metric | **Prometheus** + **Grafana** | Số liệu hệ thống (request rate, latency, outbox pending...), dashboard có sẵn: `ai-performance`, `borrow-flow`, `inventory-health`, `postgresql`, `rabbitmq-outbox`, `system-overview` |
+| 📜 Log | **Loki** + **Promtail** | Gom log tất cả container về một chỗ, tìm kiếm theo service/thời gian |
+
+> [!NOTE]
+> AI Service (Python/FastAPI) hiện **chưa** có OpenTelemetry tracing như các service Node.js — chỉ các service Node (auth/inventory/borrow/analytics) mới xuất trace về Tempo.
+
+Truy cập: Grafana http://localhost:3100, Prometheus http://localhost:9090.
 
 ## 🔁 Luồng Nghiệp Vụ Chính
 
@@ -466,10 +532,16 @@ Quy tắc nghiệp vụ:
 | 📖 Borrow Service | 3005 | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
 | 🤖 AI Service | 8000 | OCR/metadata enrichment | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant` |
 | 📊 Analytics Service | 3006 | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
-| 🐘 PostgreSQL | 5432 | Lưu dữ liệu | `auth_db`, `inventory_db`, `borrow_db` |
+| 📱 Mobile App | — | App Expo cho staff kho + khách hàng | Chạy qua Expo, không phải container Docker |
+| 🐘 PostgreSQL | 5432 | Lưu dữ liệu + pgvector cho AI | `auth_db`, `inventory_db`, `borrow_db` |
 | ⚡ Redis | 6379 | Cache cho Auth/Inventory Service | Không có UI |
-| 🛠️ pgAdmin | 8080 | Quản trị database | Web UI |
-| 🦙 Ollama | 11434 | Local LLM runtime | inference nội bộ |
+| 🐰 RabbitMQ | 5672 / 15672 | Event bus cho outbox pattern | Management UI :15672 |
+| 📈 Tempo | nội bộ | Lưu distributed trace | Xem qua Grafana |
+| 📊 Prometheus | 9090 | Thu thập metric | Web UI |
+| 📜 Loki + Promtail | nội bộ | Gom log tập trung | Xem qua Grafana |
+| 📉 Grafana | 3100 | Dashboard trace/metric/log | Web UI |
+| 🛠️ pgAdmin | 8080 | Quản trị database (profile `tools`) | Web UI |
+| 🦙 Ollama | 11434 | Local LLM runtime (profile `ai`) | inference nội bộ |
 
 ## 🛠️ Công Nghệ Sử Dụng
 
@@ -477,30 +549,41 @@ Quy tắc nghiệp vụ:
 
 - Node.js, Express.
 - Prisma ORM.
-- PostgreSQL.
+- PostgreSQL + pgvector.
 - Redis (cache).
-- JWT, permission middleware.
+- JWT, permission middleware, warehouse-scope RBAC.
 - Socket.IO (real-time), `http-proxy-middleware` (API Gateway).
+- RabbitMQ (`amqp-connection-manager`/`amqplib`) — transactional outbox, event bus.
+- VNPay SDK tự viết (HMAC-SHA512 signing/verification) cho thanh toán online.
+- OpenTelemetry SDK (traces xuất về Tempo).
 
 **🎨 Frontend**
 
-- React.
-- Vite.
-- TypeScript.
+- React, Vite, TypeScript.
 - Tailwind-style utility classes.
 - `qrcode` để render QR thật.
 - `html5-qrcode` để scan camera/manual input.
+- Playwright cho E2E test (`apps/web/e2e`).
+
+**📱 Mobile**
+
+- Expo (React Native, Expo Router) — `apps/mobile`.
+- `expo-camera` (quét barcode/QR, chụp ảnh bìa sách), `expo-secure-store` (lưu token).
 
 **🤖 AI**
 
 - FastAPI.
-- OpenRouter (mặc định `qwen/qwen3.7-flash`) cho chat/tóm tắt/tool-calling; Ollama (`llava`) cho OCR ảnh và embedding.
+- OpenRouter (Qwen) là cloud LLM duy nhất cho chat/tóm tắt/tool-calling (đã bỏ Anthropic/Groq); Ollama (`llava`) cho OCR ảnh/vision và embedding local.
+- pgvector cho tìm kiếm semantic, kết hợp keyword search qua Reciprocal Rank Fusion.
+- CLIP embedding cho tìm sách bằng ảnh bìa.
 - OCR/metadata lookup (Google Books, Open Library, marketplace scraping).
 
-**🐳 DevOps**
+**🐳 DevOps & Observability**
 
 - Docker Compose.
 - pgAdmin.
+- OpenTelemetry + Tempo (trace), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log).
+- k6 (load test, `scripts/k6/`, profile `loadtest`).
 - Seed data theo từng service.
 
 ## 🐳 Chạy Project Bằng Docker
@@ -573,6 +656,9 @@ Ba database, Redis và các service nội bộ chỉ nằm trong Docker network;
 | ❤️ Liveness | http://localhost:3000/health |
 | ✅ Readiness nghiệp vụ lõi | http://localhost:3000/ready |
 | 🛠️ pgAdmin (profile `tools`) | http://localhost:8080 |
+| 📈 Grafana | http://localhost:3100 |
+| 📊 Prometheus | http://localhost:9090 |
+| 🐰 RabbitMQ management | http://localhost:15672 |
 
 `GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency và không công khai URL/topology nội bộ.
 
@@ -622,6 +708,22 @@ pnpm test:smoke
 ```
 
 Các file kết quả cũ không được commit; kết quả chỉ có giá trị khi được tái tạo từ lệnh kiểm thử hiện tại.
+
+Ngoài các script tích hợp Node ở dưới, project còn có ba lớp kiểm thử khác:
+
+- **E2E (Playwright)** — golden path qua UI thật, không tự dựng dev server (`apps/web/e2e/`, cần stack đã chạy):
+  ```powershell
+  npm --prefix apps/web run test:e2e
+  ```
+- **Contract test** — kiểm tra hợp đồng dữ liệu giữa các service (vd Analytics đọc đúng shape dữ liệu AI service trả về), chạy trong CI mỗi lần push/PR:
+  ```powershell
+  npm --prefix services/analytics-service run test:contract
+  npm --prefix services/inventory-service run test:contract
+  ```
+- **Load test (k6)** — kiểm tra hành vi dưới tải (catalog browsing, race condition khi đặt sách), chỉ chạy khi cần:
+  ```powershell
+  docker compose --profile loadtest run --rm k6 run /scripts/smoke.js
+  ```
 
 ### ✅ Purchase Order → Supplier Fulfillment → Goods Receipt
 
@@ -848,7 +950,8 @@ PASS=10 TOTAL=10
 smartbook-system/
 |- apps/
 |  |- api-gateway/
-|  \- web/
+|  |- web/
+|  \- mobile/          # Expo/React Native — staff picking app + customer app
 |- services/
 |  |- auth-service/
 |  |- inventory-service/
@@ -857,6 +960,7 @@ smartbook-system/
 |  \- analytics-service/
 |- packages/
 |  \- shared/
+|- observability/       # Config cho Tempo, Prometheus, Loki, Promtail, Grafana
 |- db-init/
 |- docs/
 |  |- ARCHITECTURE/
@@ -864,6 +968,7 @@ smartbook-system/
 |  |- ANALYSIS/
 |  \- TEST_GUIDES/
 |- scripts/
+|  \- k6/               # Load test scenarios (profile loadtest)
 |- docker-compose.yml
 \- README.md
 ```
