@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Eye, EyeOff, Mail, Lock, Check, X } from "lucide-react";
+import { Mail, Lock, Check, X } from "lucide-react";
+import { Eye, EyeOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from "morphicons/react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
@@ -122,7 +124,7 @@ export function RegisterPage() {
               <input id="register-password" value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? "text" : "password"} placeholder="Tạo mật khẩu mạnh" autoComplete="new-password" required
                 className="w-full pl-10 pr-10 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
               <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <MorphIcon icon={showPassword ? EyeOff : Eye} className="w-4 h-4" />
               </button>
             </div>
 
