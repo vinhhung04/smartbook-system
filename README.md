@@ -198,6 +198,11 @@ flowchart LR
     Core -. "traces / metrics / logs" .-> OBS
 
     GW -. "WebSocket (Socket.IO)" .-> UI
+
+    classDef gateway fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+    classDef aiservice fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
+    class GW gateway;
+    class AI aiservice;
 ```
 
 > [!TIP]
