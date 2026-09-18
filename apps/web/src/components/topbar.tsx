@@ -1,4 +1,6 @@
-import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Moon, Sun, Search, UserCircle } from "lucide-react";
+import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Search, UserCircle } from "lucide-react";
+import { Moon, Sun } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -106,7 +108,7 @@ function ThemeToggle() {
   const { t } = useI18n();
   return (
     <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500" title={t('topbar.toggle_dark_mode')} aria-label={t('topbar.toggle_dark_mode')}>
-      {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      <MorphIcon icon={resolvedTheme === 'dark' ? Sun : Moon} className="w-4 h-4" />
     </button>
   );
 }

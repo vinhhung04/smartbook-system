@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { Eye, EyeOff, Mail, Lock, User, BookOpen, ArrowRight, CheckCircle2, Star, Calendar, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, BookOpen, ArrowRight, CheckCircle2, Star, Calendar, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { authService } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
@@ -207,7 +209,7 @@ export function CustomerRegisterPage() {
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <MorphIcon icon={showPassword ? EyeOff : Eye} className="w-4 h-4" />
                 </button>
               </div>
               {/* Password strength */}
@@ -240,7 +242,7 @@ export function CustomerRegisterPage() {
                 />
                 <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <MorphIcon icon={showConfirmPassword ? EyeOff : Eye} className="w-4 h-4" />
                 </button>
               </div>
               {form.confirm_password && form.password !== form.confirm_password && (
