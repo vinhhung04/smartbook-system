@@ -29,6 +29,10 @@ ANALYTICS_BLOCK_EXEMPT_INTENTS: frozenset[str] = frozenset({BOOK_SEARCH_QUERY, G
 def normalize_text(value: str) -> str:
     text = unicodedata.normalize("NFD", value or "")
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
+    # "đ"/"Đ" has no accent to strip via NFD — it's an atomic base letter in
+    # Unicode, not a composed base+combining-mark sequence — so it survives
+    # the loop above unchanged and must be folded to plain "d"/"D" explicitly.
+    text = text.replace("đ", "d").replace("Đ", "D")
     return text.lower().strip()
 
 
