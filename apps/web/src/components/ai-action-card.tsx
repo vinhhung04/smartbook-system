@@ -16,23 +16,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 // the floating chatbot widget (ai-chatbot.tsx) and the Decision Assistant page
 // (pages/ai-assistant.tsx) so the two surfaces render the same action UX.
 
-// Left rail color, keyed by the same tone getStatusVariant('pendingActionRisk', ...)
-// already returns for the risk badge — one risk value, one color, everywhere.
-const RISK_RAIL_COLOR: Record<string, string> = {
-  success: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  danger: 'bg-red-500',
-};
-
 function ActionTypeIcon({ type }: { type: string }) {
   const icons: Record<string, React.ReactNode> = {
-    CREATE_REORDER_DRAFT: <ShoppingCart size={13} className="text-indigo-600 dark:text-indigo-400" />,
-    CREATE_REPORT_DRAFT: <FileText size={13} className="text-indigo-600 dark:text-indigo-400" />,
-    CREATE_RESERVATION_DRAFT: <BookOpen size={13} className="text-indigo-600 dark:text-indigo-400" />,
-    CREATE_STOCK_ALERT: <Bell size={13} className="text-indigo-600 dark:text-indigo-400" />,
-    CREATE_STAFF_TASK_DRAFT: <ClipboardList size={13} className="text-indigo-600 dark:text-indigo-400" />,
+    CREATE_REORDER_DRAFT: <ShoppingCart size={13} className="text-foreground" />,
+    CREATE_REPORT_DRAFT: <FileText size={13} className="text-foreground" />,
+    CREATE_RESERVATION_DRAFT: <BookOpen size={13} className="text-foreground" />,
+    CREATE_STOCK_ALERT: <Bell size={13} className="text-foreground" />,
+    CREATE_STAFF_TASK_DRAFT: <ClipboardList size={13} className="text-foreground" />,
   };
-  return <>{icons[type] ?? <Sparkles size={13} className="text-indigo-600 dark:text-indigo-400" />}</>;
+  return <>{icons[type] ?? <Sparkles size={13} className="text-foreground" />}</>;
 }
 
 // ── Payload preview by action type ────────────────────────────────────────────
@@ -68,8 +60,8 @@ function PayloadPreview({ action }: { action: PendingAction }) {
         )}
         {warehouseGroups.map((group, gi) => (
           <div key={gi} className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
-              <Building2 size={11} className="shrink-0" />
+            <p className="flex items-center gap-1 text-[10px] font-semibold text-foreground">
+              <Building2 size={11} className="shrink-0 text-muted-foreground" />
               {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} sách
               {group.supplierName && (
                 <span className="ml-1.5 font-normal text-muted-foreground">· NCC: {group.supplierName}</span>
@@ -81,7 +73,7 @@ function PayloadPreview({ action }: { action: PendingAction }) {
                   <span className="truncate flex-1 text-foreground text-[11px]" title={item.title}>{item.title || 'Unknown'}</span>
                   <div className="flex items-center gap-1.5 ml-2 shrink-0">
                     <span className="text-muted-foreground text-[10px]">Còn: {item.current_stock ?? '?'}</span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
+                    <span className="text-foreground font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
                     {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">HIGH</span>}
                   </div>
                 </div>
@@ -163,8 +155,8 @@ function PayloadPreview({ action }: { action: PendingAction }) {
         )}
         {warehouseGroups.map((group, gi) => (
           <div key={gi} className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-red-700 dark:text-red-400">
-              <Building2 size={11} className="shrink-0" />
+            <p className="flex items-center gap-1 text-[10px] font-semibold text-foreground">
+              <Building2 size={11} className="shrink-0 text-muted-foreground" />
               {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} cảnh báo
             </p>
             <div className="space-y-1 max-h-16 overflow-y-auto">
@@ -383,23 +375,20 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
     }
   };
 
-  const riskRailColor = RISK_RAIL_COLOR[getStatusVariant('pendingActionRisk', action.risk)] ?? 'bg-slate-400';
   const hasWarningBlock = action.requires_review || (action.warnings && action.warnings.length > 0);
 
   return (
-    <div className="mt-2 flex rounded-xl border border-indigo-200 bg-indigo-50/80 overflow-hidden dark:border-indigo-500/20 dark:bg-indigo-500/10">
-      {/* Risk rail — the risk level readable at a glance, before any text */}
-      <div className={`w-1 shrink-0 ${riskRailColor}`} />
-
-      <div className="flex-1 p-3.5 space-y-3 text-[11px] min-w-0">
-        {/* Header — framed explicitly as a recommendation awaiting sign-off, not a chat reply */}
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+    <div className="mt-2 rounded-xl border border-border bg-card">
+      <div className="p-3.5 space-y-3 text-[11px] min-w-0">
+        {/* Header — framed explicitly as a recommendation awaiting sign-off, not a chat reply.
+            Neutral, not brand-colored: color here is reserved for the risk/status tags below. */}
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           <ShieldCheck size={12} />
           Đề xuất hành động — cần bạn xác nhận
         </div>
         <div className="flex items-center gap-1.5">
           <ActionTypeIcon type={action.type} />
-          <span className="font-semibold text-indigo-700 dark:text-indigo-300 flex-1">
+          <span className="font-semibold text-foreground flex-1">
             {AI_ACTION_TYPE_LABEL[action.type] ?? action.type}
           </span>
           <StatusBadge label={action.risk} variant={getStatusVariant('pendingActionRisk', action.risk)} />
@@ -556,7 +545,7 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
               disabled={confirming || (needsWarehouseSelector && !!warehouseLoadError)}
               loading={confirming}
               loadingLabel="Đang xử lý..."
-              className="flex-1 text-[12px] font-semibold"
+              className="flex-1 text-[12px] font-semibold bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
             >
               <CheckCircle size={13} />
               Xác nhận
