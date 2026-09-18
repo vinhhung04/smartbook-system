@@ -4,7 +4,7 @@
 
 ### Nền tảng Quản lý Thư viện & Kho vận kết hợp — Đồ án tốt nghiệp (KLTN)
 
-![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
@@ -355,6 +355,12 @@ Các endpoint chính:
 | GET | `/analytics/warehouse-stock-risk` | ⚠️ Rủi ro tồn kho thấp/hết hàng theo warehouse |
 | GET | `/analytics/reorder-suggestions` | 🤖 AI demand forecasting và gợi ý nhập thêm sách từ lượt mượn, reservation, wishlist, cảnh báo chờ hàng và tồn kho |
 | GET | `/analytics/reservation-funnel` | 🔻 Funnel reservation và tỷ lệ convert sang loan |
+| GET | `/analytics/aging-inventory` | 📦 Sách tồn kho lâu ngày không luân chuyển |
+| GET | `/analytics/book-turnover` | 🔄 Tốc độ luân chuyển (turnover) theo đầu sách |
+| GET | `/analytics/late-return-risk` | 🚨 Dự đoán khách hàng/loan có rủi ro trả trễ |
+| GET | `/analytics/forecast-accuracy` | 🎯 Đối chiếu độ chính xác của dự báo nhu cầu so với thực tế |
+| GET | `/analytics/reservation-no-show-risk` | 👻 Dự đoán reservation có nguy cơ khách không đến nhận |
+| GET | `/analytics/weeding-suggestions` | 🗑️ Gợi ý thanh lý sách ít mượn/lỗi thời (được nightly briefing dùng, xem [🤖 AI](#ai)) |
 
 Ví dụ response rút gọn:
 
@@ -536,25 +542,28 @@ Quy tắc nghiệp vụ:
 
 ## 🧱 Service Catalog
 
-| Service | Cổng local | Vai trò | Endpoint tiêu biểu |
+| Service | Cổng | Vai trò | Endpoint tiêu biểu |
 |---|---:|---|---|
-| 🖥️ Web UI | 5173 | Giao diện admin/staff/kho vận/customer | Dashboard, Catalog, Borrow, Kho vận, IAM, Customer Portal |
-| 🚪 API Gateway | 3000 | Cổng vào tập trung + WebSocket | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/analytics`, `/ai`, `socket.io` |
-| 🔐 Auth Service | 3004 → 3002 | Xác thực và phân quyền | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
-| 📦 Inventory Service | 3003 → 3001 | Catalog, tồn kho, mua hàng, kho vận | `/api/books`, `/api/warehouses`, `/api/purchase-orders`, `/api/picking`, `/api/packing`, `/api/borrow-integration/*` |
-| 📖 Borrow Service | 3005 | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
-| 🤖 AI Service | 8000 | OCR/metadata enrichment | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant` |
-| 📊 Analytics Service | 3006 | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
+| 🖥️ Web UI | **:5173** (host) | Giao diện admin/staff/kho vận/customer | Dashboard, Catalog, Borrow, Kho vận, IAM, Customer Portal |
+| 🚪 API Gateway | **:3000** (host) | Cổng vào tập trung + WebSocket | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/analytics`, `/ai`, `socket.io` |
+| 🔐 Auth Service | 3002 (nội bộ) | Xác thực và phân quyền | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
+| 📦 Inventory Service | 3001 (nội bộ) | Catalog, tồn kho, mua hàng, kho vận | `/api/books`, `/api/warehouses`, `/api/purchase-orders`, `/api/picking`, `/api/packing`, `/api/borrow-integration/*` |
+| 📖 Borrow Service | 3005 (nội bộ) | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
+| 🤖 AI Service | 8000 (nội bộ) | OCR/metadata enrichment | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant` |
+| 📊 Analytics Service | 3006 (nội bộ) | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
 | 📱 Mobile App | — | App Expo cho staff kho + khách hàng | Chạy qua Expo, không phải container Docker |
-| 🐘 PostgreSQL | 5432 | Lưu dữ liệu + pgvector cho AI | `auth_db`, `inventory_db`, `borrow_db` |
-| ⚡ Redis | 6379 | Cache cho Auth/Inventory Service | Không có UI |
-| 🐰 RabbitMQ | 5672 / 15672 | Event bus cho outbox pattern | Management UI :15672 |
+| 🐘 PostgreSQL | 5432 (nội bộ) | Lưu dữ liệu + pgvector cho AI | `auth_db`, `inventory_db`, `borrow_db` |
+| ⚡ Redis | 6379 (nội bộ) | Cache cho Auth/Inventory Service | Không có UI |
+| 🐰 RabbitMQ | **:5672 / :15672** (host) | Event bus cho outbox pattern | Management UI :15672 |
 | 📈 Tempo | nội bộ | Lưu distributed trace | Xem qua Grafana |
-| 📊 Prometheus | 9090 | Thu thập metric | Web UI |
+| 📊 Prometheus | **:9090** (host) | Thu thập metric | Web UI |
 | 📜 Loki + Promtail | nội bộ | Gom log tập trung | Xem qua Grafana |
-| 📉 Grafana | 3100 | Dashboard trace/metric/log | Web UI |
-| 🛠️ pgAdmin | 8080 | Quản trị database (profile `tools`) | Web UI |
-| 🦙 Ollama | 11434 | Local LLM runtime (profile `ai`) | inference nội bộ |
+| 📉 Grafana | **:3100** (host) | Dashboard trace/metric/log | Web UI |
+| 🛠️ pgAdmin | **:8080** (host, profile `tools`) | Quản trị database | Web UI |
+| 🦙 Ollama | 11434 (nội bộ, profile `ai`) | Local LLM runtime | inference qua service khác trong mạng Docker |
+
+> [!NOTE]
+> Chỉ **Web UI, API Gateway, RabbitMQ, Prometheus, Grafana, pgAdmin** được publish port ra host (`localhost`). Auth/Inventory/Borrow/Analytics/AI Service, PostgreSQL, Redis và Ollama **chỉ tồn tại trong mạng Docker nội bộ** — không truy cập trực tiếp được từ máy host, phải đi qua API Gateway hoặc `docker compose exec`.
 
 ## 🛠️ Công Nghệ Sử Dụng
 
@@ -693,7 +702,7 @@ Seed Auth Service tạo các user demo với mật khẩu chung:
 | `staff02` | 🧑‍💻 Staff |
 | `staff03` | 🧑‍💻 Staff |
 | `warehouse01` | 📦 Warehouse staff |
-| `cs01` | 🎧 Customer support |
+| `cs01` | 🎧 Librarian (trực quầy/customer support) |
 
 **🚚 Tài khoản nhà cung cấp** (đăng nhập tại `/login`, tự động vào `/supplier`)
 
