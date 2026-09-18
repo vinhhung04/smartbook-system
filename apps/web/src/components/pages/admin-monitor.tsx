@@ -10,10 +10,11 @@ import {
   ShieldCheck,
   Timer,
   Wifi,
-  WifiOff,
   XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Wifi as WifiData, WifiOff as WifiOffData } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { motion } from 'motion/react';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
 import { Button } from '@/components/ui/button';
@@ -144,7 +145,7 @@ function ServiceCard({ service }: { service: MonitorServiceHealth }) {
         </div>
         <div className="rounded-lg bg-muted/45 px-3 py-2">
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            {service.status === 'down' ? <WifiOff className="h-3.5 w-3.5" /> : <Wifi className="h-3.5 w-3.5" />}
+            <MorphIcon icon={service.status === 'down' ? WifiOffData : WifiData} className="h-3.5 w-3.5" />
             Endpoint
           </div>
           <p className="mt-1 truncate font-semibold text-foreground" title={service.url}>{service.url.replace(/^https?:\/\//, '')}</p>
@@ -251,7 +252,7 @@ export function AdminMonitorPage() {
                 }`}
                 aria-pressed={autoRefresh}
               >
-                {autoRefresh ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+                <MorphIcon icon={autoRefresh ? WifiData : WifiOffData} className="h-4 w-4" />
                 Auto 30s
               </button>
               <Button type="button" variant="outline" onClick={() => void loadSnapshot(true)} loading={refreshing} loadingLabel="Đang làm mới monitor">
@@ -266,7 +267,7 @@ export function AdminMonitorPage() {
             <span>Lần cập nhật: {formatDateTime(snapshot?.checkedAt)}</span>
             <span className="hidden sm:inline">•</span>
             <span className="inline-flex items-center gap-1.5">
-              {connected ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-amber-600" />}
+              <MorphIcon icon={connected ? WifiData : WifiOffData} className={`h-3.5 w-3.5 ${connected ? 'text-emerald-600' : 'text-amber-600'}`} />
               WebSocket UI {connected ? 'connected' : 'not connected'}
             </span>
           </div>

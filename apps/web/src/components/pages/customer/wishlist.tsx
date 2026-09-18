@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { Heart, BookOpen, Trash2, Loader2, Bell, BellOff } from 'lucide-react';
+import { Heart, BookOpen, Trash2, Loader2 } from 'lucide-react';
+import { Bell, BellOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { toast } from 'sonner';
 
@@ -107,7 +109,7 @@ export function CustomerWishlistPage() {
                 <button onClick={() => toggleAlert(item.book_id)}
                   className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${alerts.has(item.book_id) ? 'bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:hover:bg-amber-900/40' : 'bg-muted text-slate-400 dark:text-slate-500 hover:bg-muted'}`}
                   title={alerts.has(item.book_id) ? 'Tắt thông báo có hàng' : 'Báo khi có hàng'}>
-                  {alerts.has(item.book_id) ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                  <MorphIcon icon={alerts.has(item.book_id) ? Bell : BellOff} className="w-4 h-4" />
                 </button>
                 <button onClick={() => handleRemove(item.book_id)}
                   className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-900/40">

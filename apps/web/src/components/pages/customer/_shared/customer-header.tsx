@@ -1,4 +1,6 @@
-import { Menu, PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { useLocation } from 'react-router';
 import { NotificationBellDropdown } from './notification-bell-dropdown';
 import { UserAvatarMenu } from './user-avatar-menu';
@@ -30,7 +32,7 @@ function CustomerThemeToggle() {
   const { resolvedTheme, toggleTheme } = useTheme();
   return (
     <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted transition-all text-muted-foreground" title="Toggle theme">
-      {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      <MorphIcon icon={resolvedTheme === 'dark' ? Sun : Moon} className="w-4 h-4" />
     </button>
   );
 }
@@ -51,7 +53,7 @@ export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, is
               <Menu className="h-4 w-4" />
             </button>
             <button onClick={onToggleDesktopCollapse} className="hidden h-9 w-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 lg:inline-flex">
-              {isDesktopCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              <MorphIcon icon={isDesktopCollapsed ? PanelLeftOpen : PanelLeftClose} className="h-4 w-4" />
             </button>
             <h1 className="truncate text-[18px] text-foreground" style={{ fontWeight: 700 }}>{current.title}</h1>
           </div>
