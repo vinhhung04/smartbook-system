@@ -162,36 +162,46 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 
 ```mermaid
 flowchart LR
-    UI["🖥️ Web UI :5173"] --> GW["🚪 API Gateway :3000"]
-    MOB["📱 Mobile App (Expo)"] --> GW
+    subgraph Client["🖥️ Client"]
+        UI["Web UI :5173"]
+        MOB["Mobile App (Expo)"]
+    end
 
-    GW --> AUTH["🔐 Auth Service :3002"]
-    GW --> INV["📦 Inventory Service :3001"]
-    GW --> BORROW["📖 Borrow Service :3005"]
-    GW --> AI["🤖 AI Service :8000"]
-    GW --> ANA["📊 Analytics Service :3006"]
+    GW["🚪 API Gateway :3000"]
 
-    AUTH --> PG[("🐘 PostgreSQL + pgvector :5432")]
-    INV --> PG
-    BORROW --> PG
-    ANA --> PG
+    subgraph Core["⚙️ Business Services (Node.js)"]
+        AUTH["🔐 Auth :3002"]
+        INV["📦 Inventory :3001"]
+        BORROW["📖 Borrow :3005"]
+        ANA["📊 Analytics :3006"]
+    end
+
+    AI["🤖 AI Service :8000 (Python)"]
+
+    PG[("🐘 PostgreSQL + pgvector")]
+    REDIS["⚡ Redis"]
+    MQ["🐰 RabbitMQ"]
+    OLLAMA["🦙 Ollama"]
+    OBS["📈 Tempo / Prometheus / Grafana / Loki"]
+
+    Client --> GW
+    GW --> Core
+    GW --> AI
+
+    Core --> PG
     AI --> PG
-
-    AUTH --> REDIS["⚡ Redis :6379"]
+    AUTH --> REDIS
     INV --> REDIS
+    AI --> OLLAMA
 
-    INV -. publish outbox .-> MQ["🐰 RabbitMQ"]
-    MQ -. consume .-> GW
-
-    AI --> OLLAMA["🦙 Ollama :11434"]
-    PGADMIN["🛠️ pgAdmin :8080"] --> PG
+    INV -. "outbox event" .-> MQ -. consume .-> GW
+    Core -. "traces / metrics / logs" .-> OBS
 
     GW -. "WebSocket (Socket.IO)" .-> UI
-
-    AUTH -. traces .-> TEMPO["📈 Tempo/Prometheus/Grafana"]
-    INV -. traces .-> TEMPO
-    BORROW -. traces .-> TEMPO
 ```
+
+> [!TIP]
+> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)).
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
 
@@ -238,7 +248,7 @@ Borrow Service là domain lưu thông sách:
 Customer Portal là phần trải nghiệm khách hàng:
 
 - Xem catalog và chi tiết sách, đặt sách.
-- 📷 Tìm sách bằng cách chụp ảnh bìa (xem mục [🤖 AI](#-ai)).
+- 📷 Tìm sách bằng cách chụp ảnh bìa (xem mục [🤖 AI](#ai)).
 - Theo dõi reservation, hạn nhận sách, xem pickup code/QR khi sách sẵn sàng nhận.
 - Xem loan, yêu cầu gia hạn, xem fine, thanh toán fine (online qua VNPay hoặc tại quầy).
 - Wishlist, review, notification, preference.
