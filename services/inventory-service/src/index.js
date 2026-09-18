@@ -567,8 +567,3 @@ process.on('SIGTERM', async () => {
   await redis.disconnect();
   process.exit(0);
 });
-
-process.on('SIGTERM', async () => {
-  await redis.disconnect();
-  process.exit(0);
-});
