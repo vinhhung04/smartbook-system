@@ -202,7 +202,7 @@ export function ReceivingPutawayPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const data = await warehouseService.getAll();
+        const data = await warehouseService.getReceivingWarehouses();
         const rows = Array.isArray(data) ? data : [];
         setWarehouses(rows);
         const preferredWarehouseId = lockedCtx.warehouseId || rows[0]?.id || "";
