@@ -1,5 +1,5 @@
-import { Bell, ScanBarcode, LogOut, Wifi, WifiOff, Search, UserCircle } from "lucide-react";
-import { Moon, Sun } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { Bell, ScanBarcode, LogOut, Search, UserCircle } from "lucide-react";
+import { Moon, Sun, Wifi, WifiOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useCallback } from "react";
@@ -223,11 +223,7 @@ export function Topbar() {
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[13px]" style={{ fontWeight: 650 }}>{t('topbar.notifications')}</span>
-                    {connected ? (
-                      <Wifi className="w-3 h-3 text-emerald-500" />
-                    ) : (
-                      <WifiOff className="w-3 h-3 text-slate-400" />
-                    )}
+                    <MorphIcon icon={connected ? Wifi : WifiOff} className={`w-3 h-3 ${connected ? 'text-emerald-500' : 'text-slate-400'}`} />
                   </div>
                   <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}
                     onClick={() => setAdminNotifs((prev) => prev.map((n) => ({ ...n, unread: false })))}

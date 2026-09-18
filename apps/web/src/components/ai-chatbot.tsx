@@ -1,5 +1,7 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, X, Send, Sparkles, RotateCcw, Database, Zap } from 'lucide-react';
+import { Bot as BotData, X as XData } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { aiService, type ChatMessage, type SystemContext, type PendingAction } from '@/services/ai';
 import { bookService } from '@/services/book';
 import { borrowService } from '@/services/borrow';
@@ -868,7 +870,7 @@ export function AIChatbot() {
         className="relative w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 hover:from-indigo-700 hover:via-blue-700 hover:to-violet-700 shadow-lg shadow-indigo-500/25 flex items-center justify-center text-white transition-all active:scale-95"
         aria-label="Mở chatbot AI"
       >
-        {open ? <X size={22} /> : <Bot size={24} />}
+        <MorphIcon icon={open ? XData : BotData} size={open ? 22 : 24} />
         {!open && (
           <span className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-20" />
         )}

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Bell, BellRing, Wifi, WifiOff } from 'lucide-react';
+import { Bell } from 'lucide-react';
+import { Bell as BellData, BellRing as BellRingData, Wifi, WifiOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from 'morphicons/react';
 import { useNavigate } from 'react-router';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { formatDateTime } from './customer-format';
@@ -94,11 +96,7 @@ export function NotificationBellDropdown() {
         <div className="flex items-center justify-between px-2 py-1.5">
           <div className="flex items-center gap-1.5">
             <p className="text-[12px] text-foreground" style={{ fontWeight: 700 }}>Notifications</p>
-            {connected ? (
-              <Wifi className="h-3 w-3 text-emerald-500" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-slate-400 dark:text-slate-500" />
-            )}
+            <MorphIcon icon={connected ? Wifi : WifiOff} className={`h-3 w-3 ${connected ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`} />
           </div>
           <button
             onClick={async () => {
@@ -124,7 +122,7 @@ export function NotificationBellDropdown() {
             {recentRows.map((row) => (
               <DropdownMenuItem key={row.id} onSelect={() => navigate('/customer/notifications')} className="items-start rounded-[10px] px-2 py-2.5 text-[12px] transition-colors duration-200 hover:bg-cyan-50/40 dark:hover:bg-cyan-950/20">
                 <div className="mt-0.5">
-                  {row.read_at ? <Bell className="h-4 w-4 text-slate-400 dark:text-slate-500" /> : <BellRing className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
+                  <MorphIcon icon={row.read_at ? BellData : BellRingData} className={`h-4 w-4 ${row.read_at ? 'text-slate-400 dark:text-slate-500' : 'text-indigo-600 dark:text-indigo-400'}`} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-1 text-foreground" style={{ fontWeight: 600 }}>{row.subject || row.template_code || 'Notification'}</p>

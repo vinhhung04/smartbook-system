@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Lock, Plus, Unlock, X, Edit, Users } from "lucide-react";
+import { Plus, X, Edit, Users } from "lucide-react";
+import { Lock, Unlock } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { userService } from "@/services/user";
@@ -360,7 +362,7 @@ export function UsersPage() {
                           data-testid="toggle-lock-user-button"
                           className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
                         >
-                          {user.status === "LOCKED" ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                          <MorphIcon icon={user.status === "LOCKED" ? Unlock : Lock} className="h-3.5 w-3.5" />
                           {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
                         </button>
                         <button
