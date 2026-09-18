@@ -194,10 +194,8 @@ flowchart LR
     INV --> REDIS
     AI --> OLLAMA
 
-    INV -. "outbox event" .-> MQ -. consume .-> GW
+    INV -. "outbox event" .-> MQ
     Core -. "traces / metrics / logs" .-> OBS
-
-    GW -. "WebSocket (Socket.IO)" .-> UI
 
     classDef gateway fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
     classDef aiservice fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
@@ -206,7 +204,7 @@ flowchart LR
 ```
 
 > [!TIP]
-> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)).
+> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)). Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway cũng consume sự kiện từ RabbitMQ, và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
 
