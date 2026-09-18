@@ -684,9 +684,9 @@ export function AIChatbot() {
                   <Sparkles size={22} className="text-indigo-600" />
                 </div>
                 <div className="text-center">
-                  <p className="text-[14px] font-semibold text-foreground">
+                  <div className="text-[14px] font-semibold text-foreground">
                     <MessageText text={getWelcomeGreeting(currentUser)} />
-                  </p>
+                  </div>
                   <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed max-w-[300px]">
                     Tôi có thể truy xuất dữ liệu thời gian thực và tạo các hành động cần xác nhận của bạn.
                   </p>

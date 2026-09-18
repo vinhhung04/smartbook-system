@@ -345,8 +345,8 @@ export function ReorderSuggestionsPage() {
   const summary = data?.summary;
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
 
-  const lateReturnReady = lateReturn?.status !== 'INSUFFICIENT_DATA';
-  const noShowReady = noShow?.status !== 'INSUFFICIENT_DATA';
+  const lateReturnReady = lateReturn != null && lateReturn.status !== 'INSUFFICIENT_DATA';
+  const noShowReady = noShow != null && noShow.status !== 'INSUFFICIENT_DATA';
   const lateReturnHighCount = useMemo(
     () => (lateReturnReady ? (lateReturn?.items ?? []).filter((item) => item.risk_band === 'HIGH').length : null),
     [lateReturn, lateReturnReady],
