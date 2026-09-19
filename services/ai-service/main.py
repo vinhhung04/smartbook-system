@@ -2220,6 +2220,10 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
                 "keywords": [],
                 "manualEntryRequired": False,
                 "reason": "barcode is not a valid ISBN but marketplace lookup attempted",
+                # Without these, lookup_book_by_isbn() builds intelligence from {} and
+                # overwrites the found metadata above with empty values.
+                "_providerMetadata": {"fahasa": fahasa_b, "tiki": tiki_b, "vinabook": vinabook_b},
+                "_providerOutcomes": mp_results[7],
             }
 
         logger.info("Barcode %s not found in any marketplace source", raw_barcode)
