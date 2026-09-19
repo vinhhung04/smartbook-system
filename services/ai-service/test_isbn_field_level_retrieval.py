@@ -160,6 +160,83 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["found"])
 
 
+LEGACY_KEYS = [
+    "success", "found", "isbn", "isbn13", "isbn10", "title", "authors", "publisher", "description",
+    "categories", "language", "pageCount", "thumbnail", "source", "confidence", "summaryVi", "keywords",
+    "fieldEvidence", "fieldConfidence", "sources", "conflicts", "metadataQualityScore", "processingTimeMs",
+]
+
+
+class ContractTests(FieldLevelLookupTests):
+    """Same fixture as FieldLevelLookupTests; asserts the additive response contract."""
+
+    async def test_legacy_keys_are_all_still_present(self):
+        result, _ = await self._lookup(google_partial(), {"vinabook": market(publisher="NXB X")})
+        for key in LEGACY_KEYS:
+            self.assertIn(key, result)
+
+    async def test_sources_report_phase_reasons_and_skipped(self):
+        result, _ = await self._lookup(google_partial(), {"tiki": market(publisher="NXB X", description=LONG_DESC),
+                                                          "vinabook": market(publisher="NXB X", publishedDate="2020", pageCount=1)})
+        by_name = {s["name"]: s for s in result["sources"]}
+        self.assertEqual(by_name["googleBooks"]["phase"], "INITIAL")
+        self.assertEqual(by_name["tiki"]["phase"], "TARGETED")
+        self.assertIn("MISSING:publisher", by_name["tiki"]["reasons"])
+        self.assertEqual(by_name["fahasa"]["status"], "SKIPPED")
+        self.assertEqual(by_name["webSearch"]["status"], "SKIPPED")
+        self.assertEqual(by_name["worldCat"]["status"], "DISABLED")
+
+    async def test_full_metadata_marks_marketplace_as_skipped_not_not_found(self):
+        result, _ = await self._lookup(google_full(), {})
+        by_name = {s["name"]: s for s in result["sources"]}
+        self.assertEqual(by_name["tiki"]["status"], "SKIPPED")
+        self.assertEqual(result["retrieval"]["stopReason"], "COVERAGE_OK")
+        self.assertEqual(result["retrieval"]["providerCalls"], 2)
+
+    async def test_coverage_fields_and_selected_phase(self):
+        result, _ = await self._lookup(google_partial(), {"vinabook": market(
+            publisher="NXB X", publishedDate="2020", description=LONG_DESC, pageCount=228)})
+        self.assertEqual(result["fieldEvidence"]["publisher"]["selectedPhase"], "TARGETED")
+        self.assertEqual(result["fieldEvidence"]["title"]["selectedPhase"], "INITIAL")
+        self.assertEqual(result["fieldStatus"]["publisher"], "SUFFICIENT")
+        self.assertEqual(result["metadataCoverage"]["totalFields"], 9)
+        self.assertGreater(result["metadataCoverage"]["ratio"], result["retrieval"]["initialCoverage"]["ratio"])
+        self.assertIn("categories", result["missingFields"])
+        self.assertFalse(result["needsEnrichment"])
+        retrieval = result["retrieval"]
+        self.assertEqual(retrieval["mode"], "field-level")
+        self.assertIn("publisher", retrieval["recoveredFields"])
+        self.assertGreater(retrieval["qualityAfter"], retrieval["qualityBefore"])
+
+    async def test_needs_enrichment_when_high_value_gap_cannot_be_filled(self):
+        result, _ = await self._lookup(google_partial(), {})
+        self.assertTrue(result["needsEnrichment"])
+        self.assertIn("description", result["missingFields"])
+        self.assertEqual(result["retrieval"]["stopReason"], "NO_ELIGIBLE_PROVIDER")
+        self.assertIn("description", result["retrieval"]["remainingGaps"])
+
+    async def test_provider_durations_are_per_provider_not_total(self):
+        result, _ = await self._lookup(google_partial(), {})
+        by_name = {s["name"]: s for s in result["sources"]}
+        self.assertLessEqual(by_name["tiki"]["durationMs"], result["processingTimeMs"])
+
+
+class LegacyContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_coverage_fields_are_added_even_when_flag_is_off(self):
+        isbn_lookup_cache.clear()
+        with patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), patch("main.ENABLE_MARKETPLACE_LOOKUP", False), \
+             patch("main._run_standard_lookups", new=AsyncMock(return_value=[google_partial(), (None, 0.0)])):
+            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=VALID_ISBN))
+        isbn_lookup_cache.clear()
+        self.assertTrue(result["found"])
+        self.assertIn("publisher", result["missingFields"])
+        self.assertTrue(result["needsEnrichment"])
+        self.assertNotIn("retrieval", result)
+        self.assertNotIn("selectedPhase", result["fieldEvidence"]["title"])
+        statuses = {s["name"]: s["status"] for s in result["sources"]}
+        self.assertEqual(statuses["tiki"], "DISABLED")
+
+
 class FlagOffTests(unittest.IsolatedAsyncioTestCase):
     async def test_flag_off_keeps_legacy_behavior(self):
         isbn_lookup_cache.clear()

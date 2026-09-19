@@ -2566,7 +2566,35 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     return result
 
 
-def _build_source_statuses(result: dict, started_at: float) -> dict:
+def _build_field_level_source_statuses(ledger: dict[str, dict]) -> dict:
+    """Per-provider status from the retrieval ledger: a provider never called is
+    SKIPPED (not needed), not NOT_FOUND, and durations are per provider."""
+    enabled = {
+        "googleBooks": True,
+        "openLibrary": True,
+        "worldCat": ENABLE_WORLDCAT_LOOKUP,
+        "fahasa": ENABLE_MARKETPLACE_LOOKUP,
+        "tiki": ENABLE_MARKETPLACE_LOOKUP,
+        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
+        "webSearch": ENABLE_MARKETPLACE_LOOKUP,
+    }
+    statuses = {}
+    for source in ISBN_SOURCE_ORDER:
+        entry = ledger.get(source)
+        if not enabled[source]:
+            statuses[source] = {"enabled": False, "status": "DISABLED", "durationMs": 0}
+        elif entry is None:
+            statuses[source] = {"enabled": True, "status": "SKIPPED", "durationMs": 0}
+        else:
+            statuses[source] = {"enabled": True, "status": entry["status"], "durationMs": entry["durationMs"], "phase": entry["phase"]}
+            if entry["reasons"]:
+                statuses[source]["reasons"] = entry["reasons"]
+    return statuses
+
+
+def _build_source_statuses(result: dict, started_at: float, trace: dict | None = None) -> dict:
+    if trace is not None:
+        return _build_field_level_source_statuses(trace["ledger"])
     source_flags = result.get("source") or {}
     enabled = {
         "googleBooks": True,
@@ -2598,6 +2626,41 @@ def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
     return f"{isbn13}:{bool(req.generateVietnameseSummary)}"
 
 
+def _attach_coverage_fields(result: dict, intelligence: dict, trace: dict | None) -> None:
+    """Additive response fields: metadata completeness, per-field status and, for
+    the field-level flow, what the targeted retrieval did. Added even when the
+    flag is off so the eval can measure the legacy flow with the same metric."""
+    coverage = analyze_field_coverage(intelligence)
+    result.update({
+        "metadataCoverage": coverage["coverage"],
+        "fieldStatus": coverage["fieldStatus"],
+        "missingFields": coverage["missingFields"],
+        "lowConfidenceFields": coverage["lowConfidenceFields"],
+        "needsEnrichment": coverage["needsEnrichment"],
+    })
+    if trace is None:
+        return
+    ledger = trace["ledger"]
+    for field, evidence in result["fieldEvidence"].items():
+        entry = ledger.get(evidence.get("selectedSource"))
+        if entry:
+            evidence["selectedPhase"] = entry["phase"]
+    unresolved = [f for f, status in coverage["fieldStatus"].items() if status != "SUFFICIENT"]
+    result["retrieval"] = {
+        "mode": trace["mode"],
+        "rounds": trace["rounds"],
+        "providerCalls": trace["providerCalls"],
+        "stopReason": trace["stopReason"],
+        "budgetMs": trace["budgetMs"],
+        "elapsedMs": trace["elapsedMs"],
+        "initialCoverage": trace["initialCoverage"],
+        "recoveredFields": [f for f in trace["initialMissing"] if coverage["fieldStatus"].get(f) != "MISSING"],
+        "remainingGaps": unresolved,
+        "qualityBefore": trace["initialQuality"],
+        "qualityAfter": intelligence["metadataQualityScore"],
+    }
+
+
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
     cache_key = _isbn_lookup_cache_key(req)
@@ -2609,7 +2672,8 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
-    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at))
+    trace = result.pop("_retrievalTrace", None)
+    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at, trace))
     result.pop("_providerOutcomes", None)
     for source in intelligence["sources"]:
         source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
@@ -2620,6 +2684,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         result["authors"] = result["authors"] or []
         result["categories"] = result["categories"] or []
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
+    _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
 
     if cache_key and result.get("found"):
