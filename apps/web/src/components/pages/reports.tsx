@@ -1,19 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
-  BookOpen, Wallet, HandCoins, AlertTriangle, FileSpreadsheet,
-  FileText, Calendar, TrendingUp, RefreshCw, BarChart3,
+  FileSpreadsheet, FileText, Calendar, RefreshCw, BarChart3,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  AreaChart, Area, PieChart, Pie, Cell, Legend,
+  AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 import { PageWrapper, FadeItem } from '../motion-utils';
-import { StatCard } from '@/components/ui/stat-card';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Skeleton, SkeletonStatCards } from '@/components/ui/loading-state';
+import { Skeleton } from '@/components/ui/loading-state';
 import {
   Pagination,
   PaginationContent,
@@ -121,12 +122,12 @@ async function fetchAllPages<T>(
   return all;
 }
 
-function SectionEyebrow({ index, label }: { index: string; label: string }) {
-  return (
-    <p className="mb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-      {index} — {label}
-    </p>
-  );
+function SectionHeading({ label }: { label: string }) {
+  return <h2 className="mb-3 text-[15px] font-semibold text-foreground">{label}</h2>;
+}
+
+function truncateLabel(value: string, max = 24): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 const chartTooltipStyle = { fontSize: 12, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card)' };
@@ -467,81 +468,77 @@ export function ReportsPage() {
 
   return (
     <PageWrapper className="space-y-6">
-      {/* Masthead */}
       <FadeItem>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-indigo-100 dark:bg-indigo-500/15">
-              <BarChart3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <div>
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Báo cáo thư viện
-              </p>
-              <h1 className="text-[26px] font-semibold tracking-tight leading-tight text-foreground">Báo cáo &amp; Thống kê</h1>
-              <p className="mt-1 font-mono text-[12px] text-muted-foreground">Kỳ báo cáo: {periodLabel}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5 border border-border">
-              {DATE_RANGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setRange(opt.value)}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                    range === opt.value
-                      ? 'bg-card text-indigo-700 dark:text-indigo-400 shadow-sm border border-indigo-100 dark:border-indigo-500/20'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {opt.label}
-                </button>
+        <PageHeader
+          icon={BarChart3}
+          title="Báo cáo & thống kê"
+          description={`Kỳ báo cáo: ${periodLabel}`}
+          iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          actions={
+            <>
+              <div className="max-w-full overflow-x-auto">
+                <SegmentedControl
+                  options={DATE_RANGE_OPTIONS}
+                  value={range}
+                  onChange={setRange}
+                  layoutId="reports-range"
+                  className="w-max"
+                />
+              </div>
+              <Button size="sm" onClick={handleExportSummaryReport}>
+                <FileText className="h-3.5 w-3.5" />
+                Báo cáo tổng hợp
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void loadData()} disabled={loading} aria-label="Tải lại dữ liệu">
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </>
+          }
+        />
+      </FadeItem>
+
+      <FadeItem>
+        <section aria-label="Tổng quan" className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          {loading ? (
+            <Skeleton className="h-[64px] w-full" />
+          ) : (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3 lg:grid-cols-5">
+              {[
+                { label: 'Đầu sách', value: kpi.totalBooks.toLocaleString('vi-VN'), tone: 'text-foreground' },
+                { label: 'Lượt mượn', value: kpi.totalLoans.toLocaleString('vi-VN'), tone: 'text-indigo-600 dark:text-indigo-400' },
+                {
+                  label: 'Đã trả',
+                  value: kpi.returnedLoans.toLocaleString('vi-VN'),
+                  hint: kpi.totalLoans > 0 ? `${Math.round((kpi.returnedLoans / kpi.totalLoans) * 100)}% lượt mượn` : undefined,
+                  tone: 'text-emerald-600 dark:text-emerald-400',
+                },
+                {
+                  label: 'Quá hạn',
+                  value: kpi.overdueLoans.toLocaleString('vi-VN'),
+                  tone: kpi.overdueLoans > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40',
+                },
+                {
+                  label: 'Tổng tiền phạt',
+                  value: formatCompactCurrency(kpi.totalFineAmount),
+                  hint: `${kpi.totalFineAmount.toLocaleString('vi-VN')}đ`,
+                  tone: 'text-amber-600 dark:text-amber-400',
+                },
+              ].map((item) => (
+                <div key={item.label} className="min-w-0">
+                  <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+                  <dd className={cn('mt-1 truncate font-mono text-[24px] font-bold leading-none tabular-nums', item.tone)}>{item.value}</dd>
+                  {item.hint ? <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.hint}</p> : null}
+                </div>
               ))}
-            </div>
-            <button
-              onClick={handleExportSummaryReport}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[12px] hover:shadow-md transition-all font-medium"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Báo cáo tổng hợp
-            </button>
-            <button
-              onClick={() => void loadData()}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input bg-background text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors font-medium"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Tải lại
-            </button>
-          </div>
-        </div>
+            </dl>
+          )}
+        </section>
       </FadeItem>
 
-      {/* 01 — Tổng quan */}
+      {/* Xu hướng */}
       <FadeItem>
-        <SectionEyebrow index="01" label="Tổng quan" />
-        {loading ? (
-          <SkeletonStatCards count={5} />
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard label="Đầu sách" value={kpi.totalBooks} icon={BookOpen} variant="default" />
-            <StatCard label="Lượt mượn" value={kpi.totalLoans} icon={HandCoins} variant="primary" />
-            <StatCard label="Đã trả" value={kpi.returnedLoans} icon={TrendingUp} variant="success" />
-            <StatCard label="Quá hạn" value={kpi.overdueLoans} icon={AlertTriangle} variant="danger" />
-            <StatCard
-              label="Tổng phạt"
-              value={formatCompactCurrency(kpi.totalFineAmount)}
-              hint={`${kpi.totalFineAmount.toLocaleString('vi-VN')}đ chính xác`}
-              icon={Wallet}
-              variant="warning"
-            />
-          </div>
-        )}
-      </FadeItem>
-
-      {/* 02 — Xu hướng */}
-      <FadeItem>
-        <SectionEyebrow index="02" label="Xu hướng" />
+        <SectionHeading label="Xu hướng" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <SectionCard title="Xu hướng mượn sách" subtitle={`Theo ngày (${DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label})`} icon={Calendar}>
             {loading ? (
@@ -609,7 +606,7 @@ export function ReportsPage() {
 
       {/* 03 — Phân bổ */}
       <FadeItem>
-        <SectionEyebrow index="03" label="Phân bổ" />
+        <SectionHeading label="Phân bổ" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <SectionCard title="Top sách được mượn nhiều" subtitle="Xếp hạng theo lượt mượn" className="lg:col-span-2">
             {loading ? (
@@ -627,7 +624,7 @@ export function ReportsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" horizontal={false} />
                   <XAxis type="number" tick={chartAxisTick} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <YAxis type="category" dataKey="title" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} width={120} />
+                  <YAxis type="category" dataKey="title" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value: string) => truncateLabel(value)} axisLine={false} tickLine={false} width={160} />
                   <Tooltip contentStyle={chartTooltipStyle} />
                   <Bar dataKey="count" fill="url(#topBookGrad)" radius={[0, 6, 6, 0]} name="Lượt mượn" />
                 </BarChart>
@@ -641,7 +638,7 @@ export function ReportsPage() {
             ) : fineStatusData.length === 0 ? (
               <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có phạt trong khoảng thời gian này." />
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie
                     data={fineStatusData}
@@ -651,17 +648,27 @@ export function ReportsPage() {
                     outerRadius={90}
                     paddingAngle={3}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
                   >
                     {fineStatusData.map((entry) => (
                       <Cell key={entry.status} fill={FINE_STATUS_COLORS[entry.status] || '#cbd5e1'} />
                     ))}
                   </Pie>
                   <Tooltip contentStyle={chartTooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
+            )}
+            {!loading && fineStatusData.length > 0 && (
+              <ul className="mt-2 space-y-1.5">
+                {fineStatusData.map((entry) => (
+                  <li key={entry.status} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: FINE_STATUS_COLORS[entry.status] || '#cbd5e1' }} />
+                      {entry.name}
+                    </span>
+                    <span className="font-mono font-semibold tabular-nums text-foreground">{entry.value}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </SectionCard>
         </div>
@@ -669,7 +676,7 @@ export function ReportsPage() {
 
       {/* 04 — Chi tiết */}
       <FadeItem>
-        <SectionEyebrow index="04" label="Chi tiết" />
+        <SectionHeading label="Chi tiết" />
         <div className="space-y-5">
           <SectionCard
             title="Danh sách Mượn/Trả"
@@ -705,22 +712,30 @@ export function ReportsPage() {
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-border bg-muted/30">
-                            {['Mã phiếu', 'Khách hàng', 'Ngày mượn', 'Hạn trả', 'Trạng thái', 'SL'].map((h) => (
-                              <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
+                            {[
+                              { label: 'Phiếu mượn', className: '' },
+                              { label: 'Ngày mượn', className: 'hidden md:table-cell' },
+                              { label: 'Hạn trả', className: 'hidden sm:table-cell' },
+                              { label: 'Trạng thái', className: '' },
+                              { label: 'SL', className: 'hidden sm:table-cell text-right' },
+                            ].map((h) => (
+                              <th key={h.label} className={cn('text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium', h.className)}>{h.label}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {pagedLoans.map((loan) => (
                             <tr key={loan.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.loan_number}</td>
-                              <td className="px-4 py-3 text-[13px]">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</td>
-                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(loan.borrow_date)}</td>
-                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(loan.due_date)}</td>
+                              <td className="px-4 py-3">
+                                <p className="font-mono text-[13px] font-medium">{loan.loan_number}</p>
+                                <p className="max-w-[220px] truncate text-[12px] text-muted-foreground">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</p>
+                              </td>
+                              <td className="hidden px-4 py-3 text-[12px] text-muted-foreground md:table-cell">{formatCellDate(loan.borrow_date)}</td>
+                              <td className="hidden px-4 py-3 text-[12px] text-muted-foreground sm:table-cell">{formatCellDate(loan.due_date)}</td>
                               <td className="px-4 py-3">
                                 <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
                               </td>
-                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{loan.total_items}</td>
+                              <td className="hidden px-4 py-3 text-right font-mono text-[13px] font-medium sm:table-cell">{loan.total_items}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -767,21 +782,28 @@ export function ReportsPage() {
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-border bg-muted/30">
-                            {['Khách hàng', 'Loại phạt', 'Số tiền', 'Trạng thái', 'Ngày phạt'].map((h) => (
-                              <th key={h} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium">{h}</th>
+                            {[
+                              { label: 'Khách hàng', className: '' },
+                              { label: 'Số tiền', className: 'text-right' },
+                              { label: 'Trạng thái', className: '' },
+                              { label: 'Ngày phạt', className: 'hidden sm:table-cell' },
+                            ].map((h) => (
+                              <th key={h.label} className={cn('text-left text-[11px] text-muted-foreground uppercase tracking-wider px-4 py-3 font-medium', h.className)}>{h.label}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {pagedFines.map((fine) => (
                             <tr key={fine.id} className="border-b border-border last:border-0 hover:bg-muted/40 transition-colors">
-                              <td className="px-4 py-3 text-[13px]">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</td>
-                              <td className="px-4 py-3 text-[13px]">{fine.fine_type}</td>
-                              <td className="px-4 py-3 text-[13px] font-mono font-medium">{Number(fine.amount).toLocaleString('vi-VN')}đ</td>
+                              <td className="px-4 py-3">
+                                <p className="max-w-[240px] truncate text-[13px]">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</p>
+                                <p className="text-[12px] text-muted-foreground">{fine.fine_type}</p>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-[13px] font-medium tabular-nums">{Number(fine.amount).toLocaleString('vi-VN')}đ</td>
                               <td className="px-4 py-3">
                                 <StatusBadge label={FINE_STATUS_LABELS[fine.status] || fine.status} variant={getStatusVariant('fine', fine.status)} dot />
                               </td>
-                              <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatCellDate(fine.issued_at)}</td>
+                              <td className="hidden px-4 py-3 text-[12px] text-muted-foreground sm:table-cell">{formatCellDate(fine.issued_at)}</td>
                             </tr>
                           ))}
                         </tbody>

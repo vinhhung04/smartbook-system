@@ -565,8 +565,8 @@ export function OrderRequestsPage() {
       <FadeItem>
         <PageHeader
           icon={ListOrdered}
-          title="Order Requests"
-          description="Tao don yeu cau va duyet truoc khi vao Picking"
+          title="Yêu cầu xuất kho & điều chuyển"
+          description="Tạo yêu cầu và duyệt trước khi chuyển sang lấy hàng"
           iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50 dark:from-cyan-500/15 dark:to-sky-500/10 dark:border-cyan-500/20"
           iconColor="text-cyan-700 dark:text-cyan-400"
           actions={(
@@ -580,13 +580,15 @@ export function OrderRequestsPage() {
 
       {requests.length > 0 && (
         <FadeItem>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <StatCard label="Tổng request" value={requestStats.total} icon={ListOrdered} variant="primary" animateValue />
-            <StatCard label="Chờ duyệt" value={requestStats.pending} icon={Clock} variant="warning" animateValue />
-            <StatCard label="Đã duyệt" value={requestStats.approved} icon={CheckCircle2} variant="success" animateValue />
-            <StatCard label="Khẩn cấp" value={requestStats.urgent} icon={ShieldAlert} variant="danger" animateValue />
-            <StatCard label="Tổng số lượng" value={requestStats.totalQuantity} icon={Package} variant="info" animateValue />
-          </div>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+            <span><span className="font-semibold text-foreground">{requestStats.total}</span> yêu cầu</span>
+            <span aria-hidden="true">·</span>
+            <span><span className="font-semibold text-foreground">{requestStats.approved}</span> đã duyệt</span>
+            <span aria-hidden="true">·</span>
+            <span><span className="font-semibold text-foreground">{requestStats.totalQuantity}</span> bản trong tất cả yêu cầu</span>
+            {requestStats.pending > 0 ? <StatusBadge label={`${requestStats.pending} chờ duyệt`} variant="warning" dot /> : null}
+            {requestStats.urgent > 0 ? <StatusBadge label={`${requestStats.urgent} khẩn cấp`} variant="danger" dot /> : null}
+          </p>
         </FadeItem>
       )}
 
@@ -644,24 +646,26 @@ export function OrderRequestsPage() {
               />
 
               <div className="overflow-hidden rounded-xl border border-border">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Order</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Loại</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Nguồn</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Đích</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Ưu tiên</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Số lượng</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Yêu cầu lúc</TableHead>
-                      <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Thao tác</TableHead>
+                      {[
+                        { label: "Yêu cầu", className: "" },
+                        { label: "Trạng thái", className: "hidden w-[190px] sm:table-cell" },
+                        { label: "Số lượng", className: "hidden w-[100px] md:table-cell" },
+                        { label: "Yêu cầu lúc", className: "hidden w-[150px] xl:table-cell" },
+                        { label: "Thao tác", className: "w-[150px] text-right" },
+                      ].map((head) => (
+                        <TableHead key={head.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", head.className)}>
+                          {head.label}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagedRequests.length === 0 ? (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={9} className="whitespace-normal py-10 text-center">
+                        <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
                           <EmptyState
                             variant={requests.length === 0 && listView === "approval" ? "inbox" : "no-data"}
                             title={requests.length === 0 ? "Không có request nào" : "Không tìm thấy request phù hợp"}
@@ -686,32 +690,35 @@ export function OrderRequestsPage() {
                       const canTakeAction = listView === "approval"
                         && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
                           || (row.task_type === "transfer" && row.status === "REQUESTED"));
+                      const route = [row.source_warehouse_code, row.target_warehouse_code].filter(Boolean).join(" → ");
 
                       return (
                         <TableRow
                           key={`${row.task_type}-${row.task_id}`}
                           className={cn("hover:bg-muted/30", priorityAccentClass(priority))}
                         >
-                          <TableCell className="whitespace-normal text-[12px]">
-                            <p className="font-semibold text-foreground">{row.order_number}</p>
-                            <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
+                          <TableCell className="px-4 py-3 align-top">
+                            <p className="truncate text-[13px] font-semibold text-foreground" title={row.order_number}>{row.order_number}</p>
+                            <p className="truncate text-[12px] text-muted-foreground" title={route || undefined}>
+                              {[meta.label, route].filter(Boolean).join(" · ")} · {row.line_count} dòng
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                              <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
+                              <PriorityBadge priority={priority} />
+                            </div>
+                            <p className="mt-1 text-[12px] text-muted-foreground md:hidden">SL {row.total_quantity}</p>
                           </TableCell>
-                          <TableCell className="text-[12px]">
-                            <StatusBadge label={meta.label} variant={meta.variant} />
+                          <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
+                              <PriorityBadge priority={priority} />
+                            </div>
                           </TableCell>
-                          <TableCell className="text-[12px]">{row.source_warehouse_code || "-"}</TableCell>
-                          <TableCell className="text-[12px]">{row.target_warehouse_code || "-"}</TableCell>
-                          <TableCell className="text-[12px]">
-                            <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
-                          </TableCell>
-                          <TableCell className="text-[12px]">
-                            <PriorityBadge priority={priority} />
-                          </TableCell>
-                          <TableCell className="text-[12px] font-medium">{row.total_quantity}</TableCell>
-                          <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="hidden px-4 py-3 align-top text-[13px] font-semibold tabular-nums md:table-cell">{row.total_quantity}</TableCell>
+                          <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell">{formatDate(row.requested_at)}</TableCell>
+                          <TableCell className="px-4 py-3 align-top text-right">
                             {canTakeAction ? (
-                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                              <div className="inline-flex items-center justify-end gap-1.5">
                                 <Button
                                   type="button"
                                   variant="success-outline"

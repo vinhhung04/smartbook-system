@@ -217,88 +217,69 @@ export function MyWarehouseTasksPage() {
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
-        <div className="rounded-xl border border-border bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-          <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/70">
-            Vận hành kho · Công việc
-          </p>
-          <PageHeader
-            icon={ClipboardList}
-            title="Công việc kho của tôi"
-            description="Theo dõi các task nhận hàng, cất hàng, lấy hàng và xuất kho được giao"
-            iconBg="bg-emerald-100 dark:bg-emerald-500/15"
-            iconColor="text-emerald-700 dark:text-emerald-400"
-            actions={
-              <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || loadingAvailable}>
-                <RefreshCw className={`h-3.5 w-3.5 ${(loading || loadingAvailable) ? "animate-spin" : ""}`} />
-                Làm mới
-              </Button>
-            }
-          />
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-[12px] text-sky-800 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
-          <span><span className="font-semibold">Task của tôi</span> — đã nhận hoặc được quản lý giao.</span>
-          <span><span className="font-semibold">Có thể nhận</span> — công việc chưa phân công, bạn tự nhận để xử lý.</span>
-        </div>
+        <PageHeader
+          icon={ClipboardList}
+          title="Công việc kho của tôi"
+          description="Nhận hàng, cất hàng, lấy hàng và xuất kho được giao cho bạn"
+          iconBg="bg-emerald-100 dark:bg-emerald-500/15"
+          iconColor="text-emerald-700 dark:text-emerald-400"
+          actions={
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || loadingAvailable}>
+              <RefreshCw className={`h-3.5 w-3.5 ${(loading || loadingAvailable) ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
+          }
+        />
       </FadeItem>
 
       <FadeItem>
         <Tabs value={mainView} onValueChange={(value) => setMainView(value as MainView)}>
           <TabsList className="w-full sm:w-fit">
-            <TabsTrigger value="my">Task của tôi</TabsTrigger>
-            <TabsTrigger value="available">Có thể nhận</TabsTrigger>
+            <TabsTrigger value="my">Task của tôi ({tasks.length})</TabsTrigger>
+            <TabsTrigger value="available">Có thể nhận ({availableTasks.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="my" className="mt-4 space-y-4">
-            {/* Filter chips — doubles as summary counts, single source of truth for the queue below */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {FILTER_CHIPS.map((chip) => {
-                const isActive = activeTab === chip.key;
-                const count = countsByType[chip.key] ?? 0;
-                return (
-                  <button
-                    key={chip.key}
-                    type="button"
-                    onClick={() => setActiveTab(chip.key)}
-                    className={cn(
-                      "shrink-0 flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-medium cursor-pointer transition-colors",
-                      isActive
-                        ? "border-indigo-100 bg-card text-indigo-700 shadow-sm dark:border-indigo-500/20 dark:text-indigo-400"
-                        : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                    )}
-                  >
-                    <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg", isActive ? "bg-indigo-50 dark:bg-indigo-500/15" : "bg-muted")}>
-                      <chip.icon className="h-3.5 w-3.5" />
-                    </span>
-                    {chip.label}
-                    <span className={cn(
-                      "rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold",
-                      isActive ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" : "bg-muted",
-                    )}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <FilterBar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Tìm mã task, kho..."
+              showSearchClear
+              filters={
+                <div className="max-w-full overflow-x-auto">
+                  <div className="flex w-max items-center gap-1.5">
+                    {FILTER_CHIPS.filter((chip) => chip.key === "ALL" || (countsByType[chip.key] ?? 0) > 0 || activeTab === chip.key).map((chip) => {
+                      const isActive = activeTab === chip.key;
+                      return (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          onClick={() => setActiveTab(chip.key)}
+                          aria-pressed={isActive}
+                          className={cn(
+                            "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+                            isActive
+                              ? "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-300"
+                              : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                          )}
+                        >
+                          <chip.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                          {chip.label}
+                          <span className="font-mono text-[11px] tabular-nums opacity-70">{countsByType[chip.key] ?? 0}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              }
+            />
 
             {/* Work queue — one task per row, numbered by queue position so "what's next" reads
                 at a glance instead of being buried in a spreadsheet's columns. */}
             <SectionCard
               noPadding
-              icon={ClipboardList}
-              title="Task của tôi"
-              subtitle={`${filteredTasks.length}/${tasks.length} task${activeTab !== "ALL" ? ` · ${TASK_TYPE_LABELS[activeTab] ?? activeTab}` : ""}`}
-              actions={(
-                <FilterBar
-                  searchValue={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  searchPlaceholder="Tìm mã task, kho..."
-                  className="sm:w-auto"
-                />
-              )}
+              title="Hàng đợi của bạn"
+              subtitle={`${filteredTasks.length}/${tasks.length} task${activeTab !== "ALL" ? ` · ${TASK_TYPE_LABELS[activeTab] ?? activeTab}` : ""} — đã nhận hoặc được quản lý giao`}
             >
               {loading ? (
                 <div>
@@ -326,79 +307,63 @@ export function MyWarehouseTasksPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {pagedTasks.map((task, idx) => {
+                  {pagedTasks.map((task) => {
                     const actionPath = getTaskActionPath(task);
                     const canReport = OPERATIONAL_TYPES.includes(task.type);
                     const relatedEntity = getRelatedEntityDisplay(task);
                     const accent = TASK_TYPE_ACCENT[task.type] ?? DEFAULT_ACCENT;
                     const Icon = accent.icon;
-                    const seq = (myPage - 1) * PAGE_SIZE + idx + 1;
                     return (
                       <div
                         key={`${task.type}:${task.id}`}
-                        className={cn("flex items-start gap-4 border-l-4 bg-card p-4 hover:bg-muted/30 transition-colors", accent.border)}
+                        className={cn("flex flex-col gap-3 border-l-4 bg-card p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:gap-4", accent.border)}
                       >
-                        <div className="flex shrink-0 flex-col items-center gap-1.5 pt-0.5">
-                          <span className="font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
-                            {String(seq).padStart(2, "0")}
-                          </span>
-                          <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", accent.iconBg)}>
-                            <Icon className={cn("h-4 w-4", accent.iconColor)} />
-                          </div>
+                        <div className={cn("hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex", accent.iconBg)}>
+                          <Icon className={cn("h-4 w-4", accent.iconColor)} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-                              <p className="font-mono text-[13px] font-medium text-foreground truncate">{task.title}</p>
-                            </div>
+                          <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <Icon className={cn("h-3 w-3 sm:hidden", accent.iconColor)} aria-hidden="true" />
+                            {TASK_TYPE_LABELS[task.type] ?? task.type}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                            <p className="truncate font-mono text-[13px] font-medium text-foreground" title={task.title}>{task.title}</p>
                             <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
                           </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
-                            <span className="truncate">{task.warehouse || "-"}</span>
-                            <span>·</span>
-                            <span>Tạo {formatDate(task.created_at)}</span>
-                            {task.completed_at && (
-                              <>
-                                <span>·</span>
-                                <span>Hoàn tất {formatDate(task.completed_at)}</span>
-                              </>
-                            )}
-                          </div>
+                          <p className="mt-1 truncate text-[12px] text-muted-foreground">
+                            {task.warehouse || "-"} · Tạo {formatDate(task.created_at)}
+                            {task.completed_at ? ` · Hoàn tất ${formatDate(task.completed_at)}` : ""}
+                          </p>
                           {relatedEntity && (
-                            <div className="mt-2 inline-flex flex-col rounded border border-indigo-100 bg-indigo-50/70 px-2 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                              <p className="flex items-center gap-1 font-mono text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
-                                <Link2 className="h-2.5 w-2.5 shrink-0" />
-                                {relatedEntity.ref_number}
-                              </p>
-                              {relatedEntity.details && (
-                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{relatedEntity.details}</p>
-                              )}
-                            </div>
+                            <p className="mt-1 flex items-center gap-1 text-[11px] text-indigo-700 dark:text-indigo-400">
+                              <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                              <span className="font-mono font-medium">{relatedEntity.ref_number}</span>
+                              {relatedEntity.details ? <span className="truncate text-muted-foreground">· {relatedEntity.details}</span> : null}
+                            </p>
                           )}
-                          <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                            {actionPath ? (
-                              <NavLink
-                                to={actionPath}
-                                className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
-                              >
-                                {taskActionLabel(task.type)}
-                              </NavLink>
-                            ) : (
-                              <span className="text-[11px] text-muted-foreground">Không có thao tác</span>
-                            )}
-                            {canReport && (
-                              <button
-                                type="button"
-                                onClick={() => handleReportException(task)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
-                                title="Báo cáo sự cố cho task này"
-                              >
-                                <AlertTriangle className="h-3 w-3" />
-                                Báo cáo
-                              </button>
-                            )}
-                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {actionPath ? (
+                            <NavLink
+                              to={actionPath}
+                              className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/15"
+                            >
+                              {taskActionLabel(task.type)}
+                            </NavLink>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">Không có thao tác</span>
+                          )}
+                          {canReport && (
+                            <button
+                              type="button"
+                              onClick={() => handleReportException(task)}
+                              aria-label={`Báo cáo sự cố cho task ${task.title}`}
+                              title="Báo cáo sự cố cho task này"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -467,7 +432,6 @@ export function MyWarehouseTasksPage() {
                   <Hand className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Bảng việc mở</p>
                   <p className="text-sm font-semibold text-foreground">Công việc có thể tự nhận</p>
                   <p className="text-[11px] text-muted-foreground">Lấy hàng, xuất kho, nhận chuyển kho chưa phân công — nhận task và bắt đầu ngay</p>
                 </div>

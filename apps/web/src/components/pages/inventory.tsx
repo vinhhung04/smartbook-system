@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Package, AlertTriangle, Leaf, Download, ArrowRightLeft, ArrowRight, BookOpen, MapPin, Clock, Check, Bell, RefreshCw } from "lucide-react";
+import { Package, AlertTriangle, Leaf, Download, ArrowRightLeft, ArrowRight, MapPin, Check, Bell, RefreshCw } from "lucide-react";
 import { StatusBadge } from "../status-badge";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -11,7 +11,13 @@ import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
-import { SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
+import { SkeletonTableRow } from "@/components/ui/loading-state";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
+import { cn } from "@/components/ui/utils";
+import { getPaginationRange } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageWrapper, FadeItem } from "@/components/motion-utils";
@@ -53,6 +59,7 @@ interface InventoryWarehouseRow extends InventoryBook {
 }
 
 const LOW_STOCK_THRESHOLD = 5;
+const PAGE_SIZE = 25;
 
 type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 
@@ -102,6 +109,13 @@ function StockGauge({ quantity, status }: { quantity: number; status: StockStatu
 function csvCell(value: string | number) {
   const str = String(value ?? "");
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function formatUpdatedDate(value: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("vi-VN");
 }
 
 function formatUpdatedTime(value: string) {
@@ -172,6 +186,7 @@ export function InventoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [exporting, setExporting] = useState(false);
   const [hasNewData, setHasNewData] = useState(false);
+  const [page, setPage] = useState(1);
 
   const loadInventory = async () => {
     try {
@@ -282,35 +297,42 @@ export function InventoryPage() {
       ? `${data.length} đầu sách · ${expandedRows.length} dòng kho · ${totalUnits} bản tổng cộng`
       : `${uniqueTitles} đầu sách · ${selectedWhLabel} · ${totalUnits} bản trong kho này`;
 
-  const tableHeaders = ["Sách", "Thể loại", "Kho / Vị trí", "Số lượng", "Trạng thái", "Cập nhật"];
+  useEffect(() => {
+    setPage(1);
+  }, [whFilterId, statusFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const qtyTone = (qty: number) =>
+    qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
-        <div className="rounded-2xl border border-border bg-gradient-to-br from-emerald-50 via-card to-card dark:from-emerald-500/[0.07] dark:via-card dark:to-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-          <PageHeader
-            icon={Package}
-            title="Tồn kho"
-            description={whSubtitle}
-            iconBg="bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-500/20 dark:to-teal-500/10"
-            iconColor="text-emerald-600 dark:text-emerald-400"
-            actions={
-              <>
-                <Button
-                  variant="outline"
-                  loading={exporting}
-                  onClick={() => void handleExport()}
-                  className="rounded-xl border-emerald-100 bg-card text-emerald-700 hover:bg-emerald-50 shadow-sm dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
-                >
-                  {!exporting && <Download className="w-3.5 h-3.5" />} Xuất
-                </Button>
-                <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
-                  <ArrowRightLeft className="w-3.5 h-3.5" /> Biến động
-                </NavLink>
-              </>
-            }
-          />
-        </div>
+        <PageHeader
+          icon={Package}
+          title="Tồn kho"
+          description={whSubtitle}
+          iconBg="bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-500/20 dark:to-teal-500/10"
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          actions={
+            <>
+              <Button
+                variant="outline"
+                loading={exporting}
+                onClick={() => void handleExport()}
+                className="rounded-xl border-emerald-100 bg-card text-emerald-700 hover:bg-emerald-50 shadow-sm dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+              >
+                {!exporting && <Download className="w-3.5 h-3.5" />} Xuất
+              </Button>
+              <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
+                <ArrowRightLeft className="w-3.5 h-3.5" /> Biến động
+              </NavLink>
+            </>
+          }
+        />
       </FadeItem>
 
       <AnimatePresence>
@@ -334,61 +356,7 @@ export function InventoryPage() {
         )}
       </AnimatePresence>
 
-      <FadeItem>
-        <FilterBar
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Tìm theo tên sách / mã barcode..."
-          showSearchClear
-          filters={
-            <label className="flex items-center gap-2 text-[12px] text-muted-foreground font-medium">
-              <span>Kho</span>
-              <Select value={whFilterId} onValueChange={setWhFilterId}>
-                <SelectTrigger className="min-w-[200px] max-w-[280px] bg-card shadow-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouseOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          }
-        />
-      </FadeItem>
-
-      {(lowCount > 0 || outCount > 0) && (
-        <FadeItem
-          className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 text-[13px] text-amber-800 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300 dark:shadow-none sm:flex-row sm:items-center"
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <p className="flex-1">
-            {outCount > 0 && <span className="font-semibold">{outCount} sản phẩm đã hết hàng</span>}
-            {outCount > 0 && lowCount > 0 && " · "}
-            {lowCount > 0 && <span className="font-semibold">{lowCount} sản phẩm sắp hết</span>}
-            {" "}— cần kiểm tra và bổ sung.
-          </p>
-          <div className="flex shrink-0 items-center gap-3">
-            <NavLink
-              to="/reorder-suggestions"
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-800 underline decoration-amber-800/40 underline-offset-4 hover:opacity-80 dark:text-amber-300 dark:decoration-amber-300/40"
-            >
-              Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" />
-            </NavLink>
-            <Button
-              size="sm"
-              variant="warning-outline"
-              onClick={() => setStatusFilter(outCount > 0 ? "Hết hàng" : "Sắp hết")}
-            >
-              Xem ngay
-            </Button>
-          </div>
-        </FadeItem>
-      )}
-
+      {/* The four tiles double as the status filter - click one to filter, click again to clear. */}
       <FadeItem className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { key: "Tất cả", label: "Tổng bản sao", value: totalUnits, icon: Package, variant: "default" as const },
@@ -415,130 +383,152 @@ export function InventoryPage() {
           );
         })}
       </FadeItem>
-      <p className="-mt-2 text-[11px] text-muted-foreground">
-        Ngưỡng cảnh báo "Sắp hết": dưới {LOW_STOCK_THRESHOLD} bản mỗi kho.
-      </p>
+
+      <FadeItem>
+        <FilterBar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Tìm theo tên sách / mã barcode..."
+          showSearchClear
+          filters={
+            <label className="flex items-center gap-2 text-[12px] text-muted-foreground font-medium">
+              <span>Kho</span>
+              <Select value={whFilterId} onValueChange={setWhFilterId}>
+                <SelectTrigger className="min-w-[200px] max-w-[280px] bg-card shadow-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouseOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          }
+        />
+      </FadeItem>
 
       <FadeItem>
         <SectionCard noPadding>
-          {/* Mobile cards (< md) */}
-          {loading ? (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="md:hidden">
-              <EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" />
-            </div>
-          ) : (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {filtered.map((row, i) => {
-                const qty = Number(row.warehouseQty || 0);
-                const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
-                const recvQty = Number(row.warehouseRecvQty || 0);
-                const status = getStockStatus(availQty);
-                return (
-                  <motion.div key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-foreground truncate">{row.title}</p>
-                        <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{row.isbn || "-"}</p>
-                      </div>
-                      <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{row.category || "-"}</span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <MapPin className="h-3 w-3 shrink-0" /> {row.warehouseName} · {row.locationSummary}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StockGauge quantity={availQty} status={status} />
-                      <span className={`text-[13px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
-                    </div>
-                    {recvQty > 0 && (
-                      <p className="text-[10px] text-amber-500 dark:text-amber-400">Sẵn sàng: {availQty} · Nhận: {recvQty}</p>
-                    )}
-                    <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <Clock className="h-2.5 w-2.5 shrink-0" /> Cập nhật {formatUpdatedTime(row.updated_at)}
-                    </p>
-                  </motion.div>
-                );
-              })}
+          {(lowCount > 0 || outCount > 0) && (
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border bg-amber-50/70 px-4 py-2.5 text-[12px] text-amber-800 dark:bg-amber-500/[0.07] dark:text-amber-300 sm:px-5">
+              <p className="flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  {outCount > 0 && <span className="font-semibold">{outCount} hết hàng</span>}
+                  {outCount > 0 && lowCount > 0 && " · "}
+                  {lowCount > 0 && <span className="font-semibold">{lowCount} sắp hết</span>}
+                  <span className="text-amber-700/80 dark:text-amber-300/70"> (dưới {LOW_STOCK_THRESHOLD} bản mỗi kho)</span>
+                </span>
+              </p>
+              <NavLink
+                to="/reorder-suggestions"
+                className="inline-flex items-center gap-1 font-semibold underline decoration-current/40 underline-offset-4 hover:opacity-80"
+              >
+                Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" />
+              </NavLink>
             </div>
           )}
 
-          {/* Desktop table (>= md) */}
-          <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                {tableHeaders.map(h => (
-                  <th key={h} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={6} rows={4} />
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td></tr>
-              ) : filtered.map((row, i) => {
-                const qty = Number(row.warehouseQty || 0);
-                const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
-                const recvQty = Number(row.warehouseRecvQty || 0);
-                const status = getStockStatus(availQty);
-                return (
-                  <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                    className="border-b border-border last:border-0 hover:bg-muted/40 transition-all duration-150">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="hidden lg:flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                          <BookOpen className="h-4 w-4" />
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  {[
+                    { label: "Sách", className: "" },
+                    { label: "Kho / Vị trí", className: "hidden w-[200px] md:table-cell" },
+                    { label: "Số lượng", className: "w-[130px]" },
+                    { label: "Trạng thái", className: "hidden w-[130px] sm:table-cell" },
+                    { label: "Cập nhật", className: "hidden w-[110px] xl:table-cell" },
+                  ].map((h) => (
+                    <th key={h.label} className={cn("px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground", h.className)}>{h.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <SkeletonTableRow columns={5} rows={6} />
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={5}><EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td></tr>
+                ) : paged.map((row, i) => {
+                  const qty = Number(row.warehouseQty || 0);
+                  const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
+                  const recvQty = Number(row.warehouseRecvQty || 0);
+                  const status = getStockStatus(availQty);
+                  return (
+                    <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 10) * 0.02 }}
+                      className="border-b border-border transition-all duration-150 last:border-0 hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        <p className="truncate text-[13px] font-semibold text-foreground" title={row.title}>{row.title}</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          {[row.isbn || "-", row.category].filter(Boolean).join(" · ")}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+                          <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-foreground truncate">{row.title}</p>
-                          <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{row.isbn || "-"}</p>
+                        <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-muted-foreground md:hidden">
+                          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" /> {row.warehouseName} · {row.locationSummary}
+                        </p>
+                      </td>
+                      <td className="hidden px-4 py-3 md:table-cell">
+                        <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-foreground" title={row.warehouseName}>
+                          <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" /> {row.warehouseName}
+                        </p>
+                        <p className="ml-[18px] truncate font-mono text-[11px] text-muted-foreground">{row.locationSummary}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className={cn("shrink-0 font-mono text-[15px] font-bold tabular-nums", qtyTone(qty))}>{qty}</span>
+                          <StockGauge quantity={availQty} status={status} />
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{row.category || "-"}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
-                        <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" /> {row.warehouseName}
-                      </div>
-                      <p className="text-[11px] font-mono text-muted-foreground mt-0.5 ml-[18px]">{row.locationSummary}</p>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[14px] font-mono font-bold shrink-0 ${qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{qty}</span>
-                        <StockGauge quantity={availQty} status={status} />
-                      </div>
-                      {recvQty > 0 && (
-                        <div className="text-[10px] text-amber-500 dark:text-amber-400 leading-tight mt-1">
-                          Sẵn sàng: {availQty} · Nhận: {recvQty}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                        <Clock className="h-3 w-3 shrink-0" /> {formatUpdatedTime(row.updated_at)}
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        {recvQty > 0 && (
+                          <p className="mt-1 text-[10px] leading-tight text-amber-600 dark:text-amber-400">Sẵn sàng {availQty} · Nhận {recvQty}</p>
+                        )}
+                      </td>
+                      <td className="hidden px-4 py-3 sm:table-cell">
+                        <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
+                      </td>
+                      <td className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell" title={formatUpdatedTime(row.updated_at)}>
+                        {formatUpdatedDate(row.updated_at)}
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">
-            <span>Hiển thị {filtered.length}/{whScopedRows.length} dòng ({data.length} đầu sách)</span>
+
+          <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Hiển thị {paged.length} / {filtered.length} dòng ({data.length} đầu sách)</span>
+            {totalPages > 1 && (
+              <Pagination className="mx-0 w-auto justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={(event) => { event.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
+                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                  {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                    <PaginationItem key={`${item}-${i}`}>
+                      {typeof item === "number" ? (
+                        <PaginationLink isActive={item === currentPage} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
+                          {item}
+                        </PaginationLink>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={(event) => { event.preventDefault(); setPage((p) => Math.min(totalPages, p + 1)); }}
+                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         </SectionCard>
       </FadeItem>

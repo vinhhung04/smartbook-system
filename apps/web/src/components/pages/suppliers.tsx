@@ -1,15 +1,16 @@
 import { supplierService, Supplier } from '@/services/supplier';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Truck, Plus, Edit, Trash2, RefreshCw, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Truck, Plus, Pencil, Trash2, RefreshCw, X } from 'lucide-react';
 import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
-import { StatCard } from '@/components/ui/stat-card';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
@@ -50,11 +51,16 @@ function isActiveStatus(status: string) {
 }
 
 const PAGE_SIZE = 10;
+const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60';
+
+type StatusFilter = 'ALL' | 'ACTIVE' | 'OTHER';
 
 export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [form, setForm] = useState<SupplierFormState>(EMPTY_FORM);
@@ -80,11 +86,25 @@ export function SuppliersPage() {
     void loadSuppliers();
   }, [loadSuppliers]);
 
-  const totalCount = suppliers.length;
   const activeCount = suppliers.filter((s) => isActiveStatus(s.status)).length;
-  const totalPages = Math.max(1, Math.ceil(suppliers.length / PAGE_SIZE));
+
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return suppliers.filter((row) => {
+      if (statusFilter === 'ACTIVE' && !isActiveStatus(row.status)) return false;
+      if (statusFilter === 'OTHER' && isActiveStatus(row.status)) return false;
+      if (!keyword) return true;
+      return [row.code, row.name, row.contact_name, row.phone, row.email, row.tax_code]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [suppliers, search, statusFilter]);
+
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paginatedSuppliers = suppliers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paginatedSuppliers = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const openCreate = () => {
     setEditing(null);
@@ -189,35 +209,59 @@ export function SuppliersPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <StatCard label="Tổng nhà cung cấp" value={totalCount} icon={Truck} variant="info" />
-          <StatCard label="Đang hoạt động" value={activeCount} variant="success" />
+        <div className="space-y-3">
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm theo tên, mã, người liên hệ, điện thoại, email..."
+            showSearchClear
+          />
+          <div className="max-w-full overflow-x-auto">
+            <SegmentedControl
+              layoutId="supplier-status-filter"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'ALL', label: `Tất cả (${suppliers.length})` },
+                { value: 'ACTIVE', label: `Đang hoạt động (${activeCount})` },
+                { value: 'OTHER', label: `Khác (${suppliers.length - activeCount})` },
+              ]}
+              gradientClassName="from-sky-600 to-cyan-600"
+              className="w-max"
+            />
+          </div>
         </div>
       </FadeItem>
 
       <FadeItem>
         <SectionCard noPadding>
-          <div className="overflow-hidden rounded-xl border border-border">
-            <Table>
+          <div className="overflow-x-auto">
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  {['Mã', 'Tên', 'Liên hệ', 'Điện thoại', 'Email', 'Trạng thái', 'Số PO', 'Thao tác'].map((h) => (
-                    <TableHead key={h} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {h}
+                  {[
+                    { label: 'Nhà cung cấp', className: '' },
+                    { label: 'Liên hệ', className: 'hidden w-[260px] md:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[140px] sm:table-cell' },
+                    { label: 'Số PO', className: 'hidden w-[80px] text-right lg:table-cell' },
+                    { label: '', className: 'w-[96px]' },
+                  ].map((h) => (
+                    <TableHead key={h.label || 'actions'} className={cn('px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.className)}>
+                      {h.label}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <SkeletonTableRow columns={8} rows={5} />
-                ) : suppliers.length === 0 ? (
+                  <SkeletonTableRow columns={5} rows={5} />
+                ) : filtered.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="whitespace-normal">
+                    <TableCell colSpan={5} className="whitespace-normal">
                       <EmptyState
-                        variant="no-data"
-                        title="Chưa có nhà cung cấp"
-                        description="Thêm nhà cung cấp mới để bắt đầu"
+                        variant={suppliers.length === 0 ? 'no-data' : 'no-results'}
+                        title={suppliers.length === 0 ? 'Chưa có nhà cung cấp' : 'Không tìm thấy nhà cung cấp phù hợp'}
+                        description={suppliers.length === 0 ? 'Thêm nhà cung cấp mới để bắt đầu' : 'Thử đổi từ khóa hoặc bộ lọc.'}
                         className="py-12"
                       />
                     </TableCell>
@@ -225,37 +269,53 @@ export function SuppliersPage() {
                 ) : (
                   paginatedSuppliers.map((row) => {
                     const poCount = row._count?.purchase_orders ?? 0;
+                    const contact = [row.contact_name, row.phone].filter(Boolean).join(' · ');
                     return (
                       <TableRow key={row.id} className="hover:bg-muted/30">
-                        <TableCell className="text-[13px] font-semibold">{row.code || '—'}</TableCell>
-                        <TableCell className="text-[13px]">{row.name}</TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground">{row.contact_name || '—'}</TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground">{row.phone || '—'}</TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground">{row.email || '—'}</TableCell>
-                        <TableCell>
+                        <TableCell className="px-4 py-3 align-top">
+                          <p className="truncate text-[13px] font-semibold" title={row.name}>{row.name}</p>
+                          <p className="truncate text-[12px] text-muted-foreground">
+                            {[row.code, row.tax_code ? `MST ${row.tax_code}` : null].filter(Boolean).join(' · ') || '—'}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+                            <StatusBadge label={row.status || '—'} variant={getStatusVariant('supplier', row.status, 'warning')} />
+                          </div>
+                          <p className="mt-1 truncate text-[12px] text-muted-foreground md:hidden">{contact || row.email || '—'}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 align-top md:table-cell">
+                          <p className="truncate text-[13px]" title={contact || undefined}>{contact || '—'}</p>
+                          <p className="truncate text-[12px] text-muted-foreground" title={row.email || undefined}>{row.email || '—'}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
                           <StatusBadge label={row.status || '—'} variant={getStatusVariant('supplier', row.status, 'warning')} />
                         </TableCell>
-                        <TableCell className="text-[13px] tabular-nums">{poCount}</TableCell>
-                        <TableCell>
-                          {canManageSuppliers ? <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(row)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                              Sửa
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(row)}
-                              disabled={deletingId === row.id}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              {deletingId === row.id ? 'Đang xóa...' : 'Xóa'}
-                            </button>
-                          </div> : <span className="text-[12px] text-muted-foreground">Read only</span>}
+                        <TableCell className="hidden px-4 py-3 text-right align-top text-[13px] tabular-nums lg:table-cell">{poCount}</TableCell>
+                        <TableCell className="px-4 py-3 align-top">
+                          {canManageSuppliers ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(row)}
+                                aria-label={`Sửa ${row.name}`}
+                                title="Sửa"
+                                className={cn(ICON_BUTTON_CLASS, 'border-input hover:bg-muted')}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(row)}
+                                disabled={deletingId === row.id}
+                                aria-label={`Xóa ${row.name}`}
+                                title={deletingId === row.id ? 'Đang xóa...' : 'Xóa'}
+                                className={cn(ICON_BUTTON_CLASS, 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15')}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="block text-right text-[12px] text-muted-foreground">Chỉ xem</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -265,7 +325,7 @@ export function SuppliersPage() {
             </Table>
           </div>
           <div className="flex flex-col gap-3 px-5 py-3 border-t border-border text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>Hiển thị {paginatedSuppliers.length} / {suppliers.length} nhà cung cấp</span>
+            <span>Hiển thị {paginatedSuppliers.length} / {filtered.length} nhà cung cấp</span>
             {totalPages > 1 && (
               <Pagination className="mx-0 w-auto justify-end">
                 <PaginationContent>

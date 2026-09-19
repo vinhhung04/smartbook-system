@@ -22,6 +22,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { WorkflowStepper, type WorkflowStep } from "@/components/ui/workflow-stepper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
@@ -67,6 +69,7 @@ function StockAuditListView() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [note, setNote] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
@@ -91,7 +94,11 @@ function StockAuditListView() {
   }, [isManager]);
 
   const filtered = useMemo(() => {
-    const byStatus = statusFilter === "ALL" ? audits : audits.filter((a) => a.status === statusFilter);
+    const byStatus = statusFilter === "ALL"
+      ? audits
+      : statusFilter === "IN_PROGRESS"
+        ? audits.filter((a) => ["DRAFT", "IN_PROGRESS"].includes(a.status))
+        : audits.filter((a) => a.status === statusFilter);
     const q = search.trim().toLowerCase();
     if (!q) return byStatus;
     return byStatus.filter(
@@ -107,6 +114,7 @@ function StockAuditListView() {
     inProgress: audits.filter((a) => ["DRAFT", "IN_PROGRESS"].includes(a.status)).length,
     submitted: audits.filter((a) => a.status === "SUBMITTED").length,
     completed: audits.filter((a) => a.status === "COMPLETED").length,
+    cancelled: audits.filter((a) => a.status === "CANCELLED").length,
   }), [audits]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -143,57 +151,39 @@ function StockAuditListView() {
     }
   };
 
+  const statusOptions = [
+    { value: "ALL", label: `Tất cả (${counts.total})` },
+    { value: "IN_PROGRESS", label: `Đang kiểm (${counts.inProgress})` },
+    { value: "SUBMITTED", label: `Chờ duyệt (${counts.submitted})` },
+    { value: "COMPLETED", label: `Hoàn tất (${counts.completed})` },
+    ...(counts.cancelled > 0 ? [{ value: "CANCELLED", label: `Đã hủy (${counts.cancelled})` }] : []),
+  ];
+
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
-        <div className="rounded-2xl border border-border bg-gradient-to-br from-amber-50 via-card to-card dark:from-amber-500/[0.07] dark:via-card dark:to-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-          <PageHeader
-            icon={ClipboardList}
-            title="Kiểm kê kho"
-            description="Đối chiếu tồn kho thực tế với hệ thống, phát hiện và điều chỉnh chênh lệch"
-            iconBg="bg-gradient-to-br from-amber-100 to-orange-50 dark:from-amber-500/20 dark:to-orange-500/10"
-            iconColor="text-amber-600 dark:text-amber-400"
-            actions={
+        <PageHeader
+          icon={ClipboardList}
+          title="Kiểm kê kho"
+          description="Đối chiếu tồn kho thực tế với hệ thống, phát hiện và điều chỉnh chênh lệch"
+          iconBg="bg-gradient-to-br from-amber-100 to-orange-50 dark:from-amber-500/20 dark:to-orange-500/10"
+          iconColor="text-amber-600 dark:text-amber-400"
+          actions={
+            <>
               <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
                 <RefreshCw className="h-3.5 w-3.5" /> Làm mới
               </Button>
-            }
-          />
-        </div>
+              {isManager && (
+                <Button size="sm" onClick={() => setShowCreate((open) => !open)} aria-expanded={showCreate}>
+                  <Plus className="h-3.5 w-3.5" /> Tạo phiếu mới
+                </Button>
+              )}
+            </>
+          }
+        />
       </FadeItem>
 
-      {!loading && audits.length > 0 && (
-        <FadeItem>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { key: "ALL", label: "Tổng phiếu", value: counts.total, icon: Boxes, variant: "default" as const },
-              { key: "IN_PROGRESS", label: "Đang kiểm", value: counts.inProgress, icon: ClipboardList, variant: "info" as const },
-              { key: "SUBMITTED", label: "Chờ duyệt", value: counts.submitted, icon: AlertTriangle, variant: "warning" as const },
-              { key: "COMPLETED", label: "Đã hoàn tất", value: counts.completed, icon: PackageCheck, variant: "success" as const },
-            ].map((card) => {
-              const isActive = statusFilter === card.key;
-              return (
-                <button
-                  key={card.key}
-                  type="button"
-                  onClick={() => setStatusFilter(isActive ? "ALL" : card.key)}
-                  aria-pressed={isActive}
-                  className="relative w-full rounded-xl text-left transition-all cursor-pointer active:scale-[0.97]"
-                >
-                  <StatCard label={card.label} value={card.value} icon={card.icon} variant={card.variant} />
-                  {isActive && (
-                    <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </FadeItem>
-      )}
-
-      {isManager && (
+      {isManager && (showCreate || (!loading && audits.length === 0)) && (
         <FadeItem>
           <SectionCard title="Tạo phiếu kiểm kê mới" icon={ClipboardCheck}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -214,85 +204,65 @@ function StockAuditListView() {
                 <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ghi chú (không bắt buộc)</label>
                 <Input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Kiểm kê định kỳ quý 3" className="h-auto py-2" />
               </div>
-              <Button onClick={() => void handleCreate()} loading={creating} className="shrink-0">
-                <ClipboardCheck className="h-3.5 w-3.5" /> Tạo phiếu kiểm kê
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {showCreate && (
+                  <Button variant="outline" onClick={() => setShowCreate(false)}>Hủy</Button>
+                )}
+                <Button onClick={() => void handleCreate()} loading={creating}>
+                  <ClipboardCheck className="h-3.5 w-3.5" /> Tạo phiếu kiểm kê
+                </Button>
+              </div>
             </div>
           </SectionCard>
         </FadeItem>
       )}
 
-      <FadeItem>
-        <SectionCard noPadding>
-          {!loading && audits.length > 0 && (
-            <div className="border-b border-border p-4">
-              <div className="relative max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Tìm theo số phiếu hoặc kho..."
-                  aria-label="Tìm kiếm phiếu kiểm kê"
-                  className="h-10 pl-9"
+      {!loading && audits.length > 0 && (
+        <FadeItem>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Tìm theo số phiếu hoặc kho..."
+            showSearchClear
+            filters={
+              <div className="max-w-full overflow-x-auto">
+                <SegmentedControl
+                  options={statusOptions}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  layoutId="stock-audit-status-filter"
+                  gradientClassName="from-amber-600 to-orange-600"
+                  className="w-max"
                 />
               </div>
-            </div>
-          )}
+            }
+          />
+        </FadeItem>
+      )}
 
-          {/* Mobile cards (< md) */}
-          {loading ? (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="md:hidden">
-              {audits.length === 0 ? (
-                <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" />
-              ) : (
-                <EmptyState variant="no-results" title="Không tìm thấy phiếu nào" description="Thử đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái." className="py-12" />
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {paged.map((audit) => {
-                const meta = statusMeta(audit.status);
-                return (
-                  <NavLink key={audit.id} to={`/stock-audits/${audit.id}`} className="flex items-center gap-2 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/20 active:scale-[0.99]">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="truncate text-[13px] font-semibold text-indigo-600 dark:text-indigo-400">{audit.audit_number}</p>
-                        <StatusBadge label={meta.label} variant={meta.variant} dot />
-                      </div>
-                      <p className="truncate text-[12px] text-muted-foreground">{audit.warehouse_name || audit.warehouse_code || "-"}</p>
-                      <div className="mt-1 flex items-center justify-between text-[12px] text-muted-foreground">
-                        <span>{audit.line_count ?? 0} mục</span>
-                        <span>{formatDate(audit.created_at)}</span>
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  </NavLink>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Desktop table (>= md) */}
-          <div className="hidden md:block">
-            <Table>
+      <FadeItem>
+        <SectionCard noPadding>
+          <div className="overflow-x-auto">
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  {["Phiếu kiểm kê", "Kho", "Số mục", "Trạng thái", "Tạo lúc", ""].map((heading) => (
-                    <TableHead key={heading} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{heading}</TableHead>
+                  {[
+                    { label: "Phiếu kiểm kê", className: "" },
+                    { label: "Trạng thái", className: "hidden w-[140px] sm:table-cell" },
+                    { label: "Số mục", className: "hidden w-[90px] md:table-cell" },
+                    { label: "Tạo lúc", className: "hidden w-[170px] lg:table-cell" },
+                    { label: "", className: "w-[40px]" },
+                  ].map((heading) => (
+                    <TableHead key={heading.label || "chevron"} className={cn("px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap", heading.className)}>{heading.label}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <SkeletonTableRow columns={6} rows={4} />
+                  <SkeletonTableRow columns={5} rows={4} />
                 ) : filtered.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={6} className="whitespace-normal">
+                    <TableCell colSpan={5} className="whitespace-normal">
                       {audits.length === 0 ? (
                         <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description="Tạo phiếu kiểm kê để bắt đầu đối chiếu tồn kho." className="py-12" />
                       ) : (
@@ -308,20 +278,26 @@ function StockAuditListView() {
                       onClick={() => navigate(`/stock-audits/${audit.id}`)}
                       className="cursor-pointer"
                     >
-                      <TableCell className="px-5 py-3.5">
+                      <TableCell className="px-4 py-3">
                         <NavLink
                           to={`/stock-audits/${audit.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
                         >
                           {audit.audit_number}
                         </NavLink>
+                        <p className="truncate text-[12px] text-muted-foreground" title={audit.warehouse_name || audit.warehouse_code || undefined}>
+                          {audit.warehouse_name || audit.warehouse_code || "-"}
+                          <span className="md:hidden"> · {audit.line_count ?? 0} mục</span>
+                        </p>
+                        <div className="mt-1.5 sm:hidden">
+                          <StatusBadge label={meta.label} variant={meta.variant} dot />
+                        </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3.5 text-[13px]">{audit.warehouse_name || audit.warehouse_code || "-"}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-[13px] text-muted-foreground">{audit.line_count ?? 0}</TableCell>
-                      <TableCell className="px-5 py-3.5"><StatusBadge label={meta.label} variant={meta.variant} dot /></TableCell>
-                      <TableCell className="px-5 py-3.5 text-[12px] text-muted-foreground whitespace-nowrap">{formatDate(audit.created_at)}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-right">
+                      <TableCell className="hidden px-4 py-3 sm:table-cell"><StatusBadge label={meta.label} variant={meta.variant} dot /></TableCell>
+                      <TableCell className="hidden px-4 py-3 text-[13px] text-muted-foreground md:table-cell">{audit.line_count ?? 0}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-[12px] text-muted-foreground lg:table-cell">{formatDate(audit.created_at)}</TableCell>
+                      <TableCell className="px-4 py-3 text-right">
                         <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground/60" aria-label="Xem chi tiết" />
                       </TableCell>
                     </TableRow>

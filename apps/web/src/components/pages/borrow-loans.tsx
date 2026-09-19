@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
-import { BookOpen, Loader2, RefreshCw, Plus, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, BookX, CheckCircle2, Loader2, RefreshCw, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
@@ -41,10 +42,26 @@ const PAGE_SIZE = 20;
 // one request instead of the previous unparameterized call, which silently capped at 20 loans.
 const FETCH_PAGE_SIZE = 100;
 
-function daysOverdue(dueDate: string): number {
-  const diffMs = Date.now() - new Date(dueDate).getTime();
-  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+const ACTIVE_LOAN_STATUSES: LoanStatus[] = ['BORROWED', 'OVERDUE', 'RESERVED'];
+const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+
+/** Relative due date for loans still out, so staff see urgency without comparing timestamps. */
+function dueInfo(loan: Loan): { text: string; tone: 'danger' | 'warning' | 'muted' } | null {
+  if (loan.status !== 'BORROWED' && loan.status !== 'OVERDUE') return null;
+  const diff = new Date(loan.due_date).getTime() - Date.now();
+  if (Number.isNaN(diff)) return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  if (loan.status === 'OVERDUE' || diff < 0) return { text: `Quá hạn ${Math.max(1, Math.ceil(-diff / DAY))} ngày`, tone: 'danger' };
+  const days = Math.floor(diff / DAY);
+  if (days === 0) return { text: 'Đến hạn hôm nay', tone: 'warning' };
+  return { text: `Còn ${days} ngày`, tone: days <= 3 ? 'warning' : 'muted' };
 }
+
+const DUE_TONE_CLASS = {
+  danger: 'font-semibold text-rose-600 dark:text-rose-400',
+  warning: 'font-semibold text-amber-600 dark:text-amber-400',
+  muted: 'text-muted-foreground',
+} as const;
 
 const STATUS_LABELS: Record<string, string> = {
   ALL: 'Tất cả',
@@ -250,7 +267,7 @@ export function BorrowLoansPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -285,20 +302,17 @@ export function BorrowLoansPage() {
           onSearchChange={setQuery}
           searchPlaceholder="Tìm phiếu mượn..."
           filters={
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {(['ALL', ...statuses] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
-                    statusFilter === status
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {STATUS_LABELS[status] ?? status}
-                </button>
-              ))}
+            <div className="max-w-full overflow-x-auto">
+              <SegmentedControl
+                layoutId="loan-filter"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={(['ALL', ...statuses] as const).map((status) => ({
+                  value: status,
+                  label: `${STATUS_LABELS[status] ?? status} (${status === 'ALL' ? loans.length : loans.filter((item) => item.status === status).length})`,
+                }))}
+                className="w-max"
+              />
             </div>
           }
         />
@@ -315,43 +329,33 @@ export function BorrowLoansPage() {
           className="border-l-4 border-l-amber-400"
         >
           {renewalRequests.length === 0 ? (
-            <EmptyState
-              variant="no-data"
-              title="Không có yêu cầu gia hạn đang chờ"
-              description="Tất cả yêu cầu gia hạn đã được xử lý."
-              className="py-8"
-            />
+            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+              Không có yêu cầu gia hạn nào đang chờ.
+            </p>
           ) : (
             <div className="space-y-3">
               {renewalRequests.map((request) => (
-                <div key={request.request_id} className="border border-border rounded-lg p-4 flex items-center justify-between gap-4 bg-muted/30">
+                <div key={request.request_id} className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <p className="truncate text-sm font-medium text-foreground">
                       {request.loan?.loan_number || request.loan?.id || 'Phiếu không xác định'} - {request.customer?.full_name || request.customer?.customer_code || 'Khách hàng không xác định'}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Gia hạn thêm: {request.requested_extension_days ?? '-'} ngày | Yêu cầu lúc {new Date(request.requested_at).toLocaleString('vi-VN')}
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Gia hạn thêm {request.requested_extension_days ?? '-'} ngày · yêu cầu lúc {new Date(request.requested_at).toLocaleString('vi-VN')}
                     </p>
                   </div>
                   {request.loan?.id ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="success-outline"
-                        onClick={() => openRenewalDialog(request, 'APPROVE')}
-                      >
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button size="sm" variant="success-outline" onClick={() => openRenewalDialog(request, 'APPROVE')}>
                         Duyệt
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="danger-outline"
-                        onClick={() => openRenewalDialog(request, 'REJECT')}
-                      >
+                      <Button size="sm" variant="danger-outline" onClick={() => openRenewalDialog(request, 'REJECT')}>
                         Từ chối
                       </Button>
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground shrink-0">Tham chiếu phiếu mượn không hợp lệ</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">Tham chiếu phiếu mượn không hợp lệ</span>
                   )}
                 </div>
               ))}
@@ -367,22 +371,27 @@ export function BorrowLoansPage() {
       >
         <SectionCard noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Phiếu mượn', 'Khách hàng', 'Ngày mượn', 'Hạn trả', 'Sách', 'Trạng thái', 'Thao tác'].map((header) => (
-                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      {header}
+                  {[
+                    { label: 'Phiếu mượn', className: '' },
+                    { label: 'Hạn trả', className: 'hidden w-[190px] md:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[140px] sm:table-cell' },
+                    { label: 'Thao tác', className: 'w-[190px] text-right' },
+                  ].map((header) => (
+                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                      {header.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonTableRow columns={7} rows={5} />
+                  <SkeletonTableRow columns={4} rows={5} />
                 ) : paged.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={4}>
                       <EmptyState
                         variant="no-results"
                         title="Không tìm thấy phiếu mượn"
@@ -393,64 +402,68 @@ export function BorrowLoansPage() {
                   </tr>
                 ) : (
                   paged.map((loan, index) => {
-                    const overdueDays = loan.status === 'OVERDUE' ? daysOverdue(loan.due_date) : 0;
+                    const due = dueInfo(loan);
+                    const isActive = ACTIVE_LOAN_STATUSES.includes(loan.status);
                     return (
                     <motion.tr
                       key={loan.id}
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: index * 0.02 }}
+                      transition={{ duration: 0.15, delay: Math.min(index, 10) * 0.02 }}
                       className={cn(
                         'border-b border-border last:border-0 hover:bg-muted/30 transition-colors',
                         loan.status === 'OVERDUE' && 'bg-rose-50/40 dark:bg-rose-500/[0.04]',
                       )}
                     >
-                      <td className="px-5 py-3.5">
-                        <Link to={`/borrow/loans/${loan.id}`} className="text-sm font-medium text-primary hover:underline">
+                      <td className="px-4 py-3">
+                        <Link to={`/borrow/loans/${loan.id}`} className="block truncate text-sm font-semibold text-primary hover:underline">
                           {loan.loan_number}
                         </Link>
+                        <p className="truncate text-xs text-muted-foreground" title={loan.customers?.full_name || loan.customer_id}>
+                          {loan.customers?.full_name || loan.customer_id}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {loan.total_items} cuốn · mượn {new Date(loan.borrow_date).toLocaleDateString('vi-VN')}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+                          <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                          {due ? <span className={cn('text-xs', DUE_TONE_CLASS[due.tone])}>{due.text}</span> : null}
+                        </div>
                       </td>
-                      <td className="px-5 py-3.5 text-sm">{loan.customers?.full_name || loan.customer_id}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(loan.borrow_date).toLocaleString('vi-VN')}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">
-                        {new Date(loan.due_date).toLocaleString('vi-VN')}
-                        {overdueDays > 0 && (
-                          <p className="font-mono text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                            Quá hạn {overdueDays} ngày
-                          </p>
-                        )}
+                      <td className="hidden px-4 py-3 md:table-cell">
+                        {due ? <p className={cn('text-sm', DUE_TONE_CLASS[due.tone])}>{due.text}</p> : null}
+                        <p className="text-xs text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</p>
                       </td>
-                      <td className="px-5 py-3.5 text-sm">{loan.total_items}</td>
-                      <td className="px-5 py-3.5">
+                      <td className="hidden px-4 py-3 sm:table-cell">
                         <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
                       </td>
-                      <td className="px-5 py-3.5">
-                        {loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED' ? (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="success-outline"
-                              onClick={() => void returnLoan(loan.id)}
-                            >
+                      <td className="px-4 py-3">
+                        {isActive ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="success-outline" onClick={() => void returnLoan(loan.id)}>
                               Trả sách
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="warning-outline"
+                            <button
+                              type="button"
+                              aria-label={`Báo hư hỏng phiếu ${loan.loan_number}`}
+                              title="Báo hư hỏng"
                               onClick={() => void reportDamage(loan.id)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
                             >
-                              Báo hư hỏng
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger-outline"
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Đánh dấu mất phiếu ${loan.loan_number}`}
+                              title="Đánh dấu mất"
                               onClick={() => void markLost(loan.id)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20')}
                             >
-                              Đánh dấu mất
-                            </Button>
+                              <BookX className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          <span className="block text-right text-xs text-muted-foreground">-</span>
                         )}
                       </td>
                     </motion.tr>

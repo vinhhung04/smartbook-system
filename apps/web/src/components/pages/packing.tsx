@@ -414,25 +414,20 @@ export function PackingPage() {
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <div className="rounded-xl border border-border bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-          <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/70">
-            Bench · Packing Station
-          </p>
-          <PageHeader
-            icon={PackageCheck}
-            title="Packing Station"
-            description="Camera luôn bật để giám sát và hỗ trợ quét — chọn một đơn bên phải để bắt đầu đóng gói."
-            iconBg="bg-indigo-100 dark:bg-indigo-500/15"
-            iconColor="text-indigo-700 dark:text-indigo-400"
-          />
-          <div className="mt-5 pt-5 border-t border-border/70">
-            <WorkflowStepper steps={steps} />
-          </div>
+        <PageHeader
+          icon={PackageCheck}
+          title="Trạm đóng gói"
+          description="Camera luôn bật để giám sát và hỗ trợ quét. Chọn một đơn chờ đóng gói hoặc quét hoá đơn để bắt đầu."
+          iconBg="bg-indigo-100 dark:bg-indigo-500/15"
+          iconColor="text-indigo-700 dark:text-indigo-400"
+        />
+        <div className="mt-4 rounded-xl border border-border bg-card px-4 py-4 sm:px-5">
+          <WorkflowStepper steps={steps} />
         </div>
       </FadeItem>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-5 items-start">
-        <FadeItem>
+        <FadeItem className="order-2 lg:order-none">
           <PackingCameraPanel
             videoRef={camera.videoRef}
             isLive={camera.isLive}
@@ -445,34 +440,31 @@ export function PackingPage() {
           />
         </FadeItem>
 
-        <div className="space-y-5">
+        <div className="order-1 space-y-5 lg:order-none">
           {!task ? (
             <>
               <FadeItem>
                 <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-                  <div className="flex flex-col items-center gap-3 bg-gradient-to-br from-primary/[0.06] to-transparent dark:from-primary/[0.09] px-6 py-8 text-center border-b border-dashed border-border">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                      <QrCode className="h-7 w-7" />
+                  <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <QrCode className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[14px] font-semibold text-foreground">Bắt đầu đóng gói</p>
+                        <p className="text-[12px] text-muted-foreground">Quét hoá đơn hoặc mã đơn xuất kho để mở phiếu.</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Bắt đầu đóng gói
-                      </p>
-                      <p className="mt-1 text-[14px] text-foreground max-w-xs">
-                        Quét hoá đơn / mã đơn xuất kho để mở phiếu đóng gói
-                      </p>
-                    </div>
-                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)} className="mt-1">
-                      Scan hoá đơn
+                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)} className="shrink-0">
+                      <ScanLine className="h-4 w-4" />
+                      Quét hoá đơn
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between px-5 py-3">
                     <div>
-                      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
-                        Đơn đang chờ đóng gói
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Đơn đã Picking xong, chưa hoàn tất Gói hàng</p>
+                      <p className="text-[14px] font-semibold text-foreground">Đơn đang chờ đóng gói</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">Đã lấy hàng xong, chưa hoàn tất đóng gói</p>
                     </div>
                     {pendingTasks.length > 0 && (
                       <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold text-muted-foreground">
@@ -494,7 +486,7 @@ export function PackingPage() {
                       />
                     </div>
                   ) : (
-                    <div className="divide-y divide-dashed divide-border border-t border-border">
+                    <div className="divide-y divide-border border-t border-border">
                       {pendingTasks.map((entry) => {
                         const status =
                           entry.status === "NOT_STARTED"
@@ -530,8 +522,6 @@ export function PackingPage() {
             <>
               <FadeItem>
                 <div className="relative">
-                  <div className="pointer-events-none absolute -top-2 left-3 z-10 h-4 w-4 rounded-full border border-border bg-background" />
-                  <div className="pointer-events-none absolute -top-2 right-3 z-10 h-4 w-4 rounded-full border border-border bg-background" />
                   <div
                     className={`rounded-xl border bg-card p-5 pt-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4 ${
                       task.status === "COMPLETED"
@@ -541,10 +531,7 @@ export function PackingPage() {
                           : "border-l-emerald-500"
                     }`}
                   >
-                    <p className="mb-3 border-b border-dashed border-border pb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Phiếu đóng gói
-                    </p>
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <button
                           onClick={backToQueue}
@@ -571,7 +558,10 @@ export function PackingPage() {
                             <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
                           </span>
                         )}
-                        <div className="flex items-center gap-2">
+                      </div>
+                    </div>
+
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -592,9 +582,7 @@ export function PackingPage() {
                         >
                           Scan sách
                         </Button>
-                      </div>
                     </div>
-                  </div>
 
                     {photoEvidence.length > 0 ? (
                       <div className="mb-3 flex flex-wrap gap-2.5">
@@ -611,7 +599,7 @@ export function PackingPage() {
                                     ? `Đếm được ${evidence.ai_verification_result.item_count} / mong đợi ${evidence.ai_verification_result.expected_count}`
                                     : undefined
                                 }
-                                className={`inline-flex -rotate-3 items-center gap-1 rounded-md border-2 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${
+                                className={`inline-flex items-center gap-1 rounded-md border-2 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide ${
                                   evidence.ai_verification_status === "MATCH"
                                     ? "border-emerald-500/70 text-emerald-600 dark:border-emerald-400/60 dark:text-emerald-400"
                                     : evidence.ai_verification_status === "MISMATCH"
@@ -654,7 +642,7 @@ export function PackingPage() {
                       </div>
                     )}
 
-                    <div className="divide-y divide-dashed divide-border">
+                    <div className="divide-y divide-border">
                       {items.map((item) => (
                         <div key={item.id} className="py-3">
                           <div className="flex items-center justify-between gap-3">
@@ -669,7 +657,7 @@ export function PackingPage() {
                                 {item.scanned_qty}/{item.expected_qty}
                               </span>
                               {item.status === "VERIFIED" ? (
-                                <span className="inline-flex h-6 w-6 shrink-0 -rotate-6 items-center justify-center rounded-full border-2 border-emerald-500 text-emerald-500 dark:border-emerald-400 dark:text-emerald-400">
+                                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-emerald-500 text-emerald-500 dark:border-emerald-400 dark:text-emerald-400">
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                 </span>
                               ) : null}

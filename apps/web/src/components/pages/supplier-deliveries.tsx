@@ -68,6 +68,8 @@ export function SupplierDeliveriesPage() {
   return id ? <SupplierDeliveryDetailView id={id} /> : <SupplierDeliveryListView />;
 }
 
+const RECEIVABLE_STATUSES = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"];
+
 function SupplierDeliveryListView() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<SupplierDeliveryDetail[]>([]);
@@ -81,11 +83,13 @@ function SupplierDeliveryListView() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
+  // Everything is loaded once and the status filter is applied here, so the per-status counts on
+  // the filter stay correct (loading with ?status= made every other count read 0).
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const [response, supplierRows, warehouseRows] = await Promise.all([
-        supplierDeliveryService.getAll(status === "ALL" ? undefined : { status }),
+        supplierDeliveryService.getAll(),
         supplierService.getAll(),
         warehouseService.getAll(),
       ]);
@@ -97,7 +101,7 @@ function SupplierDeliveryListView() {
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -108,7 +112,7 @@ function SupplierDeliveryListView() {
   }, [search, status, supplierId, warehouseId]);
 
   const filteredRows = useMemo(() => {
-    let result = rows;
+    let result = status === "ALL" ? rows : rows.filter((row) => row.status === status);
     if (supplierId) result = result.filter((row) => row.supplier_id === supplierId);
     if (warehouseId) result = result.filter((row) => row.warehouse_id === warehouseId);
     const query = search.trim().toLowerCase();
@@ -120,17 +124,16 @@ function SupplierDeliveryListView() {
       );
     }
     return result;
-  }, [rows, search, supplierId, warehouseId]);
+  }, [rows, search, status, supplierId, warehouseId]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const summary = useMemo(() => {
-    const canReceiveCount = rows.filter((row) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status)).length;
-    const receivedCount = rows.filter((row) => row.status === "RECEIVED").length;
-    const shortageCount = rows.filter((row) => row.status === "SHORTAGE_REPORTED").length;
-    return { total: rows.length, canReceiveCount, receivedCount, shortageCount };
-  }, [rows]);
+  const statusOptions = STATUS_OPTIONS.map((option) => ({
+    value: option.value,
+    label: `${option.label} (${option.value === "ALL" ? rows.length : rows.filter((row) => row.status === option.value).length})`,
+  }));
+  const waitingCount = rows.filter((row) => RECEIVABLE_STATUSES.includes(row.status)).length;
 
   return (
     <PageWrapper className="space-y-6">
@@ -138,7 +141,7 @@ function SupplierDeliveryListView() {
         <PageHeader
           icon={Truck}
           title="Giao hàng nhà cung cấp"
-          description="Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp"
+          description={waitingCount > 0 ? `${waitingCount} hóa đơn đang chờ nhận hàng` : "Hóa đơn, phiếu giao hàng, giao lại và phiếu nhận nháp"}
           iconBg="bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10"
           iconColor="text-sky-600 dark:text-sky-400"
           actions={
@@ -149,33 +152,17 @@ function SupplierDeliveryListView() {
         />
       </FadeItem>
 
-      {!loading && rows.length > 0 && (
-        <FadeItem className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Tổng hóa đơn" value={summary.total} icon={Boxes} variant="primary" animateValue />
-          <StatCard label="Chờ nhận hàng" value={summary.canReceiveCount} icon={Clock} variant="warning" animateValue />
-          <StatCard label="Đã nhận" value={summary.receivedCount} icon={PackageCheck} variant="success" animateValue />
-          <StatCard label="Báo thiếu hàng" value={summary.shortageCount} icon={AlertCircle} variant="danger" animateValue />
-        </FadeItem>
-      )}
-
       <FadeItem>
-        <SectionCard>
+        <div className="space-y-3">
           <FilterBar
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Tìm hóa đơn, PO, nhà cung cấp, kho..."
+            showSearchClear
             filters={
               <>
-                <SegmentedControl
-                  options={STATUS_OPTIONS}
-                  value={status}
-                  onChange={setStatus}
-                  layoutId="supplier-delivery-status"
-                  gradientClassName="from-sky-600 to-blue-600"
-                  className="overflow-x-auto"
-                />
                 <Select value={supplierId || "__all__"} onValueChange={(v) => setSupplierId(v === "__all__" ? "" : v)}>
-                  <SelectTrigger size="sm" className="w-[170px]">
+                  <SelectTrigger size="sm" className="w-[180px]" aria-label="Nhà cung cấp">
                     <SelectValue placeholder="Tất cả nhà cung cấp" />
                   </SelectTrigger>
                   <SelectContent>
@@ -184,7 +171,7 @@ function SupplierDeliveryListView() {
                   </SelectContent>
                 </Select>
                 <Select value={warehouseId || "__all__"} onValueChange={(v) => setWarehouseId(v === "__all__" ? "" : v)}>
-                  <SelectTrigger size="sm" className="w-[170px]">
+                  <SelectTrigger size="sm" className="w-[180px]" aria-label="Kho nhận">
                     <SelectValue placeholder="Tất cả kho" />
                   </SelectTrigger>
                   <SelectContent>
@@ -195,106 +182,91 @@ function SupplierDeliveryListView() {
               </>
             }
           />
-        </SectionCard>
+          <div className="max-w-full overflow-x-auto">
+            <SegmentedControl
+              options={statusOptions}
+              value={status}
+              onChange={setStatus}
+              layoutId="supplier-delivery-status"
+              gradientClassName="from-sky-600 to-blue-600"
+              className="w-max"
+            />
+          </div>
+        </div>
       </FadeItem>
 
       <FadeItem>
         <SectionCard noPadding>
-          {/* Mobile cards (< md) */}
-          {loading ? (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} lines={2} />)}
-            </div>
-          ) : pagedRows.length === 0 ? (
-            <div className="md:hidden">
-              <EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." className="py-12" />
-            </div>
-          ) : (
-            <div className="grid gap-3 p-4 sm:grid-cols-2 md:hidden">
-              {pagedRows.map((row) => {
-                const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
-                const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
-                const canReceive = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status);
-                return (
-                  <div key={row.id} className="rounded-lg border border-border bg-card p-4 flex flex-col gap-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <NavLink to={`/supplier-deliveries/${row.id}`} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                          {row.invoice_number}
-                        </NavLink>
-                        <p className="truncate text-[11px] text-muted-foreground">{row.delivery_number || "-"}</p>
-                      </div>
-                      <StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot />
-                    </div>
-                    <p className="truncate text-[12px] text-muted-foreground">
-                      {row.supplier_name || "-"} · {row.warehouse_code || row.warehouse_name || "-"}
-                    </p>
-                    {row.purchase_order_id && (
-                      <p className="truncate text-[12px] text-muted-foreground">
-                        PO: <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink>
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-muted-foreground">Dự kiến {formatDate(row.expected_delivery_date)}</span>
-                      <span><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></span>
-                    </div>
-                    <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)} className="w-full">
-                      <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Desktop table (>= md) */}
-          <Table className="hidden md:table">
-            <TableHeader>
-              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                {["Hóa đơn", "PO", "NCC / Kho", "Dự kiến", "SL / Đã nhận", "Trạng thái", "Thao tác"].map((heading) => (
-                  <TableHead key={heading} className="text-[11px] uppercase tracking-wider text-muted-foreground">{heading}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <SkeletonTableRow columns={7} rows={5} />
-              ) : pagedRows.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="whitespace-normal py-12">
-                    <EmptyState variant="no-data" title="Chưa có giao hàng" description="Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." />
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table className="table-fixed">
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  {[
+                    { label: "Hóa đơn", className: "" },
+                    { label: "Đã nhận / SL", className: "hidden w-[150px] sm:table-cell" },
+                    { label: "Dự kiến", className: "hidden w-[110px] md:table-cell" },
+                    { label: "Trạng thái", className: "hidden w-[160px] sm:table-cell" },
+                    { label: "Thao tác", className: "w-[130px] text-right" },
+                  ].map((heading) => (
+                    <TableHead key={heading.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                  ))}
                 </TableRow>
-              ) : pagedRows.map((row) => {
-                const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
-                const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
-                const canReceive = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(row.status);
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell className="max-w-[170px]">
-                      <NavLink to={`/supplier-deliveries/${row.id}`} title={row.invoice_number} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.invoice_number}</NavLink>
-                      <div className="truncate text-[11px] text-muted-foreground" title={row.delivery_number || undefined}>{row.delivery_number || "-"}</div>
-                    </TableCell>
-                    <TableCell className="max-w-[150px]">
-                      {row.purchase_order_id ? <NavLink to={`/purchase-orders/${row.purchase_order_id}`} title={row.po_number || row.purchase_order_id || undefined} className="block truncate text-[13px] text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink> : "-"}
-                    </TableCell>
-                    <TableCell className="max-w-[170px]">
-                      <p className="truncate text-[13px] font-medium text-foreground" title={row.supplier_name || undefined}>{row.supplier_name || "-"}</p>
-                      <p className="truncate text-[11px] text-muted-foreground" title={row.warehouse_name || undefined}>{row.warehouse_code || row.warehouse_name || "-"}</p>
-                    </TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.expected_delivery_date)}</TableCell>
-                    <TableCell className="text-[13px]"><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></TableCell>
-                    <TableCell><StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot /></TableCell>
-                    <TableCell>
-                      <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)}>
-                        <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <SkeletonTableRow columns={5} rows={5} />
+                ) : pagedRows.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="whitespace-normal py-12">
+                      <EmptyState
+                        variant={rows.length === 0 ? "no-data" : "no-results"}
+                        title={rows.length === 0 ? "Chưa có giao hàng" : "Không tìm thấy hóa đơn phù hợp"}
+                        description={rows.length === 0 ? "Hóa đơn và phiếu giao hàng từ nhà cung cấp sẽ hiển thị ở đây." : "Thử đổi từ khóa hoặc bộ lọc."}
+                      />
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ) : pagedRows.map((row) => {
+                  const totalQty = row.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
+                  const acceptedQty = row.items.reduce((sum, item) => sum + Number(item.accepted_qty || 0), 0);
+                  const receivedPct = totalQty > 0 ? Math.min(100, Math.round((acceptedQty / totalQty) * 100)) : 0;
+                  const canReceive = RECEIVABLE_STATUSES.includes(row.status);
+                  const place = [row.supplier_name, row.warehouse_code || row.warehouse_name].filter(Boolean).join(" · ");
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className="px-4 py-3 align-top">
+                        <NavLink to={`/supplier-deliveries/${row.id}`} title={row.invoice_number} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.invoice_number}</NavLink>
+                        <p className="truncate text-[12px] text-muted-foreground" title={place || undefined}>{place || "-"}</p>
+                        <p className="truncate text-[12px] text-muted-foreground">
+                          {row.delivery_number ? `Giao ${row.delivery_number}` : null}
+                          {row.delivery_number && row.purchase_order_id ? " · " : null}
+                          {row.purchase_order_id ? (
+                            <>PO <NavLink to={`/purchase-orders/${row.purchase_order_id}`} className="text-indigo-600 dark:text-indigo-400">{row.po_number || row.purchase_order_id}</NavLink></>
+                          ) : null}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+                          <StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot />
+                          <span className="text-[12px]"><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                        <p className="text-[13px]"><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground"> / {totalQty}</span></p>
+                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã nhận ${receivedPct}%`}>
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${receivedPct}%` }} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground md:table-cell">{formatDate(row.expected_delivery_date)}</TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top sm:table-cell"><StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot /></TableCell>
+                      <TableCell className="px-4 py-3 text-right align-top">
+                        <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)}>
+                          <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-border text-[12px] text-muted-foreground">

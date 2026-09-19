@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { motion } from 'motion/react';
 import {
-  AlertTriangle,
   Archive,
   BrainCircuit,
   Clock,
@@ -9,13 +8,13 @@ import {
   Gauge,
   PackagePlus,
   RefreshCw,
-  TrendingUp,
   UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SectionCard } from '@/components/ui/section-card';
-import { StatCard } from '@/components/ui/stat-card';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
@@ -76,6 +75,13 @@ function priorityVariant(priority: ReorderSuggestionItem['priority']) {
   if (priority === 'MEDIUM') return 'warning';
   return 'info';
 }
+
+const PRIORITY_LABELS: Record<PriorityFilter, string> = {
+  ALL: 'Tất cả',
+  HIGH: 'Cao',
+  MEDIUM: 'Trung bình',
+  LOW: 'Thấp',
+};
 
 function riskBandVariant(band: RiskBand) {
   if (band === 'HIGH') return 'danger';
@@ -227,20 +233,89 @@ function DomainNavItem({
     <button
       type="button"
       onClick={onClick}
-      className={`relative w-full overflow-hidden rounded-xl border py-4 pl-5 pr-4 text-left transition ${
+      aria-pressed={active}
+      className={`relative w-full overflow-hidden rounded-xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
         active ? `${theme.border} ${theme.bg} shadow-[0_1px_2px_rgba(0,0,0,0.04)]` : 'border-border bg-card hover:bg-muted/40'
       }`}
     >
-      <span className={`absolute inset-y-0 left-0 w-[3px] ${active ? theme.rail : 'bg-transparent'}`} />
-      <span className="flex items-center gap-2">
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.iconBg}`}>
-          <Icon className={`h-3.5 w-3.5 ${theme.iconColor}`} />
+      <span className={`absolute inset-x-0 top-0 h-[3px] ${active ? theme.rail : 'bg-transparent'}`} />
+      <span className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.iconBg}`}>
+            <Icon className={`h-3.5 w-3.5 ${theme.iconColor}`} />
+          </span>
+          <span className="truncate text-[13px] font-semibold text-foreground">{label}</span>
         </span>
-        <span className="text-[13px] font-semibold text-foreground">{label}</span>
+        <span className="shrink-0 font-mono text-[22px] font-bold leading-none tabular-nums text-foreground">{value}</span>
       </span>
-      <span className="mt-3 block text-[26px] font-bold leading-none text-foreground">{value}</span>
-      <span className="mt-1.5 block text-[12px] leading-relaxed text-muted-foreground">{hint}</span>
+      <span className="mt-1.5 block truncate text-[12px] text-muted-foreground">{hint}</span>
     </button>
+  );
+}
+
+interface RiskRow {
+  key: string;
+  customer: string;
+  title: string;
+  fromLabel: string;
+  from: string | null | undefined;
+  toLabel: string;
+  to: string | null | undefined;
+  score: number;
+  band: RiskBand;
+  factors: RiskFactor[];
+}
+
+/** Shared table for the two risk models (late return, reservation no-show): same shape, different dates and factor labels. */
+function RiskTable({ rows, factorLabels }: { rows: RiskRow[]; factorLabels: Record<string, string> }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full table-fixed text-left text-[13px]">
+        <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          <tr>
+            <th className="px-4 py-3 font-semibold">Khách hàng &amp; sách</th>
+            <th className="hidden w-[170px] px-3 py-3 font-semibold sm:table-cell">Thời hạn</th>
+            <th className="w-[190px] px-3 py-3 font-semibold">Mức rủi ro</th>
+            <th className="hidden w-[250px] px-4 py-3 font-semibold xl:table-cell">Yếu tố chính</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((row) => (
+            <tr key={row.key} className="align-top transition hover:bg-muted/40">
+              <td className="px-4 py-3">
+                <p className="truncate font-semibold text-foreground" title={row.customer}>{row.customer}</p>
+                <p className="truncate text-[12px] text-muted-foreground" title={row.title}>{row.title}</p>
+                <p className="mt-1 text-[12px] text-muted-foreground sm:hidden">{row.toLabel}: {formatDateTime(row.to)}</p>
+                <div className="mt-1.5 xl:hidden"><TopFactors factors={row.factors} labels={factorLabels} /></div>
+              </td>
+              <td className="hidden px-3 py-3 sm:table-cell">
+                <p className="text-[12px] text-foreground">{row.toLabel}: {formatDateTime(row.to)}</p>
+                <p className="text-[12px] text-muted-foreground">{row.fromLabel}: {formatDateTime(row.from)}</p>
+              </td>
+              <td className="px-3 py-3">
+                <RiskMeter score={row.score} band={row.band} />
+                <div className="mt-1.5"><StatusBadge label={riskBandLabel(row.band)} variant={riskBandVariant(row.band)} dot /></div>
+              </td>
+              <td className="hidden px-4 py-3 xl:table-cell"><TopFactors factors={row.factors} labels={factorLabels} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SummaryStrip({ items }: { items: Array<{ label: string; value: string | number; tone?: string; hint?: string }> }) {
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-border bg-card p-4 sm:grid-cols-3 sm:p-5 xl:grid-cols-6">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+          <dd className={`mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums ${item.tone ?? 'text-foreground'}`}>{item.value}</dd>
+          {item.hint ? <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.hint}</p> : null}
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -387,235 +462,216 @@ export function ReorderSuggestionsPage() {
       : activeTab === 'late-return' ? lateReturnLoading
       : noShowLoading;
 
+  const errorState = (message: string, retry: () => void, title = 'Không thể tải dữ liệu') => (
+    <EmptyState
+      variant="error"
+      title={title}
+      description={message}
+      action={<Button type="button" size="sm" onClick={retry}>Thử lại</Button>}
+    />
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6"
+      className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6"
     >
       <PageHeader
         icon={BrainCircuit}
         title="Đề xuất & cảnh báo rủi ro AI"
-        description="Phân tích lượt mượn, đặt chỗ, wishlist và tồn kho để đề xuất nhập thêm, thanh lý, đồng thời cảnh báo sớm nguy cơ trả trễ và bỏ lỡ đặt chỗ."
+        description="Phân tích lượt mượn, đặt chỗ và tồn kho để đề xuất nhập thêm, thanh lý, đồng thời cảnh báo sớm nguy cơ trả trễ và bỏ lỡ đặt chỗ."
         iconBg="bg-violet-100 dark:bg-violet-500/15"
         iconColor="text-violet-600 dark:text-violet-400"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleAskAi}
-              className="inline-flex items-center gap-2 rounded-lg border border-violet-200 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10 px-3 py-2 text-[13px] font-medium text-violet-700 dark:text-violet-400 transition hover:bg-violet-100 dark:hover:bg-violet-500/20"
-            >
-              <Copy className="h-4 w-4" />
-              Ask AI về tab này
-            </button>
-            <button
-              type="button"
-              onClick={handleRefreshActiveTab}
-              disabled={activeLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${activeLoading ? 'animate-spin' : ''}`} />
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={handleAskAi} title="Sao chép câu hỏi mẫu để dán vào chatbot AI">
+              <Copy className="h-3.5 w-3.5" />
+              Hỏi AI về mục này
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleRefreshActiveTab} disabled={activeLoading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${activeLoading ? 'animate-spin' : ''}`} />
               Làm mới
-            </button>
-          </div>
+            </Button>
+          </>
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[240px_1fr] lg:items-start">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
-          <DomainNavItem
-            active={activeTab === 'reorder'}
-            onClick={() => setActiveTab('reorder')}
-            icon={PackagePlus}
-            label="Nhập thêm"
-            value={summary?.high_priority ?? 0}
-            hint={`${summary?.total_candidates ?? 0} đầu sách đang được xem xét`}
-            accent="violet"
-          />
-          <DomainNavItem
-            active={activeTab === 'weeding'}
-            onClick={() => setActiveTab('weeding')}
-            icon={Archive}
-            label="Thanh lý / chuyển kho"
-            value={weedingActionableCount}
-            hint="sách tồn kho lâu, không hoạt động"
-            accent="amber"
-          />
-          <DomainNavItem
-            active={activeTab === 'late-return'}
-            onClick={() => setActiveTab('late-return')}
-            icon={Clock}
-            label="Rủi ro trả trễ"
-            value={lateReturnHighCount ?? '—'}
-            hint="khoản mượn đang mở, nguy cơ cao"
-            accent="rose"
-          />
-          <DomainNavItem
-            active={activeTab === 'no-show'}
-            onClick={() => setActiveTab('no-show')}
-            icon={UserX}
-            label="Rủi ro bỏ lỡ đặt chỗ"
-            value={noShowHighCount ?? '—'}
-            hint="đặt chỗ đang chờ, nguy cơ cao"
-            accent="cyan"
-          />
-        </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <DomainNavItem
+          active={activeTab === 'reorder'}
+          onClick={() => setActiveTab('reorder')}
+          icon={PackagePlus}
+          label="Nhập thêm"
+          value={summary?.high_priority ?? 0}
+          hint={`ưu tiên cao · ${summary?.total_candidates ?? 0} đầu sách xem xét`}
+          accent="violet"
+        />
+        <DomainNavItem
+          active={activeTab === 'weeding'}
+          onClick={() => setActiveTab('weeding')}
+          icon={Archive}
+          label="Thanh lý / chuyển kho"
+          value={weedingActionableCount}
+          hint="sách tồn lâu, không hoạt động"
+          accent="amber"
+        />
+        <DomainNavItem
+          active={activeTab === 'late-return'}
+          onClick={() => setActiveTab('late-return')}
+          icon={Clock}
+          label="Rủi ro trả trễ"
+          value={lateReturnHighCount ?? '—'}
+          hint="khoản mượn đang mở, nguy cơ cao"
+          accent="rose"
+        />
+        <DomainNavItem
+          active={activeTab === 'no-show'}
+          onClick={() => setActiveTab('no-show')}
+          icon={UserX}
+          label="Bỏ lỡ đặt chỗ"
+          value={noShowHighCount ?? '—'}
+          hint="đặt chỗ đang chờ, nguy cơ cao"
+          accent="cyan"
+        />
+      </div>
 
-        <div className="space-y-4">
+      <div className="space-y-4">
         {activeTab === 'reorder' && (
-        <div className="space-y-4">
-          <SectionCard
-            title="Bộ lọc dự báo"
-            subtitle={data ? `Dữ liệu từ ${data.range.from} đến ${data.range.to}, lead time ${data.range.leadTimeDays} ngày` : 'Chọn khoảng thời gian và mức ưu tiên'}
-            icon={BrainCircuit}
-          >
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex rounded-lg border border-border bg-card p-1">
-                {dayOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setDays(option)}
-                    className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${
-                      days === option ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {option} ngày
-                  </button>
-                ))}
+          <div className="space-y-4">
+            <SectionCard
+              title="Bộ lọc dự báo"
+              subtitle={data ? `Dữ liệu từ ${data.range.from} đến ${data.range.to}, thời gian giao hàng ${data.range.leadTimeDays} ngày` : 'Chọn khoảng thời gian và mức ưu tiên'}
+              icon={BrainCircuit}
+            >
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                <div className="max-w-full overflow-x-auto">
+                  <SegmentedControl
+                    layoutId="reorder-days"
+                    value={String(days)}
+                    onChange={(value) => setDays(Number(value))}
+                    options={dayOptions.map((option) => ({ value: String(option), label: `${option} ngày` }))}
+                    className="w-max"
+                  />
+                </div>
+                <div className="max-w-full overflow-x-auto">
+                  <SegmentedControl
+                    layoutId="reorder-priority"
+                    value={priority}
+                    onChange={(value) => setPriority(value as PriorityFilter)}
+                    options={priorityOptions.map((option) => ({ value: option, label: PRIORITY_LABELS[option] }))}
+                    className="w-max"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  Hiển thị tối đa
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={limit}
+                    onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
+                    className="h-9 w-20 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  Ngân sách (đ)
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Không giới hạn"
+                    value={budgetVnd}
+                    onChange={(event) => {
+                      const raw = event.target.value;
+                      setBudgetVnd(raw === '' ? '' : Math.max(0, Number(raw) || 0));
+                    }}
+                    className="h-9 w-40 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
+                  />
+                </label>
               </div>
-              <select
-                value={priority}
-                onChange={(event) => setPriority(event.target.value as PriorityFilter)}
-                className="h-9 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
-              >
-                {priorityOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                Limit
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={limit}
-                  onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
-                  className="h-9 w-20 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
-                />
-              </label>
-              <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                Ngân sách (đ)
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="Không giới hạn"
-                  value={budgetVnd}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    setBudgetVnd(raw === '' ? '' : Math.max(0, Number(raw) || 0));
-                  }}
-                  className="h-9 w-36 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
-                />
-              </label>
-            </div>
-          </SectionCard>
+            </SectionCard>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Total candidates" value={summary?.total_candidates ?? 0} icon={BrainCircuit} variant="primary" />
-            <StatCard label="High priority" value={summary?.high_priority ?? 0} icon={AlertTriangle} variant="danger" />
-            <StatCard label="Medium priority" value={summary?.medium_priority ?? 0} icon={TrendingUp} variant="warning" />
-            <StatCard label="Suggested qty" value={summary?.estimated_total_reorder_qty ?? 0} icon={PackagePlus} variant="success" />
-            <StatCard label="Estimated cost" value={formatVnd(summary?.estimated_total_cost ?? 0)} icon={PackagePlus} variant="primary" />
-            {data?.budget ? (
-              <StatCard label="Ngân sách còn lại" value={formatVnd(data.budget.remaining_vnd)} icon={AlertTriangle} variant={data.budget.remaining_vnd <= 0 ? 'danger' : 'success'} />
-            ) : null}
-          </div>
+            <SummaryStrip
+              items={[
+                { label: 'Đầu sách xem xét', value: (summary?.total_candidates ?? 0).toLocaleString('vi-VN') },
+                { label: 'Ưu tiên cao', value: summary?.high_priority ?? 0, tone: (summary?.high_priority ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40' },
+                { label: 'Ưu tiên trung bình', value: summary?.medium_priority ?? 0, tone: 'text-amber-600 dark:text-amber-400' },
+                { label: 'Tổng số lượng đề xuất', value: (summary?.estimated_total_reorder_qty ?? 0).toLocaleString('vi-VN'), tone: 'text-emerald-600 dark:text-emerald-400' },
+                { label: 'Chi phí ước tính', value: formatVnd(summary?.estimated_total_cost ?? 0), tone: 'text-indigo-600 dark:text-indigo-400' },
+                ...(data?.budget
+                  ? [{ label: 'Ngân sách còn lại', value: formatVnd(data.budget.remaining_vnd), tone: data.budget.remaining_vnd <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }]
+                  : []),
+              ]}
+            />
 
-          <SectionCard
-            title="Danh sách sách nên xem xét nhập thêm"
-            subtitle="Sắp xếp theo mức ưu tiên, demand score và số lượng đề xuất"
-            icon={PackagePlus}
-            noPadding
-          >
-            {loading ? (
-              <div className="flex min-h-[260px] items-center justify-center">
-                <LoadingSpinner message="Đang phân tích nhu cầu..." />
-              </div>
-            ) : error ? (
-              <EmptyState
-                variant="error"
-                title="Không thể tải gợi ý nhập thêm"
-                description={error}
-                action={(
-                  <button type="button" onClick={() => void loadData()} className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white">
-                    Thử lại
-                  </button>
-                )}
-              />
-            ) : items.length === 0 ? (
-              <EmptyState title="Chưa có sách cần nhập thêm" description="Không có tín hiệu mượn, đặt chỗ hoặc thiếu tồn kho trong bộ lọc hiện tại." icon={PackagePlus} />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-[13px]">
-                  <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 font-semibold">Sách</th>
-                      <th className="px-3 py-3 font-semibold">Tồn &amp; nhu cầu</th>
-                      <th className="px-3 py-3 font-semibold">Dự báo 30d</th>
-                      <th className="px-3 py-3 font-semibold">Hết hàng sau</th>
-                      <th className="px-3 py-3 font-semibold">Ưu tiên</th>
-                      <th className="px-3 py-3 font-semibold">Đề xuất nhập</th>
-                      <th className="px-5 py-3 font-semibold">Lý do</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {items.map((item) => (
-                      <tr key={item.variant_id} className="align-top transition hover:bg-muted/40">
-                        <td className="px-5 py-4">
-                          <div className="max-w-[220px]">
-                            <p className="font-semibold text-foreground">{item.title || 'Chưa có tên sách'}</p>
-                            <p className="mt-1 text-[12px] text-muted-foreground">
+            <SectionCard
+              title="Sách nên xem xét nhập thêm"
+              subtitle="Sắp xếp theo mức ưu tiên, điểm nhu cầu và số lượng đề xuất"
+              icon={PackagePlus}
+              noPadding
+            >
+              {loading ? (
+                <div className="flex min-h-[260px] items-center justify-center">
+                  <LoadingSpinner message="Đang phân tích nhu cầu..." />
+                </div>
+              ) : error ? (
+                errorState(error, () => void loadData(), 'Không thể tải gợi ý nhập thêm')
+              ) : items.length === 0 ? (
+                <EmptyState title="Chưa có sách cần nhập thêm" description="Không có tín hiệu mượn, đặt chỗ hoặc thiếu tồn kho trong bộ lọc hiện tại." icon={PackagePlus} />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed text-left text-[13px]">
+                    <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Sách</th>
+                        <th className="hidden w-[190px] px-3 py-3 font-semibold md:table-cell">Nhu cầu</th>
+                        <th className="w-[170px] px-3 py-3 font-semibold">Ưu tiên</th>
+                        <th className="w-[170px] px-4 py-3 font-semibold">Đề xuất nhập</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {items.map((item) => (
+                        <tr key={item.variant_id} className="align-top transition hover:bg-muted/40">
+                          <td className="px-4 py-3">
+                            <p className="truncate font-semibold text-foreground" title={item.title || undefined}>{item.title || 'Chưa có tên sách'}</p>
+                            <p className="truncate text-[12px] text-muted-foreground">
                               {[item.author, item.category, item.isbn].filter(Boolean).join(' · ') || 'Chưa có metadata'}
                             </p>
-                          </div>
-                        </td>
-                        <td className="px-3 py-4 text-[12px] leading-relaxed">
-                          <p><span className="font-semibold text-foreground">{item.available_qty}</span> <span className="text-muted-foreground">còn lại</span></p>
-                          <p className="text-muted-foreground">{item.borrow_count} mượn · {item.reservation_count} đặt chỗ</p>
-                        </td>
-                        <td className="px-3 py-4">
-                          <p className="font-semibold text-foreground">{item.forecast_30d}</p>
-                          {item.seasonal_event ? (
-                            <StatusBadge label={`${item.seasonal_event} · ${item.seasonal_index}x`} variant="info" dot />
-                          ) : item.seasonal_index !== 1 ? (
-                            <span className="text-[12px] text-muted-foreground">{item.seasonal_index}x mùa vụ</span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-4">{formatStockoutDays(item.estimated_days_until_stockout)}</td>
-                        <td className="px-3 py-4">
-                          <StatusBadge label={item.priority} variant={priorityVariant(item.priority)} dot />
-                        </td>
-                        <td className="px-3 py-4">
-                          <p className="font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty} cuốn</p>
-                          <p className="text-muted-foreground">{formatVnd(item.estimated_cost)}</p>
-                          {data?.budget ? (
-                            <StatusBadge label={item.within_budget ? 'Trong ngân sách' : 'Vượt ngân sách'} variant={item.within_budget ? 'success' : 'danger'} dot />
-                          ) : null}
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="line-clamp-2 max-w-[260px] text-[12px] leading-relaxed text-muted-foreground" title={item.reason}>{item.reason}</p>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </SectionCard>
-        </div>
+                            <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-muted-foreground" title={item.reason}>{item.reason}</p>
+                            <p className="mt-1 text-[12px] text-muted-foreground md:hidden">
+                              Còn {item.available_qty} · dự báo 30 ngày: {item.forecast_30d}
+                            </p>
+                          </td>
+                          <td className="hidden px-3 py-3 text-[12px] leading-relaxed md:table-cell">
+                            <p><span className="font-semibold text-foreground">{item.available_qty}</span> <span className="text-muted-foreground">còn lại</span></p>
+                            <p className="text-muted-foreground">{item.borrow_count} mượn · {item.reservation_count} đặt chỗ</p>
+                            <p className="mt-1 text-foreground">Dự báo 30 ngày: <span className="font-semibold">{item.forecast_30d}</span></p>
+                            {item.seasonal_event ? (
+                              <div className="mt-1"><StatusBadge label={`${item.seasonal_event} · ${item.seasonal_index}x`} variant="info" dot /></div>
+                            ) : item.seasonal_index !== 1 ? (
+                              <p className="text-muted-foreground">{item.seasonal_index}x mùa vụ</p>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-3">
+                            <StatusBadge label={PRIORITY_LABELS[item.priority as PriorityFilter] ?? item.priority} variant={priorityVariant(item.priority)} dot />
+                            <p className="mt-1.5 text-[12px] text-muted-foreground">Hết hàng sau: {formatStockoutDays(item.estimated_days_until_stockout)}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty} cuốn</p>
+                            <p className="text-[12px] text-muted-foreground">{formatVnd(item.estimated_cost)}</p>
+                            {data?.budget ? (
+                              <div className="mt-1"><StatusBadge label={item.within_budget ? 'Trong ngân sách' : 'Vượt ngân sách'} variant={item.within_budget ? 'success' : 'danger'} dot /></div>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+          </div>
         )}
 
         {activeTab === 'weeding' && (
@@ -630,50 +686,43 @@ export function ReorderSuggestionsPage() {
                 <LoadingSpinner message="Đang kiểm tra tồn kho lâu..." />
               </div>
             ) : weedingError ? (
-              <EmptyState
-                variant="error"
-                title="Không thể tải dữ liệu"
-                description={weedingError}
-                action={(
-                  <button type="button" onClick={() => void loadWeedingSuggestions()} className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white">
-                    Thử lại
-                  </button>
-                )}
-              />
+              errorState(weedingError, () => void loadWeedingSuggestions())
             ) : weedingItems.length === 0 ? (
               <EmptyState title="Không có sách nào cần thanh lý" description="Tất cả sách còn tồn kho đều có hoạt động mượn/di chuyển trong 180 ngày gần đây." icon={Archive} />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-left text-[13px]">
+                <table className="w-full table-fixed text-left text-[13px]">
                   <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                     <tr>
-                      <th className="px-5 py-3 font-semibold">Title</th>
-                      <th className="px-3 py-3 font-semibold">Kho</th>
-                      <th className="px-3 py-3 font-semibold">Tồn kho</th>
-                      <th className="px-3 py-3 font-semibold">Không hoạt động</th>
-                      <th className="px-3 py-3 font-semibold">Giá trị tồn đọng</th>
-                      <th className="px-3 py-3 font-semibold">Đề xuất</th>
+                      <th className="px-4 py-3 font-semibold">Sách</th>
+                      <th className="hidden w-[190px] px-3 py-3 font-semibold sm:table-cell">Tồn kho</th>
+                      <th className="hidden w-[160px] px-3 py-3 font-semibold md:table-cell">Giá trị tồn đọng</th>
+                      <th className="w-[150px] px-4 py-3 font-semibold">Đề xuất</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {weedingItems.map((item) => (
-                      <tr key={`${item.variant_id}-${item.warehouse_id}`} className="align-top transition hover:bg-muted/40">
-                        <td className="px-5 py-4 font-semibold text-foreground">{item.title}</td>
-                        <td className="px-3 py-4">{item.warehouse_name}</td>
-                        <td className="px-3 py-4">{item.on_hand_qty}</td>
-                        <td className="px-3 py-4">
-                          <StatusBadge
-                            label={item.days_since_last_activity === null ? 'Chưa từng' : `${item.days_since_last_activity} ngày`}
-                            variant={severityVariant(item.severity)}
-                            dot
-                          />
-                        </td>
-                        <td className="px-3 py-4 font-semibold">{formatVnd(item.tied_up_value)}</td>
-                        <td className="px-3 py-4">
-                          <StatusBadge label={actionLabel(item.suggested_action)} variant={item.suggested_action === 'REDISTRIBUTE' ? 'info' : 'danger'} dot />
-                        </td>
-                      </tr>
-                    ))}
+                    {weedingItems.map((item) => {
+                      const idle = item.days_since_last_activity === null ? 'Chưa từng' : `${item.days_since_last_activity} ngày`;
+                      return (
+                        <tr key={`${item.variant_id}-${item.warehouse_id}`} className="align-top transition hover:bg-muted/40">
+                          <td className="px-4 py-3">
+                            <p className="truncate font-semibold text-foreground" title={item.title}>{item.title}</p>
+                            <p className="truncate text-[12px] text-muted-foreground">{item.warehouse_name}</p>
+                            <p className="mt-1 text-[12px] text-muted-foreground sm:hidden">
+                              {item.on_hand_qty} bản · không hoạt động {idle} · {formatVnd(item.tied_up_value)}
+                            </p>
+                          </td>
+                          <td className="hidden px-3 py-3 sm:table-cell">
+                            <p className="font-semibold text-foreground">{item.on_hand_qty} bản</p>
+                            <div className="mt-1"><StatusBadge label={`Không hoạt động: ${idle}`} variant={severityVariant(item.severity)} dot /></div>
+                          </td>
+                          <td className="hidden px-3 py-3 font-semibold md:table-cell">{formatVnd(item.tied_up_value)}</td>
+                          <td className="px-4 py-3">
+                            <StatusBadge label={actionLabel(item.suggested_action)} variant={item.suggested_action === 'REDISTRIBUTE' ? 'info' : 'danger'} dot />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -693,16 +742,7 @@ export function ReorderSuggestionsPage() {
                 <LoadingSpinner message="Đang chấm điểm rủi ro..." />
               </div>
             ) : lateReturnError ? (
-              <EmptyState
-                variant="error"
-                title="Không thể tải dữ liệu"
-                description={lateReturnError}
-                action={(
-                  <button type="button" onClick={() => void loadLateReturnRisk()} className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white">
-                    Thử lại
-                  </button>
-                )}
-              />
+              errorState(lateReturnError, () => void loadLateReturnRisk())
             ) : !lateReturnReady ? (
               <EmptyState
                 title="Chưa đủ dữ liệu để huấn luyện mô hình"
@@ -712,36 +752,23 @@ export function ReorderSuggestionsPage() {
             ) : (lateReturn?.items.length ?? 0) === 0 ? (
               <EmptyState title="Không có khoản mượn nào đang mở" description="Hiện không có khoản mượn nào cần chấm điểm rủi ro trả trễ." icon={Clock} />
             ) : (
-              <div className="space-y-4 px-5 pb-5 pt-4">
+              <div className="space-y-4 px-4 pb-5 pt-4 sm:px-5">
                 <ModelQualityStrip evaluation={lateReturn?.evaluation} />
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full min-w-[900px] text-left text-[13px]">
-                    <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Khách hàng</th>
-                        <th className="px-3 py-3 font-semibold">Sách</th>
-                        <th className="px-3 py-3 font-semibold">Ngày mượn</th>
-                        <th className="px-3 py-3 font-semibold">Hạn trả</th>
-                        <th className="px-3 py-3 font-semibold">Điểm rủi ro</th>
-                        <th className="px-3 py-3 font-semibold">Mức độ</th>
-                        <th className="px-4 py-3 font-semibold">Yếu tố chính</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {lateReturn?.items.map((item) => (
-                        <tr key={item.loan_item_id} className="align-top transition hover:bg-muted/40">
-                          <td className="px-4 py-3 font-semibold text-foreground">{item.customer_name || 'Chưa xác định'}</td>
-                          <td className="px-3 py-3 text-muted-foreground">{item.title || 'Chưa xác định'}</td>
-                          <td className="px-3 py-3">{formatDateTime(item.borrow_date)}</td>
-                          <td className="px-3 py-3">{formatDateTime(item.due_date)}</td>
-                          <td className="px-3 py-3"><RiskMeter score={item.risk_score} band={item.risk_band} /></td>
-                          <td className="px-3 py-3"><StatusBadge label={riskBandLabel(item.risk_band)} variant={riskBandVariant(item.risk_band)} dot /></td>
-                          <td className="px-4 py-3"><TopFactors factors={item.top_factors} labels={LATE_RETURN_FACTOR_LABELS} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <RiskTable
+                  factorLabels={LATE_RETURN_FACTOR_LABELS}
+                  rows={(lateReturn?.items ?? []).map((item) => ({
+                    key: item.loan_item_id,
+                    customer: item.customer_name || 'Chưa xác định',
+                    title: item.title || 'Chưa xác định',
+                    fromLabel: 'Ngày mượn',
+                    from: item.borrow_date,
+                    toLabel: 'Hạn trả',
+                    to: item.due_date,
+                    score: item.risk_score,
+                    band: item.risk_band,
+                    factors: item.top_factors,
+                  }))}
+                />
               </div>
             )}
           </SectionCard>
@@ -759,16 +786,7 @@ export function ReorderSuggestionsPage() {
                 <LoadingSpinner message="Đang chấm điểm rủi ro..." />
               </div>
             ) : noShowError ? (
-              <EmptyState
-                variant="error"
-                title="Không thể tải dữ liệu"
-                description={noShowError}
-                action={(
-                  <button type="button" onClick={() => void loadNoShowRisk()} className="rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-medium text-white">
-                    Thử lại
-                  </button>
-                )}
-              />
+              errorState(noShowError, () => void loadNoShowRisk())
             ) : !noShowReady ? (
               <EmptyState
                 title="Chưa đủ dữ liệu để huấn luyện mô hình"
@@ -778,41 +796,27 @@ export function ReorderSuggestionsPage() {
             ) : (noShow?.items.length ?? 0) === 0 ? (
               <EmptyState title="Không có đặt chỗ nào đang chờ lấy" description="Hiện không có đặt chỗ nào cần chấm điểm rủi ro bỏ lỡ." icon={UserX} />
             ) : (
-              <div className="space-y-4 px-5 pb-5 pt-4">
+              <div className="space-y-4 px-4 pb-5 pt-4 sm:px-5">
                 <ModelQualityStrip evaluation={noShow?.evaluation} />
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full min-w-[900px] text-left text-[13px]">
-                    <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Khách hàng</th>
-                        <th className="px-3 py-3 font-semibold">Sách</th>
-                        <th className="px-3 py-3 font-semibold">Ngày đặt</th>
-                        <th className="px-3 py-3 font-semibold">Hết hạn lấy</th>
-                        <th className="px-3 py-3 font-semibold">Điểm rủi ro</th>
-                        <th className="px-3 py-3 font-semibold">Mức độ</th>
-                        <th className="px-4 py-3 font-semibold">Yếu tố chính</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {noShow?.items.map((item) => (
-                        <tr key={item.reservation_id} className="align-top transition hover:bg-muted/40">
-                          <td className="px-4 py-3 font-semibold text-foreground">{item.customer_name || 'Chưa xác định'}</td>
-                          <td className="px-3 py-3 text-muted-foreground">{item.title || 'Chưa xác định'}</td>
-                          <td className="px-3 py-3">{formatDateTime(item.reserved_at)}</td>
-                          <td className="px-3 py-3">{formatDateTime(item.expires_at)}</td>
-                          <td className="px-3 py-3"><RiskMeter score={item.risk_score} band={item.risk_band} /></td>
-                          <td className="px-3 py-3"><StatusBadge label={riskBandLabel(item.risk_band)} variant={riskBandVariant(item.risk_band)} dot /></td>
-                          <td className="px-4 py-3"><TopFactors factors={item.top_factors} labels={NO_SHOW_FACTOR_LABELS} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <RiskTable
+                  factorLabels={NO_SHOW_FACTOR_LABELS}
+                  rows={(noShow?.items ?? []).map((item) => ({
+                    key: item.reservation_id,
+                    customer: item.customer_name || 'Chưa xác định',
+                    title: item.title || 'Chưa xác định',
+                    fromLabel: 'Ngày đặt',
+                    from: item.reserved_at,
+                    toLabel: 'Hết hạn lấy',
+                    to: item.expires_at,
+                    score: item.risk_score,
+                    band: item.risk_band,
+                    factors: item.top_factors,
+                  }))}
+                />
               </div>
             )}
           </SectionCard>
         )}
-        </div>
       </div>
     </motion.div>
   );

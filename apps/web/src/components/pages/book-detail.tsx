@@ -3,7 +3,7 @@ import { PageWrapper, FadeItem } from '../motion-utils';
 import { motion } from 'motion/react';
 import { StatusBadge } from '../status-badge';
 import { NavLink, useParams } from 'react-router';
-import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '@/services/ai';
 import { bookService } from '@/services/book';
@@ -62,6 +62,25 @@ function formatDescriptionText(value?: string | null): string {
   return value.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+const LOW_STOCK_THRESHOLD = 10;
+const DESCRIPTION_PREVIEW_CHARS = 420;
+
+function stockTone(total: number): { label: string; variant: 'danger' | 'warning' | 'success'; text: string } {
+  if (total <= 0) return { label: 'Hết hàng', variant: 'danger', text: 'text-destructive' };
+  if (total <= LOW_STOCK_THRESHOLD) return { label: 'Sắp hết', variant: 'warning', text: 'text-amber-600 dark:text-amber-400' };
+  return { label: 'Còn hàng', variant: 'success', text: 'text-emerald-600 dark:text-emerald-400' };
+}
+
+function DetailItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  const empty = value === '-';
+  return (
+    <div className="min-w-0">
+      <dt className="text-[12px] text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 break-words text-[13px] ${empty ? 'text-muted-foreground/60' : 'font-medium text-foreground'} ${mono ? 'font-mono' : ''}`}>{value}</dd>
+    </div>
+  );
+}
+
 function toEditForm(book: BookDetailData): EditForm {
   return {
     title: book.title || "",
@@ -86,6 +105,7 @@ export function BookDetailPage() {
   const [book, setBook] = useState<BookDetailData | null>(null);
   const [isApplyingAiMetadata, setIsApplyingAiMetadata] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const editModalRef = useRef<HTMLDivElement>(null);
   const closeEditModal = useCallback(() => setShowEditModal(false), []);
@@ -112,7 +132,7 @@ export function BookDetailPage() {
       setBook(payload);
       setEditForm(toEditForm(payload));
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Cannot load book details"));
+      toast.error(getApiErrorMessage(error, "Không tải được thông tin sách"));
       setBook(null);
     } finally {
       setLoading(false);
@@ -140,14 +160,14 @@ export function BookDetailPage() {
   const handleApplyAiMetadata = async () => {
     const isbnOrBarcode = normalizeIsbnOrBarcode(editForm.isbn_or_barcode);
     if (!isbnOrBarcode) {
-      toast.error("Please enter ISBN before using AI");
+      toast.error("Vui lòng nhập ISBN trước khi dùng AI");
       return;
     }
     try {
       setIsApplyingAiMetadata(true);
       const lookup = await aiService.lookupBookByIsbn({ isbn: isbnOrBarcode, generateVietnameseSummary: false });
       if (!lookup?.found) {
-        toast.info("No metadata found from ISBN.");
+        toast.info("Không tìm thấy thông tin sách theo ISBN này.");
         return;
       }
       setEditForm((prev) => ({
@@ -163,9 +183,9 @@ export function BookDetailPage() {
         description: lookup.description?.trim() || prev.description,
         cover_image_url: lookup.thumbnail || prev.cover_image_url,
       }));
-      toast.success("Metadata applied from ISBN");
+      toast.success("Đã điền thông tin từ ISBN");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Cannot fetch AI metadata"));
+      toast.error(getApiErrorMessage(error, "Không lấy được thông tin từ AI"));
     } finally {
       setIsApplyingAiMetadata(false);
     }
@@ -173,7 +193,7 @@ export function BookDetailPage() {
 
   const handleGenerateSummaryVi = async () => {
     if (!editForm.title.trim()) {
-      toast.error("Title is required before generating AI summary");
+      toast.error("Cần có tên sách trước khi tạo tóm tắt AI");
       return;
     }
     setSummaryLoading(true);
@@ -185,9 +205,9 @@ export function BookDetailPage() {
         categories: editForm.category_name ? [editForm.category_name] : [],
       });
       setEditForm((prev) => ({ ...prev, summary_vi: result.summaryVi || prev.summary_vi }));
-      toast.success(`AI summary created (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
+      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
     } catch {
-      toast.error("Cannot generate summary. Please try again.");
+      toast.error("Không tạo được tóm tắt. Vui lòng thử lại.");
     } finally {
       setSummaryLoading(false);
     }
@@ -196,7 +216,7 @@ export function BookDetailPage() {
   const handleSaveBook = async () => {
     if (!id || !book) return;
     const title = editForm.title.trim();
-    if (!title) { toast.error("Title is required"); return; }
+    if (!title) { toast.error("Tên sách là bắt buộc"); return; }
 
     const isbnOrBarcode = editForm.isbn_or_barcode.trim();
     const payload: Record<string, unknown> = {
@@ -226,9 +246,9 @@ export function BookDetailPage() {
       setBook(updated);
       setEditForm(toEditForm(updated));
       setShowEditModal(false);
-      toast.success("Book updated successfully");
+      toast.success("Đã cập nhật sách");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Failed to update book"));
+      toast.error(getApiErrorMessage(error, "Cập nhật sách thất bại"));
     } finally {
       setIsSaving(false);
     }
@@ -237,10 +257,10 @@ export function BookDetailPage() {
   if (loading) {
     return (
       <PageWrapper>
-        <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
           <div className="animate-pulse space-y-6">
             <div className="h-4 bg-muted rounded w-1/4" />
-            <div className="h-40 bg-muted rounded-xl" />
+            <div className="h-48 bg-muted rounded-xl" />
             <div className="h-64 bg-muted rounded-xl" />
           </div>
         </div>
@@ -251,160 +271,201 @@ export function BookDetailPage() {
   if (!book) {
     return (
       <PageWrapper>
-        <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-          <p className="text-[13px] text-muted-foreground">Book not found.</p>
-          <NavLink to="/catalog" className="text-primary hover:underline text-[13px] mt-2 inline-block">Back to catalog</NavLink>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+          <p className="text-[13px] text-muted-foreground">Không tìm thấy sách này.</p>
+          <NavLink to="/catalog" className="text-primary hover:underline text-[13px] mt-2 inline-block">Quay lại danh mục</NavLink>
         </div>
       </PageWrapper>
     );
   }
 
+  const tone = stockTone(totalStock);
+  const locations = book.locations || [];
+  const description = formatDescriptionText(book.description);
+  const hasDescription = description !== '-';
+  const longDescription = hasDescription && description.length > DESCRIPTION_PREVIEW_CHARS;
+  const shownDescription = longDescription && !descriptionExpanded
+    ? `${description.slice(0, DESCRIPTION_PREVIEW_CHARS).trimEnd()}…`
+    : description;
+  const missingFields = [
+    !book.author && 'tác giả',
+    !book.publisher && 'nhà xuất bản',
+    !book.publish_year && 'năm xuất bản',
+    !book.category && 'thể loại',
+    !hasDescription && 'mô tả',
+    !book.cover_image_url && 'ảnh bìa',
+  ].filter(Boolean) as string[];
+
   return (
-    <PageWrapper className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+    <PageWrapper className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <FadeItem>
         <NavLink to="/catalog" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Catalog
+          <ArrowLeft className="w-3.5 h-3.5" /> Quay lại danh mục
         </NavLink>
       </FadeItem>
 
-      {/* Book Header */}
+      {/* Hero: who the book is, and whether we have it */}
       <FadeItem>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-4">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row">
             {book.cover_image_url ? (
-              <img src={book.cover_image_url} alt={book.title} className="w-16 h-20 rounded-[12px] border border-blue-200/40 dark:border-blue-500/20 shrink-0 shadow-sm object-cover" />
+              <img src={book.cover_image_url} alt={`Bìa sách ${book.title}`} className="h-44 w-32 shrink-0 rounded-xl border border-border object-cover shadow-sm sm:h-52 sm:w-36" />
             ) : (
-              <div className="w-16 h-20 rounded-[12px] bg-gradient-to-br from-blue-100 to-teal-50 dark:from-blue-500/15 dark:to-teal-500/10 flex items-center justify-center border border-blue-200/40 dark:border-blue-500/20 shrink-0">
-                <BookOpen className="w-6 h-6 text-blue-500 dark:text-blue-400" />
+              <div className="flex h-44 w-32 shrink-0 items-center justify-center rounded-xl border border-blue-200/40 bg-gradient-to-br from-blue-100 to-teal-50 dark:border-blue-500/20 dark:from-blue-500/15 dark:to-teal-500/10 sm:h-52 sm:w-36">
+                <BookOpen className="h-8 w-8 text-blue-500 dark:text-blue-400" aria-hidden="true" />
               </div>
             )}
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-[22px] font-bold tracking-tight text-foreground">{book.title}</h1>
-                <StatusBadge label={book.is_incomplete ? "Incomplete" : "Complete"} variant={book.is_incomplete ? "warning" : "success"} dot />
+
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex flex-wrap items-center gap-2">
+                {book.category ? <StatusBadge label={book.category} variant="info" /> : null}
+                <StatusBadge label={book.is_incomplete ? 'Chưa hoàn chỉnh' : 'Hoàn chỉnh'} variant={book.is_incomplete ? 'warning' : 'success'} dot />
               </div>
-              <p className="text-[13px] text-muted-foreground mt-0.5">{book.subtitle || "-"}</p>
-              <div className="flex items-center gap-4 mt-2 text-[12px] text-muted-foreground">
-                <span>{book.author || "-"}</span>
-                <span className="text-muted-foreground/40">|</span>
-                <span>{book.publisher || "-"}{book.publish_year ? `, ${book.publish_year}` : ""}</span>
-                <span className="text-muted-foreground/40">|</span>
-                <span className="font-mono">{book.isbn || "-"}</span>
+              <h1 className="mt-2 text-[24px] font-bold leading-tight tracking-tight text-foreground">{book.title}</h1>
+              {book.subtitle ? <p className="mt-1 text-[14px] text-muted-foreground">{book.subtitle}</p> : null}
+              <p className="mt-3 text-[14px] text-foreground">{book.author || <span className="text-muted-foreground">Chưa có tác giả</span>}</p>
+              <p className="text-[13px] text-muted-foreground">
+                {[book.publisher, book.publish_year ? String(book.publish_year) : null].filter(Boolean).join(', ') || 'Chưa có nhà xuất bản'}
+              </p>
+              {book.isbn ? <p className="mt-2 font-mono text-[12px] text-muted-foreground">ISBN {book.isbn}</p> : null}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2 sm:mt-auto sm:pt-4">
+                {canEditBook ? (
+                  <button onClick={() => setShowEditModal(true)}
+                    className="inline-flex items-center gap-2 rounded-[10px] border border-blue-100 bg-card px-3.5 py-2 text-[13px] text-blue-700 shadow-sm transition-all hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
+                    <Edit className="h-3.5 w-3.5" /> Chỉnh sửa
+                  </button>
+                ) : null}
+                {canCreateReceivingDraft ? (
+                  <NavLink to="/orders/new"
+                    className="inline-flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-2 text-[13px] text-white shadow-md shadow-blue-500/15 transition-all hover:shadow-lg">
+                    <ScanBarcode className="h-3.5 w-3.5" /> Tạo phiếu nhập
+                  </NavLink>
+                ) : null}
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {canEditBook ? (
-            <button onClick={() => setShowEditModal(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10 transition-all shadow-sm">
-              <Edit className="w-3.5 h-3.5" /> Edit
-            </button>
-            ) : null}
-            {canCreateReceivingDraft ? (
-            <NavLink to="/orders/new"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] shadow-md shadow-blue-500/15 hover:shadow-lg transition-all">
-              <ScanBarcode className="w-3.5 h-3.5" /> Create Receipt
-            </NavLink>
-            ) : null}
+
+            <div className="flex shrink-0 flex-row items-baseline gap-2 border-t border-border pt-4 sm:w-36 sm:flex-col sm:items-end sm:gap-0 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0 sm:text-right">
+              <p className={`font-mono text-[40px] font-bold leading-none tabular-nums ${tone.text}`}>{totalStock}</p>
+              <p className="text-[12px] text-muted-foreground sm:mt-1">bản trong kho</p>
+              <div className="ml-auto sm:ml-0 sm:mt-2"><StatusBadge label={tone.label} variant={tone.variant} dot /></div>
+            </div>
           </div>
         </div>
       </FadeItem>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left: Metadata */}
-        <div className="lg:col-span-2 space-y-5">
+      {book.is_incomplete ? (
+        <FadeItem>
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p className="flex-1">
+              Sách này chưa hoàn chỉnh{missingFields.length > 0 ? <>: còn thiếu <span className="font-semibold">{missingFields.join(', ')}</span></> : null}.
+              {canEditBook ? ' Bổ sung thông tin để sách hiển thị đầy đủ trong danh mục.' : ''}
+            </p>
+            {canEditBook ? (
+              <button onClick={() => setShowEditModal(true)} className="shrink-0 font-semibold underline underline-offset-4 hover:opacity-80">Bổ sung</button>
+            ) : null}
+          </div>
+        </FadeItem>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-              <h3 className="text-[14px] font-semibold mb-4">Book Metadata</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: "ISBN / Barcode", value: book.isbn || "-", mono: true },
-                  { label: "Author", value: book.author || "-" },
-                  { label: "Publisher", value: book.publisher || "-" },
-                  { label: "Year", value: book.publish_year ? String(book.publish_year) : "-" },
-                  { label: "Language", value: book.language || "vi" },
-                  { label: "Category", value: book.category || "-" },
-                  { label: "List Price", value: formatCurrency(Number(book.list_price || 0)) },
-                  { label: "Unit Cost", value: formatCurrency(Number(book.unit_cost || 0)) },
-                ].map((meta) => (
-                  <div key={meta.label}>
-                    <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">{meta.label}</div>
-                    <div className={`text-[13px] font-semibold text-foreground ${meta.mono ? "font-mono" : ""}`}>{meta.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-4 border-t border-border">
-                <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">Description</div>
-                <p className="text-[13px] text-muted-foreground whitespace-pre-line leading-relaxed">{formatDescriptionText(book.description)}</p>
-              </div>
-              {book.summary_vi && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">AI Summary (Vietnamese)</div>
-                  <p className="text-[13px] text-muted-foreground whitespace-pre-line leading-relaxed">{formatDescriptionText(book.summary_vi)}</p>
-                </div>
+            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none sm:p-6">
+              <h2 className="text-[15px] font-semibold">Giới thiệu</h2>
+              {hasDescription ? (
+                <>
+                  <p className="mt-3 whitespace-pre-line text-[14px] leading-relaxed text-foreground/80">{shownDescription}</p>
+                  {longDescription ? (
+                    <button
+                      type="button"
+                      onClick={() => setDescriptionExpanded((open) => !open)}
+                      aria-expanded={descriptionExpanded}
+                      className="mt-2 text-[13px] font-medium text-primary hover:underline"
+                    >
+                      {descriptionExpanded ? 'Thu gọn' : 'Xem thêm'}
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-3 text-[13px] text-muted-foreground">Chưa có mô tả cho sách này.</p>
               )}
-            </div>
+
+              {book.summary_vi ? (
+                <div className="mt-5 rounded-lg border border-cyan-200/60 bg-cyan-50/50 p-4 dark:border-cyan-500/20 dark:bg-cyan-500/5">
+                  <p className="flex items-center gap-1.5 text-[12px] font-semibold text-cyan-700 dark:text-cyan-400">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Tóm tắt do AI tạo (tiếng Việt)
+                  </p>
+                  <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-foreground/80">{formatDescriptionText(book.summary_vi)}</p>
+                </div>
+              ) : null}
+            </section>
           </FadeItem>
 
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4">
-                <div className="flex items-center gap-2.5">
-                  <h3 className="text-[14px] font-semibold">Inventory by Location</h3>
-                  <StatusBadge label={`${totalStock} total`} variant="info" />
-                </div>
+            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <h2 className="text-[15px] font-semibold">Tồn kho theo vị trí</h2>
+                <StatusBadge label={`${totalStock} bản`} variant="info" />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      {["Warehouse", "Location", "Qty"].map((header) => (
-                        <th key={header} className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">{header}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(book.locations || []).length === 0 ? (
-                      <tr><td colSpan={3} className="px-5 py-8 text-center text-[12px] text-muted-foreground">No inventory records found.</td></tr>
-                    ) : (
-                      (book.locations || []).map((location, index) => (
-                        <tr key={`${location.warehouse_name}-${location.location_code}-${index}`} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="px-5 py-3.5 text-[13px] font-medium">{location.warehouse_name || "-"}</td>
-                          <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{location.location_code || "-"}</td>
-                          <td className="px-5 py-3.5 text-[14px] font-bold">{location.quantity}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              {locations.length === 0 ? (
+                <p className="border-t border-border px-5 py-8 text-center text-[13px] text-muted-foreground">Chưa có bản nào của sách này trong kho.</p>
+              ) : (
+                <ul className="divide-y divide-border border-t border-border">
+                  {locations.map((location, index) => {
+                    const share = totalStock > 0 ? Math.round((Number(location.quantity || 0) / totalStock) * 100) : 0;
+                    return (
+                      <li key={`${location.warehouse_name}-${location.location_code}-${index}`} className="flex items-center gap-4 px-5 py-3">
+                        <MapPin className="h-4 w-4 shrink-0 text-teal-500 dark:text-teal-400" aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-medium text-foreground">{location.warehouse_name || '-'}</p>
+                          <p className="truncate font-mono text-[12px] text-muted-foreground">{location.location_code || '-'}</p>
+                        </div>
+                        <div className="hidden w-24 sm:block" aria-hidden="true">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div className="h-full rounded-full bg-teal-500" style={{ width: `${share}%` }} />
+                          </div>
+                        </div>
+                        <span className="w-12 text-right font-mono text-[15px] font-bold tabular-nums">{location.quantity}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </FadeItem>
         </div>
 
-        {/* Right: Stock Summary */}
         <div className="space-y-5">
           <FadeItem>
-            <div className="rounded-xl border border-border bg-gradient-to-br from-blue-50/80 to-teal-50/50 dark:from-blue-500/10 dark:to-teal-500/10 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-              <h3 className="text-[14px] font-semibold mb-3">Stock Summary</h3>
-              <div className="text-center py-2">
-                <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}
-                  className="text-[42px] bg-gradient-to-r from-blue-600 to-teal-600 bg-clip-text text-transparent tracking-[-0.03em]"
-                  style={{ fontWeight: 800, lineHeight: 1 }}>
-                  {totalStock}
-                </motion.div>
-                <div className="text-[12px] text-muted-foreground mt-1">total units in stock</div>
-              </div>
-              <div className="space-y-1.5 mt-3">
-                {(book.locations || []).slice(0, 5).map((location, index) => (
-                  <div key={`${location.warehouse_name}-${location.location_code}-${index}`}
-                    className="flex items-center justify-between text-[12px] py-1.5 px-2 rounded-[7px] hover:bg-white/60 dark:hover:bg-white/5 transition-colors">
-                    <span className="text-muted-foreground flex items-center gap-1.5"><MapPin className="w-3 h-3 text-teal-500 dark:text-teal-400" />{location.warehouse_name} / {location.location_code}</span>
-                    <span className="text-blue-700 dark:text-blue-400 font-semibold">{location.quantity}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+              <h2 className="text-[15px] font-semibold">Thông tin chi tiết</h2>
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
+                <DetailItem label="ISBN / Mã vạch" value={book.isbn || '-'} mono />
+                <DetailItem label="Ngôn ngữ" value={book.language || 'vi'} />
+                <DetailItem label="Tác giả" value={book.author || '-'} />
+                <DetailItem label="Nhà xuất bản" value={book.publisher || '-'} />
+                <DetailItem label="Năm xuất bản" value={book.publish_year ? String(book.publish_year) : '-'} />
+                <DetailItem label="Thể loại" value={book.category || '-'} />
+              </dl>
+            </section>
+          </FadeItem>
+
+          <FadeItem>
+            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+              <h2 className="text-[15px] font-semibold">Giá</h2>
+              <dl className="mt-4 space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[13px] text-muted-foreground">Giá bìa</dt>
+                  <dd className="font-mono text-[15px] font-bold tabular-nums">{formatCurrency(Number(book.list_price || 0))}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[13px] text-muted-foreground">Giá vốn</dt>
+                  <dd className="font-mono text-[13px] tabular-nums text-muted-foreground">{formatCurrency(Number(book.unit_cost || 0))}</dd>
+                </div>
+              </dl>
+            </section>
           </FadeItem>
         </div>
       </div>
@@ -415,31 +476,31 @@ export function BookDetailPage() {
           <motion.div ref={editModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             className="w-full max-w-3xl rounded-2xl bg-card p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}>
-            <h3 id="book-edit-modal-title" className="mb-5 text-[16px] font-semibold">Edit Book Information</h3>
+            <h3 id="book-edit-modal-title" className="mb-5 text-[16px] font-semibold">Chỉnh sửa thông tin sách</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Title *</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Tên sách *</label>
                   <input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Subtitle</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Phụ đề</label>
                   <input value={editForm.subtitle} onChange={(e) => setEditForm((p) => ({ ...p, subtitle: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Author</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Tác giả</label>
                   <input value={editForm.author_name} onChange={(e) => setEditForm((p) => ({ ...p, author_name: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Publisher</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Nhà xuất bản</label>
                   <input value={editForm.publisher_name} onChange={(e) => setEditForm((p) => ({ ...p, publisher_name: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Category</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Thể loại</label>
                   <input value={editForm.category_name} onChange={(e) => setEditForm((p) => ({ ...p, category_name: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
@@ -449,46 +510,46 @@ export function BookDetailPage() {
                     <button type="button" onClick={() => void handleApplyAiMetadata()} disabled={isApplyingAiMetadata}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
                       <Sparkles className="w-3.5 h-3.5" />
-                      {isApplyingAiMetadata ? "Loading..." : "AI Fill"}
+                      {isApplyingAiMetadata ? "Đang tải..." : "AI điền giúp"}
                     </button>
                   </div>
                   <input value={editForm.isbn_or_barcode} onChange={(e) => setEditForm((p) => ({ ...p, isbn_or_barcode: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] font-mono outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Language</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Ngôn ngữ</label>
                   <input value={editForm.language} onChange={(e) => setEditForm((p) => ({ ...p, language: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Publish Year</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Năm xuất bản</label>
                   <input type="number" value={editForm.publish_year} onChange={(e) => setEditForm((p) => ({ ...p, publish_year: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">List Price (VND)</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Giá bìa (VND)</label>
                   <input type="number" value={editForm.list_price} onChange={(e) => setEditForm((p) => ({ ...p, list_price: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Unit Cost (VND)</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Giá vốn (VND)</label>
                   <input type="number" value={editForm.unit_cost} onChange={(e) => setEditForm((p) => ({ ...p, unit_cost: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Cover Image URL</label>
+                <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Đường dẫn ảnh bìa</label>
                 <input value={editForm.cover_image_url || ""} onChange={(e) => setEditForm((p) => ({ ...p, cover_image_url: e.target.value }))}
                   placeholder="https://..."
                   className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 {editForm.cover_image_url && (
-                  <img src={editForm.cover_image_url} alt="Cover preview" className="mt-2 max-h-24 rounded-lg object-contain border border-border" />
+                  <img src={editForm.cover_image_url} alt="Xem trước ảnh bìa" className="mt-2 max-h-24 rounded-lg object-contain border border-border" />
                 )}
               </div>
 
               <div>
-                <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Description</label>
+                <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Mô tả</label>
                 <textarea value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
                   rows={4}
                   className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all resize-none" />
@@ -496,11 +557,11 @@ export function BookDetailPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[12px] font-semibold text-muted-foreground">AI Summary (Vietnamese)</label>
+                  <label className="block text-[12px] font-semibold text-muted-foreground">Tóm tắt AI (tiếng Việt)</label>
                   <button type="button" onClick={() => void handleGenerateSummaryVi()} disabled={summaryLoading || !editForm.title.trim()}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-40">
                     {summaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {summaryLoading ? "Generating..." : "Generate AI"}
+                    {summaryLoading ? "Đang tạo..." : "Tạo bằng AI"}
                   </button>
                 </div>
                 <textarea value={editForm.summary_vi} onChange={(e) => setEditForm((p) => ({ ...p, summary_vi: e.target.value }))}
@@ -512,12 +573,12 @@ export function BookDetailPage() {
             <div className="mt-6 flex items-center gap-3">
               <button type="button" onClick={() => setShowEditModal(false)}
                 className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-muted transition-colors">
-                Cancel
+                Hủy
               </button>
               <button type="button" onClick={() => void handleSaveBook()} disabled={isSaving || isApplyingAiMetadata}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isSaving ? "Saving..." : "Save Changes"}
+                {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
             </div>
           </motion.div>

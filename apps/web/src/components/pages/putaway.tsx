@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router";
 import { motion } from "motion/react";
-import { ClipboardCheck, ArrowRight, Package, UserCheck, Clock } from "lucide-react";
+import { ClipboardCheck, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
@@ -14,10 +14,10 @@ import { StatusBadge } from "@/components/status-badge";
 import { PriorityBadge } from "@/components/ui/priority-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
-import { StatCard } from "@/components/ui/stat-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
@@ -99,7 +99,6 @@ export function PutawayPage() {
   const totalRemaining = receipts.reduce((sum, row) => sum + row.remaining_quantity, 0);
   const unassignedCount = receipts.filter((r) => !r.putaway_assignee_user_id).length;
   const assignedToMeCount = receipts.filter((r) => r.putaway_assignee_user_id === currentUserId).length;
-  const colSpan = showAssign ? 10 : 9;
 
   const handleClaimSelf = async (receiptId: string) => {
     setClaimingId(receiptId);
@@ -148,21 +147,24 @@ export function PutawayPage() {
       <FadeItem>
         <PageHeader
           icon={ClipboardCheck}
-          title="Putaway"
-          description={`${receipts.length} phiếu đã duyệt · ${totalRemaining} quyển chưa nhập kệ`}
+          title="Nhập kệ (Putaway)"
+          description="Cất sách từ phiếu nhập đã duyệt vào vị trí trên kệ"
           iconBg="bg-blue-100 dark:bg-blue-500/15"
           iconColor="text-blue-600 dark:text-blue-400"
         />
       </FadeItem>
 
-      <FadeItem>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard label="Phiếu chờ putaway" value={receipts.length} icon={Package} variant="default" />
-          <StatCard label="Chưa nhận" value={unassignedCount} icon={Clock} variant="warning" />
-          <StatCard label="Của bạn" value={assignedToMeCount} icon={UserCheck} variant="success" />
-          <StatCard label="Quyển chưa nhập kệ" value={totalRemaining} icon={Package} variant="info" />
-        </div>
-      </FadeItem>
+      {receipts.length > 0 && (
+        <FadeItem>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+            <span><span className="font-semibold text-foreground">{receipts.length}</span> phiếu chờ putaway</span>
+            <span aria-hidden="true">·</span>
+            <span><span className="font-semibold text-foreground">{totalRemaining}</span> quyển chưa nhập kệ</span>
+            {unassignedCount > 0 ? <StatusBadge label={`${unassignedCount} chưa nhận`} variant="warning" dot /> : null}
+            {assignedToMeCount > 0 ? <StatusBadge label={`${assignedToMeCount} của bạn`} variant="success" dot /> : null}
+          </p>
+        </FadeItem>
+      )}
 
       <FadeItem>
         <FilterBar
@@ -176,20 +178,26 @@ export function PutawayPage() {
       <FadeItem>
         <SectionCard noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
-                <tr className="border-b border-border bg-gradient-to-r from-blue-50/30 to-transparent dark:from-blue-500/10">
-                  {["Mã phiếu", "Kho", "Ngày", "Trạng thái", "Ưu tiên", "Người duyệt", "Tổng dòng", "Còn lại", ...(showAssign ? ["Giao putaway"] : []), "Thao tác"].map((header) => (
-                    <th key={header} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{header}</th>
+                <tr className="border-b border-border bg-muted/40">
+                  {[
+                    { label: "Phiếu nhập", className: "" },
+                    { label: "Trạng thái", className: "hidden w-[170px] sm:table-cell" },
+                    { label: "Còn lại", className: "hidden w-[110px] md:table-cell" },
+                    { label: "Phụ trách", className: cn("hidden lg:table-cell", showAssign ? "w-[330px]" : "w-[220px]") },
+                    { label: "Thao tác", className: "w-[120px] text-right" },
+                  ].map((header) => (
+                    <th key={header.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground", header.className)}>{header.label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonTableRow columns={colSpan} rows={4} />
+                  <SkeletonTableRow columns={5} rows={4} />
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={colSpan} className="py-12 text-center">
+                    <td colSpan={5} className="py-12 text-center">
                       <EmptyState
                         variant="no-data"
                         title="Không có phiếu nhập nào sẵn sàng putaway"
@@ -198,81 +206,106 @@ export function PutawayPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((receipt, index) => (
-                    <motion.tr
-                      key={receipt.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: index * 0.02 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.receipt_number}</td>
-                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.warehouse_code || receipt.warehouse_name || "-"}</td>
-                      <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{formatDate(receipt.received_at || receipt.created_at)}</td>
-                      <td className="px-4 py-3.5">
-                        <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <PriorityBadge priority={receiptAgingPriority(receipt.received_at || receipt.created_at)} />
-                      </td>
-                      <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{receipt.approved_by_user_id ? receipt.approved_by_user_id.slice(0, 8) : "-"}</td>
-                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{receipt.line_count}</td>
-                      <td className="px-4 py-3.5 text-[13px] font-semibold">{receipt.remaining_quantity}</td>
-                      {showAssign && (
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1.5">
-                            <Select
-                              value={assignState[receipt.id] || "none"}
-                              onValueChange={(v) => setAssignState((prev) => ({ ...prev, [receipt.id]: v === "none" ? "" : v }))}
-                            >
-                              <SelectTrigger size="sm" className="h-8 min-w-[140px] text-[12px]">
-                                <SelectValue placeholder="Chọn nhân viên" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Chọn nhân viên</SelectItem>
-                                {warehouseStaff.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={assigningId === receipt.id}
-                              loading={assigningId === receipt.id}
-                              onClick={() => void handleAssign(receipt.id)}
-                              className="shrink-0"
-                            >
-                              Giao
-                            </Button>
+                  filtered.map((receipt, index) => {
+                    const isMine = receipt.putaway_assignee_user_id === currentUserId && Boolean(currentUserId);
+                    const isAssigned = Boolean(receipt.putaway_assignee_user_id);
+                    const assigneeName = isMine
+                      ? "Của bạn"
+                      : warehouseStaff.find((staff) => staff.id === receipt.putaway_assignee_user_id)?.full_name || "Đã giao";
+                    const priority = receiptAgingPriority(receipt.received_at || receipt.created_at);
+
+                    // Ownership lives in one place: who has it, plus the controls to take or hand it over.
+                    const ownership = (
+                      <div className="space-y-2">
+                        <p className={cn("text-[12px]", isAssigned ? "font-medium text-foreground" : "text-muted-foreground")}>
+                          {isAssigned ? assigneeName : "Chưa nhận"}
+                        </p>
+                        {(showAssign || !isAssigned) && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {showAssign && (
+                              <>
+                                <Select
+                                  value={assignState[receipt.id] || "none"}
+                                  onValueChange={(v) => setAssignState((prev) => ({ ...prev, [receipt.id]: v === "none" ? "" : v }))}
+                                >
+                                  <SelectTrigger size="sm" aria-label={`Chọn nhân viên cho phiếu ${receipt.receipt_number}`} className="h-8 min-w-0 flex-1 text-[12px]">
+                                    <SelectValue placeholder="Chọn nhân viên" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Chọn nhân viên</SelectItem>
+                                    {warehouseStaff.map((staff) => (
+                                      <SelectItem key={staff.id} value={staff.id}>{staff.full_name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={assigningId === receipt.id}
+                                  loading={assigningId === receipt.id}
+                                  onClick={() => void handleAssign(receipt.id)}
+                                  className="shrink-0"
+                                >
+                                  Giao
+                                </Button>
+                              </>
+                            )}
+                            {!isAssigned && (
+                              <button
+                                type="button"
+                                disabled={claimingId === receipt.id}
+                                onClick={() => void handleClaimSelf(receipt.id)}
+                                className="inline-flex shrink-0 items-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
+                              >
+                                {claimingId === receipt.id ? "Đang nhận..." : "Tự nhận"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+
+                    return (
+                      <motion.tr
+                        key={receipt.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: Math.min(index, 10) * 0.02 }}
+                        className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
+                      >
+                        <td className="px-4 py-3 align-top">
+                          <p className="truncate text-[13px] font-semibold" title={receipt.receipt_number}>{receipt.receipt_number}</p>
+                          <p className="truncate text-[12px] text-muted-foreground">
+                            {[receipt.warehouse_code || receipt.warehouse_name, `${receipt.line_count} dòng`, formatDate(receipt.received_at || receipt.created_at)].filter(Boolean).join(" · ")}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                            <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
+                            <PriorityBadge priority={priority} />
+                          </div>
+                          <p className="mt-1 text-[12px] text-muted-foreground md:hidden">Còn {receipt.remaining_quantity} quyển</p>
+                          <div className="mt-2 lg:hidden">{ownership}</div>
+                        </td>
+                        <td className="hidden px-4 py-3 align-top sm:table-cell">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
+                            <PriorityBadge priority={priority} />
                           </div>
                         </td>
-                      )}
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          {!receipt.putaway_assignee_user_id && (
-                            <button
-                              type="button"
-                              disabled={claimingId === receipt.id}
-                              onClick={() => void handleClaimSelf(receipt.id)}
-                              className="inline-flex items-center rounded-[8px] border border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 disabled:opacity-50 transition-colors"
-                            >
-                              {claimingId === receipt.id ? "Đang nhận..." : "Tự nhận"}
-                            </button>
-                          )}
-                          {receipt.putaway_assignee_user_id && receipt.putaway_assignee_user_id === currentUserId && (
-                            <StatusBadge label="Của bạn" variant="success" />
-                          )}
+                        <td className="hidden px-4 py-3 align-top md:table-cell">
+                          <p className="text-[13px] font-semibold tabular-nums">{receipt.remaining_quantity}<span className="ml-1 text-[11px] font-normal text-muted-foreground">quyển</span></p>
+                        </td>
+                        <td className="hidden px-4 py-3 align-top lg:table-cell">{ownership}</td>
+                        <td className="px-4 py-3 text-right align-top">
                           <NavLink
                             to={`/putaway/${receipt.id}`}
-                            className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 font-semibold transition-colors"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[12px] font-semibold text-blue-600 transition-colors hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
                           >
-                            Xem chi tiết <ArrowRight className="w-3 h-3" />
+                            Chi tiết <ArrowRight className="h-3 w-3" />
                           </NavLink>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))
+                        </td>
+                      </motion.tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

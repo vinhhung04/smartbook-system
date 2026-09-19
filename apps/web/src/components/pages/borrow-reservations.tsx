@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -71,6 +72,28 @@ const initialFormState: ReservationFormState = {
   source_channel: 'WEB',
   notes: '',
 };
+
+const ACTIVE_RESERVATION_STATUSES: ReservationStatus[] = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+
+/** How long a live reservation has left, so staff can see what is about to lapse without reading timestamps. */
+function expiryInfo(reservation: Reservation): { text: string; tone: 'danger' | 'warning' | 'muted' } | null {
+  if (!ACTIVE_RESERVATION_STATUSES.includes(reservation.status)) return null;
+  const remaining = new Date(reservation.expires_at).getTime() - Date.now();
+  if (Number.isNaN(remaining)) return null;
+  if (remaining <= 0) return { text: 'Đã quá hạn', tone: 'danger' };
+  const minutes = Math.round(remaining / 60000);
+  if (minutes < 60) return { text: `Còn ${Math.max(1, minutes)} phút`, tone: 'warning' };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { text: `Còn ${hours} giờ`, tone: 'warning' };
+  return { text: `Còn ${Math.floor(hours / 24)} ngày`, tone: 'muted' };
+}
+
+const EXPIRY_TONE_CLASS = {
+  danger: 'font-semibold text-rose-600 dark:text-rose-400',
+  warning: 'font-semibold text-amber-600 dark:text-amber-400',
+  muted: 'text-foreground',
+} as const;
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
@@ -512,7 +535,7 @@ export function BorrowReservationsPage() {
                 />
               </div>
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -543,25 +566,17 @@ export function BorrowReservationsPage() {
           onSearchChange={setQuery}
           searchPlaceholder="Tìm đặt trước..."
           filters={
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {(['ALL', ...statuses] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
-                    statusFilter === status ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {statusFilter === status && (
-                    <motion.div
-                      layoutId="reservation-filter"
-                      className="absolute inset-0 rounded-md bg-primary"
-                      transition={{ duration: 0.15 }}
-                    />
-                  )}
-                  <span className="relative z-10">{STATUS_LABELS[status] ?? status}</span>
-                </button>
-              ))}
+            <div className="max-w-full overflow-x-auto">
+              <SegmentedControl
+                layoutId="reservation-filter"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={(['ALL', ...statuses] as const).map((status) => ({
+                  value: status,
+                  label: `${STATUS_LABELS[status] ?? status} (${status === 'ALL' ? reservations.length : reservations.filter((item) => item.status === status).length})`,
+                }))}
+                className="w-max"
+              />
             </div>
           }
         />
@@ -570,22 +585,28 @@ export function BorrowReservationsPage() {
       <FadeItem>
         <SectionCard noPadding>
           <div className="overflow-hidden rounded-xl border border-border">
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  {['Số đặt trước', 'Khách hàng', 'Tên sách', 'Kho', 'SL', 'Hết hạn lúc', 'Trạng thái', 'Thao tác'].map((header) => (
-                    <TableHead key={header} className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      {header}
+                  {[
+                    { label: 'Đặt trước', className: '' },
+                    { label: 'Sách', className: 'hidden w-[24%] md:table-cell' },
+                    { label: 'Hạn nhận', className: 'hidden w-[150px] lg:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[150px] sm:table-cell' },
+                    { label: 'Thao tác', className: 'w-[150px] text-right' },
+                  ].map((header) => (
+                    <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                      {header.label}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <SkeletonTableRow columns={8} rows={5} />
+                  <SkeletonTableRow columns={5} rows={5} />
                 ) : pagedReservations.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="whitespace-normal">
+                    <TableCell colSpan={5} className="whitespace-normal">
                       <EmptyState
                         variant="no-results"
                         title="Không tìm thấy đặt trước"
@@ -595,64 +616,82 @@ export function BorrowReservationsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pagedReservations.map((reservation) => (
-                    <TableRow key={reservation.id} className="hover:bg-muted/30">
-                      <TableCell className="px-5 py-3.5 text-sm font-medium">{reservation.reservation_number}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-sm">{reservation.customers?.full_name || reservation.customer_id}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-sm" title={reservation.variant_id}>{getBookTitle(reservation.variant_id)}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-sm text-muted-foreground" title={reservation.warehouse_id}>{reservation.warehouse_id?.slice(0, 8)}...</TableCell>
-                      <TableCell className="px-5 py-3.5 text-sm">{reservation.quantity}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-sm text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="px-5 py-3.5">
-                        <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
-                      </TableCell>
-                      <TableCell className="px-5 py-3.5">
-                        {['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(reservation.status) ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {reservation.status === 'PENDING' ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/20 dark:text-sky-400 dark:hover:bg-sky-500/10"
-                                onClick={() => void confirmReservation(reservation.id)}
-                                data-testid="confirm-reservation-button"
-                              >
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                Xác nhận
-                              </Button>
-                            ) : null}
-                            {reservation.status === 'READY_FOR_PICKUP' ? (
-                              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5 dark:border-cyan-500/20 dark:bg-cyan-500/10">
-                                <p className="text-[10px] font-medium uppercase text-cyan-600 dark:text-cyan-400">Mã nhận sách</p>
-                                <p className="font-mono text-xs font-semibold text-cyan-900 dark:text-cyan-300">{reservation.pickup_code || '-'}</p>
-                              </div>
-                            ) : null}
-                            {reservation.status === 'CONFIRMED' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
-                                onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
-                                data-testid="mark-ready-button"
-                              >
-                                Sẵn sàng
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/10"
-                              onClick={() => setCancelTarget(reservation)}
-                            >
-                              Hủy
-                            </Button>
+                  pagedReservations.map((reservation) => {
+                    const bookTitle = getBookTitle(reservation.variant_id);
+                    const expiry = expiryInfo(reservation);
+                    const isLive = ACTIVE_RESERVATION_STATUSES.includes(reservation.status);
+                    const pickupCode = reservation.status === 'READY_FOR_PICKUP' ? reservation.pickup_code || '-' : null;
+                    return (
+                      <TableRow key={reservation.id} className="hover:bg-muted/30">
+                        <TableCell className="px-4 py-3">
+                          <p className="truncate text-sm font-semibold">{reservation.reservation_number}</p>
+                          <p className="truncate text-xs text-muted-foreground">{reservation.customers?.full_name || reservation.customer_id}</p>
+                          <div className="mt-1.5 space-y-1 sm:hidden">
+                            <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
+                            {pickupCode ? <p className="font-mono text-xs font-semibold text-cyan-700 dark:text-cyan-300">{pickupCode}</p> : null}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 md:table-cell">
+                          <p className="line-clamp-2 whitespace-normal text-sm" title={reservation.variant_id}>{bookTitle}</p>
+                          <p className="text-xs text-muted-foreground">SL {reservation.quantity}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 text-sm lg:table-cell">
+                          {expiry ? <p className={cn('text-sm', EXPIRY_TONE_CLASS[expiry.tone])}>{expiry.text}</p> : null}
+                          <p className="text-xs text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 sm:table-cell">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
+                            {pickupCode ? (
+                              <span className="rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300" title="Mã nhận sách">
+                                {pickupCode}
+                              </span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
+                          {isLive ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              {reservation.status === 'PENDING' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/20 dark:text-sky-400 dark:hover:bg-sky-500/10"
+                                  onClick={() => void confirmReservation(reservation.id)}
+                                  data-testid="confirm-reservation-button"
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                  Xác nhận
+                                </Button>
+                              ) : null}
+                              {reservation.status === 'CONFIRMED' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
+                                  onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
+                                  data-testid="mark-ready-button"
+                                >
+                                  Sẵn sàng
+                                </Button>
+                              ) : null}
+                              <button
+                                type="button"
+                                aria-label={`Hủy đặt trước ${reservation.reservation_number}`}
+                                title="Hủy đặt trước"
+                                onClick={() => setCancelTarget(reservation)}
+                                className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="block text-right text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

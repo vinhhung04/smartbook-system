@@ -11,7 +11,7 @@ import { CoverSearchModal } from "../cover-search-modal";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { StatFilterCard } from "@/components/ui/stat-filter-card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
@@ -275,10 +275,6 @@ export function CatalogPage() {
           iconColor="text-blue-600 dark:text-blue-400"
           actions={
             <>
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="w-4 h-4" />
-                Xuất file
-              </Button>
               <Button variant="outline" asChild>
                 <NavLink to="/ai-import">
                   <Sparkles className="w-4 h-4" />
@@ -294,67 +290,16 @@ export function CatalogPage() {
         />
       </FadeItem>
 
-      {/* Stat cards double as the status filter — click one to filter the table by it */}
       <FadeItem>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <StatFilterCard
-            label="Tổng đầu sách"
-            value={books.length}
-            icon={BookOpen}
-            variant="default"
-            isActive={activeFilter === "All"}
-            onClick={() => setActiveFilter("All")}
-            layoutId="catalog-status-filter-badge"
-          />
-          <StatFilterCard
-            label="Hoàn chỉnh"
-            value={completeCount}
-            icon={Package}
-            variant="success"
-            isActive={activeFilter === "Complete"}
-            onClick={() => setActiveFilter(activeFilter === "Complete" ? "All" : "Complete")}
-            layoutId="catalog-status-filter-badge"
-          />
-          <StatFilterCard
-            label="Chưa hoàn chỉnh"
-            value={incompleteCount}
-            icon={AlertCircle}
-            variant="info"
-            isActive={activeFilter === "Incomplete"}
-            onClick={() => setActiveFilter(activeFilter === "Incomplete" ? "All" : "Incomplete")}
-            layoutId="catalog-status-filter-badge"
-          />
-          <StatFilterCard
-            label="Sắp hết hàng"
-            value={lowStockCount}
-            icon={AlertTriangle}
-            variant="warning"
-            isActive={activeFilter === "Low Stock"}
-            onClick={() => setActiveFilter(activeFilter === "Low Stock" ? "All" : "Low Stock")}
-            layoutId="catalog-status-filter-badge"
-          />
-          <StatFilterCard
-            label="Hết hàng"
-            value={outOfStockCount}
-            icon={AlertTriangle}
-            variant="danger"
-            isActive={activeFilter === "Out of Stock"}
-            onClick={() => setActiveFilter(activeFilter === "Out of Stock" ? "All" : "Out of Stock")}
-            layoutId="catalog-status-filter-badge"
-          />
-        </div>
-      </FadeItem>
-
-      {/* Filter Bar */}
-      <FadeItem>
-        <div className="rounded-xl border border-black/5 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4">
+        <div className="space-y-3">
           <FilterBar
             searchValue={searchQuery}
             onSearchChange={setSearchQuery}
             searchPlaceholder="Tìm theo tên sách, mã vạch, tác giả..."
+            showSearchClear
             filters={
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[180px]" aria-label="Danh mục">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -372,66 +317,86 @@ export function CatalogPage() {
                   <Camera className="w-3.5 h-3.5" />
                   Tìm bằng ảnh
                 </Button>
-                <Button variant="outline" onClick={() => void loadBooks()} loading={loading}>
+                <Button variant="outline" onClick={handleExport}>
+                  <Download className="w-3.5 h-3.5" />
+                  Xuất file
+                </Button>
+                <Button variant="outline" onClick={() => void loadBooks()} loading={loading} aria-label="Làm mới danh sách">
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Làm mới
                 </Button>
               </>
             }
           />
+
+          {/* The status counts double as the filter, replacing the five big stat cards. */}
+          <div className="max-w-full overflow-x-auto">
+            <SegmentedControl
+              layoutId="catalog-status-filter"
+              value={activeFilter}
+              onChange={setActiveFilter}
+              options={[
+                { value: "All", label: `Tất cả (${books.length})` },
+                { value: "Complete", label: `Hoàn chỉnh (${completeCount})` },
+                { value: "Incomplete", label: `Chưa hoàn chỉnh (${incompleteCount})` },
+                { value: "Low Stock", label: `Sắp hết (${lowStockCount})` },
+                { value: "Out of Stock", label: `Hết hàng (${outOfStockCount})` },
+              ]}
+              className="w-max"
+            />
+          </div>
         </div>
       </FadeItem>
 
-      {/* Table */}
       <FadeItem>
         <SectionCard noPadding className="overflow-hidden">
           {loading ? (
             <LoadingOverlay />
           ) : (
             <div>
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead
-                      className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="cursor-pointer select-none px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
                       onClick={() => toggleSort("title")}
+                      aria-sort={sortField === "title" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >
                       <span className="inline-flex items-center gap-1">
                         Sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
-                      Danh mục
+                    <TableHead className="hidden w-[170px] px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground md:table-cell">
+                      Phân loại
                     </TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
-                      Trạng thái
-                    </TableHead>
-                    <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3">
+                    <TableHead className="hidden w-[110px] px-4 py-3 text-right text-[11px] uppercase tracking-wider text-muted-foreground lg:table-cell">
                       Giá
                     </TableHead>
                     <TableHead
-                      className="text-right text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="w-[110px] cursor-pointer select-none px-4 py-3 text-right text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
                       onClick={() => toggleSort("stock")}
+                      aria-sort={sortField === "stock" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Tồn kho {sortField === "stock" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </TableHead>
                     <TableHead
-                      className="text-[11px] uppercase tracking-wider text-muted-foreground px-5 py-3 cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="hidden w-[120px] cursor-pointer select-none px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground xl:table-cell"
                       onClick={() => toggleSort("updatedAt")}
+                      aria-sort={sortField === "updatedAt" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >
                       <span className="inline-flex items-center gap-1">
-                        Vị trí · Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
+                        Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </TableHead>
-                    <TableHead className="px-5 py-3" />
+                    <TableHead className="w-[84px] px-4 py-3" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={7} className="whitespace-normal py-10 text-center">
+                      <TableCell colSpan={6} className="whitespace-normal py-10 text-center">
                         <EmptyState
                           variant="no-results"
                           title="Không tìm thấy sách"
@@ -452,15 +417,16 @@ export function CatalogPage() {
                       </TableCell>
                     </TableRow>
                   ) : pagedBooks.map((book) => (
-                    <TableRow key={book.id} className="group cursor-pointer">
-                      <TableCell className="px-5 py-3.5">
+                    <TableRow key={book.id} className="group">
+                      <TableCell className="px-4 py-3">
                         <div className="flex items-start gap-3">
                           <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
-                          <div className="min-w-0 max-w-[240px]">
+                          <div className="min-w-0 flex-1">
                             <NavLink
                               to={`/book/${book.id}`}
-                              className="block truncate text-[13px] group-hover:text-primary transition-colors hover:underline"
+                              className="block truncate text-[13px] transition-colors hover:text-primary hover:underline"
                               style={{ fontWeight: 550 }}
+                              title={book.title}
                             >
                               {book.title}
                             </NavLink>
@@ -472,46 +438,49 @@ export function CatalogPage() {
                                   e.stopPropagation();
                                   handleCopyBarcode(book.barcode!);
                                 }}
-                                className="mt-0.5 inline-flex items-center gap-1.5 rounded font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                                className="mt-0.5 inline-flex items-center gap-1.5 rounded font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                                 aria-label={`Sao chép mã vạch ${book.barcode}`}
                               >
                                 {book.barcode}
                                 {copiedBarcode === book.barcode ? (
                                   <Check className="h-3 w-3 text-success" />
                                 ) : (
-                                  <Copy className="h-3 w-3 opacity-0 group-hover:opacity-60" />
+                                  <Copy className="h-3 w-3 opacity-40 group-hover:opacity-70" />
                                 )}
                               </button>
                             )}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
+                              <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
+                              {book.is_incomplete ? <StatusBadge label="Chưa hoàn chỉnh" variant="warning" dot /> : null}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3.5">
-                        <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
+                      <TableCell className="hidden px-4 py-3 md:table-cell">
+                        <div className="flex flex-col items-start gap-1.5">
+                          <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
+                          <StatusBadge
+                            label={book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh"}
+                            variant={book.is_incomplete ? "warning" : "success"}
+                            dot
+                          />
+                        </div>
                       </TableCell>
-                      <TableCell className="px-5 py-3.5">
-                        <StatusBadge
-                          label={book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh"}
-                          variant={book.is_incomplete ? "warning" : "success"}
-                          dot
-                        />
-                      </TableCell>
-                      <TableCell className="px-5 py-3.5 text-right text-[13px] text-muted-foreground">{toDisplayPrice(book.list_price)}</TableCell>
-                      <TableCell className="px-5 py-3.5 text-right text-[13px] font-mono" style={{ fontWeight: 600 }}>
-                        <span className={
-                          book.quantity === 0 ? "text-destructive" :
-                          book.quantity <= 10 ? "text-amber-600" :
-                          "text-emerald-600"
-                        }>
+                      <TableCell className="hidden px-4 py-3 text-right text-[13px] text-muted-foreground lg:table-cell">{toDisplayPrice(book.list_price)}</TableCell>
+                      <TableCell className="px-4 py-3 text-right">
+                        <p
+                          className={cn(
+                            "font-mono text-[14px] font-semibold tabular-nums",
+                            book.quantity === 0 ? "text-destructive" : book.quantity <= 10 ? "text-amber-600" : "text-emerald-600",
+                          )}
+                        >
                           {book.quantity}
-                        </span>
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground" title={book.location || undefined}>{book.location || "-"}</p>
                       </TableCell>
-                      <TableCell className="px-5 py-3.5 text-[13px]">
-                        <p className="text-foreground/90">{book.location || "-"}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">Cập nhật: {toDisplayDate(book.updated_at)}</p>
-                      </TableCell>
-                      <TableCell className="px-5 py-3.5">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-140">
+                      <TableCell className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell">{toDisplayDate(book.updated_at)}</TableCell>
+                      <TableCell className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
                           <IconButton asChild variant="ghost" size="sm-icon" label="Xem chi tiết sách">
                             <NavLink to={`/book/${book.id}`}>
                               <Eye className="w-3.5 h-3.5 text-primary" />
@@ -535,6 +504,7 @@ export function CatalogPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {filtered.length > 0 && (
                 <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">

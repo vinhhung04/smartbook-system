@@ -7,7 +7,6 @@ import { getApiErrorMessage } from "@/services/api";
 import { toast } from "sonner";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StatCard } from "@/components/ui/stat-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -240,7 +239,7 @@ export function MovementsPage() {
   }, [movements.length, typeCounts]);
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -256,46 +255,50 @@ export function MovementsPage() {
       </motion.div>
 
       {movements.length > 0 && (
-        <motion.div
+        <motion.section
+          aria-label="Tổng quan biến động"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.03 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          className="rounded-xl border border-border bg-card p-4 sm:p-5"
         >
-          <StatCard label="Tổng nhập" value={summary.inbound} icon={movementTypes.inbound.icon} accentBorder={movementTypes.inbound.gradient} variant="success" animateValue />
-          <StatCard label="Tổng xuất" value={summary.outbound} icon={movementTypes.outbound.icon} accentBorder={movementTypes.outbound.gradient} variant="danger" animateValue />
-          <StatCard label="Chuyển kho" value={summary.transfer} icon={movementTypes.transfer.icon} accentBorder={movementTypes.transfer.gradient} variant="info" animateValue />
-          <StatCard label="Records" value={movements.length} variant="default" animateValue />
-        </motion.div>
-      )}
-
-      {distribution.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
-          className="rounded-xl border border-border bg-card p-4"
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-3">Phân bố loại biến động</p>
-          <div className="flex w-full h-2.5 rounded-full overflow-hidden bg-muted">
-            {distribution.map((d) => (
-              <div
-                key={d.key}
-                style={{ width: `${d.pct}%` }}
-                className={`h-full bg-gradient-to-r ${d.cfg.gradient} first:rounded-l-full last:rounded-r-full`}
-                title={`${d.cfg.label}: ${d.count}`}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
-            {distribution.map((d) => (
-              <div key={d.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className={`w-2 h-2 rounded-full bg-gradient-to-br ${d.cfg.gradient}`} />
-                {d.cfg.label} <span className="font-semibold text-foreground">{d.count}</span>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+            {[
+              { label: "Tổng nhập", value: summary.inbound, tone: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Tổng xuất", value: summary.outbound, tone: "text-rose-600 dark:text-rose-400" },
+              { label: "Lượt chuyển kho", value: summary.transfer, tone: "text-blue-600 dark:text-blue-400" },
+              { label: "Tổng số biến động", value: movements.length, tone: "text-foreground" },
+            ].map((item) => (
+              <div key={item.label}>
+                <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+                <dd className={cn("mt-1 font-mono text-[24px] font-bold leading-none tabular-nums", item.tone)}>{item.value.toLocaleString("vi-VN")}</dd>
               </div>
             ))}
-          </div>
-        </motion.div>
+          </dl>
+
+          {distribution.length > 0 && (
+            <div className="mt-4 border-t border-border pt-4">
+              <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Phân bố loại biến động">
+                {distribution.map((d) => (
+                  <div
+                    key={d.key}
+                    style={{ width: `${d.pct}%` }}
+                    className={`h-full bg-gradient-to-r ${d.cfg.gradient}`}
+                    title={`${d.cfg.label}: ${d.count}`}
+                  />
+                ))}
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {distribution.map((d) => (
+                  <div key={d.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span className={`h-2 w-2 rounded-full bg-gradient-to-br ${d.cfg.gradient}`} />
+                    {d.cfg.label} <span className="font-semibold text-foreground">{d.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.section>
       )}
 
       <motion.div
@@ -309,27 +312,28 @@ export function MovementsPage() {
           searchPlaceholder="Tìm biến động..."
           showSearchClear
           filters={
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground/70 font-medium shrink-0">Loại</span>
+            <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center lg:gap-4">
+              <div className="max-w-full overflow-x-auto">
                 <SegmentedControl
-                  options={[{ value: "all", label: "Tất cả" }, ...Object.entries(movementTypes).map(([k, v]) => ({ value: k, label: v.label }))]}
+                  options={[
+                    { value: "all", label: `Tất cả (${movements.length})` },
+                    ...Object.entries(movementTypes).map(([k, v]) => ({ value: k, label: `${v.label} (${typeCounts[k] || 0})` })),
+                  ]}
                   value={typeFilter}
                   onChange={setTypeFilter}
                   layoutId="move-filter"
                   gradientClassName="from-cyan-600 to-blue-600"
-                  className="overflow-x-auto"
+                  className="w-max"
                 />
               </div>
-              <div className="hidden sm:block h-5 w-px bg-border" />
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground/70 font-medium shrink-0">Thời gian</span>
+              <div className="max-w-full overflow-x-auto">
                 <SegmentedControl
                   options={RANGE_OPTIONS}
                   value={rangeFilter}
                   onChange={setRangeFilter}
                   layoutId="move-range-filter"
                   gradientClassName="from-cyan-600 to-blue-600"
+                  className="w-max"
                 />
               </div>
             </div>
@@ -397,12 +401,13 @@ export function MovementsPage() {
                             </div>
 
                             <div className="flex-1 min-w-0">
-                              <p className="font-mono text-[10px] text-muted-foreground/60 mb-0.5">{m.movement_number || m.id}</p>
-                              <p className="text-[14px] font-medium text-foreground truncate">{m.book_title}</p>
+                              <p className="text-[14px] font-medium text-foreground truncate" title={m.book_title}>{m.book_title}</p>
+                              <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                                {[m.movement_number || m.id, m.warehouse_code].filter(Boolean).join(" · ")}
+                              </p>
                               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 <StatusBadge label={typeConfig.label} variant={typeConfig.color as "success" | "warning" | "danger" | "info"} dot />
                                 <ReasonBadge reasonCode={m.reason_code} />
-                                {m.warehouse_code && <span className="font-mono text-[10px] text-muted-foreground">{m.warehouse_code}</span>}
                               </div>
                             </div>
 
@@ -423,18 +428,18 @@ export function MovementsPage() {
                                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {(
                                       [
-                                        { label: "THỜI GIAN", value: formatDate(m.created_at) },
-                                        { label: "FROM/TO", value: m.transfer_note || `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` },
-                                        { label: "WAREHOUSE", value: m.warehouse_name || m.warehouse_code || "-" },
-                                        { label: "LOCATION", value: m.to_location_code || m.from_location_code || "-", mono: true },
-                                        { label: "USER", value: m.created_by_user_id || "-" },
-                                        { label: "QTY", value: delta.text, bold: true, colored: true, positive: m.delta >= 0 },
+                                        { label: "Thời gian", value: formatDate(m.created_at) },
+                                        { label: "Từ → đến", value: m.transfer_note || `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` },
+                                        { label: "Kho", value: m.warehouse_name || m.warehouse_code || "-" },
+                                        { label: "Vị trí", value: m.to_location_code || m.from_location_code || "-", mono: true },
+                                        { label: "Người thực hiện", value: m.created_by_user_id || "-", mono: true },
+                                        { label: "Số lượng", value: delta.text, bold: true, colored: true, positive: m.delta >= 0 },
                                       ] as MovementDetailField[]
                                     ).map(f => (
                                       <div key={f.label}>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">{f.label}</p>
+                                        <p className="text-[11px] text-muted-foreground font-medium mb-1">{f.label}</p>
                                         <p
-                                          className={`text-[12px] ${f.mono ? "font-mono text-muted-foreground" : ""} ${f.colored ? (f.positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400") : "text-muted-foreground"}`}
+                                          className={`break-all text-[12px] ${f.mono ? "font-mono text-muted-foreground" : ""} ${f.colored ? (f.positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400") : "text-muted-foreground"}`}
                                           style={{ fontWeight: f.bold ? 600 : 500 }}
                                         >
                                           {f.value}
@@ -443,15 +448,15 @@ export function MovementsPage() {
                                     ))}
                                     {m.reason_code && REASON_CONFIG[m.reason_code.toUpperCase()] && (
                                       <div>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">LÝ DO</p>
+                                        <p className="text-[11px] text-muted-foreground font-medium mb-1">Lý do</p>
                                         <ReasonBadge reasonCode={m.reason_code} />
                                       </div>
                                     )}
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">NOTES</p>
-                                    <p className="text-[12px] text-muted-foreground">
-                                      Ref: {m.reference_type || "-"} / {m.reference_id || "-"}
+                                    <p className="text-[11px] text-muted-foreground font-medium mb-1">Chứng từ tham chiếu</p>
+                                    <p className="break-all text-[12px] text-muted-foreground">
+                                      {m.reference_type || "-"} / {m.reference_id || "-"}
                                     </p>
                                   </div>
                                 </div>

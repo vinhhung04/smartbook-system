@@ -628,84 +628,74 @@ export function PickingPage() {
       {!detail ? (
         <>
           <FadeItem>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Tổng đơn" value={taskStats.total} icon={Boxes} variant="primary" animateValue />
-              <StatCard label="Đơn PICK" value={taskStats.pick} icon={ListChecks} variant="info" animateValue />
-              <StatCard label="Đơn REPICK" value={taskStats.repick} icon={RotateCcw} variant="warning" animateValue />
-              <StatCard label="Chưa giao" value={taskStats.unassigned} icon={Clock} variant={taskStats.unassigned > 0 ? "danger" : "default"} animateValue />
-            </div>
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+              <span><span className="font-semibold text-foreground">{taskStats.total}</span> đơn</span>
+              <span aria-hidden="true">·</span>
+              <span><span className="font-semibold text-foreground">{taskStats.pick}</span> PICK</span>
+              <span aria-hidden="true">·</span>
+              <span><span className="font-semibold text-foreground">{taskStats.repick}</span> REPICK</span>
+              {taskStats.unassigned > 0 ? (
+                <StatusBadge label={`${taskStats.unassigned} chưa giao`} variant="danger" dot />
+              ) : null}
+            </p>
           </FadeItem>
 
           <FadeItem>
-            <SectionCard>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {canManageAssignment ? (
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho</p>
-                  <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Chọn kho" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                          {warehouse.code} - {warehouse.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    Đơn chuyển kho sẽ hiện ở kho nguồn, không hiện ở kho đích.
-                  </p>
+            <FilterBar
+              searchValue={query}
+              onSearchChange={setQuery}
+              searchPlaceholder="Mã đơn / kho / loại đơn"
+              showSearchClear
+              filters={(
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                  {canManageAssignment ? (
+                    <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                      <SelectTrigger className="w-full sm:w-[240px]" aria-label="Kho" title="Đơn chuyển kho hiện ở kho nguồn, không hiện ở kho đích.">
+                        <SelectValue placeholder="Chọn kho" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem key={warehouse.id} value={warehouse.id}>
+                            {warehouse.code} - {warehouse.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                  <div className="max-w-full overflow-x-auto">
+                    <SegmentedControl
+                      options={[
+                        { value: "ALL", label: `Tất cả (${taskStats.total})` },
+                        { value: "PICK", label: `PICK (${taskStats.pick})` },
+                        { value: "REPICK", label: `REPICK (${taskStats.repick})` },
+                      ]}
+                      value={taskClassFilter}
+                      onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
+                      layoutId="picking-class-filter"
+                      gradientClassName="from-blue-600 to-indigo-600"
+                      className="w-max"
+                    />
+                  </div>
                 </div>
-                ) : null}
-
-                <div className={canManageAssignment ? "md:col-span-2" : "md:col-span-3"}>
-                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Tìm đơn</p>
-                  <FilterBar
-                    searchValue={query}
-                    onSearchChange={setQuery}
-                    searchPlaceholder="Mã đơn / kho / loại đơn"
-                    filters={(
-                      <SegmentedControl
-                        options={[
-                          { value: "ALL", label: "Tất cả" },
-                          { value: "PICK", label: "PICK" },
-                          { value: "REPICK", label: "REPICK" },
-                        ]}
-                        value={taskClassFilter}
-                        onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
-                        layoutId="picking-class-filter"
-                        gradientClassName="from-blue-600 to-indigo-600"
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-            </SectionCard>
+              )}
+            />
           </FadeItem>
 
           <FadeItem>
             <SectionCard noPadding>
               <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     {[
-                      "Mã đơn",
-                      "Loại",
-                      "Nhóm",
-                      "Kho nguồn",
-                      "Kho đích",
-                      "Trạng thái",
-                      "Số dòng",
-                      "Còn lại",
-                      "Người lấy",
-                      "Ngày",
-                      "Thao tác",
+                      { label: "Đơn hàng", className: "" },
+                      { label: "Khối lượng", className: "hidden w-[110px] sm:table-cell" },
+                      { label: "Người lấy", className: "hidden w-[270px] md:table-cell" },
+                      { label: "Ngày", className: "hidden w-[150px] xl:table-cell" },
+                      { label: "Thao tác", className: "w-[130px] text-right" },
                     ].map((head) => (
-                      <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                        {head}
+                      <TableHead key={head.label} className={cn("px-4 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground", head.className)}>
+                        {head.label}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -713,7 +703,7 @@ export function PickingPage() {
                 <TableBody>
                   {pagedTasks.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={11} className="whitespace-normal py-10 text-center">
+                      <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
                         <EmptyState variant="no-data" title="Không có đơn nào sẵn sàng lấy" description="Các đơn được giao picking sẽ hiện ở đây" />
                       </TableCell>
                     </TableRow>
@@ -725,19 +715,59 @@ export function PickingPage() {
                     const assignedPickerName = task.assigned_picker_user_id
                       ? staffNameById.get(task.assigned_picker_user_id) || (assignedToMe ? currentUserLabel : `User ${task.assigned_picker_user_id.slice(0, 8)}`)
                       : "";
+                    const classLabel = taskClassLabel(task.task_class);
+                    const route = [task.source_warehouse_code || task.source_warehouse_name, task.target_warehouse_code || task.target_warehouse_name]
+                      .filter(Boolean)
+                      .join(" → ");
+
+                    // Assignment control lives with the assignee ("Người lấy"); on narrow screens that
+                    // column is hidden, so the same control is rendered under the order instead.
+                    const assignment = !isAssigned && canManageAssignment ? (
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={selectedPickerId || "none"}
+                          onValueChange={(v) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: v === "none" ? "" : v }))}
+                        >
+                          <SelectTrigger size="sm" aria-label={`Chọn nhân viên kho cho ${task.order_number}`} className="h-8 min-w-0 flex-1 text-[11px]">
+                            <SelectValue placeholder="Chọn nhân viên" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Chọn nhân viên</SelectItem>
+                            {warehouseStaff.map((staff) => (
+                              <SelectItem key={staff.id} value={staff.id}>
+                                {staff.full_name || staff.username}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="success-outline"
+                          onClick={() => void handleAssignTask(task)}
+                          disabled={!selectedPickerId}
+                          loading={claimingTaskKey === key}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          Giao
+                        </Button>
+                      </div>
+                    ) : null;
 
                     return (
                       <React.Fragment key={key}>
                       <TableRow className="hover:bg-muted/50">
-                        <TableCell className="text-[12px] font-semibold">{task.order_number}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{taskTypeLabel(task.order_type)}</TableCell>
-                        <TableCell className="text-[12px]">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                        <TableCell className="px-4 py-3 align-top">
+                          <p className="truncate text-[13px] font-semibold" title={task.order_number}>{task.order_number}</p>
+                          <p className="truncate text-[12px] text-muted-foreground" title={route || undefined}>
+                            {[taskTypeLabel(task.order_type), route].filter(Boolean).join(" · ")}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <StatusBadge
-                              label={`${taskClassLabel(task.task_class)}${taskClassLabel(task.task_class) === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}`}
-                              variant={taskClassLabel(task.task_class) === "REPICK" ? "warning" : "info"}
+                              label={`${classLabel}${classLabel === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}`}
+                              variant={classLabel === "REPICK" ? "warning" : "info"}
                             />
-                            {taskClassLabel(task.task_class) === "PICK" && (task.repick_count ?? 0) > 0 && task.picking_task_id && (
+                            <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                            {classLabel === "PICK" && (task.repick_count ?? 0) > 0 && task.picking_task_id && (
                               <button
                                 onClick={async () => {
                                   const ptId = task.picking_task_id!;
@@ -767,83 +797,53 @@ export function PickingPage() {
                               </button>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{task.source_warehouse_code || task.source_warehouse_name || "-"}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{task.target_warehouse_code || task.target_warehouse_name || "-"}</TableCell>
-                        <TableCell>
-                          <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
-                        </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{task.line_count}</TableCell>
-                        <TableCell className="text-[12px] font-semibold">{task.remaining_quantity}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">
-                          {isAssigned ? assignedPickerName : "Chưa giao"}
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground">{formatDate(task.requested_at)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {!isAssigned && canManageAssignment ? (
-                              <div className="flex items-center gap-2">
-                                <Select
-                                  value={selectedPickerId || "none"}
-                                  onValueChange={(v) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: v === "none" ? "" : v }))}
-                                >
-                                  <SelectTrigger size="sm" aria-label={`Chọn nhân viên kho cho ${task.order_number}`} className="h-8 min-w-[150px] text-[11px]">
-                                    <SelectValue placeholder="Chọn nhân viên" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Chọn nhân viên</SelectItem>
-                                    {warehouseStaff.map((staff) => (
-                                      <SelectItem key={staff.id} value={staff.id}>
-                                        {staff.full_name || staff.username}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  size="sm"
-                                  variant="success-outline"
-                                  onClick={() => void handleAssignTask(task)}
-                                  disabled={!selectedPickerId}
-                                  loading={claimingTaskKey === key}
-                                >
-                                  <UserCheck className="h-3.5 w-3.5" />
-                                  Giao task
-                                </Button>
-                              </div>
-                            ) : null}
-
-                            {(canManageAssignment || assignedToMe) ? (
-                              <Button size="sm" variant="outline" onClick={() => void handleOpenTask(task)}>
-                                Xem chi tiết <ArrowRight className="w-3 h-3" />
-                              </Button>
-                            ) : null}
+                          <p className="mt-1.5 text-[12px] text-muted-foreground sm:hidden">
+                            {task.line_count} dòng · còn <span className="font-semibold text-foreground">{task.remaining_quantity}</span>
+                          </p>
+                          <div className="mt-2 md:hidden">
+                            {assignment ?? <p className="text-[12px] text-muted-foreground">{isAssigned ? `Người lấy: ${assignedPickerName}` : "Chưa giao"}</p>}
                           </div>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                          <p className="text-[13px] font-semibold tabular-nums">{task.remaining_quantity}<span className="ml-1 text-[11px] font-normal text-muted-foreground">cần lấy</span></p>
+                          <p className="text-[12px] text-muted-foreground">{task.line_count} dòng</p>
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 align-top md:table-cell">
+                          {assignment ?? (
+                            <p className={cn("text-[12px]", isAssigned ? "text-foreground" : "text-muted-foreground")}>
+                              {isAssigned ? assignedPickerName : "Chưa giao"}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell">{formatDate(task.requested_at)}</TableCell>
+                        <TableCell className="px-4 py-3 align-top text-right">
+                          {(canManageAssignment || assignedToMe) ? (
+                            <Button size="sm" variant="outline" onClick={() => void handleOpenTask(task)}>
+                              Chi tiết <ArrowRight className="w-3 h-3" />
+                            </Button>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                       {/* Inline REPICK children rows when expanded */}
                       {task.picking_task_id && expandedRepickTaskId === task.picking_task_id && (
                         loadingRepickChildren ? (
                           <TableRow key={`${key}-loading`}>
-                            <TableCell colSpan={11} className="pl-10 py-2 text-[11px] text-muted-foreground">Đang tải...</TableCell>
+                            <TableCell colSpan={5} className="py-2 pl-10 text-[11px] text-muted-foreground">Đang tải...</TableCell>
                           </TableRow>
                         ) : repickChildren.map((child) => (
                           <TableRow key={child.picking_task_id} className="border-b border-amber-50 bg-amber-50/30 hover:bg-amber-50/30 dark:border-amber-500/10 dark:bg-amber-500/5 dark:hover:bg-amber-500/5">
-                            <TableCell className="text-[11px] text-muted-foreground pl-10">
-                              <span className="text-amber-700 dark:text-amber-400 font-semibold">↳ {child.task_number}</span>
+                            <TableCell colSpan={5} className="px-4 py-2 pl-10">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                                <span className="font-semibold text-amber-700 dark:text-amber-400">↳ {child.task_number}</span>
+                                <span>REPICK</span>
+                                <StatusBadge
+                                  label={child.status}
+                                  variant={child.status === "COMPLETED" ? "success" : child.status === "PICKING" ? "info" : "neutral"}
+                                />
+                                <span>{child.picking_task_items?.length ?? 0} dòng</span>
+                                <span>thiếu {child.picking_task_items?.reduce((sum, item) => sum + item.short_qty, 0) ?? 0}</span>
+                              </div>
                             </TableCell>
-                            <TableCell className="text-[11px] text-muted-foreground" colSpan={2}>REPICK</TableCell>
-                            <TableCell className="text-[11px] text-muted-foreground" colSpan={2}>—</TableCell>
-                            <TableCell className="text-[11px]">
-                              <StatusBadge
-                                label={child.status}
-                                variant={child.status === "COMPLETED" ? "success" : child.status === "PICKING" ? "info" : "neutral"}
-                              />
-                            </TableCell>
-                            <TableCell className="text-[11px] text-muted-foreground">{child.picking_task_items?.length ?? 0}</TableCell>
-                            <TableCell className="text-[11px] text-muted-foreground">
-                              {child.picking_task_items?.reduce((s, i) => s + i.short_qty, 0) ?? 0}
-                            </TableCell>
-                            <TableCell colSpan={3} />
                           </TableRow>
                         ))
                       )}
