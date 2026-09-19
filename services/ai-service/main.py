@@ -1632,19 +1632,7 @@ def _metadata_completeness_score(data: dict) -> float:
     return round(score / total_weight, 3) if total_weight else 0.0
 
 
-# Smart ISBN Intelligence is deliberately deterministic.  These weights describe
-# source reliability, while agreement is calculated from the responses received
-# for this ISBN; no model-generated score is used for catalog metadata.
-ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "webSearch"]
-ISBN_INTELLIGENCE_FIELDS = (
-    "title", "subtitle", "authors", "publisher", "publishedDate", "description",
-    "categories", "language", "pageCount", "thumbnail",
-)
-ISBN_QUALITY_WEIGHTS = {
-    "title": 2.0, "authors": 2.0, "publisher": 1.0, "publishedDate": 1.0,
-    "description": 1.5, "categories": 0.5, "language": 0.5, "pageCount": 1.0,
-    "thumbnail": 0.5,
-}
+from isbn_coverage import ISBN_INTELLIGENCE_FIELDS, ISBN_QUALITY_WEIGHTS, ISBN_SOURCE_ORDER  # noqa: E402  (deterministic-intelligence constants live there)
 
 
 def _normalize_evidence_value(value):
