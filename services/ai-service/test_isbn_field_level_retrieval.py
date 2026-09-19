@@ -237,6 +237,46 @@ class LegacyContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses["tiki"], "DISABLED")
 
 
+class EnrichGuardTests(unittest.IsolatedAsyncioTestCase):
+    async def test_residual_factual_gaps_become_warnings_and_are_never_filled_by_ai(self):
+        from main import EnrichBookAfterIsbnRequest, enrich_book_after_isbn
+        lookup = {
+            "success": True, "found": True, "isbn": VALID_ISBN, "title": "Nhà Giả Kim", "authors": ["Paulo Coelho"],
+            "publisher": "NXB X", "publishedDate": None, "description": LONG_DESC, "categories": ["Tiểu thuyết"],
+            "language": "vi", "pageCount": None, "thumbnail": None, "summaryVi": None, "keywords": [],
+            "confidence": {"overall": 0.5}, "metadataQualityScore": 0.6,
+            "missingFields": ["publishedDate", "pageCount"], "lowConfidenceFields": [], "needsEnrichment": True,
+        }
+        with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, None))), \
+             patch("main._generate_summary_vi_and_keywords", new=AsyncMock(return_value=(None, [], False))), \
+             patch("main._call_text_llm_json", new=AsyncMock(return_value=({}, False))):
+            result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn=VALID_ISBN))
+
+        warnings = " ".join(result["aiSuggestions"]["qualityWarnings"])
+        self.assertIn("số trang", warnings)
+        self.assertIn("năm xuất bản", warnings)
+        for factual in ("pageCount", "publishedDate", "publisher"):
+            self.assertNotIn(factual, result["aiSuggestions"])
+        self.assertIsNone(result["lookup"]["pageCount"])
+
+    async def test_no_warning_when_nothing_is_missing(self):
+        from main import EnrichBookAfterIsbnRequest, enrich_book_after_isbn
+        lookup = {
+            "success": True, "found": True, "isbn": VALID_ISBN, "title": "T", "authors": ["A"],
+            "publisher": "P", "publishedDate": "2020", "description": LONG_DESC, "categories": ["c"],
+            "language": "vi", "pageCount": 100, "thumbnail": None, "summaryVi": None, "keywords": [],
+            "confidence": {"overall": 0.5}, "metadataQualityScore": 0.9,
+            "missingFields": [], "lowConfidenceFields": [], "needsEnrichment": False,
+        }
+        with patch("main.lookup_book_by_isbn", new=AsyncMock(return_value=lookup)), \
+             patch("main._normalize_with_catalog_authority", new=AsyncMock(return_value=(None, None))), \
+             patch("main._generate_summary_vi_and_keywords", new=AsyncMock(return_value=(None, [], False))), \
+             patch("main._call_text_llm_json", new=AsyncMock(return_value=({}, False))):
+            result = await enrich_book_after_isbn(EnrichBookAfterIsbnRequest(isbn=VALID_ISBN))
+        self.assertNotIn("Chưa tìm thấy", " ".join(result["aiSuggestions"]["qualityWarnings"]))
+
+
 class FlagOffTests(unittest.IsolatedAsyncioTestCase):
     async def test_flag_off_keeps_legacy_behavior(self):
         isbn_lookup_cache.clear()

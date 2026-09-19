@@ -2838,6 +2838,25 @@ async def _normalize_with_catalog_authority(lookup: dict) -> tuple[dict | None, 
         return None, "Authority normalization unavailable; staff review is required before catalog changes."
 
 
+_RESIDUAL_GAP_LABELS = {"publishedDate": "năm xuất bản", "pageCount": "số trang"}
+
+
+def _residual_gap_warning(lookup: dict) -> str | None:
+    """Factual fields no source could supply stay empty for staff to fill in; the AI
+    never invents them. publisher/description/authors/categories are already covered
+    by _check_book_quality, so only the fields it does not check are listed here."""
+    if not lookup.get("found"):
+        return None
+    labels = [
+        _RESIDUAL_GAP_LABELS[field]
+        for field in (lookup.get("missingFields") or [])
+        if field in _RESIDUAL_GAP_LABELS
+    ]
+    if not labels:
+        return None
+    return f"Chưa tìm thấy từ nguồn đáng tin cậy: {', '.join(labels)}. Vui lòng nhập hoặc xác minh thủ công."
+
+
 @app.post("/enrich-book-after-isbn")
 async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
     """
@@ -2863,6 +2882,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
     suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
     if authority_warning:
         suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
+    gap_warning = _residual_gap_warning(lookup)
+    if gap_warning:
+        suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [gap_warning]
     return {
         "success": bool(lookup.get("success") or lookup.get("found")),
         "lookup": lookup,
