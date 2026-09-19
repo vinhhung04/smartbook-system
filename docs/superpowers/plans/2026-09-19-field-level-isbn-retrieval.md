@@ -558,3 +558,14 @@ Có: marketplace không còn chạy ở Round 0; `worthCallingGaps` rỗng ⇒ d
 **Placeholder scan:** Không có "TBD/TODO". Hai chỗ cố ý để quyết định bằng dữ liệu, có tiêu chí rõ: ngưỡng `LOW_CONFIDENCE_THRESHOLD` (hiệu chỉnh bằng eval) và giá trị timeout axios (Task 0 xác minh).
 
 **Type consistency:** `analyze_field_coverage` → `worthCallingGaps` (Task 2) là input `plan_targeted_retrieval` (Task 3); `ProviderLedger` (Task 3) dùng bởi `_run_field_level_lookup` và `_build_source_statuses` (Task 5/6); tên `selectedPhase`, `stopReason`, `SKIPPED` nhất quán giữa mục E, D6, I.
+
+---
+
+# Implementation notes (deviations from the plan)
+
+- **B7 confirmed** by characterization test and fixed (barcode branch now returns `_providerMetadata`/`_providerOutcomes`).
+- **B4 dropped:** Google's default `language` reliability (1.0) already outranks the marketplace default (0.8), so no prior change was made.
+- **Task 4:** `_fetch_all_marketplace` was left untouched for the legacy path; a new `_fetch_marketplace_provider(provider, isbn13)` was added instead of refactoring it.
+- **Task 9 (marketplace parser for pageCount/categories) not done:** needs real captured Tiki/Vinabook responses as fixtures.
+- **Task 11:** no new ground-truth ISBNs were added to `isbn_dataset.json` (they must be hand-verified); the live `--mode both` eval has not been run yet.
+- **Task 12:** flag stays `false` by default; enabling it is gated on the live eval (mục J).
