@@ -357,3 +357,60 @@ class RetrievalMetricsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FieldLevelScoringTests(unittest.TestCase):
+    FULL = {
+        "found": True, "publisher": "P", "description": "d", "pageCount": 10, "categories": ["c"], "publishedDate": "2020",
+        "metadataCoverage": {"ratio": 1.0}, "processingTimeMs": 2000,
+        "retrieval": {"providerCalls": 4, "initialCoverage": {"ratio": 0.4}},
+        "sources": [],
+    }
+    LEGACY = {
+        "found": True, "publisher": None, "description": None, "pageCount": None, "categories": [], "publishedDate": "2020",
+        "metadataCoverage": {"ratio": 0.5}, "processingTimeMs": 30000,
+        "sources": [
+            {"name": "googleBooks", "status": "SUCCESS"}, {"name": "tiki", "status": "NOT_FOUND"},
+            {"name": "fahasa", "status": "TIMEOUT"}, {"name": "worldCat", "status": "DISABLED"},
+            {"name": "webSearch", "status": "SKIPPED"},
+        ],
+    }
+
+    def test_verdict_uses_retrieval_trace_when_present(self):
+        verdict = scoring.field_level_verdict(self.FULL)
+        self.assertEqual(verdict["coverage_before"], 0.4)
+        self.assertEqual(verdict["coverage_after"], 1.0)
+        self.assertEqual(verdict["provider_calls"], 4)
+        self.assertTrue(all(verdict["filled"].values()))
+
+    def test_verdict_for_legacy_result_counts_called_providers_only(self):
+        verdict = scoring.field_level_verdict(self.LEGACY)
+        self.assertEqual(verdict["provider_calls"], 3)  # DISABLED and SKIPPED were never called
+        self.assertEqual(verdict["coverage_before"], 0.5)
+        self.assertEqual(verdict["coverage_after"], 0.5)
+        self.assertFalse(verdict["filled"]["publisher"])
+        self.assertTrue(verdict["filled"]["publishedDate"])
+
+    def test_aggregate_reports_fill_rate_coverage_calls_and_latency(self):
+        verdicts = [scoring.field_level_verdict(self.FULL), scoring.field_level_verdict(self.LEGACY)]
+        summary = scoring.aggregate_field_level_scores(verdicts)
+        self.assertEqual(summary["total"], 2)
+        self.assertEqual(summary["fill_rate"]["publisher"], 0.5)
+        self.assertEqual(summary["fill_rate"]["publishedDate"], 1.0)
+        self.assertEqual(summary["avg_coverage_after"], 0.75)
+        self.assertEqual(summary["avg_coverage_before"], 0.45)
+        self.assertEqual(summary["avg_provider_calls"], 3.5)
+        self.assertEqual(summary["latency_ms"]["p50"], 2000)
+        self.assertEqual(summary["latency_ms"]["p95"], 30000)
+
+    def test_aggregate_of_nothing(self):
+        self.assertEqual(scoring.aggregate_field_level_scores([]), {"total": 0})
+
+    def test_compare_modes_reports_deltas(self):
+        legacy = scoring.aggregate_field_level_scores([scoring.field_level_verdict(self.LEGACY)])
+        new = scoring.aggregate_field_level_scores([scoring.field_level_verdict(self.FULL)])
+        delta = scoring.compare_modes(legacy, new)
+        self.assertEqual(delta["coverage_after"], 0.5)
+        self.assertEqual(delta["avg_provider_calls"], 1.0)
+        self.assertEqual(delta["fill_rate"]["publisher"], 1.0)
+        self.assertEqual(delta["latency_p95_ms"], -28000)

@@ -113,6 +113,73 @@ def aggregate_extraction_scores(results: list[dict]) -> dict:
     }
 
 
+# ── Field-level retrieval metrics (completeness, not just accuracy) ───────────
+# Accuracy above says whether returned values are right; these say how much of the
+# record was filled, at what provider-call and latency cost. The same verdict works
+# for the legacy flow (no `retrieval` trace) so both modes are measured identically.
+
+FILL_RATE_FIELDS = ("publisher", "description", "pageCount", "categories", "publishedDate")
+_NOT_CALLED = {"DISABLED", "SKIPPED"}
+
+
+def _is_filled(value) -> bool:
+    return bool(value) if isinstance(value, list) else value not in (None, "")
+
+
+def field_level_verdict(actual: dict) -> dict:
+    retrieval = actual.get("retrieval") or {}
+    coverage_after = (actual.get("metadataCoverage") or {}).get("ratio", 0.0)
+    if retrieval:
+        coverage_before = (retrieval.get("initialCoverage") or {}).get("ratio", coverage_after)
+        provider_calls = retrieval.get("providerCalls", 0)
+    else:
+        coverage_before = coverage_after
+        provider_calls = sum(1 for s in actual.get("sources") or [] if s.get("status") not in _NOT_CALLED)
+    return {
+        "coverage_before": coverage_before,
+        "coverage_after": coverage_after,
+        "filled": {field: _is_filled(actual.get(field)) for field in FILL_RATE_FIELDS},
+        "provider_calls": provider_calls,
+        "processing_ms": actual.get("processingTimeMs", 0),
+    }
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    ordered = sorted(values)
+    rank = max(1, -(-len(ordered) * fraction // 1))  # ceil without importing math
+    return ordered[int(rank) - 1]
+
+
+def aggregate_field_level_scores(verdicts: list[dict]) -> dict:
+    total = len(verdicts)
+    if not total:
+        return {"total": 0}
+    latencies = [v["processing_ms"] for v in verdicts]
+    return {
+        "total": total,
+        "avg_coverage_before": round(sum(v["coverage_before"] for v in verdicts) / total, 3),
+        "avg_coverage_after": round(sum(v["coverage_after"] for v in verdicts) / total, 3),
+        "fill_rate": {
+            field: round(sum(1 for v in verdicts if v["filled"][field]) / total, 3) for field in FILL_RATE_FIELDS
+        },
+        "avg_provider_calls": round(sum(v["provider_calls"] for v in verdicts) / total, 3),
+        "latency_ms": {"p50": _percentile(latencies, 0.5), "p95": _percentile(latencies, 0.95)},
+    }
+
+
+def compare_modes(legacy: dict, new: dict) -> dict:
+    """new - legacy for each metric (positive coverage/fill deltas are improvements)."""
+    return {
+        "coverage_after": round(new["avg_coverage_after"] - legacy["avg_coverage_after"], 3),
+        "avg_provider_calls": round(new["avg_provider_calls"] - legacy["avg_provider_calls"], 3),
+        "fill_rate": {
+            field: round(new["fill_rate"][field] - legacy["fill_rate"][field], 3) for field in FILL_RATE_FIELDS
+        },
+        "latency_p50_ms": new["latency_ms"]["p50"] - legacy["latency_ms"]["p50"],
+        "latency_p95_ms": new["latency_ms"]["p95"] - legacy["latency_ms"]["p95"],
+    }
+
+
 def tool_selection_verdict(expected_tools: list[str], actual_tools: list[str]) -> dict:
     """Precision/recall for one labeled question. Tool *names* only - call
     arguments are not scored, since the same question can reasonably be

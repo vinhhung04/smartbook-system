@@ -29,6 +29,8 @@ Prints per-ISBN progress and a summary, and writes a full report to
 pass/fail table, and a list of every title/publisher mismatch so you can see
 *why* a lookup was wrong, not just that it was).
 
+**Field-level retrieval:** `python eval/eval_isbn_extraction.py --mode both` chạy toàn bộ dataset hai lần (cờ tắt rồi bật) trong cùng một phiên và ghi báo cáo so sánh `isbn_field_level_comparison_<timestamp>.md`: accuracy, coverage trước/sau, fill rate từng field, số provider call trung bình, latency p50/p95. Dataset hiện chủ yếu là sách quốc tế nổi tiếng; muốn thấy rõ lợi ích của field-level, thêm các ISBN sách Việt mà Google Books chỉ có title/authors (ground truth phải nhập tay từ nguồn đáng tin cậy).
+
 ### `isbn_dataset.json`
 
 Each entry is one ground-truth record:

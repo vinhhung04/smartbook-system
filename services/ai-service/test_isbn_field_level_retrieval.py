@@ -237,6 +237,24 @@ class LegacyContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses["tiki"], "DISABLED")
 
 
+class ObservabilityTests(FieldLevelLookupTests):
+    async def test_structured_log_line_summarizes_the_lookup_without_secrets(self):
+        import json
+        with self.assertLogs("uvicorn.error", level="INFO") as captured:
+            await self._lookup(google_partial(), {"vinabook": market(publisher="NXB X", publishedDate="2020",
+                                                                     description=LONG_DESC, pageCount=228)})
+        lines = [m for m in captured.output if "isbn_lookup " in m]
+        self.assertEqual(len(lines), 1)
+        payload = json.loads(lines[0].split("isbn_lookup ", 1)[1])
+        self.assertEqual(payload["isbn"], VALID_ISBN)
+        self.assertEqual(payload["mode"], "field-level")
+        self.assertEqual(payload["stopReason"], "COVERAGE_OK")
+        self.assertIn("publisher", payload["recovered"])
+        self.assertLess(payload["initialCoverage"], payload["finalCoverage"])
+        self.assertLess(payload["qualityBefore"], payload["qualityAfter"])
+        self.assertNotIn("KEY", lines[0].upper().replace("KEYWORDS", ""))
+
+
 class EnrichGuardTests(unittest.IsolatedAsyncioTestCase):
     async def test_residual_factual_gaps_become_warnings_and_are_never_filled_by_ai(self):
         from main import EnrichBookAfterIsbnRequest, enrich_book_after_isbn

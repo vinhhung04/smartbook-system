@@ -91,7 +91,7 @@ from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
 from prometheus_fastapi_instrumentator import Instrumentator
-from metrics import ocr_request_duration
+from metrics import isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -2673,6 +2673,35 @@ def _attach_coverage_fields(result: dict, intelligence: dict, trace: dict | None
     }
 
 
+def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
+    """One structured line per (uncached) lookup, plus metrics. Contains only the
+    ISBN, coverage/quality numbers and provider names - never keys or provider bodies."""
+    coverage = (result.get("metadataCoverage") or {}).get("ratio")
+    retrieval = result.get("retrieval") or {}
+    payload = {
+        "isbn": result.get("isbn"),
+        "mode": "field-level" if trace else "legacy",
+        "initialCoverage": (retrieval.get("initialCoverage") or {}).get("ratio", coverage),
+        "gaps": (trace or {}).get("initialMissing", []),
+        "rounds": [{"providers": r["providers"], "recovered": r["recovered"]} for r in retrieval.get("rounds", [])],
+        "recovered": retrieval.get("recoveredFields", []),
+        "remaining": retrieval.get("remainingGaps", []),
+        "finalCoverage": coverage,
+        "qualityBefore": retrieval.get("qualityBefore"),
+        "qualityAfter": result.get("metadataQualityScore"),
+        "stopReason": retrieval.get("stopReason"),
+        "providerCalls": retrieval.get("providerCalls"),
+        "elapsedMs": result.get("processingTimeMs"),
+    }
+    logger.info("isbn_lookup %s", json.dumps(payload, ensure_ascii=False))
+    try:
+        isbn_lookup_duration.labels(payload["mode"]).observe((result.get("processingTimeMs") or 0) / 1000)
+        for provider, entry in ((trace or {}).get("ledger") or {}).items():
+            isbn_provider_calls.labels(provider, entry["phase"], entry["status"]).inc()
+    except Exception:  # metrics must never break a lookup
+        logger.debug("isbn metrics update failed", exc_info=True)
+
+
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
     cache_key = _isbn_lookup_cache_key(req)
@@ -2698,6 +2727,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
     _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+    _log_isbn_lookup(result, trace)
 
     if cache_key and result.get("found"):
         isbn_lookup_cache.set(cache_key, result, ttl_seconds=_isbn_cache_ttl(result))
