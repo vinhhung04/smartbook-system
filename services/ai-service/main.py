@@ -157,6 +157,9 @@ BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 # missing, within one total time budget. Off = legacy "everything in parallel" flow.
 ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL = os.getenv("ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", "false").lower() == "true"
 ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SECONDS", "45"))
+# A found-but-incomplete lookup (gaps left, or a provider timed out/errored) is cached
+# only briefly so it is retried soon instead of sticking for the full 7 days.
+ISBN_INCOMPLETE_CACHE_TTL_SECONDS = int(os.getenv("ISBN_INCOMPLETE_CACHE_TTL_SECONDS", "600"))
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
@@ -2623,7 +2626,16 @@ def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
     isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
     if error or not isbn13:
         return None
-    return f"{isbn13}:{bool(req.generateVietnameseSummary)}"
+    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "legacy"
+    return f"{isbn13}:{bool(req.generateVietnameseSummary)}:{mode}"
+
+
+def _isbn_cache_ttl(result: dict) -> int | None:
+    """None = the cache's default (long) TTL; a short TTL when the result is incomplete."""
+    provider_failed = any(s.get("status") in ("TIMEOUT", "ERROR") for s in result.get("sources") or [])
+    if result.get("needsEnrichment") or provider_failed:
+        return ISBN_INCOMPLETE_CACHE_TTL_SECONDS
+    return None
 
 
 def _attach_coverage_fields(result: dict, intelligence: dict, trace: dict | None) -> None:
@@ -2688,7 +2700,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
 
     if cache_key and result.get("found"):
-        isbn_lookup_cache.set(cache_key, result)
+        isbn_lookup_cache.set(cache_key, result, ttl_seconds=_isbn_cache_ttl(result))
     return result
 
 
