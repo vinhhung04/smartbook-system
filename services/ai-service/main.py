@@ -1702,8 +1702,8 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
 
         alternatives = [
             {"source": item["source"], "value": item["value"]}
-            for item in confirmations[1:]
-            if _normalize_evidence_value(item["value"]) != selected_normalized
+            for item in confirmations
+            if item is not selected and _normalize_evidence_value(item["value"]) != selected_normalized
         ]
         if alternatives:
             conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})

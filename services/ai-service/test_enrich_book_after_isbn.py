@@ -64,6 +64,20 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["conflicts"][0]["field"], "title")
         self.assertGreater(result["metadataQualityScore"], 0)
 
+    def test_conflict_is_reported_when_selected_source_is_not_first_in_source_order(self):
+        # fahasa (0.84) outranks googleBooks (0.82) for publisher, so the selected
+        # source is not confirmations[0]; the disagreeing googleBooks value must
+        # still surface as a conflict.
+        result = _build_isbn_intelligence({
+            "googleBooks": {"publisher": "NXB A"},
+            "fahasa": {"publisher": "NXB B"},
+        }, {})
+
+        self.assertEqual(result["fieldEvidence"]["publisher"]["selectedSource"], "fahasa")
+        conflict = next(c for c in result["conflicts"] if c["field"] == "publisher")
+        self.assertEqual(conflict["selectedValue"], "NXB B")
+        self.assertEqual(conflict["alternatives"], [{"source": "googleBooks", "value": "NXB A"}])
+
     def test_intelligence_keeps_timeout_status_and_returns_remaining_metadata(self):
         result = _build_isbn_intelligence({
             "googleBooks": None,
