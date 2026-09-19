@@ -39,14 +39,43 @@ export interface IsbnFieldEvidence {
   selectedValue: string | string[] | number | null;
   selectedSource: IsbnSourceName | null;
   confirmations: Array<{ source: IsbnSourceName; value: unknown; sourceUrl?: string }>;
+  selectionReason?: { sourceReliability: number; agreementCount: number; conflictCount: number };
+  /** INITIAL = found by the first lookup; TARGETED = recovered afterwards for a missing/weak field. */
+  selectedPhase?: IsbnRetrievalPhase;
 }
+
+export type IsbnRetrievalPhase = 'INITIAL' | 'TARGETED';
+
+export type IsbnFieldStatus = 'MISSING' | 'LOW_CONFIDENCE' | 'CONFLICTED' | 'SUFFICIENT';
 
 export interface IsbnLookupSource {
   name: IsbnSourceName;
   enabled: boolean;
-  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED';
+  /** SKIPPED = not called because the metadata was already good enough. */
+  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED' | 'SKIPPED';
   durationMs: number;
   sourceUrl?: string;
+  phase?: IsbnRetrievalPhase;
+  reasons?: string[];
+}
+
+export interface IsbnMetadataCoverage {
+  foundFields: number;
+  totalFields: number;
+  ratio: number;
+  weightedRatio: number;
+  byTier: Record<string, { found: number; total: number }>;
+}
+
+export interface IsbnRetrievalTrace {
+  mode: string;
+  providerCalls: number;
+  stopReason: string;
+  recoveredFields: string[];
+  remainingGaps: string[];
+  qualityBefore: number;
+  qualityAfter: number;
+  elapsedMs: number;
 }
 
 export interface IsbnConflict {
@@ -101,6 +130,13 @@ export interface LookupBookByIsbnResponse {
   conflicts?: IsbnConflict[];
   metadataQualityScore?: number;
   processingTimeMs?: number;
+  /** `found` means the book was identified; completeness is described by the fields below. */
+  metadataCoverage?: IsbnMetadataCoverage;
+  fieldStatus?: Record<string, IsbnFieldStatus>;
+  missingFields?: string[];
+  lowConfidenceFields?: string[];
+  needsEnrichment?: boolean;
+  retrieval?: IsbnRetrievalTrace;
 }
 
 export interface PostIsbnAiSuggestions {

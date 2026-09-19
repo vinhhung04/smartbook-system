@@ -1,8 +1,8 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { StatusBadge } from "@/components/status-badge";
 import type { LookupBookByIsbnResponse } from "@/services/ai";
-import { displayEvidenceValue, hasIsbnEvidence } from "./utils";
+import { SOURCE_LABELS, displayEvidenceValue, fieldLabel, hasIsbnEvidence } from "./utils";
 import { ReviewDisclosure } from "./review-queue-item";
 import { ConfidenceMeter } from "./confidence-meter";
 
@@ -11,6 +11,8 @@ export function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResp
   const evidence = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource);
   const conflicts = lookup.conflicts || [];
   const sources = lookup.sources || [];
+  const coverage = lookup.metadataCoverage;
+  const fieldStatus = Object.entries(lookup.fieldStatus || {});
   if (!hasIsbnEvidence(lookup)) return null;
 
   return (
@@ -19,7 +21,8 @@ export function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResp
         <div>
           <h3 className="text-[14px] font-semibold text-foreground">{t("isbn_intelligence.title")}</h3>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {t("isbn_intelligence.quality")} {Math.round((lookup.metadataQualityScore || 0) * 100)}% · {t("isbn_intelligence.processing")} {lookup.processingTimeMs ?? 0} ms
+            {t("isbn_intelligence.quality")} {Math.round((lookup.metadataQualityScore || 0) * 100)}%
+            {coverage ? ` · ${coverage.foundFields}/${coverage.totalFields} trường` : ""} · {t("isbn_intelligence.processing")} {lookup.processingTimeMs ?? 0} ms
           </p>
         </div>
         {conflicts.length > 0 ? <StatusBadge label={`${conflicts.length} ${t("isbn_intelligence.conflicts")}`} variant="warning" /> : null}
@@ -30,6 +33,34 @@ export function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResp
           <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{t("isbn_intelligence.conflict_warning")}</div>
           {conflicts.map((conflict) => <p key={conflict.field} className="mt-1">{conflict.field}: {displayEvidenceValue(conflict.selectedValue)} · {conflict.alternatives.map((item) => `${item.source}: ${displayEvidenceValue(item.value)}`).join(" | ")}</p>)}
         </div>
+      ) : null}
+
+      {coverage && fieldStatus.length > 0 ? (
+        <ReviewDisclosure
+          id="isbn-intel-coverage"
+          title={t("isbn_intelligence.coverage")}
+          description={`${coverage.foundFields}/${coverage.totalFields}`}
+        >
+          <ul className="grid grid-cols-1 gap-1.5 text-[13px] lg:grid-cols-2">
+            {fieldStatus.map(([field, status]) => {
+              const item = lookup.fieldEvidence?.[field];
+              const enrichedFrom = item?.selectedPhase === "TARGETED" && item.selectedSource ? SOURCE_LABELS[item.selectedSource] : null;
+              const ok = status === "SUFFICIENT";
+              return (
+                <li key={field} className="flex items-start gap-1.5">
+                  {ok ? <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" /> : <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />}
+                  <span>
+                    <span className="font-medium text-foreground">{fieldLabel(field)}</span>
+                    {enrichedFrom ? <span className="block text-muted-foreground">{t("isbn_intelligence.enriched_from")} {enrichedFrom}</span> : null}
+                    {status === "MISSING" ? <span className="block text-muted-foreground">{t("isbn_intelligence.not_found_reliable")}</span> : null}
+                    {status === "LOW_CONFIDENCE" ? <span className="block text-muted-foreground">{t("isbn_intelligence.low_confidence")}</span> : null}
+                    {status === "CONFLICTED" ? <span className="block text-muted-foreground">{t("isbn_intelligence.conflict_warning")}</span> : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </ReviewDisclosure>
       ) : null}
 
       {evidence.length > 0 ? (
@@ -61,7 +92,7 @@ export function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResp
           description={`${sources.length} nguồn đã được kiểm tra`}
         >
           <div className="flex flex-wrap gap-1.5">
-            {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" ? "neutral" : "warning"} />)}
+            {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" || source.status === "SKIPPED" ? "neutral" : "warning"} />)}
           </div>
         </ReviewDisclosure>
       ) : null}

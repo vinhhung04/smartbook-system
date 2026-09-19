@@ -3,7 +3,12 @@ import type { LookupBookByIsbnResponse } from "@/services/ai";
 import { StatusBadge } from "@/components/status-badge";
 import { CoverPreview } from "./field";
 import type { EditableBookForm } from "./types";
-import { winningSourceName } from "./utils";
+import { fieldLabel, winningSourceName } from "./utils";
+
+// Mirrors the backend's critical/high-value fields (isbn_coverage.FIELD_TIERS); supporting fields are not flagged here.
+const HIGH_VALUE_TIER: Record<string, string> = {
+  title: "critical", authors: "critical", publisher: "high", publishedDate: "high", description: "high", pageCount: "high",
+};
 
 export function MetadataFoundHero({
   lookup,
@@ -16,6 +21,12 @@ export function MetadataFoundHero({
 }) {
   const quality = Math.round((lookup.metadataQualityScore || 0) * 100);
   const source = winningSourceName(lookup);
+  const gapLabels = lookup.needsEnrichment
+    ? [...(lookup.missingFields || []), ...(lookup.lowConfidenceFields || [])]
+        .filter((field, index, all) => all.indexOf(field) === index)
+        .filter((field) => lookup.fieldStatus?.[field] && ["critical", "high"].includes(HIGH_VALUE_TIER[field] || ""))
+        .map(fieldLabel)
+    : [];
   const processingSeconds = lookup.processingTimeMs != null ? (lookup.processingTimeMs / 1000).toFixed(1) : null;
 
   return (
@@ -46,6 +57,10 @@ export function MetadataFoundHero({
           </div>
         </div>
       </div>
+
+      {gapLabels.length > 0 ? (
+        <p className="mt-3 text-[13px] text-warning">Thiếu hoặc chưa chắc chắn: {gapLabels.join(", ")}</p>
+      ) : null}
 
       {(source || processingSeconds) ? (
         <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">

@@ -14,6 +14,23 @@ export const SOURCE_LABELS: Record<IsbnSourceName, string> = {
   webSearch: "Web search",
 };
 
+/** Librarian-facing (Vietnamese) names for the metadata fields shown in coverage/gap summaries. */
+export const FIELD_LABELS: Record<string, string> = {
+  title: "Tên sách",
+  authors: "Tác giả",
+  publisher: "Nhà xuất bản",
+  publishedDate: "Năm xuất bản",
+  description: "Mô tả",
+  categories: "Thể loại",
+  language: "Ngôn ngữ",
+  pageCount: "Số trang",
+  thumbnail: "Ảnh bìa",
+};
+
+export function fieldLabel(field: string): string {
+  return FIELD_LABELS[field] || field;
+}
+
 export function winningSourceName(lookup: LookupBookByIsbnResponse): string | null {
   const winner = (lookup.sources || []).find((source) => source.status === "SUCCESS");
   return winner ? SOURCE_LABELS[winner.name] || winner.name : null;
