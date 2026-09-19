@@ -49,6 +49,9 @@ class ProviderLedger:
     def get(self, provider: str) -> dict | None:
         return self._entries.get(provider)
 
+    def export(self) -> dict[str, dict]:
+        return {provider: dict(entry) for provider, entry in self._entries.items()}
+
     @property
     def provider_call_count(self) -> int:
         return len(self._entries)

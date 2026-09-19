@@ -152,6 +152,11 @@ ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lowe
 BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "30"))
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
+# Field-level ISBN retrieval: after the initial Google/Open Library lookup, only call
+# the marketplace/web providers that can fill the critical/high-value fields still
+# missing, within one total time budget. Off = legacy "everything in parallel" flow.
+ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL = os.getenv("ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", "false").lower() == "true"
+ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SECONDS", "45"))
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
@@ -1670,7 +1675,10 @@ def _metadata_completeness_score(data: dict) -> float:
     return round(score / total_weight, 3) if total_weight else 0.0
 
 
-from isbn_coverage import ISBN_INTELLIGENCE_FIELDS, ISBN_QUALITY_WEIGHTS, ISBN_SOURCE_ORDER  # noqa: E402  (deterministic-intelligence constants live there)
+from isbn_coverage import (  # noqa: E402  (deterministic-intelligence constants live there)
+    ISBN_INTELLIGENCE_FIELDS, ISBN_QUALITY_WEIGHTS, ISBN_SOURCE_ORDER, analyze_field_coverage,
+)
+from isbn_targeted import MAX_ROUNDS, PROVIDER_MIN_SECONDS, ProviderLedger, plan_targeted_retrieval  # noqa: E402
 
 
 def _normalize_evidence_value(value):
@@ -2175,6 +2183,149 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
         return None, [], False
 
 
+def _enabled_targeted_providers() -> set[str]:
+    return {"tiki", "vinabook", "fahasa", "webSearch"} if ENABLE_MARKETPLACE_LOOKUP else set()
+
+
+def _isbn_source_flags_and_confidence(provider_metadata: dict, scores: dict, ai_provider: str = "none") -> tuple[dict, dict]:
+    """Same `source` / `confidence` shapes the legacy flow returns (frontend contract)."""
+    source = {name: bool(provider_metadata.get(name)) for name in ISBN_SOURCE_ORDER}
+    source["worldCat"] = source["worldCat"] if ENABLE_WORLDCAT_LOOKUP else False
+    source["aiSummary"] = ai_provider
+    all_scores = [scores.get(name, 0.0) for name in ISBN_SOURCE_ORDER]
+    overall = round(max(all_scores), 3)
+    active = [s for s in all_scores if s > 0]
+    if len(active) >= 2:
+        overall = round(max(overall, min(1.0, sum(active) / len(active) + 0.1)), 3)
+    confidence = {"overall": overall, **{name: scores.get(name, 0.0) for name in ISBN_SOURCE_ORDER}}
+    return source, confidence
+
+
+async def _run_field_level_lookup(raw_isbn: str, isbn13: str, isbn10: str | None, generate_summary: bool) -> dict:
+    """Initial Google/Open Library lookup, then only the providers able to fill the
+    critical/high-value fields still missing, cheapest first, within one time budget.
+    Returns the same shape as the legacy valid-ISBN flow plus a `_retrievalTrace`."""
+    started = time.perf_counter()
+    deadline = started + ISBN_LOOKUP_TOTAL_BUDGET_SECONDS
+    ledger = ProviderLedger()
+    provider_metadata: dict[str, dict | None] = {name: None for name in ISBN_SOURCE_ORDER}
+    scores: dict[str, float] = {name: 0.0 for name in ISBN_SOURCE_ORDER}
+    outcomes: dict[str, str] = {}
+
+    def absorb(provider: str, data: dict | None, score: float, outcome: str | None, phase: str,
+               reasons: list[str], began: float) -> None:
+        provider_metadata[provider] = data
+        scores[provider] = score if data else 0.0
+        if outcome:
+            outcomes[provider] = outcome
+        status = "SUCCESS" if data else (outcome or "NOT_FOUND")
+        ledger.record(provider, status, phase, reasons, int((time.perf_counter() - began) * 1000))
+
+    def failure_outcome(exc: BaseException) -> str:
+        return "TIMEOUT" if isinstance(exc, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+
+    def analyze() -> tuple[dict, dict]:
+        intelligence = _build_isbn_intelligence(provider_metadata, {})
+        return intelligence, analyze_field_coverage(intelligence)
+
+    # Round 0 - INITIAL: structured APIs only (marketplace/web are targeted, not eager).
+    initial_names = ["googleBooks", "openLibrary"] + (["worldCat"] if ENABLE_WORLDCAT_LOOKUP else [])
+    began = time.perf_counter()
+    std_results = await _run_standard_lookups(isbn13, isbn10)
+    for index, name in enumerate(initial_names):
+        value = std_results[index] if index < len(std_results) else (None, 0.0)
+        if isinstance(value, BaseException):
+            absorb(name, None, 0.0, failure_outcome(value), "INITIAL", [], began)
+        else:
+            absorb(name, value[0], value[1], None, "INITIAL", [], began)
+
+    intelligence, coverage = analyze()
+    initial_coverage = {k: coverage["coverage"][k] for k in ("foundFields", "totalFields", "ratio")}
+    initial_missing = list(coverage["missingFields"])
+    quality_before = intelligence["metadataQualityScore"]
+
+    enabled = _enabled_targeted_providers()
+    rounds: list[dict] = []
+    stop_reason = None
+    for round_index in range(MAX_ROUNDS):
+        if not coverage["worthCallingGaps"]:
+            stop_reason = "COVERAGE_OK"
+            break
+        remaining = deadline - time.perf_counter()
+        plan = plan_targeted_retrieval(coverage["worthCallingGaps"], ledger, enabled, round_index, remaining)
+        if not plan:
+            continue
+        began = time.perf_counter()
+        results = await asyncio.gather(
+            *(asyncio.wait_for(_fetch_marketplace_provider(item["provider"], isbn13), timeout=max(remaining, 0.1))
+              for item in plan),
+            return_exceptions=True,
+        )
+        for item, result in zip(plan, results):
+            if isinstance(result, BaseException):
+                absorb(item["provider"], None, 0.0, failure_outcome(result), "TARGETED", item["reasons"], began)
+            else:
+                absorb(item["provider"], result[0], result[1], result[2], "TARGETED", item["reasons"], began)
+        before_missing = set(coverage["missingFields"])
+        intelligence, coverage = analyze()
+        rounds.append({
+            "round": round_index,
+            "providers": [item["provider"] for item in plan],
+            "recovered": sorted(before_missing - set(coverage["missingFields"])),
+        })
+    if stop_reason is None:
+        if not coverage["worthCallingGaps"]:
+            stop_reason = "COVERAGE_OK"
+        elif deadline - time.perf_counter() < min(PROVIDER_MIN_SECONDS.values()):
+            stop_reason = "BUDGET_EXHAUSTED"
+        else:
+            stop_reason = "NO_ELIGIBLE_PROVIDER"
+
+    metadata = intelligence["metadata"]
+    found = bool(metadata.get("title") or metadata.get("authors") or metadata.get("description"))
+    trace = {
+        "mode": "field-level",
+        "rounds": rounds,
+        "providerCalls": ledger.provider_call_count,
+        "stopReason": stop_reason,
+        "budgetMs": int(ISBN_LOOKUP_TOTAL_BUDGET_SECONDS * 1000),
+        "elapsedMs": int((time.perf_counter() - started) * 1000),
+        "initialCoverage": initial_coverage,
+        "initialMissing": initial_missing,
+        "initialQuality": quality_before,
+        "ledger": ledger.export(),
+    }
+
+    if not found:
+        result = _manual_entry_response(raw_isbn, isbn13, "metadata not found from providers")
+        result["isbn"] = isbn13
+        source, confidence = _isbn_source_flags_and_confidence(provider_metadata, scores)
+        result["source"].update(source)
+        result["confidence"].update(confidence)
+    else:
+        summary_vi, keywords, ai_provider = None, [], "none"
+        if generate_summary and _should_generate_summary(metadata):
+            summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+            ai_provider = _get_text_llm_provider().name if ok else "none"
+        source, confidence = _isbn_source_flags_and_confidence(provider_metadata, scores, ai_provider)
+        market = next((provider_metadata[n] for n in ("fahasa", "tiki", "vinabook", "webSearch") if provider_metadata[n]), None) or {}
+        result = {
+            "success": True, "found": True, "isbn": isbn13, "isbn13": isbn13, "isbn10": isbn10,
+            "title": metadata.get("title"), "subtitle": metadata.get("subtitle"),
+            "authors": metadata.get("authors") or [], "publisher": metadata.get("publisher"),
+            "publishedDate": metadata.get("publishedDate"), "description": metadata.get("description"),
+            "categories": metadata.get("categories") or [], "language": metadata.get("language"),
+            "pageCount": metadata.get("pageCount"), "thumbnail": metadata.get("thumbnail"),
+            "source": source, "confidence": confidence,
+            "summaryVi": summary_vi, "keywords": keywords, "manualEntryRequired": False,
+            "sourceUrl": market.get("sourceUrl"), "sourceFetchMode": market.get("sourceFetchMode"),
+        }
+    result["_providerMetadata"] = provider_metadata
+    result["_providerOutcomes"] = outcomes
+    result["_retrievalTrace"] = trace
+    return result
+
+
 async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
@@ -2257,6 +2408,12 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
 
     if validation_error:
         return _manual_entry_response(raw_isbn, None, validation_error)
+
+    if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:
+        try:
+            return await _run_field_level_lookup(raw_isbn, isbn13, isbn10, bool(req.generateVietnameseSummary))
+        except Exception:
+            logger.exception("Field-level ISBN retrieval failed for %s, falling back to legacy lookup", isbn13)
 
     # ── Standard ISBN lookup: run standard providers + marketplace in parallel ─
     if ENABLE_MARKETPLACE_LOOKUP:
