@@ -1506,6 +1506,44 @@ async def _fetch_all_marketplace(
     return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, search_outcomes
 
 
+async def _fetch_marketplace_provider(provider: str, isbn13: str) -> tuple[dict | None, float, str | None]:
+    """One marketplace/web provider on its own, for field-level targeted retrieval.
+
+    Returns (metadata, score, outcome); outcome is None (success or clean
+    not-found), "TIMEOUT" or "ERROR" - never raises, so one provider failing
+    cannot fail the request. The caller enforces the overall time budget."""
+    timeout = BOOK_MARKETPLACE_TIMEOUT_SECONDS
+    try:
+        if provider == "webSearch":
+            data, score, outcome = await _fetch_web_search_fallback(isbn13)
+            return data, score, (None if outcome == "NOT_FOUND" else outcome)
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
+            if provider == "tiki":
+                call = _fetch_tiki_by_isbn_api(client, isbn13)
+            elif provider == "vinabook":
+                call = _fetch_vinabook_by_isbn_api(client, isbn13)
+            elif provider == "fahasa":
+                fahasa_urls: list[str] = []
+                try:
+                    fahasa_urls = await asyncio.wait_for(
+                        asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
+                        timeout=timeout,
+                    )
+                except Exception as exc:  # CloakBrowser's own-site search below does not need DDGS
+                    logger.warning("DuckDuckGo Fahasa search failed for ISBN %s: %s", isbn13, exc)
+                call = _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13)
+            else:
+                raise ValueError(f"unknown marketplace provider {provider!r}")
+            data, score = await asyncio.wait_for(call, timeout=timeout)
+        return data, score, None
+    except (asyncio.TimeoutError, httpx.TimeoutException):
+        return None, 0.0, "TIMEOUT"
+    except Exception as exc:
+        logger.warning("Marketplace provider %s failed for ISBN %s: %s", provider, isbn13, exc)
+        return None, 0.0, "ERROR"
+
+
 # ── 7. Merge marketplace data into base metadata ─────────────────────────────
 
 def _merge_with_marketplace(
