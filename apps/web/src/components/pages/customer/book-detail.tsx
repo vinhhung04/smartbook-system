@@ -6,9 +6,8 @@ import { getApiErrorMessage } from '@/services/api';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingOverlay } from '@/components/ui/loading-state';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { BookOpen, MapPin, ShoppingCart, Star, Calendar, ChevronRight, MessageSquare, Trash2 } from 'lucide-react';
+import { BookOpen, ChevronRight, Heart, MessageSquare, ShoppingCart, Sparkles, Star, Trash2 } from 'lucide-react';
+import { cn } from '@/components/ui/utils';
 import { ReserveModal } from './_shared/reserve-modal';
 
 interface BookReview {
@@ -45,6 +44,7 @@ function StarRating({ value, onChange, size = 20, readonly = false }: {
           onClick={() => onChange?.(star)}
           onMouseEnter={() => !readonly && setHover(star)}
           onMouseLeave={() => !readonly && setHover(0)}
+          aria-label={`${star} sao`}
           className={`transition-colors ${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
         >
           <Star
@@ -144,7 +144,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
       <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-2 mb-4">
           <MessageSquare className="w-4.5 h-4.5 text-amber-600" />
-          <h3 className="text-[15px] font-semibold text-foreground">Đánh giá & Nhận xét</h3>
+          <h2 className="text-[15px] font-semibold text-foreground">Đánh giá & nhận xét</h2>
         </div>
 
         {loading ? (
@@ -164,7 +164,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
               </div>
               <StarRating value={Math.round(stats.averageRating)} readonly size={16} />
               <p className="text-[12px] text-muted-foreground mt-1">
-                {stats.totalReviews} review{stats.totalReviews !== 1 ? 's' : ''}
+                {stats.totalReviews} đánh giá
               </p>
             </div>
 
@@ -190,16 +190,16 @@ function ReviewSection({ bookId }: { bookId: string }) {
 
       {/* Write Review */}
       <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-violet-50/30 p-5">
-        <h4 className="text-[13px] font-semibold text-foreground mb-3">
-          {myReview ? 'Update your review' : 'Write a review'}
-        </h4>
+        <h3 className="text-[13px] font-semibold text-foreground mb-3">
+          {myReview ? 'Cập nhật đánh giá của bạn' : 'Viết đánh giá'}
+        </h3>
         <div className="space-y-3">
           <div>
-            <p className="text-[12px] text-muted-foreground mb-1.5">Your rating</p>
+            <p className="text-[12px] text-muted-foreground mb-1.5">Điểm của bạn</p>
             <StarRating value={rating} onChange={setRating} size={24} />
           </div>
           <textarea
-            placeholder="Share your thoughts about this book... (optional)"
+            placeholder="Chia sẻ cảm nhận của bạn về cuốn sách này... (không bắt buộc)"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
@@ -211,7 +211,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
               disabled={submitting || rating < 1}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {submitting ? 'Submitting...' : myReview ? 'Update Review' : 'Submit Review'}
+              {submitting ? 'Đang gửi...' : myReview ? 'Cập nhật đánh giá' : 'Gửi đánh giá'}
             </button>
             {myReview && (
               <button
@@ -220,7 +220,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 text-[13px] font-medium hover:bg-rose-100 disabled:opacity-50 transition-colors dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-900/40"
               >
                 <Trash2 size={14} />
-                {deleting ? 'Deleting...' : 'Delete'}
+                {deleting ? 'Đang xóa...' : 'Xóa'}
               </button>
             )}
           </div>
@@ -232,7 +232,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
         {reviews.length === 0 && !loading ? (
           <div className="rounded-xl border border-dashed border-border bg-muted/50 py-8 text-center">
             <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-[13px] text-muted-foreground">No reviews yet. Be the first to share your thoughts!</p>
+            <p className="text-[13px] text-muted-foreground">Chưa có đánh giá nào. Hãy là người đầu tiên chia sẻ cảm nhận!</p>
           </div>
         ) : (
           reviews.map((review) => (
@@ -245,7 +245,7 @@ function ReviewSection({ bookId }: { bookId: string }) {
                     </span>
                   </div>
                   <div>
-                    <p className="text-[13px] font-semibold text-foreground">{review.customers?.full_name || 'Anonymous'}</p>
+                    <p className="text-[13px] font-semibold text-foreground">{review.customers?.full_name || 'Bạn đọc ẩn danh'}</p>
                     <StarRating value={review.rating} readonly size={13} />
                   </div>
                 </div>
@@ -267,17 +267,17 @@ function ReviewSection({ bookId }: { bookId: string }) {
               onClick={() => void loadReviews(page - 1)}
               className="px-3 py-1.5 rounded-lg border text-[12px] disabled:opacity-40 hover:bg-muted transition-colors"
             >
-              Previous
+              Trang trước
             </button>
             <span className="text-[12px] text-muted-foreground">
-              Page {page} / {totalPages}
+              Trang {page} / {totalPages}
             </span>
             <button
               disabled={page >= totalPages}
               onClick={() => void loadReviews(page + 1)}
               className="px-3 py-1.5 rounded-lg border text-[12px] disabled:opacity-40 hover:bg-muted transition-colors"
             >
-              Next
+              Trang sau
             </button>
           </div>
         )}
@@ -286,219 +286,243 @@ function ReviewSection({ bookId }: { bookId: string }) {
   );
 }
 
+const DESCRIPTION_PREVIEW_CHARS = 480;
+
 export function CustomerBookDetailPage() {
   const { id } = useParams();
   const [book, setBook] = useState<CustomerCatalogBook | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showReserveModal, setShowReserveModal] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [rating, setRating] = useState<ReviewStats | null>(null);
+  const [inWishlist, setInWishlist] = useState(false);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
 
-  useEffect(() => {
-    const run = async () => {
-      if (!id) return;
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await customerCatalogService.getBookById(id);
-        setBook(data);
-      } catch (err) {
-        setError(getApiErrorMessage(err, 'Không tải được chi tiết sách'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
+  const load = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await customerCatalogService.getBookById(id);
+      setBook(data);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Không tải được chi tiết sách'));
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  const handleReserve = () => {
-    setShowReserveModal(true);
+  useEffect(() => { void load(); }, [load]);
+
+  // Rating summary and wishlist state are nice-to-have: failing to load them must not break the page.
+  useEffect(() => {
+    if (!id) return;
+    customerBorrowService.getBookRatingStats([id])
+      .then((res) => setRating(res.data?.[id] || null))
+      .catch(() => {});
+    customerBorrowService.getMyWishlist()
+      .then((res) => setInWishlist(Array.isArray(res?.data) && res.data.some((item: { book_id: string }) => item.book_id === id)))
+      .catch(() => {});
+  }, [id]);
+
+  const toggleWishlist = async () => {
+    if (!id) return;
+    try {
+      setWishlistBusy(true);
+      if (inWishlist) {
+        await customerBorrowService.removeFromWishlist(id);
+        setInWishlist(false);
+        toast.success('Đã xóa khỏi danh sách yêu thích');
+      } else {
+        await customerBorrowService.addToWishlist(id);
+        setInWishlist(true);
+        toast.success('Đã thêm vào danh sách yêu thích');
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Không thể cập nhật danh sách yêu thích'));
+    } finally {
+      setWishlistBusy(false);
+    }
   };
 
-  if (loading) return <LoadingOverlay />;
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="grid animate-pulse gap-8 md:grid-cols-[260px_1fr]">
+          <div className="aspect-[3/4] rounded-2xl bg-muted" />
+          <div className="space-y-3">
+            <div className="h-4 w-1/4 rounded bg-muted" />
+            <div className="h-8 w-3/4 rounded bg-muted" />
+            <div className="h-4 w-1/2 rounded bg-muted" />
+            <div className="h-24 rounded-xl bg-muted" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (error) return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
       <EmptyState variant="error" title="Không tải được sách" description={error}
-        action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Thử lại</button>} />
+        action={<button onClick={() => void load()} className="font-medium text-primary hover:underline">Thử lại</button>} />
     </div>
   );
   if (!book) return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
       <EmptyState variant="no-data" title="Không tìm thấy sách" description="Sách này có thể không còn trong danh mục."
-        action={<NavLink to="/customer/books" className="text-primary font-medium hover:underline">Quay lại danh mục</NavLink>} />
+        action={<NavLink to="/customer/books" className="font-medium text-primary hover:underline">Quay lại danh mục</NavLink>} />
     </div>
   );
 
   const availableStock = Number(book.available_quantity ?? book.quantity ?? 0);
   const isAvailable = availableStock > 0;
-  const isReservable = book.reservable && isAvailable;
+  const isReservable = Boolean(book.reservable && isAvailable);
+  const description = (book.description || '').trim();
+  const longDescription = description.length > DESCRIPTION_PREVIEW_CHARS;
+  const shownDescription = longDescription && !descriptionExpanded ? `${description.slice(0, DESCRIPTION_PREVIEW_CHARS).trimEnd()}…` : description;
+  const details = [
+    { label: 'Tác giả', value: book.author },
+    { label: 'Nhà xuất bản', value: book.publisher },
+    { label: 'Năm xuất bản', value: book.publish_year ? String(book.publish_year) : '' },
+    { label: 'Thể loại', value: book.category },
+    { label: 'Ngôn ngữ', value: book.language || 'vi' },
+    { label: 'ISBN', value: book.isbn, mono: true },
+  ];
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
-      {/* Breadcrumb */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-        <NavLink to="/customer/books" className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-          Quay lại danh mục
-        </NavLink>
-      </motion.div>
+    <div className="mx-auto max-w-5xl space-y-8 p-4 sm:p-6 lg:p-8">
+      <NavLink to="/customer/books" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+        <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
+        Quay lại danh mục
+      </NavLink>
 
-      {/* Hero Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05, duration: 0.3 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/20"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(255,255,255,0.1),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-60 h-60 bg-card/5 rounded-full -translate-y-1/2 translate-x-1/3" />
-        <div className="relative flex items-center gap-4">
-          <div>
-            <h1 className="text-[22px] tracking-tight text-white" style={{ fontWeight: 700 }}>{book.title}</h1>
-            {book.subtitle && <p className="text-white/65 text-[13px] mt-0.5">{book.subtitle}</p>}
-            <div className="flex items-center gap-3 mt-3 text-white/80 text-[12px]">
-              {book.author && <span>{book.author}</span>}
-              {book.publisher && <><span className="text-white/30">|</span><span>{book.publisher}</span></>}
-              {book.publish_year && <><span className="text-white/30">|</span><span>{book.publish_year}</span></>}
-            </div>
-          </div>
-          <div className="ml-auto shrink-0">
-            <button
-              onClick={handleReserve}
-              disabled={!isReservable}
-              data-testid="reserve-book-button"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-indigo-700 text-[13px] font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Đặt trước ngay
-            </button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Content */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left: Cover + Metadata */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.3 }}
-          className="md:col-span-1 space-y-4"
-        >
-          {/* Cover Image */}
-          <div className="rounded-2xl border border-black/5 bg-card overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="grid gap-6 md:grid-cols-[260px_1fr] md:gap-10">
+        {/* Cover */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mx-auto w-full max-w-[260px] md:sticky md:top-20 md:self-start">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-md">
             {book.cover_image_url ? (
-              <img src={book.cover_image_url} alt={book.title} className="w-full h-auto object-cover" />
+              <img src={book.cover_image_url} alt={`Bìa sách ${book.title}`} className="aspect-[3/4] w-full object-cover" />
             ) : (
-              <div className="aspect-[2/3] bg-gradient-to-br from-indigo-100 via-blue-50 to-cyan-50 dark:from-indigo-950/40 dark:via-card dark:to-cyan-950/30 flex items-center justify-center">
-                <div className="text-center p-6">
-                  <BookOpen className="w-12 h-12 text-indigo-300 dark:text-indigo-700 mx-auto mb-3" />
-                  <p className="text-[12px] text-indigo-400 dark:text-indigo-500">{book.category || 'Book'}</p>
+              <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-indigo-100 via-blue-50 to-cyan-50 dark:from-indigo-950/40 dark:via-card dark:to-cyan-950/30">
+                <div className="p-6 text-center">
+                  <BookOpen className="mx-auto mb-3 h-12 w-12 text-indigo-300 dark:text-indigo-700" aria-hidden="true" />
+                  <p className="text-[12px] text-indigo-400 dark:text-indigo-500">{book.category || 'Sách'}</p>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Availability Status */}
-          <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${
-            isAvailable
-              ? 'bg-emerald-50 border-emerald-100 dark:bg-emerald-950/30 dark:border-emerald-900/40'
-              : 'bg-rose-50 border-rose-100 dark:bg-rose-950/30 dark:border-rose-900/40'
-          }`}>
-            <div className={`w-2.5 h-2.5 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-            <div>
-              <p className={`text-[13px] font-semibold ${isAvailable ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-                {isAvailable ? 'Có thể đặt trước' : 'Hết sách'}
-              </p>
-              <p className={`text-[11px] ${isAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                {isAvailable ? `${availableStock} cuốn sẵn sàng` : 'Hiện không có sẵn'}
-              </p>
-            </div>
-          </div>
-
-          {/* Metadata */}
-          <div className="rounded-xl border border-black/5 bg-card p-5 space-y-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[13px] font-semibold text-foreground">Thông tin sách</h3>
-            {[
-              { label: 'Tác giả', value: book.author || '-' },
-              { label: 'Thể loại', value: book.category || '-' },
-              { label: 'NXB', value: book.publisher || '-' },
-              { label: 'ISBN', value: book.isbn || '-', mono: true },
-              { label: 'Ngôn ngữ', value: book.language || 'vi' },
-              { label: 'Sẵn sàng', value: `${availableStock} cuốn` },
-            ].map((meta) => (
-              <div key={meta.label} className="flex items-start justify-between gap-3 text-[12px]">
-                <span className="text-muted-foreground shrink-0">{meta.label}</span>
-                <span className={`text-foreground text-right ${meta.mono ? 'font-mono' : ''}`} style={{ fontWeight: 500 }}>{meta.value}</span>
-              </div>
-            ))}
-          </div>
         </motion.div>
 
-        {/* Right: Description + Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.3 }}
-          className="md:col-span-2 space-y-5"
-        >
-          {/* Description */}
-          <div className="rounded-xl border border-black/5 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[14px] font-semibold mb-3">Giới thiệu sách</h3>
-            {book.description ? (
-              <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-line">{book.description}</p>
+        {/* Title, availability, actions */}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, duration: 0.3 }} className="min-w-0">
+          {book.category ? (
+            <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300">{book.category}</span>
+          ) : null}
+          <h1 className="mt-2 text-[26px] font-bold leading-tight tracking-tight text-foreground sm:text-[30px]">{book.title}</h1>
+          {book.subtitle ? <p className="mt-1 text-[15px] text-muted-foreground">{book.subtitle}</p> : null}
+          <p className="mt-3 text-[14px] text-foreground">
+            {book.author || 'Không rõ tác giả'}
+            {book.publisher || book.publish_year ? (
+              <span className="text-muted-foreground"> · {[book.publisher, book.publish_year].filter(Boolean).join(', ')}</span>
+            ) : null}
+          </p>
+
+          <div className="mt-2 flex items-center gap-1.5 text-[13px]">
+            {rating && rating.totalReviews > 0 ? (
+              <>
+                <Star size={15} className="fill-amber-400 text-amber-400" aria-hidden="true" />
+                <span className="font-semibold text-foreground">{rating.averageRating}</span>
+                <a href="#danh-gia" className="text-muted-foreground hover:underline">({rating.totalReviews} đánh giá)</a>
+              </>
             ) : (
-              <p className="text-[13px] text-muted-foreground italic">Chưa có mô tả cho sách này.</p>
+              <a href="#danh-gia" className="text-muted-foreground hover:underline">Chưa có đánh giá — hãy là người đầu tiên</a>
             )}
           </div>
 
-          {/* AI Summary */}
-          {book.summary_vi && (
-            <div className="rounded-xl border border-cyan-100 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:border-cyan-900/30 dark:from-cyan-950/20 dark:to-blue-950/10">
-              <div className="flex items-center gap-2 mb-3">
-                <Star className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                <h3 className="text-[14px] font-semibold text-cyan-800 dark:text-cyan-300">Tóm tắt AI</h3>
-              </div>
-              <p className="text-[13px] text-cyan-900 dark:text-cyan-200 leading-relaxed whitespace-pre-line">{book.summary_vi}</p>
+          <div className={cn(
+            'mt-5 rounded-2xl border p-4 sm:p-5',
+            isAvailable
+              ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+              : 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20',
+          )}>
+            <p className={cn('flex items-center gap-2 text-[14px] font-semibold', isAvailable ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              <span className={cn('h-2.5 w-2.5 rounded-full', isAvailable ? 'bg-emerald-500' : 'bg-rose-500')} aria-hidden="true" />
+              {isAvailable ? `Còn ${availableStock} cuốn sẵn sàng` : 'Hiện đã hết sách'}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowReserveModal(true)}
+                disabled={!isReservable}
+                data-testid="reserve-book-button"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShoppingCart className="h-4 w-4" aria-hidden="true" />
+                Đặt trước
+              </button>
+              <button
+                onClick={() => void toggleWishlist()}
+                disabled={wishlistBusy}
+                aria-pressed={inWishlist}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[14px] font-medium transition-colors disabled:opacity-60',
+                  inWishlist
+                    ? 'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-950/30 dark:text-rose-400'
+                    : 'border-border bg-card text-foreground hover:bg-muted',
+                )}
+              >
+                <Heart className={cn('h-4 w-4', inWishlist && 'fill-current')} aria-hidden="true" />
+                {inWishlist ? 'Đã yêu thích' : 'Yêu thích'}
+              </button>
             </div>
-          )}
-
-          {/* Reserve CTA */}
-          <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-violet-50/40 p-5 dark:border-indigo-900/30 dark:from-indigo-950/20 dark:to-violet-950/10">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0 mt-0.5">
-                <ShoppingCart className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[14px] font-semibold text-foreground mb-1">Đặt trước sách này</h3>
-                <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">
-                  {isAvailable
-                    ? 'Sách đang có sẵn. Nhấn bên dưới để tạo đặt trước và nhận sách tại thư viện gần nhất.'
-                    : 'Sách hiện đã hết. Vui lòng kiểm tra lại sau hoặc tìm sách khác.'}
-                </p>
-                <button
-                  onClick={handleReserve}
-                  disabled={!isReservable}
-                  data-testid="reserve-book-button"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  Đặt trước ngay
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Info Note */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
-            <p className="text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed">
-              <strong>Lưu ý:</strong> Đặt trước chỉ được giữ trong thời gian giới hạn. Vui lòng nhận sách tại thư viện trong thời hạn quy định. Đến trễ có thể dẫn đến hủy đặt trước.
+            <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+              {isAvailable
+                ? 'Sách được giữ cho bạn trong thời gian giới hạn — hãy đến thư viện nhận sách trước khi hết hạn.'
+                : 'Bạn có thể thêm vào yêu thích để theo dõi và được báo khi sách có hàng.'}
             </p>
           </div>
+
+          <section className="mt-8" aria-labelledby="gioi-thieu">
+            <h2 id="gioi-thieu" className="text-[16px] font-semibold">Giới thiệu</h2>
+            {description ? (
+              <>
+                <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-foreground/80">{shownDescription}</p>
+                {longDescription ? (
+                  <button type="button" onClick={() => setDescriptionExpanded((open) => !open)} aria-expanded={descriptionExpanded} className="mt-1 text-[13px] font-medium text-primary hover:underline">
+                    {descriptionExpanded ? 'Thu gọn' : 'Xem thêm'}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <p className="mt-2 text-[13px] italic text-muted-foreground">Chưa có mô tả cho sách này.</p>
+            )}
+          </section>
+
+          {book.summary_vi ? (
+            <section className="mt-5 rounded-xl border border-cyan-200/60 bg-cyan-50/50 p-4 dark:border-cyan-900/30 dark:bg-cyan-950/20">
+              <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-cyan-800 dark:text-cyan-300">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Tóm tắt do AI tạo
+              </h2>
+              <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-cyan-900 dark:text-cyan-200">{book.summary_vi}</p>
+            </section>
+          ) : null}
+
+          <section className="mt-8" aria-labelledby="thong-tin-sach">
+            <h2 id="thong-tin-sach" className="text-[16px] font-semibold">Thông tin sách</h2>
+            <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+              {details.map((item) => (
+                <div key={item.label} className="flex items-baseline justify-between gap-3 border-b border-border py-2.5 text-[13px]">
+                  <dt className="text-muted-foreground">{item.label}</dt>
+                  <dd className={cn('text-right font-medium', item.value ? 'text-foreground' : 'text-muted-foreground/60', item.mono && 'font-mono')}>{item.value || '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
         </motion.div>
       </div>
 
-      {/* Reviews Section */}
-      {id && <ReviewSection bookId={id} />}
+      <div id="danh-gia" className="scroll-mt-20">
+        {id && <ReviewSection bookId={id} />}
+      </div>
 
       <ReserveModal
         book={showReserveModal ? book : null}

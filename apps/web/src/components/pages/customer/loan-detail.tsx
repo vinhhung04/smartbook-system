@@ -4,7 +4,8 @@ import { customerBorrowService } from '@/services/customer-borrow';
 import { customerCatalogService } from '@/services/customer-catalog';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
-import { CustomerStateBlock } from './_shared/customer-state-block';
+import { ChevronLeft, Printer } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { formatDateTime } from './_shared/customer-format';
 import { getStatusTone } from './_shared/customer-status';
@@ -57,30 +58,59 @@ export function CustomerLoanDetailPage() {
     }
   };
 
-  if (loading) return <CustomerStateBlock mode="loading" message="Đang tải chi tiết phiếu mượn..." />;
-  if (error) return <CustomerStateBlock mode="error" message={error} />;
-  if (!loan) return <CustomerStateBlock mode="empty" message="Không tìm thấy phiếu mượn." />;
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="h-10 w-1/2 animate-pulse rounded-lg bg-muted" />
+        <div className="h-32 animate-pulse rounded-xl border bg-card" />
+        <div className="h-48 animate-pulse rounded-xl border bg-card" />
+      </div>
+    );
+  }
+  if (error || !loan) {
+    return (
+      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+        <EmptyState
+          variant={error ? 'error' : 'no-data'}
+          title={error ? 'Không tải được phiếu mượn' : 'Không tìm thấy phiếu mượn'}
+          description={error || 'Phiếu mượn này không tồn tại hoặc không thuộc về bạn.'}
+          action={<NavLink to="/customer/loans" className="font-medium text-primary hover:underline">Quay lại phiếu mượn</NavLink>}
+        />
+      </div>
+    );
+  }
 
   const loanStatus = String(loan.status || '').toUpperCase();
   const canRequestRenewal = ['BORROWED', 'OVERDUE'].includes(loanStatus);
+  const tone = getStatusTone(loan.status);
+  const items: any[] = loan.loan_items || [];
+  const summary = [
+    { label: 'Ngày mượn', value: formatDateTime(loan.borrow_date) },
+    { label: 'Hạn trả', value: formatDateTime(loan.due_date), emphasis: loanStatus === 'OVERDUE' },
+    { label: 'Số cuốn', value: String(loan.total_items ?? items.length) },
+  ];
 
   return (
-    <div className="space-y-4">
-      <NavLink to="/customer/loans" className="text-[12px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300" style={{ fontWeight: 600 }}>Quay lại phiếu mượn</NavLink>
+    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <NavLink to="/customer/loans" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Quay lại phiếu mượn
+      </NavLink>
 
       <CustomerPageHeader
         title={loan.loan_number}
-        subtitle="Xem hạn trả, các mục và gửi yêu cầu gia hạn khi đủ điều kiện."
+        subtitle="Hạn trả, danh sách sách và yêu cầu gia hạn"
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
-              className="px-4 py-2.5 rounded-[10px] border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px] dark:border-indigo-800/40 dark:bg-indigo-950/30 dark:text-indigo-400">
-              In phiếu
+            <button
+              onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <Printer className="h-4 w-4" aria-hidden="true" /> In phiếu
             </button>
             <button
               onClick={() => void handleRenewRequest()}
               disabled={isSubmittingRenew || !canRequestRenewal}
-              className="px-4 py-2.5 rounded-[10px] bg-indigo-600 text-white text-[13px] disabled:opacity-60"
+              className="inline-flex h-9 items-center rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               title={canRequestRenewal ? 'Yêu cầu gia hạn' : 'Chỉ phiếu đang mượn hoặc quá hạn mới được gia hạn'}
             >
               {isSubmittingRenew ? 'Đang gửi...' : 'Yêu cầu gia hạn'}
@@ -89,36 +119,42 @@ export function CustomerLoanDetailPage() {
         }
       />
 
-      <div className="rounded-[14px] border border-border bg-card p-6">
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px]">
-          <div>
-            <span className="text-muted-foreground">Trạng thái:</span>{' '}
-            <span className={`inline-flex rounded-[8px] border px-2 py-0.5 text-[11px] ${getStatusTone(loan.status).className}`}>
-              {getStatusTone(loan.status).label}
-            </span>
-          </div>
-          <div><span className="text-muted-foreground">Ngày mượn:</span> {formatDateTime(loan.borrow_date)}</div>
-          <div><span className="text-muted-foreground">Hạn trả:</span> {formatDateTime(loan.due_date)}</div>
-          <div><span className="text-muted-foreground">Tổng số sách:</span> {loan.total_items}</div>
+      <section className="rounded-xl border border-border bg-card p-4 sm:p-5" aria-label="Tóm tắt phiếu mượn">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] text-muted-foreground">Trạng thái</span>
+          <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[12px] font-medium ${tone.className}`}>{tone.label}</span>
         </div>
-
-        <div className="mt-5">
-          <h3 className="text-[13px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>Sách đang mượn</h3>
-          {(loan.loan_items || []).length === 0 ? (
-            <div className="text-[13px] text-muted-foreground mt-2">Không có sách.</div>
-          ) : (
-            <div className="mt-2 space-y-2">
-              {loan.loan_items.map((item: any) => (
-                <div key={item.id} className="rounded-[10px] border border-border p-3 text-[13px]">
-                  <div><span className="text-muted-foreground">Tên sách:</span> {getBookTitle(item)}</div>
-                  <div><span className="text-muted-foreground">Trạng thái:</span> {getStatusTone(item.status).label}</div>
-                  <div><span className="text-muted-foreground">Hạn:</span> {formatDateTime(item.due_date)}</div>
-                </div>
-              ))}
+        <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {summary.map((item) => (
+            <div key={item.label}>
+              <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+              <dd className={`mt-0.5 text-[14px] font-semibold ${item.emphasis ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>{item.value}</dd>
             </div>
-          )}
-        </div>
-      </div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card" aria-labelledby="loan-books">
+        <h2 id="loan-books" className="border-b border-border px-4 py-3 text-[14px] font-semibold sm:px-5">Sách trong phiếu ({items.length})</h2>
+        {items.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">Phiếu này không có sách.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((item) => {
+              const itemTone = getStatusTone(item.status);
+              return (
+                <li key={item.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 sm:px-5">
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-medium text-foreground">{getBookTitle(item)}</p>
+                    <p className="text-[12px] text-muted-foreground">Hạn: {formatDateTime(item.due_date)}</p>
+                  </div>
+                  <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-medium ${itemTone.className}`}>{itemTone.label}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

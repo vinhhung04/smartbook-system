@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { ReceiptText, RefreshCw, Wallet } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { SectionCard } from '@/components/ui/section-card';
-import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingOverlay } from '@/components/ui/loading-state';
+import { cn } from '@/components/ui/utils';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 import { FineCard } from './_shared/fine-card';
+
+function remainingOf(fine: any): number {
+  const paid = (fine?.fine_payments || []).reduce((sum: number, row: any) => sum + Number(row?.amount || 0), 0);
+  return Math.max(0, Number(fine?.amount || 0) - Number(fine?.waived_amount || 0) - paid);
+}
 
 export function CustomerFinesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,77 +62,99 @@ export function CustomerFinesPage() {
 
   const totalFine = Number(data?.total_fine_balance || 0);
   const walletBalance = Number(accountSnapshot?.available_balance || 0);
+  const fines: any[] = data?.fines || [];
+  const openFines = fines.filter((fine) => remainingOf(fine) > 0);
+  const settledFines = fines.filter((fine) => remainingOf(fine) <= 0);
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-100 to-red-50 dark:from-rose-950/40 dark:to-red-950/20 flex items-center justify-center border border-rose-200/40 dark:border-rose-800/40">
-            <ReceiptText className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Tiền phạt & Ví của tôi</h1>
-            <p className="text-[13px] text-muted-foreground">Xem số dư phạt và lịch sử giao dịch ví</p>
-          </div>
-        </div>
-        <button
-          onClick={() => void loadFines()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Làm mới
-        </button>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader
+        title="Tiền phạt & ví"
+        subtitle="Số tiền phạt còn lại và lịch sử giao dịch ví của bạn"
+        actions={
+          <button
+            onClick={() => void loadFines()}
+            disabled={loading}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            Làm mới
+          </button>
+        }
+      />
 
       {loading ? (
-        <LoadingOverlay />
+        <div className="space-y-3" aria-busy="true">
+          <div className="h-32 animate-pulse rounded-xl border bg-card" />
+          <div className="h-40 animate-pulse rounded-xl border bg-card" />
+        </div>
       ) : error ? (
-        <EmptyState variant="error" title="Không tải được tiền phạt" description={error} action={<button onClick={() => void loadFines()} className="text-primary font-medium hover:underline">Thử lại</button>} />
+        <EmptyState variant="error" title="Không tải được tiền phạt" description={error} action={<button onClick={() => void loadFines()} className="font-medium text-primary hover:underline">Thử lại</button>} />
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Tiền phạt còn lại" value={formatCurrencyVnd(totalFine)} icon={ReceiptText} variant={totalFine > 0 ? 'danger' : 'success'} />
-            <StatCard label="Số dư ví" value={formatCurrencyVnd(walletBalance)} icon={Wallet} variant={walletBalance < 100000 ? 'warning' : 'success'} />
-            <StatCard label="Số phiếu phạt" value={(data?.fines || []).length} icon={ReceiptText} variant="default" />
-            <StatCard label="Lần thanh toán" value={(data?.fine_payments || []).length} icon={ReceiptText} variant="info" />
-          </div>
-
-          {totalFine > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4 text-[13px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
-              Bạn còn <strong>{formatCurrencyVnd(totalFine)}</strong> tiền phạt chưa thanh toán. Vui lòng đến quầy thư viện để thanh toán trực tiếp — nhân viên sẽ ghi nhận vào hệ thống ngay khi bạn thanh toán xong.
+          <section aria-label="Tổng quan tiền phạt" className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2">
+            <div className={cn('p-5', totalFine > 0 ? 'bg-rose-50/60 dark:bg-rose-950/20' : 'bg-emerald-50/50 dark:bg-emerald-950/15')}>
+              <p className="text-[12px] font-medium text-muted-foreground">Tiền phạt còn lại</p>
+              <p className={cn('mt-1.5 font-mono text-[28px] font-bold leading-none tabular-nums', totalFine > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                {formatCurrencyVnd(totalFine)}
+              </p>
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {totalFine > 0
+                  ? 'Thanh toán online bên dưới, hoặc đến quầy thư viện — nhân viên sẽ ghi nhận ngay.'
+                  : 'Bạn không có tiền phạt. Tiếp tục đọc sách nhé!'}
+              </p>
             </div>
-          ) : null}
+            <div className="border-t border-border p-5 sm:border-l sm:border-t-0">
+              <p className="text-[12px] font-medium text-muted-foreground">Số dư ví</p>
+              <p className={cn('mt-1.5 font-mono text-[28px] font-bold leading-none tabular-nums', walletBalance < 100000 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground')}>
+                {formatCurrencyVnd(walletBalance)}
+              </p>
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {walletBalance < 100000 ? 'Số dư thấp, nên nạp thêm để mượn sách thuận tiện.' : 'Sẵn sàng để mượn sách.'}
+              </p>
+            </div>
+          </section>
 
-          <SectionCard title="Phiếu phạt" subtitle={`${(data?.fines || []).length} phiếu`}>
-            {(data?.fines || []).length === 0 ? (
-              <EmptyState variant="no-data" title="Chưa có phiếu phạt" description="Bạn không có tiền phạt. Tiếp tục đọc sách nhé!" />
-            ) : (
+          {openFines.length > 0 && (
+            <SectionCard title="Cần thanh toán" subtitle={`${openFines.length} phiếu phạt`}>
               <div className="space-y-3">
-                {(data?.fines || []).map((fine: any) => (
-                  <FineCard key={fine.id} fine={fine} />
-                ))}
+                {openFines.map((fine: any) => <FineCard key={fine.id} fine={fine} />)}
               </div>
-            )}
-          </SectionCard>
+            </SectionCard>
+          )}
 
-          <SectionCard title="Giao dịch ví gần đây" subtitle="Giao dịch mới nhất">
+          {settledFines.length > 0 && (
+            <SectionCard title="Đã thanh toán / miễn giảm" subtitle={`${settledFines.length} phiếu phạt`}>
+              <div className="space-y-3">
+                {settledFines.map((fine: any) => <FineCard key={fine.id} fine={fine} />)}
+              </div>
+            </SectionCard>
+          )}
+
+          {fines.length === 0 && (
+            <EmptyState variant="no-data" title="Chưa có phiếu phạt" description="Bạn không có tiền phạt. Tiếp tục đọc sách nhé!" />
+          )}
+
+          <SectionCard title="Giao dịch ví gần đây" subtitle="5 giao dịch mới nhất">
             {ledgerRows.length === 0 ? (
               <EmptyState variant="inbox" title="Chưa có giao dịch" description="Lịch sử giao dịch ví sẽ hiển thị ở đây." />
             ) : (
-              <div className="space-y-2">
-                {ledgerRows.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium text-foreground truncate">{entry.entry_type || entry.reference_type || 'Entry'}</p>
-                      <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
-                    </div>
-                    <span className={`text-[14px] font-bold shrink-0 ml-3 ${Number(entry.amount) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                      {Number(entry.amount) >= 0 ? '+' : ''}{formatCurrencyVnd(Number(entry.amount))}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <ul className="divide-y divide-border">
+                {ledgerRows.map((entry) => {
+                  const amount = Number(entry.amount);
+                  return (
+                    <li key={entry.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium text-foreground">{entry.entry_type || entry.reference_type || 'Giao dịch'}</p>
+                        <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
+                      </div>
+                      <span className={cn('shrink-0 font-mono text-[14px] font-bold tabular-nums', amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                        {amount >= 0 ? '+' : ''}{formatCurrencyVnd(amount)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </SectionCard>
         </>

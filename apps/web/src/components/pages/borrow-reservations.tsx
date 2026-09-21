@@ -628,7 +628,7 @@ export function BorrowReservationsPage() {
                           <p className="truncate text-xs text-muted-foreground">{reservation.customers?.full_name || reservation.customer_id}</p>
                           <div className="mt-1.5 space-y-1 sm:hidden">
                             <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
-                            {pickupCode ? <p className="font-mono text-xs font-semibold text-cyan-700 dark:text-cyan-300">{pickupCode}</p> : null}
+                            {pickupCode ? <span className="block font-mono text-xs font-semibold text-cyan-700 dark:text-cyan-300">{pickupCode}</span> : null}
                           </div>
                         </TableCell>
                         <TableCell className="hidden px-4 py-3 md:table-cell">
@@ -643,9 +643,9 @@ export function BorrowReservationsPage() {
                           <div className="flex flex-col items-start gap-1.5">
                             <StatusBadge label={reservation.status} variant={getStatusVariant('reservation', reservation.status)} dot />
                             {pickupCode ? (
-                              <span className="rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300" title="Mã nhận sách">
+                              <p className="w-fit rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300" title="Mã nhận sách">
                                 {pickupCode}
-                              </span>
+                              </p>
                             ) : null}
                           </div>
                         </TableCell>

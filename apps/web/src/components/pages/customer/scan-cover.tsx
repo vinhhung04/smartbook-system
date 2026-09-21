@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Camera, CheckCircle, Loader2, ScanSearch, Sparkles } from 'lucide-react';
+import { Camera, CheckCircle, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { coverSearchService, CoverSearchCandidate } from '@/services/cover-search';
 import { getApiErrorMessage } from '@/services/api';
 import { resizeImageFile } from '@/lib/resize-image';
 import { CoverSearchResultCard } from './_shared/cover-search-result-card';
 import { ReserveModal } from './_shared/reserve-modal';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 
 // Visual matching (CLIP) is fast in practice (~2s/image, measured against the
 // real gallery) — this timer just gives that step a legible "done" moment.
@@ -125,23 +126,11 @@ export function CustomerScanCoverPage() {
   }, [clearTimers]);
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="relative overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-6 shadow-xl shadow-indigo-500/15"
-      >
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
-            <ScanSearch className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-[20px] tracking-tight text-white" style={{ fontWeight: 700 }}>Tìm sách bằng ảnh bìa</h1>
-            <p className="text-white/70 text-[13px] mt-0.5">Chụp hoặc chọn ảnh bìa sách — hệ thống sẽ tìm sách khớp trong thư viện.</p>
-          </div>
-        </div>
-      </motion.div>
+    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader
+        title="Tìm sách bằng ảnh bìa"
+        subtitle="Chụp hoặc chọn ảnh bìa sách — hệ thống sẽ tìm sách khớp trong thư viện."
+      />
 
       <div className="rounded-2xl border border-border bg-card p-6">
         <input
@@ -169,6 +158,7 @@ export function CustomerScanCoverPage() {
               </div>
             )}
 
+            <p className="text-center text-[12px] text-muted-foreground">Chụp thẳng, đủ sáng và thấy rõ toàn bộ bìa để kết quả chính xác hơn.</p>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-[13px] text-white hover:bg-indigo-700"

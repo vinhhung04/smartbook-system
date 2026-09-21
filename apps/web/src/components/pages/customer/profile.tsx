@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { User, Save, Bell, Lock, Globe } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Save, Bell, Lock, Globe } from 'lucide-react';
 import { customerService, CustomerProfile } from '@/services/customer';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { authService } from '@/services/auth';
@@ -7,7 +7,7 @@ import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingOverlay } from '@/components/ui/loading-state';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 
 export function CustomerProfilePage() {
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -16,27 +16,26 @@ export function CustomerProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const run = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await customerService.getMyProfile();
-        setProfile(data);
-        setForm({
-          full_name: data.full_name || '',
-          phone: data.phone || '',
-          birth_date: data.birth_date ? String(data.birth_date).slice(0, 10) : '',
-          address: data.address || '',
-        });
-      } catch (err) {
-        setError(getApiErrorMessage(err, 'Không tải được hồ sơ'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    void run();
+  const load = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await customerService.getMyProfile();
+      setProfile(data);
+      setForm({
+        full_name: data.full_name || '',
+        phone: data.phone || '',
+        birth_date: data.birth_date ? String(data.birth_date).slice(0, 10) : '',
+        address: data.address || '',
+      });
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Không tải được hồ sơ'));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => { void load(); }, [load]);
 
   const handleSave = async () => {
     if (!form.full_name.trim()) {
@@ -60,26 +59,49 @@ export function CustomerProfilePage() {
     }
   };
 
-  if (isLoading) return <LoadingOverlay />;
-  if (error) return <EmptyState variant="error" title="Không tải được hồ sơ" description={error} action={<button onClick={() => window.location.reload()} className="text-primary font-medium hover:underline">Thử lại</button>} />;
-  if (!profile) return <EmptyState variant="no-data" title="Không tìm thấy hồ sơ" description="Không thể tải hồ sơ. Vui lòng liên hệ hỗ trợ." />;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="h-20 animate-pulse rounded-xl border bg-card" />
+        <div className="h-72 animate-pulse rounded-xl border bg-card" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+        <EmptyState variant="error" title="Không tải được hồ sơ" description={error} action={<button onClick={() => void load()} className="font-medium text-primary hover:underline">Thử lại</button>} />
+      </div>
+    );
+  }
+  if (!profile) {
+    return (
+      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+        <EmptyState variant="no-data" title="Không tìm thấy hồ sơ" description="Không thể tải hồ sơ. Vui lòng liên hệ hỗ trợ." />
+      </div>
+    );
+  }
+
+  const initials = (profile.full_name || 'U').trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || '').join('') || 'U';
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
-      {/* Hero */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40">
-          <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Hồ sơ của tôi</h1>
-          <p className="text-[13px] text-muted-foreground">Quản lý thông tin cá nhân</p>
+    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader title="Hồ sơ của tôi" subtitle="Thông tin cá nhân, thông báo và bảo mật tài khoản" />
+
+      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <span aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[18px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+          {initials}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[16px] font-bold text-foreground">{profile.full_name}</p>
+          <p className="truncate text-[13px] text-muted-foreground">{profile.email || 'Chưa có email'}</p>
+          <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">Mã khách hàng: {profile.customer_code || '—'}</p>
         </div>
       </div>
 
       <SectionCard
         title="Thông tin cá nhân"
-        subtitle={`Mã KH: ${profile.customer_code || '—'} | Cập nhật thông tin liên lạc của bạn.`}
+        subtitle="Cập nhật thông tin liên lạc của bạn"
       >
         {/* Email notice */}
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
@@ -169,8 +191,8 @@ function NotificationPreferencesSection() {
   );
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
-    <button type="button" onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-muted'}`}>
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${checked ? 'bg-indigo-600' : 'bg-muted'}`}>
       <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow-sm transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
   );
@@ -233,17 +255,17 @@ function ChangePasswordSection() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Mật khẩu hiện tại</label>
-          <input type="password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })}
+          <input type="password" autoComplete="current-password" value={form.current} onChange={(e) => setForm({ ...form, current: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Mật khẩu mới</label>
-          <input type="password" value={form.newPwd} onChange={(e) => setForm({ ...form, newPwd: e.target.value })}
+          <input type="password" autoComplete="new-password" value={form.newPwd} onChange={(e) => setForm({ ...form, newPwd: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
         <div>
           <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Xác nhận mật khẩu</label>
-          <input type="password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+          <input type="password" autoComplete="new-password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })}
             className="w-full h-10 rounded-xl border border-input bg-background px-4 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
-  BookOpen, TrendingUp, Award, Flame, Clock, BarChart3, Loader2, RefreshCw,
+  BookOpen, TrendingUp, Award, Flame, Clock, RefreshCw,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -10,6 +10,8 @@ import {
 import { customerBorrowService } from '@/services/customer-borrow';
 import { aiService, ReadingStatsResponse } from '@/services/ai';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/ui/empty-state';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 
 const PIE_COLORS = ['#6366f1', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#38bdf8', '#34d399', '#fbbf24'];
 
@@ -43,49 +45,49 @@ export function CustomerReadingAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 gap-3">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-        <p className="text-[13px] text-slate-400 dark:text-slate-500">Đang phân tích dữ liệu đọc sách...</p>
+      <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl border bg-card" />)}
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="h-64 animate-pulse rounded-xl border bg-card" />
+          <div className="h-64 animate-pulse rounded-xl border bg-card" />
+        </div>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 gap-3">
-        <BookOpen className="w-10 h-10 text-slate-300 dark:text-slate-600" />
-        <p className="text-[14px] text-muted-foreground" style={{ fontWeight: 600 }}>Chưa có dữ liệu thống kê</p>
-        <p className="text-[12px] text-slate-400 dark:text-slate-500">Hãy mượn sách để bắt đầu hành trình đọc sách của bạn!</p>
-        <button onClick={() => void loadStats()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-[12px] hover:bg-indigo-700 transition-all mt-2">
-          <RefreshCw className="w-3.5 h-3.5" /> Thử lại
-        </button>
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+        <EmptyState
+          variant="no-data"
+          title="Chưa có dữ liệu thống kê"
+          description="Hãy mượn sách để bắt đầu hành trình đọc sách của bạn."
+          action={<button onClick={() => void loadStats()} className="font-medium text-primary hover:underline">Tải lại</button>}
+        />
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <BarChart3 className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-[20px] tracking-[-0.02em]" style={{ fontWeight: 700 }}>Thống kê đọc sách</h1>
-            <p className="text-[12px] text-slate-400 dark:text-slate-500">Hành trình đọc sách của bạn</p>
-          </div>
-        </div>
-        <button onClick={() => void loadStats()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] hover:bg-muted transition-all">
-          <RefreshCw className="w-3.5 h-3.5" /> Làm mới
-        </button>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader
+        title="Thống kê đọc sách"
+        subtitle="Hành trình đọc sách của bạn"
+        actions={
+          <button onClick={() => void loadStats()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Làm mới
+          </button>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Tổng sách đã mượn', value: stats.total_books, icon: BookOpen, color: 'from-indigo-500 to-blue-500', bg: 'bg-indigo-50 dark:bg-indigo-950/30' },
           { label: 'Thời gian mượn TB', value: `${stats.avg_borrow_days} ngày`, icon: Clock, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
-          { label: 'Streak liên tục', value: `${stats.streak_months} tháng`, icon: Flame, color: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+          { label: 'Chuỗi tháng liên tiếp', value: `${stats.streak_months} tháng`, icon: Flame, color: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/30' },
           { label: 'Thành tựu', value: stats.badges.length, icon: Award, color: 'from-violet-500 to-purple-500', bg: 'bg-violet-50 dark:bg-violet-950/30' },
         ].map((item, i) => (
           <motion.div key={item.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}

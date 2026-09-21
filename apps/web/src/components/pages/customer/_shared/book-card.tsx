@@ -1,78 +1,64 @@
-import { CustomerCatalogBook } from '@/services/customer-catalog';
-import { StatusBadge } from './status-badge';
-import { BookCoverPlaceholder } from './book-cover-placeholder';
+import { NavLink } from 'react-router';
 import { Star } from 'lucide-react';
+import { CustomerCatalogBook } from '@/services/customer-catalog';
+import { BookCoverPlaceholder } from './book-cover-placeholder';
 
 interface BookCardProps {
   book: CustomerCatalogBook;
-  onView: (bookId: string) => void;
   onReserve: (book: CustomerCatalogBook) => void;
   reserving?: boolean;
   ratingInfo?: { averageRating: number; totalReviews: number } | null;
 }
 
-export function BookCard({ book, onView, onReserve, reserving = false, ratingInfo }: BookCardProps) {
+/** Cover-first catalog card: the whole cover and the title open the book, the single button reserves it. */
+export function BookCard({ book, onReserve, reserving = false, ratingInfo }: BookCardProps) {
   const availableStock = Number(book.available_quantity ?? book.quantity ?? 0);
   const isAvailable = availableStock > 0;
   const canReserve = Boolean(book.reservable && isAvailable);
-  const stockLabel = isAvailable ? `${availableStock} cuốn sẵn sàng` : 'Hết sách';
+  const detailPath = `/customer/books/${book.id}`;
 
   return (
-    <article className="rounded-[14px] border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-      <BookCoverPlaceholder category={book.category} title={book.title} imageUrl={book.cover_image_url} />
-
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="max-w-[70%] truncate rounded-[8px] border border-border bg-muted/90 px-2 py-1 text-[10px] uppercase tracking-[0.05em] text-muted-foreground">
-          {book.category || 'Chưa phân loại'}
-        </span>
-        <StatusBadge status={isAvailable ? 'ACTIVE' : 'OUT_OF_STOCK'} />
-      </div>
-
-      <h3 className="mt-2 line-clamp-2 text-[14px] text-foreground" style={{ fontWeight: 700 }}>
-        {book.title}
-      </h3>
-      <p className="mt-1 text-[12px] text-muted-foreground">{book.author || 'Không rõ tác giả'}</p>
-
-      {/* Rating */}
-      <div className="mt-2 flex items-center gap-1.5">
-        {ratingInfo && ratingInfo.totalReviews > 0 ? (
-          <>
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <Star
-                  key={s}
-                  size={12}
-                  className={s <= Math.round(ratingInfo.averageRating) ? 'fill-amber-400 text-amber-400' : 'fill-transparent text-slate-300 dark:text-slate-600'}
-                />
-              ))}
-            </div>
-            <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">{ratingInfo.averageRating}</span>
-            <span className="text-[11px] text-slate-400 dark:text-slate-500">({ratingInfo.totalReviews})</span>
-          </>
-        ) : (
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Chưa có đánh giá</span>
-        )}
-      </div>
-
-      <div className={`mt-2 text-[11px] ${isAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>{stockLabel}</div>
-
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          onClick={() => onView(book.id)}
-          className="rounded-[10px] border border-border bg-card px-3 py-2 text-[12px] text-slate-600 dark:text-slate-300 hover:bg-muted"
-          style={{ fontWeight: 600 }}
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:hover:border-indigo-500/30">
+      <NavLink to={detailPath} tabIndex={-1} aria-hidden="true" className="relative block p-2.5 pb-0">
+        <BookCoverPlaceholder category={book.category} title={book.title} imageUrl={book.cover_image_url} />
+        <span
+          className={`absolute bottom-2 left-4 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-sm ${
+            isAvailable
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-800/85 text-white'
+          }`}
         >
-          Xem chi tiết
-        </button>
+          {isAvailable ? `Còn ${availableStock} cuốn` : 'Hết sách'}
+        </span>
+      </NavLink>
+
+      <div className="flex flex-1 flex-col p-3.5">
+        <p className="truncate text-[11px] uppercase tracking-[0.05em] text-muted-foreground">{book.category || 'Chưa phân loại'}</p>
+        <h3 className="mt-1 line-clamp-2 min-h-[2.5rem] text-[14px] leading-5 text-foreground" style={{ fontWeight: 700 }}>
+          <NavLink to={detailPath} className="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{book.title}</NavLink>
+        </h3>
+        <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{book.author || 'Không rõ tác giả'}</p>
+
+        <div className="mt-1.5 flex items-center gap-1">
+          {ratingInfo && ratingInfo.totalReviews > 0 ? (
+            <>
+              <Star size={12} className="fill-amber-400 text-amber-400" aria-hidden="true" />
+              <span className="text-[12px] font-semibold text-foreground">{ratingInfo.averageRating}</span>
+              <span className="text-[11px] text-muted-foreground">({ratingInfo.totalReviews} đánh giá)</span>
+            </>
+          ) : (
+            <span className="text-[11px] text-muted-foreground/70">Chưa có đánh giá</span>
+          )}
+        </div>
 
         <button
           disabled={!canReserve || reserving}
           onClick={() => onReserve(book)}
           data-testid="reserve-book-button"
-          className="flex-1 rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground"
+          className="mt-3 w-full rounded-[10px] bg-indigo-600 px-3 py-2 text-[13px] text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-muted-foreground dark:disabled:bg-slate-700"
           style={{ fontWeight: 600 }}
         >
-          {reserving ? 'Đang đặt trước...' : 'Đặt trước'}
+          {reserving ? 'Đang đặt trước...' : canReserve ? 'Đặt trước' : 'Hết sách'}
         </button>
       </div>
     </article>

@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { LogOut, ShieldCheck, User } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
+import { ACCOUNT_NAV } from './customer-nav';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -49,14 +50,12 @@ export function UserAvatarMenu() {
           <p className="text-[11px] text-muted-foreground">{user?.email}</p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate('/customer/profile')} className="rounded-[9px] text-[12px]">
-          <User className="h-4 w-4" />
-          Hồ sơ của tôi
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate('/customer/membership')} className="rounded-[9px] text-[12px]">
-          <ShieldCheck className="h-4 w-4" />
-          Hội viên
-        </DropdownMenuItem>
+        {ACCOUNT_NAV.map((item) => (
+          <DropdownMenuItem key={item.to} onSelect={() => navigate(item.to)} className="rounded-[9px] text-[12px]">
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void handleLogout()} className="rounded-[9px] text-[12px]" variant="destructive">
           <LogOut className="h-4 w-4" />

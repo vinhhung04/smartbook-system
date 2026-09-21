@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
-import { AlertCircle, BookOpen, Info, Loader2, RefreshCw, Sparkles, Star } from 'lucide-react';
+import { Info, RefreshCw } from 'lucide-react';
 import { aiService, AIRecommendationsResult } from '@/services/ai';
+import { EmptyState } from '@/components/ui/empty-state';
+import { cn } from '@/components/ui/utils';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 
 export function CustomerRecommendationsPage() {
   const [loading, setLoading] = useState(true);
@@ -28,33 +31,30 @@ export function CustomerRecommendationsPage() {
   const basis = result?.basis;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-[16px] text-foreground flex items-center gap-2" style={{ fontWeight: 650 }}>
-            <Sparkles className="w-4 h-4 text-violet-500" /> Gợi ý cho bạn
-          </h2>
-          <p className="text-[12px] text-muted-foreground mt-1">
-            {result?.personalized
-              ? `Dựa trên ${basis?.loans_used ?? 0} sách bạn đã mượn, ${basis?.wishlist_used ?? 0} sách yêu thích và ${basis?.ratings_used ?? 0} đánh giá của bạn.`
-              : 'Dựa trên mức độ phổ biến và đánh giá chung của thư viện.'}
-          </p>
-        </div>
-        <button
-          onClick={() => void load()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 dark:border-violet-500/20 text-violet-700 dark:text-violet-400 text-[12px] hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all disabled:opacity-50 shrink-0"
-          style={{ fontWeight: 550 }}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Làm mới
-        </button>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader
+        title="Gợi ý cho bạn"
+        subtitle={
+          result?.personalized
+            ? `Dựa trên ${basis?.loans_used ?? 0} sách bạn đã mượn, ${basis?.wishlist_used ?? 0} sách yêu thích và ${basis?.ratings_used ?? 0} đánh giá của bạn.`
+            : 'Dựa trên mức độ phổ biến và đánh giá chung của thư viện.'
+        }
+        actions={
+          <button
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> Làm mới
+          </button>
+        }
+      />
 
       {/* Never let a library-wide list pass as personal - say which one this is. */}
       {result && !result.personalized && !loading && (
-        <div className="flex items-start gap-2.5 rounded-[12px] border border-amber-200/70 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 p-3.5">
-          <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed">
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50 p-3.5 dark:border-amber-500/20 dark:bg-amber-500/10">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
             Đây <strong>chưa phải</strong> gợi ý cá nhân hóa — bạn chưa có lịch sử mượn, sách yêu thích
             hay đánh giá nào để hệ thống học sở thích. Hãy mượn hoặc thêm sách vào danh sách yêu thích,
             gợi ý sẽ tự động sát với bạn hơn.
@@ -63,70 +63,58 @@ export function CustomerRecommendationsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-[13px]">
-          <Loader2 className="w-4 h-4 animate-spin" /> Đang phân tích sở thích đọc của bạn...
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-44 animate-pulse rounded-2xl border bg-card" />)}
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center gap-2 py-14 rounded-[12px] border border-rose-200/60 dark:border-rose-500/20 bg-card">
-          <AlertCircle className="w-6 h-6 text-rose-500" />
-          <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>Không thể tải gợi ý</p>
-          <p className="text-[12px] text-muted-foreground">{error}</p>
-        </div>
+        <EmptyState
+          variant="error"
+          title="Không thể tải gợi ý"
+          description={error}
+          action={<button onClick={() => void load()} className="font-medium text-primary hover:underline">Thử lại</button>}
+        />
       ) : recommendations.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-14 rounded-[12px] border border-border bg-card">
-          <BookOpen className="w-6 h-6 text-muted-foreground" />
-          <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>Chưa có gợi ý</p>
-          <p className="text-[12px] text-muted-foreground">Thư viện chưa có sách phù hợp để gợi ý cho bạn.</p>
-        </div>
+        <EmptyState variant="no-data" title="Chưa có gợi ý" description="Thư viện chưa có sách phù hợp để gợi ý cho bạn." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {recommendations.map((rec, index) => (
-            <motion.div
-              key={rec.book_id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.06 }}
-            >
-              <NavLink
-                to={`/customer/books/${rec.book_id}`}
-                className="block h-full bg-card rounded-[14px] border border-border p-5 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:border-violet-200 dark:hover:border-violet-500/30 transition-all group"
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {recommendations.map((rec, index) => {
+            const match = Math.round((rec.score || 0) * 100);
+            return (
+              <motion.div
+                key={rec.book_id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index, 8) * 0.05 }}
               >
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm">
-                    <BookOpen className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-[13px] truncate text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-400 transition-colors" style={{ fontWeight: 650 }}>
-                      {rec.title}
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground truncate">{rec.author || 'Chưa rõ tác giả'}</p>
-                  </div>
-                </div>
+                <NavLink
+                  to={`/customer/books/${rec.book_id}`}
+                  className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 transition-all hover:border-violet-200 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] dark:hover:border-violet-500/30"
+                >
+                  {rec.category ? (
+                    <span className="mb-2 w-fit rounded-full border border-violet-100/60 bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-600 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-400">
+                      {rec.category}
+                    </span>
+                  ) : null}
+                  <h3 className="line-clamp-2 text-[15px] font-bold leading-snug text-foreground transition-colors group-hover:text-violet-700 dark:group-hover:text-violet-400">
+                    {rec.title}
+                  </h3>
+                  <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{rec.author || 'Chưa rõ tác giả'}</p>
 
-                {rec.category && (
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-violet-50 text-violet-600 border border-violet-100/60 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 mb-2" style={{ fontWeight: 550 }}>
-                    {rec.category}
-                  </span>
-                )}
+                  <p className="mt-3 flex-1 text-[13px] leading-relaxed text-foreground/80">{rec.reason}</p>
 
-                <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">{rec.reason}</p>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: 5 }).map((_, starIndex) => (
-                      <Star
-                        key={starIndex}
-                        className={`w-3 h-3 ${starIndex < Math.round((rec.score || 0) * 5) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700'}`}
-                      />
-                    ))}
+                  <div className="mt-4">
+                    <div className="mb-1 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">Độ phù hợp</span>
+                      <span className="font-semibold text-foreground">{match}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Độ phù hợp ${match}%`}>
+                      <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(100, match)}%` }} />
+                    </div>
                   </div>
-                  <span className="text-[10px] text-muted-foreground" style={{ fontWeight: 550 }}>
-                    Phù hợp {Math.round((rec.score || 0) * 100)}%
-                  </span>
-                </div>
-              </NavLink>
-            </motion.div>
-          ))}
+                </NavLink>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
