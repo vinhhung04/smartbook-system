@@ -136,6 +136,7 @@ const chartAxisTick = { fontSize: 10, fill: '#94a3b8' };
 export function ReportsPage() {
   const [range, setRange] = useState<DateRange>('30d');
   const [loading, setLoading] = useState(true);
+  const [borrowDenied, setBorrowDenied] = useState(false);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
   const [books, setBooks] = useState<any[]>([]);
@@ -158,6 +159,9 @@ export function ReportsPage() {
 
       if (loanResp.status === 'fulfilled') {
         setLoans(loanResp.value);
+      } else if (loanResp.reason?.response?.status === 403) {
+        // Role has no borrow-domain access (e.g. warehouse manager): hide borrow widgets instead of showing zeros.
+        setBorrowDenied(true);
       } else {
         console.error('[Reports] Loans failed:', loanResp.reason);
         toast.error('Không tải được dữ liệu mượn/trả: ' + (loanResp.reason?.response?.data?.message || loanResp.reason?.message || 'Lỗi không xác định'));
@@ -524,7 +528,7 @@ export function ReportsPage() {
                   hint: `${kpi.totalFineAmount.toLocaleString('vi-VN')}đ`,
                   tone: 'text-amber-600 dark:text-amber-400',
                 },
-              ].map((item) => (
+              ].filter((item) => !borrowDenied || item.label === 'Đầu sách').map((item) => (
                 <div key={item.label} className="min-w-0">
                   <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
                   <dd className={cn('mt-1 truncate font-mono text-[24px] font-bold leading-none tabular-nums', item.tone)}>{item.value}</dd>
@@ -533,6 +537,9 @@ export function ReportsPage() {
               ))}
             </dl>
           )}
+          {borrowDenied && (
+            <p className="mt-3 text-[12px] text-muted-foreground">Số liệu mượn/trả và phạt không khả dụng với vai trò của bạn.</p>
+          )}
         </section>
       </FadeItem>
 
@@ -540,6 +547,7 @@ export function ReportsPage() {
       <FadeItem>
         <SectionHeading label="Xu hướng" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {!borrowDenied && (
           <SectionCard title="Xu hướng mượn sách" subtitle={`Theo ngày (${DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label})`} icon={Calendar}>
             {loading ? (
               <Skeleton className="h-[260px] w-full" />
@@ -563,6 +571,7 @@ export function ReportsPage() {
               </ResponsiveContainer>
             )}
           </SectionCard>
+          )}
 
           <SectionCard
             title="Luồng kho"
@@ -605,6 +614,7 @@ export function ReportsPage() {
       </FadeItem>
 
       {/* 03 — Phân bổ */}
+      {!borrowDenied && (
       <FadeItem>
         <SectionHeading label="Phân bổ" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -673,8 +683,10 @@ export function ReportsPage() {
           </SectionCard>
         </div>
       </FadeItem>
+      )}
 
       {/* 04 — Chi tiết */}
+      {!borrowDenied && (
       <FadeItem>
         <SectionHeading label="Chi tiết" />
         <div className="space-y-5">
@@ -817,6 +829,7 @@ export function ReportsPage() {
           </SectionCard>
         </div>
       </FadeItem>
+      )}
     </PageWrapper>
   );
 }

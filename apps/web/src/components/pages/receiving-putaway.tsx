@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
 import { AlertTriangle, ArrowRightLeft, Filter, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
@@ -758,7 +758,13 @@ export function ReceivingPutawayPage() {
                 ) : candidates.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={8} className="whitespace-normal">
-                      <EmptyState variant="no-data" title="Không có ngăn còn chỗ trống" className="py-6" />
+                      <EmptyState
+                        variant="no-data"
+                        title="Không có ngăn còn chỗ trống"
+                        description="Kho này chưa có ngăn kệ nào còn chỗ. Hãy kiểm tra cấu hình kệ/ngăn của kho trước khi cất hàng."
+                        action={<Link to="/shelves" className="text-[12px] font-medium text-indigo-600 hover:underline">Mở trang Kệ hàng</Link>}
+                        className="py-6"
+                      />
                     </TableCell>
                   </TableRow>
                 ) : candidates.map((candidate) => (

@@ -30,6 +30,7 @@ import {
   type ReorderSuggestionsData,
 } from '@/services/analytics';
 import { getApiErrorMessage } from '@/services/api';
+import { hasPermission } from '@/services/http-clients';
 
 type PriorityFilter = 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
 type Tab = 'reorder' | 'weeding' | 'late-return' | 'no-show';
@@ -321,6 +322,8 @@ function SummaryStrip({ items }: { items: Array<{ label: string; value: string |
 
 export function ReorderSuggestionsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('reorder');
+  // Borrow-domain risk models are gated by analytics.borrow.read; roles without it (e.g. warehouse manager) get 403.
+  const canViewBorrowRisk = hasPermission('analytics.borrow.read');
 
   const [days, setDays] = useState(30);
   const [priority, setPriority] = useState<PriorityFilter>('ALL');
@@ -410,12 +413,12 @@ export function ReorderSuggestionsPage() {
   }, [loadWeedingSuggestions]);
 
   useEffect(() => {
-    void loadLateReturnRisk();
-  }, [loadLateReturnRisk]);
+    if (canViewBorrowRisk) void loadLateReturnRisk();
+  }, [canViewBorrowRisk, loadLateReturnRisk]);
 
   useEffect(() => {
-    void loadNoShowRisk();
-  }, [loadNoShowRisk]);
+    if (canViewBorrowRisk) void loadNoShowRisk();
+  }, [canViewBorrowRisk, loadNoShowRisk]);
 
   const summary = data?.summary;
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
@@ -498,7 +501,7 @@ export function ReorderSuggestionsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={`grid grid-cols-2 gap-3 ${canViewBorrowRisk ? 'lg:grid-cols-4' : 'lg:grid-cols-2'}`}>
         <DomainNavItem
           active={activeTab === 'reorder'}
           onClick={() => setActiveTab('reorder')}
@@ -517,6 +520,8 @@ export function ReorderSuggestionsPage() {
           hint="sách tồn lâu, không hoạt động"
           accent="amber"
         />
+        {canViewBorrowRisk && (
+          <>
         <DomainNavItem
           active={activeTab === 'late-return'}
           onClick={() => setActiveTab('late-return')}
@@ -535,6 +540,8 @@ export function ReorderSuggestionsPage() {
           hint="đặt chỗ đang chờ, nguy cơ cao"
           accent="cyan"
         />
+          </>
+        )}
       </div>
 
       <div className="space-y-4">

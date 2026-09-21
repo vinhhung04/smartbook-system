@@ -27,7 +27,7 @@ export function CustomerReadingAnalyticsPage() {
 
       let reviews: any[] = [];
       try {
-        const reviewsResp = await customerBorrowService.getMyReviewForBook('_all');
+        const reviewsResp = await customerBorrowService.getMyReviews();
         reviews = Array.isArray(reviewsResp?.data) ? reviewsResp.data : [];
       } catch { /* reviews are optional */ }
 

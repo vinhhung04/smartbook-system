@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { authAPI } from './http-clients';
 
 export interface LoginRequest {
@@ -178,9 +179,15 @@ export const authService = {
 
     try {
       return await authService.getMe();
-    } catch {
-      clearSession();
-      return null;
+    } catch (error) {
+      // Only an explicit auth rejection ends the session. Transient failures (429 rate limit,
+      // 5xx, network) keep the cached user so a busy gateway doesn't log people out.
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 401 || status === 403) {
+        clearSession();
+        return null;
+      }
+      return authService.getCurrentUser();
     }
   },
 };

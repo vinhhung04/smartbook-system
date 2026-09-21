@@ -37,7 +37,8 @@ test('customer reservation through pickup and return', async ({ page }) => {
   await expect(page.getByText(/Đã tạo phiếu mượn/)).toBeVisible();
 
   await page.goto('/borrow/loans');
-  await page.locator('tr', { hasText: 'customer01' }).first().click();
+  // The loan number in the row is the link to the detail page; rows themselves aren't clickable.
+  await page.locator('tr', { hasText: 'customer01' }).filter({ hasNotText: /RETURNED/ }).first().getByRole('link', { name: /^LOAN-/ }).click();
 
   await page.getByTestId('return-loan-button').click();
   await page.getByTestId('confirm-dialog-action').click();

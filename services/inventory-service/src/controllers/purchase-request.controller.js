@@ -119,6 +119,7 @@ async function getAllPurchaseRequests(req, res) {
       prisma.purchase_requests.findMany({
         where,
         include: {
+          purchase_orders: { select: { id: true, po_number: true } },
           warehouses: { select: { id: true, code: true, name: true } },
           book_variants: {
             select: {

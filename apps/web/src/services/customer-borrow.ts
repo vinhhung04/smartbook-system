@@ -84,6 +84,11 @@ export const customerBorrowService = {
     return response.data;
   },
 
+  async getMyReviews() {
+    const response = await gatewayAPI.get('/my/reviews');
+    return response.data;
+  },
+
   async getMyReviewForBook(bookId: string) {
     const response = await gatewayAPI.get(`/my/reviews/book/${bookId}`);
     return response.data;
@@ -150,9 +155,14 @@ export const customerBorrowService = {
   },
 
   async getBookRatingStats(bookIds: string[]) {
-    const response = await gatewayAPI.get('/borrow/reviews/stats', {
-      params: { bookIds: bookIds.join(',') },
-    });
-    return response.data as { data: Record<string, { averageRating: number; totalReviews: number }> };
+    // Server accepts at most 100 ids per request.
+    const chunks: string[][] = [];
+    for (let i = 0; i < bookIds.length; i += 100) chunks.push(bookIds.slice(i, i + 100));
+    const responses = await Promise.all(
+      chunks.map((chunk) => gatewayAPI.get('/borrow/reviews/stats', { params: { bookIds: chunk.join(',') } })),
+    );
+    const data: Record<string, { averageRating: number; totalReviews: number }> = {};
+    for (const r of responses) Object.assign(data, r.data?.data);
+    return { data };
   },
 };

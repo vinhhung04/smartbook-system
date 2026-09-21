@@ -20,6 +20,7 @@ export interface PurchaseRequest {
   created_at: string;
   updated_at: string;
   warehouses?: { id: string; code: string; name: string } | null;
+  purchase_orders?: { id: string; po_number: string } | null;
   book_variants?: {
     id: string; sku: string; isbn13: string | null;
     books?: { id: string; title: string } | null;

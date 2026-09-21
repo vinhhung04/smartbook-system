@@ -12,7 +12,7 @@ import {
   type BorrowTrendItem,
   type TopBookItem,
 } from '@/services/analytics';
-import { getApiErrorMessage, hasAnyPermission } from '@/services/http-clients';
+import { getApiErrorMessage, hasAnyPermission, hasPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
 import { purchaseRequestService } from '@/services/purchase-requests';
@@ -53,6 +53,8 @@ export function DashboardPage() {
   const [reorderSummary, setReorderSummary] = useState(emptyReorderSummary);
   const [hasNewData, setHasNewData] = useState(false);
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
+  // Borrow-domain analytics need analytics.borrow.read (warehouse managers don't have it).
+  const canViewBorrowAnalytics = hasPermission('analytics.borrow.read');
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
   const isWarehouseStaff = roles.includes('WAREHOUSE_STAFF');
@@ -70,12 +72,12 @@ export function DashboardPage() {
 
       const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel] = await Promise.all([
         analyticsService.getDashboardKpis(),
-        analyticsService.getBorrowTrends({ granularity: 'day' }),
+        canViewBorrowAnalytics ? analyticsService.getBorrowTrends({ granularity: 'day' }) : Promise.resolve(undefined),
         analyticsService.getTopBooks({ limit: 8 }),
-        analyticsService.getOverdueSummary(),
-        analyticsService.getFineSummary(),
+        canViewBorrowAnalytics ? analyticsService.getOverdueSummary() : Promise.resolve(undefined),
+        canViewBorrowAnalytics ? analyticsService.getFineSummary() : Promise.resolve(undefined),
         analyticsService.getWarehouseStockRisk(),
-        analyticsService.getReservationFunnel(),
+        canViewBorrowAnalytics ? analyticsService.getReservationFunnel() : Promise.resolve(undefined),
       ]);
 
       setDashboard({
@@ -103,7 +105,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [canViewAnalytics, isWarehouseStaff]);
+  }, [canViewAnalytics, canViewBorrowAnalytics, isWarehouseStaff]);
 
   useEffect(() => {
     void loadDashboard();
@@ -256,6 +258,7 @@ export function DashboardPage() {
             <KpiGrid kpis={kpis} overdueTotalItems={overdue.total_overdue_items} />
           </FadeItem>
 
+          {canViewBorrowAnalytics && (
           <FadeItem>
             <div className="mb-3">
               <h2 className="text-[15px] font-semibold text-foreground">Phân tích &amp; xu hướng</h2>
@@ -268,10 +271,13 @@ export function DashboardPage() {
               conversionRate={dashboard?.funnel.conversion_rate || 0}
             />
           </FadeItem>
+          )}
 
+          {canViewBorrowAnalytics && (
           <FadeItem>
             <TopBooksFinesSection topBookData={topBookData} fines={fines} />
           </FadeItem>
+          )}
 
           <FadeItem>
             <StockRiskOverdueSection stockRisk={stockRisk} overdue={overdue} />

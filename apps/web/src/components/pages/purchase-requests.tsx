@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardCheck, RefreshCw, Check, X, ArrowRight, Search } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
@@ -286,7 +287,9 @@ export function PurchaseRequestsPage() {
                           </Button>
                         )}
                         {req.status === "CONVERTED" && req.purchase_order_id && (
-                          <span className="text-[11px] text-muted-foreground font-mono">{req.purchase_order_id.slice(-8)}</span>
+                          <Link to={`/purchase-orders/${req.purchase_order_id}`} className="text-[11px] font-mono text-indigo-600 hover:underline">
+                            {req.purchase_orders?.po_number ?? req.purchase_order_id.slice(-8)}
+                          </Link>
                         )}
                       </TableCell>
                     </TableRow>

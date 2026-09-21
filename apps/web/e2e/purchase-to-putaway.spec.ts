@@ -7,13 +7,16 @@ import { loginAs, logout } from './helpers/auth';
 // assigns the delivery for counting -> staff counts it -> manager approves
 // the goods receipt (stock increases) -> staff puts the stock away on a shelf.
 test('purchase request through approval, supplier confirmation, receiving, and putaway', async ({ page, browser }) => {
-  const bookTitle = `E2E Putaway Book ${Date.now()}`;
+  // The PR -> PO conversion needs a title that exists in the catalog (variant search), so reuse a seeded book.
+  const bookTitle = 'Nhà Giả Kim';
 
   // 1. Staff creates a purchase request.
   await loginAs(page, { identifier: 'staff01', password: '123456' });
   await page.goto('/my-purchase-requests');
+  await page.getByRole('tab', { name: 'Tạo yêu cầu mới' }).click();
   await page.getByTestId('new-pr-warehouse-select').click();
-  await page.getByRole('option').first().click();
+  // WH-HCM-01 is the seeded warehouse with shelf compartments, so the putaway step at the end has somewhere to go.
+  await page.getByRole('option', { name: /WH-HCM-01/ }).click();
   await page.getByTestId('new-pr-book-title').fill(bookTitle);
   await page.getByTestId('new-pr-quantity').fill('5');
   await page.getByTestId('new-pr-submit').click();
@@ -25,7 +28,10 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   // through submit -> approve -> send to supplier.
   await loginAs(page, { identifier: 'manager01', password: '123456' });
   await page.goto('/purchase-requests');
-  const requestRow = page.locator('tr', { hasText: bookTitle });
+  // Earlier runs leave approved PRs for the same title; pick the newest still-pending one and pin it by its number.
+  const pendingRow = page.locator('tr', { hasText: bookTitle }).filter({ has: page.getByTestId('approve-purchase-request-button') }).first();
+  const requestNumber = (await pendingRow.innerText()).match(/PR-\d+-\d+/)![0];
+  const requestRow = page.locator('tr', { hasText: requestNumber });
   await requestRow.getByTestId('approve-purchase-request-button').click();
   await page.getByTestId('confirm-dialog-action').click();
 
@@ -35,8 +41,10 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.getByTestId('convert-po-supplier-select').selectOption({ index: 1 });
   await page.getByTestId('create-po-from-request-button').click();
 
-  const poLink = page.getByRole('link', { name: /^PO-/ }).first();
-  await poLink.click();
+  // The PR page only toasts the new PO number (it no longer links to it), so open it from the PO list.
+  const poNumber = (await page.getByText(/Đã chuyển thành PO: PO-\S+/).innerText()).match(/PO-\S+/)![0];
+  await page.goto('/purchase-orders');
+  await page.getByRole('link', { name: poNumber }).first().click();
 
   await page.getByTestId('submit-po-button').click();
   await page.getByTestId('confirm-dialog-action').click();
@@ -66,7 +74,8 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.goto('/supplier-deliveries');
   await page.getByRole('link', { name: /^INV-/ }).first().click();
   await page.getByTestId('goods-receipt-assign-staff-select').click();
-  await page.getByRole('option').first().click();
+  // Assign to staff01 (Le Van Minh) -- step 5 logs in as that user, so the first option won't do.
+  await page.getByRole('option', { name: /Le Van Minh/ }).click();
   await page.getByTestId('goods-receipt-submit').click();
   await expect(page.getByText(/Đã tạo phiếu/)).toBeVisible();
   const receiptUrl = page.url();
