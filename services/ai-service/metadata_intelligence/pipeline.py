@@ -25,7 +25,13 @@ async def run_pipeline(documents, target_isbn=None, provider=None, mode='B5', bu
         if mode != 'B3':
             candidates.extend(rule_candidates)
             evidence.extend(rule_evidence)
-        if mode in {'B3', 'B4', 'B5'} and doc['kind'] in {'html', 'text'} and provider and llm_docs < 3:
+        rule_fields = {c['field'] for c in rule_candidates if c['eligibleForFusion']}
+        # Text rules remain the baseline. A model is only worth paying for when a
+        # factual core field is absent; optional subtitles/translators/categories
+        # do not force a call on a complete labelled record.
+        needs_llm = bool({'title', 'authors', 'publisher', 'publishedDate', 'isbn', 'pageCount', 'description'} - rule_fields)
+        should_llm = mode == 'B3' or (mode in {'B4', 'B5'} and needs_llm)
+        if should_llm and doc['kind'] in {'html', 'text'} and provider and llm_docs < 3:
             llm_docs += 1
             cs, es, usage, ws = await extract(doc, provider, deadline)
             # Hybrid: only use LLM for fields absent from valid rule extraction in this record.
@@ -38,7 +44,7 @@ async def run_pipeline(documents, target_isbn=None, provider=None, mode='B5', bu
             evidence.extend(es)
             calls.extend(usage)
             warnings.extend(ws)
-        elif doc['kind'] in {'html', 'text'} and mode in {'B3', 'B4', 'B5'}:
+        elif should_llm and doc['kind'] in {'html', 'text'}:
             warnings.append('LLM_SKIPPED:' + doc['id'])
     # IDs identify facts, not retries or repeated chunks.
     candidates = list({c['id']: c for c in candidates}.values())

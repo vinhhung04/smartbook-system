@@ -77,6 +77,15 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['usage'], [])
         provider.chat.assert_not_awaited()
 
+    async def test_complete_labelled_text_does_not_call_llm_in_hybrid(self):
+        from metadata_intelligence.pipeline import run_pipeline
+        provider = SimpleNamespace(model='test', chat=AsyncMock())
+        text = ('Tên sách: Book\nTác giả: A\nNhà xuất bản: NXB\nNăm xuất bản: 2020\n'
+                'ISBN: 9780439708180\nSố trang: 100\nMô tả: A description')
+        result = await run_pipeline([document('pasted', 'text', text)], '9780439708180', provider, mode='B4')
+        self.assertEqual(result['metadata']['pageCount'], 100)
+        provider.chat.assert_not_awaited()
+
     async def test_llm_extracts_with_span_and_usage(self):
         from metadata_intelligence.pipeline import run_pipeline
         from llm_provider import ChatUsage

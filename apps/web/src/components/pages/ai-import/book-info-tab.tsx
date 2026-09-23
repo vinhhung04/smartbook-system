@@ -164,6 +164,7 @@ export function BookInfoTab({
             <Field id="title" className="sm:col-span-4" label="Tên sách" required variant="underline" inputClassName="text-[16px]" value={form.title} onChange={(v) => onFieldChange("title", v)} />
             <Field id="subtitle" className="sm:col-span-6" label="Tựa phụ" variant="underline" value={form.subtitle} onChange={(v) => onFieldChange("subtitle", v)} />
             <Field id="authors" className="sm:col-span-3" label="Tác giả (cách nhau dấu phẩy)" variant="underline" value={form.authorsText} onChange={(v) => onFieldChange("authorsText", v)} />
+            <Field id="translator" className="sm:col-span-3" label="Dịch giả (cách nhau dấu phẩy)" variant="underline" value={form.translatorText || ''} onChange={(v) => onFieldChange("translatorText", v)} />
             <Field id="publisher" className="sm:col-span-3" label="Nhà xuất bản" variant="underline" value={form.publisher} onChange={(v) => onFieldChange("publisher", v)} />
           </div>
         </SectionCard>

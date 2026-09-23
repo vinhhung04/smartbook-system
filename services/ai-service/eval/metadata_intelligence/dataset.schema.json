@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Book Metadata Intelligence dataset",
+  "type": "object",
+  "required": ["editions"],
+  "properties": {"editions": {"type": "array", "items": {"type": "object", "required": ["editionId", "workGroup", "split", "languageGroup", "editionGold", "documents"], "properties": {
+    "editionId": {"type": "string"}, "workGroup": {"type": "string"}, "split": {"enum": ["development", "test"]}, "languageGroup": {"enum": ["vi", "international"]},
+    "targetIsbn": {"type": ["string", "null"]}, "secondAnnotator": {"type": "boolean"},
+    "editionGold": {"type": "object", "required": ["fields"], "properties": {"fields": {"type": "object", "additionalProperties": {"type": "object", "required": ["status"], "properties": {"status": {"enum": ["known", "absent", "unknown", "not_applicable"]}, "value": {}}}}}},
+    "documents": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"type": "object", "required": ["provider", "kind", "payload"], "properties": {"provider": {"type": "string"}, "kind": {"enum": ["json", "html", "text"]}, "payload": {}, "url": {"type": "string"}, "recordId": {"type": "string"}}}}
+  }}}}
+}

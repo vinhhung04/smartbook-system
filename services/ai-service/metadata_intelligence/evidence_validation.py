@@ -14,6 +14,7 @@ ROLE_LABELS = {
     'title': r'tên sách|nhan đề|title',
     'subtitle': r'phụ đề|subtitle',
     'categories': r'thể loại|chủ đề|categories|category|subjects?',
+    'description': r'mô tả|giới thiệu|description|summary',
 }
 
 

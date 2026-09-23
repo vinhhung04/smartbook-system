@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ExtractionEvidencePanel } from './extraction-evidence-panel';
 import { aiService, type EnrichMode, type LookupBookByIsbnResponse, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { metadataIntelligenceService, type DuplicateDecisionResult, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
@@ -39,6 +41,14 @@ const EMPTY_AI_FIELD_LOADING: Record<AiFieldKey, boolean> = { description: false
 export function AIImportPage() {
   const shouldReduceMotion = useReducedMotion();
   const [isbnInput, setIsbnInput] = useState("");
+  const [pipelineEnabled, setPipelineEnabled] = useState(false);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceType, setSourceType] = useState<'text' | 'html'>('text');
+  useEffect(() => {
+    let active = true;
+    metadataIntelligenceService.capabilities().then(c => { if (active) setPipelineEnabled(c.enabled); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -202,9 +212,9 @@ export function AIImportPage() {
     setActiveWorkspaceTab(reviewIssueCount > 0 ? "review" : "book");
   }, [lookupData, reviewIssueCount]);
 
-  async function handleLookup(rawInput?: string) {
+  async function handleLookup(rawInput?: string, pasted = false) {
     const normalized = normalizeIsbnInput(rawInput ?? isbnInput);
-    if (!normalized) {
+    if (!normalized && !pasted) {
       toast.error("Vui lòng nhập ISBN");
       return;
     }
@@ -218,7 +228,10 @@ export function AIImportPage() {
     setAiFieldCandidates(EMPTY_AI_FIELD_CANDIDATES);
     setQualityCheckResult(null);
     try {
-      const result = await aiService.enrichBookAfterIsbn({
+      const result = pipelineEnabled ? {
+        lookup: await metadataIntelligenceService.extract(pasted ? sourceType : 'isbn', pasted ? sourceText : normalized, pasted ? normalized || undefined : undefined),
+        aiSuggestions: { description: null, summaryVi: null, keywords: [], categories: [], qualityWarnings: [], provider: 'none', confidence: 0 } as PostIsbnAiSuggestions,
+      } : await aiService.enrichBookAfterIsbn({
         isbn: normalized,
         existingCategories,
       });
@@ -270,11 +283,16 @@ export function AIImportPage() {
     }
   }
 
-  async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED") {
+  async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED", override?: unknown) {
     if (!reconciliationDraft) return;
     try {
-      const value = status === "ACCEPTED" ? reconciliationValueFromForm(field, form) : undefined;
+      const value = status === "ACCEPTED" ? override === undefined ? reconciliationValueFromForm(field, form) : override : undefined;
       const decision = await metadataIntelligenceService.decideField(reconciliationDraft.id, field, status, value);
+      if (override !== undefined) {
+        const formField: Record<string, keyof EditableBookForm> = { authors: 'authorsText', translator: 'translatorText', categories: 'categoriesText', isbn: 'isbn13' };
+        const target = formField[field] || field as keyof EditableBookForm;
+        if (target in form || target === 'translatorText') setForm(current => ({ ...current, [target]: Array.isArray(value) ? value.join(', ') : String(value ?? '') }));
+      }
       setReconciliationDraft((current) => current ? {
         ...current,
         decisions: current.decisions.map((item) => item.field === field ? { ...item, status: decision.status, value: decision.value } : item),
@@ -475,6 +493,10 @@ export function AIImportPage() {
   }
 
   async function handleSave() {
+    if (lookupData?.intelligence && !reconciliationDraft) {
+      toast.error('Cần có bản nháp kiểm duyệt trước khi lưu kết quả trích xuất.');
+      return;
+    }
     const normalizedIsbn = normalizeIsbnInput(form.isbn || isbnInput);
     const title = form.title.trim();
     if (!normalizedIsbn) {
@@ -641,6 +663,16 @@ export function AIImportPage() {
       </FadeItem>
 
       <AnimatePresence mode="wait" initial={false}>
+      {pipelineEnabled && <section className="space-y-2 rounded-xl border bg-card p-4">
+        <label htmlFor="metadataSource" className="text-sm font-semibold">Trích xuất từ nội dung sách</label>
+        <p className="text-sm text-muted-foreground">Dán thông tin từ trang sách. ISBN ở ô trên là tùy chọn để đối chiếu ấn bản.</p>
+        <select aria-label="Định dạng nội dung" value={sourceType} onChange={e => setSourceType(e.target.value as 'text' | 'html')} className="rounded border bg-background p-2 text-sm">
+          <option value="text">Văn bản</option><option value="html">HTML</option>
+        </select>
+        <Textarea id="metadataSource" value={sourceText} onChange={e => setSourceText(e.target.value)} maxLength={100000} rows={5} placeholder="Tên sách, tác giả, thông tin xuất bản, mô tả…" />
+        <button type="button" disabled={lookupLoading || !sourceText.trim()} onClick={() => void handleLookup(undefined, true)} className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{lookupLoading ? 'Đang trích xuất…' : 'Trích xuất thông tin'}</button>
+      </section>}
+      {lookupData?.intelligence && <ExtractionEvidencePanel bundle={lookupData.intelligence} draft={reconciliationDraft} onDecide={handleAuthorityDecision} />}
       {lookupLoading ? (
         <motion.div key="lookup-loading" initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}>
           <IsbnLookupProgress />

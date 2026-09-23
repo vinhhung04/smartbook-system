@@ -43,6 +43,7 @@ class ChatUsage:
     completion_tokens: int | None
     tool_call_count: int
     error: str | None = None
+    cost_usd: float | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -52,6 +53,8 @@ class ChatUsage:
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "tool_call_count": self.tool_call_count,
+            "costUsd": self.cost_usd,
+            "error": self.error,
         }
 
 
@@ -406,6 +409,7 @@ class OpenRouterProvider:
             prompt_tokens=usage_data.get("prompt_tokens"),
             completion_tokens=usage_data.get("completion_tokens"),
             tool_call_count=len(tool_calls),
+            cost_usd=usage_data.get("cost"),
         )
         _log_call(usage)
         assistant_message = (
