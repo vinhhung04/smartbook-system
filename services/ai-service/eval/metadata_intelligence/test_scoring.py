@@ -26,5 +26,12 @@ class MetadataScoringTests(unittest.TestCase):
         self.assertEqual(report['evidenceSupportedExtractionRate'], 0)
         self.assertEqual(report['hallucinationRate'], 1)
 
+    def test_review_rate_reflects_pipeline_flag_even_without_gold(self):
+        entry = {'editionId': 'e', 'workGroup': 'w', 'editionGold': {'fields': {}}}
+        flagged = score_run(entry, {'metadata': {}, 'decisions': {'title': {'status': 'REVIEW_REQUIRED'}}})
+        clean = score_run(entry, {'metadata': {}, 'decisions': {'title': {'status': 'PROPOSED'}}})
+        self.assertEqual(aggregate([flagged])['reviewRate'], 1.0)
+        self.assertEqual(aggregate([clean])['reviewRate'], 0.0)
+
 
 if __name__ == '__main__': unittest.main()

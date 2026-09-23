@@ -70,7 +70,10 @@ def score_run(entry, bundle):
         totals['edition_contaminated'] += int(contaminated)
         per_field[field] = {'exact': exact, 'emitted': is_emitted, 'supported': support,
                             'editionContaminated': contaminated, 'tp': tp, 'fp': fp, 'fn': fn}
+    # The pipeline's own review flag, independent of whether gold is known yet.
+    review_required = any(decisions.get(field, {}).get('status') == 'REVIEW_REQUIRED' for field in FIELDS)
     return {'editionId': entry['editionId'], 'workGroup': entry['workGroup'], 'perField': per_field,
+            'reviewRequired': review_required,
             'latencyMs': bundle.get('processingTimeMs', 0), 'usage': bundle.get('usage', []), **totals}
 
 
@@ -98,7 +101,7 @@ def aggregate(results):
         'hallucinationRate': ratio(totals['emitted'] - totals['supported'], totals['emitted']),
         'evidenceSupportedExtractionRate': ratio(totals['supported'], totals['emitted']),
         'editionContaminationRate': ratio(totals['edition_contaminated'], totals['emitted']),
-        'reviewRate': ratio(sum(any(v['emitted'] and not v['supported'] for v in r['perField'].values()) for r in results), len(results)),
+        'reviewRate': ratio(sum(r['reviewRequired'] for r in results), len(results)),
         'latencyMs': {'p50': percentile([r['latencyMs'] for r in results], .5), 'p95': percentile([r['latencyMs'] for r in results], .95)},
         'tokenUsage': {'prompt': sum((call.get('prompt_tokens') or 0) for r in results for call in r['usage']),
                        'completion': sum((call.get('completion_tokens') or 0) for r in results for call in r['usage'])},
