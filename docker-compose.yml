@@ -338,6 +338,11 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
       - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
+      # metadata-intelligence/extract calls inventory-service to verify catalog
+      # authorization before running the pipeline; without this it falls back to
+      # routes_metadata_intelligence.py's default port (3002), which doesn't match
+      # inventory-service's actual PORT=3001 above, and every request 503s.
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
