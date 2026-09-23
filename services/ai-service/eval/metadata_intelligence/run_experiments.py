@@ -101,7 +101,9 @@ def bootstrap_delta(left, right, rounds=2000, seed=20260923):
         sample = [rng.choice(groups) for _ in groups]
         def coverage(data):
             rows = [x for g in sample for x in data[g]]
-            return sum(x['correct'] for x in rows) / sum(x['eligible'] for x in rows)
+            eligible = sum(x['eligible'] for x in rows)
+            # No known gold labels yet (e.g. pre-annotation smoke runs): report no signal, not a crash.
+            return sum(x['correct'] for x in rows) / eligible if eligible else 0
         values.append(coverage(r) - coverage(l))
     values.sort()
     return {'method': 'paired bootstrap by workGroup', 'rounds': rounds, 'ci95': [values[int(.025 * rounds)], values[int(.975 * rounds) - 1]]}
