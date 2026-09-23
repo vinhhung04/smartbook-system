@@ -61,6 +61,28 @@ class MetadataIntelligenceTests(unittest.TestCase):
         verify_candidates(candidates, '9780439708180')
         self.assertTrue(all(c['editionStatus'] != 'verified' for c in candidates))
 
+    def test_description_survives_wrong_edition_but_title_does_not(self):
+        doc = document('googleBooks', 'json', {'volumeInfo': {
+            'title': 'A book', 'description': 'A great read',
+            'industryIdentifiers': [{'identifier': '9780439708180'}]}})
+        candidates, _ = extract_rules(doc)
+        verify_candidates(candidates, '9780061120084')
+        by_field = {c['field']: c for c in candidates}
+        self.assertEqual(by_field['title']['editionStatus'], 'rejected')
+        self.assertFalse(by_field['title']['eligibleForFusion'])
+        self.assertEqual(by_field['description']['editionStatus'], 'rejected')
+        self.assertTrue(by_field['description']['eligibleForFusion'])
+
+    def test_fusion_fallback_prefers_reliable_source_over_extraction_order(self):
+        # openLibrary candidate is extracted (and inserted) first, but googleBooks
+        # has the higher publisher reliability prior and should still win.
+        doc_ol = document('openLibrary', 'json', {'publishers': ['OpenLib Publisher']})
+        doc_gb = document('googleBooks', 'json', {'volumeInfo': {'publisher': 'GB Publisher'}})
+        candidates = extract_rules(doc_ol)[0] + extract_rules(doc_gb)[0]
+        verify_candidates(candidates, None)
+        result = fuse(candidates, [doc_ol, doc_gb])
+        self.assertEqual(result['publisher']['proposedValue'], 'GB Publisher')
+
 
 if __name__ == '__main__':
     unittest.main()
@@ -114,3 +136,9 @@ class PipelineTests(unittest.IsolatedAsyncioTestCase):
         result = await run_pipeline(docs, '9780439708180', mode='B5')
         self.assertEqual(result['metadata']['title'], 'Right')
         self.assertEqual(result['decisions']['title']['status'], 'REVIEW_REQUIRED')
+
+    async def test_auto_inferred_target_isbn_warns(self):
+        from metadata_intelligence.pipeline import run_pipeline
+        doc = document('pasted', 'text', 'Book A\nISBN: 9780439708180')
+        result = await run_pipeline([doc])
+        self.assertIn('TARGET_ISBN_INFERRED_FROM_SINGLE_SOURCE', result['warnings'])

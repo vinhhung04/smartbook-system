@@ -1,7 +1,7 @@
 from source_reliability import reliability
 
 from .normalization import key
-from .schemas import FIELDS, LIST_FIELDS, FieldDecision
+from .schemas import FIELDS, LIST_FIELDS, WORK_SCOPE_FIELDS, FieldDecision
 from urllib.parse import urlsplit
 
 
@@ -26,18 +26,23 @@ def fuse(candidates, documents, policy='consensus'):
     for field in FIELDS:
         entries = [c for c in candidates if c['field'] == field]
         eligible = [c for c in entries if c['eligibleForFusion']]
-        verified = [c for c in eligible if c['editionStatus'] == 'verified']
-        if verified:
-            eligible = verified
-        elif eligible:
-            # Do not combine unverified records from different editions/sources.
-            record = (eligible[0]['sourceDocumentId'], eligible[0]['sourceRecordId'])
-            eligible = [c for c in eligible if (c['sourceDocumentId'], c['sourceRecordId']) == record]
+        def weight(c):
+            return reliability(docs[c['sourceDocumentId']]['provider'], field) or .65
+        if field not in WORK_SCOPE_FIELDS:
+            verified = [c for c in eligible if c['editionStatus'] == 'verified']
+            if verified:
+                eligible = verified
+            elif eligible:
+                # Do not combine unverified records from different editions/sources;
+                # keep the most reliable source's record, not just the first extracted.
+                best_source = max(eligible, key=lambda c: (weight(c), c['id']))
+                record = (best_source['sourceDocumentId'], best_source['sourceRecordId'])
+                eligible = [c for c in eligible if (c['sourceDocumentId'], c['sourceRecordId']) == record]
+        # Work-scope fields (e.g. description) are edition-invariant, so every eligible
+        # candidate can corroborate regardless of which record/edition it came from.
         groups = {}
         for c in eligible:
             groups.setdefault(key(c['normalizedValue']), []).append(c)
-        def weight(c):
-            return reliability(docs[c['sourceDocumentId']]['provider'], field) or .65
         def support(group):
             weights = {}
             for c in group:

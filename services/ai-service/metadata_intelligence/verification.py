@@ -1,5 +1,7 @@
 import re
 
+from .schemas import WORK_SCOPE_FIELDS
+
 
 def canonical_isbn(value):
     s = re.sub(r'[^0-9X]', '', str(value or '').upper())
@@ -35,6 +37,6 @@ def verify_candidates(candidates, target):
         else:
             status = 'verified'
         candidate['editionStatus'] = status
-        if status in {'rejected', 'conflicting'}:
+        if status in {'rejected', 'conflicting'} and candidate['field'] not in WORK_SCOPE_FIELDS:
             candidate['eligibleForFusion'] = False
             candidate['rejectionReasons'].append('EDITION_' + status.upper())

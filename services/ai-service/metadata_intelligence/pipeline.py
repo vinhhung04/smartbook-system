@@ -57,6 +57,9 @@ async def run_pipeline(documents, target_isbn=None, provider=None, mode='B5', bu
     observed = {c['normalizedValue'] for c in candidates if c['field'] == 'isbn' and c['eligibleForFusion']}
     if not target and len(observed) == 1:
         target = next(iter(observed))
+        # Self-inferred target: any resulting 'verified' status only means the record
+        # matches itself, not that an independent source confirmed the edition.
+        warnings.append('TARGET_ISBN_INFERRED_FROM_SINGLE_SOURCE')
     verify_candidates(candidates, target)
     if not edition_gate:
         for c in candidates:

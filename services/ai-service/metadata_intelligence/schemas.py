@@ -6,6 +6,9 @@ VERSION = 'metadata-intelligence-v2.1'
 FIELDS = ('title', 'subtitle', 'authors', 'translator', 'publisher', 'publishedDate',
           'isbn', 'pageCount', 'categories', 'description', 'language', 'thumbnail')
 LIST_FIELDS = {'authors', 'translator', 'categories'}
+# Fields that describe the work rather than a specific printing/ISBN, so a
+# record whose ISBN does not match the target edition can still corroborate them.
+WORK_SCOPE_FIELDS = {'description'}
 
 
 class StrictModel(BaseModel):

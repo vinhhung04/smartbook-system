@@ -1,7 +1,7 @@
 import re
 
 from .normalization import key, normalize
-from .schemas import ExtractionEvidence, MetadataCandidate, FIELDS, LIST_FIELDS
+from .schemas import ExtractionEvidence, MetadataCandidate, FIELDS, LIST_FIELDS, WORK_SCOPE_FIELDS
 from .sources import digest
 
 ROLE_LABELS = {
@@ -33,6 +33,7 @@ def candidate(doc, field, value, origin, evidence, record_id=None, model=None):
         id=digest([doc['id'], record_id, field, value, origin, [e['id'] for e in evidence]])[:24],
         sourceDocumentId=doc['id'], sourceRecordId=record_id or doc['recordId'], field=field,
         rawValue=value, normalizedValue=normalized, origin=origin, model=model,
+        scope='work' if field in WORK_SCOPE_FIELDS else 'edition',
         promptVersion='extract-v1' if origin == 'LLM_EXTRACTED' else None,
         evidenceIds=[e['id'] for e in evidence], eligibleForFusion=not errors,
         rejectionReasons=errors,
