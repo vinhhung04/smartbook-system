@@ -18,6 +18,9 @@ export const SOURCE_LABELS: Record<IsbnSourceName, string> = {
 export const FIELD_LABELS: Record<string, string> = {
   title: "Tên sách",
   authors: "Tác giả",
+  translator: "Dịch giả",
+  subtitle: "Tựa phụ",
+  isbn: "ISBN",
   publisher: "Nhà xuất bản",
   publishedDate: "Năm xuất bản",
   description: "Mô tả",
@@ -100,6 +103,7 @@ export function mapLookupToForm(data: LookupBookByIsbnResponse): EditableBookFor
     title: data.title || "",
     subtitle: data.subtitle || "",
     authorsText: (data.authors || []).join(", "),
+    translatorText: (data.translator || []).join(", "),
     publisher: data.publisher || "",
     publishedDate: data.publishedDate || "",
     description: data.description || "",
@@ -141,6 +145,9 @@ export function buildDuplicateCheckMetadata({ lookup, normalizedMetadata, form }
 export function reconciliationValueFromForm(field: string, form: EditableBookForm): unknown {
   switch (field) {
     case "title": return form.title.trim();
+    case "subtitle": return form.subtitle.trim() || null;
+    case "isbn": return form.isbn13.trim() || form.isbn.trim() || null;
+    case "translator": return splitCommaValues(form.translatorText || '');
     case "authors": return splitCommaValues(form.authorsText);
     case "publisher": return form.publisher.trim();
     case "categories": return splitCommaValues(form.categoriesText);
@@ -158,6 +165,7 @@ export function finalMetadataFromForm(form: EditableBookForm): FinalMetadata {
   const keywords = [...new Set(splitCommaValues(form.keywordsText).filter((item) => item.length <= 50))].slice(0, 15);
   return {
     title: form.title.trim(), subtitle: form.subtitle.trim() || null, description: form.description.trim() || null,
+    translator: splitCommaValues(form.translatorText || ''), publishedDate: form.publishedDate.trim() || null,
     summaryVi: form.summaryVi.trim() || null, language: form.language.trim() || "vi",
     ...(isbn13.length === 13 ? { isbn13 } : {}), ...(isbn10.length === 10 ? { isbn10 } : {}),
     internalBarcode: normalizeIsbnInput(form.isbn || "") || null, publishYear: parsePublishYear(form.publishedDate),

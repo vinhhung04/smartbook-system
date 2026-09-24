@@ -86,6 +86,7 @@ from assistant_loop import (
     seed_fast_path,
 )
 from llm_provider import get_llm_provider
+from metadata_intelligence.capture import capture as capture_metadata_source
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
@@ -156,6 +157,7 @@ BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 # the marketplace/web providers that can fill the critical/high-value fields still
 # missing, within one total time budget. Off = legacy "everything in parallel" flow.
 ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL = os.getenv("ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", "false").lower() == "true"
+ENABLE_METADATA_INTELLIGENCE_V2 = os.getenv("ENABLE_METADATA_INTELLIGENCE_V2", "false").lower() == "true"
 ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SECONDS", "45"))
 # A found-but-incomplete lookup (gaps left, or a provider timed out/errored) is cached
 # only briefly so it is retried soon instead of sticking for the full 7 days.
@@ -866,6 +868,7 @@ async def _fetch_and_parse_product_page(
         )
         response.raise_for_status()
         html_text = response.text
+        capture_metadata_source(source_name, 'html', html_text, url)
     except Exception as exc:
         logger.warning("Marketplace fetch failed [%s] %s: %s", source_name, url, exc)
         raise
@@ -1071,6 +1074,7 @@ async def _fetch_and_parse_product_page_with_browser(
     if not html_text:
         return None, 0.0
 
+    capture_metadata_source(source_name, 'html', html_text, url)
     metadata = _parse_json_ld_product(html_text) or _parse_meta_product(html_text)
     if not metadata:
         logger.debug("Browser marketplace [%s] no metadata from %s", source_name, url)
@@ -1286,6 +1290,7 @@ async def _fetch_tiki_by_isbn_api(
                     )
                     detail_resp.raise_for_status()
                     detail = detail_resp.json() or {}
+                    capture_metadata_source('tiki', 'json', detail, f'https://tiki.vn/api/v2/products/{product_id}')
                     description = _safe_text(detail.get("description") or detail.get("short_description"))
                     # Authors and publisher from specifications
                     specs = detail.get("specifications") or []
@@ -1416,6 +1421,7 @@ async def _fetch_vinabook_by_isbn_api(
         )
         product_resp.raise_for_status()
         product = product_resp.json() or {}
+        capture_metadata_source('vinabook', 'json', product, product_url + '.js')
 
         variant = (product.get("variants") or [{}])[0]
         sku = (variant.get("barcode") or variant.get("sku") or "").strip()
@@ -1767,6 +1773,7 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
 
 
 def _parse_google_books_item(item: dict) -> dict:
+    capture_metadata_source('googleBooks', 'json', item, 'https://www.googleapis.com/books/v1/volumes/' + str(item.get('id', '')))
     volume_info = item.get("volumeInfo") or {}
     image_links = volume_info.get("imageLinks") or {}
     return {
@@ -1841,6 +1848,7 @@ async def _fetch_open_library_description_via_json(
 
 
 def _parse_open_library_item(item: dict) -> dict:
+    capture_metadata_source('openLibrary', 'json', item, OPEN_LIBRARY_SITE_ORIGIN + str(item.get('key', '')))
     publish_date = _safe_text(item.get("publish_date"))
     authors = []
     for author in item.get("authors") or []:
@@ -1890,6 +1898,9 @@ async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) ->
             items = (response.json() or {}).get("items") or []
             if not items:
                 continue
+            for candidate_item in items[:2]:
+                capture_metadata_source('googleBooks', 'json', candidate_item,
+                    'https://www.googleapis.com/books/v1/volumes/' + str(candidate_item.get('id', '')))
             metadata = _parse_google_books_item(items[0])
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
@@ -2704,6 +2715,9 @@ def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
 
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    if ENABLE_METADATA_INTELLIGENCE_V2:
+        from metadata_intelligence.schemas import ExtractionInput
+        return await metadata_extraction_service(ExtractionInput(type='isbn', value=req.isbn))
     cache_key = _isbn_lookup_cache_key(req)
     if cache_key:
         cached = isbn_lookup_cache.get(cache_key)
@@ -2738,6 +2752,56 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
 @app.post("/isbn-intelligence")
 async def isbn_intelligence_lookup(req: IsbnLookupRequest):
     return await lookup_book_by_isbn(req)
+
+
+async def metadata_extraction_service(input):
+    """Reuse current discovery while preserving source payloads in this request only."""
+    from copy import deepcopy
+    from metadata_intelligence.capture import collector
+    from metadata_intelligence.sources import document, digest
+    from metadata_intelligence.pipeline import run_pipeline, legacy_projection
+    from metadata_intelligence.schemas import VERSION
+    from metadata_intelligence.verification import canonical_isbn
+    target = input.value if input.type == 'isbn' else input.targetIsbn
+    if target and not canonical_isbn(target):
+        raise HTTPException(422, 'A valid ISBN-10 or ISBN-13 is required')
+    key = 'mi:' + digest([input.model_dump(), VERSION, OPENROUTER_TEXT_MODEL, LLM_PROVIDER,
+                          ENABLE_MARKETPLACE_LOOKUP, ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL, 'extract-v1'])
+    cached = isbn_lookup_cache.get(key)
+    if cached:
+        result = deepcopy(cached)
+        result['intelligence']['cacheHit'] = True
+        return result
+    began = time.monotonic()
+    docs, warnings = [], []
+    if input.type == 'isbn':
+        token = collector.set(docs)
+        try:
+            await asyncio.wait_for(_lookup_book_by_isbn_legacy(IsbnLookupRequest(isbn=canonical_isbn(target))), timeout=40)
+        except asyncio.TimeoutError:
+            warnings.append('DISCOVERY_TIMEOUT')
+        except Exception as exc:
+            logger.warning('metadata discovery failed: %s', type(exc).__name__)
+            warnings.append('DISCOVERY_ERROR')
+        finally:
+            collector.reset(token)
+    else:
+        docs = [document('pasted', input.type, input.value, input.sourceUrl)]
+    try:
+        provider = _get_text_llm_provider()
+    except ValueError:
+        provider = None
+    bundle = await run_pipeline(docs, target, provider, budget=max(.01, 60 - (time.monotonic() - began)))
+    bundle['warnings'].extend(warnings)
+    bundle['processingTimeMs'] = int((time.monotonic() - began) * 1000)
+    result = legacy_projection(bundle)
+    if result['found']:
+        isbn_lookup_cache.set(key, result, ttl_seconds=600)
+    return result
+
+
+from routes_metadata_intelligence import build_router as build_metadata_router
+app.include_router(build_metadata_router(metadata_extraction_service, lambda: ENABLE_METADATA_INTELLIGENCE_V2))
 
 
 class EnrichBookAfterIsbnRequest(BaseModel):

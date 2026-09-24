@@ -85,6 +85,8 @@ export interface IsbnConflict {
 }
 
 export interface LookupBookByIsbnResponse {
+  intelligence?: import('./metadata-pipeline-types').MetadataPipeline;
+  translator?: string[];
   success: boolean;
   found: boolean;
   isbn: string;

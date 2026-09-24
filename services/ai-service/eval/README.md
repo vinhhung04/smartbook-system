@@ -57,6 +57,18 @@ Matching is fuzzy for text fields (`difflib`, accent/case-insensitive,
 threshold 0.85 — see `scoring.py`) so cosmetic differences ("NXB Trẻ" vs
 "Nha Xuat Ban Tre") don't count as mismatches; year matching is exact.
 
+## 1b. Book Metadata Intelligence B1–B5
+
+`metadata_intelligence/run_experiments.py` compares frozen source snapshots with B1 (Google Books), B2 (rule extraction), B3 (Qwen extraction), B4 (hybrid), and B5 (hybrid plus field fusion). It reports precision, recall, F1, correct-field coverage, hallucination/evidence support, edition contamination, review rate, latency, tokens and returned API cost. It never invents a completed 120-edition study: `--strict-protocol` refuses any dataset other than the registered 120 / 40-development / 80-test / 60–60 split with 24 double-annotated editions.
+
+```powershell
+cd services/ai-service
+python eval/metadata_intelligence/run_experiments.py --dataset eval/metadata_intelligence/pilot_dataset.example.json --modes B1,B2,B3,B4,B5
+python eval/metadata_intelligence/run_experiments.py --dataset <frozen-120-edition-manifest>.json --strict-protocol --repeat 3
+```
+
+The runner includes three offline B5 ablations by default: evidence gate disabled, edition gate disabled, and fixed source-priority fusion. Use [the annotation guide](metadata_intelligence/ANNOTATION_GUIDE.md) and schema before creating the final dataset. The pilot manifest is illustrative only and is excluded from thesis results. The existing live `eval_isbn_extraction.py` remains the current-system baseline; run it separately with the same ISBN subset and report it as a live, non-frozen comparison.
+
 ## 2. Assistant tool-selection accuracy — `eval_assistant_tools.py`
 
 For every labeled question in `assistant_dataset.json`, runs the exact same
