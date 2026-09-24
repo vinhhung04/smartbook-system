@@ -315,6 +315,7 @@ async function updateMe(req, res) {
 
     const full_name = req.body?.full_name;
     const email = req.body?.email;
+    const phone = req.body?.phone;
 
     if (full_name !== undefined && String(full_name).trim().length < 2) {
       return res.status(400).json({ message: 'full_name must be at least 2 characters' });
@@ -327,11 +328,16 @@ async function updateMe(req, res) {
       }
     }
 
+    if (phone !== undefined && phone !== null && String(phone).trim() && !/^[0-9+()\-\s]{6,30}$/.test(String(phone).trim())) {
+      return res.status(400).json({ message: 'Invalid phone format' });
+    }
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
         ...(full_name !== undefined ? { full_name: String(full_name).trim() } : {}),
         ...(email !== undefined ? { email: normalizeIdentifier(email) } : {}),
+        ...(phone !== undefined ? { phone: String(phone).trim() || null } : {}),
       },
     });
 
@@ -600,6 +606,30 @@ async function verifyEmail(req, res) {
   }
 }
 
+async function resendVerification(req, res) {
+  try {
+    const userId = req.auth?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.email_verified_at) {
+      return res.json({ message: 'Email already verified' });
+    }
+
+    await sendVerificationEmail(user);
+    return res.json({ message: 'Verification email sent' });
+  } catch (error) {
+    console.error('resendVerification error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -611,4 +641,5 @@ module.exports = {
   requestPasswordReset,
   confirmPasswordReset,
   verifyEmail,
+  resendVerification,
 };

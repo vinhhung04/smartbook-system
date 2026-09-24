@@ -18,6 +18,10 @@ export interface AuthUser {
   username: string;
   email: string;
   full_name: string;
+  phone?: string | null;
+  avatar_url?: string | null;
+  last_login_at?: string | null;
+  email_verified_at?: string | null;
   roles: string[];
   permissions: string[];
   is_superuser?: boolean;
@@ -41,6 +45,7 @@ interface TokenPayload {
 export interface UpdateMeRequest {
   full_name?: string;
   email?: string;
+  phone?: string;
 }
 
 const TOKEN_KEY = 'token';
@@ -169,6 +174,11 @@ export const authService = {
 
   confirmPasswordReset: async (token: string, newPassword: string): Promise<{ message: string }> => {
     const response = await authAPI.post('/auth/password-reset/confirm', { token, new_password: newPassword });
+    return response.data;
+  },
+
+  resendVerification: async (): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/resend-verification');
     return response.data;
   },
 
