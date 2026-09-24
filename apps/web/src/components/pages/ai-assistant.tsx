@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Send,
   ShieldAlert,
-  Sparkles,
   Trash2,
   TrendingUp,
   User,
@@ -52,10 +51,10 @@ interface AssistantMessage {
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'smartbook:ai-assistant:active-conversation-id';
 
 const SUGGESTED_QUESTIONS = [
-  { icon: Warehouse, text: 'Kho nào đang có rủi ro tồn kho thấp nhất?' },
-  { icon: Package, text: 'Sách nào cần nhập thêm gấp trong 30 ngày tới?' },
-  { icon: Clock, text: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
-  { icon: TrendingUp, text: 'Tỷ lệ chuyển đổi reservation sang mượn sách hiện tại ra sao?' },
+  { icon: Warehouse, tone: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400', text: 'Kho nào đang có rủi ro tồn kho thấp nhất?' },
+  { icon: Package, tone: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400', text: 'Sách nào cần nhập thêm gấp trong 30 ngày tới?' },
+  { icon: Clock, tone: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400', text: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
+  { icon: TrendingUp, tone: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400', text: 'Tỷ lệ chuyển đổi reservation sang mượn sách hiện tại ra sao?' },
 ];
 
 // Real answers take 60-120s+ on this deployment's Ollama, which only partially offloads
@@ -344,6 +343,7 @@ export function AIAssistantPage() {
   }, [loading]);
 
   const currentStage = [...LOADING_STAGES].reverse().find((stage) => elapsedSeconds >= stage.atSeconds) ?? LOADING_STAGES[0];
+  const currentStageIndex = LOADING_STAGES.indexOf(currentStage);
 
   const updateLastMessage = (updater: (message: AssistantMessage) => AssistantMessage) => {
     setMessages((prev) => {
@@ -565,11 +565,8 @@ export function AIAssistantPage() {
           <div ref={scrollRef} className="max-h-[65vh] min-h-[420px] space-y-6 overflow-y-auto px-5 py-6">
             {messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center gap-6 text-center">
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 opacity-40 blur-xl" />
-                  <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/25">
-                    <Sparkles className="h-7 w-7 text-white" />
-                  </div>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-muted">
+                  <Bot className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
                   <h3 className="text-[18px] font-semibold text-foreground">Chưa có câu hỏi nào</h3>
@@ -578,7 +575,7 @@ export function AIAssistantPage() {
                   </p>
                 </div>
                 <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-                  {SUGGESTED_QUESTIONS.map(({ icon: Icon, text }, index) => (
+                  {SUGGESTED_QUESTIONS.map(({ icon: Icon, tone, text }, index) => (
                     <motion.button
                       key={text}
                       type="button"
@@ -590,8 +587,8 @@ export function AIAssistantPage() {
                       whileTap={{ scale: 0.98 }}
                       className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-violet-300 hover:shadow-md dark:hover:border-violet-500/30"
                     >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-500/15">
-                        <Icon className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone}`}>
+                        <Icon className="h-4 w-4" />
                       </div>
                       <span className="text-[13px] leading-snug text-foreground">{text}</span>
                     </motion.button>
@@ -635,22 +632,29 @@ export function AIAssistantPage() {
                           role={isStreamingMessage ? 'status' : undefined}
                         >
                           {isAwaitingFirstToken ? (
-                            <span className="inline-flex items-center gap-2 text-muted-foreground">
-                              <span className="flex gap-1">
-                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.3s]" />
-                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.15s]" />
-                                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-400" />
+                            <span className="inline-flex flex-col gap-1.5 text-muted-foreground">
+                              <span className="flex items-center gap-2">
+                                <motion.span
+                                  key={currentStage.label}
+                                  initial={{ opacity: 0, y: 4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.25 }}
+                                  className="text-[12px]"
+                                >
+                                  {currentStage.label}
+                                </motion.span>
+                                <span className="tabular-nums text-[12px] text-muted-foreground/60">· {elapsedSeconds}s</span>
                               </span>
-                              <motion.span
-                                key={currentStage.label}
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.25 }}
-                                className="text-[12px]"
-                              >
-                                {currentStage.label}
-                              </motion.span>
-                              <span className="tabular-nums text-[12px] text-muted-foreground/60">· {elapsedSeconds}s</span>
+                              <span className="flex gap-1">
+                                {LOADING_STAGES.map((stage, i) => (
+                                  <span
+                                    key={stage.label}
+                                    className={`h-1 w-6 rounded-full transition-colors duration-500 ${
+                                      i <= currentStageIndex ? 'bg-violet-500' : 'bg-muted'
+                                    }`}
+                                  />
+                                ))}
+                              </span>
                             </span>
                           ) : (
                             <>
