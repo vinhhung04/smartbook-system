@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NavLink } from 'react-router';
 import { BookOpen } from 'lucide-react';
 import { customerService, MembershipInfo } from '@/services/customer';
 import { getApiErrorMessage } from '@/services/api';
@@ -45,7 +46,12 @@ export function CustomerMembershipPage() {
   if (!membership) {
     return (
       <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
-        <EmptyState variant="no-data" title="Không tìm thấy hội viên" description="Vui lòng liên hệ nhân viên thư viện để thiết lập hội viên." />
+        <EmptyState
+          variant="no-data"
+          title="Không tìm thấy hội viên"
+          description="Vui lòng liên hệ nhân viên thư viện để thiết lập hội viên."
+          action={<NavLink to="/customer/support" className="font-medium text-primary hover:underline">Xem thông tin liên hệ</NavLink>}
+        />
       </div>
     );
   }
@@ -120,7 +126,8 @@ export function CustomerMembershipPage() {
           ))}
         </dl>
         <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-          Hạn mức do gói hội viên quy định. Liên hệ nhân viên thư viện để nâng cấp gói hoặc thỏa thuận riêng.
+          Hạn mức do gói hội viên quy định.{' '}
+          <NavLink to="/customer/support" className="font-medium underline">Liên hệ thư viện</NavLink> để nâng cấp gói hoặc thỏa thuận riêng.
         </p>
       </SectionCard>
     </div>

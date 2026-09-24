@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NavLink } from 'react-router';
 import { Save, Bell, Lock, Globe } from 'lucide-react';
 import { customerService, CustomerProfile } from '@/services/customer';
 import { customerBorrowService } from '@/services/customer-borrow';
@@ -106,7 +107,8 @@ export function CustomerProfilePage() {
         {/* Email notice */}
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/30">
           <p className="text-[12px] text-amber-700 dark:text-amber-400">
-            <strong>Lưu ý:</strong> Email được quản lý bởi tài khoản đăng nhập và không thể chỉnh sửa ở đây. Liên hệ hỗ trợ để đổi email.
+            <strong>Lưu ý:</strong> Email được quản lý bởi tài khoản đăng nhập và không thể chỉnh sửa ở đây.{' '}
+            <NavLink to="/customer/support" className="font-medium underline">Liên hệ hỗ trợ</NavLink> để đổi email.
           </p>
         </div>
 

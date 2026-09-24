@@ -1,5 +1,5 @@
 import {
-  BarChart3, BookOpen, CalendarClock, Bell, HandCoins, Heart, House, ReceiptText,
+  BarChart3, BookOpen, CalendarClock, Bell, HandCoins, Heart, House, LifeBuoy, ReceiptText,
   ScanSearch, ShieldCheck, Sparkles, User, type LucideIcon,
 } from 'lucide-react';
 
@@ -32,4 +32,5 @@ export const ACCOUNT_NAV: CustomerNavItem[] = [
   { to: '/customer/membership', label: 'Hội viên', icon: ShieldCheck },
   { to: '/customer/notifications', label: 'Thông báo', icon: Bell },
   { to: '/customer/profile', label: 'Hồ sơ của tôi', icon: User },
+  { to: '/customer/support', label: 'Hỗ trợ & Liên hệ', icon: LifeBuoy },
 ];

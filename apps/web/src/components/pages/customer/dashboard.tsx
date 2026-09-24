@@ -123,6 +123,7 @@ export function CustomerDashboardPage() {
           variant="no-data"
           title="Không có dữ liệu hội viên"
           description="Vui lòng liên hệ hỗ trợ để thiết lập tài khoản."
+          action={<NavLink to="/customer/support" className="font-medium text-primary hover:underline">Xem thông tin liên hệ</NavLink>}
         />
       </div>
     );
