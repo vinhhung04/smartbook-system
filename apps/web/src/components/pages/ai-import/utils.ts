@@ -225,3 +225,65 @@ export function hasIsbnEvidence(lookup: LookupBookByIsbnResponse): boolean {
   const evidenceCount = Object.entries(lookup.fieldEvidence || {}).filter(([, item]) => item.selectedSource).length;
   return evidenceCount > 0 || (lookup.sources || []).length > 0;
 }
+
+/** Whether `field` is one Evidence Fusion flagged as conflicted — prefers the
+ *  top-level `conflictedFields` list, falls back to scanning `conflicts[]` for an
+ *  older/cached response that predates it. */
+export function isFieldConflicted(field: string, lookup: LookupBookByIsbnResponse): boolean {
+  if (lookup.conflictedFields) return lookup.conflictedFields.includes(field);
+  return (lookup.conflicts || []).some((conflict) => conflict.field === field);
+}
+
+// isbn_fusion.py appends reasonCodes in priority order (agreement/single-source first,
+// a conflict-related code second when present) — this re-ranks them so the ONE tag shown
+// in the UI is always the most actionable, not just whichever the backend listed first.
+const REASON_CODE_PRIORITY = [
+  "SOURCE_CONFLICT", "MINORITY_DISAGREEMENT", "LLM_ONLY_EVIDENCE_REJECTED",
+  "MULTI_SOURCE_AGREEMENT", "SINGLE_SOURCE", "CATEGORY_UNION", "RICHEST_DESCRIPTION",
+];
+
+const REASON_CODE_I18N_KEY: Record<string, string> = {
+  MULTI_SOURCE_AGREEMENT: "isbn_intelligence.reason.multi_source",
+  SINGLE_SOURCE: "isbn_intelligence.reason.single_source",
+  SOURCE_CONFLICT: "isbn_intelligence.reason.source_conflict",
+  MINORITY_DISAGREEMENT: "isbn_intelligence.reason.minority_disagreement",
+  CATEGORY_UNION: "isbn_intelligence.reason.category_union",
+  RICHEST_DESCRIPTION: "isbn_intelligence.reason.richest_description",
+  LLM_ONLY_EVIDENCE_REJECTED: "isbn_intelligence.reason.llm_rejected",
+};
+
+const REASON_CODE_TONE: Record<string, "success" | "warning" | "neutral"> = {
+  MULTI_SOURCE_AGREEMENT: "success",
+  SOURCE_CONFLICT: "warning",
+  LLM_ONLY_EVIDENCE_REJECTED: "warning",
+};
+
+function primaryReasonCode(reasonCodes: string[] | undefined): string | null {
+  if (!reasonCodes || reasonCodes.length === 0) return null;
+  return REASON_CODE_PRIORITY.find((code) => reasonCodes.includes(code)) || reasonCodes[0];
+}
+
+/** i18n key for the single most useful reasonCode to show as a tag on a field's
+ *  evidence card, or null when there's nothing to show (no fusion data on this field). */
+export function reasonCodeI18nKey(reasonCodes: string[] | undefined): string | null {
+  const code = primaryReasonCode(reasonCodes);
+  return code ? REASON_CODE_I18N_KEY[code] || null : null;
+}
+
+/** StatusBadge tone for the same reasonCode the tag above labels. */
+export function reasonCodeTone(reasonCodes: string[] | undefined): "success" | "warning" | "neutral" {
+  const code = primaryReasonCode(reasonCodes);
+  return (code && REASON_CODE_TONE[code]) || "neutral";
+}
+
+const EXTRACTION_METHOD_I18N_KEY: Record<string, string> = {
+  api_structured: "isbn_intelligence.method.api_structured",
+  json_ld: "isbn_intelligence.method.json_ld",
+  dom: "isbn_intelligence.method.dom",
+  snippet_regex: "isbn_intelligence.method.snippet_regex",
+  llm_derived: "isbn_intelligence.method.llm_derived",
+};
+
+export function extractionMethodI18nKey(method: string): string {
+  return EXTRACTION_METHOD_I18N_KEY[method] || method;
+}

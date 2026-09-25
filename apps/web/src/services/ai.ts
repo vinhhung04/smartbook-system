@@ -35,6 +35,34 @@ export interface LookupBookByIsbnRequest {
 
 export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook' | 'webSearch';
 
+/** How a source's value was pulled out - structured API/JSON-LD is most reliable,
+ *  an AI-inferred value the least (see services/ai-service/isbn_fusion.py). */
+export type IsbnExtractionMethod = 'api_structured' | 'json_ld' | 'dom' | 'snippet_regex' | 'llm_derived';
+
+/** Why Evidence Fusion picked (or didn't pick) this field's value - see
+ *  services/ai-service/isbn_fusion.py's reasonCodes. */
+export type IsbnFieldReasonCode =
+  | 'MULTI_SOURCE_AGREEMENT' | 'SINGLE_SOURCE' | 'SOURCE_CONFLICT' | 'MINORITY_DISAGREEMENT'
+  | 'LLM_ONLY_EVIDENCE_REJECTED' | 'NO_SOURCE_RESPONDED' | 'CATEGORY_UNION' | 'RICHEST_DESCRIPTION';
+
+/** One competing value group for a field - e.g. two sources naming a different
+ *  publisher each form their own candidate, ranked by `support`. */
+export interface IsbnFieldCandidate {
+  value: unknown;
+  sources: IsbnSourceName[];
+  support: number;
+}
+
+/** A single source's raw contribution to a field, with its own reliability -
+ *  richer than `confirmations` (which only has source + value). */
+export interface IsbnFieldEvidenceItem {
+  source: IsbnSourceName;
+  value: unknown;
+  method: IsbnExtractionMethod;
+  reliability: number;
+  sourceUrl?: string;
+}
+
 export interface IsbnFieldEvidence {
   selectedValue: string | string[] | number | null;
   selectedSource: IsbnSourceName | null;
@@ -42,6 +70,11 @@ export interface IsbnFieldEvidence {
   selectionReason?: { sourceReliability: number; agreementCount: number; conflictCount: number };
   /** INITIAL = found by the first lookup; TARGETED = recovered afterwards for a missing/weak field. */
   selectedPhase?: IsbnRetrievalPhase;
+  /** Evidence Fusion provenance (ISBN_FUSION_MODE=evidence, the default) - absent on an
+   *  older cached response or when ISBN_FUSION_MODE=prior. */
+  reasonCodes?: IsbnFieldReasonCode[];
+  candidates?: IsbnFieldCandidate[];
+  evidence?: IsbnFieldEvidenceItem[];
 }
 
 export type IsbnRetrievalPhase = 'INITIAL' | 'TARGETED';
@@ -130,6 +163,9 @@ export interface LookupBookByIsbnResponse {
   fieldConfidence?: Record<string, number>;
   sources?: IsbnLookupSource[];
   conflicts?: IsbnConflict[];
+  /** Same fields as conflicts[].map(c => c.field), exposed directly for a quick lookup
+   *  (e.g. tagging a field's own evidence card) without re-deriving it from conflicts[]. */
+  conflictedFields?: string[];
   metadataQualityScore?: number;
   processingTimeMs?: number;
   /** `found` means the book was identified; completeness is described by the fields below. */
