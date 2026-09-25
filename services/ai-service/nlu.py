@@ -2,15 +2,13 @@
 nlu.py — Hybrid NLU layer for SmartBook AI chatbot.
 
 Stage 1: detect_intent() rule-based (fast, deterministic).
-Stage 2: LLM classifier via the configured text LLM (OpenRouter/Qwen by
-default; see NLU_PROVIDER/LLM_PROVIDER) for natural Vietnamese entity
+Stage 2: LLM classifier via OpenRouter (Qwen) for natural Vietnamese entity
 extraction.
 
 Security: Never sends auth tokens, user profiles, or business data to any LLM.
 """
 from __future__ import annotations
 
-import functools
 import json
 import logging
 import os
@@ -18,7 +16,7 @@ import re
 from typing import Any
 
 from cache import SummaryCache
-from llm_provider import get_llm_provider
+from llm_provider import get_openrouter_provider, TEXT_MODEL
 from intent import (
     detect_intent,
     normalize_text,
@@ -44,35 +42,13 @@ from agent_actions import (
 
 logger = logging.getLogger("uvicorn.error")
 
-# Ollama model priority for NLU text classification: NLU_MODEL -> SUMMARY_MODEL -> OLLAMA_MODEL -> "llama3"
-_NLU_OLLAMA_MODEL = os.getenv(
-    "NLU_MODEL",
-    os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llama3")),
-)
-_OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 _NLU_TIMEOUT = float(os.getenv("NLU_LLM_TIMEOUT_SECONDS", "5"))
-# Provider for NLU intent classification - "openrouter" (default) or "ollama". Falls
-# back to LLM_PROVIDER when unset, so this module stays in sync with the rest of the
-# service's default provider without needing its own separate config in the common case.
-_NLU_PROVIDER = (os.getenv("NLU_PROVIDER", "").strip() or os.getenv("LLM_PROVIDER", "openrouter")).strip().lower()
-_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-_OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-_OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
-_OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
 
 
-@functools.lru_cache(maxsize=1)
 def _get_nlu_provider():
-    """Cached provider instance for NLU intent classification - see _NLU_PROVIDER."""
-    return get_llm_provider(
-        _NLU_PROVIDER,
-        ollama_host=_OLLAMA_HOST,
-        ollama_model=_NLU_OLLAMA_MODEL,
-        openrouter_api_key=_OPENROUTER_API_KEY,
-        openrouter_base_url=_OPENROUTER_BASE_URL,
-        openrouter_model=_OPENROUTER_TEXT_MODEL,
-        openrouter_fallback_model=_OPENROUTER_FALLBACK_MODEL,
-    )
+    """OpenRouter provider for NLU intent classification. get_openrouter_provider()
+    is itself cached per model, so this stays cheap to call repeatedly."""
+    return get_openrouter_provider(TEXT_MODEL)
 
 INTENT_ALLOWLIST: frozenset[str] = frozenset([
     DASHBOARD_SUMMARY_QUERY,
@@ -344,8 +320,7 @@ def _history_snippet(conversation_history: list | None) -> str:
 
 
 async def _call_llm(message: str, history: str) -> tuple[dict, bool]:
-    """NLU classification call. Routes through llm_provider (OpenRouter/Qwen
-    by default; see NLU_PROVIDER/LLM_PROVIDER)."""
+    """NLU classification call. Routes through llm_provider (OpenRouter/Qwen)."""
     user_content = f"Cau nguoi dung: {message}"
     if history:
         user_content = f"Lich su:\n{history}\n\n{user_content}"
@@ -360,6 +335,7 @@ async def _call_llm(message: str, history: str) -> tuple[dict, bool]:
             num_predict=400,
             timeout=_NLU_TIMEOUT,
             temperature=0.1,
+            feature="nlu",
         )
         return _parse_json(result.text), bool(result.text)
     except Exception as exc:

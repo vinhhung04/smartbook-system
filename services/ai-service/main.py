@@ -1,8 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-import ollama
+from pydantic import BaseModel, ValidationError
 import httpx
 import os
 import json
@@ -48,6 +47,8 @@ from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
 import assistant_tools
 from source_reliability import reliability
 import book_index
+import embeddings
+import vector_store
 import recommendation
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
@@ -85,7 +86,7 @@ from assistant_loop import (
     retry_once_if_ungrounded,
     seed_fast_path,
 )
-from llm_provider import get_llm_provider
+from llm_provider import get_openrouter_provider, VisionResponseError, TEXT_MODEL, ASSISTANT_MODEL, VISION_MODEL
 from metadata_intelligence.capture import capture as capture_metadata_source
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
@@ -122,10 +123,6 @@ async def _startup_init_db() -> None:
     await init_db()
 
 
-# Lấy host Ollama từ biến môi trường (mặc định cho Docker Compose)
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava")
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
 GOOGLE_BOOKS_API_BASE_URL = os.getenv(
     "GOOGLE_BOOKS_API_BASE_URL",
     "https://www.googleapis.com/books/v1/volumes",
@@ -189,36 +186,16 @@ AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATI
 
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
-# ── OpenRouter — the text/tool-calling backend (replaces Ollama for chat; Ollama
-# stays for the vision/OCR models and embeddings.py, which OpenRouter doesn't
-# serve). Anthropic and Groq were deliberately removed from this service - Qwen via
-# OpenRouter is the one cloud LLM it depends on. See llm_provider.OpenRouterProvider.
-# Model slug verified against the raw https://openrouter.ai/api/v1/models JSON on
-# 2026-09-15 ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
+# ── OpenRouter — the sole inference backend this service depends on. Anthropic,
+# Groq and Ollama were all deliberately removed - Qwen via OpenRouter is the one
+# cloud LLM it calls, for text, tool-calling, NLU and vision alike. See
+# llm_provider.OpenRouterProvider / get_openrouter_provider(). Model slug verified
+# against the raw https://openrouter.ai/api/v1/models JSON on 2026-09-15
+# ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
 # OpenRouter's own canonical_slug for this alias is qwen/qwen3.7-flash-20260727).
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
-OPENROUTER_ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", OPENROUTER_TEXT_MODEL)
-OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
-# Provider for /chat, /generate-book-summary, /generate-summary-vi,
-# /enrich-book-after-isbn, /enrich-book-metadata, /explain-storage-suggestion, and
-# nightly_briefing's text generation. "openrouter" (default) | "ollama" (fully offline).
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
-# Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
-# needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
-ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
-# Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
-# loop - "openrouter" (default) or "ollama" (fully offline). See llm_provider.py.
-ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "openrouter").strip().lower()
-# Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
-# partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
-# desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
-# 17 layers run on CPU, so every round is a CPU+GPU hybrid, not pure CPU — but still slow,
-# and it re-processes the full system prompt + tool schemas each round (stateless chat API),
-# measured at 25-70s+ per round directly against /api/chat during verification.
 ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
 # Per-request budget for the gateway reads that back /recommendations (loans,
 # wishlist, ratings, catalog). Kept short: a slow dependency should degrade the
@@ -231,30 +208,6 @@ ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 # also silently truncated a correct direct answer (no tool needed) at 200
 # tokens - the one case where the model is actually generating prose there.
 ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
-
-
-@app.on_event("startup")
-async def _startup_warmup_assistant_model() -> None:
-    """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
-    request pays that cost. Only relevant when /assistant is actually configured to use
-    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter has no
-    local model to warm up. Fire-and-forget — must never delay app startup or crash
-    it if Ollama isn't reachable yet (docker-compose only waits for the container to
-    *start*, not for Ollama's model server to be ready)."""
-    if ASSISTANT_PROVIDER != "ollama":
-        return
-
-    async def _warm_up():
-        try:
-            await ollama.AsyncClient(host=OLLAMA_HOST).chat(
-                model=ASSISTANT_MODEL,
-                messages=[{"role": "user", "content": "hi"}],
-                options={"num_predict": 1},
-            )
-        except Exception as exc:
-            logger.warning("Assistant model warm-up failed (non-fatal): %s", exc)
-
-    asyncio.create_task(_warm_up())
 
 
 @app.on_event("startup")
@@ -282,7 +235,7 @@ async def _startup_nightly_briefing() -> None:
 @app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
-    len duoc ngay ca khi Ollama chua san sang — retrieval se degrade xuong
+    len duoc ngay ca khi OpenRouter chua san sang — retrieval se degrade xuong
     keyword-only cho den khi ingest xong.
 
     Tat bang ENABLE_CORPUS_INGEST=false (vd trong test e2e khong can semantic).
@@ -293,8 +246,16 @@ async def _startup_ingest_corpus() -> None:
     async def _run() -> None:
         import ingestion
         try:
+            # Purge any chunk embedded by a stale model/dimension (e.g. leftover
+            # nomic-embed-text vectors from before the OpenRouter migration)
+            # BEFORE re-ingesting, so a document that never gets re-ingested
+            # (no longer in corpus/ or /api/books) doesn't leave an orphaned
+            # vector search_semantic could still match against the wrong space.
+            purged = await vector_store.get_store().delete_chunks_except_model(embeddings.EMBED_IDENTITY)
+            if purged:
+                logger.info("startup ingest: purged %d chunk(s) from a stale embedding model", purged)
             await ingestion.ingest_internal_docs()
-            books = await assistant_tools._get("/api/books", None)
+            books = await assistant_tools._get("/api/books", None, truncate=False)
             stats = await ingestion.ingest_books(books) if isinstance(books, list) else {}
             if not stats.get("documents"):
                 # Khong im lang cho truong hop no-op: /api/books doi JWT nguoi dung
@@ -323,7 +284,9 @@ ASSISTANT_ALLOWED_PERMISSIONS = {
 }
 
 def _extract_json(raw: str) -> dict:
-    """Trích xuất JSON từ response text của Ollama (có thể lẫn markdown/text thừa)."""
+    """Trích xuất JSON từ response text của text LLM (có thể lẫn markdown/text thừa).
+    Dùng cho các lời gọi text-generation (summary, ISBN enrichment) không bật
+    response_format=json_object - vision calls (analyze_image) đã tự đảm bảo JSON hợp lệ."""
     # Thử parse thẳng trước
     try:
         return json.loads(raw.strip())
@@ -364,12 +327,20 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
 async def health():
     return {
         "status": "ok",
-        "model": OLLAMA_MODEL,
-        "ollama_host": OLLAMA_HOST,
-        "llm_provider": LLM_PROVIDER,
-        "assistant_provider": ASSISTANT_PROVIDER,
+        "model": TEXT_MODEL,
+        "llm_provider": "openrouter",
+        "assistant_model": ASSISTANT_MODEL,
+        "vision_model": VISION_MODEL,
+        "embed_model": embeddings.EMBED_MODEL,
     }
 
+
+PACKING_VISION_MAX_TOKENS = int(os.getenv("PACKING_VISION_MAX_TOKENS", "200"))
+# Kept below the inventory-service caller's own 20s AbortSignal.timeout(20000)
+# (services/inventory-service/src/services/packing-evidence-ai.service.js) so
+# THIS timeout fires first and returns a clean 502 instead of the caller's
+# fetch aborting first with no response body at all.
+PACKING_VISION_TIMEOUT_SECONDS = float(os.getenv("PACKING_VISION_TIMEOUT_SECONDS", "15"))
 
 PROMPT_PACKING_VERIFY = (
     "Hãy đóng vai một nhân viên kiểm tra đóng gói tại kho sách. "
@@ -382,21 +353,25 @@ PROMPT_PACKING_VERIFY = (
 )
 
 
-def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_PACKING_VERIFY,
-        images=[image_bytes],
-        options={"temperature": 0},
+class _PackingVerifyResult(BaseModel):
+    item_count: int = 0
+    detected_titles: list[str] = []
+
+
+async def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
+    provider = get_openrouter_provider(VISION_MODEL)
+    parsed, _usage = await provider.analyze_image(
+        image_bytes, PROMPT_PACKING_VERIFY,
+        max_tokens=PACKING_VISION_MAX_TOKENS, timeout=PACKING_VISION_TIMEOUT_SECONDS,
+        feature="packing_verification",
     )
-    raw_text: str = response.get("response", "")
-    data = _extract_json(raw_text)
-    detected_titles = data.get("detected_titles")
-    return {
-        "item_count": int(data.get("item_count") or 0),
-        "detected_titles": detected_titles if isinstance(detected_titles, list) else [],
-    }
+    # Drop explicit nulls (the model sometimes writes "item_count": null instead of
+    # following the prompt's "đặt item_count là 0" instruction) so the field's
+    # default applies the same way a missing key would - a genuinely wrong type
+    # (e.g. item_count: "many") still fails validation below.
+    sanitized = {k: v for k, v in parsed.items() if v is not None}
+    result = _PackingVerifyResult.model_validate(sanitized)
+    return result.model_dump()
 
 
 @app.post("/verify-packing-photo")
@@ -404,16 +379,21 @@ async def verify_packing_photo(file: UploadFile = File(...)):
     image_bytes = _validate_and_read_image(file)
 
     try:
-        return _verify_packing_photo_from_bytes(image_bytes)
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+        return await _verify_packing_photo_from_bytes(image_bytes)
+    except (VisionResponseError, ValidationError) as e:
+        logger.warning("verify_packing_photo: invalid AI response: %s", e)
+        raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning("verify_packing_photo: AI call failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
 
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Smart Receiving AI — Receipt/Invoice OCR Scanning
 # ────────────────────────────────────────────────────────────────────────────────
+
+RECEIPT_VISION_MAX_TOKENS = int(os.getenv("RECEIPT_VISION_MAX_TOKENS", "1200"))
+RECEIPT_VISION_TIMEOUT_SECONDS = float(os.getenv("RECEIPT_VISION_TIMEOUT_SECONDS", "30"))
 
 PROMPT_RECEIPT = (
     "Bạn là một chuyên gia nhập liệu kho sách cho hệ thống thư viện SmartBook. "
@@ -449,41 +429,17 @@ PROMPT_RECEIPT = (
 )
 
 
-def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
-    """Extract structured data from receipt/invoice image using Ollama vision."""
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_RECEIPT,
-        images=[image_bytes],
-        options={"temperature": 0},
+async def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
+    """Extract structured data from receipt/invoice image using OpenRouter vision.
+    Returns the parsed JSON dict as-is - callers validate/normalize it (analyze_image
+    already guarantees this is a JSON object; it never returns free text)."""
+    provider = get_openrouter_provider(VISION_MODEL)
+    parsed, _usage = await provider.analyze_image(
+        image_bytes, PROMPT_RECEIPT,
+        max_tokens=RECEIPT_VISION_MAX_TOKENS, timeout=RECEIPT_VISION_TIMEOUT_SECONDS,
+        feature="receipt_ocr",
     )
-    raw_text: str = response.get("response", "")
-
-    # Try to parse JSON from response
-    try:
-        return json.loads(raw_text.strip())
-    except json.JSONDecodeError:
-        pass
-
-    # Try to extract JSON from markdown code block
-    import re
-    block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
-    if block:
-        try:
-            return json.loads(block.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Try to find JSON object anywhere in text
-    obj = re.search(r"\{[\s\S]*\}", raw_text)
-    if obj:
-        try:
-            return json.loads(obj.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    return {"error": "Không thể trích xuất dữ liệu từ hình ảnh", "raw": raw_text}
+    return parsed
 
 
 @app.post("/scan-receipt")
@@ -505,20 +461,20 @@ async def scan_receipt(file: UploadFile = File(...)):
 
     try:
         with ocr_request_duration.time():
-            result = _scan_receipt_from_bytes(image_bytes)
+            result = await _scan_receipt_from_bytes(image_bytes)
 
-        # Validate response structure
+        # Model-reported failure (it was told to return {"error": "..."} when it
+        # can't read the receipt at all) - a normal 200 with success=False, not
+        # an HTTP error.
         if "error" in result:
-            return {
-                "success": False,
-                "error": result["error"],
-                "raw": result.get("raw"),
-            }
+            return {"success": False, "error": str(result["error"])}
 
         # Normalize line_items
         line_items = result.get("line_items") or []
         normalized_items = []
         for item in line_items:
+            if not isinstance(item, dict):
+                continue
             normalized_item = {
                 "title": item.get("title") or "Không rõ",
                 "isbn": item.get("isbn"),
@@ -536,10 +492,12 @@ async def scan_receipt(file: UploadFile = File(...)):
             "total_items": len(normalized_items),
         }
 
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+    except VisionResponseError as e:
+        logger.warning("scan_receipt: invalid AI response: %s", e)
+        raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning("scan_receipt: AI call failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
 
 
 @app.get("/recommendations")
@@ -1619,11 +1577,13 @@ def _safe_list(values) -> list[str]:
             out.append(text)
     return out
 
-async def _call_text_llm_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+async def _call_text_llm_json(
+    system_prompt: str, user_prompt: str, max_tokens: int = 600, feature: str = "text",
+) -> tuple[dict, bool]:
     """JSON-returning call for Pattern B (see _call_text_llm). Parse via
     _extract_json: no json_object mode, the model's raw text isn't
     guaranteed valid JSON."""
-    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3)
+    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3, feature=feature)
     if not ok:
         return {}, False
     return _extract_json(raw), True
@@ -2165,7 +2125,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
     if not _should_generate_summary(metadata):
         return None, [], False
 
-    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55)
+    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55, feature="summary")
     if not called_ok:
         return None, [], False
 
@@ -2765,7 +2725,7 @@ async def metadata_extraction_service(input):
     target = input.value if input.type == 'isbn' else input.targetIsbn
     if target and not canonical_isbn(target):
         raise HTTPException(422, 'A valid ISBN-10 or ISBN-13 is required')
-    key = 'mi:' + digest([input.model_dump(), VERSION, OPENROUTER_TEXT_MODEL, LLM_PROVIDER,
+    key = 'mi:' + digest([input.model_dump(), VERSION, TEXT_MODEL,
                           ENABLE_MARKETPLACE_LOOKUP, ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL, 'extract-v1'])
     cached = isbn_lookup_cache.get(key)
     if cached:
@@ -3042,7 +3002,7 @@ def _normalize_bookstore_description(text: str) -> str:
 
 
 def _generate_fallback_description(title: str, author: str, web_context: str = "") -> str:
-    """Generate a simple description when Ollama is unavailable."""
+    """Generate a simple description when the AI text model is unavailable."""
     web_info = ""
     if web_context:
         web_info = f"\n\nThông tin tham khảo:\n{web_context}"
@@ -3065,7 +3025,7 @@ def _generate_fallback_description(title: str, author: str, web_context: str = "
 @app.post("/api/ai/generate-book-summary")
 async def generate_book_summary_legacy(req: BookSummaryRequest):
     """
-    Tạo mô tả sách bằng Tiếng Việt sử dụng Ollama.
+    Tạo mô tả sách bằng Tiếng Việt sử dụng OpenRouter (Qwen).
     Nhập: title (tên sách), author (tác giả)
     Xuất: description (mô tả 150-200 từ, có bố cục nhiều dòng), web_context_used (có sử dụng web search hay không)
     """
@@ -3234,7 +3194,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
+    data, ok = await _call_text_llm_json(SYSTEM, user_prompt, feature="isbn_enrichment")
     ai_provider = _get_text_llm_provider().name if ok else "none"
 
     if not ok:
@@ -3281,7 +3241,7 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     try:
-        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
+        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7, feature="summary")
         if not ok:
             fallback_description = _generate_fallback_description(req.title, req.author, web_context)
             return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
@@ -3491,13 +3451,11 @@ class AssistantResponse(BaseModel):
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
     """/chat reply: the full multi-turn messages list, routed through the
-    configured text LLM (OpenRouter/Qwen by default; see LLM_PROVIDER) via
-    the same chat-completion interface /assistant uses - replaces the old
-    direct-Ollama _chat_with_ollama, which collapsed the whole conversation
-    into one role-labelled completion prompt instead of using a proper
-    chat-messages call."""
+    configured text LLM (OpenRouter/Qwen) via the same chat-completion
+    interface /assistant uses, so the conversation is sent as a proper
+    chat-messages call rather than collapsed into one role-labelled prompt."""
     reply, ok = await _call_text_llm_messages(
-        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS, feature="chat",
     )
     return (reply or None), ok
 
@@ -3766,50 +3724,30 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
     return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
 
 
-@functools.lru_cache(maxsize=1)
 def _get_assistant_provider():
-    """Cached: the same provider instance (and, for OpenRouter, its
-    underlying HTTP client) is reused across requests instead of rebuilt
-    per-request."""
-    return get_llm_provider(
-        ASSISTANT_PROVIDER,
-        ollama_host=OLLAMA_HOST,
-        ollama_model=ASSISTANT_MODEL,
-        openrouter_api_key=OPENROUTER_API_KEY,
-        openrouter_base_url=OPENROUTER_BASE_URL,
-        openrouter_model=OPENROUTER_ASSISTANT_MODEL,
-        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
-    )
+    """OpenRouter provider for /assistant and /assistant/stream's tool-calling
+    loop. get_openrouter_provider() is itself cached per model, so this is
+    cheap to call repeatedly - kept as its own function so call sites don't
+    need to know the model constant's name."""
+    return get_openrouter_provider(ASSISTANT_MODEL)
 
 
-@functools.lru_cache(maxsize=1)
 def _get_text_llm_provider():
-    """Provider (see LLM_PROVIDER, default openrouter/Qwen) for the
-    text-generation helpers below: book summary, ISBN enrichment, /chat
-    replies, storage-suggestion explanations, nightly briefing - tried before
-    each feature's own static fallback. Cached the same way
-    _get_assistant_provider() is."""
-    return get_llm_provider(
-        LLM_PROVIDER,
-        ollama_host=OLLAMA_HOST,
-        ollama_model=SUMMARY_MODEL,
-        openrouter_api_key=OPENROUTER_API_KEY,
-        openrouter_base_url=OPENROUTER_BASE_URL,
-        openrouter_model=OPENROUTER_TEXT_MODEL,
-        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
-    )
+    """OpenRouter provider for the text-generation helpers below: book
+    summary, ISBN enrichment, /chat replies, storage-suggestion explanations,
+    nightly briefing - tried before each feature's own static fallback."""
+    return get_openrouter_provider(TEXT_MODEL)
 
 
 async def _call_text_llm_messages(
-    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None,
+    feature: str = "text",
 ) -> tuple[str, bool]:
     """Tier-2 call for Pattern B's text-generation helpers: routes an
     already-built chat message list (system/user/assistant turns) through
-    _get_text_llm_provider() (OpenRouter by default, replacing the old direct
-    `ollama.Client(...).generate(...)` calls) using the same ChatResult
-    interface /assistant already relies on. Returns (raw_text, success) -
-    callers keep their own JSON parsing (_extract_json) and tier-3 static
-    fallback unchanged; only the "how do we reach a model" plumbing moved."""
+    _get_text_llm_provider() using the same ChatResult interface /assistant
+    already relies on. Returns (raw_text, success) - callers keep their own
+    JSON parsing (_extract_json) and tier-3 static fallback unchanged."""
     try:
         provider = _get_text_llm_provider()
         result = await provider.chat(
@@ -3818,6 +3756,7 @@ async def _call_text_llm_messages(
             num_predict=max_tokens,
             timeout=timeout if timeout is not None else CHAT_LLM_TIMEOUT_SECONDS * 2,
             temperature=temperature,
+            feature=feature,
         )
         return result.text, bool(result.text)
     except Exception as exc:
@@ -3826,7 +3765,8 @@ async def _call_text_llm_messages(
 
 
 async def _call_text_llm(
-    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3,
+    timeout: float | None = None, feature: str = "text",
 ) -> tuple[str, bool]:
     """Single-turn convenience wrapper over _call_text_llm_messages, for
     callers that just have a (system_prompt, user_prompt) pair rather than a
@@ -3834,7 +3774,8 @@ async def _call_text_llm(
     messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
         {"role": "user", "content": user_prompt},
     ]
-    return await _call_text_llm_messages(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout)
+    return await _call_text_llm_messages(
+        messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, feature=feature)
 
 
 def _render_tool_result(name: str, tool_result: dict) -> str:
@@ -4211,6 +4152,7 @@ async def assistant(request: Request, req: AssistantRequest):
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
             result = await provider.chat(
                 messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                feature="assistant",
             )
             call_usage.append(result.usage.as_dict())
             messages.append(result.assistant_message)
@@ -4231,7 +4173,7 @@ async def assistant(request: Request, req: AssistantRequest):
         logger.exception("Assistant tool-calling failed")
         raise HTTPException(
             status_code=503,
-            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi).",
+            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi).",
         )
 
     if not answer:
@@ -4240,8 +4182,8 @@ async def assistant(request: Request, req: AssistantRequest):
     grounding_warning = _grounding_check(answer, collected_data, message_text)
     if grounding_warning and answered_normally:
         answer, retry_usage = await retry_once_if_ungrounded(
-            messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
-            ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+            ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
         )
         if retry_usage:
             call_usage.append(retry_usage)
@@ -4295,9 +4237,9 @@ def _sse(event: str, data: dict) -> str:
 @app.post("/assistant/stream")
 async def assistant_stream(request: Request, req: AssistantRequest):
     """Streaming twin of /assistant: same permission gate and tool-calling loop, but
-    each round's Ollama response is consumed with `stream=True` so the final answer's
+    each round's OpenRouter response is consumed with `stream=True` so the final answer's
     tokens reach the client as they're generated, instead of only after the whole
-    tool-calling loop (which takes 60-120s+ on this CPU-only deployment) completes.
+    tool-calling loop completes.
     Tool-selection rounds normally produce no content deltas (the model emits only
     tool_calls for those), so in practice only the final round streams visible text.
     """
@@ -4367,6 +4309,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 final_chunk = None
                 async for chunk in provider.chat_stream(
                     messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                    feature="assistant",
                 ):
                     if chunk.delta:
                         answer += chunk.delta
@@ -4394,7 +4337,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
-            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi)."
+            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
             yield _sse("token", {"text": answer})
             yield _sse("done", {
                 "answer": answer,
@@ -4414,8 +4357,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         grounding_warning = _grounding_check(answer, collected_data, message_text)
         if grounding_warning and answered_normally:
             answer, retry_usage = await retry_once_if_ungrounded(
-                messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
-                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+                messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+                ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
             )
             if retry_usage:
                 call_usage.append(retry_usage)
@@ -5017,7 +4960,7 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
 
     if entries:
         user_prompt = _build_recommendation_reason_prompt(entries, profile)
-        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt, feature="recommendation")
         if ok and parsed:
             provider = _get_text_llm_provider().name
         if ok and isinstance(parsed, dict):
@@ -5215,13 +5158,21 @@ async def explain_storage_suggestion(req: StorageSuggestionRequest):
 Sách cần xếp: "{book_title}" của {author_text}
 Thể loại: {category_text}
 
-Các vị trí được gợi ý:
+Các vị trí được gợi ý, ĐÃ được xếp hạng sẵn theo điểm số (KHÔNG được thay đổi thứ tự này),
+mỗi vị trí kèm "reasons" là danh sách lý do đã được hệ thống tính toán sẵn:
 {json.dumps(req.suggestions, ensure_ascii=False, indent=2)}
 
-Hãy viết câu giải thích ngắn gọn cho TỪNG vị trí (1 câu mỗi vị trí, 30-80 ký tự).
-Giải thích phải tự nhiên, không liệt kê rules.
+Với MỖI vị trí theo ĐÚNG thứ tự đã cho, hãy diễn giải lại các "reasons" của vị trí đó
+thành 1 câu văn tự nhiên (30-80 ký tự), không liệt kê rules thô.
 
-Trả về JSON array với đúng {len(req.suggestions)} câu:
+CHỈ được dùng thông tin có trong "reasons" của vị trí đó. KHÔNG được:
+- bịa thêm lý do/tiêu chí nào không có trong "reasons"
+- nói vị trí "gần khu picking", "thuận tiện đường đi", "khu vực IT", hay bất kỳ mô tả
+  không gian/khoảng cách/khu vực nào không có trong "reasons"
+- thay đổi thứ tự các vị trí
+- suy đoán thông tin không được cung cấp
+
+Trả về JSON array với đúng {len(req.suggestions)} câu, theo ĐÚNG thứ tự đã cho:
 ["câu giải thích 1", "câu giải thích 2", ...]
 
 CHỈ trả về JSON, không markdown."""
@@ -5237,14 +5188,21 @@ CHỈ trả về JSON, không markdown."""
 
 
 async def _get_ai_explanations(prompt: str, expected_count: int) -> tuple[list[str] | None, str]:
-    """Gọi text LLM đã cấu hình (OpenRouter/Qwen mặc định; xem LLM_PROVIDER) để sinh
-    explanations. Trả về (explanations, provider_name_da_dung)."""
+    """Gọi text LLM đã cấu hình (OpenRouter/Qwen) để sinh explanations.
+    Trả về (explanations, provider_name_da_dung)."""
     try:
         raw, ok = await _call_text_llm(
-            "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
+            "Bạn là trợ lý CHỈ diễn giải lại (paraphrase) các lý do đã được hệ thống tính "
+            "toán sẵn cho từng vị trí lưu kho. Bạn KHÔNG được: (1) thay đổi thứ tự xếp hạng "
+            "các vị trí, (2) bịa thêm bất kỳ lý do/tiêu chí nào không có trong dữ liệu đầu "
+            "vào (ví dụ: không được nói vị trí 'gần khu picking', 'thuận tiện đường đi', "
+            "'khu vực IT', hoặc bất kỳ mô tả không gian/vị trí vật lý nào không có trong dữ "
+            "liệu), (3) suy đoán thông tin không được cung cấp. Chỉ được diễn giải lại chính "
+            "xác các reasons đã cho bằng văn phong tự nhiên hơn. Chỉ trả về JSON array.",
             prompt,
             max_tokens=200,
             temperature=0.3,
+            feature="storage_suggestion",
         )
         if ok:
             explanations = _parse_json_array(raw)

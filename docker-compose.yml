@@ -324,15 +324,12 @@ services:
     profiles: ["ai"]
     build: ./services/ai-service
     depends_on:
-      ollama:
-        condition: service_started
       db:
         condition: service_healthy
       tempo:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AI_DB_NAME:-ai_db}
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - OTEL_SERVICE_NAME=ai-service
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
@@ -346,30 +343,22 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
-      # OpenRouter — default text/tool-calling backend (replaces Ollama for chat/summary/
-      # tool-calling/NLU; Ollama stays for the vision/OCR models and embeddings below).
+      # OpenRouter — the sole inference backend this service depends on: text,
+      # tool-calling, NLU, vision/OCR (cover search, packing verification) and
+      # embeddings all go through it. No Ollama, no GPU, no local chat/vision model.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENROUTER_TEXT_MODEL=${OPENROUTER_TEXT_MODEL:-qwen/qwen3.7-flash}
       - OPENROUTER_ASSISTANT_MODEL=${OPENROUTER_ASSISTANT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_VISION_MODEL=${OPENROUTER_VISION_MODEL:-qwen/qwen3.7-flash}
       - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
-      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
-      - NLU_PROVIDER=${NLU_PROVIDER:-}
-      # Ollama model tags — still used for vision/OCR (OLLAMA_MODEL) and embeddings
-      # (FAQ_EMBED_MODEL below), plus selectable via LLM_PROVIDER/ASSISTANT_PROVIDER=ollama.
-      - SUMMARY_MODEL=${SUMMARY_MODEL:-llama3.1:8b-instruct-q4_0}
-      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-llama3.1:8b-instruct-q4_0}
-      # "openrouter" (default) or "ollama" (fully offline).
-      - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-openrouter}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
-      # Embedding model for chatbot FAQ semantic search (GENERAL_QUERY fallback) - separate
-      # from ASSISTANT_MODEL/SUMMARY_MODEL since it is a dedicated embedding model, not a chat model.
-      - FAQ_EMBED_MODEL=${FAQ_EMBED_MODEL:-nomic-embed-text}
-      - EMBED_BREAKER_THRESHOLD=${EMBED_BREAKER_THRESHOLD:-3}
-      - EMBED_BREAKER_COOLDOWN_SECONDS=${EMBED_BREAKER_COOLDOWN_SECONDS:-60}
-      - CLOUD_EMBED_MODEL=${CLOUD_EMBED_MODEL:-qwen/qwen3-embedding-8b}
-      - CLOUD_EMBED_DIMENSIONS=${CLOUD_EMBED_DIMENSIONS:-768}
-      - CLOUD_EMBED_TIMEOUT_SECONDS=${CLOUD_EMBED_TIMEOUT_SECONDS:-30}
+      # Embedding model for semantic search (book search, internal-doc FAQ retrieval).
+      # dimensions is always sent to cut the vector down to match the database's
+      # fixed vector(768) column (schema.sql) - qwen3-embedding-8b defaults to 4096.
+      - OPENROUTER_EMBED_MODEL=${OPENROUTER_EMBED_MODEL:-qwen/qwen3-embedding-8b}
+      - OPENROUTER_EMBED_DIMENSIONS=${OPENROUTER_EMBED_DIMENSIONS:-768}
+      - OPENROUTER_EMBED_TIMEOUT_SECONDS=${OPENROUTER_EMBED_TIMEOUT_SECONDS:-30}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}
@@ -395,22 +384,26 @@ services:
       # How long to poll for Fahasa's search-API response after the page starts loading
       # (replaces waiting for the page to go fully network-idle, which it never does).
       - FAHASA_SEARCH_RESPONSE_WAIT_SECONDS=${FAHASA_SEARCH_RESPONSE_WAIT_SECONDS:-8}
-      # "Find book by cover photo" — CLIP visual embedding + OCR-text fusion
+      # "Find book by cover photo" — CLIP visual embedding + OpenRouter vision OCR fusion
       - CLIP_MODEL_NAME=${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
       - COVER_OCR_MAX_TOKENS=${COVER_OCR_MAX_TOKENS:-200}
-      - COVER_OCR_TIMEOUT_SECONDS=${COVER_OCR_TIMEOUT_SECONDS:-90}
+      - COVER_OCR_TIMEOUT_SECONDS=${COVER_OCR_TIMEOUT_SECONDS:-20}
       - COVER_SEARCH_VISUAL_THRESHOLD=${COVER_SEARCH_VISUAL_THRESHOLD:-0.80}
       - COVER_SEARCH_MIN_CONFIDENCE=${COVER_SEARCH_MIN_CONFIDENCE:-0.5}
       - COVER_SEARCH_VISUAL_WEIGHT=${COVER_SEARCH_VISUAL_WEIGHT:-0.6}
       - COVER_SEARCH_RESULT_LIMIT=${COVER_SEARCH_RESULT_LIMIT:-5}
+      # Packing-photo verification (OpenRouter vision) - see packing-evidence-ai.service.js
+      - PACKING_VISION_MAX_TOKENS=${PACKING_VISION_MAX_TOKENS:-200}
+      - PACKING_VISION_TIMEOUT_SECONDS=${PACKING_VISION_TIMEOUT_SECONDS:-15}
+      # Receipt/invoice OCR (OpenRouter vision) - /scan-receipt
+      - RECEIPT_VISION_MAX_TOKENS=${RECEIPT_VISION_MAX_TOKENS:-1200}
+      - RECEIPT_VISION_TIMEOUT_SECONDS=${RECEIPT_VISION_TIMEOUT_SECONDS:-30}
       # "Thu thu AI truc dem" — autonomous nightly briefing agent (nightly_briefing.py)
       - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
       - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
-      - NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS:-180}
+      - NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS:-180}
     volumes:
-      # Persist the ~600MB CLIP model download across container recreation —
-      # a bind mount, matching this compose file's existing convention for
-      # model caches (see ollama's ./ollama_data:/root/.ollama below).
+      # Persist the ~600MB CLIP model download across container recreation.
       - ./ai_service_model_cache:/root/.cache/huggingface
       # Persist CloakBrowser's patched Chromium binary. Without this it re-downloads
       # from scratch on every container recreate - measured at ~30KB/s from
@@ -482,26 +475,6 @@ services:
         condition: service_healthy
       analytics-service:
         condition: service_healthy
-
-  ollama:
-    profiles: ["ai"]
-    image: ollama/ollama:latest
-    environment:
-      # Ollama's default 5-minute idle unload means the first question after any gap in a
-      # demo session pays full model-load latency again — 30m keeps it resident through
-      # normal gaps between questions without pinning it in VRAM/RAM forever (-1).
-      - OLLAMA_KEEP_ALIVE=30m
-    volumes:
-      - ./ollama_data:/root/.ollama
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   k6:
     profiles: ["loadtest"]

@@ -19,9 +19,9 @@ function confidenceTone(confidence: number) {
 
 // Visual matching (CLIP) is fast in practice (~2s/image against the real
 // gallery) — this timer just gives that checklist row a legible "done"
-// moment. OCR (Ollama vision, CPU) is the real bottleneck and has no
-// progress signal from the server, so its row stays "in progress" until the
-// actual response arrives — never faked past that point.
+// moment. OCR (OpenRouter vision) has no progress signal from the server,
+// so its row stays "in progress" until the actual response arrives — never
+// faked past that point.
 const VISUAL_STEP_MS = 3000;
 const SLOW_HINT_AFTER_MS = 12000;
 const SCAN_PREVIEW_HEIGHT = 220;

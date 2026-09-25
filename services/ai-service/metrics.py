@@ -5,6 +5,16 @@ ai_request_duration = Histogram(
     "LLM chat/assistant call duration",
     ["endpoint"],
 )
+ai_llm_tokens_total = Counter(
+    "ai_llm_tokens_total",
+    "OpenRouter prompt/completion tokens by feature and model",
+    ["feature", "model", "kind"],
+)
+ai_llm_cost_usd_total = Counter(
+    "ai_llm_cost_usd_total",
+    "OpenRouter cost in USD by feature and model, as reported by OpenRouter's usage.cost",
+    ["feature", "model"],
+)
 ocr_request_duration = Histogram(
     "ocr_request_duration_seconds",
     "OCR scan-receipt duration",

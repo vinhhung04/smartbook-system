@@ -205,7 +205,7 @@ export function BookDetailPage() {
         categories: editForm.category_name ? [editForm.category_name] : [],
       });
       setEditForm((prev) => ({ ...prev, summary_vi: result.summaryVi || prev.summary_vi }));
-      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
+      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "openrouter" ? "OpenRouter" : result.ai_provider})`);
     } catch {
       toast.error("Không tạo được tóm tắt. Vui lòng thử lại.");
     } finally {

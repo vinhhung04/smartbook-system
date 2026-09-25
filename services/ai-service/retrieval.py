@@ -239,9 +239,9 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
         # context (which leaves the LLM with nothing to ground on), look for
         # related entries in the static FAQ set.
         #
-        # Ollama's embed() is a blocking network call, so it must run off the
-        # event loop the same way main.py wraps ollama.Client calls in
-        # _chat_with_ollama (main.py:3291-3309), since retrieve_context is async.
+        # find_relevant() is a blocking network call (OpenRouter embeddings), so
+        # it must run off the event loop via asyncio.to_thread, since
+        # retrieve_context is async.
         empty_envelope = {
             "summary": "",
             "raw": raw,

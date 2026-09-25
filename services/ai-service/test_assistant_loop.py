@@ -2,7 +2,7 @@
 tool-round-execution helpers /assistant and /assistant/stream both call into.
 
 These test the helpers in isolation via fake run_tool_call/run_fast_path_tool/
-render_tool_result callables, independent of main.py, Ollama, or the gateway.
+render_tool_result callables, independent of main.py, the LLM provider, or the gateway.
 """
 import asyncio
 import unittest

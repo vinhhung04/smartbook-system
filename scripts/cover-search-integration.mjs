@@ -4,16 +4,16 @@
 // assertions on structure/permissions, soft (WARN, not FAIL) assertions on
 // anything that depends on the LLM's own judgment.
 //
-// Slow by nature: the OCR leg (Ollama llava, CPU) can take up to ~90s per
-// call (see services/ai-service/routes_cover_search.py's COVER_OCR_TIMEOUT_SECONDS),
+// The OCR leg (OpenRouter vision) can take up to ~20s per call (see
+// services/ai-service/routes_cover_search.py's COVER_OCR_TIMEOUT_SECONDS),
 // and the very first call after a cold start also pays the one-time cost of
 // embedding the whole cover gallery (a few seconds per image). Run
 // `POST /ai/find-book-by-cover/reindex` once beforehand (this script does it)
 // so that cost is paid predictably instead of mid-assertion.
 //
-// Requires: a running stack with the `ai` profile up (Ollama + ai-service),
-// and at least one seeded book_variants row with a real, fetchable
-// cover_image_url (see data/smartbook_catalog_enrichment_seed.sql —
+// Requires: a running stack with the `ai` profile up (ai-service, no Ollama
+// or GPU needed), and at least one seeded book_variants row with a real,
+// fetchable cover_image_url (see data/smartbook_catalog_enrichment_seed.sql —
 // `pnpm demo:seed` already applies it).
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';

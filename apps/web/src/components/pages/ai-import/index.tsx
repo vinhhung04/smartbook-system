@@ -376,7 +376,7 @@ export function AIImportPage() {
             description: result.summaryVi ? { value: result.summaryVi, source: "generated" } : prev.description,
             keywords: result.keywords?.length ? { value: result.keywords.join(", "), source: "generated" } : prev.keywords,
           }));
-          toast.success(`Đã tạo mô tả AI (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
+          toast.success(`Đã tạo mô tả AI (${result.ai_provider === "openrouter" ? "OpenRouter" : result.ai_provider})`);
         } else {
           const result = await aiService.enrichBookMetadata({
             title: form.title.trim(),

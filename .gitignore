@@ -1,5 +1,4 @@
 node_modules/
-ollama_data/
 ai_service_model_cache/
 ai_service_cloakbrowser_cache/
 .env

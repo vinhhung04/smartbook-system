@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-ollama
 python-multipart
 ddgs
 httpx

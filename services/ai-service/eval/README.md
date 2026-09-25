@@ -2,8 +2,8 @@
 
 Three standalone, manually-run scripts that measure the AI service against a
 labeled ground truth, for the experimental-results chapter. None of them are
-part of CI: all three call out to live systems (public book APIs, a running
-Ollama, or the full running stack) that are slow and non-deterministic, so a
+part of CI: all three call out to live systems (public book APIs, OpenRouter,
+or the full running stack) that are slow and non-deterministic, so a
 red/green pass/fail in CI would be noise, not signal. Run them yourself
 whenever you want a number.
 
@@ -73,7 +73,7 @@ The runner includes three offline B5 ablations by default: evidence gate disable
 
 For every labeled question in `assistant_dataset.json`, runs the exact same
 system prompt and tool schemas `/assistant` uses (imported from `main.py`)
-against Ollama directly, and compares the set of tools the model chose to
+against OpenRouter directly, and compares the set of tools the model chose to
 call against the expected set. This isolates the model's tool-selection
 decision from the rest of the endpoint (auth, conversation history, caching)
 — those are exercised by `eval_assistant_answers.py` (below) and
@@ -87,14 +87,11 @@ a later round). `ask_once` measures the fast case; `ask_multi_round` measures
 whether the loop's later rounds recover from a first-round miss — a compound
 question that round 1 misses can still succeed in `multi_round`.
 
-**Requirements:** a running Ollama with `ASSISTANT_MODEL` pulled (default
-`llama3.1:8b-instruct-q4_0`). Set `OLLAMA_HOST` if Ollama isn't reachable at
-the in-Docker default (`http://ollama:11434`) — e.g. from a host shell
-against `docker compose`'s Ollama:
+**Requirements:** `OPENROUTER_API_KEY` set (same as the running service).
 
 ```bash
 cd services/ai-service
-OLLAMA_HOST=http://localhost:11434 python eval/eval_assistant_tools.py
+python eval/eval_assistant_tools.py
 ```
 
 Reports exact-match rate plus average precision/recall (a question expecting
@@ -117,7 +114,8 @@ evidence extraction, grounding) via the gateway, and scores the *answer
 text* itself — not just which tools got called.
 
 **Requirements:** the full stack running (`docker compose up`) — gateway,
-auth-service, ai-service, Ollama. It logs itself in (`ASSISTANT_EVAL_USERNAME`
+auth-service, ai-service (with `OPENROUTER_API_KEY` set). It logs itself in
+(`ASSISTANT_EVAL_USERNAME`
 / `ASSISTANT_EVAL_PASSWORD`, default `manager01` / `123456`) and calls
 `POST /ai/assistant` through `SMARTBOOK_GATEWAY_URL` (default
 `http://localhost:3000`).

@@ -51,7 +51,7 @@ export const MONITOR_SERVICE_CONFIGS: MonitorServiceConfig[] = [
   {
     id: 'ai-service',
     name: 'AI Service',
-    description: 'Assistant, OCR, Ollama-backed AI workflows',
+    description: 'Assistant, OCR, OpenRouter-backed AI workflows',
     url: env.VITE_AI_HEALTH_URL || 'http://localhost:3000/ai/health',
   },
 ];

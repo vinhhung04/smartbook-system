@@ -83,9 +83,8 @@ class IngestBooksResilienceTest(unittest.TestCase):
         vector_store.set_store(self.store)
         self.embed_patcher = mock.patch.object(
             embeddings, "embed_batch",
-            side_effect=lambda texts, client=None, allow_cloud_fallback=True:
-                embeddings.BatchEmbedResult(
-                    vectors=[[0.1, 0.2] for _ in texts], model="test-model", provider="ollama"),
+            side_effect=lambda texts: embeddings.BatchEmbedResult(
+                vectors=[[0.1, 0.2] for _ in texts], model="test-model", provider="openrouter"),
         )
         self.embed_mock = self.embed_patcher.start()
 
@@ -113,22 +112,12 @@ class IngestBooksResilienceTest(unittest.TestCase):
         self.assertIn((vector_store.CORPUS_BOOK, "3"), self.store._docs)
         self.assertNotIn((vector_store.CORPUS_BOOK, "2"), self.store._docs)
 
-    def test_ingestion_never_allows_cloud_fallback(self):
-        asyncio.run(ingestion.ingest_books([{"id": 1, "title": "Sach A", "author": "Tac gia A"}]))
-        self.assertTrue(self.embed_mock.call_args_list)
-        for call in self.embed_mock.call_args_list:
-            self.assertIs(call.kwargs.get("allow_cloud_fallback"), False)
 
-
-class IngestOllamaDownTest(unittest.TestCase):
-    """Duong GHI chi dung Ollama (AD-8). Ollama chet thi tai lieu bi BO QUA,
-    khong bao gio duoc embed bang model cloud.
-
-    Neu ingestion ghi chunk bang model cloud, chunk do mang embedding_model
-    cloud nhung content_hash lai tinh theo hang so EMBED_MODEL (Ollama) — lan
-    ingest sau thay hash trung nen bo qua, vector cloud khong bao gio duoc thay,
-    va moi truy van (embed bang Ollama da khoe lai, loc theo EMBED_MODEL) khong
-    con nhin thay tai lieu do nua. Bo qua roi ingest lai thi tu chua lanh."""
+class IngestEmbedFailureTest(unittest.TestCase):
+    """OpenRouter is the only embedding provider now (no Ollama fallback to
+    arbitrate with a circuit breaker): a failed embed call skips the
+    document entirely, and the NEXT ingest run (once OpenRouter is healthy
+    again) picks it up and embeds it - it is never silently lost."""
 
     def setUp(self):
         self.store = vector_store.InMemoryVectorStore()
@@ -138,44 +127,49 @@ class IngestOllamaDownTest(unittest.TestCase):
     def tearDown(self):
         vector_store.set_store(None)
 
-    def test_ollama_down_skips_document_then_next_run_recovers_it(self):
-        cloud = mock.Mock()
-        cloud.embed_batch.return_value = [[0.9, 0.1]]
-        # Mach mo ngay sau mot lan loi — ke ca vay, duong ghi van khong duoc
-        # cham vao cloud.
-        embeddings._breaker = embeddings.EmbedCircuitBreaker(threshold=1, cooldown_seconds=0.0)
-
-        dead = mock.Mock()
-        dead.embed_batch.return_value = None
-        with mock.patch.object(embeddings, "_cloud_embedder", cloud), \
-                mock.patch.object(embeddings, "_OLLAMA_EMBEDDER", dead):
+    def test_embed_failure_skips_document_then_next_run_recovers_it(self):
+        with mock.patch.object(embeddings, "embed_batch", return_value=None):
             result1 = asyncio.run(ingestion.ingest_books([self.book]))
 
-        cloud.embed_batch.assert_not_called()
         self.assertEqual(result1["chunks_embedded"], 0)
         self.assertEqual(result1["chunks_skipped"], 1)
         # Khong co chunk nao duoc ghi -> khong co gi bi tag sai model.
         self.assertEqual(
             [row for slot in self.store._chunks.values() for row in slot.values()], [])
 
-        healthy = mock.Mock()
-        healthy.embed_batch.side_effect = lambda texts, client=None: [[1.0, 0.0] for _ in texts]
-        embeddings._breaker = embeddings.EmbedCircuitBreaker(threshold=1, cooldown_seconds=0.0)
-        with mock.patch.object(embeddings, "_cloud_embedder", cloud), \
-                mock.patch.object(embeddings, "_OLLAMA_EMBEDDER", healthy):
+        healthy_result = embeddings.BatchEmbedResult(
+            vectors=[[1.0, 0.0]], model=embeddings.EMBED_IDENTITY, provider="openrouter")
+        with mock.patch.object(embeddings, "embed_batch", return_value=healthy_result):
             result2 = asyncio.run(ingestion.ingest_books([self.book]))
 
-        cloud.embed_batch.assert_not_called()
         self.assertEqual(result2["chunks_embedded"], 1)
         rows = [row for slot in self.store._chunks.values() for row in slot.values()]
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["embedding_model"], embeddings.EMBED_MODEL)
+        self.assertEqual(rows[0]["embedding_model"], embeddings.EMBED_IDENTITY)
 
-        # Tai lieu nhin thay duoc bang truy van embed qua Ollama.
         hits = asyncio.run(self.store.search_semantic(
             vector_store.CORPUS_BOOK, [1.0, 0.0], k=5,
-            embedding_model=embeddings.EMBED_MODEL))
+            embedding_model=embeddings.EMBED_IDENTITY))
         self.assertEqual([hit.source_id for hit in hits], ["4242"])
+
+
+class ChunkHashModelRotationTest(unittest.TestCase):
+    """chunk_hash() folds embeddings.EMBED_IDENTITY into the hash (content +
+    model + dimensions): a chunk hashed under an old identity (e.g. the
+    pre-migration nomic-embed-text) is planned for re-embedding once the
+    configured identity changes, even though its text never changed."""
+
+    def test_changing_the_embedding_identity_invalidates_existing_hashes(self):
+        text = "noi dung khong doi"
+        with mock.patch.object(embeddings, "EMBED_IDENTITY", "nomic-embed-text@768"):
+            old_hash = ingestion.chunk_hash(text)
+
+        with mock.patch.object(embeddings, "EMBED_IDENTITY", "qwen/qwen3-embedding-8b@768"):
+            new_hash = ingestion.chunk_hash(text)
+            todo = ingestion.plan_chunks({0: old_hash}, [text])
+
+        self.assertNotEqual(old_hash, new_hash)
+        self.assertEqual(todo, [0])
 
 
 if __name__ == "__main__":

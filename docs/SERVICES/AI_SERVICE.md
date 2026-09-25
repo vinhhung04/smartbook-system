@@ -6,10 +6,25 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 
 - Runtime: Python + FastAPI
 - Entrypoint: services/ai-service/main.py
-- Model runtime: OpenRouter (mặc định — text/tool-calling, xem `llm_provider.py`) + Ollama local
-  (vision/OCR và embeddings — xem `LLM_PROVIDER`/`ASSISTANT_PROVIDER` bên dưới để chạy fully-offline
-  bằng Ollama thay vì OpenRouter)
+- Model runtime: OpenRouter là backend inference duy nhất (`llm_provider.py`, `get_openrouter_provider()`)
+  — text, tool-calling, NLU, vision/OCR và embeddings đều qua nó. Không có Ollama, không có
+  local chat/vision model, không cần GPU. CLIP (local, CPU) vẫn chạy riêng chỉ cho visual
+  similarity của ảnh bìa (`cover_embeddings.py`) — độc lập với LLM.
 - Vai trò: tra cứu ISBN, tạo tóm tắt tiếng Việt, OCR hóa đơn nhập kho, trợ lý ra quyết định
+
+## Bảo mật & dữ liệu
+
+- `OPENROUTER_API_KEY` chỉ nằm server-side (biến môi trường của `ai-service`) — không gửi xuống
+  frontend, không log, không commit vào repo. Đã quét toàn bộ repo + git history, không có key
+  thật nào bị commit.
+- **Ảnh gửi ra bên thứ ba**: `/verify-packing-photo`, `/scan-receipt`, và OCR bìa sách
+  (`/find-book-by-cover`) gửi ảnh (đóng gói, hóa đơn nhập kho, bìa sách) tới OpenRouter qua
+  HTTPS để chạy vision/OCR — khác với trước đây khi Ollama chạy local, ảnh không rời máy. Đây
+  là thay đổi về data residency cần lưu ý nếu có yêu cầu compliance (vd hóa đơn nhập kho có
+  thể chứa thông tin nhà cung cấp/giá). Text truy vấn (chat, tìm sách, NLU) cũng qua OpenRouter
+  tương tự — không khác biệt so với phần chat/tool-calling đã dùng OpenRouter từ trước.
+- Không gửi token xác thực, hồ sơ người dùng, hay dữ liệu nghiệp vụ nội bộ nào khác tới LLM
+  ngoài nội dung câu hỏi/ảnh cần xử lý (xem `nlu.py`'s docstring).
 
 ## Endpoint chính
 
@@ -24,7 +39,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /generate-summary-vi | Tạo tóm tắt tiếng Việt phong cách nhà sách (Fahasa/Tiki style) |
 | POST | /chat | Hỏi đáp AI |
 | POST | /reading-stats | Tổng hợp thống kê đọc |
-| POST | /assistant | Trợ lý hỗ trợ ra quyết định (Ollama tool-calling qua Analytics Service) |
+| POST | /assistant | Trợ lý hỗ trợ ra quyết định (tool-calling qua OpenRouter + Analytics Service) |
 | POST | /assistant/stream | Bản streaming (SSE) của /assistant |
 | POST | /actions/confirm | Xác nhận (hoặc hủy, nếu `confirm: false`) một pending action |
 | POST | /actions/cancel | Hủy một pending action |
@@ -46,10 +61,10 @@ Ghi chú quan trọng:
 - **Field-level retrieval** (`ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL`, mặc định tắt): sau lookup Google/Open Library, hệ thống đo độ đầy đủ theo field (`MISSING` / `LOW_CONFIDENCE` / `CONFLICTED` / `SUFFICIENT`) và chỉ gọi thêm provider có khả năng bổ sung field quan trọng còn thiếu (Tiki/Vinabook → Fahasa → web search), mỗi provider tối đa một lần và trong ngân sách `ISBN_LOOKUP_TOTAL_BUDGET_SECONDS`. Response bổ sung (additive) `metadataCoverage`, `fieldStatus`, `missingFields`, `lowConfidenceFields`, `needsEnrichment`, `retrieval`, `sources[].phase/reasons` và trạng thái `SKIPPED`. `found` vẫn nghĩa là đã nhận diện được sách, không đồng nghĩa metadata đầy đủ. Kết quả chưa đầy đủ hoặc có provider lỗi chỉ được cache `ISBN_INCOMPLETE_CACHE_TTL_SECONDS`.
 - Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
-- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (mặc định OpenRouter/`OPENROUTER_ASSISTANT_MODEL`, chọn qua `ASSISTANT_PROVIDER` — có thể là `ollama`/`ASSISTANT_MODEL` để chạy fully-offline) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. `ASSISTANT_PROVIDER` chọn đúng 1 provider — không tự động fallback sang provider khác nếu provider đó lỗi.
+- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (OpenRouter/`OPENROUTER_ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [] }`. `OPENROUTER_FALLBACK_MODEL` (nếu set) thử lại một lần trên cùng OpenRouter key nếu model chính lỗi — không có fallback sang provider khác.
 - **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
-- **Hybrid FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON) theo hai nhánh như `search_books`: semantic (cosine, phải vượt `FAQ_MATCH_THRESHOLD` mới được tính) và keyword (Postgres full-text bỏ dấu — bắt được câu hỏi gần trùng từng chữ với heading của FAQ mà vector một mình bỏ lỡ), hợp nhất bằng RRF (`fusion.py`), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. Ollama lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ, không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
-- **Hybrid book search**: tool `search_books` của `/assistant` truy vấn corpus `BOOK_METADATA` trong pgvector theo hai tín hiệu — semantic (cosine similarity trên embedding của `title + author + category + description + summary_vi`, `book_index.py`) và keyword (Postgres full-text, bỏ dấu bằng `unaccent`) — rồi hợp nhất bằng Reciprocal Rank Fusion (`fusion.py`, không còn trung bình cộng hai thang điểm khác bản chất). Riêng ISBN được xử lý TRƯỚC RRF bằng một short-circuit khớp chính xác (so khớp isbn đã chuẩn hoá — bỏ dấu gạch ngang/khoảng trắng — dưới dạng SUBSTRING của câu hỏi đã chuẩn hoá, không đòi hỏi câu hỏi chỉ gồm mỗi ISBN) vì ISBN cố ý không nằm trong nội dung embed/tsv (một mã định danh có cấu trúc, không phải ngôn ngữ tự nhiên). Ollama lỗi → chỉ còn tín hiệu keyword, đúng tinh thần hành vi trước đây (degrade, không lỗi).
+- **Hybrid FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON) theo hai nhánh như `search_books`: semantic (cosine, phải vượt `FAQ_MATCH_THRESHOLD` mới được tính) và keyword (Postgres full-text bỏ dấu — bắt được câu hỏi gần trùng từng chữ với heading của FAQ mà vector một mình bỏ lỡ), hợp nhất bằng RRF (`fusion.py`), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. OpenRouter embedding lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ (degrade xuống keyword-only), không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
+- **Hybrid book search**: tool `search_books` của `/assistant` truy vấn corpus `BOOK_METADATA` trong pgvector theo hai tín hiệu — semantic (cosine similarity trên embedding của `title + author + category + description + summary_vi`, `book_index.py`) và keyword (Postgres full-text, bỏ dấu bằng `unaccent`) — rồi hợp nhất bằng Reciprocal Rank Fusion (`fusion.py`, không còn trung bình cộng hai thang điểm khác bản chất). Riêng ISBN được xử lý TRƯỚC RRF bằng một short-circuit khớp chính xác (so khớp isbn đã chuẩn hoá — bỏ dấu gạch ngang/khoảng trắng — dưới dạng SUBSTRING của câu hỏi đã chuẩn hoá, không đòi hỏi câu hỏi chỉ gồm mỗi ISBN) vì ISBN cố ý không nằm trong nội dung embed/tsv (một mã định danh có cấu trúc, không phải ngôn ngữ tự nhiên). OpenRouter embedding lỗi → chỉ còn tín hiệu keyword, đúng tinh thần hành vi trước đây (degrade, không lỗi).
 - **Evidence-first**: `evidence` được sinh best-effort từ kết quả tool (xem `evidence.py`) — nếu tool trả `{"error": ...}` hoặc hình dạng dữ liệu không khớp, extractor tương ứng chỉ trả `[]`, không lỗi.
 - **AI Action Center + audit log**: `agent_store.py` không còn lưu action trong RAM — mỗi pending action được lưu trong bảng `ai_pending_actions` (Postgres, DB `ai_db`), và mọi bước trong vòng đời (CREATED/CONFIRMED/EXECUTED/CANCELLED/FAILED/EXPIRED) được ghi vào `ai_action_audit_logs`. Danh sách/chi tiết xem qua `GET /assistant/actions` và `GET /assistant/actions/{id}`. Denylist hành động nguy hiểm (`agent_actions.DANGEROUS_ACTION_DENYLIST`) không đổi.
 
@@ -86,8 +101,10 @@ không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_em
     index, `vector_cosine_ops`) và một cột `tsv` (full-text, GIN index) cho keyword search. Mọi
     truy vấn semantic đều lọc thêm `embedding_model = <model đang cấu hình>` (AD-3: đổi model thì
     vector cũ không lẫn vào kết quả mới cho tới khi ingest lại).
-- **Ingestion** (`ingestion.py`, incremental theo `content_hash` từng chunk — nội dung không đổi
-  thì không gọi lại Ollama):
+- **Ingestion** (`ingestion.py`, incremental theo `content_hash` từng chunk — hash gồm cả nội dung
+  VÀ embedding identity (`embeddings.EMBED_IDENTITY` = model + dimensions), nên nội dung không đổi
+  thì không gọi lại OpenRouter, nhưng đổi model/dimensions thì mọi chunk bị coi là "đã đổi" và được
+  embed lại):
   - `ingestion.ingest_internal_docs()` — đọc toàn bộ `services/ai-service/corpus/*.md`, chạy tự
     động ở mỗi lần khởi động service (`main.py`'s `_startup_ingest_corpus`, không phụ thuộc auth,
     không chặn startup).
@@ -111,25 +128,28 @@ không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_em
     ai_db -c "SELECT corpus, count(*) FROM ai_document_chunks GROUP BY corpus;"`.
 - **Biến môi trường mới**: xem `INGEST_MAX_CHUNK_CHARS`, `ENABLE_CORPUS_INGEST` trong bảng dưới.
 
-### Embedding Provider: Circuit Breaker (Ollama ↔ OpenRouter)
+### Embedding Provider: OpenRouter only
 
-Embedding cho semantic FAQ + book search (`faq_retrieval.find_relevant()` và `search_books` tool trong `/assistant`) hỗ trợ hai provider với tự động chuyển đổi (circuit breaker):
+Embedding cho semantic FAQ + book search (`faq_retrieval.find_relevant()` và `search_books` tool trong `/assistant`) dùng đúng một provider — OpenRouter (`OPENROUTER_EMBED_MODEL=qwen/qwen3-embedding-8b`). Không còn Ollama, không còn circuit breaker giữa hai provider (không có gì để chuyển đổi nữa). `embed_batch()`/`embed_text()` không bao giờ raise: lỗi (timeout, HTTP error, dimension/count mismatch) trả về `None`, caller tự degrade xuống keyword-only search.
 
-- **Provider chính**: Ollama local (offline được, `FAQ_EMBED_MODEL=nomic-embed-text`)
-- **Provider dự phòng**: OpenRouter cloud (`CLOUD_EMBED_MODEL=qwen/qwen3-embedding-8b`) — thử khi Ollama bị lỗi liên tục
+**`OPENROUTER_API_KEY` rỗng = mọi embedding call trả `None` ngay**: `OpenRouterEmbedder` dừng trước khi gửi request nào, không để nội dung truy vấn/tài liệu rời máy khi chưa cấu hình key.
 
-**Circuit breaker có 3 trạng thái:**
-- `CLOSED` (mặc định): sử dụng Ollama, log warning nếu lỗi nhưng không chuyển sang cloud ngay
-- `OPEN`: sau `EMBED_BREAKER_THRESHOLD` lỗi Ollama liên tục (mặc định 3), chuyển hoàn toàn sang OpenRouter để truy vấn tiếp theo
-- `HALF_OPEN`: sau `EMBED_BREAKER_COOLDOWN_SECONDS` giây tắt (mặc định 60), thử lại Ollama **đúng một lần** (caller đầu tiên giành được lần thử đó; mọi caller song song khác đi thẳng sang cloud, tránh cả loạt request cùng đâm vào một Ollama đang chết); nếu thành công quay về CLOSED, nếu lỗi quay về OPEN
+**Quan trọng: `dimensions:768` là bắt buộc** — `ai_document_chunks.embedding` được định nghĩa cố định là `vector(768)` trong schema (xem `schema.sql`). Model `qwen/qwen3-embedding-8b` mặc định trả embedding 4096 chiều, nên **luôn gửi `dimensions: 768`** trong request (`OPENROUTER_EMBED_DIMENSIONS`) để model trả 768 chiều trực tiếp.
 
-**Fallback chỉ áp dụng cho đường ĐỌC (truy vấn).** `ingestion.py` gọi `embeddings.embed_batch(..., allow_cloud_fallback=False)`: Ollama lỗi thì bỏ qua tài liệu đó và ghi log, lần ingest sau (khi Ollama khỏe lại) nhặt nó lên sạch sẽ. Nếu cho phép ghi bằng model cloud, chunk sẽ mang `embedding_model` cloud trong khi `content_hash` vẫn tính theo `FAQ_EMBED_MODEL` (Ollama) — lần ingest sau thấy hash trùng nên bỏ qua, vector cloud không bao giờ được thay, và tài liệu đó biến mất vĩnh viễn khỏi semantic search.
+**Embedding identity = model + dimensions** (`embeddings.EMBED_IDENTITY`, ví dụ `qwen/qwen3-embedding-8b@768`) — được lưu vào cột `embedding_model` của mỗi chunk VÀ gấp vào `content_hash` (xem `ingestion.chunk_hash`). Đổi `OPENROUTER_EMBED_MODEL`/`OPENROUTER_EMBED_DIMENSIONS` khiến mọi chunk bị coi là "đã đổi" nên được embed lại tự động; `VectorStore.delete_chunks_except_model()` (gọi lúc khởi động và bởi `reindex_embeddings.py`) còn dọn cả những vector của model cũ thuộc tài liệu không được ingest lại (không còn trong `corpus/` hoặc `/api/books`) — xem "Migration embedding model" bên dưới.
 
-**`OPENROUTER_API_KEY` rỗng = tắt hẳn fallback**: `CloudEmbedder` dừng ngay và log warning, không gửi request nào (không để nội dung truy vấn/tài liệu rời máy trên đường mà operator tin là "chỉ Ollama").
+**Debug**: khi provider lỗi, xem log từ `embeddings.py` (dòng `embed_call model=... error=...`) để biết nguyên nhân (timeout, HTTP error, dimension mismatch...).
 
-**Quan trọng: `dimensions:768` là bắt buộc** — `ai_document_chunks.embedding` được định nghĩa cố định là `vector(768)` trong schema (xem `schema.sql`). Model OpenRouter `qwen/qwen3-embedding-8b` mặc định trả embedding 4096 chiều, nên **luôn gửi `dimensions: 768`** trong request để model trả 768 chiều trực tiếp (không cần post-process truncate hay project lại, tránh mất mát semantics). Không thay đổi column schema được mà không migrate toàn bộ vector cũ — dùng mặc định 768 trên cả hai provider để không cần việc đó.
+### Migration embedding model (vd đổi từ nomic-embed-text sang qwen3-embedding-8b)
 
-**Debug circuit breaker**: khi provider lỗi, xem log từ `embeddings.py` (ví dụ: "Ollama embedding failed: <type(exc).__name__>: ...") để xác định provider nào fail và trạng thái hiện tại của breaker. Log cũng ghi lúc chuyển sang OPEN hoặc khi thử lại từ HALF_OPEN.
+Vector cũ của một model khác **không dùng lại được** — nó nằm trong một không gian vector khác, so sánh cosine với nó là vô nghĩa. Cách re-index toàn bộ:
+
+```bash
+cd services/ai-service
+REINDEX_AUTH_TOKEN=<JWT của ADMIN/WAREHOUSE_MANAGER, từ POST /auth/login> python reindex_embeddings.py
+```
+
+Script này: (1) xoá mọi chunk không mang `embedding_model` hiện tại (`delete_chunks_except_model`), (2) `ingest_internal_docs()`, (3) `ingest_books()` qua `/api/books` (cần token vì endpoint đó có auth — startup ingest không có token, xem ghi chú `task_5448fb5f` ở trên). Không có token, script chỉ re-index corpus `INTERNAL_DOC` và in cảnh báo bỏ qua `BOOK_METADATA`. Kiểm tra kết quả: `SELECT embedding_model, count(*) FROM ai_document_chunks GROUP BY 1;` — chỉ nên còn đúng một giá trị.
 
 ### Upgrade notes: đổi image Postgres sang `pgvector/pgvector:pg15`
 
@@ -196,28 +216,21 @@ case cải thiện nhờ pgvector (`bm-038`, `doc-005`, `doc-014`, `doc-021`) nh
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| LLM_PROVIDER | openrouter | Provider cho `/chat`, tóm tắt/ISBN-enrichment, giải thích gợi ý lưu kho, nightly briefing: `openrouter` \| `ollama` |
-| OPENROUTER_API_KEY | rỗng | Bắt buộc nếu `LLM_PROVIDER`/`ASSISTANT_PROVIDER=openrouter`. Không hard-code — lấy từ env/secret |
+| OPENROUTER_API_KEY | rỗng | Bắt buộc — không có key thì mọi tính năng AI (text/tool-calling/vision/embedding) đều lỗi/degrade. Không hard-code — lấy từ env/secret, không log, không gửi xuống frontend |
 | OPENROUTER_BASE_URL | https://openrouter.ai/api/v1 | Base URL OpenRouter (OpenAI-compatible) |
-| OPENROUTER_TEXT_MODEL | qwen/qwen3.7-flash | Model cho tóm tắt/chat/NLU qua OpenRouter (xác thực trực tiếp trên JSON thô của `/api/v1/models` ngày 2026-09-15 — hỗ trợ `tools`/`tool_choice`, context 1M; canonical_slug nội bộ của OpenRouter là `qwen/qwen3.7-flash-20260727`) |
+| OPENROUTER_TEXT_MODEL | qwen/qwen3.7-flash | Model cho tóm tắt/chat/NLU qua OpenRouter (xác thực trực tiếp trên JSON thô của `/api/v1/models` ngày 2026-09-15 — hỗ trợ `tools`/`tool_choice`/`response_format`, context 1M; canonical_slug nội bộ của OpenRouter là `qwen/qwen3.7-flash-20260727`) |
 | OPENROUTER_ASSISTANT_MODEL | qwen/qwen3.7-flash | Model cho `/assistant` (tool-calling) qua OpenRouter — cùng model như trên |
-| OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt |
-| NLU_PROVIDER | rỗng (dùng `LLM_PROVIDER`) | Provider cho phân loại intent (`nlu.py`) |
-| ASSISTANT_PROVIDER | openrouter | Provider cho vòng lặp tool-calling của `/assistant`: `openrouter` \| `ollama` |
-| OLLAMA_HOST | http://ollama:11434 | Địa chỉ Ollama trong Docker network — vẫn cần cho vision/OCR + embeddings, và khi chọn provider `ollama` |
-| OLLAMA_MODEL | llava | Model xử lý ảnh (OCR hóa đơn, xác minh ảnh đóng gói) — luôn qua Ollama, không đổi bởi `LLM_PROVIDER` |
-| SUMMARY_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `LLM_PROVIDER=ollama` (tóm tắt văn bản / `/chat`) |
-| ASSISTANT_MODEL | llama3.1:8b-instruct-q4_0 | Model Ollama dùng khi `ASSISTANT_PROVIDER=ollama` (cần hỗ trợ Ollama tool-calling) |
-| FAQ_EMBED_MODEL | nomic-embed-text | Model embedding chính (Ollama) cho semantic FAQ + book search; khi Ollama lỗi liên tục, **chỉ đường đọc (truy vấn)** mới rơi sang OpenRouter `CLOUD_EMBED_MODEL`, còn ingestion luôn chỉ dùng Ollama (cần `ollama pull nomic-embed-text`) |
+| OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói, quét hóa đơn |
+| OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt. Phải là model OpenRouter — không có fallback provider khác |
+| ASSISTANT_TOOL_CONTEXT_CHARS | 2000 | Số ký tự tối đa một tool result đóng góp vào prompt `/assistant` |
+| OPENROUTER_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding cho semantic FAQ + book search |
+| OPENROUTER_EMBED_DIMENSIONS | 768 | Số chiều gửi kèm trong request OpenRouter để khớp cột `vector(768)` trong `ai_document_chunks` — model này mặc định trả 4096 chiều, không được bỏ |
+| OPENROUTER_EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |
 | FAQ_MATCH_THRESHOLD | 0.75 | Ngưỡng cosine similarity tối thiểu để coi một mục FAQ là khớp |
 | FAQ_TOP_K | 3 | Số mục FAQ tối đa đưa vào context mỗi lượt hỏi |
 | BOOK_SEMANTIC_THRESHOLD | 0.6 | Ngưỡng cosine tối thiểu để một cuốn sách được coi là khớp ngữ nghĩa trong `search_books` |
-| EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |
-| EMBED_BREAKER_THRESHOLD | 3 | Số lỗi Ollama liên tiếp trước khi mở mạch và chuyển sang cloud |
-| EMBED_BREAKER_COOLDOWN_SECONDS | 60 | Cooldown (giây) khi mạch đang mở, trước khi thử lại Ollama một lần (HALF_OPEN) |
-| CLOUD_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding fallback qua OpenRouter (dùng chung `OPENROUTER_API_KEY`); key rỗng = tắt fallback |
-| CLOUD_EMBED_DIMENSIONS | 768 | Số chiều gửi kèm trong request OpenRouter để khớp cột `vector(768)` trong `ai_document_chunks` — model này mặc định trả 4096 chiều, không được bỏ |
-| CLOUD_EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding qua OpenRouter |
+| PACKING_VISION_MAX_TOKENS / PACKING_VISION_TIMEOUT_SECONDS | 200 / 15 | Cap output/timeout cho `/verify-packing-photo` — timeout thấp hơn `AbortSignal.timeout(20000)` của caller (`packing-evidence-ai.service.js`) |
+| RECEIPT_VISION_MAX_TOKENS / RECEIPT_VISION_TIMEOUT_SECONDS | 1200 / 30 | Cap output/timeout cho `/scan-receipt` |
 | INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
 | ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền lúc khởi động (`ingest_internal_docs`/`ingest_books`) — tắt trong môi trường test e2e không cần semantic |
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
@@ -241,7 +254,7 @@ case cải thiện nhờ pgvector (`bm-038`, `doc-005`, `doc-014`, `doc-021`) nh
 ### Cách 1: Docker Compose
 
 ```bash
-docker compose up -d --build ai-service ollama
+docker compose --profile ai up -d --build ai-service
 ```
 
 ### Cách 2: Chạy local
@@ -265,7 +278,7 @@ python main.py
 
 - Gateway định tuyến vào AI qua /ai và /api/ai.
 - Frontend gọi qua VITE_AI_BASE_URL.
-- Khi chạy Docker, cần đảm bảo OLLAMA_HOST trỏ tới http://ollama:11434.
+- Khi chạy Docker, chỉ cần `OPENROUTER_API_KEY` trong `.env` — không cần container/GPU nào khác cho AI.
 
 ## Tài liệu liên quan
 

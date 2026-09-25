@@ -112,7 +112,7 @@ def test_run_nightly_briefing_falls_back_to_tier2_with_its_own_longer_timeout(mo
     # Regression guard for the real bug hit in manual verification: _chat_with_text_llm's
     # own CHAT_LLM_TIMEOUT_SECONDS (12s, tuned for live chat) was too short for this
     # job's larger prompt, silently always falling through to the plain-text fallback.
-    # _generate_with_text_llm must use NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS instead.
+    # _generate_with_text_llm must use NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS instead.
     async def fake_get_internal(_endpoint):
         return {"ok": True}
 
@@ -124,10 +124,12 @@ def test_run_nightly_briefing_falls_back_to_tier2_with_its_own_longer_timeout(mo
 
     call_kwargs = {}
 
-    async def fake_call_text_llm(system_prompt, user_prompt, *, max_tokens=900, temperature=0.3, timeout=None):
+    async def fake_call_text_llm(
+        system_prompt, user_prompt, *, max_tokens=900, temperature=0.3, timeout=None, feature="text",
+    ):
         call_kwargs.update(
             system_prompt=system_prompt, user_prompt=user_prompt,
-            max_tokens=max_tokens, temperature=temperature, timeout=timeout,
+            max_tokens=max_tokens, temperature=temperature, timeout=timeout, feature=feature,
         )
         return "Bao cao gia lap tu tier 2", True
 
@@ -141,5 +143,6 @@ def test_run_nightly_briefing_falls_back_to_tier2_with_its_own_longer_timeout(mo
 
     reply = asyncio.run(nightly_briefing._generate_with_text_llm("bat ky prompt nao"))
     assert reply == "Bao cao gia lap tu tier 2"
-    assert call_kwargs["timeout"] == nightly_briefing.NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS
+    assert call_kwargs["timeout"] == nightly_briefing.NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS
     assert "bat ky prompt nao" in call_kwargs["user_prompt"]
+    assert call_kwargs["feature"] == "nightly_briefing"

@@ -15,8 +15,8 @@ GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstr
 ASSISTANT_TOOL_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_TOOL_TIMEOUT_SECONDS", "8"))
 
 # Caps how many rows a single tool call can return, so a large analytics
-# response doesn't blow up the LLM's context window (and, on CPU-only Ollama,
-# doesn't add minutes to the next round's prompt-processing time).
+# response doesn't blow up the LLM's context window or the next round's
+# prompt-processing time/cost.
 MAX_LIST_ITEMS = 12
 
 
@@ -38,7 +38,13 @@ def _truncate(value: Any) -> Any:
     return value
 
 
-async def _get(endpoint: str, auth_header: str | None, params: dict | None = None) -> dict:
+async def _get(
+    endpoint: str, auth_header: str | None, params: dict | None = None, *, truncate: bool = True,
+) -> dict:
+    """truncate=False bypasses MAX_LIST_ITEMS entirely - for bulk data consumers
+    (ingestion.py's book corpus sync, via main.py's startup hook and
+    reindex_embeddings.py) that need the complete list, not a context-window-safe
+    preview for an LLM tool call. Every tool-calling call site keeps the default."""
     clean_params = {key: val for key, val in (params or {}).items() if val is not None}
     headers = {"Authorization": auth_header} if auth_header else {}
     try:
@@ -46,7 +52,8 @@ async def _get(endpoint: str, auth_header: str | None, params: dict | None = Non
             response = await client.get(f"{GATEWAY_URL}{endpoint}", params=clean_params, headers=headers)
         if response.status_code >= 400:
             return {"error": f"{endpoint} tra ve HTTP {response.status_code}"}
-        return _truncate(_data(response.json()))
+        data = _data(response.json())
+        return _truncate(data) if truncate else data
     except httpx.TimeoutException:
         return {"error": f"{endpoint} het thoi gian cho phan hoi"}
     except Exception as exc:
@@ -162,7 +169,7 @@ _MIN_ISBN_KEY_LEN = 10
 _RRF_MAX_SCORE = 2.0 / (fusion.RRF_K + 1)
 
 
-async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
+async def _score_and_rank_books(books: list, query: str, limit: int) -> list[dict]:
     """Hybrid ranking qua vector store, hop nhat bang RRF.
 
     Truoc day ham nay tu cham diem keyword trong Python roi trung binh cong voi
@@ -216,7 +223,7 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         None,
     )
 
-    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     semantic = (
         [
             hit for hit in await store.search_semantic(

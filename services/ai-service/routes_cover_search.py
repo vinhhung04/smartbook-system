@@ -6,9 +6,9 @@ evidence-first convention (see main.py's ISBN metadata fusion):
 
 - visual: cosine similarity between the query photo's CLIP embedding and each
   catalog cover's precomputed embedding (cover_gallery.py / cover_embeddings.py).
-- ocr_text: Ollama's vision model reads the title/author off the cover, then
-  that text is scored against the catalog by assistant_tools._score_and_rank_books
-  (reused as-is, not reimplemented).
+- ocr_text: OpenRouter's vision model (Qwen) reads the title/author off the
+  cover, then that text is scored against the catalog by
+  assistant_tools._score_and_rank_books (reused as-is, not reimplemented).
 
 A new router module (not main.py) — this feature has its own prompt/parsing/
 merge logic that doesn't belong mixed into main.py's existing ~229KB, following
@@ -17,19 +17,17 @@ the precedent set by routes_actions.py/routes_conversations.py.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import re
 
 import httpx
-import ollama
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 import assistant_tools
 import cover_embeddings
 import cover_gallery
 import embeddings
+from llm_provider import get_openrouter_provider, VisionResponseError, VISION_MODEL
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -39,15 +37,12 @@ router = APIRouter(tags=["cover-search"])
 # retrieval.py, agent_permissions.py) — route modules never import main.py, to
 # avoid a circular import (main.py constructs the app and includes this router).
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava")
 CATALOG_FETCH_TIMEOUT_SECONDS = float(os.getenv("CATALOG_FETCH_TIMEOUT_SECONDS", "15"))
-# Bounds a single llava generation. Confirmed in testing: uncapped, a photo
-# with no legible title/author can make llava ramble 1500+ tokens instead of
-# stopping at the JSON, taking minutes on CPU-only Ollama. 200 tokens is far
-# more than a two-field JSON object needs.
+# Bounds a single vision call. A two-field JSON object needs far fewer than
+# 200 tokens; the timeout is a much lower default than the old CPU-only
+# Ollama one (90s) because OpenRouter's hosted Qwen answers in a few seconds.
 COVER_OCR_MAX_TOKENS = int(os.getenv("COVER_OCR_MAX_TOKENS", "200"))
-COVER_OCR_TIMEOUT_SECONDS = float(os.getenv("COVER_OCR_TIMEOUT_SECONDS", "90"))
+COVER_OCR_TIMEOUT_SECONDS = float(os.getenv("COVER_OCR_TIMEOUT_SECONDS", "20"))
 
 COVER_SEARCH_VISUAL_THRESHOLD = float(os.getenv("COVER_SEARCH_VISUAL_THRESHOLD", "0.80"))
 COVER_SEARCH_MIN_CONFIDENCE = float(os.getenv("COVER_SEARCH_MIN_CONFIDENCE", "0.5"))
@@ -80,45 +75,19 @@ def _clean_ocr_value(value) -> str | None:
     return text
 
 
-def _extract_title_author(raw: str) -> dict:
-    """Local copy of main.py's _extract_json's 3-strategy parse (direct →
-    fenced ```json``` block → first {...} object), with a fallback shaped for
-    this endpoint's own two fields instead of main.py's ISBN-lookup fallback.
-    Duplicated rather than imported to avoid a circular import with main.py."""
-    for candidate in (
-        raw.strip(),
-        (re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL) or [None, None])[1],
-        (re.search(r"\{.*?\}", raw, re.DOTALL) or [None])[0],
-    ):
-        if not candidate:
-            continue
-        try:
-            data = json.loads(candidate)
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            continue
-    return {"title": None, "author": None}
-
-
-def _run_cover_ocr(image_bytes: bytes) -> dict:
-    """Blocking Ollama vision call — must run via asyncio.to_thread.
-
-    Confirmed in testing: without num_predict, llava can ramble for 1500+
-    tokens on a photo that isn't a book cover (nothing to "read" pins it into
-    a long free-form description instead of stopping at the JSON), taking
-    minutes on CPU. The answer only needs a two-field JSON object, so the cap
-    is generous but bounded; the client-level timeout is the hard backstop —
-    on either limit this degrades to "no OCR signal", not a hung request."""
+async def _run_cover_ocr(image_bytes: bytes) -> dict:
+    """OpenRouter vision call. analyze_image() already guarantees a JSON
+    object response (json_object mode) or raises VisionResponseError - any
+    failure (upstream error, timeout, invalid JSON) degrades to "no OCR
+    signal" instead of raising, so find_book_by_cover always still returns
+    the CLIP-only result."""
     try:
-        client = ollama.Client(host=OLLAMA_HOST, timeout=COVER_OCR_TIMEOUT_SECONDS)
-        response = client.generate(
-            model=OLLAMA_MODEL,
-            prompt=PROMPT_COVER_OCR,
-            images=[image_bytes],
-            options={"temperature": 0, "num_predict": COVER_OCR_MAX_TOKENS},
+        provider = get_openrouter_provider(VISION_MODEL)
+        data, _usage = await provider.analyze_image(
+            image_bytes, PROMPT_COVER_OCR,
+            max_tokens=COVER_OCR_MAX_TOKENS, timeout=COVER_OCR_TIMEOUT_SECONDS,
+            feature="cover_ocr",
         )
-        data = _extract_title_author(response.get("response", ""))
     except Exception as exc:
         logger.warning("cover_search: OCR failed: %s", type(exc).__name__)
         data = {"title": None, "author": None}
@@ -239,7 +208,7 @@ async def find_book_by_cover(request: Request, file: UploadFile = File(...)):
     auth_header = request.headers.get("authorization")
 
     ocr_data, books, visual_matches = await asyncio.gather(
-        asyncio.to_thread(_run_cover_ocr, image_bytes),
+        _run_cover_ocr(image_bytes),
         _fetch_catalog(auth_header),
         _match_visual(image_bytes),
     )

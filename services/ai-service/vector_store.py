@@ -68,6 +68,14 @@ class VectorStore(Protocol):
         source_ids: list[str] | None = None,
     ) -> list[Hit]: ...
 
+    async def delete_chunks_except_model(self, embedding_model: str) -> int:
+        """Xoa moi chunk KHONG thuoc `embedding_model` (vd cac vector nomic cu
+        con sot lai sau khi doi embedding provider). Tra ve so chunk da xoa.
+        Dung khi khoi dong (truoc ingest) va boi reindex_embeddings.py, de
+        khong vector nao cua model cu song sot ke ca voi tai lieu khong duoc
+        ingest lai."""
+        ...
+
 
 class InMemoryVectorStore:
     """Cosine tuyen tinh tren dict. Dung cho test, khong dung cho production."""
@@ -155,6 +163,15 @@ class InMemoryVectorStore:
                 hits.append(self._hit(doc, row, overlap / len(tokens)))
         hits.sort(key=lambda hit: (-hit.score, hit.source_id))
         return hits[:k]
+
+    async def delete_chunks_except_model(self, embedding_model: str) -> int:
+        deleted = 0
+        for document_id, rows in self._chunks.items():
+            stale = [index for index, row in rows.items() if row["embedding_model"] != embedding_model]
+            for index in stale:
+                del rows[index]
+            deleted += len(stale)
+        return deleted
 
 
 _store: VectorStore | None = None

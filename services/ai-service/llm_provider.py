@@ -1,35 +1,39 @@
-"""Swappable chat-completion provider for /assistant's tool-calling loop
-(also reused by main.py's other text-generation call sites - see
-_get_text_llm_provider() - and by nlu.py's intent classifier - now that
-OpenRouter has replaced Ollama as the default text/tool-calling backend).
+"""OpenRouter chat-completion and vision client, used by /assistant's
+tool-calling loop (also reused by main.py's other text-generation call sites -
+see _get_text_llm_provider() - by nlu.py's intent classifier, and by
+routes_cover_search.py / main.py's vision endpoints via analyze_image()).
 
-Both /assistant and /assistant/stream build an Ollama-shaped message list
+OpenRouter is the sole inference backend this service depends on (Ollama was
+removed - no local chat/vision model, no GPU requirement). get_openrouter_provider()
+is the one place OPENROUTER_API_KEY/OPENROUTER_BASE_URL/OPENROUTER_FALLBACK_MODEL
+are read from env, so main.py/nlu.py/routes_cover_search.py don't each parse
+their own copy.
+
+/assistant and /assistant/stream build an OpenAI-shaped-ish message list
 (`{"role": ..., "content": ..., "tool_calls": [...]}` for an assistant turn
 that called tools, `{"role": "tool", "tool_name": ..., "content": ...}` for a
-tool result) and an Ollama-shaped tool list (OpenAI-style
-`{"type": "function", "function": {...}}`). This module lets that same
-message/tool shape run against OpenRouter (LLM_PROVIDER=openrouter, the
-default and primary provider - any model OpenRouter serves, e.g. Qwen) or
-Ollama (the only path that runs fully offline, still used for the
-vision/OCR models and kept available for local dev) without the call sites
-caring which one is live. Anthropic and Groq were deliberately removed from
-this service - OpenRouter/Qwen is the one cloud provider it depends on.
+tool result) and an OpenAI-style tool list (`{"type": "function", "function":
+{...}}`). to_openrouter_messages() converts that message shape into the
+strict OpenAI format OpenRouter's /chat/completions requires (tool_call ids,
+JSON-string arguments).
 
-Every call also returns usage figures neither call site previously captured
-anywhere: latency, prompt/completion tokens, provider, model. A structured
-log line is emitted for every call so a slow or expensive turn is
-diagnosable from logs alone; main.py additionally aggregates these across a
-request's rounds and attaches them to the `/assistant` response under a
-debug key.
+Every call returns usage figures: latency, prompt/completion tokens, cost
+(OpenRouter reports this directly), provider, model, and which feature made
+the call. A structured log line is emitted for every call so a slow or
+expensive turn is diagnosable from logs alone; main.py additionally
+aggregates these across a request's rounds and attaches them to the
+`/assistant` response under a debug key.
 """
 from __future__ import annotations
 
+import functools
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
-from metrics import ai_request_duration
+from metrics import ai_request_duration, ai_llm_cost_usd_total, ai_llm_tokens_total
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -44,6 +48,7 @@ class ChatUsage:
     tool_call_count: int
     error: str | None = None
     cost_usd: float | None = None
+    feature: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -55,6 +60,7 @@ class ChatUsage:
             "tool_call_count": self.tool_call_count,
             "costUsd": self.cost_usd,
             "error": self.error,
+            "feature": self.feature,
         }
 
 
@@ -80,162 +86,45 @@ class StreamChunk:
     usage: ChatUsage | None = None
 
 
+class VisionResponseError(RuntimeError):
+    """Raised by analyze_image() when the vision model's response isn't a
+    JSON object - callers (cover OCR, packing verification, receipt scan)
+    catch this and degrade (CLIP-only / HTTP 502) instead of crashing."""
+
+
 def _log_call(usage: ChatUsage) -> None:
-    ai_request_duration.labels(endpoint=usage.provider).observe(usage.latency_ms / 1000)
+    ai_request_duration.labels(endpoint=usage.feature or usage.provider).observe(usage.latency_ms / 1000)
+    if usage.prompt_tokens is not None:
+        ai_llm_tokens_total.labels(feature=usage.feature, model=usage.model, kind="prompt").inc(usage.prompt_tokens)
+    if usage.completion_tokens is not None:
+        ai_llm_tokens_total.labels(feature=usage.feature, model=usage.model, kind="completion").inc(usage.completion_tokens)
+    if usage.cost_usd:
+        ai_llm_cost_usd_total.labels(feature=usage.feature, model=usage.model).inc(usage.cost_usd)
     if usage.error:
         logger.warning(
-            "assistant_llm_call provider=%s model=%s latency_ms=%.0f error=%s",
-            usage.provider, usage.model, usage.latency_ms, usage.error,
+            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f error=%s",
+            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.error,
         )
     else:
         logger.info(
-            "assistant_llm_call provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
-            "completion_tokens=%s tool_calls=%d",
-            usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
-            usage.completion_tokens, usage.tool_call_count,
-        )
-
-
-class OllamaProvider:
-    """Wraps the exact ollama.Client()/AsyncClient() calls /assistant and
-    /assistant/stream made directly before this module existed - same model,
-    same options, same per-chunk timeout handling. This class changes
-    nothing about Ollama's behaviour; it exists so main.py's two endpoints
-    can call one interface regardless of which provider is configured."""
-
-    name = "ollama"
-
-    def __init__(self, host: str, model: str):
-        self._host = host
-        self.model = model
-
-    async def chat(
-        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float, temperature: float = 0.2
-    ) -> ChatResult:
-        import asyncio
-        import ollama
-
-        client = ollama.Client(host=self._host)
-        started = time.perf_counter()
-        try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.chat,
-                    model=self.model,
-                    messages=messages,
-                    tools=tools,
-                    options={"temperature": temperature, "num_predict": num_predict},
-                ),
-                timeout=timeout,
-            )
-        except Exception as exc:
-            usage = ChatUsage(
-                provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
-                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc),
-            )
-            _log_call(usage)
-            raise
-
-        latency_ms = (time.perf_counter() - started) * 1000
-        message = response["message"]
-        tool_calls = message.get("tool_calls") or []
-        usage = ChatUsage(
-            provider=self.name, model=self.model, latency_ms=latency_ms,
-            prompt_tokens=response.get("prompt_eval_count"),
-            completion_tokens=response.get("eval_count"),
-            tool_call_count=len(tool_calls),
-        )
-        _log_call(usage)
-        return ChatResult(
-            assistant_message=message,
-            tool_calls=tool_calls,
-            text=(message.get("content") or "").strip(),
-            usage=usage,
-        )
-
-    async def chat_stream(
-        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float, temperature: float = 0.2
-    ) -> AsyncIterator[StreamChunk]:
-        import asyncio
-        import ollama
-
-        client = ollama.AsyncClient(host=self._host)
-        started = time.perf_counter()
-        try:
-            stream = await client.chat(
-                model=self.model, messages=messages, tools=tools, stream=True,
-                options={"temperature": temperature, "num_predict": num_predict},
-            )
-
-            last_message = None
-            prompt_tokens = None
-            completion_tokens = None
-            # Ollama sends the parsed tool call on the chunk that decides it, then a
-            # separate final "done" sentinel chunk whose own tool_calls is always None -
-            # naively keeping only the *last* chunk's tool_calls silently drops the call.
-            accumulated_tool_calls: list[dict] = []
-            iterator = stream.__aiter__()
-            while True:
-                try:
-                    chunk = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
-                except StopAsyncIteration:
-                    break
-                last_message = chunk.message
-                if chunk.message.tool_calls:
-                    accumulated_tool_calls = chunk.message.tool_calls
-                if getattr(chunk, "done", False):
-                    prompt_tokens = getattr(chunk, "prompt_eval_count", None)
-                    completion_tokens = getattr(chunk, "eval_count", None)
-                delta = chunk.message.content or ""
-                if delta:
-                    yield StreamChunk(delta=delta)
-        except Exception as exc:
-            usage = ChatUsage(
-                provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
-                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc),
-            )
-            _log_call(usage)
-            raise
-
-        latency_ms = (time.perf_counter() - started) * 1000
-        if last_message is None:
-            usage = ChatUsage(
-                provider=self.name, model=self.model, latency_ms=latency_ms,
-                prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, tool_call_count=0,
-            )
-            _log_call(usage)
-            yield StreamChunk(done=True, assistant_message=None, tool_calls=[], text="", usage=usage)
-            return
-
-        tool_calls = accumulated_tool_calls or []
-        assistant_message = (
-            {"role": "assistant", "content": "", "tool_calls": tool_calls} if tool_calls else last_message
-        )
-        usage = ChatUsage(
-            provider=self.name, model=self.model, latency_ms=latency_ms,
-            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, tool_call_count=len(tool_calls),
-        )
-        _log_call(usage)
-        yield StreamChunk(
-            done=True,
-            assistant_message=assistant_message,
-            tool_calls=tool_calls,
-            text=(last_message.get("content") or "").strip() if not tool_calls else "",
-            usage=usage,
+            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
+            "completion_tokens=%s tool_calls=%d cost_usd=%s",
+            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
+            usage.completion_tokens, usage.tool_call_count, usage.cost_usd,
         )
 
 
 def to_openrouter_messages(messages: list[dict]) -> list[dict]:
-    """Converts the Ollama-shaped message list /assistant builds
-    (`{"role": "tool", "tool_name": ..., "content": ...}` for a tool result,
-    `{"function": {"name", "arguments": dict}}` tool_calls with no id) into
-    the strict OpenAI-format messages OpenRouter's /chat/completions expects:
-    an assistant tool_calls entry needs an "id" plus a JSON-*string*
-    "arguments", and each tool-result message must carry the matching
-    "tool_call_id" instead of "tool_name". Ids are assigned fresh every round
-    (never reused across rounds) and matched to the "tool" messages that
-    follow in the same order - execute_tool_round appends tool results via
-    asyncio.gather, which preserves the calls' input order.
+    """Converts this service's own message list shape (`{"role": "tool",
+    "tool_name": ..., "content": ...}` for a tool result, `{"function":
+    {"name", "arguments": dict}}` tool_calls with no id) into the strict
+    OpenAI-format messages OpenRouter's /chat/completions expects: an
+    assistant tool_calls entry needs an "id" plus a JSON-*string* "arguments",
+    and each tool-result message must carry the matching "tool_call_id"
+    instead of "tool_name". Ids are assigned fresh every round (never reused
+    across rounds) and matched to the "tool" messages that follow in the same
+    order - execute_tool_round appends tool results via asyncio.gather, which
+    preserves the calls' input order.
 
     OpenAI-shaped system messages stay inline in the messages list (no
     separate top-level `system` field), so there is no system-extraction
@@ -295,10 +184,10 @@ def to_openrouter_messages(messages: list[dict]) -> list[dict]:
 
 def _openrouter_tool_calls(raw_tool_calls: list[dict] | None) -> list[dict]:
     """Normalizes an OpenRouter/OpenAI-shaped response's tool_calls (where
-    function.arguments is a JSON *string*) into the same
-    `{"function": {"name", "arguments": dict}}` shape OllamaProvider
-    produces, so main.py's loop and assistant_loop.execute_tool_round don't
-    need to know which provider answered."""
+    function.arguments is a JSON *string*) into this service's own
+    `{"function": {"name", "arguments": dict}}` shape, so main.py's loop and
+    assistant_loop.execute_tool_round don't need any provider-specific
+    handling."""
     import json
 
     if not raw_tool_calls:
@@ -315,23 +204,47 @@ def _openrouter_tool_calls(raw_tool_calls: list[dict] | None) -> list[dict]:
     return result
 
 
+def _is_retryable(exc: Exception) -> bool:
+    """Whether the SAME model is worth retrying once more: a timeout,
+    connection error, rate limit (429) or upstream 5xx. A 4xx like 400/401/404
+    means retrying the same model wastes a request - go straight to the
+    fallback model (if any) instead."""
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return isinstance(exc, (httpx.TimeoutException, httpx.TransportError))
+
+
+def _sniff_image_mime(image_bytes: bytes) -> str:
+    """Detects the image format from its magic bytes so analyze_image() can
+    build a correct data: URL. Defaults to image/jpeg (the most common camera
+    upload format) when nothing matches - OpenRouter's vision models decode
+    the bytes regardless of a slightly wrong declared mime type."""
+    if image_bytes[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    if image_bytes[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return "image/jpeg"
+
+
 class OpenRouterProvider:
-    """Runs a chat/completion call against a model served through
-    OpenRouter's OpenAI-compatible /chat/completions API - the sole
-    production provider this module was extended for (replacing Ollama for
-    text/tool-calling; Ollama stays available as an opt-in offline/dev
-    alternative, selected the same way via get_llm_provider()).
+    """Runs chat, streaming-chat and vision calls against OpenRouter's
+    OpenAI-compatible API - the sole inference backend this service depends
+    on. ANALYTICS_TOOLS is already OpenAI-shaped (`{"type": "function",
+    "function": {...}}`), so tool *schemas* pass through unchanged - only the
+    message list needs to_openrouter_messages() to add the tool_call ids /
+    JSON-string arguments the strict OpenAI format requires.
 
-    ANALYTICS_TOOLS is already OpenAI-shaped
-    (`{"type": "function", "function": {...}}`), so tool *schemas* pass
-    through unchanged - only the message list needs to_openrouter_messages()
-    to add the tool_call ids / JSON-string arguments the strict OpenAI
-    format requires (Ollama's own tool-calling is more lenient and never
-    needed this).
-
-    `fallback_model`, if set, is retried once (non-streaming only) when the
-    primary model errors - e.g. a temporary 429/5xx from OpenRouter or the
-    upstream model provider - using the same OpenRouter API key.
+    `fallback_model`, if set, is tried once (non-streaming only) when the
+    primary model fails after one retry - e.g. a persistent 429/5xx from
+    OpenRouter or the upstream model provider - using the same OpenRouter API
+    key. No fallback is ever hard-coded; it is entirely OPENROUTER_FALLBACK_MODEL.
 
     Reasoning is explicitly disabled (`"reasoning": {"enabled": false}`) on
     every call: several OpenRouter models (e.g. Qwen3.7 Flash, the default -
@@ -340,11 +253,7 @@ class OpenRouterProvider:
     `content` - confirmed live: the same tool-calling request that returned
     `finish_reason: "length"` with an empty `content`/no `tool_calls` at
     max_tokens=100 with reasoning left on returned a correct `tool_calls`
-    response in 15 completion tokens once reasoning was disabled. The
-    existing prompts/num_predict budgets in this service were tuned for
-    non-reasoning models (Ollama); this keeps that assumption true for
-    OpenRouter instead of risking every round silently starving on
-    `finish_reason: "length"`."""
+    response in 15 completion tokens once reasoning was disabled."""
 
     name = "openrouter"
 
@@ -357,11 +266,47 @@ class OpenRouterProvider:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
-    async def chat(
-        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float, temperature: float = 0.2
-    ) -> ChatResult:
+    async def _request_completion(self, payload: dict, timeout: float) -> tuple[dict, str]:
+        """POSTs /chat/completions: the primary model gets one retry on a
+        transient error (see _is_retryable), then the fallback model (if
+        configured) gets one attempt. Returns (response JSON, model that
+        actually answered). Raises the last exception if every attempt
+        fails."""
         import httpx
 
+        models_and_retry = [(self.model, True)]
+        if self._fallback_model:
+            models_and_retry.append((self._fallback_model, False))
+
+        last_exc: Exception | None = None
+        async with httpx.AsyncClient(timeout=timeout) as http_client:
+            for model, retry_once in models_and_retry:
+                attempts = 2 if retry_once else 1
+                for attempt in range(attempts):
+                    try:
+                        response = await http_client.post(
+                            f"{self._base_url}/chat/completions",
+                            headers=self._headers(),
+                            json={**payload, "model": model},
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        if not data.get("choices"):
+                            raise ValueError(f"OpenRouter response has no choices: {data!r}")
+                        return data, model
+                    except Exception as exc:  # noqa: BLE001 - fall through to retry/fallback/raise below
+                        last_exc = exc
+                        if attempt == 0 and retry_once and not _is_retryable(exc):
+                            break  # non-transient: skip the same-model retry, go to fallback
+                        continue
+
+        assert last_exc is not None
+        raise last_exc
+
+    async def chat(
+        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float,
+        temperature: float = 0.2, feature: str = "",
+    ) -> ChatResult:
         payload: dict[str, Any] = {
             "messages": to_openrouter_messages(messages),
             "max_tokens": num_predict,
@@ -372,33 +317,15 @@ class OpenRouterProvider:
             payload["tools"] = tools
 
         started = time.perf_counter()
-        models_to_try = [self.model] + ([self._fallback_model] if self._fallback_model else [])
-        last_exc: Exception | None = None
-        data: dict | None = None
-        used_model = self.model
-        async with httpx.AsyncClient(timeout=timeout) as http_client:
-            for model in models_to_try:
-                try:
-                    response = await http_client.post(
-                        f"{self._base_url}/chat/completions",
-                        headers=self._headers(),
-                        json={**payload, "model": model},
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                    used_model = model
-                    break
-                except Exception as exc:  # noqa: BLE001 - fall through to next model / re-raise below
-                    last_exc = exc
-                    continue
-
-        if data is None:
+        try:
+            data, used_model = await self._request_completion(payload, timeout)
+        except Exception as exc:
             usage = ChatUsage(
                 provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
-                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(last_exc),
+                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc), feature=feature,
             )
             _log_call(usage)
-            raise last_exc
+            raise
 
         latency_ms = (time.perf_counter() - started) * 1000
         choice_message = data["choices"][0]["message"]
@@ -410,6 +337,7 @@ class OpenRouterProvider:
             completion_tokens=usage_data.get("completion_tokens"),
             tool_call_count=len(tool_calls),
             cost_usd=usage_data.get("cost"),
+            feature=feature,
         )
         _log_call(usage)
         assistant_message = (
@@ -424,7 +352,8 @@ class OpenRouterProvider:
         )
 
     async def chat_stream(
-        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float, temperature: float = 0.2
+        self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float,
+        temperature: float = 0.2, feature: str = "",
     ) -> AsyncIterator[StreamChunk]:
         import json
         import httpx
@@ -444,11 +373,11 @@ class OpenRouterProvider:
         started = time.perf_counter()
         text_parts: list[str] = []
         # OpenRouter streams a tool call's arguments across many chunks, indexed
-        # by position - same "accumulate until the done chunk" problem
-        # OllamaProvider.chat_stream's comment describes for Ollama's own stream.
+        # by position - accumulate until the final usage-bearing chunk arrives.
         tool_call_chunks: dict[int, dict] = {}
         prompt_tokens: int | None = None
         completion_tokens: int | None = None
+        cost_usd: float | None = None
         try:
             async with httpx.AsyncClient(timeout=timeout) as http_client:
                 async with http_client.stream(
@@ -467,6 +396,7 @@ class OpenRouterProvider:
                         if usage_chunk:
                             prompt_tokens = usage_chunk.get("prompt_tokens")
                             completion_tokens = usage_chunk.get("completion_tokens")
+                            cost_usd = usage_chunk.get("cost")
                         choices = chunk.get("choices") or []
                         if not choices:
                             continue
@@ -488,7 +418,7 @@ class OpenRouterProvider:
         except Exception as exc:
             usage = ChatUsage(
                 provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
-                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc),
+                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc), feature=feature,
             )
             _log_call(usage)
             raise
@@ -511,6 +441,7 @@ class OpenRouterProvider:
         usage = ChatUsage(
             provider=self.name, model=self.model, latency_ms=latency_ms,
             prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, tool_call_count=len(tool_calls),
+            cost_usd=cost_usd, feature=feature,
         )
         _log_call(usage)
         yield StreamChunk(
@@ -521,28 +452,87 @@ class OpenRouterProvider:
             usage=usage,
         )
 
+    async def analyze_image(
+        self, image_bytes: bytes, prompt: str, *, max_tokens: int, timeout: float,
+        feature: str = "vision", temperature: float = 0.0,
+    ) -> tuple[dict, ChatUsage]:
+        """One image + one text prompt, JSON-object response. Returns
+        (parsed_json, usage). Raises VisionResponseError if the model's
+        content isn't valid JSON - callers decide how to degrade (main.py's
+        packing/receipt endpoints return HTTP 502; routes_cover_search.py
+        falls back to CLIP-only, never crashing the request).
 
-def get_llm_provider(
-    provider: str,
-    *,
-    ollama_host: str,
-    ollama_model: str,
-    openrouter_api_key: str = "",
-    openrouter_base_url: str | None = None,
-    openrouter_model: str = "",
-    openrouter_fallback_model: str | None = None,
-) -> OllamaProvider | OpenRouterProvider:
-    """Factory selecting the configured provider. Takes config as explicit
-    parameters (rather than reading os.getenv itself) so this module has no
-    dependency on main.py's env-parsing and stays independently testable."""
-    normalized = (provider or "ollama").strip().lower()
-    if normalized == "openrouter":
-        if not openrouter_api_key:
-            raise ValueError("LLM_PROVIDER=openrouter requires OPENROUTER_API_KEY to be set.")
-        return OpenRouterProvider(
-            api_key=openrouter_api_key,
-            base_url=openrouter_base_url or "https://openrouter.ai/api/v1",
-            model=openrouter_model,
-            fallback_model=openrouter_fallback_model,
+        Uses response_format={"type": "json_object"} rather than a strict
+        json_schema: OpenRouter's model listing for qwen/qwen3.7-flash does
+        not advertise `structured_outputs` support, only `response_format`,
+        so schema *validation* happens at the call site (Pydantic) instead of
+        being enforced upstream."""
+        import base64
+        import json
+
+        mime = _sniff_image_mime(image_bytes)
+        data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        payload: dict[str, Any] = {
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "reasoning": {"enabled": False},
+            "response_format": {"type": "json_object"},
+        }
+
+        started = time.perf_counter()
+        try:
+            data, used_model = await self._request_completion(payload, timeout)
+        except Exception as exc:
+            usage = ChatUsage(
+                provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
+                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc), feature=feature,
+            )
+            _log_call(usage)
+            raise
+
+        latency_ms = (time.perf_counter() - started) * 1000
+        content = (data["choices"][0]["message"].get("content") or "").strip()
+        usage_data = data.get("usage") or {}
+        usage = ChatUsage(
+            provider=self.name, model=used_model, latency_ms=latency_ms,
+            prompt_tokens=usage_data.get("prompt_tokens"),
+            completion_tokens=usage_data.get("completion_tokens"),
+            tool_call_count=0, cost_usd=usage_data.get("cost"), feature=feature,
         )
-    return OllamaProvider(host=ollama_host, model=ollama_model)
+        _log_call(usage)
+
+        try:
+            parsed = json.loads(content)
+        except (TypeError, ValueError) as exc:
+            raise VisionResponseError(f"vision response is not valid JSON: {content[:200]!r}") from exc
+        if not isinstance(parsed, dict):
+            raise VisionResponseError(f"vision response is not a JSON object: {content[:200]!r}")
+        return parsed, usage
+
+
+TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", TEXT_MODEL)
+VISION_MODEL = os.getenv("OPENROUTER_VISION_MODEL", TEXT_MODEL)
+
+
+@functools.lru_cache(maxsize=None)
+def get_openrouter_provider(model: str) -> OpenRouterProvider:
+    """Cached OpenRouterProvider for a given model - one HTTP client
+    "identity" per distinct model instead of every call site (main.py,
+    nlu.py, routes_cover_search.py) parsing its own copy of
+    OPENROUTER_API_KEY/OPENROUTER_BASE_URL/OPENROUTER_FALLBACK_MODEL.
+    Raises ValueError if OPENROUTER_API_KEY isn't set - callers already
+    catch and degrade (e.g. main.py's _call_text_llm_messages)."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY must be set to use OpenRouter.")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    fallback_model = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip() or None
+    return OpenRouterProvider(api_key=api_key, base_url=base_url, model=model, fallback_model=fallback_model)

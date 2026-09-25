@@ -33,7 +33,7 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 | 📦 **Service lớn nhất** | Inventory Service — ~28 route file (mua hàng, nhập/xuất kho) |
 | 🗄️ **Cơ sở dữ liệu** | PostgreSQL + pgvector (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
 | 🐳 **Triển khai** | Docker Compose — 14 container mặc định (AI, pgAdmin, seed demo, k6 là profile tùy chọn) |
-| 🤖 **AI** | OpenRouter (Qwen) là cloud LLM duy nhất (đã bỏ Anthropic/Groq) cho chat/tóm tắt/tool-calling; Ollama cho vision/OCR + embedding local, có circuit breaker tự chuyển sang cloud embedding khi Ollama lỗi; tìm kiếm hybrid semantic (pgvector) + keyword qua RRF |
+| 🤖 **AI** | OpenRouter (Qwen) là backend inference duy nhất (đã bỏ Anthropic/Groq/Ollama) cho chat/tóm tắt/tool-calling/vision-OCR/embedding — không cần GPU; CLIP local (CPU) cho visual similarity ảnh bìa; tìm kiếm hybrid semantic (pgvector) + keyword qua RRF |
 | 📱 **Mobile** | Expo/React Native — app cho nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán) |
 | 📨 **Event-driven** | RabbitMQ + transactional outbox (Inventory Service phát sự kiện, API Gateway relay qua Socket.IO) |
 | 📈 **Observability** | OpenTelemetry tracing (Tempo), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log tập trung) |
@@ -156,7 +156,7 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 - 📈 Observability: OpenTelemetry tracing (Tempo) cho các service Node.js, metric (Prometheus) + dashboard (Grafana), log tập trung (Loki/Promtail).
 - 🖥️ Web UI: giao diện quản trị, kho vận và customer portal trên React/Vite.
 - 📱 Mobile App: ứng dụng Expo/React Native — một app dùng chung cho cả nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán).
-- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, RabbitMQ, services, gateway, web, bộ observability, pgAdmin, Ollama.
+- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, RabbitMQ, services, gateway, web, bộ observability, pgAdmin. AI Service gọi OpenRouter qua HTTPS — không cần container GPU.
 
 ## 🏗️ Kiến Trúc Tổng Quan
 
@@ -181,7 +181,7 @@ flowchart LR
     PG[("🐘 PostgreSQL + pgvector")]
     REDIS["⚡ Redis"]
     MQ["🐰 RabbitMQ"]
-    OLLAMA["🦙 Ollama"]
+    OPENROUTER(["☁️ OpenRouter (Qwen) — chat/tool-calling/vision/embedding"])
     OBS["📈 Tempo / Prometheus / Grafana / Loki"]
 
     Client --> GW
@@ -192,7 +192,7 @@ flowchart LR
     AI --> PG
     AUTH --> REDIS
     INV --> REDIS
-    AI --> OLLAMA
+    AI -. "HTTPS (không cần GPU)" .-> OPENROUTER
 
     INV -. "outbox event" .-> MQ
     Core -. "traces / metrics / logs" .-> OBS
@@ -204,7 +204,7 @@ flowchart LR
 ```
 
 > [!TIP]
-> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)). Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway cũng consume sự kiện từ RabbitMQ, và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
+> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)). AI Service tự chạy CLIP (local, CPU) cho visual similarity ảnh bìa — không phải một service/container riêng nên không có node riêng trên sơ đồ. Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway cũng consume sự kiện từ RabbitMQ, và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
 
@@ -327,12 +327,12 @@ AI Service hỗ trợ tự động hóa nhập liệu và ra quyết định:
 
 - OCR hóa đơn/phiếu giao hàng khi nhập kho (`/scan-receipt`), lookup metadata theo ISBN (Google Books, Open Library, marketplace Fahasa/Tiki/Vinabook).
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
-- `llm_provider.py` **đã bỏ hẳn Anthropic và Groq** — OpenRouter (Qwen) là cloud provider duy nhất cho `/chat` và `/assistant`, chọn qua `LLM_PROVIDER=openrouter|ollama`; Ollama chỉ còn dùng cho local dev offline và cho vision/OCR.
+- `llm_provider.py` **đã bỏ hẳn Anthropic, Groq và Ollama** — OpenRouter (Qwen) là provider duy nhất cho `/chat`, `/assistant`, NLU và vision/OCR, qua `get_openrouter_provider()`.
 - `POST /ai/assistant` — chatbot hỗ trợ ra quyết định dành cho manager/admin: dùng tool-calling thật qua `llm_provider.py` để tự chọn gọi các endpoint `/analytics/*` rồi tổng hợp câu trả lời tiếng Việt kèm số liệu cụ thể. Trang web tương ứng: `/ai-assistant` (chỉ hiển thị cho ADMIN/WAREHOUSE_MANAGER).
 - 🌙 **Nightly briefing** — job chạy mỗi đêm (`nightly_briefing.py`, bật bằng `ENABLE_NIGHTLY_BRIEFING`), tự gọi 6 endpoint `/analytics/*` (quá hạn, phạt, rủi ro tồn kho, gợi ý nhập hàng, funnel reservation, gợi ý thanh lý), tóm tắt bằng LLM rồi tạo sẵn một **pending action** (`CREATE_REPORT_DRAFT`) để staff duyệt vào sáng hôm sau — không tự động publish gì cả.
-- 📷 **Tìm sách bằng ảnh bìa** — `POST /find-book-by-cover`: kết hợp visual embedding (CLIP) so khớp với gallery bìa sách đã index sẵn (`ai_cover_embeddings`) và OCR (Ollama vision) đọc tên sách/tác giả rồi so khớp catalog, trả về danh sách candidate kèm độ tin cậy (`confidence`) và bằng chứng từng tín hiệu (`evidence`). Dùng chung ở cả Web (modal cho staff) và Mobile (màn hình quét bìa cho khách hàng).
+- 📷 **Tìm sách bằng ảnh bìa** — `POST /find-book-by-cover`: kết hợp visual embedding (CLIP, local) so khớp với gallery bìa sách đã index sẵn (`ai_cover_embeddings`) và OCR (OpenRouter vision — Qwen) đọc tên sách/tác giả rồi so khớp catalog, trả về danh sách candidate kèm độ tin cậy (`confidence`) và bằng chứng từng tín hiệu (`evidence`). Dùng chung ở cả Web (modal cho staff) và Mobile (màn hình quét bìa cho khách hàng).
 - 🔎 **Tìm kiếm hybrid** — `pg_vector_store.py` (semantic qua pgvector) kết hợp `search_keyword` (full-text, không phân biệt dấu) qua **Reciprocal Rank Fusion (RRF)** trong `faq_retrieval.py`, thay vì chỉ semantic hoặc chỉ keyword.
-- 🧯 **Circuit breaker cho embedding** (`embeddings.py`) — mặc định dùng Ollama local để embed; nếu Ollama lỗi liên tiếp quá ngưỡng (`EMBED_BREAKER_THRESHOLD`) thì tự động chuyển sang `CloudEmbedder` (OpenRouter) trong thời gian cooldown (`EMBED_BREAKER_COOLDOWN_SECONDS`), rồi thử lại Ollama sau đó — đảm bảo AI service không "đứng hình" khi Ollama tạm thời không phản hồi.
+- 🔎 **Embedding** (`embeddings.py`) — OpenRouter (`qwen/qwen3-embedding-8b`, 768 chiều) là provider duy nhất cho semantic search; `embed_batch()`/`embed_text()` không bao giờ raise, lỗi thì trả `None` và caller tự degrade xuống keyword-only search.
 
 ### 📊 Analytics
 
@@ -560,10 +560,9 @@ Quy tắc nghiệp vụ:
 | 📜 Loki + Promtail | nội bộ | Gom log tập trung | Xem qua Grafana |
 | 📉 Grafana | **:3100** (host) | Dashboard trace/metric/log | Web UI |
 | 🛠️ pgAdmin | **:8080** (host, profile `tools`) | Quản trị database | Web UI |
-| 🦙 Ollama | 11434 (nội bộ, profile `ai`) | Local LLM runtime | inference qua service khác trong mạng Docker |
 
 > [!NOTE]
-> Chỉ **Web UI, API Gateway, RabbitMQ, Prometheus, Grafana, pgAdmin** được publish port ra host (`localhost`). Auth/Inventory/Borrow/Analytics/AI Service, PostgreSQL, Redis và Ollama **chỉ tồn tại trong mạng Docker nội bộ** — không truy cập trực tiếp được từ máy host, phải đi qua API Gateway hoặc `docker compose exec`.
+> Chỉ **Web UI, API Gateway, RabbitMQ, Prometheus, Grafana, pgAdmin** được publish port ra host (`localhost`). Auth/Inventory/Borrow/Analytics/AI Service, PostgreSQL và Redis **chỉ tồn tại trong mạng Docker nội bộ** — không truy cập trực tiếp được từ máy host, phải đi qua API Gateway hoặc `docker compose exec`. AI Service gọi OpenRouter ra ngoài qua HTTPS (không có container/port nào cho inference cục bộ).
 
 ## 🛠️ Công Nghệ Sử Dụng
 
@@ -595,9 +594,9 @@ Quy tắc nghiệp vụ:
 **🤖 AI**
 
 - FastAPI.
-- OpenRouter (Qwen) là cloud LLM duy nhất cho chat/tóm tắt/tool-calling (đã bỏ Anthropic/Groq); Ollama (`llava`) cho OCR ảnh/vision và embedding local.
-- pgvector cho tìm kiếm semantic, kết hợp keyword search qua Reciprocal Rank Fusion.
-- CLIP embedding cho tìm sách bằng ảnh bìa.
+- OpenRouter (Qwen) là backend inference duy nhất — chat/tóm tắt/tool-calling/NLU, vision/OCR (bìa sách, đóng gói, hóa đơn) và embedding, đều qua cùng một provider (đã bỏ Anthropic/Groq/Ollama, không cần GPU).
+- pgvector cho tìm kiếm semantic (embedding OpenRouter), kết hợp keyword search qua Reciprocal Rank Fusion.
+- CLIP embedding (local, CPU) cho tìm sách bằng ảnh bìa — độc lập với LLM.
 - OCR/metadata lookup (Google Books, Open Library, marketplace scraping).
 
 **🐳 DevOps & Observability**
@@ -627,7 +626,7 @@ Các biến quan trọng:
 - `ANALYTICS_SERVICE_URL`, `LOW_STOCK_THRESHOLD`
 - `VITE_API_BASE_URL`, `VITE_AUTH_BASE_URL`, `VITE_AI_BASE_URL`
 - `ALLOWED_ORIGINS`, `SOCKET_CORS_ORIGIN`
-- `OLLAMA_HOST`, `SUMMARY_MODEL` (chỉ cần khi bật profile AI)
+- `OPENROUTER_API_KEY`, `OPENROUTER_TEXT_MODEL` (chỉ cần khi bật profile AI — xem `.env.example`)
 
 ### 2️⃣ Chạy toàn bộ stack
 
@@ -646,12 +645,10 @@ docker compose up -d --build
 pnpm demo:seed
 ```
 
-AI là tính năng tùy chọn. Stack thư viện/kho vận mặc định không chờ Ollama. Khi chưa bật AI, Gateway vẫn healthy/ready và giao diện báo AI tạm thời không khả dụng. Bật AI sau khi nghiệp vụ lõi đã sẵn sàng:
+AI là tính năng tùy chọn. Stack thư viện/kho vận mặc định không phụ thuộc AI Service. Khi chưa bật AI, Gateway vẫn healthy/ready và giao diện báo AI tạm thời không khả dụng. Bật AI sau khi nghiệp vụ lõi đã sẵn sàng — chỉ cần `OPENROUTER_API_KEY` trong `.env`, không cần pull model hay GPU:
 
 ```powershell
-docker compose --profile ai up -d --build ai-service ollama
-docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
-docker compose exec ollama ollama pull nomic-embed-text
+docker compose --profile ai up -d --build ai-service
 ```
 
 pgAdmin chỉ bật khi cần quản trị DB:
@@ -862,11 +859,9 @@ ACCESS=1 TOTAL=1
 <details>
 <summary>Xem lệnh chạy &amp; kết quả</summary>
 
-Script này đăng nhập bằng tài khoản manager demo, gọi `POST /ai/assistant` qua API Gateway với các câu hỏi tiếng Việt, kiểm tra tool-calling thật sự được gọi (không hard-code intent), kiểm tra customer token bị chặn 403, và kiểm tra hành vi từ chối với câu hỏi ngoài phạm vi. Yêu cầu model `ASSISTANT_MODEL` đã được pull trong Ollama trước:
+Script này đăng nhập bằng tài khoản manager demo, gọi `POST /ai/assistant` qua API Gateway với các câu hỏi tiếng Việt, kiểm tra tool-calling thật sự được gọi (không hard-code intent), kiểm tra customer token bị chặn 403, và kiểm tra hành vi từ chối với câu hỏi ngoài phạm vi. Yêu cầu `OPENROUTER_API_KEY` đã được set trong `.env` của AI Service:
 
 ```powershell
-docker compose exec ollama ollama pull llama3.1:8b-instruct-q4_0
-docker compose exec ollama ollama pull nomic-embed-text
 node scripts\ai-assistant-integration.mjs
 ```
 

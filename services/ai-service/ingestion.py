@@ -28,7 +28,11 @@ _HEADING_RE = re.compile(r"^#{1,6} ", re.MULTILINE)
 
 
 def chunk_hash(text: str) -> str:
-    return embeddings.content_hash({"model": embeddings.EMBED_MODEL, "text": text})
+    # Identity = content + embedding model + dimensions (embeddings.EMBED_IDENTITY):
+    # a chunk embedded by a different model, or the same model at a different
+    # dimension count, lives in a different vector space and must never be
+    # treated as "unchanged" just because its text didn't change.
+    return embeddings.content_hash({"model": embeddings.EMBED_IDENTITY, "text": text})
 
 
 def chunk_markdown(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
@@ -95,14 +99,7 @@ async def _ingest_one(
     if not todo:
         return 0, len(texts)
 
-    # allow_cloud_fallback=False: duong GHI chi dung Ollama. Chunk embed bang
-    # model cloud se bi tag embedding_model khac, trong khi content_hash van
-    # tinh theo hang so EMBED_MODEL — lan ingest sau thay hash trung nen bo qua,
-    # va vector cloud khong bao gio duoc thay -> tai lieu mat hut khoi semantic
-    # search vinh vien. Bo qua tai lieu (nhu truoc Phase B) thi lan ingest sau,
-    # khi Ollama khoe lai, se nhat no len sach se.
-    embed_result = await asyncio.to_thread(
-        embeddings.embed_batch, [texts[i] for i in todo], allow_cloud_fallback=False)
+    embed_result = await asyncio.to_thread(embeddings.embed_batch, [texts[i] for i in todo])
     if embed_result is None:
         logger.warning("ingestion: embed that bai cho %s/%s, bo qua", corpus, source_id)
         return 0, len(texts)

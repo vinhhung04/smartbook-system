@@ -229,7 +229,7 @@ export function RecommendationsPage() {
           variant="no-data"
           icon={BookOpen}
           title="Chưa có gợi ý"
-          description={provider === "fallback" ? "AI chưa khả dụng. Vui lòng kiểm tra cấu hình ANTHROPIC_API_KEY hoặc kết nối Ollama." : "Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!"}
+          description={provider === "fallback" ? "AI chưa khả dụng. Vui lòng kiểm tra cấu hình OPENROUTER_API_KEY." : "Chưa có đủ dữ liệu để gợi ý. Hãy mượn thêm sách!"}
           className="bg-card rounded-[12px] border border-border py-12"
         />
       ) : (

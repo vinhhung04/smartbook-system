@@ -120,6 +120,37 @@ class PgVectorStoreTest(unittest.TestCase):
         first, second = asyncio.run(scenario())
         self.assertEqual(first, second)
 
+    def test_delete_chunks_except_model_removes_only_stale_rows(self):
+        async def scenario():
+            doc = await self.store.upsert_document(
+                corpus=self.vector_store.CORPUS_BOOK, source_id="test-b4",
+                title="Sach cu", content="Noi dung cu", content_hash="h1", metadata={})
+            await self.store.upsert_chunks([
+                self.vector_store.Chunk(
+                    doc, self.vector_store.CORPUS_BOOK, 0, "Noi dung cu", "c1",
+                    self._vec(1.0), "stale-model@768"),
+            ])
+            doc2 = await self.store.upsert_document(
+                corpus=self.vector_store.CORPUS_BOOK, source_id="test-b5",
+                title="Sach moi", content="Noi dung moi", content_hash="h1", metadata={})
+            await self.store.upsert_chunks([
+                self.vector_store.Chunk(
+                    doc2, self.vector_store.CORPUS_BOOK, 0, "Noi dung moi", "c1",
+                    self._vec(1.0), embeddings.EMBED_IDENTITY),
+            ])
+
+            deleted = await self.store.delete_chunks_except_model(embeddings.EMBED_IDENTITY)
+            remaining_stale = await self.store.existing_chunk_hashes(doc)
+            remaining_current = await self.store.existing_chunk_hashes(doc2)
+            import db
+            await db.engine.dispose()
+            return deleted, remaining_stale, remaining_current
+
+        deleted, remaining_stale, remaining_current = asyncio.run(scenario())
+        self.assertGreaterEqual(deleted, 1)
+        self.assertEqual(remaining_stale, {})
+        self.assertEqual(remaining_current, {0: "c1"})
+
     def test_keyword_ignores_dau(self):
         """unaccent: go khong dau van phai match noi dung co dau."""
         async def scenario():

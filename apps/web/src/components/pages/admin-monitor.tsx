@@ -114,7 +114,8 @@ function getMetadataRows(service: MonitorServiceHealth) {
   if (typeof response.service === 'string') rows.push({ label: 'Service', value: response.service });
   if (typeof response.redis === 'string') rows.push({ label: 'Redis', value: response.redis });
   if (typeof response.model === 'string') rows.push({ label: 'Model', value: response.model });
-  if (typeof response.ollama_host === 'string') rows.push({ label: 'Ollama', value: response.ollama_host });
+  if (typeof response.llm_provider === 'string') rows.push({ label: 'LLM Provider', value: response.llm_provider });
+  if (typeof response.embed_model === 'string') rows.push({ label: 'Embed Model', value: response.embed_model });
   if (typeof response.connectedSockets === 'number') rows.push({ label: 'Sockets', value: String(response.connectedSockets) });
 
   const databases = response.databases;

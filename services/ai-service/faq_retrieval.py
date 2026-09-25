@@ -21,7 +21,6 @@ import logging
 import os
 from typing import NamedTuple
 
-import ollama
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -33,18 +32,20 @@ from pg_vector_store import PgVectorStore
 
 logger = logging.getLogger("uvicorn.error")
 
-FAQ_EMBED_MODEL = embeddings.EMBED_MODEL
-FAQ_MATCH_THRESHOLD = float(os.getenv("FAQ_MATCH_THRESHOLD", "0.75"))
+# 0.75 was tuned for nomic-embed-text's cosine distribution. Verified live against
+# qwen/qwen3-embedding-8b (post-Ollama-removal migration): the correct document for a
+# real query scored ~0.39 cosine, with the best distractor at ~0.32 - Qwen3's short-text
+# similarity scores sit in a much lower/flatter range than nomic's. Re-ran
+# eval/eval_rag.py's INTERNAL_DOC cases live at both values: 0.75 gave R@5 0.45 (most
+# correct matches filtered out by the gate before RRF ever saw them); 0.3 gave R@5 0.85 -
+# above the pre-migration nomic baseline (0.775, eval/reports/rag_final_fixes_20260917_061603.md).
+FAQ_MATCH_THRESHOLD = float(os.getenv("FAQ_MATCH_THRESHOLD", "0.3"))
 FAQ_TOP_K = int(os.getenv("FAQ_TOP_K", "3"))
 
 
 class FAQMatch(NamedTuple):
     entry: dict
     score: float
-
-
-def embed_text(text: str, client: ollama.Client | None = None) -> list[float] | None:
-    return embeddings.embed_text(text, client=client)
 
 
 def _entry_from_hit(hit) -> dict:
@@ -82,8 +83,8 @@ def _per_call_store():
     return PgVectorStore(engine=engine), engine
 
 
-async def _find_relevant_async(query: str, top_k: int, threshold: float, client) -> list[FAQMatch]:
-    embed_result = await asyncio.to_thread(embed_text, query, client)
+async def _find_relevant_async(query: str, top_k: int, threshold: float) -> list[FAQMatch]:
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     if embed_result is None:
         return []
     store, engine = _per_call_store()
@@ -111,7 +112,6 @@ def find_relevant(
     query: str,
     top_k: int = FAQ_TOP_K,
     threshold: float = FAQ_MATCH_THRESHOLD,
-    client: ollama.Client | None = None,
 ) -> list[FAQMatch]:
     """Chu ky sync giu nguyen (AD-5): retrieval.py:254 goi ham nay qua
     asyncio.to_thread, nen no chay trong mot thread KHONG co event loop —
@@ -120,7 +120,7 @@ def find_relevant(
     if not query:
         return []
     try:
-        return asyncio.run(_find_relevant_async(query, top_k, threshold, client))
+        return asyncio.run(_find_relevant_async(query, top_k, threshold))
     except Exception as exc:
         logger.warning("faq_retrieval: tim kiem that bai: %s", type(exc).__name__)
         return []

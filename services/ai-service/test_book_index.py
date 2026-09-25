@@ -50,7 +50,7 @@ BOOKS = [
 class HybridSearchTest(unittest.TestCase):
     """search_books gio hop nhat semantic va keyword qua vector_store + RRF.
 
-    Vector cua sach khong con den tu viec embed lai text qua client Ollama gia —
+    Vector cua sach khong con den tu viec embed lai text qua provider gia —
     ruot moi cua semantic_scores/_score_and_rank_books chi doc tu vector store
     (da duoc ingestion.py dong bo tu truoc), nen moi test o day tu seed
     InMemoryVectorStore truc tiep bang upsert_document/upsert_chunks.
@@ -75,7 +75,7 @@ class HybridSearchTest(unittest.TestCase):
         self.vector_store.set_store(None)
 
     def test_semantic_scores_aligned_with_input_order(self):
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
             scores = run(book_index.semantic_scores(BOOKS, "lap trinh"))
         self.assertEqual(len(scores), len(BOOKS))
         self.assertAlmostEqual(scores[0], 1.0)
@@ -89,7 +89,7 @@ class HybridSearchTest(unittest.TestCase):
         extra = BOOKS + [{"id": "b-unknown", "title": "Chua ingest", "author": "",
                           "category": "", "isbn": "", "quantity": 0,
                           "description": "", "summary_vi": ""}]
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
             scores = run(book_index.semantic_scores(extra, "lap trinh"))
         self.assertEqual(len(scores), len(extra))
         self.assertEqual(scores[-1], 0.0)
@@ -99,7 +99,7 @@ class HybridSearchTest(unittest.TestCase):
         # same vector simulates a query that is topically aligned with book 2
         # regardless of shared keywords, proving the semantic half of the fusion
         # can surface a result on its own.
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="openrouter")):
             results = run(assistant_tools._score_and_rank_books(BOOKS, "sach day tre ky nang song", 5))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b2")
@@ -109,7 +109,7 @@ class HybridSearchTest(unittest.TestCase):
         # isolates the keyword half: book 3's title is a direct hit, nothing
         # else in the catalog shares any token with the query.
         query = "Lich su the gioi"
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 0.0], model="test-model", provider="openrouter")):
             results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b3")
@@ -122,7 +122,7 @@ class HybridSearchTest(unittest.TestCase):
         # appears in any book's indexed text either. The isbn short-circuit in
         # _score_and_rank_books must still put book 1 at rank 1.
         query = BOOKS[0]["isbn"]
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="openrouter")):
             results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b1")
@@ -140,7 +140,7 @@ class HybridSearchTest(unittest.TestCase):
         # not the bare isbn alone — the short-circuit must still fire via
         # substring containment, not exact string equality.
         query = "Tim sach ISBN 9786041234567 con hang khong?"
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 1.0], model="test-model", provider="openrouter")):
             results = run(assistant_tools._score_and_rank_books(BOOKS, query, 5))
         self.assertTrue(results)
         self.assertEqual(results[0]["id"], "b1")
@@ -161,7 +161,7 @@ class HybridSearchTest(unittest.TestCase):
         self.assertEqual([book["id"] for book in results], ["b1"])
 
     def test_unrelated_query_returns_nothing(self):
-        # No embedding signal (Ollama down) and a query that shares no token
+        # No embedding signal (embed call failed) and a query that shares no token
         # with any book's indexed content: both rankings come back empty, so
         # the RRF fusion of two empty lists must also be empty.
         with mock.patch.object(embeddings, "embed_text", return_value=None):

@@ -57,10 +57,10 @@ const SUGGESTED_QUESTIONS = [
   { icon: TrendingUp, tone: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400', text: 'Tỷ lệ chuyển đổi reservation sang mượn sách hiện tại ra sao?' },
 ];
 
-// Real answers take 60-120s+ on this deployment's Ollama, which only partially offloads
-// the model to GPU (VRAM-constrained shared laptop GPU) and re-processes the full system
-// prompt + tool schema set every tool-calling round. A single static "loading" message
-// reads as frozen well before that; these stages set honest expectations as time passes.
+// A multi-round tool-calling answer (OpenRouter/Qwen) can still take several seconds
+// per round across up to ASSISTANT_MAX_TOOL_ROUNDS rounds. A single static "loading"
+// message reads as frozen well before that; these stages set honest expectations as
+// time passes.
 const LOADING_STAGES = [
   { atSeconds: 0, label: 'Đang phân tích câu hỏi...' },
   { atSeconds: 8, label: 'Đang chọn công cụ phân tích phù hợp...' },

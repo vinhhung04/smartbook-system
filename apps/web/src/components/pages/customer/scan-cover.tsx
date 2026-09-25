@@ -11,9 +11,9 @@ import { CustomerPageHeader } from './_shared/customer-page-header';
 
 // Visual matching (CLIP) is fast in practice (~2s/image, measured against the
 // real gallery) — this timer just gives that step a legible "done" moment.
-// OCR (Ollama vision, CPU) is the real bottleneck and has no progress signal
-// from the server, so its row stays "in progress" until the actual response
-// arrives — never faked past that point.
+// OCR (OpenRouter vision) has no progress signal from the server, so its row
+// stays "in progress" until the actual response arrives — never faked past
+// that point.
 const VISUAL_STEP_MS = 3000;
 const SLOW_HINT_AFTER_MS = 12000;
 const SCAN_LINE_TRAVEL_PX = 256; // matches the fixed h-64 preview container

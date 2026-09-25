@@ -78,6 +78,26 @@ class InMemoryVectorStoreTest(unittest.TestCase):
         ]))
         self.assertEqual(run(self.store.existing_chunk_hashes(doc_a)), {0: "c1-new"})
 
+    def test_delete_chunks_except_model_removes_only_stale_model_chunks(self):
+        doc_a, doc_b = self._seed()  # both chunks embedded with model "m"
+        run(self.store.upsert_chunks([
+            Chunk(doc_b, vector_store.CORPUS_BOOK, 1, "Them mot chunk moi", "c3", [0.2, 0.8], "new-model"),
+        ]))
+
+        deleted = run(self.store.delete_chunks_except_model("new-model"))
+
+        self.assertEqual(deleted, 2)  # the two "m"-tagged chunks from _seed()
+        remaining = [
+            row["embedding_model"]
+            for slot in self.store._chunks.values() for row in slot.values()
+        ]
+        self.assertEqual(remaining, ["new-model"])
+
+    def test_delete_chunks_except_model_is_a_noop_when_nothing_is_stale(self):
+        self._seed()
+        deleted = run(self.store.delete_chunks_except_model("m"))
+        self.assertEqual(deleted, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
