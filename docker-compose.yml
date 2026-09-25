@@ -323,9 +323,12 @@ services:
   ai-service:
     profiles: ["ai"]
     build: ./services/ai-service
+    # No hard dependency on ollama: the default LLM/assistant provider is OpenRouter
+    # (see OPENROUTER_*/LLM_PROVIDER below) — ollama only backs the optional vision/OCR
+    # and embedding paths, which already degrade gracefully when it's unreachable. Ollama
+    # is slow to become ready (model pulls) and has occasionally hung entirely on this
+    # stack; blocking ai-service's startup on it took down chat/analytics too.
     depends_on:
-      ollama:
-        condition: service_started
       db:
         condition: service_healthy
       tempo:

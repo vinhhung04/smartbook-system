@@ -296,7 +296,7 @@ export function ExceptionReportsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
+                      <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
                     </td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
                     <td className="px-4 py-3 text-[12px]">

@@ -256,16 +256,29 @@ export function PackingPage() {
     [activeSessionId, clearRecordCountdown, stopActiveSession, finalizeComplete, handleVideoUploadFailed],
   );
 
+  // A packing task freshly opened via scan-invoice (or still sitting unclaimed in the
+  // queue) has no assigned_packer_id — canAccessTask only lets managers/admins act on an
+  // unassigned task, so a regular staff member would hit 403 on their very first item
+  // scan. Self-claim it here, once, the same way Picking/Putaway already do; skip it when
+  // someone is already assigned (self or otherwise) so this never contests a manager's or
+  // another staff member's claim.
+  const claimIfUnassigned = useCallback(async (task: PackingTask): Promise<PackingTask> => {
+    if (task.assigned_packer_id || !task.id) return task;
+    const { task: claimed } = await packingService.claimTask(task.id);
+    return claimed;
+  }, []);
+
   const refreshTask = useCallback(
     async (taskId: string) => {
       supersedeActiveSessionIfNeeded(taskId);
       const { task: detail } = await packingService.getTaskDetail(taskId);
-      setTask(detail as ActivePackingTask);
-      if (detail.status !== "COMPLETED" && detail.id) {
-        startSession(detail.id);
+      const claimed = await claimIfUnassigned(detail);
+      setTask(claimed as ActivePackingTask);
+      if (claimed.status !== "COMPLETED" && claimed.id) {
+        startSession(claimed.id);
       }
     },
-    [supersedeActiveSessionIfNeeded, startSession],
+    [supersedeActiveSessionIfNeeded, startSession, claimIfUnassigned],
   );
 
   const handleScanInvoice = useCallback(
@@ -273,12 +286,13 @@ export function PackingPage() {
       setLoadingInvoice(true);
       try {
         const result = await packingService.scanInvoice(code);
-        if (result.task.id) supersedeActiveSessionIfNeeded(result.task.id);
-        setTask(result.task as ActivePackingTask);
+        const claimedTask = await claimIfUnassigned(result.task);
+        if (claimedTask.id) supersedeActiveSessionIfNeeded(claimedTask.id);
+        setTask(claimedTask as ActivePackingTask);
         setLastScanFeedback(null);
         toast.success(`Đã tải đơn ${result.outbound_order.outbound_number}`);
-        if (result.task.status !== "COMPLETED" && result.task.id) {
-          startSession(result.task.id);
+        if (claimedTask.status !== "COMPLETED" && claimedTask.id) {
+          startSession(claimedTask.id);
         }
         void loadQueue();
       } catch (error) {
@@ -287,7 +301,7 @@ export function PackingPage() {
         setLoadingInvoice(false);
       }
     },
-    [supersedeActiveSessionIfNeeded, startSession, loadQueue],
+    [supersedeActiveSessionIfNeeded, startSession, loadQueue, claimIfUnassigned],
   );
 
   const openPendingTask = useCallback(

@@ -398,6 +398,37 @@ async function createGoodsReceiptFromInvoice(req, res) {
         });
       }
 
+      // A prior invoice for this same PO may have left an open shortage report. Once every
+      // line it flagged as short is now fully received (across this delivery plus whatever
+      // was already received), close it out — otherwise it sits at ACKNOWLEDGED forever even
+      // though the shortage is gone, and staff have to remember to resolve it by hand.
+      const openShortageReports = await tx.supplier_shortage_reports.findMany({
+        where: { purchase_order_id: po.id, status: { in: ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"] } },
+        include: { supplier_shortage_report_items: true },
+      });
+      for (const sourceReport of openShortageReports) {
+        const deliveredNowByPoItemId = new Map(
+          receiptItems.map((item) => [String(item.purchase_order_item_id), item.quantity]),
+        );
+        const stillShort = sourceReport.supplier_shortage_report_items.some((reportItem) => {
+          const poItem = poItemsById.get(String(reportItem.purchase_order_item_id));
+          const deliveredNow = deliveredNowByPoItemId.get(String(reportItem.purchase_order_item_id)) || 0;
+          const remaining = Number(poItem?.ordered_qty || 0) - Number(poItem?.received_qty || 0) - deliveredNow;
+          return remaining > 0;
+        });
+        if (!stillShort) {
+          await tx.supplier_shortage_reports.update({
+            where: { id: sourceReport.id },
+            data: { status: "RESOLVED", resolved_at: new Date(), updated_at: new Date() },
+          });
+          await audit(tx, userId, "SUPPLIER_SHORTAGE_RESOLVED", "SUPPLIER_SHORTAGE_REPORT", sourceReport.id, {
+            purchase_order_id: po.id,
+            resolved_by_invoice_id: invoice.id,
+            goods_receipt_id: receipt.id,
+          });
+        }
+      }
+
       await tx.supplier_delivery_invoices.update({
         where: { id: invoice.id },
         data: { status: shortageItems.length > 0 ? "SHORTAGE_REPORTED" : "RECEIVED", updated_at: new Date() },

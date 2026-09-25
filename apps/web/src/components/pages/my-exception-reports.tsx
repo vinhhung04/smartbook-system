@@ -59,6 +59,10 @@ function statusVariant(status: string) {
   return getStatusVariant("exceptionReport", status);
 }
 
+function statusLabel(status: string) {
+  return STATUS_FILTERS.find((entry) => entry.value === status)?.label ?? status;
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
   const d = new Date(value);
@@ -369,7 +373,7 @@ export function MyExceptionReportsPage() {
                         <TableCell className="text-[13px]">{r.expected_qty ?? "-"}</TableCell>
                         <TableCell className="text-[13px]">{r.actual_qty ?? "-"}</TableCell>
                         <TableCell>
-                          <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
+                          <StatusBadge label={statusLabel(r.status)} variant={statusVariant(r.status)} dot />
                         </TableCell>
                         <TableCell className="text-[12px] text-muted-foreground">{formatDate(r.created_at)}</TableCell>
                       </TableRow>

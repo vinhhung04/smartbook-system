@@ -2701,6 +2701,22 @@ async function confirmPickingLine(req, res) {
                 },
               });
             }
+
+            // The branches above only ever touch rootOrderId's status. A REPICK order is
+            // its own outbound_orders row with its own status column — once ITS line is
+            // fully picked, that column must move off "PICKING" too, or OUTBOUND_READY_STATUS
+            // (used by the picking queue) keeps matching it and it lingers in staff task
+            // lists forever, long after there's nothing left to pick on it.
+            if (isRepickOrder && allDone && order.status !== "READY_TO_SHIP") {
+              await tx.outbound_orders.update({
+                where: { id: order.id },
+                data: {
+                  status: "READY_TO_SHIP",
+                  processed_by_user_id: scope.currentUserId,
+                  updated_at: new Date(),
+                },
+              });
+            }
           }
 
           // Auto-create repick when the PICK task completes with short-picked items.
