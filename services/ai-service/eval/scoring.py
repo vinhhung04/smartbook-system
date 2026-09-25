@@ -445,3 +445,76 @@ def aggregate_retrieval_scores(results: list[dict]) -> dict:
         "recall_at_5": round(mean([recall_at_k(r["retrieved_ids"], r["expected_ids"], 5) for r in results]), 4),
         "mrr": round(mean([mean_reciprocal_rank(r["retrieved_ids"], r["expected_ids"]) for r in results]), 4),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Abstention scoring (eval_rag.py + retrieval_confidence.py). recall_at_k()
+# above always scores a no-answer case (empty expected_ids) as 0 and folds it
+# into the same average as answerable cases - useful for "did the top-5
+# contain the answer" but blind to whether the system correctly said "I don't
+# know" for a question with no answer in the corpus. These functions score
+# that abstention decision on its own.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _abstained(result: dict) -> bool:
+    """A case counts as abstained if the confidence layer said NO_EVIDENCE, or
+    - for a result dict with no `decision` key (e.g. an older report, or a run
+    with RAG_ABSTENTION_ENABLED=false) - if nothing at all came back."""
+    if result.get("decision") is not None:
+        return result["decision"] == "NO_EVIDENCE" or not result["retrieved_ids"]
+    return not result["retrieved_ids"]
+
+
+def abstention_metrics(results: list[dict]) -> dict:
+    """`results` items need `expected_ids`, `retrieved_ids`, and optionally
+    `decision` (a retrieval_confidence.py decision string). A no-answer case
+    is one with empty `expected_ids` (the corpus has no real answer to it) -
+    same convention eval_rag.py's dataset already uses."""
+    no_answer = [r for r in results if not r["expected_ids"]]
+    answerable = [r for r in results if r["expected_ids"]]
+
+    no_answer_correct = sum(1 for r in no_answer if _abstained(r))
+    no_answer_accuracy = round(no_answer_correct / len(no_answer), 4) if no_answer else None
+    false_positive_rate = round(1 - no_answer_accuracy, 4) if no_answer_accuracy is not None else None
+
+    answerable_wrongly_abstained = sum(1 for r in answerable if _abstained(r))
+    false_negative_rate = round(answerable_wrongly_abstained / len(answerable), 4) if answerable else None
+
+    abstained_total = sum(1 for r in results if _abstained(r))
+    coverage = round(1 - abstained_total / len(results), 4) if results else None
+
+    # Abstention as a binary classifier over "does this question have no real
+    # answer": true positive = correctly abstained on a genuine no-answer case.
+    true_positive = no_answer_correct
+    false_positive = answerable_wrongly_abstained
+    false_negative = len(no_answer) - no_answer_correct
+    precision = round(true_positive / (true_positive + false_positive), 4) if (true_positive + false_positive) else None
+    recall = round(true_positive / (true_positive + false_negative), 4) if (true_positive + false_negative) else None
+    f1 = round(2 * precision * recall / (precision + recall), 4) if precision and recall and (precision + recall) else None
+
+    return {
+        "no_answer_count": len(no_answer), "answerable_count": len(answerable),
+        "no_answer_accuracy": no_answer_accuracy, "false_positive_rate": false_positive_rate,
+        "false_negative_rate": false_negative_rate, "coverage": coverage,
+        "abstention_precision": precision, "abstention_recall": recall, "abstention_f1": f1,
+    }
+
+
+def answerable_recall(results: list[dict]) -> dict:
+    """aggregate_retrieval_scores() restricted to genuinely answerable cases -
+    the Recall@k a caller would see if the dataset had no no-answer cases at
+    all, so it isn't dragged down by cases that always score 0."""
+    return aggregate_retrieval_scores([r for r in results if r["expected_ids"]])
+
+
+def selective_accuracy(results: list[dict], k: int = 1) -> float | None:
+    """recall_at_k averaged over only the cases the system chose to answer
+    (didn't abstain) - the "selective prediction" complement to Coverage: how
+    good are the answers actually given, not how many are given. A no-answer
+    case the system wrongly answered still scores 0 here (recall_at_k of an
+    empty expected_ids list), correctly penalizing a false positive."""
+    answered = [r for r in results if not _abstained(r)]
+    if not answered:
+        return None
+    return round(sum(recall_at_k(r["retrieved_ids"], r["expected_ids"], k) for r in answered) / len(answered), 4)

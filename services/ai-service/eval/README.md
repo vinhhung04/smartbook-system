@@ -7,6 +7,65 @@ or the full running stack) that are slow and non-deterministic, so a
 red/green pass/fail in CI would be noise, not signal. Run them yourself
 whenever you want a number.
 
+## 0. RAG retrieval + abstention — `eval_rag.py` / `calibrate_rag.py`
+
+Calls the retrieval layer directly (`assistant_tools._score_and_rank_books_with_confidence`
+for `BOOK_METADATA`, `faq_retrieval.find_relevant_with_confidence` for `INTERNAL_DOC`) for
+every entry in `rag_dataset.json` — not through HTTP, so this measures retrieval, not
+auth/conversation/cache.
+
+**Requirements:** a live Postgres with pgvector (`DATABASE_URL`), `OPENROUTER_API_KEY`, and
+`EVAL_AUTH_TOKEN` (a JWT for `/api/books`) for the `BOOK_METADATA` cases — without it those
+cases see an empty catalog and score 0.
+
+```bash
+cd services/ai-service
+python eval/eval_rag.py                          # abstention on (matches production)
+python eval/eval_rag.py --abstention off          # raw RRF, no NO_EVIDENCE suppression - reproduces the pre-abstention baseline
+python eval/eval_rag.py --abstention off --dump-signals   # also writes rag_signals_<ts>.json for calibrate_rag.py
+```
+
+Reports Recall@1/3/5, MRR (as before), plus retrieval_confidence.py's abstention metrics:
+No-answer Accuracy, False Positive/Negative Rate, Coverage, Abstention Precision/Recall/F1,
+Answerable Recall (Recall restricted to genuinely-answerable cases, not dragged down by the
+no-answer cases that always score 0), and Selective Accuracy (accuracy over only the cases
+the system chose to answer). See `eval/scoring.py`'s `abstention_metrics()` /
+`answerable_recall()` / `selective_accuracy()` for the exact definitions, and
+`../test_eval_scoring.py` for their unit tests.
+
+`rag_dataset.json` has 130 cases now (75 `BOOK_METADATA`, 55 `INTERNAL_DOC`; 20 no-answer
+cases per corpus — up from 5 — so the abstention metrics above aren't computed from a
+handful of cases).
+
+### Calibrating `retrieval_confidence.py`'s thresholds — `calibrate_rag.py`
+
+Reads a signals dump (from `--dump-signals`, taken with `--abstention off` so
+`retrieved_ids` is the raw, unfiltered ranking even for cases the *current* thresholds
+would abstain on) and grid-searches `tau_evidence`/`tau_confident` **offline** - no
+OpenRouter/DB calls per candidate - separately for each corpus (their cosine
+distributions differ). Splits the dataset into a `calib` half (used to pick the
+threshold) and a `test` half (used to report it), via a fixed-seed shuffle, so the
+reported numbers aren't the same data that chose the threshold.
+
+```bash
+python eval/eval_rag.py --abstention off --dump-signals
+python eval/calibrate_rag.py eval/reports/rag_signals_<timestamp>.json
+```
+
+Picks the candidate with the best No-answer Accuracy (tie-broken by Abstention F1) among
+those whose `calib`-split Recall@5 doesn't fall more than `RECALL_TOLERANCE` (0.02) below
+the baseline recorded in `calibrate_rag.BASELINE_RECALL_AT_5` (read from
+`eval/reports/rag_20260925_041036.md`, the report cited when
+`FAQ_MATCH_THRESHOLD`/`BOOK_SEMANTIC_THRESHOLD` were lowered to 0.3) — i.e. it will not trade
+away the recall gain that migration bought to reduce false abstentions. Writes
+`eval/reports/calibration_<timestamp>.md` with the full threshold grid, so a rejected
+candidate's numbers are visible too, not just the winner's.
+
+Update `retrieval_confidence.BOOK_CONFIDENCE`/`DOC_CONFIDENCE`'s defaults (or the
+`BOOK_CONF_*`/`DOC_CONF_*` env vars) once you've run this against real data - the values
+shipped in `retrieval_confidence.py` are provisional, seeded from the cosine ranges already
+documented in `faq_retrieval.py`/`book_index.py`'s comments, not from a calibration run.
+
 ## 1. ISBN extraction accuracy — `eval_isbn_extraction.py`
 
 Calls `lookup_book_by_isbn()` from `main.py` in-process (real network calls
@@ -68,6 +127,32 @@ python eval/metadata_intelligence/run_experiments.py --dataset <frozen-120-editi
 ```
 
 The runner includes three offline B5 ablations by default: evidence gate disabled, edition gate disabled, and fixed source-priority fusion. Use [the annotation guide](metadata_intelligence/ANNOTATION_GUIDE.md) and schema before creating the final dataset. The pilot manifest is illustrative only and is excluded from thesis results. The existing live `eval_isbn_extraction.py` remains the current-system baseline; run it separately with the same ISBN subset and report it as a live, non-frozen comparison.
+
+## 1c. Field-level Metadata Evidence Fusion — `metadata_fusion/run_eval.py`
+
+Offline, fixture-based (no network, no Postgres) - unlike `eval_isbn_extraction.py`, provider
+metadata is supplied directly by `metadata_fusion/dataset.json` (18 cases: single/multi-source,
+conflicting publisher/pageCount/date, accent/case author-spelling differences, description-only-
+one-source, category merge, low-reliability web-only, "marketplace unavailable"/"source timed
+out" - both represented as an absent provider entry, since fusion cannot and should not tell
+those apart from a provider that simply had nothing to say). This isolates the fusion step
+(`isbn_fusion.py`, via `main._build_isbn_intelligence()`) from retrieval timing/budget and the
+ISBN checksum validator, which `test_isbn_field_level_retrieval.py` and main.py's ISBN
+validation tests already cover.
+
+```bash
+cd services/ai-service
+python eval/metadata_fusion/run_eval.py
+```
+
+Runs both `ISBN_FUSION_MODE` values ("prior": the original single-highest-reliability-source
+rule; "evidence": the new fusion) over the same dataset and reports, per mode: Field
+Accuracy/Precision/Recall, Coverage, Missing-field Detection Accuracy, and Conflict Detection
+Accuracy (case-level exact match) plus Precision/Recall (field-level) - so the report shows the
+before/after this task is meant to demonstrate. Scored with `scoring.field_matches()` (the same
+accent/case-insensitive fuzzy matcher `eval_isbn_extraction.py` uses), never with
+`isbn_fusion.py`'s own normalizer, so the eval can't mark itself correct for free. Writes
+`eval/reports/metadata_fusion_<timestamp>.md`.
 
 ## 2. Assistant tool-selection accuracy — `eval_assistant_tools.py`
 

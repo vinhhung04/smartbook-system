@@ -86,6 +86,23 @@ def test_search_books_extracts_results():
     assert items[0]["value"] == 4
 
 
+def test_search_books_no_evidence_surfaces_a_caveat_and_no_book_rows():
+    result = {"query": "python", "results": [], "retrievalStatus": "NO_EVIDENCE", "retrievalConfidence": 0.1}
+    items = extract_evidence("search_books", result)
+    assert len(items) == 1
+    assert items[0]["metric"] == "retrievalStatus"
+
+
+def test_search_books_uncertain_prepends_a_caveat_before_the_book_rows():
+    result = {
+        "query": "python", "retrievalStatus": "UNCERTAIN", "retrievalConfidence": 0.4,
+        "results": [{"title": "Sách D", "quantity": 4, "author": "Tác giả"}],
+    }
+    items = extract_evidence("search_books", result)
+    assert items[0]["metric"] == "retrievalConfidence"
+    assert items[1]["label"] == "Sách D"
+
+
 def test_borrow_trends_extracts_totals_and_peak_day():
     result = [
         {"date": "2026-09-01", "loans": 5, "returns": 3, "reservations": 1},

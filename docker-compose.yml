@@ -359,6 +359,8 @@ services:
       - OPENROUTER_EMBED_MODEL=${OPENROUTER_EMBED_MODEL:-qwen/qwen3-embedding-8b}
       - OPENROUTER_EMBED_DIMENSIONS=${OPENROUTER_EMBED_DIMENSIONS:-768}
       - OPENROUTER_EMBED_TIMEOUT_SECONDS=${OPENROUTER_EMBED_TIMEOUT_SECONDS:-30}
+      # RAG abstention (retrieval_confidence.py, sau RRF) - xem .env.example
+      - RAG_ABSTENTION_ENABLED=${RAG_ABSTENTION_ENABLED:-true}
       - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}
@@ -370,6 +372,9 @@ services:
       # Field-level retrieval: chỉ gọi marketplace/web cho field còn thiếu (mặc định tắt, chờ eval)
       - ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL=${ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:-false}
       - ENABLE_METADATA_INTELLIGENCE_V2=${ENABLE_METADATA_INTELLIGENCE_V2:-false}
+      # Field-level Metadata Evidence Fusion (isbn_fusion.py) - "prior" rolls back to the
+      # old single-highest-reliability-source rule - see eval/metadata_fusion/run_eval.py
+      - ISBN_FUSION_MODE=${ISBN_FUSION_MODE:-evidence}
       - ISBN_LOOKUP_TOTAL_BUDGET_SECONDS=${ISBN_LOOKUP_TOTAL_BUDGET_SECONDS:-45}
       - ISBN_INCOMPLETE_CACHE_TTL_SECONDS=${ISBN_INCOMPLETE_CACHE_TTL_SECONDS:-600}
       - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-30}

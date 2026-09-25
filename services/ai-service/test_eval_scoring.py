@@ -355,6 +355,77 @@ class RetrievalMetricsTest(unittest.TestCase):
         self.assertAlmostEqual(agg["mrr"], (1.0 + 1 / 3) / 2, places=4)
 
 
+class AbstentionMetricsTest(unittest.TestCase):
+    def test_correctly_abstained_no_answer_case_counts_toward_accuracy(self):
+        results = [{"expected_ids": [], "retrieved_ids": [], "decision": "NO_EVIDENCE"}]
+        metrics = scoring.abstention_metrics(results)
+        self.assertEqual(metrics["no_answer_accuracy"], 1.0)
+        self.assertEqual(metrics["false_positive_rate"], 0.0)
+
+    def test_no_answer_case_answered_anyway_is_a_false_positive(self):
+        results = [{"expected_ids": [], "retrieved_ids": ["x"], "decision": "UNCERTAIN"}]
+        metrics = scoring.abstention_metrics(results)
+        self.assertEqual(metrics["no_answer_accuracy"], 0.0)
+        self.assertEqual(metrics["false_positive_rate"], 1.0)
+
+    def test_answerable_case_wrongly_abstained_is_a_false_negative(self):
+        results = [{"expected_ids": ["a"], "retrieved_ids": [], "decision": "NO_EVIDENCE"}]
+        metrics = scoring.abstention_metrics(results)
+        self.assertEqual(metrics["false_negative_rate"], 1.0)
+
+    def test_answerable_case_answered_correctly_is_not_penalized(self):
+        results = [{"expected_ids": ["a"], "retrieved_ids": ["a"], "decision": "CONFIDENT_MATCH"}]
+        metrics = scoring.abstention_metrics(results)
+        self.assertEqual(metrics["false_negative_rate"], 0.0)
+        self.assertEqual(metrics["coverage"], 1.0)
+
+    def test_decision_missing_falls_back_to_emptiness(self):
+        results = [{"expected_ids": [], "retrieved_ids": []}]
+        metrics = scoring.abstention_metrics(results)
+        self.assertEqual(metrics["no_answer_accuracy"], 1.0)
+
+    def test_precision_recall_f1_over_a_mixed_set(self):
+        results = [
+            {"expected_ids": [], "retrieved_ids": [], "decision": "NO_EVIDENCE"},       # TP
+            {"expected_ids": [], "retrieved_ids": ["x"], "decision": "UNCERTAIN"},      # FP is the mirror: answerable wrongly abstained; here it's a no-answer wrongly answered (FN for abstention)
+            {"expected_ids": ["a"], "retrieved_ids": ["a"], "decision": "CONFIDENT_MATCH"},  # correctly answered
+            {"expected_ids": ["b"], "retrieved_ids": [], "decision": "NO_EVIDENCE"},     # wrongly abstained (FP for abstention)
+        ]
+        metrics = scoring.abstention_metrics(results)
+        # TP=1 (first row), FP=1 (last row, answerable wrongly abstained), FN=1 (second row, no-answer wrongly answered)
+        self.assertEqual(metrics["abstention_precision"], 0.5)
+        self.assertEqual(metrics["abstention_recall"], 0.5)
+        self.assertAlmostEqual(metrics["abstention_f1"], 0.5)
+
+
+class AnswerableRecallTest(unittest.TestCase):
+    def test_excludes_no_answer_cases_from_the_average(self):
+        results = [
+            {"expected_ids": [], "retrieved_ids": []},
+            {"expected_ids": ["a"], "retrieved_ids": ["a"]},
+        ]
+        agg = scoring.answerable_recall(results)
+        self.assertEqual(agg["count"], 1)
+        self.assertEqual(agg["recall_at_1"], 1.0)
+
+
+class SelectiveAccuracyTest(unittest.TestCase):
+    def test_only_answered_cases_are_scored(self):
+        results = [
+            {"expected_ids": ["a"], "retrieved_ids": ["a"], "decision": "CONFIDENT_MATCH"},
+            {"expected_ids": ["b"], "retrieved_ids": [], "decision": "NO_EVIDENCE"},  # abstained, excluded
+        ]
+        self.assertEqual(scoring.selective_accuracy(results, k=1), 1.0)
+
+    def test_none_when_everything_abstained(self):
+        results = [{"expected_ids": ["a"], "retrieved_ids": [], "decision": "NO_EVIDENCE"}]
+        self.assertIsNone(scoring.selective_accuracy(results))
+
+    def test_wrong_answer_on_a_no_answer_case_scores_zero_not_excluded(self):
+        results = [{"expected_ids": [], "retrieved_ids": ["x"], "decision": "UNCERTAIN"}]
+        self.assertEqual(scoring.selective_accuracy(results, k=1), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

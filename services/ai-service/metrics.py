@@ -30,3 +30,20 @@ isbn_provider_calls = Counter(
     "ISBN lookup provider calls by phase and outcome",
     ["provider", "phase", "status"],
 )
+
+# retrieval_confidence.py's three-way decision, by corpus - lets a dashboard
+# show the no-answer rate (NO_EVIDENCE / total) directly instead of only
+# learning about it from an eval report.
+ai_retrieval_decisions_total = Counter(
+    "ai_retrieval_decisions_total",
+    "RAG retrieval_confidence.py decisions by corpus and decision",
+    ["corpus", "decision"],
+)
+
+# isbn_fusion.py's per-field outcome - lets a dashboard show which fields most
+# often end up CONFLICTED/LOW_CONFIDENCE/MISSING across real lookups.
+ai_isbn_field_status_total = Counter(
+    "ai_isbn_field_status_total",
+    "ISBN Intelligence field-level status by field and status",
+    ["field", "status"],
+)

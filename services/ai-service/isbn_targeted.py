@@ -20,6 +20,11 @@ PROVIDER_CAPABILITY: dict[str, frozenset[str]] = {
     # _parse_web_search_metadata: only labelled title | author | publisher | year snippets.
     "webSearch": frozenset({"title", "authors", "publisher", "publishedDate"}),
 }
+# Plural alias matching the name used in the Evidence Fusion design docs
+# (docs/SERVICES/AI_SERVICE.md) - same object, so a change to one is a change
+# to both; kept as an alias rather than a copy to avoid the two drifting apart.
+PROVIDER_CAPABILITIES = PROVIDER_CAPABILITY
+
 PROVIDER_COST: dict[str, str] = {
     "tiki": "cheap", "vinabook": "cheap", "fahasa": "expensive", "webSearch": "last_resort",
 }

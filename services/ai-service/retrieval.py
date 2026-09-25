@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 import faq_retrieval
+import retrieval_confidence
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -248,17 +249,29 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             "sources": sources,
             "warnings": warnings,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "retrieval_status": retrieval_confidence.NO_EVIDENCE,
+            "retrieval_confidence": 0.0,
+            "reason_codes": [],
         }
         try:
-            faq_matches = await asyncio.to_thread(
-                faq_retrieval.find_relevant, intent_info.get("query") or ""
+            faq_matches, confidence_result = await asyncio.to_thread(
+                faq_retrieval.find_relevant_with_confidence, intent_info.get("query") or ""
             )
         except Exception:
-            # find_relevant is documented never to raise; belt-and-braces so a
-            # bug in the embedding layer can never turn /chat into a 500.
+            # find_relevant_with_confidence is documented never to raise;
+            # belt-and-braces so a bug in the embedding layer can never turn
+            # /chat into a 500.
             return empty_envelope
-        if not faq_matches:
-            return empty_envelope
+        # NO_EVIDENCE: do not hand the LLM "the nearest thing we have" for a
+        # question the corpus has no real answer to (see retrieval_confidence.py) -
+        # same empty envelope as today, just reached via the confidence decision
+        # instead of an incidentally-empty match list.
+        if not faq_matches or confidence_result.decision == retrieval_confidence.NO_EVIDENCE:
+            return {
+                **empty_envelope,
+                "retrieval_confidence": confidence_result.confidence,
+                "reason_codes": list(confidence_result.reason_codes),
+            }
 
         for match in faq_matches:
             sources.append({
@@ -278,7 +291,12 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
         faq_lines = [
             f"- {match.entry['question']}: {match.entry['answer']}" for match in faq_matches
         ]
-        summary = "Cau hoi thuong gap lien quan:\n" + "\n".join(faq_lines)
+        summary_lead = (
+            "Co mot so ket qua gan dung nhung do tin cay chua cao, can doi chieu truoc khi tra loi chac chan:\n"
+            if confidence_result.decision == retrieval_confidence.UNCERTAIN
+            else "Cau hoi thuong gap lien quan:\n"
+        )
+        summary = summary_lead + "\n".join(faq_lines)
 
         return {
             "summary": summary,
@@ -286,6 +304,9 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             "sources": sources,
             "warnings": warnings,
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "retrieval_status": confidence_result.decision,
+            "retrieval_confidence": confidence_result.confidence,
+            "reason_codes": list(confidence_result.reason_codes),
         }
 
     if not auth_header:

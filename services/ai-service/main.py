@@ -24,14 +24,17 @@ from intent import (
     BORROW_TREND_QUERY,
     DASHBOARD_SUMMARY_QUERY,
     FINE_SUMMARY_QUERY,
+    GENERAL_QUERY,
     LOW_STOCK_QUERY,
     OVERDUE_LOAN_QUERY,
     REORDER_SUGGESTION_QUERY,
     RESERVATION_QUERY,
     TOP_BORROWED_BOOKS_QUERY,
     detect_intent,
+    is_information_seeking,
     normalize_text,
 )
+import retrieval_confidence
 from nlu import _has_action_surface, _is_complex_message, classify_user_message
 from rag import (
     RAG_SYSTEM_RULES,
@@ -93,7 +96,7 @@ from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
 from prometheus_fastapi_instrumentator import Instrumentator
-from metrics import isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
+from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -1648,6 +1651,7 @@ from isbn_coverage import (  # noqa: E402  (deterministic-intelligence constants
     ISBN_INTELLIGENCE_FIELDS, ISBN_QUALITY_WEIGHTS, ISBN_SOURCE_ORDER, analyze_field_coverage,
 )
 from isbn_targeted import MAX_ROUNDS, PROVIDER_MIN_SECONDS, ProviderLedger, plan_targeted_retrieval  # noqa: E402
+import isbn_fusion  # noqa: E402
 
 
 def _normalize_evidence_value(value):
@@ -1663,8 +1667,48 @@ def _has_evidence_value(value) -> bool:
     return bool(value) if isinstance(value, list) else value not in (None, "")
 
 
+# "evidence" (default): normalize candidates and fuse agreeing sources via
+# isbn_fusion.fuse_field() - see that module for the full rationale. "prior":
+# the original single-highest-reliability-source rule, kept reachable for
+# eval/metadata_fusion/run_eval.py's before/after comparison and as a rollback.
+ISBN_FUSION_MODE = os.getenv("ISBN_FUSION_MODE", "evidence").strip().lower()
+
+
+def _select_field_prior(field: str, confirmations: list[dict]) -> dict:
+    """The original selection rule (unchanged): the single highest-reliability
+    source wins outright, confidence is that source's reliability discounted by
+    how much of the reliability-weighted responses disagreed with it."""
+    selected = max(confirmations, key=lambda item: reliability(item["source"], field)) if confirmations else None
+    if not selected:
+        return {
+            "value": None, "selectedSource": None, "confidence": 0.0, "agreementCount": 0,
+            "conflictCount": 0, "alternatives": [], "reasonCodes": [], "candidates": [], "evidence": [],
+        }
+
+    selected_normalized = _normalize_evidence_value(selected["value"])
+    agreement = sum(
+        reliability(item["source"], field)
+        for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized
+    ) / sum(reliability(item["source"], field) for item in confirmations)
+    # A single provider is useful but cannot be as strong as corroborated data.
+    corroboration = 0.7 + (0.3 * agreement)
+    confidence = round(min(1.0, reliability(selected["source"], field) * corroboration), 3)
+    alternatives = [
+        {"source": item["source"], "value": item["value"]}
+        for item in confirmations
+        if item is not selected and _normalize_evidence_value(item["value"]) != selected_normalized
+    ]
+    agreement_count = sum(1 for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized)
+    return {
+        "value": selected["value"], "selectedSource": selected["source"], "confidence": confidence,
+        "agreementCount": agreement_count, "conflictCount": len(alternatives), "alternatives": alternatives,
+        "reasonCodes": [], "candidates": [], "evidence": [],
+    }
+
+
 def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_statuses: dict[str, dict]) -> dict:
-    """Select metadata and attach explainable, deterministic evidence."""
+    """Select metadata and attach explainable, deterministic evidence. See
+    ISBN_FUSION_MODE for the two selection rules this can run."""
     metadata: dict = {}
     field_evidence: dict = {}
     field_confidence: dict = {}
@@ -1675,43 +1719,41 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
         for source in ISBN_SOURCE_ORDER:
             value = (provider_metadata.get(source) or {}).get(field)
             if _has_evidence_value(value):
-                item = {"source": source, "value": value}
-                source_url = (provider_metadata.get(source) or {}).get("sourceUrl")
+                provider_data = provider_metadata.get(source) or {}
+                item = {
+                    "source": source, "value": value,
+                    "extractionMethod": isbn_fusion.infer_method(source, provider_data.get("sourceFetchMode")),
+                }
+                source_url = provider_data.get("sourceUrl")
                 if source_url:
                     item["sourceUrl"] = source_url
                 confirmations.append(item)
 
-        selected = max(confirmations, key=lambda item: reliability(item["source"], field)) if confirmations else None
-        metadata[field] = selected["value"] if selected else ([] if field in {"authors", "categories"} else None)
+        fused = (
+            _select_field_prior(field, confirmations) if ISBN_FUSION_MODE == "prior"
+            else isbn_fusion.fuse_field(field, confirmations)
+        )
+        metadata[field] = fused["value"] if fused["selectedSource"] else ([] if field in {"authors", "categories"} else None)
         field_evidence[field] = {
             "selectedValue": metadata[field],
-            "selectedSource": selected["source"] if selected else None,
+            "selectedSource": fused["selectedSource"],
             "confirmations": confirmations,
-            "selectionReason": {"sourceReliability": reliability(selected["source"], field) if selected else 0, "agreementCount": 0, "conflictCount": 0},
+            "selectionReason": {
+                "sourceReliability": reliability(fused["selectedSource"], field) if fused["selectedSource"] else 0,
+                "agreementCount": fused["agreementCount"], "conflictCount": fused["conflictCount"],
+            },
         }
-        if not selected:
-            field_confidence[field] = 0.0
-            continue
-
-        selected_normalized = _normalize_evidence_value(selected["value"])
-        responding = [item for item in confirmations]
-        agreement = sum(
-            reliability(item["source"], field)
-            for item in responding if _normalize_evidence_value(item["value"]) == selected_normalized
-        ) / sum(reliability(item["source"], field) for item in responding)
-        # A single provider is useful but cannot be as strong as corroborated data.
-        corroboration = 0.7 + (0.3 * agreement)
-        field_confidence[field] = round(min(1.0, reliability(selected["source"], field) * corroboration), 3)
-
-        alternatives = [
-            {"source": item["source"], "value": item["value"]}
-            for item in confirmations
-            if item is not selected and _normalize_evidence_value(item["value"]) != selected_normalized
-        ]
-        if alternatives:
-            conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})
-        field_evidence[field]["selectionReason"]["agreementCount"] = sum(1 for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized)
-        field_evidence[field]["selectionReason"]["conflictCount"] = len(alternatives)
+        # Additive provenance from isbn_fusion.py (Chức năng 2.16) - absent
+        # entirely in "prior" mode, which never populates these.
+        if fused["reasonCodes"]:
+            field_evidence[field]["reasonCodes"] = fused["reasonCodes"]
+        if fused["candidates"]:
+            field_evidence[field]["candidates"] = fused["candidates"]
+        if fused["evidence"]:
+            field_evidence[field]["evidence"] = fused["evidence"]
+        field_confidence[field] = fused["confidence"]
+        if fused["alternatives"]:
+            conflicts.append({"field": field, "selectedValue": metadata[field], "alternatives": fused["alternatives"]})
 
     quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
     quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
@@ -2619,6 +2661,10 @@ def _attach_coverage_fields(result: dict, intelligence: dict, trace: dict | None
         "fieldStatus": coverage["fieldStatus"],
         "missingFields": coverage["missingFields"],
         "lowConfidenceFields": coverage["lowConfidenceFields"],
+        # Already computed by analyze_field_coverage() but never surfaced before -
+        # a CONFLICTED field also shows up in fieldStatus, but a caller wanting
+        # "which fields disagree" had to filter fieldStatus itself.
+        "conflictedFields": coverage["conflictedFields"],
         "needsEnrichment": coverage["needsEnrichment"],
     })
     if trace is None:
@@ -2649,6 +2695,7 @@ def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
     ISBN, coverage/quality numbers and provider names - never keys or provider bodies."""
     coverage = (result.get("metadataCoverage") or {}).get("ratio")
     retrieval = result.get("retrieval") or {}
+    field_evidence = result.get("fieldEvidence") or {}
     payload = {
         "isbn": result.get("isbn"),
         "mode": "field-level" if trace else "legacy",
@@ -2663,12 +2710,19 @@ def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
         "stopReason": retrieval.get("stopReason"),
         "providerCalls": retrieval.get("providerCalls"),
         "elapsedMs": result.get("processingTimeMs"),
+        # Evidence Fusion observability (Chức năng 2) - counts only, never field
+        # values or provider response bodies.
+        "conflictCount": len(result.get("conflicts") or []),
+        "evidenceCount": sum(len(e.get("confirmations") or []) for e in field_evidence.values()),
+        "sourcesConsulted": [s["name"] for s in (result.get("sources") or []) if s.get("status") == "SUCCESS"],
     }
     logger.info("isbn_lookup %s", json.dumps(payload, ensure_ascii=False))
     try:
         isbn_lookup_duration.labels(payload["mode"]).observe((result.get("processingTimeMs") or 0) / 1000)
         for provider, entry in ((trace or {}).get("ledger") or {}).items():
             isbn_provider_calls.labels(provider, entry["phase"], entry["status"]).inc()
+        for field, status in (result.get("fieldStatus") or {}).items():
+            ai_isbn_field_status_total.labels(field, status).inc()
     except Exception:  # metrics must never break a lookup
         logger.debug("isbn metrics update failed", exc_info=True)
 
@@ -3266,6 +3320,16 @@ async def _generate_book_summary(req: BookSummaryRequest):
 # AI Chat — Trợ lý ảo SmartBook
 # ────────────────────────────────────────────────────────────────────────────────
 
+# Fixed reply for /chat when retrieval_confidence.py decides NO_EVIDENCE on an
+# information-seeking GENERAL_QUERY message (see chat()) - the corpus has no
+# real answer, so the LLM is skipped entirely rather than risk it inventing one
+# from an empty [RAG CONTEXT] block (Chức năng 1.4: no hallucination on weak
+# retrieval). A greeting/small-talk message with the same NO_EVIDENCE decision
+# still reaches the LLM below - see is_information_seeking().
+GENERAL_QUERY_ABSTENTION_REPLY = (
+    "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này."
+)
+
 CHAT_SYSTEM_PROMPT = (
     "Bạn là **SmartBook AI** — trợ lý ảo thông minh chuyên biệt cho hệ thống quản lý thư viện SmartBook.\n\n"
 
@@ -3321,6 +3385,9 @@ ASSISTANT_SYSTEM_PROMPT = (
     "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (thông tin cá nhân khách hàng, thời tiết, chứng khoán, "
     "tin tức...), từ chối lịch sự, ngắn gọn, KHÔNG bịa câu trả lời và KHÔNG gọi tool nào.\n"
     "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n"
+    "- search_books trả kèm retrievalStatus: NO_EVIDENCE nghĩa là catalog không có sách phù hợp — nói rõ điều đó, "
+    "KHÔNG gợi ý sách khác thay thế. UNCERTAIN nghĩa là kết quả chỉ gần đúng — trình bày như một gợi ý chưa chắc "
+    "chắn, không khẳng định như sự thật.\n"
     "- Nếu câu hỏi chứa NHIỀU yêu cầu dữ liệu khác nhau, hãy gọi TẤT CẢ tool cần thiết TRONG CÙNG MỘT LƯỢT.\n"
     "- Ví dụ: \"KPI hiện tại và các khoản quá hạn\" → gọi đồng thời get_dashboard_kpis VÀ get_overdue_summary.\n\n"
 
@@ -3567,6 +3634,27 @@ async def chat(request: Request, req: ChatRequest):
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
+
+    # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
+    # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
+    # stop it from inventing an answer. A greeting/small-talk message with the
+    # same decision (is_information_seeking() false) still reaches the LLM
+    # below, since there is nothing to hallucinate about there.
+    if (
+        intent_info.get("intent") == GENERAL_QUERY
+        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
+        and is_information_seeking(req.message)
+    ):
+        return {
+            "reply": GENERAL_QUERY_ABSTENTION_REPLY,
+            "ai_provider": "abstention",
+            "intent": intent_info.get("intent"),
+            "context_sources": [],
+            "retrieval_warnings": [],
+            "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+            "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
+        }
+
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
@@ -4444,6 +4532,14 @@ async def chat_stream(request: Request, req: ChatRequest):
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
+
+    # See the identical check in /chat above.
+    abstain = (
+        intent_info.get("intent") == GENERAL_QUERY
+        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
+        and is_information_seeking(req.message)
+    )
+
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
@@ -4537,6 +4633,16 @@ async def chat_stream(request: Request, req: ChatRequest):
         return reply_text, pending_action_data
 
     async def event_generator():
+        if abstain:
+            yield _sse("token", {"text": GENERAL_QUERY_ABSTENTION_REPLY})
+            yield _sse("done", {
+                "reply": GENERAL_QUERY_ABSTENTION_REPLY, "ai_provider": "abstention",
+                "intent": intent_info.get("intent"), "context_sources": [], "retrieval_warnings": [],
+                "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+                "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
+            })
+            return
+
         if cached_reply:
             yield _sse("token", {"text": cached_reply})
             yield _sse("done", {"reply": cached_reply, "ai_provider": "cached", **metadata})

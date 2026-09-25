@@ -115,6 +115,23 @@ def _evidence_reorder_suggestions(result: dict) -> list[dict]:
 
 def _evidence_search_books(result: dict) -> list[dict]:
     items = []
+    # retrievalStatus (assistant_tools.search_books, via retrieval_confidence.py)
+    # must reach the model as text, not just sit unused in the JSON payload -
+    # otherwise a weak/absent match still gets presented as a normal result
+    # (Chức năng 1: "Không hallucinate khi retrieval yếu").
+    status = result.get("retrievalStatus")
+    if status == "NO_EVIDENCE":
+        items.append(_item(
+            "Không tìm thấy trong catalog", "search_books", "retrievalStatus", "NO_EVIDENCE", "",
+            description="Catalog không có sách nào đủ liên quan đến truy vấn này — không được bịa hoặc gợi ý sách khác.",
+        ))
+        return items
+    if status == "UNCERTAIN":
+        items.append(_item(
+            "Độ tin cậy chưa cao", "search_books", "retrievalConfidence",
+            result.get("retrievalConfidence"), "",
+            description="Kết quả bên dưới chỉ gần đúng — trình bày là chưa chắc chắn, không khẳng định như sự thật.",
+        ))
     for book in (result.get("results") or [])[:3]:
         if not isinstance(book, dict) or "title" not in book:
             continue

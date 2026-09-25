@@ -1,0 +1,4093 @@
+[
+  {
+    "id": "bm-001",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234567",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "retrieved_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-002",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234570",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "2d75502e-c16c-4c28-9ff8-2a294b457fd7"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-003",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234572",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "retrieved_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "6a5ab918-e542-4fb5-b355-a219e899f616"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-004",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9780060883287",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "831b7fc9-a6bb-4918-8770-b29b77217c9a",
+      "d6b3e59a-ed9d-41d0-9043-84c5ae9184d9"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-005",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9781400079278",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "retrieved_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "6a5ab918-e542-4fb5-b355-a219e899f616",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-006",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786041234574",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "retrieved_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "2d75502e-c16c-4c28-9ff8-2a294b457fd7"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-007",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9786042389001",
+    "expected_ids": [
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "retrieved_ids": [
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "d6b3e59a-ed9d-41d0-9043-84c5ae9184d9",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-008",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 9780593135204",
+    "expected_ids": [
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "retrieved_ids": [
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "a8efb6b2-7751-4dc5-9c3e-54a4b0b00cab",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-009",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách có tựa đề 'Nhà Giả Kim' của Paulo Coelho",
+    "expected_ids": [
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+    ],
+    "retrieved_ids": [
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "f4f0e7d0-ee28-4acd-a70c-4f1707325352",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7036149678459795,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-010",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách 'Mắt Biếc' của Nguyễn Nhật Ánh còn không?",
+    "expected_ids": [
+      "cb780777-916e-4d15-a3d7-a321436d9ea9"
+    ],
+    "retrieved_ids": [
+      "cb780777-916e-4d15-a3d7-a321436d9ea9",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "d736b4be-0e40-4157-ae69-8322c83a2c39"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7348430156707764,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-011",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách 'Dune - Xứ Cát' của Frank Herbert",
+    "expected_ids": [
+      "8702650d-2a96-42fc-8e5c-9872ad55400e"
+    ],
+    "retrieved_ids": [
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "2f7a6bba-a705-41af-bc76-3297f8f3551a",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "f4f0e7d0-ee28-4acd-a70c-4f1707325352",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7749624982498601,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-012",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935235244603",
+    "expected_ids": [
+      "646f7364-013d-4848-aa62-b1f2b2099544"
+    ],
+    "retrieved_ids": [
+      "646f7364-013d-4848-aa62-b1f2b2099544",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb",
+      "2d75502e-c16c-4c28-9ff8-2a294b457fd7",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "a8efb6b2-7751-4dc5-9c3e-54a4b0b00cab",
+      "234068a3-3910-44bd-8574-0c521a440b14"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-013",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935086855348",
+    "expected_ids": [
+      "26a9abaf-f277-496d-b082-374983ede77a"
+    ],
+    "retrieved_ids": [
+      "26a9abaf-f277-496d-b082-374983ede77a",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "a8efb6b2-7751-4dc5-9c3e-54a4b0b00cab",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "a4468945-8101-44d9-a957-ccc46866f294",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-014",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách 'Người Đàn Ông Mang Tên OVE' của Fredrik Backman",
+    "expected_ids": [
+      "9d889004-907e-45bb-9a20-31fb7e74bf32"
+    ],
+    "retrieved_ids": [
+      "9d889004-907e-45bb-9a20-31fb7e74bf32",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "463658e9-cf90-4e53-9536-852cd550fbb1",
+      "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7795044183731079,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-015",
+    "corpus": "BOOK_METADATA",
+    "question": "Tìm sách ISBN 8935235244177",
+    "expected_ids": [
+      "efc23f75-42c5-488b-9f9f-6238a083c737"
+    ],
+    "retrieved_ids": [
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "ISBN_EXACT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": "ISBN_EXACT"
+    }
+  },
+  {
+    "id": "bm-016",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào viết về đói nghèo và bất công xã hội thời phong kiến không?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "retrieved_ids": [
+      "bd4f36f9-6298-49b3-b903-12c89835d8c3",
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "f3699258-5ed4-409b-8f5b-c7809b77ef00",
+      "205ec491-f420-4209-b811-e78d509ef66b",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.115,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.36892200615769655,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-017",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một nhân vật nông thôn cố thoát khỏi cuộc sống nghèo khó nhưng cuối cùng thất bại?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "retrieved_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "831b7fc9-a6bb-4918-8770-b29b77217c9a",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "77f6e125-fa10-4993-ba7e-666a48d21de7"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6317177414894104,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-018",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể một bí mật đau lòng trong một gia đình Việt Nam trước cách mạng?",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "retrieved_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb",
+      "9c7dce89-5f60-43ae-a0dc-e7e12aef6d6f"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.463,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5780779295586925,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-019",
+    "corpus": "BOOK_METADATA",
+    "question": "Truyện ngắn nào nói về một gia đình phải đối mặt với sự thật đau lòng về chính mình?",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "retrieved_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "701ef460-8590-4fc8-a73c-16eaa661a5d9",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "29697aed-d5f7-41cc-a550-5c354c4694e4",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "a4468945-8101-44d9-a957-ccc46866f294"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.426,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5554980205147871,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-020",
+    "corpus": "BOOK_METADATA",
+    "question": "Tập thơ nào viết về tình yêu và quê hương đất nước?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "419bd1ca-ad0d-4334-958b-c3eda948c11a",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "fde4387f-783f-484d-9863-1454ecf2dbc6",
+      "8e51e48a-5837-4fb3-b22e-32380196564d"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.432,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5591489672660828,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-021",
+    "corpus": "BOOK_METADATA",
+    "question": "Có tập thơ nào nói về đời sống và con người Việt Nam không?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8e51e48a-5837-4fb3-b22e-32380196564d",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.478,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5870367042444182,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-022",
+    "corpus": "BOOK_METADATA",
+    "question": "Câu chuyện cổ tích Việt Nam nào nói về hóa thân và giấc mơ sau khi chết?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "retrieved_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.434,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5604360103607178,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-023",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể sự tích cổ tích với motif tình yêu bị trả thù?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "retrieved_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "77f6e125-fa10-4993-ba7e-666a48d21de7",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "26b85215-358d-4302-8eeb-574553866b22"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.35,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.509863971488006,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-024",
+    "corpus": "BOOK_METADATA",
+    "question": "Cuốn sách nào kể về tuổi thơ nông thôn Việt Nam đầy biến động, gia đình và hy vọng?",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "retrieved_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.398,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5389266335324436,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-025",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào nói về đời sống nông thôn với nhiều biến động về tình yêu?",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "retrieved_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.412,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5473339883884194,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-026",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào lấy bối cảnh Tokyo cuối thập niên 1960, kể về tình yêu và mất mát của một chàng trai?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "retrieved_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6260416694295907,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-027",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về hành trình trưởng thành của một chàng trai tên Toru Watanabe?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "retrieved_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "46bb7207-4ed9-4989-8b84-3e63be02fa76",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.495,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5972103236442997,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-028",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một gia tộc trải qua bảy thế hệ ở một thị trấn hư cấu tên Macondo?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "b4722dab-a17d-4381-8532-a4ac6de7ed90"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7276605367660522,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-029",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm văn học nào nói về gia đình Buendia?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "29697aed-d5f7-41cc-a550-5c354c4694e4"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.46,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5760389566421509,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-030",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào viết về tuổi học trò với nhiều sự trớ trêu và hạnh phúc?",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "retrieved_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "26b85215-358d-4302-8eeb-574553866b22",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "a8efb6b2-7751-4dc5-9c3e-54a4b0b00cab",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.412,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5473394067681199,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-031",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào kể về thanh niên sống ở đô thị với những kỷ niệm vui buồn?",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "retrieved_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6252701356523998,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-032",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào phân tích tâm lý và tính cách của người Việt trong đời sống hiện đại?",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "retrieved_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "de712574-7a17-401b-9cf6-16aa0e3d4f51",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7869056463241577,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-033",
+    "corpus": "BOOK_METADATA",
+    "question": "Có cuốn sách nào nghiên cứu về hành vi và tính cách con người Việt Nam không?",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "retrieved_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "ee2b16f6-6945-42a3-a187-98fd3688f45f",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb",
+      "1ece2b63-d5bd-4132-a99e-42926849a019"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.7045979499816895,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-034",
+    "corpus": "BOOK_METADATA",
+    "question": "Tiểu thuyết nào có một cậu bé tên Nakata có thể nói chuyện với mèo?",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "retrieved_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "985f4880-37b7-4ac0-9492-2150af4f518a",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6446662545204346,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-035",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào kể về một ông già hay ăn cắp vặt tên Hoshino?",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "retrieved_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "ee2b16f6-6945-42a3-a187-98fd3688f45f",
+      "77f6e125-fa10-4993-ba7e-666a48d21de7",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.475,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5852232473822578,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-036",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của tác giả Nam Cao?",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "retrieved_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d",
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.278,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.46653871138509273,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-037",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm nào của Xuân Diệu?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "c3b888e3-9a25-408d-91e9-4639c2d82f1c"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "419bd1ca-ad0d-4334-958b-c3eda948c11a",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.314,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.48811227083206177,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-038",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của nhà văn Tô Hoài?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "retrieved_ids": [
+      "46bb7207-4ed9-4989-8b84-3e63be02fa76",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "fde4387f-783f-484d-9863-1454ecf2dbc6"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.258,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.45506733655929565,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-039",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của Haruki Murakami?",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "5b1493c9-fc87-4fb9-b29d-e71242f0243e"
+    ],
+    "retrieved_ids": [
+      "5b1493c9-fc87-4fb9-b29d-e71242f0243e",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "646f7364-013d-4848-aa62-b1f2b2099544",
+      "234068a3-3910-44bd-8574-0c521a440b14"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.455,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5729071243349994,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-040",
+    "corpus": "BOOK_METADATA",
+    "question": "Tác phẩm đoạt giải Nobel Văn học của Gabriel Garcia Marquez là gì?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "10c718ff-e5d8-4b12-b56a-5f40afe9bb12",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "ff530ce0-b493-464d-b48e-4fb70c01f1bb",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.254,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.45225170254707336,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-041",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của nhà văn Nguyễn Nhật Ánh?",
+    "expected_ids": [
+      "d736b4be-0e40-4157-ae69-8322c83a2c39",
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "cb780777-916e-4d15-a3d7-a321436d9ea9",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "retrieved_ids": [
+      "14a22cde-bee6-4590-a0b8-df26877d45d6",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "d736b4be-0e40-4157-ae69-8322c83a2c39",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "cb780777-916e-4d15-a3d7-a321436d9ea9"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.43,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5582501292228699,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-042",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào của tác giả Fredrik Backman?",
+    "expected_ids": [
+      "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+      "463658e9-cf90-4e53-9536-852cd550fbb1",
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "9d889004-907e-45bb-9a20-31fb7e74bf32"
+    ],
+    "retrieved_ids": [
+      "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+      "9d889004-907e-45bb-9a20-31fb7e74bf32",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "463658e9-cf90-4e53-9536-852cd550fbb1",
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "2d75502e-c16c-4c28-9ff8-2a294b457fd7",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.44,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5640636254567991,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-043",
+    "corpus": "BOOK_METADATA",
+    "question": "Có tuyển tập thơ nào trong thư viện không?",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "10c718ff-e5d8-4b12-b56a-5f40afe9bb12",
+      "fe14f5f0-e17f-4466-a38a-236343fa559f",
+      "419bd1ca-ad0d-4334-958b-c3eda948c11a",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.231,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.438437283039093,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-044",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào là truyện cổ tích dân gian Việt Nam không?",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "retrieved_ids": [
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "afa04903-053e-4248-af61-da2e37a848b5",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.343,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.505632147025106,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-045",
+    "corpus": "BOOK_METADATA",
+    "question": "Cuốn nào được xem là kiệt tác (masterpiece) của văn học hiện thực huyền ảo Mỹ Latinh?",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "2f7a6bba-a705-41af-bc76-3297f8f3551a",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4",
+      "10c718ff-e5d8-4b12-b56a-5f40afe9bb12",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.242,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.44505220979141025,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-046",
+    "corpus": "BOOK_METADATA",
+    "question": "sach nao viet ve doi ngheo bat cong thoi phong kien",
+    "expected_ids": [
+      "699f3d1e-7133-4fd2-8ebe-27fc627f6922"
+    ],
+    "retrieved_ids": [
+      "701ef460-8590-4fc8-a73c-16eaa661a5d9",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "c88fcd82-6cf1-4751-851d-2ff643b878a6",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20",
+      "a7407d48-1e4f-45d8-ac77-bb53fce549f6"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.375,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5249148607254066,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-047",
+    "corpus": "BOOK_METADATA",
+    "question": "tim sach chiec la cuoi cung",
+    "expected_ids": [
+      "8b34c2ea-5a03-4bdc-94e2-5be56fcf9a3d"
+    ],
+    "retrieved_ids": [
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "701ef460-8590-4fc8-a73c-16eaa661a5d9",
+      "a4468945-8101-44d9-a957-ccc46866f294",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "a7407d48-1e4f-45d8-ac77-bb53fce549f6",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.367,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5200296354311497,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-048",
+    "corpus": "BOOK_METADATA",
+    "question": "tho xuan dieu noi ve tinh yeu que huong",
+    "expected_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d"
+    ],
+    "retrieved_ids": [
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "701ef460-8590-4fc8-a73c-16eaa661a5d9",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "c88fcd82-6cf1-4751-851d-2ff643b878a6",
+      "fde4387f-783f-484d-9863-1454ecf2dbc6"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.366,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.5198007822036743,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-049",
+    "corpus": "BOOK_METADATA",
+    "question": "chuyen co tich tam cam",
+    "expected_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4"
+    ],
+    "retrieved_ids": [
+      "7b38dc79-fe24-45ed-9014-fbfe570e88e4",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "701ef460-8590-4fc8-a73c-16eaa661a5d9",
+      "fde4387f-783f-484d-9863-1454ecf2dbc6",
+      "a4468945-8101-44d9-a957-ccc46866f294"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 0.9,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6004374802242961,
+      "semantic_rank": 3,
+      "keyword_rank": 1,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-050",
+    "corpus": "BOOK_METADATA",
+    "question": "sach ke chuyen tuoi tho o vung que day hy vong",
+    "expected_ids": [
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7"
+    ],
+    "retrieved_ids": [
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "8a3644ca-e9b2-4a14-b0c9-935f14c06f66",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "1ece2b63-d5bd-4132-a99e-42926849a019"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.247,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.448397696018219,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-051",
+    "corpus": "BOOK_METADATA",
+    "question": "haruki murakami tieu thuyet ve tokyo nhung nam 1960",
+    "expected_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "retrieved_ids": [
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "5b1493c9-fc87-4fb9-b29d-e71242f0243e",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "419bd1ca-ad0d-4334-958b-c3eda948c11a",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "646f7364-013d-4848-aa62-b1f2b2099544"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6782725463753239,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-052",
+    "corpus": "BOOK_METADATA",
+    "question": "sach ke gia toc bay doi qua thi tran hu cau macondo",
+    "expected_ids": [
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+    ],
+    "retrieved_ids": [
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "e1184385-1e57-4e2a-a9f0-919a8d41c9e3",
+      "a7407d48-1e4f-45d8-ac77-bb53fce549f6",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "583126f5-6465-44d7-98f2-008beabf029e",
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.304,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.4821031987667084,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-053",
+    "corpus": "BOOK_METADATA",
+    "question": "tieu thuyet nguyen nhat anh ve tuoi hoc tro thanh thi",
+    "expected_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2"
+    ],
+    "retrieved_ids": [
+      "ffb24f62-48e3-4075-8374-df0fd16096d2",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "c88fcd82-6cf1-4751-851d-2ff643b878a6",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "583126f5-6465-44d7-98f2-008beabf029e"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6576370596885728,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-054",
+    "corpus": "BOOK_METADATA",
+    "question": "sach phan tich tam ly tinh cach nguoi viet",
+    "expected_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7"
+    ],
+    "retrieved_ids": [
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "c88fcd82-6cf1-4751-851d-2ff643b878a6",
+      "de712574-7a17-401b-9cf6-16aa0e3d4f51",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.652310848236084,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-055",
+    "corpus": "BOOK_METADATA",
+    "question": "tieu thuyet co cau be ten nakata noi chuyen duoc voi meo",
+    "expected_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec"
+    ],
+    "retrieved_ids": [
+      "44d1360d-1974-4e8e-8ce9-04e35facedec",
+      "efc23f75-42c5-488b-9f9f-6238a083c737",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "a4468945-8101-44d9-a957-ccc46866f294",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.6243194193459294,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-056",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào dạy lập trình Python cơ bản không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "646f7364-013d-4848-aa62-b1f2b2099544",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "32231538-5670-44d1-84b8-72f5dff77e68",
+      "c88fcd82-6cf1-4751-851d-2ff643b878a6"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.261,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.4566123161680895,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-057",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn nấu ăn món Việt truyền thống không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "1ece2b63-d5bd-4132-a99e-42926849a019",
+      "10c718ff-e5d8-4b12-b56a-5f40afe9bb12",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "6a7ea5dd-e577-40a4-9463-8187f00ce04d",
+      "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+      "8a3644ca-e9b2-4a14-b0c9-935f14c06f66"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.314,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.48856857487150673,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-058",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn nuôi dạy con kiểu Nhật Bản không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "26b85215-358d-4302-8eeb-574553866b22",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+      "8b5e9927-eb24-431c-8fee-40c03fd3e538",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "4ac8d302-8574-4cb7-bd44-b60b25255bd9",
+      "ccfeb71b-dae8-4bd0-93fa-591ace5f682d"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.128,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.3767390251159668,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-059",
+    "corpus": "BOOK_METADATA",
+    "question": "Có truyện tranh nào dành cho trẻ em 5 tuổi không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "26b85215-358d-4302-8eeb-574553866b22",
+      "8a3644ca-e9b2-4a14-b0c9-935f14c06f66",
+      "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "2ecd2275-687d-4bff-906e-a49b8a0f4cab",
+      "77f6e125-fa10-4993-ba7e-666a48d21de7",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.256,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.45370366893432634,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-060",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào hướng dẫn kỹ thuật vẽ tranh sơn dầu cho người mới bắt đầu không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "26b85215-358d-4302-8eeb-574553866b22",
+      "8fa082b6-8211-47eb-954c-00d2589b2c8e",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20",
+      "fdae87bb-a4b1-44ba-9df3-f5cbacd3eed3"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.07,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 6,
+      "semantic_available": true,
+      "semantic_top1": 0.34185465227691303,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-001",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mỗi hạng thành viên được mượn tối đa bao nhiêu quyển sách?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "renewal-count",
+      "lost-item-fee"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8262107618513934,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-002",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thẻ Đọc được mượn tối đa mấy cuốn sách và trong bao lâu?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "renewal-count",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8073922991752625,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-003",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng Thượng Đế (VIP) được mượn tối đa bao nhiêu sách?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "renewal-count",
+      "reservation-hold"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7559047937393188,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-004",
+    "corpus": "INTERNAL_DOC",
+    "question": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "retrieved_ids": [
+      "fine-calculation",
+      "lost-item-fee",
+      "renewal-count"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.810032069683075,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-005",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mức phạt mỗi ngày trễ hạn của hạng Bạc Sĩ là bao nhiêu?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "retrieved_ids": [
+      "fine-calculation",
+      "lost-item-fee",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7124632000923157,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-006",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trả sách trễ hạn có bị phạt tiền không?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "retrieved_ids": [
+      "fine-calculation",
+      "renewal-count",
+      "lost-item-fee"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7092454433441162,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-007",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi có thể gia hạn sách đã mượn không?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "retrieved_ids": [
+      "renewal-count",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7572054492594439,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-008",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng Vàng Hoàng được gia hạn sách tối đa mấy lần?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "retrieved_ids": [
+      "renewal-count",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7257887773920996,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-009",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mỗi lần gia hạn sách kéo dài thêm bao lâu?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "retrieved_ids": [
+      "renewal-count",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7985370397131757,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-010",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đặt trước sách xong thì giữ chỗ trong bao lâu?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "retrieved_ids": [
+      "reservation-hold",
+      "membership-loan-limit",
+      "renewal-count"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8607782804502097,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-011",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng thành viên nào được giữ chỗ sách đặt trước lâu nhất?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "retrieved_ids": [
+      "reservation-hold",
+      "membership-loan-limit",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.737576083089348,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-012",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm mất sách đang mượn thì phải đền bao nhiêu?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "retrieved_ids": [
+      "lost-item-fee",
+      "fine-calculation",
+      "membership-loan-limit"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8467299524867652,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-013",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hệ số đền bù sách mất của hạng Thẻ Đọc là bao nhiêu?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "retrieved_ids": [
+      "lost-item-fee",
+      "fine-calculation",
+      "membership-loan-limit"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7928510184795285,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-014",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đền sách mất có tính theo giá trị sách không?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "retrieved_ids": [
+      "lost-item-fee",
+      "fine-calculation",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7059000905811745,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-015",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quy trình nhập kho khi hàng từ nhà cung cấp về hoạt động như thế nào?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "retrieved_ids": [
+      "goods-receipt-process",
+      "supplier-portal",
+      "purchase-order-flow"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7479920610187075,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-016",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tồn kho có tự động cộng khi hàng về kho không?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "retrieved_ids": [
+      "goods-receipt-process",
+      "storage-suggestion-ai",
+      "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.6781029903323352,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-017",
+    "corpus": "INTERNAL_DOC",
+    "question": "Purchase request và purchase order khác nhau như thế nào?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "retrieved_ids": [
+      "purchase-order-flow",
+      "goods-receipt-process",
+      "supplier-portal"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8200013041496277,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-018",
+    "corpus": "INTERNAL_DOC",
+    "question": "Khi tồn kho thấp thì nhân viên phải làm gì trước khi đặt hàng?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "retrieved_ids": [
+      "purchase-order-flow",
+      "goods-receipt-process",
+      "supplier-portal"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.553051557955054,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-019",
+    "corpus": "INTERNAL_DOC",
+    "question": "Purchase order được gửi cho ai xác nhận?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "retrieved_ids": [
+      "purchase-order-flow",
+      "supplier-portal",
+      "goods-receipt-process"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.5654745101928711,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-020",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhà cung cấp xác nhận đơn hàng bằng cách nào nếu chưa có tài khoản?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "retrieved_ids": [
+      "supplier-portal",
+      "goods-receipt-process",
+      "purchase-order-flow"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8553231699668451,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-021",
+    "corpus": "INTERNAL_DOC",
+    "question": "Supplier Portal có cần đăng nhập không?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "retrieved_ids": [
+      "supplier-portal"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.4,
+    "reason_codes": [
+      "EMBEDDING_UNAVAILABLE",
+      "KEYWORD_ONLY_FALLBACK",
+      "KEYWORD_AGREEMENT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": false,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": 1,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-022",
+    "corpus": "INTERNAL_DOC",
+    "question": "AI hỗ trợ gợi ý vị trí lưu trữ sách trong kho như thế nào?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "retrieved_ids": [
+      "storage-suggestion-ai",
+      "ai-assistant-scope",
+      "reservation-hold"
+    ],
+    "decision": "CONFIDENT_MATCH",
+    "confidence": 1.0,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "KEYWORD_AGREEMENT",
+      "SIGNALS_AGREE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8816663552323807,
+      "semantic_rank": 1,
+      "keyword_rank": 1,
+      "top1_agree": true,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-023",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hệ thống có gợi ý tái sắp xếp kệ sách hiện có không?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "retrieved_ids": [
+      "storage-suggestion-ai",
+      "ai-assistant-scope",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7368621512487115,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-024",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trợ lý AI (chatbot) trong hệ thống hỗ trợ được những gì?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "retrieved_ids": [
+      "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.4,
+    "reason_codes": [
+      "EMBEDDING_UNAVAILABLE",
+      "KEYWORD_ONLY_FALLBACK",
+      "KEYWORD_AGREEMENT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": false,
+      "semantic_top1": 0.0,
+      "semantic_rank": null,
+      "keyword_rank": 1,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-025",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chatbot có thể tra cứu tồn kho và sách quá hạn không?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "storage-suggestion-ai",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.8260464914454968,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-026",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi là thành viên mới, được ôm về nhà bao nhiêu cuốn sách một lúc vậy?",
+    "expected_ids": [
+      "membership-loan-limit"
+    ],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "reservation-hold",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.5521918535232544,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-027",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trả sách trễ thì bị sao?",
+    "expected_ids": [
+      "fine-calculation"
+    ],
+    "retrieved_ids": [
+      "fine-calculation",
+      "lost-item-fee",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.6784783005714417,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-028",
+    "corpus": "INTERNAL_DOC",
+    "question": "Sách sắp hết hạn mà chưa đọc xong thì làm sao mượn thêm được nữa?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "retrieved_ids": [
+      "renewal-count",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.6683589419233487,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-029",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đặt sách online rồi thì bao lâu phải ra lấy?",
+    "expected_ids": [
+      "reservation-hold"
+    ],
+    "retrieved_ids": [
+      "reservation-hold",
+      "membership-loan-limit",
+      "renewal-count"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.6177891948474413,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-030",
+    "corpus": "INTERNAL_DOC",
+    "question": "Lỡ làm thất lạc sách của thư viện thì phải bồi thường thế nào?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "retrieved_ids": [
+      "lost-item-fee",
+      "fine-calculation",
+      "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7210553884506226,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-031",
+    "corpus": "INTERNAL_DOC",
+    "question": "Sách mới nhập về kho thì khi nào mới hiện lên là còn hàng?",
+    "expected_ids": [
+      "goods-receipt-process"
+    ],
+    "retrieved_ids": [
+      "goods-receipt-process",
+      "reservation-hold",
+      "storage-suggestion-ai"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.591097933319275,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-032",
+    "corpus": "INTERNAL_DOC",
+    "question": "Khi sách trong kho sắp hết thì quy trình đặt hàng thêm diễn ra ra sao?",
+    "expected_ids": [
+      "purchase-order-flow"
+    ],
+    "retrieved_ids": [
+      "goods-receipt-process",
+      "purchase-order-flow",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.5615242625645637,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-033",
+    "corpus": "INTERNAL_DOC",
+    "question": "Bên cung cấp sách chưa có tài khoản trên hệ thống thì xác nhận đơn hàng kiểu gì?",
+    "expected_ids": [
+      "supplier-portal"
+    ],
+    "retrieved_ids": [
+      "supplier-portal",
+      "goods-receipt-process",
+      "reservation-hold"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7618514072343319,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-034",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên kho sắp xếp sách lên kệ có được hệ thống gợi ý chỗ để không?",
+    "expected_ids": [
+      "storage-suggestion-ai"
+    ],
+    "retrieved_ids": [
+      "storage-suggestion-ai",
+      "ai-assistant-scope",
+      "goods-receipt-process"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.7719356281719,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-035",
+    "corpus": "INTERNAL_DOC",
+    "question": "Con bot chat trong hệ thống này làm được những việc gì?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "retrieved_ids": [
+      "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN",
+    "confidence": 0.5,
+    "reason_codes": [
+      "SEMANTIC_STRONG",
+      "NO_KEYWORD_SUPPORT"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.5662360360096707,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-036",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có bán cà phê hay đồ ăn nhẹ không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.241,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4203986996293472,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-037",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có dịch vụ giao sách tận nhà không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "reservation-hold",
+      "renewal-count",
+      "ai-assistant-scope"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.273,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4364341573197654,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-038",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có wifi miễn phí cho khách không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.173,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.38654181836919377,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-039",
+    "corpus": "INTERNAL_DOC",
+    "question": "Giờ mở cửa của thư viện là mấy giờ?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "reservation-hold",
+      "ai-assistant-scope",
+      "membership-loan-limit"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.27,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.43500546008316,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-040",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể đổi trả sách đã mua tại quầy sách không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "reservation-hold",
+      "ai-assistant-scope",
+      "lost-item-fee"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.23,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4150602918791423,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-061",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy lập trình Rust cho người mới bắt đầu?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "56e789b9-d356-4c4f-910d-6751d4b98c31",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "ca3d510f-69b9-4477-a51d-a0b775536230",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "32231538-5670-44d1-84b8-72f5dff77e68",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.247,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.44816869497299194,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-062",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về đầu tư tiền điện tử (crypto) không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "56e789b9-d356-4c4f-910d-6751d4b98c31",
+      "e905160b-2972-4555-b6b3-9ba0e083e349",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "9b7ad6ec-fad1-4e20-9ea7-0b25f821aaa6",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "410c75e1-54bc-4bc7-be64-9015364f992e",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.258,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.45504296629852736,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-063",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn sửa chữa xe máy tại nhà?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20",
+      "d6b3e59a-ed9d-41d0-9043-84c5ae9184d9",
+      "4bebe16a-05d9-4c18-9819-93694a604acc",
+      "8b5e9927-eb24-431c-8fee-40c03fd3e538"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.053,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 5,
+      "semantic_available": true,
+      "semantic_top1": 0.331670343875885,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-064",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy make-up chuyên nghiệp không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "32231538-5670-44d1-84b8-72f5dff77e68",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20",
+      "8a3644ca-e9b2-4a14-b0c9-935f14c06f66",
+      "0068449d-fd5e-4f60-9828-20cb8af0627d",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.162,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.3973892033100128,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-065",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào về lịch sử bóng đá thế giới?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "871990a8-98e6-4325-8d56-690bb6f73ed7",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "583126f5-6465-44d7-98f2-008beabf029e",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "ca3d510f-69b9-4477-a51d-a0b775536230"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.069,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.34168606996536255,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-066",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy chơi guitar cổ điển cho người mới không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "7bb64de7-087e-4d58-af51-236e1c2d1fa8"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.014,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 2,
+      "semantic_available": true,
+      "semantic_top1": 0.30859296594283214,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-067",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn thiết kế nội thất căn hộ nhỏ?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.068,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 4,
+      "semantic_available": true,
+      "semantic_top1": 0.3409428000450134,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-068",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về nuôi cá cảnh thủy sinh không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "419bd1ca-ad0d-4334-958b-c3eda948c11a"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.01,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.3058285530907783,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-069",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy nhiếp ảnh đường phố chuyên nghiệp?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "23f50a5e-bed0-408f-bcaa-5511a618dcfb",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "eefc9e17-7846-48dc-8f72-ba7de01d5b2a",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "e274df90-3e39-4bd7-afdf-94ab10583b48",
+      "8702650d-2a96-42fc-8e5c-9872ad55400e",
+      "47b3acaa-496a-4a80-a426-f0ffa9d3b337"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.157,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.394109486655816,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-070",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về luật thuế doanh nghiệp 2026 không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "17c13184-689f-4ff8-a917-a626c6fcd1a9",
+      "9b7ad6ec-fad1-4e20-9ea7-0b25f821aaa6",
+      "2d75502e-c16c-4c28-9ff8-2a294b457fd7",
+      "56e789b9-d356-4c4f-910d-6751d4b98c31",
+      "e905160b-2972-4555-b6b3-9ba0e083e349",
+      "d86ce9b1-48c8-4c19-8c87-ea7431bacc7b",
+      "f3699258-5ed4-409b-8f5b-c7809b77ef00",
+      "26b85215-358d-4302-8eeb-574553866b22"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.095,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.3572581623350485,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-071",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn trồng rau sạch tại nhà?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "1f444016-a3aa-498c-b406-1b2db4aca9cc",
+      "d6b3e59a-ed9d-41d0-9043-84c5ae9184d9"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.049,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.32927804167735886,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-072",
+    "corpus": "BOOK_METADATA",
+    "question": "Có truyện tranh thể loại kinh dị Nhật Bản không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "efc23f75-42c5-488b-9f9f-6238a083c737"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.007,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.30425034140048424,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-073",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy pha chế cocktail chuyên nghiệp?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "0068449d-fd5e-4f60-9828-20cb8af0627d",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "6dadf91b-a007-4f56-976a-0049a776d3d3",
+      "56e789b9-d356-4c4f-910d-6751d4b98c31",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "e905160b-2972-4555-b6b3-9ba0e083e349",
+      "17c13184-689f-4ff8-a917-a626c6fcd1a9",
+      "82902b9d-5f42-4f3b-af11-4afc43a8da20"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.23,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.4382776691582597,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-074",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về tâm lý học tội phạm không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "f3699258-5ed4-409b-8f5b-c7809b77ef00",
+      "f1931d86-1aa7-41f6-99f7-8ad1695605e7",
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "14f4f082-74d9-4b4e-8067-97c0b6745719",
+      "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+      "de712574-7a17-401b-9cf6-16aa0e3d4f51",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "716f456e-08ba-4ca9-975c-41f56e5db716"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.284,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.4702645540237427,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "bm-075",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn leo núi và dã ngoại sinh tồn?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "e16c5805-e27e-4d8c-bf90-136b1892e474",
+      "23f50a5e-bed0-408f-bcaa-5511a618dcfb",
+      "26a9abaf-f277-496d-b082-374983ede77a",
+      "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+      "790d978e-fb9d-42a4-b7e3-d021c941062b",
+      "32231538-5670-44d1-84b8-72f5dff77e68",
+      "234068a3-3910-44bd-8574-0c521a440b14",
+      "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.107,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "BOOK_METADATA",
+      "result_count": 8,
+      "semantic_available": true,
+      "semantic_top1": 0.3641808032989502,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-041",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tổ chức sự kiện gặp gỡ tác giả không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "renewal-count",
+      "reservation-hold"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.133,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.36667580505239394,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-042",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên thư viện làm việc theo ca như thế nào?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "membership-loan-limit",
+      "reservation-hold"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.232,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4158054118098443,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-043",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có chỗ đậu xe ô tô miễn phí không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "storage-suggestion-ai",
+      "ai-assistant-scope",
+      "reservation-hold"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.044,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.3217810584176224,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-044",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể in tài liệu tại thư viện không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "renewal-count",
+      "membership-loan-limit"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.304,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4517712727716947,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-045",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có phòng học nhóm riêng để thuê không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "lost-item-fee",
+      "renewal-count"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.103,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.35131722688674927,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-046",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chính sách bảo hiểm cho sách bị cháy nổ là gì?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "lost-item-fee",
+      "reservation-hold",
+      "membership-loan-limit"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.17,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.38520475537805354,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-047",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có hợp tác với trường đại học nào không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.068,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.3340054551960665,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-048",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có chương trình khuyến mãi ngày lễ cho hội viên không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "reservation-hold",
+      "renewal-count"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.099,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.3493658095976234,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-049",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có ứng dụng di động riêng không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "renewal-count",
+      "storage-suggestion-ai"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.239,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4197306805929355,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-050",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên thư viện có được nghỉ phép năm bao nhiêu ngày?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "renewal-count",
+      "ai-assistant-scope"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.239,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4195517897605896,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-051",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tổ chức thi đọc sách hè cho trẻ em không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "reservation-hold",
+      "renewal-count"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.085,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.34243990011334136,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-052",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có dịch vụ dịch thuật tài liệu tại thư viện không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "renewal-count",
+      "lost-item-fee"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.21,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.40480877175357277,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-053",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện đóng cửa vào những ngày lễ nào trong năm?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "membership-loan-limit",
+      "reservation-hold",
+      "renewal-count"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.218,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.40920254588127136,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-054",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể quyên góp sách cũ cho thư viện không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope",
+      "renewal-count",
+      "lost-item-fee"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.237,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 3,
+      "semantic_available": true,
+      "semantic_top1": 0.4183431815113534,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  },
+  {
+    "id": "doc-055",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có bán vé tham quan cho khách du lịch không?",
+    "expected_ids": [],
+    "retrieved_ids": [
+      "ai-assistant-scope"
+    ],
+    "decision": "NO_EVIDENCE",
+    "confidence": 0.057,
+    "reason_codes": [
+      "SEMANTIC_WEAK",
+      "NO_KEYWORD_SUPPORT",
+      "LOW_OVERALL_CONFIDENCE"
+    ],
+    "signals": {
+      "corpus": "INTERNAL_DOC",
+      "result_count": 1,
+      "semantic_available": true,
+      "semantic_top1": 0.32849461819215486,
+      "semantic_rank": 1,
+      "keyword_rank": null,
+      "top1_agree": false,
+      "hard_match": null
+    }
+  }
+]

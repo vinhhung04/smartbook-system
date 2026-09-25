@@ -27,10 +27,17 @@ from sqlalchemy.pool import NullPool
 import db
 import embeddings
 import fusion
+import retrieval_confidence as confidence
 import vector_store
 from pg_vector_store import PgVectorStore
 
 logger = logging.getLogger("uvicorn.error")
+
+# When on (default), find_relevant() withholds matches for a NO_EVIDENCE decision
+# instead of handing retrieval.py "the nearest thing we have" for a question the
+# corpus has no real answer to (see retrieval_confidence.py). Kept switchable so
+# eval/eval_rag.py can reproduce the pre-abstention baseline for comparison.
+RAG_ABSTENTION_ENABLED = os.getenv("RAG_ABSTENTION_ENABLED", "true").lower() != "false"
 
 # 0.75 was tuned for nomic-embed-text's cosine distribution. Verified live against
 # qwen/qwen3-embedding-8b (post-Ollama-removal migration): the correct document for a
@@ -83,10 +90,17 @@ def _per_call_store():
     return PgVectorStore(engine=engine), engine
 
 
-async def _find_relevant_async(query: str, top_k: int, threshold: float) -> list[FAQMatch]:
+async def _find_relevant_async(
+    query: str, top_k: int, threshold: float,
+) -> tuple[list[FAQMatch], confidence.RetrievalConfidence]:
+    # embeddings.embed_batch()/embed_text() are documented to never raise and to
+    # let the caller "drop the semantic signal, keyword search only" on failure
+    # (embeddings.py's module docstring) - this used to return [] immediately
+    # instead, which contradicted that contract and meant an OpenRouter outage
+    # made GENERAL_QUERY answer with zero FAQ context even for questions the
+    # keyword arm alone could have answered (book search already fell back to
+    # keyword-only; this brings the FAQ corpus in line with it).
     embed_result = await asyncio.to_thread(embeddings.embed_text, query)
-    if embed_result is None:
-        return []
     store, engine = _per_call_store()
     try:
         # threshold la nguong COSINE (mac dinh 0.75), ap len nhanh semantic
@@ -94,18 +108,49 @@ async def _find_relevant_async(query: str, top_k: int, threshold: float) -> list
         # cosine khong chuyen sang do duoc. Nhanh keyword khong co nguong:
         # mot cu khop full-text da tu no la tin hieu co nghia (cung quy uoc voi
         # _score_and_rank_books ben phia sach).
-        semantic = [
-            hit for hit in await store.search_semantic(
-                vector_store.CORPUS_DOC, embed_result.vector, k=top_k,
-                embedding_model=embed_result.model)
-            if hit.score >= threshold
-        ]
+        semantic = (
+            [
+                hit for hit in await store.search_semantic(
+                    vector_store.CORPUS_DOC, embed_result.vector, k=top_k,
+                    embedding_model=embed_result.model)
+                if hit.score >= threshold
+            ]
+            if embed_result is not None else []
+        )
         keyword = await store.search_keyword(vector_store.CORPUS_DOC, query, k=top_k)
         fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=top_k)
-        return [FAQMatch(entry=_entry_from_hit(hit), score=hit.score) for hit in fused]
+        signals = confidence.extract_signals(
+            vector_store.CORPUS_DOC, semantic, keyword, fused, semantic_available=embed_result is not None,
+        )
+        result = confidence.evaluate(signals, confidence.DOC_CONFIDENCE)
+        confidence.log_decision(result)
+        matches = [FAQMatch(entry=_entry_from_hit(hit), score=hit.score) for hit in fused]
+        return matches, result
     finally:
         if engine is not None:
             await engine.dispose()
+
+
+def find_relevant_with_confidence(
+    query: str,
+    top_k: int = FAQ_TOP_K,
+    threshold: float = FAQ_MATCH_THRESHOLD,
+) -> tuple[list[FAQMatch], confidence.RetrievalConfidence]:
+    """Same sync/never-raises contract as find_relevant(), but also returns the
+    RetrievalConfidence decision so retrieval.py can abstain instead of
+    presenting a weak match as a settled answer (see retrieval_confidence.py)."""
+    query = (query or "").strip()
+    empty_confidence = confidence.RetrievalConfidence(
+        confidence.NO_EVIDENCE, 0.0, ["EMPTY_QUERY"],
+        confidence.RetrievalSignals(vector_store.CORPUS_DOC, 0, False, 0.0, None, None, False),
+    )
+    if not query:
+        return [], empty_confidence
+    try:
+        return asyncio.run(_find_relevant_async(query, top_k, threshold))
+    except Exception as exc:
+        logger.warning("faq_retrieval: tim kiem that bai: %s", type(exc).__name__)
+        return [], empty_confidence
 
 
 def find_relevant(
@@ -115,12 +160,13 @@ def find_relevant(
 ) -> list[FAQMatch]:
     """Chu ky sync giu nguyen (AD-5): retrieval.py:254 goi ham nay qua
     asyncio.to_thread, nen no chay trong mot thread KHONG co event loop —
-    asyncio.run() o day la hop le, khong phai nested loop."""
-    query = (query or "").strip()
-    if not query:
+    asyncio.run() o day la hop le, khong phai nested loop.
+
+    Withholds matches on a NO_EVIDENCE decision when RAG_ABSTENTION_ENABLED
+    (default on) - callers that need the confidence/reason codes too (to show
+    an UNCERTAIN caveat, or to log the decision) should call
+    find_relevant_with_confidence() instead."""
+    matches, result = find_relevant_with_confidence(query, top_k, threshold)
+    if RAG_ABSTENTION_ENABLED and result.decision == confidence.NO_EVIDENCE:
         return []
-    try:
-        return asyncio.run(_find_relevant_async(query, top_k, threshold))
-    except Exception as exc:
-        logger.warning("faq_retrieval: tim kiem that bai: %s", type(exc).__name__)
-        return []
+    return matches
