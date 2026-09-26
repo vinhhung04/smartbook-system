@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown, ChevronRight, Clock, ListChecks, MapPin, Package, QrCode, RotateCcw, ScanLine, UserCheck } from "lucide-react";
-import { WorkflowStepper, type WorkflowStep } from "@/components/ui";
+import {
+  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Circle, MapPin, Minus, Package, Plus, ScanLine, UserCheck,
+} from "lucide-react";
 import { toast } from "sonner";
-import { NavLink } from "react-router";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { useHardwareScanner } from "@/hooks/useHardwareScanner";
@@ -16,9 +16,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button, IconButton } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { StatCard } from "@/components/ui/stat-card";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -43,38 +41,51 @@ import {
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { canManageReceiving } from "@/lib/rbac";
 
+const ALL_WAREHOUSES = "all";
+const PAGE_SIZE = 10;
+
+const TASK_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Chờ duyệt",
+  APPROVED: "Chờ lấy",
+  READY: "Chờ lấy",
+  PICKING: "Đang lấy",
+  IN_PROGRESS: "Đang lấy",
+  PICKED: "Đã lấy xong",
+  COMPLETED: "Đã lấy xong",
+  SHORT_PICKED: "Thiếu hàng",
+  CANCELLED: "Đã hủy",
+};
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("vi-VN", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return date.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function taskTypeLabel(orderType: string): string {
-  if (orderType === "OUTBOUND_REPICK") return "Xuất kho / Lấy bù";
-  if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Chuyển kho / Lấy bù";
+  if (orderType === "OUTBOUND_REPICK") return "Xuất kho · lấy bù";
+  if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Chuyển kho · lấy bù";
   if (orderType === "WAREHOUSE_TRANSFER") return "Chuyển kho";
-  if (orderType.startsWith("OUTBOUND_")) return "Xuất kho / Cửa hàng";
+  if (orderType.startsWith("OUTBOUND_")) return "Xuất kho / cửa hàng";
   return orderType;
 }
 
-function taskClassLabel(taskClass?: string): string {
-  return taskClass === "REPICK" ? "REPICK" : "PICK";
+function isRepick(taskClass?: string) {
+  return taskClass === "REPICK";
 }
 
-function taskStatusVariant(status: string) {
-  return getPickingTaskStatusVariant(status);
+function statusLabel(status: string) {
+  return TASK_STATUS_LABELS[String(status || "").toUpperCase()] || status;
 }
 
-type PickingScanTarget = "presence" | "location" | "product";
+type ScanStep = "presence" | "location" | "product" | "quantity";
 
-const PAGE_SIZE = 10;
+const SCAN_TITLES: Record<Exclude<ScanStep, "quantity">, string> = {
+  presence: "Quét vị trí bạn đang đứng",
+  location: "Quét mã kệ cần đến",
+  product: "Quét mã vạch sách",
+};
 
 export function PickingPage() {
   const [loading, setLoading] = useState(true);
@@ -87,7 +98,7 @@ export function PickingPage() {
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(ALL_WAREHOUSES);
 
   const [tasks, setTasks] = useState<PickingTaskSummary[]>([]);
   const [query, setQuery] = useState("");
@@ -99,9 +110,9 @@ export function PickingPage() {
   const [detail, setDetail] = useState<PickingTaskDetail | null>(null);
 
   const [presenceConfirmed, setPresenceConfirmed] = useState(false);
-  const [presenceInput, setPresenceInput] = useState("");
   const [presenceResolvedLocationInput, setPresenceResolvedLocationInput] = useState("");
 
+  const [scanInput, setScanInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [locationVerified, setLocationVerified] = useState(false);
   const [productBarcodeInput, setProductBarcodeInput] = useState("");
@@ -109,14 +120,12 @@ export function PickingPage() {
   const [quantityInput, setQuantityInput] = useState(1);
   const [selectedScannedVariantId, setSelectedScannedVariantId] = useState("");
   const [ambiguousMatches, setAmbiguousMatches] = useState<PickingVariantLookupMatch[]>([]);
-  const [activeScanTarget, setActiveScanTarget] = useState<PickingScanTarget | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
-  // Repick hierarchy expand state
   const [expandedRepickTaskId, setExpandedRepickTaskId] = useState<string | null>(null);
   const [repickChildren, setRepickChildren] = useState<(PickingTaskRecord & { picking_task_items: PickingTaskItemRecord[] })[]>([]);
   const [loadingRepickChildren, setLoadingRepickChildren] = useState(false);
 
-  // Declare shortage (create REPICK)
   const [declaringShortage, setDeclaringShortage] = useState(false);
   const [showShortageConfirm, setShowShortageConfirm] = useState(false);
 
@@ -128,86 +137,72 @@ export function PickingPage() {
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.username
     || (currentUser as { full_name?: string; username?: string; email?: string } | null)?.email
     || "Tôi");
-  const staffNameById = useMemo(() => {
-    return new Map(warehouseStaff.map((user) => [
-      user.id,
-      user.full_name || user.username || user.email,
-    ]));
-  }, [warehouseStaff]);
+  const staffNameById = useMemo(() => new Map(warehouseStaff.map((user) => [user.id, user.full_name || user.username || user.email])), [warehouseStaff]);
 
+  // My tasks first, then unassigned ones waiting for a picker, then the oldest request first.
   const filteredTasks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    const classFiltered = taskClassFilter === "ALL"
-      ? tasks
-      : tasks.filter((task) => taskClassLabel(task.task_class) === taskClassFilter);
-
-    if (!keyword) return classFiltered;
-
-    return classFiltered.filter((task) => (
-      task.order_number.toLowerCase().includes(keyword)
-      || (task.source_warehouse_code || "").toLowerCase().includes(keyword)
-      || (task.source_warehouse_name || "").toLowerCase().includes(keyword)
-      || taskTypeLabel(task.order_type).toLowerCase().includes(keyword)
-    ));
-  }, [tasks, query, taskClassFilter]);
+    const rank = (task: PickingTaskSummary) => (task.assigned_picker_user_id === currentUserId ? 0 : task.assigned_picker_user_id ? 2 : 1);
+    return tasks
+      .filter((task) => taskClassFilter === "ALL" || (taskClassFilter === "REPICK") === isRepick(task.task_class))
+      .filter((task) => !keyword
+        || task.order_number.toLowerCase().includes(keyword)
+        || (task.source_warehouse_code || "").toLowerCase().includes(keyword)
+        || (task.source_warehouse_name || "").toLowerCase().includes(keyword)
+        || taskTypeLabel(task.order_type).toLowerCase().includes(keyword))
+      .sort((a, b) => rank(a) - rank(b) || String(a.requested_at).localeCompare(String(b.requested_at)));
+  }, [tasks, query, taskClassFilter, currentUserId]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
+  const pagedTasks = useMemo(() => filteredTasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filteredTasks, page]);
 
-  const pagedTasks = useMemo(
-    () => filteredTasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredTasks, page],
-  );
-
-  const taskStats = useMemo(() => {
-    const pick = tasks.filter((task) => taskClassLabel(task.task_class) === "PICK").length;
-    const repick = tasks.filter((task) => taskClassLabel(task.task_class) === "REPICK").length;
-    const unassigned = tasks.filter((task) => !task.assigned_picker_user_id).length;
-    return { total: tasks.length, pick, repick, unassigned };
-  }, [tasks]);
+  const taskStats = useMemo(() => ({
+    total: tasks.length,
+    pick: tasks.filter((task) => !isRepick(task.task_class)).length,
+    repick: tasks.filter((task) => isRepick(task.task_class)).length,
+    unassigned: tasks.filter((task) => !task.assigned_picker_user_id).length,
+    mine: tasks.filter((task) => task.assigned_picker_user_id === currentUserId).length,
+  }), [tasks, currentUserId]);
 
   const currentLine = detail?.current_line || null;
   const completedLineCount = useMemo(
     () => (detail?.lines || []).filter((line) => Number(line.picked_qty || 0) >= Number(line.requested_qty || 0)).length,
     [detail],
   );
-  const totalPickedQty = useMemo(
-    () => (detail?.lines || []).reduce((sum, line) => sum + Number(line.picked_qty || 0), 0),
-    [detail],
-  );
+  const totalPickedQty = useMemo(() => (detail?.lines || []).reduce((sum, line) => sum + Number(line.picked_qty || 0), 0), [detail]);
+  const totalRequestedQty = useMemo(() => (detail?.lines || []).reduce((sum, line) => sum + Number(line.requested_qty || 0), 0), [detail]);
 
-  // Can declare shortage when: some items were picked but not all lines complete (PICK or REPICK task)
   const canDeclareShortage = Boolean(
     detail
     && totalPickedQty > 0
     && (detail.lines || []).some((line) => Number(line.picked_qty || 0) < Number(line.requested_qty || 0)),
   );
 
-  const canConfirmLine = Boolean(
-    detail
-    && currentLine
-    && presenceConfirmed
-    && locationVerified
-    && productVerified
-    && Number(quantityInput) > 0,
-  );
-
-  const scannerTitle = useMemo(() => {
-    if (activeScanTarget === "presence") return "Quét vị trí hiện tại";
-    if (activeScanTarget === "location") return "Quét vị trí cần đến";
-    if (activeScanTarget === "product") return "Quét mã vạch sản phẩm";
-    return "Quét mã vạch";
-  }, [activeScanTarget]);
+  const scanStep: ScanStep = !presenceConfirmed ? "presence" : !locationVerified ? "location" : !productVerified ? "product" : "quantity";
+  const canConfirmLine = Boolean(detail && currentLine && scanStep === "quantity" && Number(quantityInput) > 0);
 
   const loadTasks = async (warehouseId?: string) => {
-    const res = await pickingService.getTasks(warehouseId);
+    const res = await pickingService.getTasks(warehouseId && warehouseId !== ALL_WAREHOUSES ? warehouseId : undefined);
     setTasks(res.data || []);
+  };
+  const reloadTasks = () => loadTasks(canManageAssignment ? selectedWarehouseId : undefined);
+
+  const resetLineProgress = () => {
+    setScanInput("");
+    setLocationInput("");
+    setLocationVerified(false);
+    setProductBarcodeInput("");
+    setProductVerified(false);
+    setQuantityInput(1);
+    setSelectedScannedVariantId("");
+    setAmbiguousMatches([]);
   };
 
   const loadDetail = async (
     taskType: PickingTaskType,
     taskId: string,
     options?: { preservePresence?: boolean; currentLocationInput?: string },
-  ) => {
+  ): Promise<PickingTaskDetail> => {
     setLoadingDetail(true);
     try {
       const preservePresence = options?.preservePresence === true;
@@ -216,20 +211,12 @@ export function PickingPage() {
       setDetail(data);
       setSelectedTaskType(taskType);
       setSelectedTaskId(taskId);
-
       if (!preservePresence) {
         setPresenceConfirmed(false);
-        setPresenceInput("");
         setPresenceResolvedLocationInput("");
       }
-
-      setLocationInput("");
-      setLocationVerified(false);
-      setProductBarcodeInput("");
-      setProductVerified(false);
-      setQuantityInput(1);
-      setSelectedScannedVariantId("");
-      setAmbiguousMatches([]);
+      resetLineProgress();
+      return data;
     } finally {
       setLoadingDetail(false);
     }
@@ -239,69 +226,55 @@ export function PickingPage() {
     const run = async () => {
       try {
         setLoading(true);
-
         const [warehouseRows, staffRows] = await Promise.all([
           canManageAssignment ? warehouseService.getAll() : Promise.resolve([]),
           canManageAssignment ? userService.getWarehouseStaff() : Promise.resolve({ data: [] }),
         ]);
-
         const rows = Array.isArray(warehouseRows) ? warehouseRows : [];
         setWarehouseStaff(Array.isArray(staffRows?.data) ? staffRows.data : []);
         setWarehouses(rows);
-
-        const preferredWarehouse = rows.find((item) => item.id === currentUserPrimaryWarehouseId)?.id || rows[0]?.id || "";
-
-        setSelectedWarehouseId(preferredWarehouse);
-        await loadTasks(canManageAssignment ? (preferredWarehouse || undefined) : undefined);
+        // Only narrow to one warehouse when the user belongs to it; otherwise show every
+        // warehouse so tasks are never hidden behind an arbitrary default branch.
+        const preferred = rows.some((item) => item.id === currentUserPrimaryWarehouseId) ? currentUserPrimaryWarehouseId : ALL_WAREHOUSES;
+        setSelectedWarehouseId(preferred);
+        if (!canManageAssignment) await loadTasks();
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Không tải được danh sách đơn lấy hàng"));
       } finally {
         setLoading(false);
       }
     };
-
     void run();
   }, [canManageAssignment, currentUserPrimaryWarehouseId]);
 
   useEffect(() => {
-    if (!canManageAssignment) {
-      return;
-    }
-
-    if (!selectedWarehouseId) {
-      setTasks([]);
-      return;
-    }
-
+    if (!canManageAssignment) return;
     void loadTasks(selectedWarehouseId).catch((error) => {
       toast.error(getApiErrorMessage(error, "Không tải được danh sách đơn theo kho"));
     });
   }, [canManageAssignment, selectedWarehouseId]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, taskClassFilter]);
+  useEffect(() => { setPage(1); }, [query, taskClassFilter, selectedWarehouseId]);
+  useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
   useEffect(() => {
-    setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
+    if (detail && scanStep !== "quantity") document.getElementById("picking-scan")?.focus({ preventScroll: true });
+  }, [detail, scanStep]);
 
   const handleAssignTask = async (task: PickingTaskSummary) => {
     const key = `${task.task_type}:${task.task_id}`;
     const pickerUserId = assigningPickerIdByTask[key];
-
     if (!pickerUserId) {
-      toast.error("Chọn nhân viên kho trước khi giao task");
+      toast.error("Chọn nhân viên kho trước khi giao việc");
       return;
     }
-
     try {
       setClaimingTaskKey(key);
       await pickingService.claimTask(task.task_type, task.task_id, pickerUserId);
-      await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
-      toast.success(`Đã giao task ${task.order_number}`);
+      await reloadTasks();
+      toast.success(`Đã giao đơn ${task.order_number}`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Giao task thất bại"));
+      toast.error(getApiErrorMessage(error, "Giao việc thất bại"));
     } finally {
       setClaimingTaskKey("");
     }
@@ -315,167 +288,176 @@ export function PickingPage() {
     }
   };
 
-  const handleConfirmPresence = async (inputOverride?: string) => {
+  const matchesLineLocation = (line: PickingTaskDetail["current_line"], input: string) => {
+    if (!line) return false;
+    const normalized = input.trim().toLowerCase();
+    return [line.source_location_id, line.source_location_code, line.source_location_barcode]
+      .filter(Boolean)
+      .some((value) => String(value).trim().toLowerCase() === normalized);
+  };
+
+  const acceptLocation = (line: NonNullable<PickingTaskDetail["current_line"]>, input: string) => {
+    setLocationInput(input);
+    setLocationVerified(true);
+    setProductVerified(false);
+    setProductBarcodeInput("");
+    setQuantityInput(Math.max(1, Math.trunc(Number(line.remaining_qty || 1))));
+    setSelectedScannedVariantId("");
+    setAmbiguousMatches([]);
+  };
+
+  const handleConfirmPresence = async (input: string) => {
     if (!selectedTaskType || !selectedTaskId) return;
-
-    const sourceInput = inputOverride ?? presenceInput;
-    const input = sourceInput.trim();
-
-    if (inputOverride !== undefined) {
-      setPresenceInput(sourceInput);
-    }
-
-    if (!input) {
-      toast.error("Nhập hoặc scan vị trí hiện tại");
+    const value = input.trim();
+    if (!value) {
+      toast.error("Quét hoặc nhập mã vị trí bạn đang đứng");
       return;
     }
-
     try {
       setConfirmingPresence(true);
-      const res = await pickingService.confirmPresence(selectedTaskType, selectedTaskId, input);
-
-      const confirmedLocation = String(res.data.location_code || input).trim();
+      const res = await pickingService.confirmPresence(selectedTaskType, selectedTaskId, value);
+      const confirmedLocation = String(res.data.location_code || value).trim();
       setPresenceConfirmed(true);
       setPresenceResolvedLocationInput(confirmedLocation);
-      setPresenceInput("");
-
-      await loadDetail(selectedTaskType, selectedTaskId, {
-        preservePresence: true,
-        currentLocationInput: confirmedLocation,
-      });
-
+      const fresh = await loadDetail(selectedTaskType, selectedTaskId, { preservePresence: true, currentLocationInput: confirmedLocation });
       playScanSuccess();
-      toast.success(`Đã xác nhận hiện diện tại ${res.data.location_code}`);
+      // Standing at the shelf of the first line already? That one scan also verifies the location.
+      if (fresh.current_line && matchesLineLocation(fresh.current_line, value)) {
+        acceptLocation(fresh.current_line, value);
+        toast.success(`Đã xác nhận có mặt và đúng kệ ${fresh.current_line.source_location_code}`);
+      } else {
+        toast.success(`Đã xác nhận có mặt tại ${res.data.location_code}`);
+      }
     } catch (error) {
       playScanError();
-      toast.error(getApiErrorMessage(error, "Xác nhận hiện diện thất bại"));
+      toast.error(getApiErrorMessage(error, "Xác nhận vị trí thất bại"));
     } finally {
       setConfirmingPresence(false);
     }
   };
 
-  const handleLookupProduct = async (barcodeOverride?: string) => {
-    if (!locationVerified) {
-      toast.error("Cần scan đúng vị trí đích trước");
-      return;
-    }
-
+  const handleVerifyLocation = (input: string) => {
     if (!currentLine) {
-      toast.error("Không xác định được dòng hiện tại");
+      toast.error("Không có dòng cần lấy");
       return;
     }
-
-    const sourceBarcode = barcodeOverride ?? productBarcodeInput;
-    const barcode = sourceBarcode.trim();
-
-    if (barcodeOverride !== undefined) {
-      setProductBarcodeInput(sourceBarcode);
+    if (!input.trim()) {
+      toast.error("Quét hoặc nhập mã kệ cần đến");
+      return;
     }
+    if (matchesLineLocation(currentLine, input)) {
+      acceptLocation(currentLine, input.trim());
+      playScanSuccess();
+      return;
+    }
+    // No shelf assigned yet: the backend resolves the source on confirm and accepts any
+    // location that actually holds this book, so let the scan through and let it decide.
+    if (!currentLine.source_location_id && !currentLine.source_location_code) {
+      acceptLocation(currentLine, input.trim());
+      playScanSuccess();
+      toast.info("Dòng chưa gán kệ — hệ thống sẽ kiểm tra vị trí này có sách khi bạn xác nhận.");
+      return;
+    }
+    setLocationVerified(false);
+    setProductVerified(false);
+    playScanError();
+    toast.error(`Sai kệ. Cần đến ${currentLine.source_location_code || "vị trí được chỉ định"}`);
+  };
 
+  const handleLookupProduct = async (input: string) => {
+    if (!currentLine) return;
+    const barcode = input.trim();
     if (!barcode) {
-      toast.error("Nhập barcode sản phẩm");
+      toast.error("Quét hoặc nhập mã vạch sách");
       return;
     }
-
+    setProductBarcodeInput(barcode);
     try {
       setLoadingLookup(true);
       const res = await pickingService.lookupVariantByBarcode(barcode);
-
       if (res.ambiguous) {
         setAmbiguousMatches(res.matches || []);
         setSelectedScannedVariantId("");
         setProductVerified(false);
         playScanError();
-        toast.error("Barcode trùng nhiều SKU, vui lòng chọn đúng item");
+        toast.error("Mã vạch trùng nhiều sách, hãy chọn đúng cuốn");
         return;
       }
-
       setAmbiguousMatches([]);
       if (res.selected?.variant_id) {
         if (res.selected.variant_id !== currentLine.variant_id) {
           setProductVerified(false);
           setSelectedScannedVariantId("");
           playScanError();
-          toast.error("Sai sản phẩm cho dòng hiện tại");
+          toast.error(`Sai sách. Cần lấy: ${currentLine.book_title}`);
           return;
         }
-
         setSelectedScannedVariantId(res.selected.variant_id);
         setProductVerified(true);
         playScanSuccess();
-        toast.success(`Đã nhận diện: ${res.selected.book_title}`);
       }
     } catch (error) {
       playScanError();
-      toast.error(getApiErrorMessage(error, "Không tra cứu được mã vạch sản phẩm"));
+      toast.error(getApiErrorMessage(error, "Không tra cứu được mã vạch sách"));
     } finally {
       setLoadingLookup(false);
     }
   };
+
+  const handleScan = (raw: string) => {
+    const value = raw.trim();
+    setScanInput("");
+    if (!value || !detail || !currentLine) return;
+    if (scanStep === "presence") void handleConfirmPresence(value);
+    else if (scanStep === "location") handleVerifyLocation(value);
+    else if (scanStep === "product") void handleLookupProduct(value);
+  };
+
+  // Handheld keyboard-wedge scanner: the current step decides what a scan means, so staff
+  // never has to tap a field first — shelf, then book, one after another.
+  useHardwareScanner(handleScan);
 
   const handleConfirmLine = async () => {
     if (!selectedTaskType || !selectedTaskId || !currentLine) {
       toast.error("Chưa có dòng cần lấy");
       return;
     }
-
     const quantity = Math.trunc(Number(quantityInput || 0));
-
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      toast.error("Số lượng phải > 0");
+      toast.error("Số lượng phải lớn hơn 0");
       return;
     }
-
     if (quantity > Number(currentLine.remaining_qty || 0)) {
-      toast.error("Số lượng vượt quá số lượng còn phải pick của dòng");
+      toast.error(`Chỉ còn ${currentLine.remaining_qty} cuốn cần lấy ở dòng này`);
       return;
     }
-
     try {
       setConfirmingLine(true);
-
-      const payload = {
+      const result = await pickingService.confirmLine(selectedTaskType, selectedTaskId, currentLine.line_id, {
         quantity,
         scanned_location_input: locationInput.trim(),
         scanned_product_barcode: productBarcodeInput.trim() || null,
         scanned_variant_id: selectedScannedVariantId || null,
-      };
-
-      const result = await pickingService.confirmLine(selectedTaskType, selectedTaskId, currentLine.line_id, payload);
-
+      });
       const nextLocationContext = locationInput.trim() || presenceResolvedLocationInput;
-
-      setLocationInput("");
-      setLocationVerified(false);
-      setProductBarcodeInput("");
-      setProductVerified(false);
-      setQuantityInput(1);
-      setSelectedScannedVariantId("");
-      setAmbiguousMatches([]);
-
       setPresenceConfirmed(true);
       setPresenceResolvedLocationInput(nextLocationContext);
-
       await Promise.all([
-        loadDetail(selectedTaskType, selectedTaskId, {
-          preservePresence: true,
-          currentLocationInput: nextLocationContext,
-        }),
-        loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined),
+        loadDetail(selectedTaskType, selectedTaskId, { preservePresence: true, currentLocationInput: nextLocationContext }),
+        reloadTasks(),
       ]);
-
       playScanSuccess();
       if (result.data.task_completed) {
         confetti({ particleCount: 60, spread: 55, origin: { y: 0.7 } });
-        toast.success("Đã hoàn tất toàn bộ task picking");
+        toast.success("Đã lấy đủ hàng cho đơn này");
       } else if (result.data.line_remaining_quantity > 0) {
-        toast.success(`Đã pick một phần, còn ${result.data.line_remaining_quantity} sản phẩm cần pick tiếp`);
+        toast.success(`Đã lấy ${quantity} cuốn, dòng này còn ${result.data.line_remaining_quantity}`);
       } else {
-        toast.success("Đã xác nhận lấy dòng thành công");
+        toast.success(`Đã lấy ${quantity} cuốn`);
       }
     } catch (error) {
       playScanError();
-      toast.error(getApiErrorMessage(error, "Xác nhận lấy dòng thất bại"));
+      toast.error(getApiErrorMessage(error, "Xác nhận lấy hàng thất bại"));
     } finally {
       setConfirmingLine(false);
     }
@@ -486,29 +468,22 @@ export function PickingPage() {
     setSelectedTaskId("");
     setDetail(null);
     setPresenceConfirmed(false);
-    setPresenceInput("");
     setPresenceResolvedLocationInput("");
-    setLocationInput("");
-    setLocationVerified(false);
-    setProductBarcodeInput("");
-    setProductVerified(false);
-    setQuantityInput(1);
-    setSelectedScannedVariantId("");
-    setAmbiguousMatches([]);
-    setActiveScanTarget(null);
+    resetLineProgress();
+    setCameraOpen(false);
     setShowShortageConfirm(false);
   };
 
   const handleDeclareShortage = async () => {
-    if (!selectedTaskId || declaringShortage) return;
+    if (!selectedTaskId || !selectedTaskType || declaringShortage) return;
     setShowShortageConfirm(false);
     setDeclaringShortage(true);
     try {
-      const res = await pickingService.declareShortage(selectedTaskType!, selectedTaskId);
+      const res = await pickingService.declareShortage(selectedTaskType, selectedTaskId);
       toast.success(res.data?.order_number
-        ? `Đã tạo REPICK ${res.data.order_number} — nhân viên khác có thể nhận và lấy bù`
-        : "Đã khai báo thiếu hàng và tạo REPICK thành công");
-      await loadTasks(canManageAssignment ? (selectedWarehouseId || undefined) : undefined);
+        ? `Đã tạo đơn lấy bù ${res.data.order_number} cho phần còn thiếu`
+        : "Đã khai báo thiếu hàng và tạo đơn lấy bù");
+      await reloadTasks();
       handleBackToList();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Khai báo thiếu hàng thất bại"));
@@ -517,84 +492,20 @@ export function PickingPage() {
     }
   };
 
-  const handleVerifyLocation = (inputOverride?: string) => {
-    if (!currentLine) {
-      toast.error("Không có dòng cần lấy");
+  const toggleRepickChildren = async (pickingTaskId: string) => {
+    if (expandedRepickTaskId === pickingTaskId) {
+      setExpandedRepickTaskId(null);
+      setRepickChildren([]);
       return;
     }
-
-    const sourceInput = inputOverride ?? locationInput;
-    const input = sourceInput.trim().toLowerCase();
-
-    if (inputOverride !== undefined) {
-      setLocationInput(sourceInput);
-    }
-
-    if (!input) {
-      toast.error("Nhập hoặc scan vị trí đích");
-      return;
-    }
-
-    const expected = [
-      currentLine.source_location_id,
-      currentLine.source_location_code,
-      currentLine.source_location_barcode,
-    ]
-      .filter(Boolean)
-      .map((value) => String(value).trim().toLowerCase());
-
-    if (expected.includes(input)) {
-      setLocationVerified(true);
-      setProductVerified(false);
-      setProductBarcodeInput("");
-      setQuantityInput(Math.max(1, Math.trunc(Number(currentLine.remaining_qty || 1))));
-      setSelectedScannedVariantId("");
-      setAmbiguousMatches([]);
-      playScanSuccess();
-      toast.success("Đã xác nhận đúng vị trí lấy hàng");
-      return;
-    }
-
-    setLocationVerified(false);
-    setProductVerified(false);
-    playScanError();
-    toast.error(`Sai vị trí. Cần đến ${currentLine.source_location_code || "vị trí được chỉ định"}`);
-  };
-
-  const handleDetectedScan = (code: string) => {
-    const normalized = String(code || "").trim();
-    if (!normalized || !activeScanTarget) return;
-
-    if (activeScanTarget === "presence") {
-      void handleConfirmPresence(normalized);
-    }
-
-    if (activeScanTarget === "location") {
-      handleVerifyLocation(normalized);
-    }
-
-    if (activeScanTarget === "product") {
-      void handleLookupProduct(normalized);
-    }
-
-    setActiveScanTarget(null);
-  };
-
-  // Hardware keyboard-wedge scanner (a handheld gun, not the camera modal): the current step
-  // decides what a scan means, so staff never has to tap a field or button before scanning —
-  // scan the shelf location, then the book, one after another, hands mostly on the cart.
-  const handleHardwareScan = (code: string) => {
-    if (!detail || !currentLine) return;
-    if (!presenceConfirmed) {
-      void handleConfirmPresence(code);
-    } else if (!locationVerified) {
-      handleVerifyLocation(code);
-    } else if (!productVerified) {
-      void handleLookupProduct(code);
+    setExpandedRepickTaskId(pickingTaskId);
+    setLoadingRepickChildren(true);
+    try {
+      setRepickChildren(await pickingService.getPickingTaskChildren(pickingTaskId));
+    } finally {
+      setLoadingRepickChildren(false);
     }
   };
-
-  useHardwareScanner(handleHardwareScan);
 
   if (loading) {
     return (
@@ -604,712 +515,530 @@ export function PickingPage() {
     );
   }
 
-  return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <NavLink
-          to="/orders"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
-        >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại danh sách
-        </NavLink>
-      </FadeItem>
+  if (detail) {
+    const progress = totalRequestedQty > 0 ? Math.round((totalPickedQty / totalRequestedQty) * 100) : 0;
+    const route = [detail.source_warehouse_code || detail.source_warehouse_name, detail.target_warehouse_code || detail.target_warehouse_name].filter(Boolean).join(" → ");
+    const done = detail.remaining_line_count === 0;
+    const stepHint: Record<ScanStep, string> = {
+      presence: currentLine?.source_location_code
+        ? `Quét mã vị trí bạn đang đứng để bắt đầu. Nếu đang ở kệ ${currentLine.source_location_code}, quét luôn mã kệ đó.`
+        : "Quét mã vị trí bạn đang đứng để bắt đầu và sắp lộ trình ngắn nhất.",
+      location: currentLine?.source_location_code
+        ? `Đi tới kệ ${currentLine.source_location_code} rồi quét mã kệ.`
+        : "Dòng này chưa được gán kệ. Đến vị trí đang có cuốn sách này và quét mã vị trí đó.",
+      product: "Lấy sách trên kệ và quét mã vạch trên bìa.",
+      quantity: "Kiểm lại số cuốn trên tay rồi xác nhận.",
+    };
+    const checks: { label: string; done: boolean }[] = [
+      { label: "Có mặt tại kho", done: presenceConfirmed },
+      { label: "Đúng kệ", done: locationVerified },
+      { label: "Đúng sách", done: productVerified },
+    ];
 
-      <FadeItem>
-        <PageHeader
-          icon={Package}
-          title="Lấy hàng (Picking)"
-          description={canManageAssignment ? "Quản lý giao task lấy hàng cho nhân viên kho và theo dõi tiến độ pick" : "Thực hiện task lấy hàng đã được giao"}
-          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10"
-          iconColor="text-blue-600 dark:text-blue-400"
-        />
-      </FadeItem>
-
-      {!detail ? (
-        <>
-          <FadeItem>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-              <span><span className="font-semibold text-foreground">{taskStats.total}</span> đơn</span>
-              <span aria-hidden="true">·</span>
-              <span><span className="font-semibold text-foreground">{taskStats.pick}</span> PICK</span>
-              <span aria-hidden="true">·</span>
-              <span><span className="font-semibold text-foreground">{taskStats.repick}</span> REPICK</span>
-              {taskStats.unassigned > 0 ? (
-                <StatusBadge label={`${taskStats.unassigned} chưa giao`} variant="danger" dot />
-              ) : null}
-            </p>
-          </FadeItem>
-
-          <FadeItem>
-            <FilterBar
-              searchValue={query}
-              onSearchChange={setQuery}
-              searchPlaceholder="Mã đơn / kho / loại đơn"
-              showSearchClear
-              filters={(
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-                  {canManageAssignment ? (
-                    <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                      <SelectTrigger className="w-full sm:w-[240px]" aria-label="Kho" title="Đơn chuyển kho hiện ở kho nguồn, không hiện ở kho đích.">
-                        <SelectValue placeholder="Chọn kho" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.code} - {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+    return (
+      <PageWrapper className="space-y-5">
+        <FadeItem>
+          <header className="space-y-3">
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Danh sách đơn lấy hàng
+            </button>
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-mono text-[20px] font-semibold tracking-tight text-foreground">{detail.order_number}</h1>
+                  {isRepick(detail.task_class) ? (
+                    <StatusBadge label={detail.repick_sequence ? `Lấy bù #${detail.repick_sequence}` : "Lấy bù"} variant="warning" />
                   ) : null}
-                  <div className="max-w-full overflow-x-auto">
-                    <SegmentedControl
-                      options={[
-                        { value: "ALL", label: `Tất cả (${taskStats.total})` },
-                        { value: "PICK", label: `PICK (${taskStats.pick})` },
-                        { value: "REPICK", label: `REPICK (${taskStats.repick})` },
-                      ]}
-                      value={taskClassFilter}
-                      onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
-                      layoutId="picking-class-filter"
-                      gradientClassName="from-blue-600 to-indigo-600"
-                      className="w-max"
-                    />
-                  </div>
                 </div>
-              )}
-            />
-          </FadeItem>
+                <p className="mt-1 text-[13px] text-muted-foreground">{[taskTypeLabel(detail.order_type), route].filter(Boolean).join(" · ")}</p>
+              </div>
+              <div className="w-full min-w-[220px] sm:w-64">
+                <div className="flex items-baseline justify-between text-[12px]">
+                  <span className="text-muted-foreground">{completedLineCount}/{detail.lines.length} dòng</span>
+                  <span className="font-semibold tabular-nums text-foreground">{totalPickedQty}/{totalRequestedQty} cuốn</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Tiến độ lấy hàng">
+                  <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            </div>
+          </header>
+        </FadeItem>
 
-          <FadeItem>
-            <SectionCard noPadding>
-              <div className="overflow-x-auto">
-              <Table className="table-fixed">
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    {[
-                      { label: "Đơn hàng", className: "" },
-                      { label: "Khối lượng", className: "hidden w-[110px] sm:table-cell" },
-                      { label: "Người lấy", className: "hidden w-[270px] md:table-cell" },
-                      { label: "Ngày", className: "hidden w-[150px] xl:table-cell" },
-                      { label: "Thao tác", className: "w-[130px] text-right" },
-                    ].map((head) => (
-                      <TableHead key={head.label} className={cn("px-4 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground", head.className)}>
-                        {head.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pagedTasks.length === 0 ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
-                        <EmptyState variant="no-data" title="Không có đơn nào sẵn sàng lấy" description="Các đơn được giao picking sẽ hiện ở đây" />
-                      </TableCell>
-                    </TableRow>
-                  ) : pagedTasks.map((task) => {
-                    const key = `${task.task_type}:${task.task_id}`;
-                    const assignedToMe = task.assigned_picker_user_id && task.assigned_picker_user_id === currentUserId;
-                    const isAssigned = Boolean(task.assigned_picker_user_id);
-                    const selectedPickerId = assigningPickerIdByTask[key] || "";
-                    const assignedPickerName = task.assigned_picker_user_id
-                      ? staffNameById.get(task.assigned_picker_user_id) || (assignedToMe ? currentUserLabel : `User ${task.assigned_picker_user_id.slice(0, 8)}`)
-                      : "";
-                    const classLabel = taskClassLabel(task.task_class);
-                    const route = [task.source_warehouse_code || task.source_warehouse_name, task.target_warehouse_code || task.target_warehouse_name]
-                      .filter(Boolean)
-                      .join(" → ");
+        <FadeItem>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-4">
+              {loadingDetail && !currentLine ? (
+                <SectionCard><LoadingOverlay /></SectionCard>
+              ) : done ? (
+                <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-6 text-center dark:border-emerald-500/20 dark:bg-emerald-500/[0.06]">
+                  <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <h2 className="mt-3 text-[18px] font-semibold text-foreground">Đã lấy đủ hàng</h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    {totalPickedQty} cuốn đã chuyển sang khu xuất hàng và đang chờ xác nhận xuất kho
+                    {detail.completed_at ? ` · xong lúc ${formatDate(detail.completed_at)}` : ""}.
+                  </p>
+                  <Button className="mt-5" onClick={handleBackToList}>
+                    <ArrowLeft className="h-4 w-4" /> Về danh sách đơn
+                  </Button>
+                </section>
+              ) : currentLine ? (
+                <section aria-labelledby="next-pick-title" className={cn("rounded-xl border border-border bg-card transition-opacity", loadingDetail && "opacity-60")}>
+                  <div className="border-b border-border p-5">
+                    <h2 id="next-pick-title" className="text-[12px] font-semibold text-muted-foreground">Lấy tiếp theo</h2>
+                    <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+                      <div className={cn(
+                        "flex flex-col items-center justify-center rounded-lg border px-4 py-3",
+                        locationVerified ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10" : "border-blue-200 bg-blue-50 dark:border-blue-500/20 dark:bg-blue-500/10",
+                      )}>
+                        <MapPin className={cn("h-4 w-4", locationVerified ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400")} aria-hidden="true" />
+                        <span className="mt-1 text-[11px] text-muted-foreground">Kệ</span>
+                        {currentLine.source_location_code ? (
+                          <span className="font-mono text-[20px] font-bold leading-tight text-foreground">{currentLine.source_location_code}</span>
+                        ) : (
+                          <span className="text-[13px] font-semibold leading-tight text-muted-foreground">Chưa gán</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 self-center">
+                        <p className="text-[17px] font-semibold leading-snug text-foreground">{currentLine.book_title}</p>
+                        <p className="mt-1 truncate font-mono text-[12px] text-muted-foreground">
+                          {[currentLine.isbn13 || currentLine.barcode, currentLine.sku].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                        {currentLine.note ? <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-400">Ghi chú: {currentLine.note}</p> : null}
+                      </div>
+                      <div className="col-span-2 flex items-baseline gap-2 sm:col-span-1 sm:flex-col sm:items-end sm:justify-center sm:gap-0">
+                        <span className="text-[11px] text-muted-foreground">Cần lấy</span>
+                        <span className="text-[32px] font-bold leading-none text-foreground">{currentLine.remaining_qty}</span>
+                        <span className="text-[12px] text-muted-foreground">
+                          {currentLine.picked_qty > 0 ? `đã lấy ${currentLine.picked_qty}/${currentLine.requested_qty}` : "cuốn"}
+                        </span>
+                      </div>
+                    </div>
+                    {isRepick(detail.task_class) && currentLine.repick_line?.missing_qty ? (
+                      <p className="mt-3 text-[12px] text-amber-700 dark:text-amber-400">
+                        Lấy bù phần thiếu {currentLine.repick_line.missing_qty} cuốn từ đơn {detail.parent_order_number || detail.root_order_number || "gốc"}.
+                      </p>
+                    ) : null}
+                  </div>
 
-                    // Assignment control lives with the assignee ("Người lấy"); on narrow screens that
-                    // column is hidden, so the same control is rendered under the order instead.
-                    const assignment = !isAssigned && canManageAssignment ? (
-                      <div className="flex items-center gap-2">
+                  <div className="space-y-4 p-5">
+                    <ol className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Các bước kiểm tra">
+                      {checks.map((check) => (
+                        <li key={check.label} className={cn("inline-flex items-center gap-1.5 text-[13px]", check.done ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>
+                          {check.done ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <Circle className="h-4 w-4" aria-hidden="true" />}
+                          {check.label}
+                        </li>
+                      ))}
+                    </ol>
+
+                    {scanStep !== "quantity" ? (
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          handleScan(scanInput);
+                        }}
+                        className="space-y-2"
+                      >
+                        <label htmlFor="picking-scan" className="block text-[14px] font-semibold text-foreground">{SCAN_TITLES[scanStep]}</label>
+                        <p className="text-[13px] text-muted-foreground">{stepHint[scanStep]}</p>
+                        <div className="flex gap-2">
+                          <Input
+                            id="picking-scan"
+                            value={scanInput}
+                            onChange={(event) => setScanInput(event.target.value)}
+                            placeholder={scanStep === "product" ? "Mã vạch / ISBN / SKU" : "Mã vị trí hoặc barcode kệ"}
+                            autoComplete="off"
+                            className="h-14 min-w-0 flex-1 font-mono text-[16px]"
+                          />
+                          <IconButton type="button" variant="outline" onClick={() => setCameraOpen(true)} label="Quét bằng camera" className="h-14 w-14 shrink-0">
+                            <ScanLine className="h-5 w-5" />
+                          </IconButton>
+                          <Button type="submit" loading={confirmingPresence || loadingLookup} className="h-14 px-5 text-[15px]">
+                            Xác nhận
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-[14px] font-semibold text-foreground">Số cuốn đã lấy</p>
+                        <p className="text-[13px] text-muted-foreground">{stepHint.quantity}</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center rounded-lg border border-border">
+                            <IconButton type="button" variant="ghost" label="Bớt 1 cuốn" className="h-14 w-14" onClick={() => setQuantityInput((value) => Math.max(1, value - 1))} disabled={quantityInput <= 1}>
+                              <Minus className="h-5 w-5" />
+                            </IconButton>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              aria-label="Số cuốn đã lấy"
+                              min={1}
+                              max={currentLine.remaining_qty || 1}
+                              value={quantityInput}
+                              onChange={(event) => setQuantityInput(Math.min(Number(currentLine.remaining_qty || 1), Math.max(1, Math.trunc(Number(event.target.value || 1)))))}
+                              className="h-14 w-20 border-0 text-center text-[20px] font-semibold shadow-none focus-visible:ring-0"
+                            />
+                            <IconButton type="button" variant="ghost" label="Thêm 1 cuốn" className="h-14 w-14" onClick={() => setQuantityInput((value) => Math.min(Number(currentLine.remaining_qty || 1), value + 1))} disabled={quantityInput >= Number(currentLine.remaining_qty || 1)}>
+                              <Plus className="h-5 w-5" />
+                            </IconButton>
+                          </div>
+                          <Button onClick={() => void handleConfirmLine()} disabled={!canConfirmLine} loading={confirmingLine} className="h-14 flex-1 bg-emerald-600 px-5 text-[15px] hover:bg-emerald-700 sm:flex-none">
+                            <CheckCircle2 className="h-5 w-5" />
+                            Xác nhận đã lấy {quantityInput} cuốn
+                          </Button>
+                        </div>
+                        {quantityInput < Number(currentLine.remaining_qty || 0) ? (
+                          <p className="text-[12px] text-amber-700 dark:text-amber-400">Lấy ít hơn số cần: phần còn lại vẫn ở dòng này để lấy tiếp hoặc khai báo thiếu.</p>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {ambiguousMatches.length > 0 ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+                        <p className="text-[13px] font-semibold text-amber-900 dark:text-amber-300">Mã vạch trùng nhiều sách — chọn đúng cuốn trên tay:</p>
                         <Select
-                          value={selectedPickerId || "none"}
-                          onValueChange={(v) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: v === "none" ? "" : v }))}
+                          value={selectedScannedVariantId || undefined}
+                          onValueChange={(selected) => {
+                            setSelectedScannedVariantId(selected);
+                            if (selected === currentLine.variant_id) {
+                              setProductVerified(true);
+                              setAmbiguousMatches([]);
+                              playScanSuccess();
+                            } else {
+                              setProductVerified(false);
+                              playScanError();
+                              toast.error(`Sai sách. Cần lấy: ${currentLine.book_title}`);
+                            }
+                          }}
                         >
-                          <SelectTrigger size="sm" aria-label={`Chọn nhân viên kho cho ${task.order_number}`} className="h-8 min-w-0 flex-1 text-[11px]">
-                            <SelectValue placeholder="Chọn nhân viên" />
+                          <SelectTrigger className="mt-2 w-full text-[13px]">
+                            <SelectValue placeholder="Chọn sách" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">Chọn nhân viên</SelectItem>
-                            {warehouseStaff.map((staff) => (
-                              <SelectItem key={staff.id} value={staff.id}>
-                                {staff.full_name || staff.username}
+                            {ambiguousMatches.map((match) => (
+                              <SelectItem key={match.variant_id} value={match.variant_id}>
+                                {match.book_title} · {match.sku || match.internal_barcode || match.isbn13 || match.isbn10}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button
-                          size="sm"
-                          variant="success-outline"
-                          onClick={() => void handleAssignTask(task)}
-                          disabled={!selectedPickerId}
-                          loading={claimingTaskKey === key}
-                        >
-                          <UserCheck className="h-3.5 w-3.5" />
-                          Giao
-                        </Button>
                       </div>
-                    ) : null;
+                    ) : null}
+                  </div>
+                </section>
+              ) : (
+                <SectionCard>
+                  <EmptyState variant="no-data" title="Không tìm thấy dòng cần lấy tiếp" description="Tải lại đơn hoặc quay về danh sách." />
+                </SectionCard>
+              )}
+            </div>
 
+            <aside aria-labelledby="pick-list-title" className="lg:sticky lg:top-20 lg:self-start">
+              <section className="rounded-xl border border-border bg-card">
+                <div className="flex items-baseline justify-between border-b border-border px-4 py-3">
+                  <h2 id="pick-list-title" className="text-[14px] font-semibold text-foreground">Danh sách cần lấy</h2>
+                  <span className="text-[12px] text-muted-foreground">theo lộ trình</span>
+                </div>
+                <ol className="max-h-[60vh] overflow-y-auto">
+                  {detail.lines.map((line) => {
+                    const lineDone = Number(line.picked_qty || 0) >= Number(line.requested_qty || 0);
+                    const isCurrent = !done && currentLine?.line_id === line.line_id;
                     return (
-                      <React.Fragment key={key}>
-                      <TableRow className="hover:bg-muted/50">
+                      <li
+                        key={line.line_id}
+                        aria-current={isCurrent ? "step" : undefined}
+                        className={cn("flex items-start gap-3 border-b border-border px-4 py-3 last:border-0", isCurrent && "bg-blue-50/70 dark:bg-blue-500/[0.07]")}
+                      >
+                        {lineDone ? (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Đã lấy" />
+                        ) : isCurrent ? (
+                          <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-label="Đang lấy" />
+                        ) : (
+                          <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" aria-label="Chưa lấy" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate text-[13px]", lineDone ? "text-muted-foreground line-through decoration-muted-foreground/40" : "font-medium text-foreground")} title={line.book_title}>{line.book_title}</p>
+                          <p className="font-mono text-[12px] text-muted-foreground">{line.source_location_code || "Chưa gán kệ"}</p>
+                        </div>
+                        <span className={cn("shrink-0 text-[13px] tabular-nums", lineDone ? "text-muted-foreground" : "font-semibold text-foreground")}>
+                          {line.picked_qty}/{line.requested_qty}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {canDeclareShortage && !done ? (
+                  <div className="border-t border-border p-4">
+                    {showShortageConfirm ? (
+                      <div className="space-y-2">
+                        <p className="text-[13px] text-foreground">Tạo đơn lấy bù cho phần còn thiếu và kết thúc đơn này?</p>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => void handleDeclareShortage()} loading={declaringShortage} className="bg-orange-600 text-white hover:bg-orange-700">
+                            Xác nhận thiếu hàng
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setShowShortageConfirm(false)} disabled={declaringShortage}>Hủy</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowShortageConfirm(true)}
+                        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-orange-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/30 dark:text-orange-400"
+                      >
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Kệ không đủ hàng? Khai báo thiếu
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+            </aside>
+          </div>
+        </FadeItem>
+
+        <BarcodeScanModal
+          isOpen={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onDetected={(code) => {
+            setCameraOpen(false);
+            handleScan(code);
+          }}
+          title={scanStep === "quantity" ? "Quét mã vạch" : SCAN_TITLES[scanStep]}
+        />
+      </PageWrapper>
+    );
+  }
+
+  return (
+    <PageWrapper className="space-y-5">
+      <FadeItem>
+        <PageHeader
+          icon={Package}
+          title="Lấy hàng"
+          description={canManageAssignment ? "Giao đơn cho nhân viên kho và theo dõi tiến độ lấy hàng." : "Các đơn lấy hàng được giao cho bạn."}
+          iconBg="bg-blue-100 dark:bg-blue-500/15"
+          iconColor="text-blue-600 dark:text-blue-400"
+        />
+      </FadeItem>
+
+      <FadeItem>
+        <FilterBar
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Mã đơn, kho hoặc loại đơn"
+          showSearchClear
+          filters={(
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+              {canManageAssignment ? (
+                <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                  <SelectTrigger className="w-full sm:w-[240px]" aria-label="Kho nguồn" title="Đơn chuyển kho hiện ở kho nguồn.">
+                    <SelectValue placeholder="Chọn kho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_WAREHOUSES}>Tất cả kho</SelectItem>
+                    {warehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <div className="max-w-full overflow-x-auto">
+                <SegmentedControl
+                  options={[
+                    { value: "ALL", label: `Tất cả (${taskStats.total})` },
+                    { value: "PICK", label: `Lấy hàng (${taskStats.pick})` },
+                    { value: "REPICK", label: `Lấy bù (${taskStats.repick})` },
+                  ]}
+                  value={taskClassFilter}
+                  onChange={(v) => setTaskClassFilter(v as "ALL" | "PICK" | "REPICK")}
+                  layoutId="picking-class-filter"
+                  className="w-max"
+                />
+              </div>
+            </div>
+          )}
+        />
+      </FadeItem>
+
+      <FadeItem>
+        <SectionCard noPadding>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-3 text-[13px] text-muted-foreground">
+            <span><span className="font-semibold text-foreground">{taskStats.total}</span> đơn</span>
+            {taskStats.mine > 0 ? <span><span className="font-semibold text-foreground">{taskStats.mine}</span> giao cho bạn</span> : null}
+            {taskStats.unassigned > 0 ? (
+              <span className="font-medium text-rose-600 dark:text-rose-400">{taskStats.unassigned} chưa giao cho ai</span>
+            ) : null}
+          </div>
+          <div className="overflow-x-auto">
+            <Table className="table-fixed">
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  {[
+                    { label: "Đơn hàng", className: "" },
+                    { label: "Cần lấy", className: "hidden w-[110px] sm:table-cell" },
+                    { label: "Người lấy", className: "hidden w-[270px] md:table-cell" },
+                    { label: "Yêu cầu lúc", className: "hidden w-[130px] xl:table-cell" },
+                    { label: "", className: "w-[130px]" },
+                  ].map((head, index) => (
+                    <TableHead key={index} className={cn("px-4 text-[12px] font-medium text-muted-foreground", head.className)}>{head.label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedTasks.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
+                      <EmptyState
+                        variant="no-data"
+                        title={tasks.length === 0 ? "Chưa có đơn nào cần lấy" : "Không có đơn khớp bộ lọc"}
+                        description={tasks.length === 0 ? "Đơn xuất kho hoặc chuyển kho đã duyệt sẽ hiện ở đây." : "Thử đổi kho, loại đơn hoặc từ khóa."}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : pagedTasks.map((task) => {
+                  const key = `${task.task_type}:${task.task_id}`;
+                  const assignedToMe = Boolean(task.assigned_picker_user_id) && task.assigned_picker_user_id === currentUserId;
+                  const isAssigned = Boolean(task.assigned_picker_user_id);
+                  const selectedPickerId = assigningPickerIdByTask[key] || "";
+                  const assignedPickerName = task.assigned_picker_user_id
+                    ? staffNameById.get(task.assigned_picker_user_id) || (assignedToMe ? currentUserLabel : `Nhân viên ${task.assigned_picker_user_id.slice(0, 8)}`)
+                    : "";
+                  const repick = isRepick(task.task_class);
+                  const route = [task.source_warehouse_code || task.source_warehouse_name, task.target_warehouse_code || task.target_warehouse_name].filter(Boolean).join(" → ");
+                  const inProgress = task.remaining_quantity < task.total_quantity;
+
+                  // Assignment control lives with the assignee column; on narrow screens that
+                  // column is hidden, so the same control is rendered under the order instead.
+                  const assignment = !isAssigned && canManageAssignment ? (
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedPickerId || "none"} onValueChange={(v) => setAssigningPickerIdByTask((prev) => ({ ...prev, [key]: v === "none" ? "" : v }))}>
+                        <SelectTrigger size="sm" aria-label={`Chọn nhân viên kho cho ${task.order_number}`} className="h-8 min-w-0 flex-1 text-[12px]">
+                          <SelectValue placeholder="Chọn nhân viên" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Chọn nhân viên</SelectItem>
+                          {warehouseStaff.map((staff) => (
+                            <SelectItem key={staff.id} value={staff.id}>{staff.full_name || staff.username}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="success-outline" onClick={() => void handleAssignTask(task)} disabled={!selectedPickerId} loading={claimingTaskKey === key}>
+                        <UserCheck className="h-3.5 w-3.5" /> Giao
+                      </Button>
+                    </div>
+                  ) : null;
+
+                  return (
+                    <React.Fragment key={key}>
+                      <TableRow className={cn("hover:bg-muted/50", assignedToMe && "bg-blue-50/40 dark:bg-blue-500/[0.05]")}>
                         <TableCell className="px-4 py-3 align-top">
-                          <p className="truncate text-[13px] font-semibold" title={task.order_number}>{task.order_number}</p>
+                          <p className="truncate font-mono text-[13px] font-semibold" title={task.order_number}>{task.order_number}</p>
                           <p className="truncate text-[12px] text-muted-foreground" title={route || undefined}>
                             {[taskTypeLabel(task.order_type), route].filter(Boolean).join(" · ")}
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <StatusBadge
-                              label={`${classLabel}${classLabel === "REPICK" && task.repick_sequence ? ` #${task.repick_sequence}` : ""}`}
-                              variant={classLabel === "REPICK" ? "warning" : "info"}
-                            />
-                            <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
-                            {classLabel === "PICK" && (task.repick_count ?? 0) > 0 && task.picking_task_id && (
+                            <StatusBadge label={statusLabel(task.status)} variant={getPickingTaskStatusVariant(task.status)} dot />
+                            {repick ? <StatusBadge label={task.repick_sequence ? `Lấy bù #${task.repick_sequence}` : "Lấy bù"} variant="warning" /> : null}
+                            {assignedToMe ? <StatusBadge label="Của bạn" variant="info" /> : null}
+                            {!repick && (task.repick_count ?? 0) > 0 && task.picking_task_id ? (
                               <button
-                                onClick={async () => {
-                                  const ptId = task.picking_task_id!;
-                                  if (expandedRepickTaskId === ptId) {
-                                    setExpandedRepickTaskId(null);
-                                    setRepickChildren([]);
-                                  } else {
-                                    setExpandedRepickTaskId(ptId);
-                                    setLoadingRepickChildren(true);
-                                    try {
-                                      const children = await pickingService.getPickingTaskChildren(ptId);
-                                      setRepickChildren(children);
-                                    } finally {
-                                      setLoadingRepickChildren(false);
-                                    }
-                                  }
-                                }}
-                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-amber-100 transition-colors dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/15"
-                                title="Xem REPICK tasks"
-                                aria-label={`Xem ${task.repick_count} REPICK task của đơn ${task.order_number}`}
+                                type="button"
+                                onClick={() => void toggleRepickChildren(task.picking_task_id!)}
+                                className="inline-flex items-center gap-0.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/15"
+                                aria-label={`Xem ${task.repick_count} đơn lấy bù của ${task.order_number}`}
                                 aria-expanded={expandedRepickTaskId === task.picking_task_id}
                               >
-                                {task.repick_count} RPK
-                                {expandedRepickTaskId === task.picking_task_id
-                                  ? <ChevronDown className="w-3 h-3" />
-                                  : <ChevronRight className="w-3 h-3" />}
+                                {task.repick_count} đơn lấy bù
+                                {expandedRepickTaskId === task.picking_task_id ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                               </button>
-                            )}
+                            ) : null}
                           </div>
                           <p className="mt-1.5 text-[12px] text-muted-foreground sm:hidden">
-                            {task.line_count} dòng · còn <span className="font-semibold text-foreground">{task.remaining_quantity}</span>
+                            Còn <span className="font-semibold text-foreground">{task.remaining_quantity}</span> cuốn · {task.line_count} dòng
                           </p>
                           <div className="mt-2 md:hidden">
                             {assignment ?? <p className="text-[12px] text-muted-foreground">{isAssigned ? `Người lấy: ${assignedPickerName}` : "Chưa giao"}</p>}
                           </div>
                         </TableCell>
                         <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                          <p className="text-[13px] font-semibold tabular-nums">{task.remaining_quantity}<span className="ml-1 text-[11px] font-normal text-muted-foreground">cần lấy</span></p>
+                          <p className="text-[13px] font-semibold tabular-nums">{task.remaining_quantity}<span className="ml-1 text-[12px] font-normal text-muted-foreground">cuốn</span></p>
                           <p className="text-[12px] text-muted-foreground">{task.line_count} dòng</p>
                         </TableCell>
                         <TableCell className="hidden px-4 py-3 align-top md:table-cell">
-                          {assignment ?? (
-                            <p className={cn("text-[12px]", isAssigned ? "text-foreground" : "text-muted-foreground")}>
-                              {isAssigned ? assignedPickerName : "Chưa giao"}
-                            </p>
-                          )}
+                          {assignment ?? <p className={cn("text-[13px]", isAssigned ? "text-foreground" : "text-muted-foreground")}>{isAssigned ? assignedPickerName : "Chưa giao"}</p>}
                         </TableCell>
-                        <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell">{formatDate(task.requested_at)}</TableCell>
-                        <TableCell className="px-4 py-3 align-top text-right">
-                          {(canManageAssignment || assignedToMe) ? (
-                            <Button size="sm" variant="outline" onClick={() => void handleOpenTask(task)}>
-                              Chi tiết <ArrowRight className="w-3 h-3" />
+                        <TableCell className="hidden px-4 py-3 align-top text-[12px] tabular-nums text-muted-foreground xl:table-cell">{formatDate(task.requested_at)}</TableCell>
+                        <TableCell className="px-4 py-3 text-right align-top">
+                          {assignedToMe ? (
+                            <Button size="sm" onClick={() => void handleOpenTask(task)}>
+                              {inProgress ? "Tiếp tục" : "Bắt đầu"} <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
+                          ) : canManageAssignment ? (
+                            <Button size="sm" variant="outline" onClick={() => void handleOpenTask(task)}>Xem</Button>
                           ) : null}
                         </TableCell>
                       </TableRow>
-                      {/* Inline REPICK children rows when expanded */}
-                      {task.picking_task_id && expandedRepickTaskId === task.picking_task_id && (
+                      {task.picking_task_id && expandedRepickTaskId === task.picking_task_id ? (
                         loadingRepickChildren ? (
-                          <TableRow key={`${key}-loading`}>
-                            <TableCell colSpan={5} className="py-2 pl-10 text-[11px] text-muted-foreground">Đang tải...</TableCell>
+                          <TableRow>
+                            <TableCell colSpan={5} className="py-2 pl-10 text-[12px] text-muted-foreground">Đang tải…</TableCell>
                           </TableRow>
                         ) : repickChildren.map((child) => (
-                          <TableRow key={child.picking_task_id} className="border-b border-amber-50 bg-amber-50/30 hover:bg-amber-50/30 dark:border-amber-500/10 dark:bg-amber-500/5 dark:hover:bg-amber-500/5">
+                          <TableRow key={child.picking_task_id} className="bg-amber-50/30 hover:bg-amber-50/30 dark:bg-amber-500/5 dark:hover:bg-amber-500/5">
                             <TableCell colSpan={5} className="px-4 py-2 pl-10">
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                                <span className="font-semibold text-amber-700 dark:text-amber-400">↳ {child.task_number}</span>
-                                <span>REPICK</span>
-                                <StatusBadge
-                                  label={child.status}
-                                  variant={child.status === "COMPLETED" ? "success" : child.status === "PICKING" ? "info" : "neutral"}
-                                />
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+                                <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">↳ {child.task_number}</span>
+                                <StatusBadge label={statusLabel(child.status)} variant={getPickingTaskStatusVariant(child.status)} />
                                 <span>{child.picking_task_items?.length ?? 0} dòng</span>
-                                <span>thiếu {child.picking_task_items?.reduce((sum, item) => sum + item.short_qty, 0) ?? 0}</span>
+                                <span>thiếu {child.picking_task_items?.reduce((sum, item) => sum + item.short_qty, 0) ?? 0} cuốn</span>
                               </div>
                             </TableCell>
                           </TableRow>
                         ))
-                      )}
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              </div>
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
 
-              {filteredTasks.length > 0 && (
-                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedTasks.length}</span> / {filteredTasks.length} đơn
-                  </p>
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.max(1, current - 1));
-                            }}
-                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                        {getPaginationRange(page, totalPages).map((item) => (
-                          <PaginationItem key={item}>
-                            {typeof item === "number" ? (
-                              <PaginationLink
-                                isActive={item === page}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  setPage(item);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </PaginationLink>
-                            ) : (
-                              <PaginationEllipsis />
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.min(totalPages, current + 1));
-                            }}
-                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
-                </div>
-              )}
-            </SectionCard>
-          </FadeItem>
-        </>
-      ) : (
-        <>
-          <FadeItem>
-            <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-indigo-500" />
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10 items-center justify-center">
-                    <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-muted-foreground font-semibold">Đơn đang thao tác</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <h2 className="text-[15px] font-semibold">{detail.order_number} · {taskTypeLabel(detail.order_type)}</h2>
-                      <StatusBadge
-                        label={`${taskClassLabel(detail.task_class)}${taskClassLabel(detail.task_class) === "REPICK" && detail.repick_sequence ? ` #${detail.repick_sequence}` : ""}`}
-                        variant={taskClassLabel(detail.task_class) === "REPICK" ? "warning" : "info"}
-                      />
-                    </div>
-                    <p className="text-[12px] text-muted-foreground mt-1">
-                      Nguồn: {detail.source_warehouse_code || detail.source_warehouse_name || "-"}
-                      {detail.target_warehouse_code || detail.target_warehouse_name ? ` | Đích: ${detail.target_warehouse_code || detail.target_warehouse_name}` : ""}
-                      {` | Còn ${detail.remaining_line_count} dòng / ${detail.remaining_quantity} sản phẩm`}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="outline" onClick={handleBackToList}>
-                  Quay lại danh sách
-                </Button>
-              </div>
-            </div>
-          </FadeItem>
-
-          {loadingDetail ? (
-            <FadeItem>
-              <SectionCard>
-                <LoadingOverlay />
-              </SectionCard>
-            </FadeItem>
-          ) : null}
-
-          {!loadingDetail && detail.remaining_line_count === 0 ? (
-            <FadeItem>
-              <Alert className="border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
-                <AlertTitle className="text-emerald-800 dark:text-emerald-300">Đã hoàn tất lấy hàng, chờ xuất kho</AlertTitle>
-                <AlertDescription className="text-emerald-700 dark:text-emerald-400">
-                  <p>Hàng đã được chuyển vào SHIPPING và đang chờ xác nhận outbound.</p>
-                  <p>
-                    Đơn: {detail.order_number} | Line đã pick: {completedLineCount}/{detail.lines.length} | Tổng qty đã pick: {totalPickedQty}
-                    {detail.completed_at ? ` | Hoàn tất: ${formatDate(detail.completed_at)}` : ""}
-                  </p>
-                </AlertDescription>
-              </Alert>
-            </FadeItem>
-          ) : null}
-
-          {!loadingDetail && detail.remaining_line_count > 0 ? (
-            <>
-              {/* Focus Mode Stepper */}
-              <FadeItem>
-                <SectionCard title="Tiến trình lấy hàng">
-                  <WorkflowStepper
-                    steps={[
-                      {
-                        id: 'presence',
-                        label: 'Xác nhận vị trí',
-                        description: 'Quét mã vị trí hiện tại',
-                        icon: UserCheck,
-                        status: presenceConfirmed ? 'completed' : 'active',
-                      },
-                      {
-                        id: 'location',
-                        label: 'Đi tới kệ',
-                        description: 'Quét mã vị trí lấy hàng',
-                        icon: MapPin,
-                        status: !presenceConfirmed ? 'pending' : locationVerified ? 'completed' : 'active',
-                      },
-                      {
-                        id: 'product',
-                        label: 'Quét sản phẩm',
-                        description: 'Quét mã vạch sách',
-                        icon: QrCode,
-                        status: !locationVerified ? 'pending' : productVerified ? 'completed' : 'active',
-                      },
-                      {
-                        id: 'quantity',
-                        label: 'Nhập số lượng',
-                        description: 'Điền số lượng lấy được',
-                        icon: Package,
-                        status: !productVerified ? 'pending' : canConfirmLine ? 'active' : 'pending',
-                      },
-                      {
-                        id: 'confirm',
-                        label: 'Xác nhận',
-                        description: 'Xác nhận dòng đã lấy',
-                        icon: CheckCircle2,
-                        status: canConfirmLine ? 'active' : 'pending',
-                      },
-                    ] satisfies WorkflowStep[]}
-                    compact
-                  />
-                </SectionCard>
-              </FadeItem>
-
-              {taskClassLabel(detail.task_class) === "REPICK" ? (
-                <FadeItem>
-                  <Alert className="border-amber-200/60 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/10">
-                    <AlertTriangle className="text-amber-600 dark:text-amber-400" />
-                    <AlertTitle className="text-amber-900 dark:text-amber-300">
-                      {detail.repick_sequence ? `Lấy bù lần #${detail.repick_sequence}` : 'Đơn lấy bù bổ sung phần thiếu'}
-                    </AlertTitle>
-                    <AlertDescription className="text-amber-800 dark:text-amber-400">
-                      <p>
-                        Đơn gốc: {detail.root_order_number || detail.root_task_id || "-"}
-                        {detail.parent_order_number || detail.parent_task_id ? ` | Sinh từ: ${detail.parent_order_number || detail.parent_task_id}` : ""}
-                      </p>
-                      <p>Đơn này chỉ chứa phần còn thiếu cần lấy lại.</p>
-                    </AlertDescription>
-                  </Alert>
-                </FadeItem>
-              ) : null}
-
-              <FadeItem>
-                <SectionCard
-                  title="Xác nhận hiện diện nhân viên"
-                  subtitle="Scan/nhập vị trí hiện tại trong kho nguồn trước khi pick."
-                  icon={UserCheck}
-                >
-                  <div className="flex gap-2 flex-wrap">
-                    <Input
-                      value={presenceInput}
-                      onChange={(event) => setPresenceInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleConfirmPresence();
-                        }
-                      }}
-                      placeholder="Barcode hoặc mã vị trí hiện tại"
-                      className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
-                      disabled={presenceConfirmed}
+          {filteredTasks.length > 0 && totalPages > 1 ? (
+            <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] text-muted-foreground">
+                Hiển thị <span className="font-medium text-foreground">{pagedTasks.length}</span> / {filteredTasks.length} đơn
+              </p>
+              <Pagination className="mx-0 w-auto justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={(event) => { event.preventDefault(); setPage((current) => Math.max(1, current - 1)); }}
+                      className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
                     />
-                    <IconButton
-                      variant="outline"
-                      onClick={() => setActiveScanTarget("presence")}
-                      disabled={confirmingPresence || presenceConfirmed}
-                      label="Quét mã vị trí hiện tại"
-                      className="h-14 w-14 shrink-0"
-                    >
-                      <ScanLine className="w-5 h-5" />
-                    </IconButton>
-                    <Button
-                      onClick={() => void handleConfirmPresence()}
-                      disabled={presenceConfirmed}
-                      loading={confirmingPresence}
-                      className={`h-14 px-4 text-[15px] ${
-                        presenceConfirmed
-                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 cursor-default dark:bg-emerald-500/15 dark:text-emerald-400"
-                          : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
-                      }`}
-                    >
-                      {presenceConfirmed ? "Đã xác nhận" : "Xác nhận"}
-                    </Button>
-                  </div>
-                </SectionCard>
-              </FadeItem>
-
-              <FadeItem>
-                <SectionCard title="Scan vị trí cần đến" icon={MapPin}>
-                  {!presenceConfirmed ? (
-                    <p className="text-[12px] text-muted-foreground">Cần hoàn thành bước 1 trước khi hiện vị trí cần pick.</p>
-                  ) : currentLine ? (
-                    <div className="space-y-4">
-                      <div className="rounded-[12px] border border-border bg-muted/50 p-4">
-                        <p className="text-[11px] text-muted-foreground font-semibold">Vị trí cần đến</p>
-                        <p className="text-[15px] text-foreground font-bold mt-1">
-                          {currentLine.source_location_code || "(Hệ thống đang xác định vị trí phù hợp)"}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground mt-1">Chỉ scan đúng vị trí này mới được sang bước tiếp theo.</p>
-                      </div>
-
-                      <div className="flex gap-2 flex-wrap">
-                        <Input
-                          value={locationInput}
-                          onChange={(event) => {
-                            setLocationInput(event.target.value);
-                            setLocationVerified(false);
-                            setProductVerified(false);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              handleVerifyLocation();
-                            }
-                          }}
-                          placeholder="Barcode hoặc mã vị trí đích"
-                          className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
-                        />
-                        <IconButton
-                          variant="outline"
-                          onClick={() => setActiveScanTarget("location")}
-                          disabled={!presenceConfirmed || !currentLine}
-                          label="Quét mã vị trí cần đến"
-                          className="h-14 w-14 shrink-0"
-                        >
-                          <ScanLine className="w-5 h-5" />
-                        </IconButton>
-                        <Button
-                          onClick={() => handleVerifyLocation()}
-                          className={`h-14 px-4 text-[15px] ${
-                            locationVerified
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400"
-                              : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
-                          }`}
-                        >
-                          {locationVerified ? "Đúng vị trí" : "Xác nhận vị trí"}
-                        </Button>
-                      </div>
-
-                      {locationVerified ? (
-                        <>
-                          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Scan sản phẩm cần lấy</p>
-                          <div className="rounded-[12px] border border-border bg-muted/50 p-4">
-                            <p className="text-[11px] text-muted-foreground font-semibold">Sản phẩm cần pick</p>
-                            <p className="text-[13px] text-foreground font-semibold mt-1">{currentLine.book_title}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                              SKU: {currentLine.sku || "-"} | Barcode: {currentLine.barcode || "-"}
-                            </p>
-                            <p className="text-[12px] text-foreground mt-1 font-medium">
-                              Cần pick: {currentLine.remaining_qty} (đã pick {currentLine.picked_qty}/{currentLine.requested_qty})
-                            </p>
-                            {taskClassLabel(detail.task_class) === "REPICK" && currentLine.repick_line?.original_line_id ? (
-                              <p className="text-[11px] text-muted-foreground mt-1">
-                                Truy vết dòng gốc: {currentLine.repick_line.original_line_id} | Thiếu ban đầu: {currentLine.repick_line.missing_qty}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="flex gap-2 flex-wrap">
-                            <Input
-                              value={productBarcodeInput}
-                              onChange={(event) => {
-                                setProductBarcodeInput(event.target.value);
-                                setProductVerified(false);
-                                setSelectedScannedVariantId("");
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void handleLookupProduct();
-                                }
-                              }}
-                              placeholder="Barcode / mã nội bộ / ISBN / SKU"
-                              className="flex-1 min-w-[200px] h-14 py-3.5 text-[15px]"
-                            />
-                            <IconButton
-                              variant="outline"
-                              onClick={() => setActiveScanTarget("product")}
-                              disabled={loadingLookup || !locationVerified}
-                              label="Quét mã vạch sản phẩm"
-                              className="h-14 w-14 shrink-0"
-                            >
-                              <ScanLine className="w-5 h-5" />
-                            </IconButton>
-                            <Button
-                              onClick={() => void handleLookupProduct()}
-                              loading={loadingLookup}
-                              className="h-14 px-4 text-[15px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
-                            >
-                              Xác nhận mã
-                            </Button>
-                          </div>
-
-                          {ambiguousMatches.length > 0 ? (
-                            <div className="rounded-[12px] border border-amber-200/60 bg-amber-50/50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
-                              <p className="text-[12px] text-amber-800 dark:text-amber-400 font-semibold">Barcode trùng nhiều item, chọn đúng item:</p>
-                              <Select
-                                value={selectedScannedVariantId || undefined}
-                                onValueChange={(selected) => {
-                                  setSelectedScannedVariantId(selected);
-
-                                  if (selected === currentLine.variant_id) {
-                                    setProductVerified(true);
-                                    toast.success("Đã chọn đúng sản phẩm cho dòng hiện tại");
-                                  } else {
-                                    setProductVerified(false);
-                                    toast.error("Sai sản phẩm cho dòng hiện tại");
-                                  }
-                                }}
-                              >
-                                <SelectTrigger className="mt-2 w-full text-[12px] border-amber-200 dark:border-amber-500/20">
-                                  <SelectValue placeholder="Chọn biến thể đúng" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {ambiguousMatches.map((match) => (
-                                    <SelectItem key={match.variant_id} value={match.variant_id}>
-                                      {match.sku || match.internal_barcode || match.isbn13 || match.isbn10} | {match.book_title} | {match.matched_by}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          ) : null}
-
-                          {productVerified ? (
-                            <>
-                              <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground pt-2">Nhập số lượng và xác nhận</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
-                                  <Input
-                                    type="number"
-                                    min={1}
-                                    max={currentLine?.remaining_qty || 1}
-                                    value={quantityInput}
-                                    onChange={(event) => setQuantityInput(Math.max(1, Math.trunc(Number(event.target.value || 1))))}
-                                    className="w-full h-14 py-3.5 text-[15px]"
-                                  />
-                                </div>
-                                <div className="flex items-end justify-end">
-                                  <Button
-                                    onClick={handleConfirmLine}
-                                    disabled={!canConfirmLine}
-                                    loading={confirmingLine}
-                                    className="h-14 px-5 text-[15px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90"
-                                  >
-                                    Xác nhận lấy dòng
-                                  </Button>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-[12px] text-muted-foreground">Cần scan đúng sản phẩm trước khi nhập số lượng.</p>
-                          )}
-                        </>
+                  </PaginationItem>
+                  {getPaginationRange(page, totalPages).map((item, index) => (
+                    <PaginationItem key={typeof item === "number" ? item : `${item}-${index}`}>
+                      {typeof item === "number" ? (
+                        <PaginationLink isActive={item === page} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">{item}</PaginationLink>
                       ) : (
-                        <p className="text-[12px] text-muted-foreground">Cần scan đúng vị trí đích trước khi hiện sản phẩm cần lấy.</p>
+                        <PaginationEllipsis />
                       )}
-                    </div>
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">Không tìm thấy dòng cần lấy tiếp theo.</p>
-                  )}
-                </SectionCard>
-              </FadeItem>
-
-              {canDeclareShortage ? (
-                <FadeItem>
-                  <Alert className="border-orange-200/70 bg-orange-50/60 dark:border-orange-500/20 dark:bg-orange-500/10">
-                    <AlertTriangle className="text-orange-600 dark:text-orange-400" />
-                    <AlertTitle className="text-orange-900 dark:text-orange-300">Không đủ hàng để pick?</AlertTitle>
-                    <AlertDescription className="text-orange-800 dark:text-orange-400">
-                      <p>
-                        Nếu bạn đã pick tối đa có thể nhưng vẫn thiếu, hãy khai báo thiếu hàng.
-                        Hệ thống sẽ tạo đơn REPICK để nhân viên khác có thể nhận và lấy bù phần còn thiếu.
-                      </p>
-                      <div className="mt-3">
-                        {showShortageConfirm ? (
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <p className="text-[12px] text-orange-900 dark:text-orange-300 font-semibold">Xác nhận khai báo thiếu hàng?</p>
-                            <Button
-                              onClick={() => void handleDeclareShortage()}
-                              loading={declaringShortage}
-                              size="sm"
-                              className="bg-orange-600 hover:bg-orange-700 text-white"
-                            >
-                              Xác nhận, tạo REPICK
-                            </Button>
-                            <Button
-                              onClick={() => setShowShortageConfirm(false)}
-                              disabled={declaringShortage}
-                              variant="outline"
-                              size="sm"
-                              className="border-orange-200 text-orange-700 hover:bg-orange-100 dark:border-orange-500/20 dark:text-orange-400 dark:hover:bg-orange-500/15"
-                            >
-                              Huỷ
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            onClick={() => setShowShortageConfirm(true)}
-                            variant="outline"
-                            size="sm"
-                            className="border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-500/30 dark:text-orange-400 dark:hover:bg-orange-500/15"
-                          >
-                            Khai báo thiếu hàng &amp; tạo REPICK
-                          </Button>
-                        )}
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                </FadeItem>
-              ) : null}
-            </>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={(event) => { event.preventDefault(); setPage((current) => Math.min(totalPages, current + 1)); }}
+                      className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           ) : null}
-        </>
-      )}
-
-      <BarcodeScanModal
-        isOpen={Boolean(activeScanTarget)}
-        onClose={() => setActiveScanTarget(null)}
-        onDetected={handleDetectedScan}
-        title={scannerTitle}
-      />
+        </SectionCard>
+      </FadeItem>
     </PageWrapper>
   );
 }
