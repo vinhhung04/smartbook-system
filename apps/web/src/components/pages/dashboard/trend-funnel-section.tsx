@@ -1,85 +1,190 @@
-import { TicketCheck, TrendingUp } from 'lucide-react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { SectionCard } from '@/components/ui/section-card';
+import { useMemo } from 'react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { DashboardKpis } from '@/services/analytics';
-import { CHART_COLORS } from './types';
+import { cn } from '@/components/ui/utils';
+import type { DashboardKpis, ReservationFunnel } from '@/services/analytics';
 import { formatPercent } from './utils';
 
-interface TrendFunnelSectionProps {
-  trendData: Array<{ date: string; loans: number; returns: number; reservations: number; label: string }>;
-  funnelData: Array<{ name: string; value: number }>;
-  kpis: DashboardKpis;
-  conversionRate: number;
+// Validated categorical trio (dataviz validator, light + dark): indigo / cyan / amber.
+// Reservations also carry a dashed stroke because cyan↔indigo sits near the tritan floor in dark mode.
+const SERIES = [
+  { key: 'loans', label: 'Mượn', color: 'var(--series-loans)', dash: undefined },
+  { key: 'returns', label: 'Trả', color: 'var(--series-returns)', dash: undefined },
+  { key: 'reservations', label: 'Đặt trước', color: 'var(--series-reservations)', dash: '5 3' },
+] as const;
+
+const SERIES_VARS = '[--series-loans:#4f46e5] [--series-returns:#06b6d4] [--series-reservations:#f59e0b] dark:[--series-loans:#6366f1] dark:[--series-returns:#0891b2] dark:[--series-reservations:#d97706]';
+const DAY_MS = 86_400_000;
+
+type TrendRow = { date: string; loans: number; returns: number; reservations: number };
+
+/** Continuous daily series from the first to the last reported day, so quiet days read as zero. */
+function zeroFill(rows: TrendRow[]): TrendRow[] {
+  const valid = rows.filter((row) => /^\d{4}-\d{2}-\d{2}/.test(row.date));
+  if (valid.length === 0) return rows;
+  const byDay = new Map(valid.map((row) => [row.date.slice(0, 10), row]));
+  const days = [...byDay.keys()].sort();
+  const out: TrendRow[] = [];
+  for (let t = Date.parse(`${days[0]}T00:00:00Z`); t <= Date.parse(`${days[days.length - 1]}T00:00:00Z`); t += DAY_MS) {
+    const key = new Date(t).toISOString().slice(0, 10);
+    const row = byDay.get(key);
+    out.push({ date: key, loans: Number(row?.loans || 0), returns: Number(row?.returns || 0), reservations: Number(row?.reservations || 0) });
+  }
+  return out;
 }
 
-export function TrendFunnelSection({ trendData, funnelData, kpis, conversionRate }: TrendFunnelSectionProps) {
+function dayLabel(date: string) {
+  const [, month, day] = date.split('-');
+  return day && month ? `${day}/${month}` : date;
+}
+
+function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey?: string; value?: number }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-[12px] shadow-[0_6px_16px_-6px_rgba(15,23,42,0.25)]">
+      <p className="mb-1 font-medium text-foreground">{dayLabel(label || '')}</p>
+      {SERIES.map((series) => (
+        <p key={series.key} className="flex items-center justify-between gap-4 text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0.5 w-3 rounded-full" style={{ background: series.color }} aria-hidden="true" />
+            {series.label}
+          </span>
+          <span className="font-semibold tabular-nums text-foreground">{Number(payload.find((entry) => entry.dataKey === series.key)?.value || 0).toLocaleString('vi-VN')}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+interface TrendFunnelSectionProps {
+  trendData: TrendRow[];
+  funnel: ReservationFunnel;
+  kpis: DashboardKpis;
+}
+
+export function TrendFunnelSection({ trendData, funnel, kpis }: TrendFunnelSectionProps) {
+  const series = useMemo(() => zeroFill(trendData), [trendData]);
+  const totals = useMemo(() => series.reduce(
+    (acc, row) => ({ loans: acc.loans + row.loans, returns: acc.returns + row.returns, reservations: acc.reservations + row.reservations }),
+    { loans: 0, returns: 0, reservations: 0 },
+  ), [series]);
+
+  const open = funnel.pending + funnel.confirmed + funnel.ready_for_pickup;
+  const outcomes = [
+    { key: 'converted', label: 'Đã đến lấy', value: funnel.converted_to_loan, color: 'bg-emerald-500' },
+    { key: 'expired', label: 'Hết hạn không lấy', value: funnel.expired, color: 'bg-amber-500' },
+    { key: 'cancelled', label: 'Đã hủy', value: funnel.cancelled, color: 'bg-slate-400' },
+    { key: 'open', label: 'Đang xử lý', value: open, color: 'bg-indigo-400' },
+  ].filter((outcome) => outcome.value > 0);
+  const outcomeTotal = outcomes.reduce((sum, outcome) => sum + outcome.value, 0);
+
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-      <section className="xl:col-span-2">
-        <SectionCard title="Xu hướng mượn trả" subtitle="Lượt mượn, trả và đặt trước trong khoảng thời gian gần nhất" icon={TrendingUp}>
-          {trendData.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={trendData} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
-                <defs>
-                  <linearGradient id="loansGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={CHART_COLORS[0]} stopOpacity={0.28} />
-                    <stop offset="100%" stopColor={CHART_COLORS[0]} stopOpacity={0.03} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={32} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="loans" stroke={CHART_COLORS[0]} fill="url(#loansGrad)" strokeWidth={2} name="Mượn" />
-                <Area type="monotone" dataKey="returns" stroke={CHART_COLORS[1]} fill={CHART_COLORS[1]} fillOpacity={0.15} strokeWidth={2} name="Trả" />
-                <Area type="monotone" dataKey="reservations" stroke={CHART_COLORS[2]} fill={CHART_COLORS[2]} fillOpacity={0.15} strokeWidth={2} name="Đặt trước" />
-              </AreaChart>
+      <section aria-labelledby="trend-title" className={cn('rounded-xl border border-border bg-card p-5 xl:col-span-2', SERIES_VARS)}>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div>
+            <h3 id="trend-title" className="text-[14px] font-semibold text-foreground">Mượn, trả và đặt trước theo ngày</h3>
+            {series.length ? (
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {series.length} ngày gần nhất · <span className="font-semibold text-foreground">{totals.loans.toLocaleString('vi-VN')}</span> lượt mượn,{' '}
+                <span className="font-semibold text-foreground">{totals.returns.toLocaleString('vi-VN')}</span> lượt trả
+              </p>
+            ) : null}
+          </div>
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Chú thích">
+            {SERIES.map((item) => (
+              <li key={item.key} className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <svg width="16" height="6" aria-hidden="true"><line x1="0" y1="3" x2="16" y2="3" stroke={item.color} strokeWidth="2" strokeDasharray={item.dash} strokeLinecap="round" /></svg>
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="mt-4">
+          {series.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(148,163,184,0.22)" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={dayLabel} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} minTickGap={24} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+                <Tooltip content={<TrendTooltip />} cursor={{ stroke: 'rgba(148,163,184,0.5)', strokeWidth: 1 }} />
+                {SERIES.map((item) => (
+                  <Line
+                    key={item.key}
+                    type="linear"
+                    dataKey={item.key}
+                    name={item.label}
+                    stroke={item.color}
+                    strokeWidth={2}
+                    strokeDasharray={item.dash}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--card)' }}
+                    isAnimationActive={false}
+                  />
+                ))}
+              </LineChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState variant="no-data" title="Chưa có dữ liệu xu hướng" description="Chưa có hoạt động mượn/đặt trong khoảng thời gian đã chọn." />
+            <EmptyState variant="no-data" title="Chưa có dữ liệu xu hướng" description="Chưa có hoạt động mượn/đặt trong khoảng thời gian này." />
           )}
-        </SectionCard>
+        </div>
       </section>
 
-      <SectionCard title="Phễu đặt trước" subtitle={`Tỷ lệ chuyển đổi ${formatPercent(conversionRate)}`} icon={TicketCheck}>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="rounded-lg bg-muted/50 px-2.5 py-2">
-            <p className="text-[11px] uppercase text-muted-foreground">Đặt trước</p>
-            <p className="text-[15px] font-semibold text-foreground">{kpis.pending_reservations}</p>
-          </div>
-          <div className="rounded-lg bg-muted/50 px-2.5 py-2">
-            <p className="text-[11px] uppercase text-muted-foreground">Đã xác nhận</p>
-            <p className="text-[15px] font-semibold text-foreground">{kpis.confirmed_reservations}</p>
-          </div>
-          <div className="rounded-lg bg-muted/50 px-2.5 py-2">
-            <p className="text-[11px] uppercase text-muted-foreground">Sẵn lấy</p>
-            <p className="text-[15px] font-semibold text-foreground">{kpis.ready_for_pickup_reservations}</p>
-          </div>
-          <div className="rounded-lg bg-muted/50 px-2.5 py-2">
-            <p className="text-[11px] uppercase text-muted-foreground">Sắp hết hạn lấy</p>
-            <p className="text-[15px] font-semibold text-foreground">{kpis.pickup_codes_expiring_soon}</p>
-          </div>
+      <section aria-labelledby="reservation-title" className="rounded-xl border border-border bg-card p-5">
+        <h3 id="reservation-title" className="text-[14px] font-semibold text-foreground">Đặt trước</h3>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Tỷ lệ khách đến lấy <span className="font-semibold text-foreground">{formatPercent(funnel.conversion_rate)}</span>
+        </p>
+
+        <div className="mt-4">
+          <p className="text-[12px] font-medium text-muted-foreground">Đang chờ xử lý</p>
+          <dl className="mt-2 grid grid-cols-3 divide-x divide-border rounded-lg border border-border">
+            {[
+              { label: 'Chờ xác nhận', value: kpis.pending_reservations },
+              { label: 'Đã xác nhận', value: kpis.confirmed_reservations },
+              { label: 'Sẵn sàng lấy', value: kpis.ready_for_pickup_reservations },
+            ].map((stat) => (
+              <div key={stat.label} className="px-3 py-2.5">
+                <dt className="text-[11px] leading-4 text-muted-foreground">{stat.label}</dt>
+                <dd className="mt-0.5 text-[18px] font-semibold text-foreground">{stat.value.toLocaleString('vi-VN')}</dd>
+              </div>
+            ))}
+          </dl>
+          {kpis.pickup_codes_expiring_soon > 0 ? (
+            <p className="mt-2 text-[12px] font-medium text-amber-700 dark:text-amber-400">{kpis.pickup_codes_expiring_soon} mã lấy sách sắp hết hạn</p>
+          ) : null}
         </div>
-        {funnelData.some((item) => item.value > 0) ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={funnelData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} width={28} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Đặt trước">
-                {funnelData.map((_, index) => (
-                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+
+        <div className="mt-5">
+          <p className="text-[12px] font-medium text-muted-foreground">
+            Kết quả {outcomeTotal > 0 ? `${outcomeTotal.toLocaleString('vi-VN')} lượt đặt trước` : ''}
+          </p>
+          {outcomeTotal > 0 ? (
+            <>
+              <div className="mt-2 flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Tỷ trọng kết quả đặt trước">
+                {outcomes.map((outcome) => (
+                  <span key={outcome.key} className={cn('h-full', outcome.color)} style={{ width: `${(outcome.value / outcomeTotal) * 100}%`, minWidth: 3 }} />
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyState variant="no-data" title="Chưa có đặt trước" description="Phễu đặt trước sẽ hiển thị sau khi khách hàng tạo đặt trước." />
-        )}
-      </SectionCard>
+              </div>
+              <ul className="mt-3 space-y-1.5">
+                {outcomes.map((outcome) => (
+                  <li key={outcome.key} className="flex items-center justify-between gap-3 text-[13px]">
+                    <span className="inline-flex items-center gap-2 text-foreground">
+                      <span className={cn('h-2.5 w-2.5 rounded-[3px]', outcome.color)} aria-hidden="true" />
+                      {outcome.label}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      <span className="font-semibold text-foreground">{outcome.value.toLocaleString('vi-VN')}</span> · {Math.round((outcome.value / outcomeTotal) * 100)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-2 text-[13px] text-muted-foreground">Chưa có lượt đặt trước nào.</p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

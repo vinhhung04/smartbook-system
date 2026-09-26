@@ -1,76 +1,131 @@
-import { Ban, CheckCircle2, Crown, Receipt } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { SectionCard } from '@/components/ui/section-card';
+import { useMemo } from 'react';
+import { NavLink } from 'react-router';
 import { EmptyState } from '@/components/ui/empty-state';
+import { cn } from '@/components/ui/utils';
 import type { FineSummary } from '@/services/analytics';
-import { CHART_COLORS } from './types';
 import { formatMoney } from './utils';
 
+// Backend stores a few spellings for the same fine reason; readers see one Vietnamese label.
+const FINE_TYPE_LABELS: Record<string, string> = {
+  OVERDUE: 'Trả trễ hạn',
+  LATE: 'Trả trễ hạn',
+  DAMAGE: 'Hư hỏng sách',
+  DAMAGED: 'Hư hỏng sách',
+  LOST: 'Mất sách',
+};
+
+function compactMoney(value: number) {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
+}
+
 interface TopBooksFinesSectionProps {
-  topBookData: Array<{ variant_id: string; book_id: string | null; title: string; borrow_count: number; name: string }>;
+  topBookData: Array<{ variant_id: string; book_id: string | null; title: string; borrow_count: number }>;
   fines: FineSummary;
 }
 
 export function TopBooksFinesSection({ topBookData, fines }: TopBooksFinesSectionProps) {
+  const topMax = topBookData[0]?.borrow_count || 1;
+
+  const byType = useMemo(() => {
+    const merged = new Map<string, { label: string; amount: number; count: number }>();
+    for (const item of fines.by_type) {
+      const label = FINE_TYPE_LABELS[String(item.fine_type).toUpperCase()] || item.fine_type;
+      const current = merged.get(label) || { label, amount: 0, count: 0 };
+      current.amount += Number(item.amount || 0);
+      current.count += Number(item.count || 0);
+      merged.set(label, current);
+    }
+    return [...merged.values()].sort((a, b) => b.amount - a.amount);
+  }, [fines.by_type]);
+
+  const statusParts = [
+    { key: 'unpaid', label: 'Chưa thu', value: fines.total_unpaid, color: 'bg-rose-500' },
+    { key: 'paid', label: 'Đã thu', value: fines.total_paid, color: 'bg-emerald-500' },
+    { key: 'waived', label: 'Miễn giảm', value: fines.total_waived, color: 'bg-slate-400' },
+  ];
+  const statusTotal = statusParts.reduce((sum, part) => sum + part.value, 0);
+
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-      <SectionCard title="Sách mượn nhiều nhất" subtitle="Xếp hạng theo số lượt mượn" icon={Crown}>
-        {topBookData.length ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={topBookData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
-              <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: 'var(--color-foreground)' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)' }} />
-              <Bar dataKey="borrow_count" radius={[0, 6, 6, 0]} name="Số lượt mượn">
-                {topBookData.map((_, index) => (
-                  <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
-        )}
-      </SectionCard>
-
-      <SectionCard title="Tổng quan tiền phạt" subtitle="Số tiền chưa trả, đã trả và miễn giảm" icon={Receipt}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-500/20 dark:bg-rose-500/10">
-            <div className="flex items-center gap-1.5 text-[11px] uppercase text-rose-700 dark:text-rose-400">
-              <Receipt className="w-3 h-3" /> Chưa trả
-            </div>
-            <p className="mt-1 text-[18px] font-semibold text-rose-900 dark:text-rose-300">{formatMoney(fines.total_unpaid)}</p>
-          </div>
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-            <div className="flex items-center gap-1.5 text-[11px] uppercase text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="w-3 h-3" /> Đã trả
-            </div>
-            <p className="mt-1 text-[18px] font-semibold text-emerald-900 dark:text-emerald-300">{formatMoney(fines.total_paid)}</p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-500/20 dark:bg-slate-500/10">
-            <div className="flex items-center gap-1.5 text-[11px] uppercase text-slate-600 dark:text-slate-400">
-              <Ban className="w-3 h-3" /> Miễn giảm
-            </div>
-            <p className="mt-1 text-[18px] font-semibold text-slate-800 dark:text-slate-300">{formatMoney(fines.total_waived)}</p>
-          </div>
-        </div>
-        <div className="mt-4 space-y-2">
-          {fines.by_type.length ? (
-            fines.by_type.map((item) => (
-              <div key={item.fine_type} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                <div>
-                  <p className="text-[13px] font-medium">{item.fine_type}</p>
-                  <p className="text-[12px] text-muted-foreground">{item.count} khoản phạt</p>
-                </div>
-                <p className="text-[13px] font-semibold">{formatMoney(item.amount)}</p>
-              </div>
-            ))
+      <section aria-labelledby="top-books-title" className="rounded-xl border border-border bg-card p-5">
+        <h3 id="top-books-title" className="text-[14px] font-semibold text-foreground">Sách được mượn nhiều nhất</h3>
+        <p className="mt-1 text-[13px] text-muted-foreground">Xếp hạng theo tổng lượt mượn</p>
+        <div className="mt-4">
+          {topBookData.length ? (
+            <ol className="space-y-3">
+              {topBookData.map((book, index) => {
+                const title = (
+                  <span className="truncate text-[13px] font-medium text-foreground" title={book.title}>{book.title}</span>
+                );
+                return (
+                  <li key={book.variant_id} className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
+                    <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
+                    {book.book_id ? (
+                      <NavLink to={`/book/${book.book_id}`} className="min-w-0 truncate hover:underline">{title}</NavLink>
+                    ) : title}
+                    <span className="text-[13px] font-semibold tabular-nums text-foreground">{book.borrow_count.toLocaleString('vi-VN')}</span>
+                    <span className="col-start-2 col-end-4 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                      <span className="block h-full rounded-full bg-indigo-500 dark:bg-indigo-400" style={{ width: `${(book.borrow_count / topMax) * 100}%` }} />
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           ) : (
-            <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
+            <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
           )}
         </div>
-      </SectionCard>
+      </section>
+
+      <section aria-labelledby="fines-title" className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h3 id="fines-title" className="text-[14px] font-semibold text-foreground">Tiền phạt</h3>
+          <NavLink to="/borrow/fines?status=UNPAID" className="text-[13px] font-medium text-indigo-600 hover:underline dark:text-indigo-400">Xem khoản chưa thu</NavLink>
+        </div>
+        {statusTotal > 0 ? (
+          <>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Chưa thu <span className="font-semibold text-foreground">{formatMoney(fines.total_unpaid)}</span> · {fines.unpaid_count.toLocaleString('vi-VN')} khoản
+            </p>
+            <div className="mt-4 flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Tỷ trọng tiền phạt theo trạng thái">
+              {statusParts.filter((part) => part.value > 0).map((part) => (
+                <span key={part.key} className={cn('h-full', part.color)} style={{ width: `${(part.value / statusTotal) * 100}%`, minWidth: 3 }} />
+              ))}
+            </div>
+            <dl className="mt-3 grid grid-cols-3 gap-3">
+              {statusParts.map((part) => (
+                <div key={part.key}>
+                  <dt className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                    <span className={cn('h-2 w-2 rounded-[2px]', part.color)} aria-hidden="true" />
+                    {part.label}
+                  </dt>
+                  <dd className="mt-0.5 text-[15px] font-semibold text-foreground">{compactMoney(part.value)}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {byType.length ? (
+              <table className="mt-5 w-full text-[13px]">
+                <caption className="mb-1 text-left text-[12px] font-medium text-muted-foreground">Theo lý do phạt</caption>
+                <thead className="sr-only">
+                  <tr><th>Lý do</th><th>Số khoản</th><th>Số tiền</th></tr>
+                </thead>
+                <tbody>
+                  {byType.map((row) => (
+                    <tr key={row.label} className="border-b border-border last:border-0">
+                      <td className="py-2 text-foreground">{row.label}</td>
+                      <td className="py-2 text-right tabular-nums text-muted-foreground">{row.count.toLocaleString('vi-VN')} khoản</td>
+                      <td className="w-28 py-2 text-right font-semibold tabular-nums text-foreground">{compactMoney(row.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
+        )}
+      </section>
     </div>
   );
 }

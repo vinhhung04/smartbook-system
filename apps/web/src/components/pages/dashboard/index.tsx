@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Bell, LayoutDashboard, RefreshCw, ShieldOff } from 'lucide-react';
@@ -7,11 +7,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
-import {
-  analyticsService,
-  type BorrowTrendItem,
-  type TopBookItem,
-} from '@/services/analytics';
+import { analyticsService } from '@/services/analytics';
 import { getApiErrorMessage, hasAnyPermission, hasPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
@@ -34,15 +30,7 @@ import {
   emptyReorderSummary,
   type DashboardState,
 } from './types';
-import { compactTitle, getGreeting } from './utils';
-
-function compactBook(item: TopBookItem) {
-  return { ...item, name: compactTitle(item.title) };
-}
-
-function labelTrend(item: BorrowTrendItem) {
-  return { ...item, label: item.date.length === 10 ? item.date.slice(5) : item.date };
-}
+import { getGreeting } from './utils';
 
 export function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -125,20 +113,9 @@ export function DashboardPage() {
     onPurchaseRequestEvent: markNewData,
   });
 
-  const trendData = useMemo(() => (dashboard?.trends || []).map(labelTrend), [dashboard?.trends]);
-  const topBookData = useMemo(() => (dashboard?.topBooks || []).map(compactBook), [dashboard?.topBooks]);
+  const trendData = dashboard?.trends || [];
+  const topBookData = dashboard?.topBooks || [];
 
-  const funnelData = useMemo(() => {
-    const funnel = dashboard?.funnel || emptyFunnel;
-    return [
-      { name: 'Chờ xác nhận', value: funnel.pending },
-      { name: 'Đã xác nhận', value: funnel.confirmed },
-      { name: 'Sẵn lấy', value: funnel.ready_for_pickup },
-      { name: 'Đã mượn', value: funnel.converted_to_loan },
-      { name: 'Đã hủy', value: funnel.cancelled },
-      { name: 'Hết hạn', value: funnel.expired },
-    ];
-  }, [dashboard?.funnel]);
 
   const kpis = dashboard?.kpis || emptyKpis;
   const overdue = dashboard?.overdue || emptyOverdue;
@@ -270,9 +247,8 @@ export function DashboardPage() {
             </div>
             <TrendFunnelSection
               trendData={trendData}
-              funnelData={funnelData}
+              funnel={dashboard?.funnel || emptyFunnel}
               kpis={kpis}
-              conversionRate={dashboard?.funnel.conversion_rate || 0}
             />
           </FadeItem>
           )}
