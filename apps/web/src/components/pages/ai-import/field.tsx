@@ -63,5 +63,6 @@ export function CoverPreview({ src, alt }: { src: string; alt: string }) {
       </div>
     );
   }
-  return <img src={src} alt={alt} className="h-full w-full object-cover" onError={() => setFailed(true)} />;
+  // Google Books returns http:// cover URLs, which the page's CSP (https-only img-src) blocks.
+  return <img src={src.replace(/^http:\/\//i, "https://")} alt={alt} className="h-full w-full object-cover" onError={() => setFailed(true)} />;
 }

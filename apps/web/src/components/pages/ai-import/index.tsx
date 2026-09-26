@@ -18,8 +18,7 @@ import { BookInfoTab } from "./book-info-tab";
 import { EmptyLookupState } from "./empty-state";
 import { IsbnLookupProgress } from "./isbn-lookup-progress";
 import { LookupSearchCard } from "./lookup-search-card";
-import { MetadataFoundHero } from "./metadata-found-hero";
-import { MetadataReadiness } from "./metadata-readiness";
+import { BookProfileAside } from "./book-profile-aside";
 import { ReviewTab } from "./review-tab";
 import { StickyFooter } from "./sticky-footer";
 import { EMPTY_FORM, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
@@ -686,8 +685,6 @@ export function AIImportPage() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
             <section className="rounded-lg border border-border/80 bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-6 dark:shadow-none">
-              {lookupData.found ? <MetadataFoundHero lookup={lookupData} form={form} completeSignalCount={completeSignalCount} /> : null}
-
               {manualMode ? (
                 <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
@@ -711,18 +708,23 @@ export function AIImportPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-6 pb-24">
-                <MetadataReadiness signals={reviewSignals} onFocusField={focusField} />
+              <div className="grid grid-cols-1 gap-8 pb-24 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-10">
+                <BookProfileAside
+                  lookup={lookupData}
+                  form={form}
+                  signals={reviewSignals}
+                  onThumbnailChange={(value) => setForm((prev) => ({ ...prev, thumbnail: value }))}
+                  onFocusField={focusField}
+                />
 
-                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="gap-0">
+                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="min-w-0 gap-0">
                   <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 sm:gap-6" aria-label="Không gian làm việc nhập sách">
                     <TabsTrigger
                       value="book"
                       aria-label="Thông tin sách và AI hỗ trợ"
                       className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:text-cyan-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-cyan-300"
                     >
-                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin & AI</span>
-                      <StatusBadge label={`${completeSignalCount}/4`} variant={completeSignalCount === 4 ? "success" : "warning"} />
+                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin sách</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="review"
@@ -762,7 +764,6 @@ export function AIImportPage() {
                       <BookInfoTab
                         form={form}
                         onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
-                        completeSignalCount={completeSignalCount}
                         aiFieldCandidates={aiFieldCandidates}
                         aiFieldLoading={aiFieldLoading}
                         onRegenerateField={(field) => void regenerateAiField(field)}
