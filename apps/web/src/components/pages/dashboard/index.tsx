@@ -152,15 +152,15 @@ export function DashboardPage() {
     month: '2-digit',
     year: 'numeric',
   });
-  const totalActionable = pendingPR + openER + kpis.low_stock_variants + kpis.overdue_loans + fines.unpaid_count + reorderSummary.high_priority;
+  const openActionCount = [pendingPR, openER, kpis.low_stock_variants, kpis.overdue_loans, fines.unpaid_count, reorderSummary.high_priority].filter((count) => count > 0).length;
 
   if (isWarehouseStaff) {
     return <Navigate to="/my-warehouse-tasks" replace />;
   }
 
   const headerDescription = canViewAnalytics && !loading && !error
-    ? totalActionable > 0
-      ? `${todayLabel} — Bạn có ${totalActionable} việc cần xử lý hôm nay.`
+    ? openActionCount > 0
+      ? `${todayLabel} — Bạn có ${openActionCount} đầu việc cần xử lý hôm nay.`
       : `${todayLabel} — Không có việc gì khẩn cấp hôm nay, mọi thứ đang ổn định.`
     : `${todayLabel} — Xem KPI thư viện, kho vận và các việc cần xử lý trong ngày.`;
 
@@ -248,14 +248,18 @@ export function DashboardPage() {
               openER={openER}
               lowStockVariants={kpis.low_stock_variants}
               overdueLoans={kpis.overdue_loans}
+              overdueItems={overdue.total_overdue_items}
+              oldestOverdueDays={overdue.oldest_overdue_days}
               unpaidFineCount={fines.unpaid_count}
               unpaidFineAmount={kpis.unpaid_fine_amount}
               highPriorityReorder={reorderSummary.high_priority}
+              reorderCandidates={reorderSummary.total_candidates}
+              reorderQty={reorderSummary.estimated_total_reorder_qty}
             />
           </FadeItem>
 
           <FadeItem>
-            <KpiGrid kpis={kpis} overdueTotalItems={overdue.total_overdue_items} />
+            <KpiGrid kpis={kpis} />
           </FadeItem>
 
           {canViewBorrowAnalytics && (
