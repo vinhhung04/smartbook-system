@@ -1,3 +1,5 @@
+import { getToken } from './http-clients';
+
 export type MonitorStatus = 'ok' | 'degraded' | 'down';
 
 export interface MonitorServiceConfig {
@@ -21,6 +23,8 @@ export interface MonitorServiceHealth {
 
 export interface MonitorSnapshot {
   checkedAt: string;
+  /** false when the admin breakdown was unavailable and only public health boundaries were checked. */
+  detailed: boolean;
   services: MonitorServiceHealth[];
   summary: {
     total: number;
@@ -35,23 +39,27 @@ const TIMEOUT_MS = 5000;
 
 const env = import.meta.env;
 
+const GATEWAY_CONFIG: MonitorServiceConfig = {
+  id: 'api-gateway',
+  name: 'API Gateway',
+  description: 'Cổng HTTP, WebSocket và phòng realtime',
+  url: env.VITE_GATEWAY_HEALTH_URL || 'http://localhost:3000/health',
+};
+
+const SYSTEM_HEALTH_URL = env.VITE_GATEWAY_SYSTEM_HEALTH_URL || 'http://localhost:3000/system/health';
+
+// Fallback when the caller cannot read the admin breakdown: the public, topology-free boundaries.
 export const MONITOR_SERVICE_CONFIGS: MonitorServiceConfig[] = [
   {
-    id: 'api-gateway',
-    name: 'API Gateway',
-    description: 'HTTP proxy, WebSocket gateway, realtime rooms',
-    url: env.VITE_GATEWAY_HEALTH_URL || 'http://localhost:3000/health',
-  },
-  {
     id: 'core-services',
-    name: 'Core Services',
-    description: 'Auth, inventory, borrow and analytics readiness',
+    name: 'Dịch vụ lõi',
+    description: 'Auth, inventory, borrow và analytics (kiểm tra gộp)',
     url: env.VITE_GATEWAY_READY_URL || 'http://localhost:3000/ready',
   },
   {
     id: 'ai-service',
     name: 'AI Service',
-    description: 'Assistant, OCR, OpenRouter-backed AI workflows',
+    description: 'Trợ lý AI, OCR và gợi ý metadata qua OpenRouter',
     url: env.VITE_AI_HEALTH_URL || 'http://localhost:3000/ai/health',
   },
 ];
@@ -151,25 +159,68 @@ function buildSummary(services: MonitorServiceHealth[]): MonitorSnapshot['summar
   };
 }
 
-export async function getSystemHealthSnapshot(): Promise<MonitorSnapshot> {
-  const settled = await Promise.allSettled(MONITOR_SERVICE_CONFIGS.map(fetchServiceHealth));
-  const checkedAt = new Date().toISOString();
-  const services = settled.map((result, index) => {
-    if (result.status === 'fulfilled') return result.value;
+interface SystemHealthBreakdown {
+  checked_at: string;
+  gateway: { version: string; uptime_seconds: number; connected_sockets: number };
+  services: Array<{
+    id: string;
+    name: string;
+    description: string;
+    status: 'ok' | 'down';
+    latency_ms: number | null;
+    error: string | null;
+    details: unknown;
+  }>;
+}
 
-    const config = MONITOR_SERVICE_CONFIGS[index];
-    return {
-      ...config,
-      status: 'down' as const,
-      latencyMs: null,
-      checkedAt,
-      response: null,
-      error: result.reason instanceof Error ? result.reason.message : 'Health check failed',
-    };
-  });
+/** Admin-only per-service breakdown measured by the gateway itself; null when unavailable or not permitted. */
+async function fetchSystemBreakdown(): Promise<SystemHealthBreakdown | null> {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const response = await fetch(SYSTEM_HEALTH_URL, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return isRecord(body) && Array.isArray(body.services) ? (body as unknown as SystemHealthBreakdown) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSystemHealthSnapshot(): Promise<MonitorSnapshot> {
+  const [gateway, breakdown] = await Promise.all([fetchServiceHealth(GATEWAY_CONFIG), fetchSystemBreakdown()]);
+  const checkedAt = new Date().toISOString();
+
+  let services: MonitorServiceHealth[];
+  if (breakdown) {
+    services = [
+      { ...gateway, response: gateway.response ? { ...gateway.response, uptime_seconds: breakdown.gateway.uptime_seconds, connected_sockets: breakdown.gateway.connected_sockets } : gateway.response },
+      ...breakdown.services.map((service) => {
+        const details = isRecord(service.details) ? service.details : null;
+        return {
+          id: service.id,
+          name: service.name,
+          description: service.description,
+          url: `Gateway → ${service.id}`,
+          status: normalizeStatus(service.status === 'ok', details),
+          latencyMs: service.latency_ms,
+          checkedAt: breakdown.checked_at,
+          response: details,
+          error: service.error,
+        };
+      }),
+    ];
+  } else {
+    services = [gateway, ...(await Promise.all(MONITOR_SERVICE_CONFIGS.map(fetchServiceHealth)))];
+  }
 
   return {
     checkedAt,
+    detailed: Boolean(breakdown),
     services,
     summary: buildSummary(services),
   };

@@ -679,7 +679,7 @@ Ba database, Redis và các service nội bộ chỉ nằm trong Docker network;
 | 📊 Prometheus | http://localhost:9090 |
 | 🐰 RabbitMQ management | http://localhost:15672 |
 
-`GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency và không công khai URL/topology nội bộ.
+`GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency (gọi `/ready` của từng service lõi, gồm cả kết nối database) và không công khai URL/topology nội bộ. `GET /system/health` trả trạng thái, độ trễ và chi tiết từng service (kể cả AI) cho trang Giám sát hệ thống — yêu cầu JWT có vai trò `ADMIN` (hoặc quyền quản trị như `auth.users.read`), cùng điều kiện với trang `/admin/monitor`.
 
 ## 🔑 Tài Khoản Demo
 

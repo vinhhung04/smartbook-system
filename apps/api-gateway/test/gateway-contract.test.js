@@ -17,6 +17,12 @@ test('AI proxy fails in a documented degraded mode', () => {
   assert.match(source, /on: \{ error: handleAiProxyError \}/);
 });
 
+test('per-service health breakdown is admin-only and readiness checks dependency /ready', () => {
+  assert.match(source, /app\.get\("\/system\/health", requireAdminToken,/);
+  assert.match(source, /path: "\/ready", critical: true/);
+  assert.doesNotMatch(source, /app\.get\("\/ready"[\s\S]{0,200}\/health`/);
+});
+
 test('internal websocket pushes require a service key and allowlisted event', () => {
   assert.match(source, /x-internal-service-key/);
   assert.match(source, /ALLOWED_EVENTS/);

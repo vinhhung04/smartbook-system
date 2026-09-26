@@ -284,17 +284,102 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/ready", async (_req, res) => {
-  const targets = [authTarget, inventoryTarget, borrowTarget, analyticsTarget];
+const DEPENDENCY_TIMEOUT_MS = 2000;
+
+// Core services expose /ready (process + database); AI is optional, so its outage
+// degrades the system instead of failing gateway readiness.
+const DEPENDENCIES = [
+  { id: "auth-service", name: "Auth Service", description: "Đăng nhập, người dùng và phân quyền", target: authTarget, path: "/ready", critical: true },
+  { id: "inventory-service", name: "Inventory Service", description: "Danh mục sách, tồn kho và kho vận", target: inventoryTarget, path: "/ready", critical: true },
+  { id: "borrow-service", name: "Borrow Service", description: "Khách hàng, đặt trước, mượn trả và tiền phạt", target: borrowTarget, path: "/ready", critical: true },
+  { id: "analytics-service", name: "Analytics Service", description: "Báo cáo và số liệu tổng quan", target: analyticsTarget, path: "/ready", critical: true },
+  { id: "ai-service", name: "AI Service", description: "Trợ lý AI, OCR và gợi ý metadata qua OpenRouter", target: aiTarget, path: "/health", critical: false },
+];
+
+const ADMIN_PERMISSIONS = ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"];
+
+async function probeDependency(dependency) {
+  const startedAt = performance.now();
   try {
-    const responses = await Promise.all(
-      targets.map((target) => fetch(`${target}/health`, { signal: AbortSignal.timeout(2000) })),
-    );
-    if (responses.some((response) => !response.ok)) throw new Error("dependency unavailable");
-    return res.json({ service: "api-gateway", status: "ready" });
-  } catch (_error) {
+    const response = await fetch(`${dependency.target}${dependency.path}`, {
+      signal: AbortSignal.timeout(DEPENDENCY_TIMEOUT_MS),
+    });
+    const latencyMs = Math.round(performance.now() - startedAt);
+    let details = null;
+    try {
+      details = await response.json();
+    } catch {
+      details = null;
+    }
+    return {
+      id: dependency.id,
+      name: dependency.name,
+      description: dependency.description,
+      critical: dependency.critical,
+      status: response.ok ? "ok" : "down",
+      latency_ms: latencyMs,
+      error: response.ok ? null : `HTTP ${response.status}`,
+      details,
+    };
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return {
+      id: dependency.id,
+      name: dependency.name,
+      description: dependency.description,
+      critical: dependency.critical,
+      status: "down",
+      latency_ms: Math.round(performance.now() - startedAt),
+      error: timedOut ? `Không phản hồi sau ${DEPENDENCY_TIMEOUT_MS / 1000}s` : "Không kết nối được",
+      details: null,
+    };
+  }
+}
+
+function requireAdminToken(req, res, next) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ message: "Authentication required", code: "UNAUTHORIZED" });
+  let payload;
+  try {
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ message: "Invalid token", code: "UNAUTHORIZED" });
+  }
+  const roles = Array.isArray(payload.roles) ? payload.roles.map((role) => String(role).toUpperCase()) : [];
+  const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+  const allowed = payload.is_superuser === true
+    || roles.includes("ADMIN")
+    || ADMIN_PERMISSIONS.some((permission) => permissions.includes(permission));
+  if (!allowed) return res.status(403).json({ message: "Forbidden", code: "FORBIDDEN" });
+  return next();
+}
+
+app.get("/ready", async (_req, res) => {
+  const results = await Promise.all(DEPENDENCIES.filter((dependency) => dependency.critical).map(probeDependency));
+  if (results.some((result) => result.status !== "ok")) {
     return res.status(503).json({ service: "api-gateway", status: "not_ready" });
   }
+  return res.json({ service: "api-gateway", status: "ready" });
+});
+
+// Per-service breakdown for the admin monitor. Kept behind admin auth because it
+// reveals the internal service layout that the public /ready deliberately hides.
+app.get("/system/health", requireAdminToken, async (_req, res) => {
+  const services = await Promise.all(DEPENDENCIES.map(probeDependency));
+  const criticalDown = services.some((service) => service.critical && service.status !== "ok");
+  const optionalDown = services.some((service) => !service.critical && service.status !== "ok");
+  res.set("Cache-Control", "no-store");
+  return res.json({
+    status: criticalDown ? "down" : optionalDown ? "degraded" : "ok",
+    checked_at: new Date().toISOString(),
+    gateway: {
+      version: "1.0.0",
+      uptime_seconds: Math.round(process.uptime()),
+      connected_sockets: io.engine.clientsCount,
+    },
+    services,
+  });
 });
 
 app.use(
