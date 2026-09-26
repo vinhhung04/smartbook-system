@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, Boxes, ClipboardCheck, Clock, DollarSign, Info, PackageCheck, RefreshCw, Truck, UserCheck, Warehouse } from "lucide-react";
+import { AlertCircle, ArrowLeft, ClipboardCheck, Info, RefreshCw, Truck, UserCheck } from "lucide-react";
 import { toast } from "sonner";
-import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
+import {
+  RECEIVABLE_DELIVERY_STATUSES,
+  SUPPLIER_DELIVERY_STATUS_LABELS,
+  supplierDeliveryService,
+  supplierDeliveryStatusLabel,
+  type SupplierDeliveryDetail,
+} from "@/services/supplier-delivery";
 import { goodsReceiptService } from "@/services/goods-receipt";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { supplierService, type Supplier } from "@/services/supplier";
@@ -13,13 +19,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { LoadingOverlay, SkeletonCard, SkeletonTableRow } from "@/components/ui/loading-state";
-import { StatCard } from "@/components/ui/stat-card";
+import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageWrapper, FadeItem } from "@/components/motion-utils";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
@@ -43,32 +47,15 @@ function formatCurrency(value: number) {
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tất cả" },
-  { value: "SUBMITTED", label: "Đã gửi" },
-  { value: "PARTIALLY_RECEIVED", label: "Nhận một phần" },
-  { value: "SHORTAGE_REPORTED", label: "Báo thiếu hàng" },
-  { value: "RECEIVED", label: "Đã nhận" },
-  { value: "CANCELLED", label: "Đã hủy" },
+  ...Object.entries(SUPPLIER_DELIVERY_STATUS_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
-/**
- * The line's real reconciliation state — how much the supplier actually
- * invoiced against what's still owed on the PO. A flat "THIẾU"/"QUÁ PO"
- * label tells staff something's off but not by how much; this shows the
- * real number so a shortage or overage can be judged at a glance.
- */
-function DeliveryVarianceBadge({ invoicedQty, remainingQty }: { invoicedQty: number; remainingQty: number }) {
-  const diff = invoicedQty - remainingQty;
-  if (diff === 0) return <StatusBadge label="Đủ" variant="success" />;
-  if (diff < 0) return <StatusBadge label={`Thiếu ${Math.abs(diff)}`} variant="warning" />;
-  return <StatusBadge label={`Vượt ${diff}`} variant="danger" />;
-}
+const RECEIVABLE_STATUSES = RECEIVABLE_DELIVERY_STATUSES;
 
 export function SupplierDeliveriesPage() {
   const { id } = useParams();
   return id ? <SupplierDeliveryDetailView id={id} /> : <SupplierDeliveryListView />;
 }
-
-const RECEIVABLE_STATUSES = ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"];
 
 function SupplierDeliveryListView() {
   const navigate = useNavigate();
@@ -244,7 +231,7 @@ function SupplierDeliveryListView() {
                           ) : null}
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                          <StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot />
+                          <StatusBadge label={supplierDeliveryStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot />
                           <span className="text-[12px]"><span className="font-semibold">{acceptedQty}</span><span className="text-muted-foreground">/{totalQty}</span></span>
                         </div>
                       </TableCell>
@@ -255,7 +242,7 @@ function SupplierDeliveryListView() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground md:table-cell">{formatDate(row.expected_delivery_date)}</TableCell>
-                      <TableCell className="hidden px-4 py-3 align-top sm:table-cell"><StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot /></TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top sm:table-cell"><StatusBadge label={supplierDeliveryStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot /></TableCell>
                       <TableCell className="px-4 py-3 text-right align-top">
                         <Button size="sm" variant={canReceive ? "default" : "outline"} disabled={!canReceive} onClick={() => navigate(`/supplier-deliveries/${row.id}`)}>
                           <ClipboardCheck className="h-3.5 w-3.5" /> {canReceive ? "Nhận hàng" : "Đã đóng"}
@@ -336,36 +323,39 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       .catch(() => {});
   }, []);
 
-  // Quantities are taken directly from invoice — staff will verify physically
-  const totals = useMemo(() => {
-    if (!invoice) return { planned: 0, amount: 0, shortage: 0 };
-    return invoice.items.reduce(
-      (acc, item) => {
-        const qty = Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0));
-        acc.planned += qty;
-        acc.amount += qty * Number(item.unit_cost || 0);
-        acc.shortage += Math.max(0, Number(item.invoiced_qty || 0) - Number(item.remaining_qty || 0));
-        return acc;
-      },
-      { planned: 0, amount: 0, shortage: 0 },
-    );
-  }, [invoice]);
+  // What each line will actually receive: never more than the PO still owes, never more than invoiced.
+  const lines = useMemo(() => (invoice?.items || []).map((item) => {
+    const invoiced = Number(item.invoiced_qty || 0);
+    const remaining = Number(item.remaining_qty || 0);
+    const willReceive = Math.min(invoiced, remaining);
+    return { item, invoiced, remaining, willReceive, over: Math.max(0, invoiced - remaining), short: Math.max(0, remaining - invoiced) };
+  }), [invoice]);
 
-  const canReceive = invoice ? ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status) : false;
+  const totals = useMemo(() => lines.reduce(
+    (acc, line) => ({
+      planned: acc.planned + line.willReceive,
+      amount: acc.amount + line.willReceive * Number(line.item.unit_cost || 0),
+      over: acc.over + line.over,
+      short: acc.short + line.short,
+    }),
+    { planned: 0, amount: 0, over: 0, short: 0 },
+  ), [lines]);
+
+  const canReceive = invoice ? RECEIVABLE_STATUSES.includes(invoice.status) : false;
 
   const createAndAssign = async () => {
     if (!invoice) return;
     if (!selectedStaffId) return toast.error("Vui lòng chọn nhân viên kho để giao phiếu");
 
-    const items = invoice.items
-      .map((item) => ({
+    const items = lines
+      .map(({ item, willReceive, over }) => ({
         invoice_item_id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
-        delivered_qty: Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0)),
+        delivered_qty: willReceive,
         unit_cost: item.unit_cost,
         location_id: null,
-        note: Number(item.invoiced_qty || 0) > Number(item.remaining_qty || 0) ? "Số lượng hóa đơn vượt PO còn lại" : null,
+        note: over > 0 ? "Số lượng hóa đơn vượt PO còn lại" : null,
       }))
       .filter((item) => item.delivered_qty > 0);
 
@@ -373,7 +363,6 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
 
     try {
       setSaving(true);
-      // Step 1: Create draft goods receipt from invoice
       const response = await supplierDeliveryService.createGoodsReceiptFromInvoice(invoice.id, {
         warehouse_id: invoice.warehouse_id || "",
         note,
@@ -381,15 +370,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       });
       const receiptId = response.data.id;
       const receiptNumber = response.data.receipt_number;
-
-      // Step 2: Assign to selected warehouse staff
       await goodsReceiptService.assign(receiptId, selectedStaffId);
-
-      const staffName = warehouseStaff.find((s) => s.id === selectedStaffId)?.full_name
-        || warehouseStaff.find((s) => s.id === selectedStaffId)?.username
-        || "nhân viên";
-
-      toast.success(`Đã tạo phiếu ${receiptNumber} và giao cho ${staffName}`);
+      const staff = warehouseStaff.find((s) => s.id === selectedStaffId);
+      toast.success(`Đã tạo phiếu ${receiptNumber} và giao cho ${staff?.full_name || staff?.username || "nhân viên"}`);
       navigate(`/orders/${receiptId}`);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tạo và giao phiếu thất bại"));
@@ -399,151 +382,174 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><LoadingOverlay /></div>;
+    return <PageWrapper><LoadingOverlay /></PageWrapper>;
   }
 
   if (!invoice) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><EmptyState variant="no-data" title="Không tìm thấy phiếu giao hàng" description="Phiếu này có thể đã bị xóa." /></div>;
+    return (
+      <PageWrapper>
+        <EmptyState variant="no-data" title="Không tìm thấy hóa đơn giao hàng" description="Hóa đơn này có thể đã bị xóa." />
+      </PageWrapper>
+    );
   }
 
+  const meta = [
+    invoice.supplier_name,
+    invoice.warehouse_code || invoice.warehouse_name ? `Kho ${invoice.warehouse_code || invoice.warehouse_name}` : null,
+    invoice.expected_delivery_date ? `Dự kiến ${formatDate(invoice.expected_delivery_date)}` : null,
+  ].filter(Boolean);
+
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="space-y-5">
       <FadeItem>
-        <NavLink to="/supplier-deliveries" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Quay lại
-        </NavLink>
-      </FadeItem>
-
-      <FadeItem>
-        <PageHeader
-          icon={Truck}
-          title="Phiếu xuất nhà cung cấp"
-          description={`${invoice.po_number || "-"} · ${invoice.supplier_name || "-"} · Hóa đơn ${invoice.invoice_number}`}
-          iconBg="bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10"
-          iconColor="text-sky-600 dark:text-sky-400"
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge label={invoice.status} variant={getStatusVariant("purchaseOrder", invoice.status)} dot />
-              <Button variant="outline" size="sm" onClick={() => void load()} loading={saving}>
-                <RefreshCw className="h-3.5 w-3.5" /> Làm mới
-              </Button>
+        <header className="space-y-3">
+          <NavLink to="/supplier-deliveries" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Giao hàng nhà cung cấp
+          </NavLink>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-[20px] font-semibold tracking-tight text-foreground">
+                  Hóa đơn <span className="font-mono">{invoice.invoice_number}</span>
+                </h1>
+                <StatusBadge label={supplierDeliveryStatusLabel(invoice.status)} variant={getStatusVariant("purchaseOrder", invoice.status)} dot />
+              </div>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {meta.join(" · ")}
+                {invoice.purchase_order_id ? (
+                  <> · PO <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="font-mono text-indigo-600 hover:underline dark:text-indigo-400">{invoice.po_number || invoice.purchase_order_id}</NavLink></>
+                ) : null}
+              </p>
             </div>
-          }
-        />
+            <Button variant="outline" size="sm" onClick={() => void load()} loading={loading}>
+              <RefreshCw className="h-3.5 w-3.5" /> Làm mới
+            </Button>
+          </div>
+        </header>
       </FadeItem>
 
-      <FadeItem className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Kho nhận" value={invoice.warehouse_code || invoice.warehouse_name || "-"} icon={Warehouse} variant="primary" />
-        <StatCard label="Ngày giao dự kiến" value={formatDate(invoice.expected_delivery_date)} icon={Clock} variant="info" />
-        <StatCard label="Số lượng sẽ nhận" value={totals.planned} icon={Boxes} variant="success" animateValue />
-        <StatCard label="Giá trị ước tính" value={formatCurrency(totals.amount)} icon={DollarSign} variant="default" />
-      </FadeItem>
-
-      {/* Items from invoice — quantities auto-filled, staff will verify physically */}
       <FadeItem>
-        <SectionCard title="Danh sách hàng theo phiếu NCC" noPadding>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                {["Sách", "Lịch sử PO (đặt · đã nhận · còn lại)", "NCC xuất", "Sẽ nhận", "Đối soát"].map((heading) => (
-                  <TableHead key={heading} className="text-[11px] uppercase tracking-wider text-muted-foreground">{heading}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoice.items.map((item) => {
-                const willReceive = Math.min(Number(item.invoiced_qty || 0), Number(item.remaining_qty || 0));
-                return (
+        <section aria-labelledby="reconcile-title" className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-border px-5 py-3.5">
+            <h2 id="reconcile-title" className="text-[14px] font-semibold text-foreground">Đối chiếu hóa đơn với PO</h2>
+            <p className="text-[13px] text-muted-foreground">
+              Sẽ nhận <span className="font-semibold text-foreground">{totals.planned.toLocaleString("vi-VN")}</span> cuốn
+              {totals.amount > 0 ? <> · ước tính <span className="font-semibold text-foreground">{formatCurrency(totals.amount)}</span></> : null}
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  {[
+                    { label: "Sách", className: "min-w-[220px]" },
+                    { label: "Đặt trên PO", className: "text-right" },
+                    { label: "Đã nhận trước", className: "text-right" },
+                    { label: "PO còn lại", className: "text-right" },
+                    { label: "NCC giao", className: "text-right" },
+                    { label: "Sẽ nhận", className: "text-right" },
+                    { label: "Chênh lệch", className: "" },
+                  ].map((heading) => (
+                    <TableHead key={heading.label} className={cn("px-4 text-[12px] font-medium text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map(({ item, invoiced, remaining, willReceive, over, short }) => (
                   <TableRow key={item.id}>
-                    <TableCell className="max-w-[220px]">
-                      <p className="truncate text-[13px] font-semibold" title={item.title || undefined}>{item.title || "-"}</p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">{item.isbn13 || item.sku || item.variant_id}</p>
+                    <TableCell className="px-4 py-3 align-top">
+                      <p className="max-w-[320px] truncate text-[13px] font-medium" title={item.title || undefined}>{item.title || "-"}</p>
+                      <p className="font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || item.variant_id}</p>
                     </TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">
-                      {item.ordered_qty} · {item.previously_received_qty} · <span className="font-medium text-foreground">{item.remaining_qty}</span>
-                    </TableCell>
-                    <TableCell className="text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{item.invoiced_qty}</TableCell>
-                    <TableCell>
-                      <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-1 text-[12px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">{willReceive}</span>
-                    </TableCell>
-                    <TableCell>
-                      <DeliveryVarianceBadge invoicedQty={Number(item.invoiced_qty || 0)} remainingQty={Number(item.remaining_qty || 0)} />
+                    <TableCell className="px-4 py-3 text-right align-top text-[13px] tabular-nums text-muted-foreground">{item.ordered_qty}</TableCell>
+                    <TableCell className="px-4 py-3 text-right align-top text-[13px] tabular-nums text-muted-foreground">{item.previously_received_qty}</TableCell>
+                    <TableCell className="px-4 py-3 text-right align-top text-[13px] tabular-nums">{remaining}</TableCell>
+                    <TableCell className="px-4 py-3 text-right align-top text-[13px] font-medium tabular-nums">{invoiced}</TableCell>
+                    <TableCell className="px-4 py-3 text-right align-top text-[14px] font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{willReceive}</TableCell>
+                    <TableCell className="px-4 py-3 align-top">
+                      {over > 0 ? (
+                        <>
+                          <StatusBadge label={`Giao vượt ${over}`} variant="danger" />
+                          <p className="mt-1 max-w-[220px] text-[12px] leading-4 text-muted-foreground">{over} cuốn vượt PO sẽ không nhập kho</p>
+                        </>
+                      ) : short > 0 ? (
+                        <>
+                          <StatusBadge label={`Giao thiếu ${short}`} variant="warning" />
+                          <p className="mt-1 max-w-[220px] text-[12px] leading-4 text-muted-foreground">PO vẫn chờ {short} cuốn sau lần giao này</p>
+                        </>
+                      ) : (
+                        <StatusBadge label="Khớp PO" variant="success" />
+                      )}
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </SectionCard>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {totals.over > 0 || totals.short > 0 ? (
+            <div className="space-y-2 border-t border-border px-5 py-3.5 text-[13px]">
+              {totals.over > 0 ? (
+                <p className="flex items-start gap-2 text-foreground">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
+                  NCC giao vượt {totals.over} cuốn so với số PO còn lại. Phiếu nhập chỉ nhận tối đa số còn lại trên PO; phần vượt không được nhập kho.
+                </p>
+              ) : null}
+              {totals.short > 0 ? (
+                <p className="flex items-start gap-2 text-foreground">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                  Hóa đơn này giao thiếu {totals.short} cuốn so với PO còn lại. Phần thiếu vẫn mở trên PO để nhận ở lần giao sau.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
       </FadeItem>
-
-      {totals.shortage > 0 && (
-        <FadeItem>
-          <Alert className="border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <AlertCircle className="text-amber-600 dark:text-amber-400" />
-            <AlertDescription className="text-amber-800 dark:text-amber-300">
-              Một số mục NCC xuất ít hơn PO còn lại. Hệ thống sẽ tự tạo báo cáo thiếu hàng.
-            </AlertDescription>
-          </Alert>
-        </FadeItem>
-      )}
 
       <FadeItem>
-        <Alert className="border-sky-100 bg-sky-50 dark:border-sky-500/20 dark:bg-sky-500/10">
-          <Info className="text-sky-600 dark:text-sky-400" />
-          <AlertDescription className="text-sky-800 dark:text-sky-300">
-            Tồn kho chỉ tăng sau khi manager <strong>duyệt phiếu</strong>. Phiếu tạo ra sẽ ở trạng thái DRAFT để nhân viên kho kiểm đếm thực tế trước khi duyệt.
-          </AlertDescription>
-        </Alert>
-      </FadeItem>
-
-      {canReceive && (
-        <FadeItem>
-          <SectionCard title="Giao phiếu kiểm đếm cho nhân viên kho" icon={UserCheck}>
-            <div className="space-y-4 p-1">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Nhân viên kho thực hiện kiểm đếm</label>
-                  <Select value={selectedStaffId || "none"} onValueChange={(v) => setSelectedStaffId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="w-full" data-testid="goods-receipt-assign-staff-select">
-                      <SelectValue placeholder="Chọn nhân viên kho" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouseStaff.map((staff) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.full_name || staff.username || staff.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ghi chú phiếu nhập</label>
-                  <Input
-                    type="text"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="h-auto py-2"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => void createAndAssign()}
-                  disabled={!selectedStaffId || totals.planned <= 0}
-                  loading={saving}
-                  data-testid="goods-receipt-submit"
-                >
-                  <ClipboardCheck className="h-4 w-4" />
-                  Tạo phiếu và giao cho nhân viên
-                </Button>
+        {canReceive ? (
+          <section aria-labelledby="assign-title" className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start gap-3">
+              <UserCheck className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div>
+                <h2 id="assign-title" className="text-[14px] font-semibold text-foreground">Giao kiểm đếm cho nhân viên kho</h2>
+                <p className="mt-1 max-w-[70ch] text-[13px] text-muted-foreground">
+                  Hệ thống tạo phiếu nhập nháp với số "Sẽ nhận" ở trên. Nhân viên kho đếm thực tế trên phiếu; tồn kho chỉ tăng khi quản lý duyệt phiếu.
+                </p>
               </div>
             </div>
-          </SectionCard>
-        </FadeItem>
-      )}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="assign-staff" className="mb-1.5 block text-[12px] font-medium text-foreground">Nhân viên kiểm đếm</label>
+                <Select value={selectedStaffId || "none"} onValueChange={(v) => setSelectedStaffId(v === "none" ? "" : v)}>
+                  <SelectTrigger id="assign-staff" className="w-full" data-testid="goods-receipt-assign-staff-select">
+                    <SelectValue placeholder="Chọn nhân viên kho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouseStaff.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.id}>{staff.full_name || staff.username || staff.email}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="receipt-note" className="mb-1.5 block text-[12px] font-medium text-foreground">Ghi chú phiếu nhập</label>
+                <Input id="receipt-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button onClick={() => void createAndAssign()} disabled={!selectedStaffId || totals.planned <= 0} loading={saving} data-testid="goods-receipt-submit">
+                <ClipboardCheck className="h-4 w-4" />
+                Tạo phiếu nhập {totals.planned} cuốn và giao việc
+              </Button>
+            </div>
+          </section>
+        ) : (
+          <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 px-5 py-4 text-[13px] text-muted-foreground">
+            <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            Hóa đơn ở trạng thái "{supplierDeliveryStatusLabel(invoice.status)}" nên không tạo thêm phiếu nhập được.
+          </p>
+        )}
+      </FadeItem>
     </PageWrapper>
   );
 }

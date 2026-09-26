@@ -14,6 +14,20 @@ export interface SupplierDeliveryDetail extends SupplierInvoice {
   }>;
 }
 
+export const SUPPLIER_DELIVERY_STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: 'Chờ nhận hàng',
+  PARTIALLY_RECEIVED: 'Nhận một phần',
+  SHORTAGE_REPORTED: 'Đã báo thiếu',
+  RECEIVED: 'Đã nhận đủ',
+  CANCELLED: 'Đã hủy',
+};
+
+export const RECEIVABLE_DELIVERY_STATUSES = ['SUBMITTED', 'PARTIALLY_RECEIVED', 'SHORTAGE_REPORTED'];
+
+export function supplierDeliveryStatusLabel(status: string): string {
+  return SUPPLIER_DELIVERY_STATUS_LABELS[status] || status;
+}
+
 export interface CreateGoodsReceiptFromInvoicePayload {
   warehouse_id: string;
   note?: string | null;

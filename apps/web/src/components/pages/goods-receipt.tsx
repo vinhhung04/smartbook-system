@@ -7,7 +7,7 @@ import { PageWrapper, FadeItem } from "../motion-utils";
 import { warehouseService } from "@/services/warehouse";
 import { bookService } from "@/services/book";
 import { goodsReceiptService } from "@/services/goods-receipt";
-import { supplierDeliveryService, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
+import { RECEIVABLE_DELIVERY_STATUSES, supplierDeliveryService, supplierDeliveryStatusLabel, type SupplierDeliveryDetail } from "@/services/supplier-delivery";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { authService } from "@/services/auth";
@@ -307,7 +307,7 @@ export function GoodsReceiptPage() {
       setInvoiceSaving(true);
       const response = await supplierDeliveryService.createGoodsReceiptFromInvoice(supplierDeliveryInvoiceId, {
         warehouse_id: invoice.warehouse_id || "",
-        note: `Receive supplier invoice ${invoice.invoice_number}`,
+        note: `Nhận hàng theo hóa đơn NCC ${invoice.invoice_number}`,
         items: payloadItems,
       });
       toast.success(`Đã tạo phiếu nhập ${response.data.receipt_number} ở trạng thái nháp`);
@@ -320,7 +320,7 @@ export function GoodsReceiptPage() {
   };
   const handleCreateDraftReceipt = async () => {
     if (!selectedWarehouse) {
-      toast.error("Vui long chon kho");
+      toast.error("Vui lòng chọn kho");
       return;
     }
     if (!items.length) {
@@ -526,109 +526,123 @@ export function GoodsReceiptPage() {
     );
   }
 
-  const receivableDeliveries = supplierDeliveries.filter((delivery) =>
-    ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(delivery.status),
+  const receivableDeliveries = supplierDeliveries
+    .filter((delivery) => RECEIVABLE_DELIVERY_STATUSES.includes(delivery.status))
+    .sort((a, b) => String(a.expected_delivery_date || "9999").localeCompare(String(b.expected_delivery_date || "9999")));
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const modeSwitch = (active: "supplier" | "manual") => (
+    <div className="inline-flex rounded-lg border border-border bg-card p-1" role="group" aria-label="Cách nhận hàng">
+      <button
+        type="button"
+        aria-pressed={active === "supplier"}
+        onClick={() => setReceivingMode("supplier")}
+        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "supplier" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+      >
+        <Truck className="h-3.5 w-3.5" /> Theo hóa đơn NCC
+      </button>
+      <button
+        type="button"
+        aria-pressed={active === "manual"}
+        onClick={() => setReceivingMode("manual")}
+        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "manual" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+      >
+        <ScanBarcode className="h-3.5 w-3.5" /> Quét ISBN thủ công
+      </button>
+    </div>
   );
 
   if (canManageReceiving && receivingMode === "supplier") {
     return (
-      <PageWrapper className="space-y-6">
+      <PageWrapper className="space-y-5">
         <FadeItem>
-          <NavLink
-            to="/orders"
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách phiếu
+          <NavLink to="/orders" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> Phiếu nhập kho
           </NavLink>
         </FadeItem>
 
         <FadeItem>
           <PageHeader
+            icon={Truck}
             title="Nhận hàng từ nhà cung cấp"
-            description="Đối chiếu PO, hóa đơn/phiếu giao hàng và số lượng nhận thực tế."
-            actions={
-              <div className="inline-flex rounded-[10px] border border-border bg-card p-1">
-                <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-foreground px-3 py-2 text-[12px] font-semibold text-background">
-                  <Truck className="h-3.5 w-3.5" /> Theo phiếu NCC
-                </button>
-                <button
-                  onClick={() => setReceivingMode("manual")}
-                  className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted"
-                >
-                  <ScanBarcode className="h-3.5 w-3.5" /> ISBN thủ công
-                </button>
-              </div>
-            }
+            description={isLoading
+              ? "Đối chiếu hóa đơn NCC với PO rồi giao kiểm đếm cho nhân viên kho."
+              : receivableDeliveries.length > 0
+                ? `${receivableDeliveries.length} hóa đơn đang chờ nhận hàng — chọn một hóa đơn để đối chiếu với PO.`
+                : "Không có hóa đơn nào đang chờ nhận hàng."}
+            iconBg="bg-emerald-100 dark:bg-emerald-500/15"
+            iconColor="text-emerald-600 dark:text-emerald-400"
+            actions={modeSwitch("supplier")}
           />
         </FadeItem>
 
         <FadeItem>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Phiếu sẵn sàng</p>
-              <p className="mt-1 text-[20px] font-bold">{receivableDeliveries.length}</p>
-            </div>
-            <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Quy trình</p>
-              <p className="mt-1 text-[13px] font-semibold">Tạo nháp trước, duyệt sau</p>
-            </div>
-            <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Kiểm tra</p>
-              <p className="mt-1 text-[13px] font-semibold">Chặn nhận vượt số lượng</p>
-            </div>
-          </div>
-        </FadeItem>
-
-        <FadeItem>
-          <div className="overflow-hidden rounded-[12px] border border-border bg-card">
-            <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-[14px] font-semibold">Hóa đơn / phiếu giao hàng từ NCC</h2>
-            </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             {isLoading ? (
               <LoadingOverlay />
             ) : receivableDeliveries.length === 0 ? (
               <EmptyState
                 variant="no-data"
-                title="Chưa có hóa đơn/phiếu giao hàng nào sẵn sàng nhập"
-                description="Hãy gửi PO cho nhà cung cấp và để nhà cung cấp xác nhận, tạo hóa đơn trước."
+                title="Chưa có hóa đơn nào chờ nhận hàng"
+                description="Hóa đơn xuất hiện ở đây sau khi nhà cung cấp xác nhận PO và gửi hóa đơn giao hàng."
               />
             ) : (
               <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted">
-                    {["Hóa đơn", "PO", "NCC", "Kho", "Dự kiến", "Số dòng", "Trạng thái", "Thao tác"].map((heading) => (
-                      <th key={heading} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {receivableDeliveries.map((delivery) => (
-                    <tr key={delivery.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3.5 text-[13px] font-semibold">{delivery.invoice_number}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{delivery.po_number || "-"}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{delivery.supplier_name || "-"}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{delivery.warehouse_code || delivery.warehouse_name || "-"}</td>
-                      <td className="px-5 py-3.5 text-[12px] text-muted-foreground">
-                        {delivery.expected_delivery_date ? new Date(delivery.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px]">{delivery.items.length}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge label={delivery.status} variant="warning" />
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <button
-                          onClick={() => navigate(`/supplier-deliveries/${delivery.id}`)}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white"
-                        >
-                          <ClipboardCheck className="h-3.5 w-3.5" /> Đối chiếu & nhập hàng
-                        </button>
-                      </td>
+                <table className="w-full min-w-[720px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40">
+                      {[
+                        { label: "Hóa đơn", className: "" },
+                        { label: "Kho nhận", className: "" },
+                        { label: "Dự kiến giao", className: "" },
+                        { label: "Hàng", className: "text-right" },
+                        { label: "Trạng thái", className: "" },
+                        { label: "", className: "" },
+                      ].map((heading, index) => (
+                        <th key={index} className={`px-4 py-2.5 text-left text-[12px] font-medium text-muted-foreground ${heading.className}`}>{heading.label}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {receivableDeliveries.map((delivery) => {
+                      const expected = delivery.expected_delivery_date ? String(delivery.expected_delivery_date).slice(0, 10) : null;
+                      const late = Boolean(expected && expected < todayIso);
+                      const bookCount = delivery.items.reduce((sum, item) => sum + Number(item.invoiced_qty || 0), 0);
+                      return (
+                        <tr key={delivery.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
+                          <td className="px-4 py-3 align-top">
+                            <NavLink to={`/supplier-deliveries/${delivery.id}`} className="font-mono text-[13px] font-semibold text-foreground hover:text-emerald-700 hover:underline dark:hover:text-emerald-400">
+                              {delivery.invoice_number}
+                            </NavLink>
+                            <p className="max-w-[340px] truncate text-[12px] text-muted-foreground" title={delivery.supplier_name || undefined}>{delivery.supplier_name || "-"}</p>
+                            {delivery.po_number ? <p className="font-mono text-[12px] text-muted-foreground">PO {delivery.po_number}</p> : null}
+                          </td>
+                          <td className="px-4 py-3 align-top text-[13px]">{delivery.warehouse_code || delivery.warehouse_name || "-"}</td>
+                          <td className="px-4 py-3 align-top text-[13px] tabular-nums">
+                            {expected ? new Date(expected).toLocaleDateString("vi-VN") : "-"}
+                            {late ? <p className="text-[12px] font-medium text-rose-600 dark:text-rose-400">Đã quá hạn</p> : null}
+                          </td>
+                          <td className="px-4 py-3 text-right align-top text-[13px] tabular-nums">
+                            <span className="font-semibold">{bookCount}</span> cuốn
+                            <p className="text-[12px] text-muted-foreground">{delivery.items.length} đầu sách</p>
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <StatusBadge label={supplierDeliveryStatusLabel(delivery.status)} variant={delivery.status === "SUBMITTED" ? "info" : "warning"} dot />
+                          </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/supplier-deliveries/${delivery.id}`)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                            >
+                              <ClipboardCheck className="h-3.5 w-3.5" /> Đối chiếu
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -662,19 +676,7 @@ export function GoodsReceiptPage() {
           title="Nhập kho theo ISBN13"
           description="Dùng cho phiếu nhập thủ công không gắn với đơn đặt hàng."
           actions={
-            canManageReceiving ? (
-              <div className="inline-flex rounded-[10px] border border-border bg-card p-1">
-                <button
-                  onClick={() => setReceivingMode("supplier")}
-                  className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-muted-foreground hover:bg-muted"
-                >
-                  <Truck className="h-3.5 w-3.5" /> Theo phiếu NCC
-                </button>
-                <button className="inline-flex items-center gap-1.5 rounded-[8px] bg-foreground px-3 py-2 text-[12px] font-semibold text-background">
-                  <ScanBarcode className="h-3.5 w-3.5" /> ISBN thủ công
-                </button>
-              </div>
-            ) : null
+            canManageReceiving ? modeSwitch("manual") : null
           }
         />
       </FadeItem>
@@ -829,7 +831,7 @@ export function GoodsReceiptPage() {
                   onClick={() => setStep("review")}
                   className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white"
                 >
-                  Review
+                  Xem lại
                 </button>
               </div>
             </div>
@@ -933,7 +935,7 @@ export function GoodsReceiptPage() {
                 onClick={() => setShowConfirmModal(false)}
                 className="flex-1 rounded-[10px] border border-border bg-card px-4 py-2.5 text-[13px] font-semibold text-foreground"
               >
-                Huy
+                Hủy
               </button>
               <button
                 onClick={() => void handleCreateDraftReceipt()}
@@ -960,7 +962,7 @@ export function GoodsReceiptPage() {
           >
             <h3 id="new-book-modal-title" className="mb-2 text-[16px] font-semibold">Tạo sách tạm cho ISBN13 mới</h3>
             <p className="mb-4 text-[13px] text-muted-foreground">
-              ISBN13 chua ton tai trong he thong. Vui long nhap ten sach de tao ban ghi INCOMPLETE.
+              ISBN13 này chưa có trong hệ thống. Nhập tên sách để tạo sách tạm, bổ sung thông tin sau.
             </p>
 
             <div className="space-y-3">
@@ -998,7 +1000,7 @@ export function GoodsReceiptPage() {
                 }}
                 className="flex-1 rounded-[10px] border border-border bg-card px-4 py-2.5 text-[13px] font-semibold text-foreground"
               >
-                Huy
+                Hủy
               </button>
               <button
                 onClick={() => void handleCreateIncompleteBook()}
