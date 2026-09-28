@@ -12,7 +12,7 @@ a different dataset - fatal for a reproducible thesis artifact. The tool
 result IS the source of truth the answer must be faithful to; this eval
 resolves that value at run time and checks the answer against it.
 
-Requires the full stack running (gateway, auth-service, ai-service, Ollama)
+Requires the full stack running (gateway, auth-service, ai-service)
 - it logs in itself and calls POST /ai/assistant per question.
 
 Usage (from services/ai-service/):
@@ -40,14 +40,12 @@ REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://localhost:3000").rstrip("/")
 USERNAME = os.getenv("ASSISTANT_EVAL_USERNAME", "manager01")
 PASSWORD = os.getenv("ASSISTANT_EVAL_PASSWORD", "123456")
-# ai-service's own per-IP limiter (cache.py: 15 req/min) was sized around the
-# local Ollama model's natural ~25-70s/round pace, which never came close to
-# it. Running this eval against a fast cloud provider (OpenRouter/Qwen) hits it
-# almost immediately - every request after the first ~15 comes back 429 within
-# the same minute. 4.5s keeps this eval under 15/min against any provider
-# without touching the limiter itself (a separate, known issue - see the
-# plan's "out of scope" notes - it's keyed by client IP, which is the
-# gateway's IP for every real caller, not just this eval script).
+# ai-service's own per-IP limiter (cache.py: 15 req/min) is easy to hit when
+# running this eval against OpenRouter/Qwen's fast round-trip time - every
+# request after the first ~15 comes back 429 within the same minute. 4.5s
+# keeps this eval under 15/min without touching the limiter itself (a
+# separate, known issue - it's keyed by client IP, which is the gateway's
+# IP for every real caller, not just this eval script).
 ASSISTANT_EVAL_REQUEST_DELAY_SECONDS = float(os.getenv("ASSISTANT_EVAL_REQUEST_DELAY_SECONDS", "4.5"))
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_EVAL_TIMEOUT_SECONDS", "150"))
 

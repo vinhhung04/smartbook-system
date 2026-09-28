@@ -1,4 +1,4 @@
-import { inventoryAPI } from './http-clients';
+import { inventoryAPI, aiAPI } from './http-clients';
 import type { LookupBookByIsbnResponse, PostIsbnAiSuggestions } from './ai';
 
 export type AuthorityStatus = 'AUTO_MATCH' | 'REVIEW_REQUIRED' | 'NEW_ENTITY';
@@ -42,6 +42,8 @@ export interface DuplicateDecisionResult {
 }
 
 export interface FinalMetadata {
+  translator?: string[];
+  publishedDate?: string | null;
   title?: string;
   subtitle?: string | null;
   description?: string | null;
@@ -57,6 +59,9 @@ export interface FinalMetadata {
 }
 
 export const metadataIntelligenceService = {
+  capabilities: async (): Promise<{ enabled: boolean }> => (await aiAPI.get('/metadata-intelligence/capabilities')).data,
+  extract: async (type: 'isbn' | 'html' | 'text', value: string, targetIsbn?: string): Promise<LookupBookByIsbnResponse> =>
+    (await aiAPI.post('/metadata-intelligence/extract', { input: { type, value, ...(targetIsbn ? { targetIsbn } : {}) } }, { timeout: 70000 })).data,
   createReconciliationDraft: async (lookup: LookupBookByIsbnResponse, aiSuggestions: PostIsbnAiSuggestions): Promise<ReconciliationDraft> => {
     const response = await inventoryAPI.post('/api/metadata-reconciliations', { isbn: lookup.isbn, lookup, aiSuggestions });
     return response.data.data;

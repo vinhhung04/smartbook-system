@@ -18,6 +18,10 @@ export interface AuthUser {
   username: string;
   email: string;
   full_name: string;
+  phone?: string | null;
+  avatar_url?: string | null;
+  last_login_at?: string | null;
+  email_verified_at?: string | null;
   roles: string[];
   permissions: string[];
   is_superuser?: boolean;
@@ -41,6 +45,7 @@ interface TokenPayload {
 export interface UpdateMeRequest {
   full_name?: string;
   email?: string;
+  phone?: string;
 }
 
 const TOKEN_KEY = 'token';
@@ -172,6 +177,11 @@ export const authService = {
     return response.data;
   },
 
+  resendVerification: async (): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/resend-verification');
+    return response.data;
+  },
+
   hydrateCurrentUser: async (): Promise<AuthUser | null> => {
     if (!authService.isAuthenticated()) {
       return null;
@@ -180,18 +190,13 @@ export const authService = {
     try {
       return await authService.getMe();
     } catch (error) {
-      // Only a genuinely invalid/expired token should log the user out. Any other failure —
-      // rate limiting, a 5xx, a dropped connection — is transient and must not throw away a
-      // valid session; the caller already has a token that's fine to keep using once the
-      // gateway/service recovers.
+      // Only an explicit auth rejection ends the session. Transient failures (429 rate limit,
+      // 5xx, network) keep the cached user so a busy gateway doesn't log people out.
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      if (status === 401) {
+      if (status === 401 || status === 403) {
         clearSession();
         return null;
       }
-      // Transient failure: every route loader treats a null return here as "not logged
-      // in" and redirects to /login, so fall back to the last known user from localStorage
-      // instead of bouncing someone with a perfectly valid session out of the app.
       return authService.getCurrentUser();
     }
   },

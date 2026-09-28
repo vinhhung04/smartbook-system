@@ -101,9 +101,6 @@ health:
 	@echo ""
 	@echo "AI Service:   http://localhost:8000/health"
 	@curl -s http://localhost:8000/health 2>/dev/null | jq . || echo "❌ Not responding"
-	@echo ""
-	@echo "Ollama:       http://localhost:11434/api/tags"
-	@curl -s http://localhost:11434/api/tags 2>/dev/null | jq .models || echo "❌ Not responding"
 
 # Logs
 logs:
@@ -153,7 +150,7 @@ check-env:
 
 check-ports:
 	@echo "[INFO] Checking port availability..."
-	@for port in 3000 3001 3002 3003 3004 5173 5432 8000 8080 11434; do \
+	@for port in 3000 3001 3002 3003 3004 5173 5432 8000 8080; do \
 		if command -v lsof >/dev/null 2>&1; then \
 			if lsof -i :$$port >/dev/null 2>&1; then \
 				echo "⚠️  Port $$port is in use"; \
@@ -185,7 +182,7 @@ reset-hard:
 	@echo "⚠️  WARNING: This will completely reset the Docker environment!"
 	@echo "This will permanently delete:"
 	@echo "  - All containers"
-	@echo "  - All volumes (databases, ollama data)"
+	@echo "  - All volumes (databases)"
 	@echo "  - All built images"
 	@read -p "Continue? (y/N) " -n 1 -r; \
 	echo ""; \

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Plus, X, Edit, Users } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Users } from "lucide-react";
 import { Lock, Unlock } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
@@ -76,6 +76,34 @@ function statusBadgeVariant(status: UserRow["status"]): "success" | "danger" | "
 }
 
 const PAGE_SIZE = 10;
+
+const ROLE_CHIP_CLASS = "whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-400";
+const ICON_BUTTON_CLASS = "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60";
+const MAX_VISIBLE_ROLES = 2;
+
+function userInitials(fullName: string, username: string) {
+  const source = (fullName || username || "?").trim();
+  const words = source.split(/\s+/);
+  const letters = words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : source.slice(0, 2);
+  return letters.toUpperCase();
+}
+
+function RoleChips({ roles }: { roles: RoleItem[] }) {
+  if (roles.length === 0) return <span className="text-[12px] text-muted-foreground">Chưa có vai trò</span>;
+  const hidden = roles.slice(MAX_VISIBLE_ROLES);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {roles.slice(0, MAX_VISIBLE_ROLES).map((role) => (
+        <span key={role.id} className={ROLE_CHIP_CLASS}>{role.code}</span>
+      ))}
+      {hidden.length > 0 ? (
+        <span className={cn(ROLE_CHIP_CLASS, "bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground")} title={hidden.map((role) => role.code).join(", ")}>
+          +{hidden.length}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -304,74 +332,98 @@ export function UsersPage() {
       <FadeItem>
         <SectionCard noPadding>
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full table-fixed">
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {[
-                  "Tên đăng nhập",
-                  "Họ tên",
-                  "Email",
-                  "Vai trò",
-                  "Trạng thái",
-                  "Ngày tạo",
-                  "Hành động",
+                  { label: "Người dùng", className: "" },
+                  { label: "Vai trò", className: "hidden w-[220px] md:table-cell" },
+                  { label: "Trạng thái", className: "hidden w-[120px] sm:table-cell" },
+                  { label: "Ngày tạo", className: "hidden w-[110px] xl:table-cell" },
+                  { label: "Hành động", className: "w-[124px] text-right" },
                 ].map((header) => (
-                  <th key={header} className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {header}
+                  <th key={header.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", header.className)}>
+                    {header.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonTableRow columns={7} rows={5} />
+                <SkeletonTableRow columns={5} rows={5} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7}><EmptyState variant="no-data" title="Không có người dùng nào" description="Tạo người dùng mới để bắt đầu" className="py-12" /></td>
+                  <td colSpan={5}>
+                    <EmptyState
+                      variant="no-data"
+                      title={search.trim() ? "Không tìm thấy người dùng phù hợp" : "Không có người dùng nào"}
+                      description={search.trim() ? "Thử từ khóa khác hoặc xóa bộ lọc tìm kiếm" : "Tạo người dùng mới để bắt đầu"}
+                      className="py-12"
+                    />
+                  </td>
                 </tr>
               ) : (
                 paginatedUsers.map((user) => (
                   <motion.tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <td className="px-5 py-3.5 text-[13px] font-semibold">{user.username}</td>
-                    <td className="px-5 py-3.5 text-[13px]">{user.full_name}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{user.email || "-"}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex flex-wrap gap-1.5">
-                        {(user.roles || []).map((role) => (
-                          <span key={role.id} className="rounded-full bg-blue-100 dark:bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400">
-                            {role.code}
-                          </span>
-                        ))}
+                    <td className="px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
+                            user.status === "LOCKED"
+                              ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                              : "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+                          )}
+                        >
+                          {userInitials(user.full_name, user.username)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-semibold" title={user.full_name}>{user.full_name || user.username}</p>
+                          <p className="truncate text-[12px] text-muted-foreground" title={`${user.username} · ${user.email || "-"}`}>
+                            {user.username} · {user.email || "-"}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
+                            <RoleChips roles={user.roles || []} />
+                            <span className="sm:hidden"><StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} /></span>
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      <RoleChips roles={user.roles || []} />
+                    </td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
                       <StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} />
                     </td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatDate(user.created_at)}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
+                    <td className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell">{formatDate(user.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openEditUser(user)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          aria-label={`Sửa ${user.username}`}
+                          title="Sửa"
+                          className={cn(ICON_BUTTON_CLASS, "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20")}
                         >
-                          <Edit className="h-3.5 w-3.5" />
-                          Sửa
+                          <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => void handleToggleLock(user)}
                           data-testid="toggle-lock-user-button"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-[12px] hover:bg-muted"
+                          aria-label={`${user.status === "LOCKED" ? "Mở khóa" : "Khóa"} ${user.username}`}
+                          title={user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
+                          className={cn(ICON_BUTTON_CLASS, "border-input hover:bg-muted")}
                         >
                           <MorphIcon icon={user.status === "LOCKED" ? Unlock : Lock} className="h-3.5 w-3.5" />
-                          {user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
                         </button>
                         <button
                           onClick={() => setPendingDeleteUser(user)}
                           disabled={deletingUserId === user.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[12px] text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 disabled:opacity-60"
+                          aria-label={`Xóa ${user.username}`}
+                          title={deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
+                          className={cn(ICON_BUTTON_CLASS, "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20")}
                         >
-                          <X className="h-3.5 w-3.5" />
-                          {deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </td>

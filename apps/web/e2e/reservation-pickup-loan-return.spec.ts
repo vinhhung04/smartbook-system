@@ -83,7 +83,7 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
     await staffPage.getByRole('alertdialog').getByRole('button', { name: 'Xác nhận' }).click();
 
     await expect(staffPage.getByText('Đã trả sách thành công')).toBeVisible({ timeout: 10_000 });
-    await expect(loanRow.getByText('RETURNED', { exact: false })).toBeVisible({ timeout: 10_000 });
+    await expect(loanRow).toContainText('RETURNED', { timeout: 10_000 });
 
     test.info().annotations.push({ type: 'flow', description: `Book "${bookTitle}" — ${reservationNumber} -> ${loanNumber}` });
   } finally {

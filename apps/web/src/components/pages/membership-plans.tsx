@@ -11,6 +11,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Loader2,
+  Users,
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { SectionCard } from '@/components/ui/section-card';
@@ -20,6 +21,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/components/ui/utils';
 import { getApiErrorMessage } from '@/services/api';
 
 export interface MembershipPlan {
@@ -73,6 +75,68 @@ function toNum(v: unknown): number {
     return Number.isNaN(n) ? 0 : n;
   }
   return 0;
+}
+
+function formatVnd(value: unknown): string {
+  return `${toNum(value).toLocaleString('vi-VN')} VND`;
+}
+
+function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: MembershipPlan) => void }) {
+  const members = plan._count?.customer_memberships ?? 0;
+  const rules: Array<{ label: string; value: string }> = [
+    { label: 'Gia hạn tối đa', value: `${plan.max_renewal_count} lần` },
+    { label: 'Giữ chỗ đặt trước', value: `${plan.reservation_hold_hours} giờ` },
+    { label: 'Phạt mỗi ngày trễ', value: toNum(plan.fine_per_day) > 0 ? formatVnd(plan.fine_per_day) : 'Không phạt' },
+    { label: 'Hệ số phí mất sách', value: `×${toNum(plan.lost_item_fee_multiplier)}` },
+  ];
+  return (
+    <article className={cn('flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md', !plan.is_active && 'opacity-70')}>
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-[15px] font-semibold text-foreground" title={plan.name}>{plan.name}</h3>
+          <p className="font-mono text-[11px] text-muted-foreground">{plan.code}</p>
+        </div>
+        {plan.is_active ? (
+          <StatusBadge label="Hoạt động" variant="success" dot />
+        ) : (
+          <StatusBadge label="Không hoạt động" variant="neutral" dot />
+        )}
+      </header>
+
+      {plan.description ? <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{plan.description}</p> : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3">
+        <div>
+          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_active_loans}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">cuốn mượn cùng lúc</p>
+        </div>
+        <div>
+          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_loan_days}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">ngày mỗi lượt mượn</p>
+        </div>
+      </div>
+
+      <dl className="mt-4 space-y-2 text-[12px]">
+        {rules.map((rule) => (
+          <div key={rule.label} className="flex items-center justify-between gap-3">
+            <dt className="text-muted-foreground">{rule.label}</dt>
+            <dd className="text-right font-medium text-foreground">{rule.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <footer className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-3">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+          {members} thành viên
+        </span>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => onEdit(plan)} aria-label={`Sửa gói ${plan.name}`}>
+          <Edit className="h-3.5 w-3.5" />
+          Sửa
+        </Button>
+      </footer>
+    </article>
+  );
 }
 
 function planToForm(p: MembershipPlan): PlanFormState {
@@ -206,7 +270,7 @@ export function MembershipPlansPage() {
     'w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40';
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -288,74 +352,10 @@ export function MembershipPlansPage() {
               }
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Mã gói
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Tên gói
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Tối đa mượn
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Tối đa ngày
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Phạt/ngày
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Gia hạn
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Trạng thái
-                    </th>
-                    <th className="text-left text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Thành viên
-                    </th>
-                    <th className="text-right text-[11px] text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plans.map((plan) => (
-                    <tr key={plan.id} className="border-b border-border/80 last:border-0 hover:bg-muted/20">
-                      <td className="px-5 py-3.5 text-[13px] font-medium">{plan.code}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{plan.name}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{plan.max_active_loans}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{plan.max_loan_days}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{toNum(plan.fine_per_day).toFixed(2)}</td>
-                      <td className="px-5 py-3.5 text-[13px]">{plan.max_renewal_count}</td>
-                      <td className="px-5 py-3.5 text-[13px]">
-                        {plan.is_active ? (
-                          <StatusBadge label="Hoạt động" variant="success" dot />
-                        ) : (
-                          <StatusBadge label="Không hoạt động" variant="neutral" dot />
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px]">
-                        {plan._count?.customer_memberships ?? 0}
-                      </td>
-                      <td className="px-5 py-3.5 text-[13px] text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="gap-1.5 h-8"
-                          onClick={() => openEdit(plan)}
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                          Sửa
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+              {plans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan} onEdit={openEdit} />
+              ))}
             </div>
           )}
         </SectionCard>

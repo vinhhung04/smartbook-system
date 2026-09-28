@@ -14,6 +14,7 @@ function endpoints(router) {
 test('reconciliation API exposes draft, per-field decision, and safe apply routes', () => {
   assert.deepEqual(endpoints(reconciliationRoutes), [
     'GET /:id',
+    'GET /capabilities',
     'PATCH /:id/fields/:field',
     'POST /',
     'POST /:id/apply',

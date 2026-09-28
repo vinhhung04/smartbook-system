@@ -9,14 +9,16 @@ import httpx
 import book_index
 import embeddings
 import fusion
+import retrieval_confidence
 import vector_store
+from intent import normalize_text
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 ASSISTANT_TOOL_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_TOOL_TIMEOUT_SECONDS", "8"))
 
 # Caps how many rows a single tool call can return, so a large analytics
-# response doesn't blow up the LLM's context window (and, on CPU-only Ollama,
-# doesn't add minutes to the next round's prompt-processing time).
+# response doesn't blow up the LLM's context window or the next round's
+# prompt-processing time/cost.
 MAX_LIST_ITEMS = 12
 
 
@@ -38,7 +40,13 @@ def _truncate(value: Any) -> Any:
     return value
 
 
-async def _get(endpoint: str, auth_header: str | None, params: dict | None = None) -> dict:
+async def _get(
+    endpoint: str, auth_header: str | None, params: dict | None = None, *, truncate: bool = True,
+) -> dict:
+    """truncate=False bypasses MAX_LIST_ITEMS entirely - for bulk data consumers
+    (ingestion.py's book corpus sync, via main.py's startup hook and
+    reindex_embeddings.py) that need the complete list, not a context-window-safe
+    preview for an LLM tool call. Every tool-calling call site keeps the default."""
     clean_params = {key: val for key, val in (params or {}).items() if val is not None}
     headers = {"Authorization": auth_header} if auth_header else {}
     try:
@@ -46,7 +54,8 @@ async def _get(endpoint: str, auth_header: str | None, params: dict | None = Non
             response = await client.get(f"{GATEWAY_URL}{endpoint}", params=clean_params, headers=headers)
         if response.status_code >= 400:
             return {"error": f"{endpoint} tra ve HTTP {response.status_code}"}
-        return _truncate(_data(response.json()))
+        data = _data(response.json())
+        return _truncate(data) if truncate else data
     except httpx.TimeoutException:
         return {"error": f"{endpoint} het thoi gian cho phan hoi"}
     except Exception as exc:
@@ -162,7 +171,17 @@ _MIN_ISBN_KEY_LEN = 10
 _RRF_MAX_SCORE = 2.0 / (fusion.RRF_K + 1)
 
 
-async def _score_and_rank_books(books: list, query: str, limit: int, client=None) -> list[dict]:
+async def _score_and_rank_books(books: list, query: str, limit: int) -> list[dict]:
+    """Thin wrapper kept for existing callers (routes_cover_search.py,
+    test_book_index.py) that only want the ranked list, not the confidence
+    decision — see _score_and_rank_books_with_confidence()."""
+    results, _confidence = await _score_and_rank_books_with_confidence(books, query, limit)
+    return results
+
+
+async def _score_and_rank_books_with_confidence(
+    books: list, query: str, limit: int,
+) -> tuple[list[dict], retrieval_confidence.RetrievalConfidence]:
     """Hybrid ranking qua vector store, hop nhat bang RRF.
 
     Truoc day ham nay tu cham diem keyword trong Python roi trung binh cong voi
@@ -195,12 +214,17 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
     query da chuan hoa, khong doi hoi bang tuyet doi ca chuoi (van khop truong
     hop query dung la isbn tran, vi mot chuoi luon la substring cua chinh no).
     """
+    def _no_evidence(hard_match: str | None = None) -> tuple[list[dict], retrieval_confidence.RetrievalConfidence]:
+        signals = retrieval_confidence.extract_signals(
+            vector_store.CORPUS_BOOK, [], [], [], semantic_available=False, hard_match=hard_match)
+        return [], retrieval_confidence.evaluate(signals, retrieval_confidence.BOOK_CONFIDENCE)
+
     query = (query or "").strip()
     if not query:
-        return []
+        return _no_evidence()
     valid_books = [book for book in books if isinstance(book, dict) and book.get("id")]
     if not valid_books:
-        return []
+        return _no_evidence()
 
     by_id = {str(book["id"]): book for book in valid_books}
     source_ids = list(by_id.keys())
@@ -215,8 +239,15 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         ),
         None,
     )
+    # A query that IS a book's title, word for word, is as strong a signal as
+    # an isbn match — no need to wait on semantic/keyword agreement for it.
+    normalized_query = normalize_text(query)
+    title_hit = None if isbn_hit is not None else next(
+        (book for book in valid_books if normalize_text(str(book.get("title") or "")) == normalized_query),
+        None,
+    )
 
-    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     semantic = (
         [
             hit for hit in await store.search_semantic(
@@ -239,6 +270,14 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         if hit.source_id in by_id
     ]
 
+    hard_match = "ISBN_EXACT" if isbn_hit is not None else ("TITLE_EXACT" if title_hit is not None else None)
+    signals = retrieval_confidence.extract_signals(
+        vector_store.CORPUS_BOOK, semantic, keyword, fused,
+        semantic_available=embed_result is not None, hard_match=hard_match,
+    )
+    confidence = retrieval_confidence.evaluate(signals, retrieval_confidence.BOOK_CONFIDENCE)
+    retrieval_confidence.log_decision(confidence)
+
     if isbn_hit is not None:
         isbn_id = isbn_hit["id"]
         results = [result for result in results if result["id"] != isbn_id]
@@ -246,7 +285,7 @@ async def _score_and_rank_books(books: list, query: str, limit: int, client=None
         # thang do identity chu khong phai xep hang.
         results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
 
-    return results[:limit]
+    return results[:limit], confidence
 
 
 async def search_books(auth_header: str | None = None, query: str = "") -> dict:
@@ -274,8 +313,19 @@ async def search_books(auth_header: str | None = None, query: str = "") -> dict:
     except Exception as exc:
         return {"error": f"/api/books that bai: {type(exc).__name__}"}
 
-    results = await _score_and_rank_books(books, query, SEARCH_BOOKS_RESULT_LIMIT)
-    return {"query": query, "results": results}
+    results, confidence = await _score_and_rank_books_with_confidence(books, query, SEARCH_BOOKS_RESULT_LIMIT)
+    # NO_EVIDENCE: withhold the "nearest thing we have" instead of handing the
+    # model/agent a book that isn't really an answer (see retrieval_confidence.py).
+    # UNCERTAIN keeps the candidates - the model is told via evidence.py/the
+    # assistant prompt to present them as unconfirmed, not to drop them.
+    if confidence.decision == retrieval_confidence.NO_EVIDENCE:
+        results = []
+    return {
+        "query": query, "results": results,
+        "retrievalStatus": confidence.decision,
+        "retrievalConfidence": confidence.confidence,
+        "reasonCodes": list(confidence.reason_codes),
+    }
 
 
 async def get_aging_inventory(

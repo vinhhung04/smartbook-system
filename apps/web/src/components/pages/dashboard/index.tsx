@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Bell, LayoutDashboard, RefreshCw, ShieldOff } from 'lucide-react';
@@ -7,12 +7,8 @@ import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
-import {
-  analyticsService,
-  type BorrowTrendItem,
-  type TopBookItem,
-} from '@/services/analytics';
-import { getApiErrorMessage, hasAnyPermission } from '@/services/http-clients';
+import { analyticsService } from '@/services/analytics';
+import { getApiErrorMessage, hasAnyPermission, hasPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
 import { purchaseRequestService } from '@/services/purchase-requests';
@@ -34,15 +30,7 @@ import {
   emptyReorderSummary,
   type DashboardState,
 } from './types';
-import { compactTitle, getGreeting } from './utils';
-
-function compactBook(item: TopBookItem) {
-  return { ...item, name: compactTitle(item.title) };
-}
-
-function labelTrend(item: BorrowTrendItem) {
-  return { ...item, label: item.date.length === 10 ? item.date.slice(5) : item.date };
-}
+import { getGreeting } from './utils';
 
 export function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -53,6 +41,8 @@ export function DashboardPage() {
   const [reorderSummary, setReorderSummary] = useState(emptyReorderSummary);
   const [hasNewData, setHasNewData] = useState(false);
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
+  // Borrow-domain analytics need analytics.borrow.read (warehouse managers don't have it).
+  const canViewBorrowAnalytics = hasPermission('analytics.borrow.read');
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());
   const isWarehouseStaff = roles.includes('WAREHOUSE_STAFF');
@@ -70,12 +60,12 @@ export function DashboardPage() {
 
       const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel] = await Promise.all([
         analyticsService.getDashboardKpis(),
-        analyticsService.getBorrowTrends({ granularity: 'day' }),
+        canViewBorrowAnalytics ? analyticsService.getBorrowTrends({ granularity: 'day' }) : Promise.resolve(undefined),
         analyticsService.getTopBooks({ limit: 8 }),
-        analyticsService.getOverdueSummary(),
-        analyticsService.getFineSummary(),
+        canViewBorrowAnalytics ? analyticsService.getOverdueSummary() : Promise.resolve(undefined),
+        canViewBorrowAnalytics ? analyticsService.getFineSummary() : Promise.resolve(undefined),
         analyticsService.getWarehouseStockRisk(),
-        analyticsService.getReservationFunnel(),
+        canViewBorrowAnalytics ? analyticsService.getReservationFunnel() : Promise.resolve(undefined),
       ]);
 
       setDashboard({
@@ -103,7 +93,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [canViewAnalytics, isWarehouseStaff]);
+  }, [canViewAnalytics, canViewBorrowAnalytics, isWarehouseStaff]);
 
   useEffect(() => {
     void loadDashboard();
@@ -123,20 +113,9 @@ export function DashboardPage() {
     onPurchaseRequestEvent: markNewData,
   });
 
-  const trendData = useMemo(() => (dashboard?.trends || []).map(labelTrend), [dashboard?.trends]);
-  const topBookData = useMemo(() => (dashboard?.topBooks || []).map(compactBook), [dashboard?.topBooks]);
+  const trendData = dashboard?.trends || [];
+  const topBookData = dashboard?.topBooks || [];
 
-  const funnelData = useMemo(() => {
-    const funnel = dashboard?.funnel || emptyFunnel;
-    return [
-      { name: 'Chờ xác nhận', value: funnel.pending },
-      { name: 'Đã xác nhận', value: funnel.confirmed },
-      { name: 'Sẵn lấy', value: funnel.ready_for_pickup },
-      { name: 'Đã mượn', value: funnel.converted_to_loan },
-      { name: 'Đã hủy', value: funnel.cancelled },
-      { name: 'Hết hạn', value: funnel.expired },
-    ];
-  }, [dashboard?.funnel]);
 
   const kpis = dashboard?.kpis || emptyKpis;
   const overdue = dashboard?.overdue || emptyOverdue;
@@ -150,15 +129,15 @@ export function DashboardPage() {
     month: '2-digit',
     year: 'numeric',
   });
-  const totalActionable = pendingPR + openER + kpis.low_stock_variants + kpis.overdue_loans + fines.unpaid_count + reorderSummary.high_priority;
+  const openActionCount = [pendingPR, openER, kpis.low_stock_variants, kpis.overdue_loans, fines.unpaid_count, reorderSummary.high_priority].filter((count) => count > 0).length;
 
   if (isWarehouseStaff) {
     return <Navigate to="/my-warehouse-tasks" replace />;
   }
 
   const headerDescription = canViewAnalytics && !loading && !error
-    ? totalActionable > 0
-      ? `${todayLabel} — Bạn có ${totalActionable} việc cần xử lý hôm nay.`
+    ? openActionCount > 0
+      ? `${todayLabel} — Bạn có ${openActionCount} đầu việc cần xử lý hôm nay.`
       : `${todayLabel} — Không có việc gì khẩn cấp hôm nay, mọi thứ đang ổn định.`
     : `${todayLabel} — Xem KPI thư viện, kho vận và các việc cần xử lý trong ngày.`;
 
@@ -246,16 +225,21 @@ export function DashboardPage() {
               openER={openER}
               lowStockVariants={kpis.low_stock_variants}
               overdueLoans={kpis.overdue_loans}
+              overdueItems={overdue.total_overdue_items}
+              oldestOverdueDays={overdue.oldest_overdue_days}
               unpaidFineCount={fines.unpaid_count}
               unpaidFineAmount={kpis.unpaid_fine_amount}
               highPriorityReorder={reorderSummary.high_priority}
+              reorderCandidates={reorderSummary.total_candidates}
+              reorderQty={reorderSummary.estimated_total_reorder_qty}
             />
           </FadeItem>
 
           <FadeItem>
-            <KpiGrid kpis={kpis} overdueTotalItems={overdue.total_overdue_items} />
+            <KpiGrid kpis={kpis} />
           </FadeItem>
 
+          {canViewBorrowAnalytics && (
           <FadeItem>
             <div className="mb-3">
               <h2 className="text-[15px] font-semibold text-foreground">Phân tích &amp; xu hướng</h2>
@@ -263,15 +247,17 @@ export function DashboardPage() {
             </div>
             <TrendFunnelSection
               trendData={trendData}
-              funnelData={funnelData}
+              funnel={dashboard?.funnel || emptyFunnel}
               kpis={kpis}
-              conversionRate={dashboard?.funnel.conversion_rate || 0}
             />
           </FadeItem>
+          )}
 
+          {canViewBorrowAnalytics && (
           <FadeItem>
             <TopBooksFinesSection topBookData={topBookData} fines={fines} />
           </FadeItem>
+          )}
 
           <FadeItem>
             <StockRiskOverdueSection stockRisk={stockRisk} overdue={overdue} />

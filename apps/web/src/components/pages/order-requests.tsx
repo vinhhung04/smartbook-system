@@ -159,7 +159,7 @@ function getTransferInsufficientStockDescription(error: unknown): string | null 
 
   return shortages
     .slice(0, 3)
-    .map((item) => `${item.isbn13 || item.sku || item.variant_id || "N/A"}: can ${item.available_qty || 0}, yeu cau ${item.required_qty || 0}, thieu ${item.shortage_qty || 0}`)
+    .map((item) => `${item.isbn13 || item.sku || item.variant_id || "N/A"}: còn ${item.available_qty || 0}, cần ${item.required_qty || 0}, thiếu ${item.shortage_qty || 0}`)
     .join(" | ");
 }
 
@@ -186,6 +186,18 @@ function statusBadgeVariant(status: string): "success" | "warning" | "danger" | 
   if (upper.includes("PENDING") || upper.includes("REQUESTED")) return "warning";
   if (upper.includes("PICK")) return "info";
   return "neutral";
+}
+
+function requestStatusLabel(status: string): string {
+  const upper = String(status || "").toUpperCase();
+  if (upper.includes("REJECT")) return "Bị từ chối";
+  if (upper.includes("CANCEL")) return "Đã hủy";
+  if (upper.includes("PENDING") || upper.includes("REQUESTED")) return "Chờ duyệt";
+  if (upper.includes("COMPLETED")) return "Hoàn tất";
+  if (upper.includes("PICK")) return "Đang lấy hàng";
+  if (upper.includes("READY")) return "Sẵn sàng";
+  if (upper.includes("APPROVED")) return "Đã duyệt";
+  return status;
 }
 
 function isPendingStatus(status: string): boolean {
@@ -234,7 +246,7 @@ export function OrderRequestsPage() {
   const [assignedPickerUserId, setAssignedPickerUserId] = useState("");
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
 
-  const [listView, setListView] = useState<"my" | "approval">("my");
+  const [listView, setListView] = useState<"my" | "approval">(() => (canApproveRequests() ? "approval" : "my"));
   const [requests, setRequests] = useState<OrderRequestSummary[]>([]);
 
   const [search, setSearch] = useState("");
@@ -316,9 +328,9 @@ export function OrderRequestsPage() {
           setWarehouseStaff(Array.isArray(staffRes.data) ? staffRes.data : []);
         }
 
-        await loadRequests("my", preferredWarehouse || undefined);
+        await loadRequests(canApprove ? "approval" : "my", canApprove ? undefined : (preferredWarehouse || undefined));
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Khong tai duoc du lieu order requests"));
+        toast.error(getApiErrorMessage(error, "Không tải được dữ liệu yêu cầu xuất kho"));
       } finally {
         setLoading(false);
       }
@@ -333,7 +345,7 @@ export function OrderRequestsPage() {
     const warehouseFilter = listView === "approval" ? undefined : selectedWarehouseId;
 
     void loadRequests(listView, warehouseFilter).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Khong tai duoc danh sach request"));
+      toast.error(getApiErrorMessage(error, "Không tải được danh sách yêu cầu"));
     });
   }, [listView, selectedWarehouseId]);
 
@@ -352,7 +364,7 @@ export function OrderRequestsPage() {
       })
       .catch((error) => {
         if (!cancelled) {
-          toast.error(getApiErrorMessage(error, "Khong sinh duoc Reference Code"));
+          toast.error(getApiErrorMessage(error, "Không tạo được mã tham chiếu"));
         }
       })
       .finally(() => {
@@ -377,7 +389,7 @@ export function OrderRequestsPage() {
   const handleSearchVariant = async () => {
     const q = variantQuery.trim();
     if (q.length < 2) {
-      toast.error("Nhap it nhat 2 ky tu de tim variant");
+      toast.error("Nhập ít nhất 2 ký tự để tìm sách");
       return;
     }
 
@@ -386,7 +398,7 @@ export function OrderRequestsPage() {
       const response = await orderRequestService.searchVariants(q);
       setVariantResults(response.data || []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Khong tim duoc variant"));
+      toast.error(getApiErrorMessage(error, "Không tìm được sách"));
     } finally {
       setSearchingVariant(false);
     }
@@ -447,12 +459,12 @@ export function OrderRequestsPage() {
 
   const handleSubmitRequest = async () => {
     if (!selectedWarehouseId) {
-      toast.error("Chon warehouse nguon truoc");
+      toast.error("Chọn kho nguồn trước");
       return;
     }
 
     if (draftLines.length === 0) {
-      toast.error("Can it nhat 1 line trong request");
+      toast.error("Yêu cầu cần ít nhất 1 dòng sách");
       return;
     }
 
@@ -473,7 +485,7 @@ export function OrderRequestsPage() {
         });
       } else {
         if (!targetWarehouseId) {
-          toast.error("Chon warehouse dich cho transfer");
+          toast.error("Chọn kho đích cho điều chuyển");
           return;
         }
 
@@ -489,13 +501,13 @@ export function OrderRequestsPage() {
         });
       }
 
-      toast.success("Tao request thanh cong");
+      toast.success("Đã tạo yêu cầu");
       resetForm();
       setListView("my");
       await loadRequests("my", selectedWarehouseId || undefined);
       setActiveTab("queue");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Tao request that bai");
+      const message = getApiErrorMessage(error, "Tạo yêu cầu thất bại");
       const shortageDescription = getTransferInsufficientStockDescription(error);
 
       if (shortageDescription) {
@@ -533,10 +545,10 @@ export function OrderRequestsPage() {
 
       if (pendingAction.mode === "approve") {
         await orderRequestService.approveRequest(pendingAction.taskType, pendingAction.taskId);
-        toast.success("Da duyet request");
+        toast.success("Đã duyệt yêu cầu");
       } else {
         await orderRequestService.rejectRequest(pendingAction.taskType, pendingAction.taskId, rejectReason.trim() || undefined);
-        toast.success("Da tu choi request");
+        toast.success("Đã từ chối yêu cầu");
       }
 
       const warehouseFilter = listView === "approval" ? undefined : (selectedWarehouseId || undefined);
@@ -544,7 +556,7 @@ export function OrderRequestsPage() {
       setPendingAction(null);
       setRejectReason("");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Cap nhat request that bai"));
+      toast.error(getApiErrorMessage(error, "Cập nhật yêu cầu thất bại"));
     } finally {
       setActionSubmitting(false);
     }
@@ -554,7 +566,7 @@ export function OrderRequestsPage() {
     return (
       <PageWrapper>
         <div className="flex min-h-[40vh] items-center justify-center">
-          <LoadingSpinner message="Dang tai du lieu order requests..." className="flex-col gap-3 text-[13px]" />
+          <LoadingSpinner message="Đang tải yêu cầu xuất kho…" className="flex-col gap-3 text-[13px]" />
         </div>
       </PageWrapper>
     );
@@ -565,28 +577,30 @@ export function OrderRequestsPage() {
       <FadeItem>
         <PageHeader
           icon={ListOrdered}
-          title="Order Requests"
-          description="Tao don yeu cau va duyet truoc khi vao Picking"
+          title="Yêu cầu xuất kho & điều chuyển"
+          description="Tạo yêu cầu và duyệt trước khi chuyển sang lấy hàng"
           iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50 dark:from-cyan-500/15 dark:to-sky-500/10 dark:border-cyan-500/20"
           iconColor="text-cyan-700 dark:text-cyan-400"
-          actions={(
+          actions={activeTab === "queue" ? (
             <Button type="button" onClick={() => setActiveTab("compose")}>
               <Plus className="h-3.5 w-3.5" />
               Tạo yêu cầu mới
             </Button>
-          )}
+          ) : null}
         />
       </FadeItem>
 
       {requests.length > 0 && (
         <FadeItem>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <StatCard label="Tổng request" value={requestStats.total} icon={ListOrdered} variant="primary" animateValue />
-            <StatCard label="Chờ duyệt" value={requestStats.pending} icon={Clock} variant="warning" animateValue />
-            <StatCard label="Đã duyệt" value={requestStats.approved} icon={CheckCircle2} variant="success" animateValue />
-            <StatCard label="Khẩn cấp" value={requestStats.urgent} icon={ShieldAlert} variant="danger" animateValue />
-            <StatCard label="Tổng số lượng" value={requestStats.totalQuantity} icon={Package} variant="info" animateValue />
-          </div>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+            <span><span className="font-semibold text-foreground">{requestStats.total}</span> yêu cầu</span>
+            <span aria-hidden="true">·</span>
+            <span><span className="font-semibold text-foreground">{requestStats.approved}</span> đã duyệt</span>
+            <span aria-hidden="true">·</span>
+            <span><span className="font-semibold text-foreground">{requestStats.totalQuantity}</span> bản trong tất cả yêu cầu</span>
+            {requestStats.pending > 0 ? <StatusBadge label={`${requestStats.pending} chờ duyệt`} variant="warning" dot /> : null}
+            {requestStats.urgent > 0 ? <StatusBadge label={`${requestStats.urgent} khẩn cấp`} variant="danger" dot /> : null}
+          </p>
         </FadeItem>
       )}
 
@@ -644,30 +658,32 @@ export function OrderRequestsPage() {
               />
 
               <div className="overflow-hidden rounded-xl border border-border">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Order</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Loại</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Nguồn</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Đích</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Ưu tiên</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Số lượng</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Yêu cầu lúc</TableHead>
-                      <TableHead className="text-right text-[11px] uppercase tracking-wider text-muted-foreground">Thao tác</TableHead>
+                      {[
+                        { label: "Yêu cầu", className: "" },
+                        { label: "Trạng thái", className: "hidden w-[190px] sm:table-cell" },
+                        { label: "Số lượng", className: "hidden w-[100px] md:table-cell" },
+                        { label: "Yêu cầu lúc", className: "hidden w-[150px] xl:table-cell" },
+                        { label: "Thao tác", className: "w-[150px] text-right" },
+                      ].map((head) => (
+                        <TableHead key={head.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", head.className)}>
+                          {head.label}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pagedRequests.length === 0 ? (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={9} className="whitespace-normal py-10 text-center">
+                        <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
                           <EmptyState
                             variant={requests.length === 0 && listView === "approval" ? "inbox" : "no-data"}
-                            title={requests.length === 0 ? "Không có request nào" : "Không tìm thấy request phù hợp"}
+                            title={requests.length === 0 ? "Chưa có yêu cầu nào" : "Không tìm thấy yêu cầu phù hợp"}
                             description={
                               requests.length === 0
-                                ? (listView === "approval" ? "Không có đơn nào đang chờ duyệt." : "Hãy tạo request đầu tiên của bạn.")
+                                ? (listView === "approval" ? "Không có đơn nào đang chờ duyệt." : "Tạo yêu cầu đầu tiên của bạn.")
                                 : "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
                             }
                             action={requests.length === 0 && listView === "my" ? (
@@ -686,32 +702,35 @@ export function OrderRequestsPage() {
                       const canTakeAction = listView === "approval"
                         && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
                           || (row.task_type === "transfer" && row.status === "REQUESTED"));
+                      const route = [row.source_warehouse_code, row.target_warehouse_code].filter(Boolean).join(" → ");
 
                       return (
                         <TableRow
                           key={`${row.task_type}-${row.task_id}`}
                           className={cn("hover:bg-muted/30", priorityAccentClass(priority))}
                         >
-                          <TableCell className="whitespace-normal text-[12px]">
-                            <p className="font-semibold text-foreground">{row.order_number}</p>
-                            <p className="text-[11px] text-muted-foreground">{row.line_count} lines</p>
+                          <TableCell className="px-4 py-3 align-top">
+                            <p className="truncate text-[13px] font-semibold text-foreground" title={row.order_number}>{row.order_number}</p>
+                            <p className="truncate text-[12px] text-muted-foreground" title={route || undefined}>
+                              {[meta.label, route].filter(Boolean).join(" · ")} · {row.line_count} dòng
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                              <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
+                              <PriorityBadge priority={priority} />
+                            </div>
+                            <p className="mt-1 text-[12px] text-muted-foreground md:hidden">SL {row.total_quantity}</p>
                           </TableCell>
-                          <TableCell className="text-[12px]">
-                            <StatusBadge label={meta.label} variant={meta.variant} />
+                          <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
+                            <div className="flex flex-col items-start gap-1.5">
+                              <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
+                              <PriorityBadge priority={priority} />
+                            </div>
                           </TableCell>
-                          <TableCell className="text-[12px]">{row.source_warehouse_code || "-"}</TableCell>
-                          <TableCell className="text-[12px]">{row.target_warehouse_code || "-"}</TableCell>
-                          <TableCell className="text-[12px]">
-                            <StatusBadge label={row.status} variant={statusBadgeVariant(row.status)} dot />
-                          </TableCell>
-                          <TableCell className="text-[12px]">
-                            <PriorityBadge priority={priority} />
-                          </TableCell>
-                          <TableCell className="text-[12px] font-medium">{row.total_quantity}</TableCell>
-                          <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.requested_at)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="hidden px-4 py-3 align-top text-[13px] font-semibold tabular-nums md:table-cell">{row.total_quantity}</TableCell>
+                          <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell">{formatDate(row.requested_at)}</TableCell>
+                          <TableCell className="px-4 py-3 align-top text-right">
                             {canTakeAction ? (
-                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                              <div className="inline-flex items-center justify-end gap-1.5">
                                 <Button
                                   type="button"
                                   variant="success-outline"
@@ -744,7 +763,7 @@ export function OrderRequestsPage() {
               {filteredRequests.length > 0 && (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedRequests.length}</span> / {filteredRequests.length} request
+                    Hiển thị <span className="font-medium text-foreground">{pagedRequests.length}</span> / {filteredRequests.length} yêu cầu
                   </p>
                   {totalPages > 1 && (
                     <Pagination className="mx-0 w-auto justify-end">
@@ -795,13 +814,13 @@ export function OrderRequestsPage() {
 
           <TabsContent value="compose" className="mt-4 space-y-6">
             <SectionCard
-              title="Thông tin request"
+              title="Thông tin yêu cầu"
               subtitle="Chọn loại, kho nguồn và ghi chú trước khi thêm dòng hàng."
               icon={Send}
             >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="md:col-span-3">
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại request</p>
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại yêu cầu</p>
                   <div className="flex items-center gap-3 flex-wrap">
                     <SegmentedControl
                       options={[
@@ -827,10 +846,10 @@ export function OrderRequestsPage() {
                 </div>
 
                 <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse nguồn</p>
+                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Kho nguồn</p>
                   <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Chọn warehouse" />
+                      <SelectValue placeholder="Chọn kho nguồn" />
                     </SelectTrigger>
                     <SelectContent>
                       {warehouses.map((warehouse) => (
@@ -842,10 +861,10 @@ export function OrderRequestsPage() {
 
                 {requestType === "transfer" ? (
                   <div>
-                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Warehouse đích</p>
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Kho đích</p>
                     <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn warehouse đích" />
+                        <SelectValue placeholder="Chọn kho đích" />
                       </SelectTrigger>
                       <SelectContent>
                         {filteredWarehouses.map((warehouse) => (
@@ -857,7 +876,7 @@ export function OrderRequestsPage() {
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Type</p>
+                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do xuất</p>
                       <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
                         <SelectTrigger className="w-full">
                           <SelectValue />
@@ -875,7 +894,7 @@ export function OrderRequestsPage() {
                       </Select>
                     </div>
                     <div>
-                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Reference Code</p>
+                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Mã tham chiếu</p>
                       <div className="relative">
                         <Input
                           value={externalReference}
@@ -899,7 +918,7 @@ export function OrderRequestsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Chưa giao (giao sau ở Picking)</SelectItem>
+                        <SelectItem value="none">Chưa giao (giao sau ở bước Lấy hàng)</SelectItem>
                         {warehouseStaff.map((staff) => (
                           <SelectItem key={staff.id} value={staff.id}>
                             {staff.full_name} ({staff.username})
@@ -917,15 +936,15 @@ export function OrderRequestsPage() {
                     onChange={(event) => setRequestNote(event.target.value)}
                     rows={2}
                     className="resize-y"
-                    placeholder="Lý do tạo request..."
+                    placeholder="Lý do tạo yêu cầu…"
                   />
                 </div>
               </div>
             </SectionCard>
 
             <SectionCard
-              title="Thêm lines"
-              subtitle="Tìm variant theo ISBN13, SKU hoặc tên sách, sau đó thêm vào bảng dưới."
+              title="Thêm sách"
+              subtitle="Tìm theo ISBN13, SKU hoặc tên sách rồi thêm vào danh sách bên dưới."
               icon={Plus}
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
@@ -1011,7 +1030,7 @@ export function OrderRequestsPage() {
                         <td colSpan={3} className="py-10 text-center">
                           <EmptyState
                             variant="no-data"
-                            title="Chưa có line nào"
+                            title="Chưa có sách nào"
                             description="Tìm sản phẩm và nhấn Thêm để bắt đầu."
                             className="py-0"
                           />
@@ -1049,7 +1068,7 @@ export function OrderRequestsPage() {
                             size="sm-icon"
                             className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                             onClick={() => handleRemoveLine(line.isbn13)}
-                            aria-label="Xoa dong"
+                            aria-label="Xóa dòng"
                           >
                             <X className="h-4 w-4" />
                           </Button>
@@ -1090,14 +1109,14 @@ export function OrderRequestsPage() {
         <AlertDialogContent className="max-w-[420px]">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingAction?.mode === "approve" ? "Duyệt request?" : "Từ chối request?"}
+              {pendingAction?.mode === "approve" ? "Duyệt yêu cầu?" : "Từ chối yêu cầu?"}
             </AlertDialogTitle>
             {pendingAction && (
               <AlertDialogDescription>
                 Request <span className="font-medium text-foreground">{pendingAction.orderNumber}</span> · {pendingAction.totalQuantity} cuốn.{" "}
                 {pendingAction.mode === "approve"
-                  ? "Request sẽ chuyển sang bước Picking."
-                  : "Người tạo request sẽ được thông báo về việc từ chối."}
+                  ? "Yêu cầu sẽ chuyển sang bước Lấy hàng."
+                  : "Người tạo yêu cầu sẽ được thông báo về việc từ chối."}
               </AlertDialogDescription>
             )}
           </AlertDialogHeader>
@@ -1109,7 +1128,7 @@ export function OrderRequestsPage() {
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
                 rows={2}
-                placeholder="Cho người tạo biết vì sao request bị từ chối..."
+                placeholder="Cho người tạo biết vì sao yêu cầu bị từ chối…"
               />
             </div>
           )}

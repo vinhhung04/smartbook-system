@@ -1,8 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-import ollama
+from pydantic import BaseModel, ValidationError
 import httpx
 import os
 import json
@@ -25,14 +24,17 @@ from intent import (
     BORROW_TREND_QUERY,
     DASHBOARD_SUMMARY_QUERY,
     FINE_SUMMARY_QUERY,
+    GENERAL_QUERY,
     LOW_STOCK_QUERY,
     OVERDUE_LOAN_QUERY,
     REORDER_SUGGESTION_QUERY,
     RESERVATION_QUERY,
     TOP_BORROWED_BOOKS_QUERY,
     detect_intent,
+    is_information_seeking,
     normalize_text,
 )
+import retrieval_confidence
 from nlu import _has_action_surface, _is_complex_message, classify_user_message
 from rag import (
     RAG_SYSTEM_RULES,
@@ -48,6 +50,8 @@ from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
 import assistant_tools
 from source_reliability import reliability
 import book_index
+import embeddings
+import vector_store
 import recommendation
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
@@ -85,13 +89,14 @@ from assistant_loop import (
     retry_once_if_ungrounded,
     seed_fast_path,
 )
-from llm_provider import get_llm_provider
+from llm_provider import get_openrouter_provider, VisionResponseError, TEXT_MODEL, ASSISTANT_MODEL, VISION_MODEL
+from metadata_intelligence.capture import capture as capture_metadata_source
 from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
 from prometheus_fastapi_instrumentator import Instrumentator
-from metrics import ocr_request_duration
+from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -121,10 +126,6 @@ async def _startup_init_db() -> None:
     await init_db()
 
 
-# Lấy host Ollama từ biến môi trường (mặc định cho Docker Compose)
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava")
-SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", os.getenv("OLLAMA_MODEL", "llava"))
 GOOGLE_BOOKS_API_BASE_URL = os.getenv(
     "GOOGLE_BOOKS_API_BASE_URL",
     "https://www.googleapis.com/books/v1/volumes",
@@ -152,6 +153,15 @@ ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lowe
 BOOK_MARKETPLACE_TIMEOUT_SECONDS = float(os.getenv("BOOK_MARKETPLACE_TIMEOUT_SECONDS", "30"))
 BOOK_LOOKUP_MAX_WEB_RESULTS = int(os.getenv("BOOK_LOOKUP_MAX_WEB_RESULTS", "5"))
 BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
+# Field-level ISBN retrieval: after the initial Google/Open Library lookup, only call
+# the marketplace/web providers that can fill the critical/high-value fields still
+# missing, within one total time budget. Off = legacy "everything in parallel" flow.
+ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL = os.getenv("ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", "false").lower() == "true"
+ENABLE_METADATA_INTELLIGENCE_V2 = os.getenv("ENABLE_METADATA_INTELLIGENCE_V2", "false").lower() == "true"
+ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SECONDS", "45"))
+# A found-but-incomplete lookup (gaps left, or a provider timed out/errored) is cached
+# only briefly so it is retried soon instead of sticking for the full 7 days.
+ISBN_INCOMPLETE_CACHE_TTL_SECONDS = int(os.getenv("ISBN_INCOMPLETE_CACHE_TTL_SECONDS", "600"))
 MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
@@ -179,36 +189,16 @@ AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATI
 
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
 
-# ── OpenRouter — the text/tool-calling backend (replaces Ollama for chat; Ollama
-# stays for the vision/OCR models and embeddings.py, which OpenRouter doesn't
-# serve). Anthropic and Groq were deliberately removed from this service - Qwen via
-# OpenRouter is the one cloud LLM it depends on. See llm_provider.OpenRouterProvider.
-# Model slug verified against the raw https://openrouter.ai/api/v1/models JSON on
-# 2026-09-15 ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
+# ── OpenRouter — the sole inference backend this service depends on. Anthropic,
+# Groq and Ollama were all deliberately removed - Qwen via OpenRouter is the one
+# cloud LLM it calls, for text, tool-calling, NLU and vision alike. See
+# llm_provider.OpenRouterProvider / get_openrouter_provider(). Model slug verified
+# against the raw https://openrouter.ai/api/v1/models JSON on 2026-09-15
+# ("id": "qwen/qwen3.7-flash", supports "tools"/"tool_choice", 1M context;
 # OpenRouter's own canonical_slug for this alias is qwen/qwen3.7-flash-20260727).
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-OPENROUTER_TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
-OPENROUTER_ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", OPENROUTER_TEXT_MODEL)
-OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
-# Provider for /chat, /generate-book-summary, /generate-summary-vi,
-# /enrich-book-after-isbn, /enrich-book-metadata, /explain-storage-suggestion, and
-# nightly_briefing's text generation. "openrouter" (default) | "ollama" (fully offline).
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
 # ── Assistant (tool-calling decision-support chatbot) ─────────────────────────
-# Separate model from SUMMARY_MODEL/OLLAMA_MODEL because native Ollama tool-calling
-# needs a model tag that actually supports `tools=` (llama3 does not; llama3.1 does).
-ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "llama3.1:8b-instruct-q4_0")
-# Which chat-completion backend /assistant and /assistant/stream call for their tool-calling
-# loop - "openrouter" (default) or "ollama" (fully offline). See llm_provider.py.
-ASSISTANT_PROVIDER = os.getenv("ASSISTANT_PROVIDER", "openrouter").strip().lower()
-# Ollama does use the GPU reserved in docker-compose, but this model (8B, ~4.7GB) only
-# partly fits the ~3.3GB VRAM free on this deployment's 4GB card (the rest is shared with
-# desktop apps) — confirmed via container logs: "offloaded 16/33 layers to GPU". The other
-# 17 layers run on CPU, so every round is a CPU+GPU hybrid, not pure CPU — but still slow,
-# and it re-processes the full system prompt + tool schemas each round (stateless chat API),
-# measured at 25-70s+ per round directly against /api/chat during verification.
 ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS", "120"))
 # Per-request budget for the gateway reads that back /recommendations (loans,
 # wishlist, ratings, catalog). Kept short: a slow dependency should degrade the
@@ -221,30 +211,6 @@ ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 # also silently truncated a correct direct answer (no tool needed) at 200
 # tokens - the one case where the model is actually generating prose there.
 ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
-
-
-@app.on_event("startup")
-async def _startup_warmup_assistant_model() -> None:
-    """Best-effort: load ASSISTANT_MODEL into Ollama (onto GPU/RAM) before the first real
-    request pays that cost. Only relevant when /assistant is actually configured to use
-    Ollama (ASSISTANT_PROVIDER=ollama) - a no-op skip otherwise, since OpenRouter has no
-    local model to warm up. Fire-and-forget — must never delay app startup or crash
-    it if Ollama isn't reachable yet (docker-compose only waits for the container to
-    *start*, not for Ollama's model server to be ready)."""
-    if ASSISTANT_PROVIDER != "ollama":
-        return
-
-    async def _warm_up():
-        try:
-            await ollama.AsyncClient(host=OLLAMA_HOST).chat(
-                model=ASSISTANT_MODEL,
-                messages=[{"role": "user", "content": "hi"}],
-                options={"num_predict": 1},
-            )
-        except Exception as exc:
-            logger.warning("Assistant model warm-up failed (non-fatal): %s", exc)
-
-    asyncio.create_task(_warm_up())
 
 
 @app.on_event("startup")
@@ -272,7 +238,7 @@ async def _startup_nightly_briefing() -> None:
 @app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
-    len duoc ngay ca khi Ollama chua san sang — retrieval se degrade xuong
+    len duoc ngay ca khi OpenRouter chua san sang — retrieval se degrade xuong
     keyword-only cho den khi ingest xong.
 
     Tat bang ENABLE_CORPUS_INGEST=false (vd trong test e2e khong can semantic).
@@ -283,8 +249,16 @@ async def _startup_ingest_corpus() -> None:
     async def _run() -> None:
         import ingestion
         try:
+            # Purge any chunk embedded by a stale model/dimension (e.g. leftover
+            # nomic-embed-text vectors from before the OpenRouter migration)
+            # BEFORE re-ingesting, so a document that never gets re-ingested
+            # (no longer in corpus/ or /api/books) doesn't leave an orphaned
+            # vector search_semantic could still match against the wrong space.
+            purged = await vector_store.get_store().delete_chunks_except_model(embeddings.EMBED_IDENTITY)
+            if purged:
+                logger.info("startup ingest: purged %d chunk(s) from a stale embedding model", purged)
             await ingestion.ingest_internal_docs()
-            books = await assistant_tools._get("/api/books", None)
+            books = await assistant_tools._get("/api/books", None, truncate=False)
             stats = await ingestion.ingest_books(books) if isinstance(books, list) else {}
             if not stats.get("documents"):
                 # Khong im lang cho truong hop no-op: /api/books doi JWT nguoi dung
@@ -313,7 +287,9 @@ ASSISTANT_ALLOWED_PERMISSIONS = {
 }
 
 def _extract_json(raw: str) -> dict:
-    """Trích xuất JSON từ response text của Ollama (có thể lẫn markdown/text thừa)."""
+    """Trích xuất JSON từ response text của text LLM (có thể lẫn markdown/text thừa).
+    Dùng cho các lời gọi text-generation (summary, ISBN enrichment) không bật
+    response_format=json_object - vision calls (analyze_image) đã tự đảm bảo JSON hợp lệ."""
     # Thử parse thẳng trước
     try:
         return json.loads(raw.strip())
@@ -354,12 +330,20 @@ def _validate_and_read_image(file: UploadFile) -> bytes:
 async def health():
     return {
         "status": "ok",
-        "model": OLLAMA_MODEL,
-        "ollama_host": OLLAMA_HOST,
-        "llm_provider": LLM_PROVIDER,
-        "assistant_provider": ASSISTANT_PROVIDER,
+        "model": TEXT_MODEL,
+        "llm_provider": "openrouter",
+        "assistant_model": ASSISTANT_MODEL,
+        "vision_model": VISION_MODEL,
+        "embed_model": embeddings.EMBED_MODEL,
     }
 
+
+PACKING_VISION_MAX_TOKENS = int(os.getenv("PACKING_VISION_MAX_TOKENS", "200"))
+# Kept below the inventory-service caller's own 20s AbortSignal.timeout(20000)
+# (services/inventory-service/src/services/packing-evidence-ai.service.js) so
+# THIS timeout fires first and returns a clean 502 instead of the caller's
+# fetch aborting first with no response body at all.
+PACKING_VISION_TIMEOUT_SECONDS = float(os.getenv("PACKING_VISION_TIMEOUT_SECONDS", "15"))
 
 PROMPT_PACKING_VERIFY = (
     "Hãy đóng vai một nhân viên kiểm tra đóng gói tại kho sách. "
@@ -372,21 +356,25 @@ PROMPT_PACKING_VERIFY = (
 )
 
 
-def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_PACKING_VERIFY,
-        images=[image_bytes],
-        options={"temperature": 0},
+class _PackingVerifyResult(BaseModel):
+    item_count: int = 0
+    detected_titles: list[str] = []
+
+
+async def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
+    provider = get_openrouter_provider(VISION_MODEL)
+    parsed, _usage = await provider.analyze_image(
+        image_bytes, PROMPT_PACKING_VERIFY,
+        max_tokens=PACKING_VISION_MAX_TOKENS, timeout=PACKING_VISION_TIMEOUT_SECONDS,
+        feature="packing_verification",
     )
-    raw_text: str = response.get("response", "")
-    data = _extract_json(raw_text)
-    detected_titles = data.get("detected_titles")
-    return {
-        "item_count": int(data.get("item_count") or 0),
-        "detected_titles": detected_titles if isinstance(detected_titles, list) else [],
-    }
+    # Drop explicit nulls (the model sometimes writes "item_count": null instead of
+    # following the prompt's "đặt item_count là 0" instruction) so the field's
+    # default applies the same way a missing key would - a genuinely wrong type
+    # (e.g. item_count: "many") still fails validation below.
+    sanitized = {k: v for k, v in parsed.items() if v is not None}
+    result = _PackingVerifyResult.model_validate(sanitized)
+    return result.model_dump()
 
 
 @app.post("/verify-packing-photo")
@@ -394,16 +382,21 @@ async def verify_packing_photo(file: UploadFile = File(...)):
     image_bytes = _validate_and_read_image(file)
 
     try:
-        return _verify_packing_photo_from_bytes(image_bytes)
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+        return await _verify_packing_photo_from_bytes(image_bytes)
+    except (VisionResponseError, ValidationError) as e:
+        logger.warning("verify_packing_photo: invalid AI response: %s", e)
+        raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning("verify_packing_photo: AI call failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
 
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Smart Receiving AI — Receipt/Invoice OCR Scanning
 # ────────────────────────────────────────────────────────────────────────────────
+
+RECEIPT_VISION_MAX_TOKENS = int(os.getenv("RECEIPT_VISION_MAX_TOKENS", "1200"))
+RECEIPT_VISION_TIMEOUT_SECONDS = float(os.getenv("RECEIPT_VISION_TIMEOUT_SECONDS", "30"))
 
 PROMPT_RECEIPT = (
     "Bạn là một chuyên gia nhập liệu kho sách cho hệ thống thư viện SmartBook. "
@@ -439,41 +432,17 @@ PROMPT_RECEIPT = (
 )
 
 
-def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
-    """Extract structured data from receipt/invoice image using Ollama vision."""
-    client = ollama.Client(host=OLLAMA_HOST)
-    response = client.generate(
-        model=OLLAMA_MODEL,
-        prompt=PROMPT_RECEIPT,
-        images=[image_bytes],
-        options={"temperature": 0},
+async def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
+    """Extract structured data from receipt/invoice image using OpenRouter vision.
+    Returns the parsed JSON dict as-is - callers validate/normalize it (analyze_image
+    already guarantees this is a JSON object; it never returns free text)."""
+    provider = get_openrouter_provider(VISION_MODEL)
+    parsed, _usage = await provider.analyze_image(
+        image_bytes, PROMPT_RECEIPT,
+        max_tokens=RECEIPT_VISION_MAX_TOKENS, timeout=RECEIPT_VISION_TIMEOUT_SECONDS,
+        feature="receipt_ocr",
     )
-    raw_text: str = response.get("response", "")
-
-    # Try to parse JSON from response
-    try:
-        return json.loads(raw_text.strip())
-    except json.JSONDecodeError:
-        pass
-
-    # Try to extract JSON from markdown code block
-    import re
-    block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
-    if block:
-        try:
-            return json.loads(block.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Try to find JSON object anywhere in text
-    obj = re.search(r"\{[\s\S]*\}", raw_text)
-    if obj:
-        try:
-            return json.loads(obj.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    return {"error": "Không thể trích xuất dữ liệu từ hình ảnh", "raw": raw_text}
+    return parsed
 
 
 @app.post("/scan-receipt")
@@ -495,20 +464,20 @@ async def scan_receipt(file: UploadFile = File(...)):
 
     try:
         with ocr_request_duration.time():
-            result = _scan_receipt_from_bytes(image_bytes)
+            result = await _scan_receipt_from_bytes(image_bytes)
 
-        # Validate response structure
+        # Model-reported failure (it was told to return {"error": "..."} when it
+        # can't read the receipt at all) - a normal 200 with success=False, not
+        # an HTTP error.
         if "error" in result:
-            return {
-                "success": False,
-                "error": result["error"],
-                "raw": result.get("raw"),
-            }
+            return {"success": False, "error": str(result["error"])}
 
         # Normalize line_items
         line_items = result.get("line_items") or []
         normalized_items = []
         for item in line_items:
+            if not isinstance(item, dict):
+                continue
             normalized_item = {
                 "title": item.get("title") or "Không rõ",
                 "isbn": item.get("isbn"),
@@ -526,10 +495,12 @@ async def scan_receipt(file: UploadFile = File(...)):
             "total_items": len(normalized_items),
         }
 
-    except ollama.ResponseError as e:
-        raise HTTPException(status_code=502, detail=f"Ollama lỗi: {e.error}")
+    except VisionResponseError as e:
+        logger.warning("scan_receipt: invalid AI response: %s", e)
+        raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning("scan_receipt: AI call failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
 
 
 @app.get("/recommendations")
@@ -858,6 +829,7 @@ async def _fetch_and_parse_product_page(
         )
         response.raise_for_status()
         html_text = response.text
+        capture_metadata_source(source_name, 'html', html_text, url)
     except Exception as exc:
         logger.warning("Marketplace fetch failed [%s] %s: %s", source_name, url, exc)
         raise
@@ -1063,6 +1035,7 @@ async def _fetch_and_parse_product_page_with_browser(
     if not html_text:
         return None, 0.0
 
+    capture_metadata_source(source_name, 'html', html_text, url)
     metadata = _parse_json_ld_product(html_text) or _parse_meta_product(html_text)
     if not metadata:
         logger.debug("Browser marketplace [%s] no metadata from %s", source_name, url)
@@ -1278,6 +1251,7 @@ async def _fetch_tiki_by_isbn_api(
                     )
                     detail_resp.raise_for_status()
                     detail = detail_resp.json() or {}
+                    capture_metadata_source('tiki', 'json', detail, f'https://tiki.vn/api/v2/products/{product_id}')
                     description = _safe_text(detail.get("description") or detail.get("short_description"))
                     # Authors and publisher from specifications
                     specs = detail.get("specifications") or []
@@ -1408,6 +1382,7 @@ async def _fetch_vinabook_by_isbn_api(
         )
         product_resp.raise_for_status()
         product = product_resp.json() or {}
+        capture_metadata_source('vinabook', 'json', product, product_url + '.js')
 
         variant = (product.get("variants") or [{}])[0]
         sku = (variant.get("barcode") or variant.get("sku") or "").strip()
@@ -1506,6 +1481,44 @@ async def _fetch_all_marketplace(
     return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, search_outcomes
 
 
+async def _fetch_marketplace_provider(provider: str, isbn13: str) -> tuple[dict | None, float, str | None]:
+    """One marketplace/web provider on its own, for field-level targeted retrieval.
+
+    Returns (metadata, score, outcome); outcome is None (success or clean
+    not-found), "TIMEOUT" or "ERROR" - never raises, so one provider failing
+    cannot fail the request. The caller enforces the overall time budget."""
+    timeout = BOOK_MARKETPLACE_TIMEOUT_SECONDS
+    try:
+        if provider == "webSearch":
+            data, score, outcome = await _fetch_web_search_fallback(isbn13)
+            return data, score, (None if outcome == "NOT_FOUND" else outcome)
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
+            if provider == "tiki":
+                call = _fetch_tiki_by_isbn_api(client, isbn13)
+            elif provider == "vinabook":
+                call = _fetch_vinabook_by_isbn_api(client, isbn13)
+            elif provider == "fahasa":
+                fahasa_urls: list[str] = []
+                try:
+                    fahasa_urls = await asyncio.wait_for(
+                        asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
+                        timeout=timeout,
+                    )
+                except Exception as exc:  # CloakBrowser's own-site search below does not need DDGS
+                    logger.warning("DuckDuckGo Fahasa search failed for ISBN %s: %s", isbn13, exc)
+                call = _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13)
+            else:
+                raise ValueError(f"unknown marketplace provider {provider!r}")
+            data, score = await asyncio.wait_for(call, timeout=timeout)
+        return data, score, None
+    except (asyncio.TimeoutError, httpx.TimeoutException):
+        return None, 0.0, "TIMEOUT"
+    except Exception as exc:
+        logger.warning("Marketplace provider %s failed for ISBN %s: %s", provider, isbn13, exc)
+        return None, 0.0, "ERROR"
+
+
 # ── 7. Merge marketplace data into base metadata ─────────────────────────────
 
 def _merge_with_marketplace(
@@ -1567,11 +1580,13 @@ def _safe_list(values) -> list[str]:
             out.append(text)
     return out
 
-async def _call_text_llm_json(system_prompt: str, user_prompt: str, max_tokens: int = 600) -> tuple[dict, bool]:
+async def _call_text_llm_json(
+    system_prompt: str, user_prompt: str, max_tokens: int = 600, feature: str = "text",
+) -> tuple[dict, bool]:
     """JSON-returning call for Pattern B (see _call_text_llm). Parse via
     _extract_json: no json_object mode, the model's raw text isn't
     guaranteed valid JSON."""
-    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3)
+    raw, ok = await _call_text_llm(system_prompt, user_prompt, max_tokens=max_tokens, temperature=0.3, feature=feature)
     if not ok:
         return {}, False
     return _extract_json(raw), True
@@ -1632,19 +1647,11 @@ def _metadata_completeness_score(data: dict) -> float:
     return round(score / total_weight, 3) if total_weight else 0.0
 
 
-# Smart ISBN Intelligence is deliberately deterministic.  These weights describe
-# source reliability, while agreement is calculated from the responses received
-# for this ISBN; no model-generated score is used for catalog metadata.
-ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "webSearch"]
-ISBN_INTELLIGENCE_FIELDS = (
-    "title", "subtitle", "authors", "publisher", "publishedDate", "description",
-    "categories", "language", "pageCount", "thumbnail",
+from isbn_coverage import (  # noqa: E402  (deterministic-intelligence constants live there)
+    ISBN_INTELLIGENCE_FIELDS, ISBN_QUALITY_WEIGHTS, ISBN_SOURCE_ORDER, analyze_field_coverage,
 )
-ISBN_QUALITY_WEIGHTS = {
-    "title": 2.0, "authors": 2.0, "publisher": 1.0, "publishedDate": 1.0,
-    "description": 1.5, "categories": 0.5, "language": 0.5, "pageCount": 1.0,
-    "thumbnail": 0.5,
-}
+from isbn_targeted import MAX_ROUNDS, PROVIDER_MIN_SECONDS, ProviderLedger, plan_targeted_retrieval  # noqa: E402
+import isbn_fusion  # noqa: E402
 
 
 def _normalize_evidence_value(value):
@@ -1660,8 +1667,48 @@ def _has_evidence_value(value) -> bool:
     return bool(value) if isinstance(value, list) else value not in (None, "")
 
 
+# "evidence" (default): normalize candidates and fuse agreeing sources via
+# isbn_fusion.fuse_field() - see that module for the full rationale. "prior":
+# the original single-highest-reliability-source rule, kept reachable for
+# eval/metadata_fusion/run_eval.py's before/after comparison and as a rollback.
+ISBN_FUSION_MODE = os.getenv("ISBN_FUSION_MODE", "evidence").strip().lower()
+
+
+def _select_field_prior(field: str, confirmations: list[dict]) -> dict:
+    """The original selection rule (unchanged): the single highest-reliability
+    source wins outright, confidence is that source's reliability discounted by
+    how much of the reliability-weighted responses disagreed with it."""
+    selected = max(confirmations, key=lambda item: reliability(item["source"], field)) if confirmations else None
+    if not selected:
+        return {
+            "value": None, "selectedSource": None, "confidence": 0.0, "agreementCount": 0,
+            "conflictCount": 0, "alternatives": [], "reasonCodes": [], "candidates": [], "evidence": [],
+        }
+
+    selected_normalized = _normalize_evidence_value(selected["value"])
+    agreement = sum(
+        reliability(item["source"], field)
+        for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized
+    ) / sum(reliability(item["source"], field) for item in confirmations)
+    # A single provider is useful but cannot be as strong as corroborated data.
+    corroboration = 0.7 + (0.3 * agreement)
+    confidence = round(min(1.0, reliability(selected["source"], field) * corroboration), 3)
+    alternatives = [
+        {"source": item["source"], "value": item["value"]}
+        for item in confirmations
+        if item is not selected and _normalize_evidence_value(item["value"]) != selected_normalized
+    ]
+    agreement_count = sum(1 for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized)
+    return {
+        "value": selected["value"], "selectedSource": selected["source"], "confidence": confidence,
+        "agreementCount": agreement_count, "conflictCount": len(alternatives), "alternatives": alternatives,
+        "reasonCodes": [], "candidates": [], "evidence": [],
+    }
+
+
 def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_statuses: dict[str, dict]) -> dict:
-    """Select metadata and attach explainable, deterministic evidence."""
+    """Select metadata and attach explainable, deterministic evidence. See
+    ISBN_FUSION_MODE for the two selection rules this can run."""
     metadata: dict = {}
     field_evidence: dict = {}
     field_confidence: dict = {}
@@ -1672,43 +1719,41 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
         for source in ISBN_SOURCE_ORDER:
             value = (provider_metadata.get(source) or {}).get(field)
             if _has_evidence_value(value):
-                item = {"source": source, "value": value}
-                source_url = (provider_metadata.get(source) or {}).get("sourceUrl")
+                provider_data = provider_metadata.get(source) or {}
+                item = {
+                    "source": source, "value": value,
+                    "extractionMethod": isbn_fusion.infer_method(source, provider_data.get("sourceFetchMode")),
+                }
+                source_url = provider_data.get("sourceUrl")
                 if source_url:
                     item["sourceUrl"] = source_url
                 confirmations.append(item)
 
-        selected = max(confirmations, key=lambda item: reliability(item["source"], field)) if confirmations else None
-        metadata[field] = selected["value"] if selected else ([] if field in {"authors", "categories"} else None)
+        fused = (
+            _select_field_prior(field, confirmations) if ISBN_FUSION_MODE == "prior"
+            else isbn_fusion.fuse_field(field, confirmations)
+        )
+        metadata[field] = fused["value"] if fused["selectedSource"] else ([] if field in {"authors", "categories"} else None)
         field_evidence[field] = {
             "selectedValue": metadata[field],
-            "selectedSource": selected["source"] if selected else None,
+            "selectedSource": fused["selectedSource"],
             "confirmations": confirmations,
-            "selectionReason": {"sourceReliability": reliability(selected["source"], field) if selected else 0, "agreementCount": 0, "conflictCount": 0},
+            "selectionReason": {
+                "sourceReliability": reliability(fused["selectedSource"], field) if fused["selectedSource"] else 0,
+                "agreementCount": fused["agreementCount"], "conflictCount": fused["conflictCount"],
+            },
         }
-        if not selected:
-            field_confidence[field] = 0.0
-            continue
-
-        selected_normalized = _normalize_evidence_value(selected["value"])
-        responding = [item for item in confirmations]
-        agreement = sum(
-            reliability(item["source"], field)
-            for item in responding if _normalize_evidence_value(item["value"]) == selected_normalized
-        ) / sum(reliability(item["source"], field) for item in responding)
-        # A single provider is useful but cannot be as strong as corroborated data.
-        corroboration = 0.7 + (0.3 * agreement)
-        field_confidence[field] = round(min(1.0, reliability(selected["source"], field) * corroboration), 3)
-
-        alternatives = [
-            {"source": item["source"], "value": item["value"]}
-            for item in confirmations[1:]
-            if _normalize_evidence_value(item["value"]) != selected_normalized
-        ]
-        if alternatives:
-            conflicts.append({"field": field, "selectedValue": selected["value"], "alternatives": alternatives})
-        field_evidence[field]["selectionReason"]["agreementCount"] = sum(1 for item in confirmations if _normalize_evidence_value(item["value"]) == selected_normalized)
-        field_evidence[field]["selectionReason"]["conflictCount"] = len(alternatives)
+        # Additive provenance from isbn_fusion.py (Chức năng 2.16) - absent
+        # entirely in "prior" mode, which never populates these.
+        if fused["reasonCodes"]:
+            field_evidence[field]["reasonCodes"] = fused["reasonCodes"]
+        if fused["candidates"]:
+            field_evidence[field]["candidates"] = fused["candidates"]
+        if fused["evidence"]:
+            field_evidence[field]["evidence"] = fused["evidence"]
+        field_confidence[field] = fused["confidence"]
+        if fused["alternatives"]:
+            conflicts.append({"field": field, "selectedValue": metadata[field], "alternatives": fused["alternatives"]})
 
     quality_total = sum(ISBN_QUALITY_WEIGHTS.values())
     quality = sum(ISBN_QUALITY_WEIGHTS[field] * field_confidence.get(field, 0.0) for field in ISBN_QUALITY_WEIGHTS)
@@ -1730,6 +1775,7 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
 
 
 def _parse_google_books_item(item: dict) -> dict:
+    capture_metadata_source('googleBooks', 'json', item, 'https://www.googleapis.com/books/v1/volumes/' + str(item.get('id', '')))
     volume_info = item.get("volumeInfo") or {}
     image_links = volume_info.get("imageLinks") or {}
     return {
@@ -1804,6 +1850,7 @@ async def _fetch_open_library_description_via_json(
 
 
 def _parse_open_library_item(item: dict) -> dict:
+    capture_metadata_source('openLibrary', 'json', item, OPEN_LIBRARY_SITE_ORIGIN + str(item.get('key', '')))
     publish_date = _safe_text(item.get("publish_date"))
     authors = []
     for author in item.get("authors") or []:
@@ -1853,6 +1900,9 @@ async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) ->
             items = (response.json() or {}).get("items") or []
             if not items:
                 continue
+            for candidate_item in items[:2]:
+                capture_metadata_source('googleBooks', 'json', candidate_item,
+                    'https://www.googleapis.com/books/v1/volumes/' + str(candidate_item.get('id', '')))
             metadata = _parse_google_books_item(items[0])
             return metadata, _metadata_completeness_score(metadata)
         except Exception as exc:
@@ -2117,7 +2167,7 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
     if not _should_generate_summary(metadata):
         return None, [], False
 
-    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55)
+    raw_text, called_ok = await _call_text_llm("", _build_summary_prompt(metadata), max_tokens=700, temperature=0.55, feature="summary")
     if not called_ok:
         return None, [], False
 
@@ -2147,6 +2197,149 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
     except Exception as exc:
         logger.warning("Summary generation post-processing failed: %s", exc)
         return None, [], False
+
+
+def _enabled_targeted_providers() -> set[str]:
+    return {"tiki", "vinabook", "fahasa", "webSearch"} if ENABLE_MARKETPLACE_LOOKUP else set()
+
+
+def _isbn_source_flags_and_confidence(provider_metadata: dict, scores: dict, ai_provider: str = "none") -> tuple[dict, dict]:
+    """Same `source` / `confidence` shapes the legacy flow returns (frontend contract)."""
+    source = {name: bool(provider_metadata.get(name)) for name in ISBN_SOURCE_ORDER}
+    source["worldCat"] = source["worldCat"] if ENABLE_WORLDCAT_LOOKUP else False
+    source["aiSummary"] = ai_provider
+    all_scores = [scores.get(name, 0.0) for name in ISBN_SOURCE_ORDER]
+    overall = round(max(all_scores), 3)
+    active = [s for s in all_scores if s > 0]
+    if len(active) >= 2:
+        overall = round(max(overall, min(1.0, sum(active) / len(active) + 0.1)), 3)
+    confidence = {"overall": overall, **{name: scores.get(name, 0.0) for name in ISBN_SOURCE_ORDER}}
+    return source, confidence
+
+
+async def _run_field_level_lookup(raw_isbn: str, isbn13: str, isbn10: str | None, generate_summary: bool) -> dict:
+    """Initial Google/Open Library lookup, then only the providers able to fill the
+    critical/high-value fields still missing, cheapest first, within one time budget.
+    Returns the same shape as the legacy valid-ISBN flow plus a `_retrievalTrace`."""
+    started = time.perf_counter()
+    deadline = started + ISBN_LOOKUP_TOTAL_BUDGET_SECONDS
+    ledger = ProviderLedger()
+    provider_metadata: dict[str, dict | None] = {name: None for name in ISBN_SOURCE_ORDER}
+    scores: dict[str, float] = {name: 0.0 for name in ISBN_SOURCE_ORDER}
+    outcomes: dict[str, str] = {}
+
+    def absorb(provider: str, data: dict | None, score: float, outcome: str | None, phase: str,
+               reasons: list[str], began: float) -> None:
+        provider_metadata[provider] = data
+        scores[provider] = score if data else 0.0
+        if outcome:
+            outcomes[provider] = outcome
+        status = "SUCCESS" if data else (outcome or "NOT_FOUND")
+        ledger.record(provider, status, phase, reasons, int((time.perf_counter() - began) * 1000))
+
+    def failure_outcome(exc: BaseException) -> str:
+        return "TIMEOUT" if isinstance(exc, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
+
+    def analyze() -> tuple[dict, dict]:
+        intelligence = _build_isbn_intelligence(provider_metadata, {})
+        return intelligence, analyze_field_coverage(intelligence)
+
+    # Round 0 - INITIAL: structured APIs only (marketplace/web are targeted, not eager).
+    initial_names = ["googleBooks", "openLibrary"] + (["worldCat"] if ENABLE_WORLDCAT_LOOKUP else [])
+    began = time.perf_counter()
+    std_results = await _run_standard_lookups(isbn13, isbn10)
+    for index, name in enumerate(initial_names):
+        value = std_results[index] if index < len(std_results) else (None, 0.0)
+        if isinstance(value, BaseException):
+            absorb(name, None, 0.0, failure_outcome(value), "INITIAL", [], began)
+        else:
+            absorb(name, value[0], value[1], None, "INITIAL", [], began)
+
+    intelligence, coverage = analyze()
+    initial_coverage = {k: coverage["coverage"][k] for k in ("foundFields", "totalFields", "ratio")}
+    initial_missing = list(coverage["missingFields"])
+    quality_before = intelligence["metadataQualityScore"]
+
+    enabled = _enabled_targeted_providers()
+    rounds: list[dict] = []
+    stop_reason = None
+    for round_index in range(MAX_ROUNDS):
+        if not coverage["worthCallingGaps"]:
+            stop_reason = "COVERAGE_OK"
+            break
+        remaining = deadline - time.perf_counter()
+        plan = plan_targeted_retrieval(coverage["worthCallingGaps"], ledger, enabled, round_index, remaining)
+        if not plan:
+            continue
+        began = time.perf_counter()
+        results = await asyncio.gather(
+            *(asyncio.wait_for(_fetch_marketplace_provider(item["provider"], isbn13), timeout=max(remaining, 0.1))
+              for item in plan),
+            return_exceptions=True,
+        )
+        for item, result in zip(plan, results):
+            if isinstance(result, BaseException):
+                absorb(item["provider"], None, 0.0, failure_outcome(result), "TARGETED", item["reasons"], began)
+            else:
+                absorb(item["provider"], result[0], result[1], result[2], "TARGETED", item["reasons"], began)
+        before_missing = set(coverage["missingFields"])
+        intelligence, coverage = analyze()
+        rounds.append({
+            "round": round_index,
+            "providers": [item["provider"] for item in plan],
+            "recovered": sorted(before_missing - set(coverage["missingFields"])),
+        })
+    if stop_reason is None:
+        if not coverage["worthCallingGaps"]:
+            stop_reason = "COVERAGE_OK"
+        elif deadline - time.perf_counter() < min(PROVIDER_MIN_SECONDS.values()):
+            stop_reason = "BUDGET_EXHAUSTED"
+        else:
+            stop_reason = "NO_ELIGIBLE_PROVIDER"
+
+    metadata = intelligence["metadata"]
+    found = bool(metadata.get("title") or metadata.get("authors") or metadata.get("description"))
+    trace = {
+        "mode": "field-level",
+        "rounds": rounds,
+        "providerCalls": ledger.provider_call_count,
+        "stopReason": stop_reason,
+        "budgetMs": int(ISBN_LOOKUP_TOTAL_BUDGET_SECONDS * 1000),
+        "elapsedMs": int((time.perf_counter() - started) * 1000),
+        "initialCoverage": initial_coverage,
+        "initialMissing": initial_missing,
+        "initialQuality": quality_before,
+        "ledger": ledger.export(),
+    }
+
+    if not found:
+        result = _manual_entry_response(raw_isbn, isbn13, "metadata not found from providers")
+        result["isbn"] = isbn13
+        source, confidence = _isbn_source_flags_and_confidence(provider_metadata, scores)
+        result["source"].update(source)
+        result["confidence"].update(confidence)
+    else:
+        summary_vi, keywords, ai_provider = None, [], "none"
+        if generate_summary and _should_generate_summary(metadata):
+            summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(metadata)
+            ai_provider = _get_text_llm_provider().name if ok else "none"
+        source, confidence = _isbn_source_flags_and_confidence(provider_metadata, scores, ai_provider)
+        market = next((provider_metadata[n] for n in ("fahasa", "tiki", "vinabook", "webSearch") if provider_metadata[n]), None) or {}
+        result = {
+            "success": True, "found": True, "isbn": isbn13, "isbn13": isbn13, "isbn10": isbn10,
+            "title": metadata.get("title"), "subtitle": metadata.get("subtitle"),
+            "authors": metadata.get("authors") or [], "publisher": metadata.get("publisher"),
+            "publishedDate": metadata.get("publishedDate"), "description": metadata.get("description"),
+            "categories": metadata.get("categories") or [], "language": metadata.get("language"),
+            "pageCount": metadata.get("pageCount"), "thumbnail": metadata.get("thumbnail"),
+            "source": source, "confidence": confidence,
+            "summaryVi": summary_vi, "keywords": keywords, "manualEntryRequired": False,
+            "sourceUrl": market.get("sourceUrl"), "sourceFetchMode": market.get("sourceFetchMode"),
+        }
+    result["_providerMetadata"] = provider_metadata
+    result["_providerOutcomes"] = outcomes
+    result["_retrievalTrace"] = trace
+    return result
 
 
 async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
@@ -2220,6 +2413,10 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
                 "keywords": [],
                 "manualEntryRequired": False,
                 "reason": "barcode is not a valid ISBN but marketplace lookup attempted",
+                # Without these, lookup_book_by_isbn() builds intelligence from {} and
+                # overwrites the found metadata above with empty values.
+                "_providerMetadata": {"fahasa": fahasa_b, "tiki": tiki_b, "vinabook": vinabook_b},
+                "_providerOutcomes": mp_results[7],
             }
 
         logger.info("Barcode %s not found in any marketplace source", raw_barcode)
@@ -2227,6 +2424,12 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
 
     if validation_error:
         return _manual_entry_response(raw_isbn, None, validation_error)
+
+    if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:
+        try:
+            return await _run_field_level_lookup(raw_isbn, isbn13, isbn10, bool(req.generateVietnameseSummary))
+        except Exception:
+            logger.exception("Field-level ISBN retrieval failed for %s, falling back to legacy lookup", isbn13)
 
     # ── Standard ISBN lookup: run standard providers + marketplace in parallel ─
     if ENABLE_MARKETPLACE_LOOKUP:
@@ -2379,7 +2582,35 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     return result
 
 
-def _build_source_statuses(result: dict, started_at: float) -> dict:
+def _build_field_level_source_statuses(ledger: dict[str, dict]) -> dict:
+    """Per-provider status from the retrieval ledger: a provider never called is
+    SKIPPED (not needed), not NOT_FOUND, and durations are per provider."""
+    enabled = {
+        "googleBooks": True,
+        "openLibrary": True,
+        "worldCat": ENABLE_WORLDCAT_LOOKUP,
+        "fahasa": ENABLE_MARKETPLACE_LOOKUP,
+        "tiki": ENABLE_MARKETPLACE_LOOKUP,
+        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
+        "webSearch": ENABLE_MARKETPLACE_LOOKUP,
+    }
+    statuses = {}
+    for source in ISBN_SOURCE_ORDER:
+        entry = ledger.get(source)
+        if not enabled[source]:
+            statuses[source] = {"enabled": False, "status": "DISABLED", "durationMs": 0}
+        elif entry is None:
+            statuses[source] = {"enabled": True, "status": "SKIPPED", "durationMs": 0}
+        else:
+            statuses[source] = {"enabled": True, "status": entry["status"], "durationMs": entry["durationMs"], "phase": entry["phase"]}
+            if entry["reasons"]:
+                statuses[source]["reasons"] = entry["reasons"]
+    return statuses
+
+
+def _build_source_statuses(result: dict, started_at: float, trace: dict | None = None) -> dict:
+    if trace is not None:
+        return _build_field_level_source_statuses(trace["ledger"])
     source_flags = result.get("source") or {}
     enabled = {
         "googleBooks": True,
@@ -2408,11 +2639,99 @@ def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
     isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
     if error or not isbn13:
         return None
-    return f"{isbn13}:{bool(req.generateVietnameseSummary)}"
+    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "legacy"
+    return f"{isbn13}:{bool(req.generateVietnameseSummary)}:{mode}"
+
+
+def _isbn_cache_ttl(result: dict) -> int | None:
+    """None = the cache's default (long) TTL; a short TTL when the result is incomplete."""
+    provider_failed = any(s.get("status") in ("TIMEOUT", "ERROR") for s in result.get("sources") or [])
+    if result.get("needsEnrichment") or provider_failed:
+        return ISBN_INCOMPLETE_CACHE_TTL_SECONDS
+    return None
+
+
+def _attach_coverage_fields(result: dict, intelligence: dict, trace: dict | None) -> None:
+    """Additive response fields: metadata completeness, per-field status and, for
+    the field-level flow, what the targeted retrieval did. Added even when the
+    flag is off so the eval can measure the legacy flow with the same metric."""
+    coverage = analyze_field_coverage(intelligence)
+    result.update({
+        "metadataCoverage": coverage["coverage"],
+        "fieldStatus": coverage["fieldStatus"],
+        "missingFields": coverage["missingFields"],
+        "lowConfidenceFields": coverage["lowConfidenceFields"],
+        # Already computed by analyze_field_coverage() but never surfaced before -
+        # a CONFLICTED field also shows up in fieldStatus, but a caller wanting
+        # "which fields disagree" had to filter fieldStatus itself.
+        "conflictedFields": coverage["conflictedFields"],
+        "needsEnrichment": coverage["needsEnrichment"],
+    })
+    if trace is None:
+        return
+    ledger = trace["ledger"]
+    for field, evidence in result["fieldEvidence"].items():
+        entry = ledger.get(evidence.get("selectedSource"))
+        if entry:
+            evidence["selectedPhase"] = entry["phase"]
+    unresolved = [f for f, status in coverage["fieldStatus"].items() if status != "SUFFICIENT"]
+    result["retrieval"] = {
+        "mode": trace["mode"],
+        "rounds": trace["rounds"],
+        "providerCalls": trace["providerCalls"],
+        "stopReason": trace["stopReason"],
+        "budgetMs": trace["budgetMs"],
+        "elapsedMs": trace["elapsedMs"],
+        "initialCoverage": trace["initialCoverage"],
+        "recoveredFields": [f for f in trace["initialMissing"] if coverage["fieldStatus"].get(f) != "MISSING"],
+        "remainingGaps": unresolved,
+        "qualityBefore": trace["initialQuality"],
+        "qualityAfter": intelligence["metadataQualityScore"],
+    }
+
+
+def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
+    """One structured line per (uncached) lookup, plus metrics. Contains only the
+    ISBN, coverage/quality numbers and provider names - never keys or provider bodies."""
+    coverage = (result.get("metadataCoverage") or {}).get("ratio")
+    retrieval = result.get("retrieval") or {}
+    field_evidence = result.get("fieldEvidence") or {}
+    payload = {
+        "isbn": result.get("isbn"),
+        "mode": "field-level" if trace else "legacy",
+        "initialCoverage": (retrieval.get("initialCoverage") or {}).get("ratio", coverage),
+        "gaps": (trace or {}).get("initialMissing", []),
+        "rounds": [{"providers": r["providers"], "recovered": r["recovered"]} for r in retrieval.get("rounds", [])],
+        "recovered": retrieval.get("recoveredFields", []),
+        "remaining": retrieval.get("remainingGaps", []),
+        "finalCoverage": coverage,
+        "qualityBefore": retrieval.get("qualityBefore"),
+        "qualityAfter": result.get("metadataQualityScore"),
+        "stopReason": retrieval.get("stopReason"),
+        "providerCalls": retrieval.get("providerCalls"),
+        "elapsedMs": result.get("processingTimeMs"),
+        # Evidence Fusion observability (Chức năng 2) - counts only, never field
+        # values or provider response bodies.
+        "conflictCount": len(result.get("conflicts") or []),
+        "evidenceCount": sum(len(e.get("confirmations") or []) for e in field_evidence.values()),
+        "sourcesConsulted": [s["name"] for s in (result.get("sources") or []) if s.get("status") == "SUCCESS"],
+    }
+    logger.info("isbn_lookup %s", json.dumps(payload, ensure_ascii=False))
+    try:
+        isbn_lookup_duration.labels(payload["mode"]).observe((result.get("processingTimeMs") or 0) / 1000)
+        for provider, entry in ((trace or {}).get("ledger") or {}).items():
+            isbn_provider_calls.labels(provider, entry["phase"], entry["status"]).inc()
+        for field, status in (result.get("fieldStatus") or {}).items():
+            ai_isbn_field_status_total.labels(field, status).inc()
+    except Exception:  # metrics must never break a lookup
+        logger.debug("isbn metrics update failed", exc_info=True)
 
 
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
+    if ENABLE_METADATA_INTELLIGENCE_V2:
+        from metadata_intelligence.schemas import ExtractionInput
+        return await metadata_extraction_service(ExtractionInput(type='isbn', value=req.isbn))
     cache_key = _isbn_lookup_cache_key(req)
     if cache_key:
         cached = isbn_lookup_cache.get(cache_key)
@@ -2422,7 +2741,8 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
-    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at))
+    trace = result.pop("_retrievalTrace", None)
+    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at, trace))
     result.pop("_providerOutcomes", None)
     for source in intelligence["sources"]:
         source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
@@ -2433,10 +2753,12 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         result["authors"] = result["authors"] or []
         result["categories"] = result["categories"] or []
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
+    _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
+    _log_isbn_lookup(result, trace)
 
     if cache_key and result.get("found"):
-        isbn_lookup_cache.set(cache_key, result)
+        isbn_lookup_cache.set(cache_key, result, ttl_seconds=_isbn_cache_ttl(result))
     return result
 
 
@@ -2444,6 +2766,56 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
 @app.post("/isbn-intelligence")
 async def isbn_intelligence_lookup(req: IsbnLookupRequest):
     return await lookup_book_by_isbn(req)
+
+
+async def metadata_extraction_service(input):
+    """Reuse current discovery while preserving source payloads in this request only."""
+    from copy import deepcopy
+    from metadata_intelligence.capture import collector
+    from metadata_intelligence.sources import document, digest
+    from metadata_intelligence.pipeline import run_pipeline, legacy_projection
+    from metadata_intelligence.schemas import VERSION
+    from metadata_intelligence.verification import canonical_isbn
+    target = input.value if input.type == 'isbn' else input.targetIsbn
+    if target and not canonical_isbn(target):
+        raise HTTPException(422, 'A valid ISBN-10 or ISBN-13 is required')
+    key = 'mi:' + digest([input.model_dump(), VERSION, TEXT_MODEL,
+                          ENABLE_MARKETPLACE_LOOKUP, ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL, 'extract-v1'])
+    cached = isbn_lookup_cache.get(key)
+    if cached:
+        result = deepcopy(cached)
+        result['intelligence']['cacheHit'] = True
+        return result
+    began = time.monotonic()
+    docs, warnings = [], []
+    if input.type == 'isbn':
+        token = collector.set(docs)
+        try:
+            await asyncio.wait_for(_lookup_book_by_isbn_legacy(IsbnLookupRequest(isbn=canonical_isbn(target))), timeout=40)
+        except asyncio.TimeoutError:
+            warnings.append('DISCOVERY_TIMEOUT')
+        except Exception as exc:
+            logger.warning('metadata discovery failed: %s', type(exc).__name__)
+            warnings.append('DISCOVERY_ERROR')
+        finally:
+            collector.reset(token)
+    else:
+        docs = [document('pasted', input.type, input.value, input.sourceUrl)]
+    try:
+        provider = _get_text_llm_provider()
+    except ValueError:
+        provider = None
+    bundle = await run_pipeline(docs, target, provider, budget=max(.01, 60 - (time.monotonic() - began)))
+    bundle['warnings'].extend(warnings)
+    bundle['processingTimeMs'] = int((time.monotonic() - began) * 1000)
+    result = legacy_projection(bundle)
+    if result['found']:
+        isbn_lookup_cache.set(key, result, ttl_seconds=600)
+    return result
+
+
+from routes_metadata_intelligence import build_router as build_metadata_router
+app.include_router(build_metadata_router(metadata_extraction_service, lambda: ENABLE_METADATA_INTELLIGENCE_V2))
 
 
 class EnrichBookAfterIsbnRequest(BaseModel):
@@ -2586,6 +2958,25 @@ async def _normalize_with_catalog_authority(lookup: dict) -> tuple[dict | None, 
         return None, "Authority normalization unavailable; staff review is required before catalog changes."
 
 
+_RESIDUAL_GAP_LABELS = {"publishedDate": "năm xuất bản", "pageCount": "số trang"}
+
+
+def _residual_gap_warning(lookup: dict) -> str | None:
+    """Factual fields no source could supply stay empty for staff to fill in; the AI
+    never invents them. publisher/description/authors/categories are already covered
+    by _check_book_quality, so only the fields it does not check are listed here."""
+    if not lookup.get("found"):
+        return None
+    labels = [
+        _RESIDUAL_GAP_LABELS[field]
+        for field in (lookup.get("missingFields") or [])
+        if field in _RESIDUAL_GAP_LABELS
+    ]
+    if not labels:
+        return None
+    return f"Chưa tìm thấy từ nguồn đáng tin cậy: {', '.join(labels)}. Vui lòng nhập hoặc xác minh thủ công."
+
+
 @app.post("/enrich-book-after-isbn")
 async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
     """
@@ -2611,6 +3002,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
     suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
     if authority_warning:
         suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
+    gap_warning = _residual_gap_warning(lookup)
+    if gap_warning:
+        suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [gap_warning]
     return {
         "success": bool(lookup.get("success") or lookup.get("found")),
         "lookup": lookup,
@@ -2662,7 +3056,7 @@ def _normalize_bookstore_description(text: str) -> str:
 
 
 def _generate_fallback_description(title: str, author: str, web_context: str = "") -> str:
-    """Generate a simple description when Ollama is unavailable."""
+    """Generate a simple description when the AI text model is unavailable."""
     web_info = ""
     if web_context:
         web_info = f"\n\nThông tin tham khảo:\n{web_context}"
@@ -2685,7 +3079,7 @@ def _generate_fallback_description(title: str, author: str, web_context: str = "
 @app.post("/api/ai/generate-book-summary")
 async def generate_book_summary_legacy(req: BookSummaryRequest):
     """
-    Tạo mô tả sách bằng Tiếng Việt sử dụng Ollama.
+    Tạo mô tả sách bằng Tiếng Việt sử dụng OpenRouter (Qwen).
     Nhập: title (tên sách), author (tác giả)
     Xuất: description (mô tả 150-200 từ, có bố cục nhiều dòng), web_context_used (có sử dụng web search hay không)
     """
@@ -2854,7 +3248,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
     else:
         raise HTTPException(status_code=422, detail=f"Unknown mode: {mode}")
 
-    data, ok = await _call_text_llm_json(SYSTEM, user_prompt)
+    data, ok = await _call_text_llm_json(SYSTEM, user_prompt, feature="isbn_enrichment")
     ai_provider = _get_text_llm_provider().name if ok else "none"
 
     if not ok:
@@ -2901,7 +3295,7 @@ async def _generate_book_summary(req: BookSummaryRequest):
     )
 
     try:
-        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7)
+        raw_text, ok = await _call_text_llm("", prompt, max_tokens=400, temperature=0.7, feature="summary")
         if not ok:
             fallback_description = _generate_fallback_description(req.title, req.author, web_context)
             return {"description": fallback_description, "web_context_used": bool(web_context), "fallback": True}
@@ -2925,6 +3319,16 @@ async def _generate_book_summary(req: BookSummaryRequest):
 # ────────────────────────────────────────────────────────────────────────────────
 # AI Chat — Trợ lý ảo SmartBook
 # ────────────────────────────────────────────────────────────────────────────────
+
+# Fixed reply for /chat when retrieval_confidence.py decides NO_EVIDENCE on an
+# information-seeking GENERAL_QUERY message (see chat()) - the corpus has no
+# real answer, so the LLM is skipped entirely rather than risk it inventing one
+# from an empty [RAG CONTEXT] block (Chức năng 1.4: no hallucination on weak
+# retrieval). A greeting/small-talk message with the same NO_EVIDENCE decision
+# still reaches the LLM below - see is_information_seeking().
+GENERAL_QUERY_ABSTENTION_REPLY = (
+    "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này."
+)
 
 CHAT_SYSTEM_PROMPT = (
     "Bạn là **SmartBook AI** — trợ lý ảo thông minh chuyên biệt cho hệ thống quản lý thư viện SmartBook.\n\n"
@@ -2981,6 +3385,9 @@ ASSISTANT_SYSTEM_PROMPT = (
     "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (thông tin cá nhân khách hàng, thời tiết, chứng khoán, "
     "tin tức...), từ chối lịch sự, ngắn gọn, KHÔNG bịa câu trả lời và KHÔNG gọi tool nào.\n"
     "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n"
+    "- search_books trả kèm retrievalStatus: NO_EVIDENCE nghĩa là catalog không có sách phù hợp — nói rõ điều đó, "
+    "KHÔNG gợi ý sách khác thay thế. UNCERTAIN nghĩa là kết quả chỉ gần đúng — trình bày như một gợi ý chưa chắc "
+    "chắn, không khẳng định như sự thật.\n"
     "- Nếu câu hỏi chứa NHIỀU yêu cầu dữ liệu khác nhau, hãy gọi TẤT CẢ tool cần thiết TRONG CÙNG MỘT LƯỢT.\n"
     "- Ví dụ: \"KPI hiện tại và các khoản quá hạn\" → gọi đồng thời get_dashboard_kpis VÀ get_overdue_summary.\n\n"
 
@@ -3111,13 +3518,11 @@ class AssistantResponse(BaseModel):
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
     """/chat reply: the full multi-turn messages list, routed through the
-    configured text LLM (OpenRouter/Qwen by default; see LLM_PROVIDER) via
-    the same chat-completion interface /assistant uses - replaces the old
-    direct-Ollama _chat_with_ollama, which collapsed the whole conversation
-    into one role-labelled completion prompt instead of using a proper
-    chat-messages call."""
+    configured text LLM (OpenRouter/Qwen) via the same chat-completion
+    interface /assistant uses, so the conversation is sent as a proper
+    chat-messages call rather than collapsed into one role-labelled prompt."""
     reply, ok = await _call_text_llm_messages(
-        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS, feature="chat",
     )
     return (reply or None), ok
 
@@ -3229,6 +3634,27 @@ async def chat(request: Request, req: ChatRequest):
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
+
+    # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
+    # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
+    # stop it from inventing an answer. A greeting/small-talk message with the
+    # same decision (is_information_seeking() false) still reaches the LLM
+    # below, since there is nothing to hallucinate about there.
+    if (
+        intent_info.get("intent") == GENERAL_QUERY
+        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
+        and is_information_seeking(req.message)
+    ):
+        return {
+            "reply": GENERAL_QUERY_ABSTENTION_REPLY,
+            "ai_provider": "abstention",
+            "intent": intent_info.get("intent"),
+            "context_sources": [],
+            "retrieval_warnings": [],
+            "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+            "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
+        }
+
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
@@ -3386,50 +3812,30 @@ async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tupl
     return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
 
 
-@functools.lru_cache(maxsize=1)
 def _get_assistant_provider():
-    """Cached: the same provider instance (and, for OpenRouter, its
-    underlying HTTP client) is reused across requests instead of rebuilt
-    per-request."""
-    return get_llm_provider(
-        ASSISTANT_PROVIDER,
-        ollama_host=OLLAMA_HOST,
-        ollama_model=ASSISTANT_MODEL,
-        openrouter_api_key=OPENROUTER_API_KEY,
-        openrouter_base_url=OPENROUTER_BASE_URL,
-        openrouter_model=OPENROUTER_ASSISTANT_MODEL,
-        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
-    )
+    """OpenRouter provider for /assistant and /assistant/stream's tool-calling
+    loop. get_openrouter_provider() is itself cached per model, so this is
+    cheap to call repeatedly - kept as its own function so call sites don't
+    need to know the model constant's name."""
+    return get_openrouter_provider(ASSISTANT_MODEL)
 
 
-@functools.lru_cache(maxsize=1)
 def _get_text_llm_provider():
-    """Provider (see LLM_PROVIDER, default openrouter/Qwen) for the
-    text-generation helpers below: book summary, ISBN enrichment, /chat
-    replies, storage-suggestion explanations, nightly briefing - tried before
-    each feature's own static fallback. Cached the same way
-    _get_assistant_provider() is."""
-    return get_llm_provider(
-        LLM_PROVIDER,
-        ollama_host=OLLAMA_HOST,
-        ollama_model=SUMMARY_MODEL,
-        openrouter_api_key=OPENROUTER_API_KEY,
-        openrouter_base_url=OPENROUTER_BASE_URL,
-        openrouter_model=OPENROUTER_TEXT_MODEL,
-        openrouter_fallback_model=OPENROUTER_FALLBACK_MODEL,
-    )
+    """OpenRouter provider for the text-generation helpers below: book
+    summary, ISBN enrichment, /chat replies, storage-suggestion explanations,
+    nightly briefing - tried before each feature's own static fallback."""
+    return get_openrouter_provider(TEXT_MODEL)
 
 
 async def _call_text_llm_messages(
-    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+    messages: list[dict], *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None,
+    feature: str = "text",
 ) -> tuple[str, bool]:
     """Tier-2 call for Pattern B's text-generation helpers: routes an
     already-built chat message list (system/user/assistant turns) through
-    _get_text_llm_provider() (OpenRouter by default, replacing the old direct
-    `ollama.Client(...).generate(...)` calls) using the same ChatResult
-    interface /assistant already relies on. Returns (raw_text, success) -
-    callers keep their own JSON parsing (_extract_json) and tier-3 static
-    fallback unchanged; only the "how do we reach a model" plumbing moved."""
+    _get_text_llm_provider() using the same ChatResult interface /assistant
+    already relies on. Returns (raw_text, success) - callers keep their own
+    JSON parsing (_extract_json) and tier-3 static fallback unchanged."""
     try:
         provider = _get_text_llm_provider()
         result = await provider.chat(
@@ -3438,6 +3844,7 @@ async def _call_text_llm_messages(
             num_predict=max_tokens,
             timeout=timeout if timeout is not None else CHAT_LLM_TIMEOUT_SECONDS * 2,
             temperature=temperature,
+            feature=feature,
         )
         return result.text, bool(result.text)
     except Exception as exc:
@@ -3446,7 +3853,8 @@ async def _call_text_llm_messages(
 
 
 async def _call_text_llm(
-    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3, timeout: float | None = None
+    system_prompt: str, user_prompt: str, *, max_tokens: int = 900, temperature: float = 0.3,
+    timeout: float | None = None, feature: str = "text",
 ) -> tuple[str, bool]:
     """Single-turn convenience wrapper over _call_text_llm_messages, for
     callers that just have a (system_prompt, user_prompt) pair rather than a
@@ -3454,7 +3862,8 @@ async def _call_text_llm(
     messages = ([{"role": "system", "content": system_prompt}] if system_prompt else []) + [
         {"role": "user", "content": user_prompt},
     ]
-    return await _call_text_llm_messages(messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout)
+    return await _call_text_llm_messages(
+        messages, max_tokens=max_tokens, temperature=temperature, timeout=timeout, feature=feature)
 
 
 def _render_tool_result(name: str, tool_result: dict) -> str:
@@ -3831,6 +4240,7 @@ async def assistant(request: Request, req: AssistantRequest):
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
             result = await provider.chat(
                 messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                feature="assistant",
             )
             call_usage.append(result.usage.as_dict())
             messages.append(result.assistant_message)
@@ -3851,7 +4261,7 @@ async def assistant(request: Request, req: AssistantRequest):
         logger.exception("Assistant tool-calling failed")
         raise HTTPException(
             status_code=503,
-            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi).",
+            detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi).",
         )
 
     if not answer:
@@ -3860,8 +4270,8 @@ async def assistant(request: Request, req: AssistantRequest):
     grounding_warning = _grounding_check(answer, collected_data, message_text)
     if grounding_warning and answered_normally:
         answer, retry_usage = await retry_once_if_ungrounded(
-            messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
-            ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+            ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
         )
         if retry_usage:
             call_usage.append(retry_usage)
@@ -3915,9 +4325,9 @@ def _sse(event: str, data: dict) -> str:
 @app.post("/assistant/stream")
 async def assistant_stream(request: Request, req: AssistantRequest):
     """Streaming twin of /assistant: same permission gate and tool-calling loop, but
-    each round's Ollama response is consumed with `stream=True` so the final answer's
+    each round's OpenRouter response is consumed with `stream=True` so the final answer's
     tokens reach the client as they're generated, instead of only after the whole
-    tool-calling loop (which takes 60-120s+ on this CPU-only deployment) completes.
+    tool-calling loop completes.
     Tool-selection rounds normally produce no content deltas (the model emits only
     tool_calls for those), so in practice only the final round streams visible text.
     """
@@ -3987,6 +4397,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 final_chunk = None
                 async for chunk in provider.chat_stream(
                     messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                    feature="assistant",
                 ):
                     if chunk.delta:
                         answer += chunk.delta
@@ -4014,7 +4425,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
-            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc Ollama không phản hồi)."
+            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
             yield _sse("token", {"text": answer})
             yield _sse("done", {
                 "answer": answer,
@@ -4034,8 +4445,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         grounding_warning = _grounding_check(answer, collected_data, message_text)
         if grounding_warning and answered_normally:
             answer, retry_usage = await retry_once_if_ungrounded(
-                messages, answer, grounding_warning, provider.chat, ANALYTICS_TOOLS,
-                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+                messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+                ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
             )
             if retry_usage:
                 call_usage.append(retry_usage)
@@ -4121,6 +4532,14 @@ async def chat_stream(request: Request, req: ChatRequest):
         retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
+
+    # See the identical check in /chat above.
+    abstain = (
+        intent_info.get("intent") == GENERAL_QUERY
+        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
+        and is_information_seeking(req.message)
+    )
+
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
@@ -4214,6 +4633,16 @@ async def chat_stream(request: Request, req: ChatRequest):
         return reply_text, pending_action_data
 
     async def event_generator():
+        if abstain:
+            yield _sse("token", {"text": GENERAL_QUERY_ABSTENTION_REPLY})
+            yield _sse("done", {
+                "reply": GENERAL_QUERY_ABSTENTION_REPLY, "ai_provider": "abstention",
+                "intent": intent_info.get("intent"), "context_sources": [], "retrieval_warnings": [],
+                "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+                "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
+            })
+            return
+
         if cached_reply:
             yield _sse("token", {"text": cached_reply})
             yield _sse("done", {"reply": cached_reply, "ai_provider": "cached", **metadata})
@@ -4637,7 +5066,7 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
 
     if entries:
         user_prompt = _build_recommendation_reason_prompt(entries, profile)
-        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt)
+        parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt, feature="recommendation")
         if ok and parsed:
             provider = _get_text_llm_provider().name
         if ok and isinstance(parsed, dict):
@@ -4835,13 +5264,21 @@ async def explain_storage_suggestion(req: StorageSuggestionRequest):
 Sách cần xếp: "{book_title}" của {author_text}
 Thể loại: {category_text}
 
-Các vị trí được gợi ý:
+Các vị trí được gợi ý, ĐÃ được xếp hạng sẵn theo điểm số (KHÔNG được thay đổi thứ tự này),
+mỗi vị trí kèm "reasons" là danh sách lý do đã được hệ thống tính toán sẵn:
 {json.dumps(req.suggestions, ensure_ascii=False, indent=2)}
 
-Hãy viết câu giải thích ngắn gọn cho TỪNG vị trí (1 câu mỗi vị trí, 30-80 ký tự).
-Giải thích phải tự nhiên, không liệt kê rules.
+Với MỖI vị trí theo ĐÚNG thứ tự đã cho, hãy diễn giải lại các "reasons" của vị trí đó
+thành 1 câu văn tự nhiên (30-80 ký tự), không liệt kê rules thô.
 
-Trả về JSON array với đúng {len(req.suggestions)} câu:
+CHỈ được dùng thông tin có trong "reasons" của vị trí đó. KHÔNG được:
+- bịa thêm lý do/tiêu chí nào không có trong "reasons"
+- nói vị trí "gần khu picking", "thuận tiện đường đi", "khu vực IT", hay bất kỳ mô tả
+  không gian/khoảng cách/khu vực nào không có trong "reasons"
+- thay đổi thứ tự các vị trí
+- suy đoán thông tin không được cung cấp
+
+Trả về JSON array với đúng {len(req.suggestions)} câu, theo ĐÚNG thứ tự đã cho:
 ["câu giải thích 1", "câu giải thích 2", ...]
 
 CHỈ trả về JSON, không markdown."""
@@ -4857,14 +5294,21 @@ CHỈ trả về JSON, không markdown."""
 
 
 async def _get_ai_explanations(prompt: str, expected_count: int) -> tuple[list[str] | None, str]:
-    """Gọi text LLM đã cấu hình (OpenRouter/Qwen mặc định; xem LLM_PROVIDER) để sinh
-    explanations. Trả về (explanations, provider_name_da_dung)."""
+    """Gọi text LLM đã cấu hình (OpenRouter/Qwen) để sinh explanations.
+    Trả về (explanations, provider_name_da_dung)."""
     try:
         raw, ok = await _call_text_llm(
-            "Bạn là chuyên gia kho sách. Viết câu giải thích ngắn gọn 1-2 dòng. Chỉ trả về JSON array.",
+            "Bạn là trợ lý CHỈ diễn giải lại (paraphrase) các lý do đã được hệ thống tính "
+            "toán sẵn cho từng vị trí lưu kho. Bạn KHÔNG được: (1) thay đổi thứ tự xếp hạng "
+            "các vị trí, (2) bịa thêm bất kỳ lý do/tiêu chí nào không có trong dữ liệu đầu "
+            "vào (ví dụ: không được nói vị trí 'gần khu picking', 'thuận tiện đường đi', "
+            "'khu vực IT', hoặc bất kỳ mô tả không gian/vị trí vật lý nào không có trong dữ "
+            "liệu), (3) suy đoán thông tin không được cung cấp. Chỉ được diễn giải lại chính "
+            "xác các reasons đã cho bằng văn phong tự nhiên hơn. Chỉ trả về JSON array.",
             prompt,
             max_tokens=200,
             temperature=0.3,
+            feature="storage_suggestion",
         )
         if ok:
             explanations = _parse_json_array(raw)

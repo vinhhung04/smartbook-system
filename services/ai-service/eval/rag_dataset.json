@@ -1367,5 +1367,245 @@
     "expected_ids": [],
     "expected_facts": [],
     "note": "Ngoai pham vi FAQ noi bo (FAQ chi noi ve muon/tra, khong noi ve mua ban)"
+  },
+  {
+    "id": "bm-061",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy lập trình Rust cho người mới bắt đầu?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-062",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về đầu tư tiền điện tử (crypto) không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-063",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn sửa chữa xe máy tại nhà?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-064",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy make-up chuyên nghiệp không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-065",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào về lịch sử bóng đá thế giới?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-066",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy chơi guitar cổ điển cho người mới không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-067",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn thiết kế nội thất căn hộ nhỏ?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-068",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về nuôi cá cảnh thủy sinh không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-069",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy nhiếp ảnh đường phố chuyên nghiệp?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-070",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về luật thuế doanh nghiệp 2026 không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-071",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn trồng rau sạch tại nhà?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-072",
+    "corpus": "BOOK_METADATA",
+    "question": "Có truyện tranh thể loại kinh dị Nhật Bản không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-073",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy pha chế cocktail chuyên nghiệp?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-074",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách nào về tâm lý học tội phạm không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-075",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn leo núi và dã ngoại sinh tồn?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Catalog khong co sach chu de nay - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-041",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tổ chức sự kiện gặp gỡ tác giả không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-042",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên thư viện làm việc theo ca như thế nào?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-043",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có chỗ đậu xe ô tô miễn phí không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-044",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể in tài liệu tại thư viện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-045",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có phòng học nhóm riêng để thuê không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-046",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chính sách bảo hiểm cho sách bị cháy nổ là gì?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-047",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có hợp tác với trường đại học nào không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-048",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có chương trình khuyến mãi ngày lễ cho hội viên không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-049",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có ứng dụng di động riêng không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-050",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên thư viện có được nghỉ phép năm bao nhiêu ngày?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-051",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tổ chức thi đọc sách hè cho trẻ em không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-052",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có dịch vụ dịch thuật tài liệu tại thư viện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-053",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện đóng cửa vào những ngày lễ nào trong năm?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-054",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể quyên góp sách cũ cho thư viện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "doc-055",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có bán vé tham quan cho khách du lịch không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
   }
 ]

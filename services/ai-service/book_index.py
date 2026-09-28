@@ -14,15 +14,18 @@ import asyncio
 import logging
 import os
 
-import ollama
-
 import embeddings
 import vector_store
 
 logger = logging.getLogger("uvicorn.error")
 
 # Nguong cosine toi thieu de mot quyen duoc tinh la trung ve ngu nghia.
-BOOK_SEMANTIC_THRESHOLD = float(os.getenv("BOOK_SEMANTIC_THRESHOLD", "0.6"))
+# 0.6 duoc tune cho nomic-embed-text. Da kiem chung truc tiep voi qwen/qwen3-embedding-8b
+# (sau migration bo Ollama): pho diem cosine cua Qwen3 cho short-text tieng Viet thap/phang
+# hon nomic han - vd cau hoi thuc te chi dat ~0.38 voi sach dung, ~0.30-0.35 voi sach nhieu.
+# Giu cung 0.3 nhu FAQ_MATCH_THRESHOLD (faq_retrieval.py) - xem comment o do ve so lieu
+# eval/eval_rag.py truoc/sau khi tune.
+BOOK_SEMANTIC_THRESHOLD = float(os.getenv("BOOK_SEMANTIC_THRESHOLD", "0.3"))
 
 
 def book_text(book: dict) -> str:
@@ -41,7 +44,6 @@ def book_text(book: dict) -> str:
 async def semantic_scores(
     books: list[dict],
     query: str,
-    client: ollama.Client | None = None,
 ) -> list[float]:
     """Cosine similarity cua `query` voi tung quyen, xep thang hang voi `books`.
 
@@ -56,7 +58,7 @@ async def semantic_scores(
     if not query or not books:
         return []
 
-    embed_result = await asyncio.to_thread(embeddings.embed_text, query, client)
+    embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     if embed_result is None:
         return []
 

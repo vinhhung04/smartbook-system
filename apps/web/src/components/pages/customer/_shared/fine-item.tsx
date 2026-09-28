@@ -36,17 +36,18 @@ export function FineItem({ fine }: FineItemProps) {
         : 'border-border bg-card';
 
   return (
-    <div className={`rounded-[12px] border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${toneClassName}`}>
+    <div className={`rounded-xl border p-4 transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${toneClassName}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-[13px] text-foreground" style={{ fontWeight: 700 }}>{fine.fine_type}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.04em] text-slate-400 dark:text-slate-500">Trạng thái phạt</div>
-          <div className="mt-1 text-[12px] text-muted-foreground">Ngày phát hành: {formatDateTime(fine.issued_at)}</div>
-          <div className="mt-1"><StatusBadge status={fine.status} /></div>
+        <div className="min-w-0">
+          <div className="text-[14px] text-foreground" style={{ fontWeight: 700 }}>{fine.fine_type}</div>
+          <div className="mt-1 text-[12px] text-muted-foreground">Phát sinh ngày {formatDateTime(fine.issued_at)}</div>
+          <div className="mt-1.5"><StatusBadge status={fine.status} /></div>
         </div>
-        <div className="text-right text-[12px] text-slate-600 dark:text-slate-300">
-          <div>Tổng: {formatCurrencyVnd(fine.amount)}</div>
-          <div className={isHighRemaining ? 'text-rose-700 dark:text-rose-400' : ''} style={{ fontWeight: 700 }}>Còn lại: {formatCurrencyVnd(remaining)}</div>
+        <div className="text-right">
+          <div className="text-[12px] text-muted-foreground">Tổng {formatCurrencyVnd(fine.amount)}</div>
+          <div className={`mt-0.5 font-mono text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-rose-700 dark:text-rose-400' : 'text-foreground') : 'text-emerald-600 dark:text-emerald-400'}`} style={{ fontWeight: 700 }}>
+            {remaining > 0 ? `Còn ${formatCurrencyVnd(remaining)}` : 'Đã xong'}
+          </div>
         </div>
       </div>
 

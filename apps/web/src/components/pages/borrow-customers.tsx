@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, UserPlus, Send, X } from 'lucide-react';
+import { Users, UserPlus, Send, X, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { cn } from '@/components/ui/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
@@ -13,6 +15,18 @@ import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 const customerStatuses: CustomerStatus[] = ['ACTIVE', 'SUSPENDED', 'BLOCKED', 'INACTIVE'];
+
+const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+
+function customerInitials(fullName: string) {
+  const words = (fullName || '?').trim().split(/\s+/);
+  const letters = words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : words[0].slice(0, 2);
+  return letters.toUpperCase();
+}
+
+function formatFine(value: number) {
+  return `${Number(value || 0).toLocaleString('vi-VN')} VND`;
+}
 
 interface CustomerFormState {
   id?: string;
@@ -75,6 +89,12 @@ export function BorrowCustomersPage() {
     });
   }, [customers, search, statusFilter]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: customers.length };
+    for (const customer of customers) counts[customer.status] = (counts[customer.status] || 0) + 1;
+    return counts;
+  }, [customers]);
+
   const resetForm = () => {
     setFormState(initialFormState);
     setFormOpen(false);
@@ -133,7 +153,7 @@ export function BorrowCustomersPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Hero Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -166,25 +186,17 @@ export function BorrowCustomersPage() {
           onSearchChange={setSearch}
           searchPlaceholder="Tìm khách hàng..."
           filters={
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {(['ALL', ...customerStatuses] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className="relative px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all"
-                >
-                  {statusFilter === status ? (
-                    <motion.div
-                      layoutId="customer-filter"
-                      className="absolute inset-0 rounded-md bg-primary"
-                      transition={{ duration: 0.15 }}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground hover:text-foreground"> {status}</span>
-                  )}
-                  <span className="relative z-10">{status}</span>
-                </button>
-              ))}
+            <div className="max-w-full overflow-x-auto">
+              <SegmentedControl
+                layoutId="customer-filter"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={(['ALL', ...customerStatuses] as const).map((status) => ({
+                  value: status,
+                  label: `${status === 'ALL' ? 'Tất cả' : status} (${statusCounts[status] || 0})`,
+                }))}
+                className="w-max"
+              />
             </div>
           }
         />
@@ -198,22 +210,28 @@ export function BorrowCustomersPage() {
       >
         <SectionCard noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Mã KH', 'Tên', 'Email', 'Điện thoại', 'Trạng thái', 'Dư nợ phạt', 'Thao tác'].map((header) => (
-                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      {header}
+                  {[
+                    { label: 'Khách hàng', className: '' },
+                    { label: 'Liên hệ', className: 'hidden w-[240px] md:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[130px] sm:table-cell' },
+                    { label: 'Dư nợ phạt', className: 'hidden w-[140px] text-right sm:table-cell' },
+                    { label: 'Thao tác', className: 'w-[92px] text-right' },
+                  ].map((header) => (
+                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                      {header.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonTableRow columns={7} rows={5} />
+                  <SkeletonTableRow columns={5} rows={5} />
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={5}>
                       <EmptyState
                         variant="no-results"
                         title="Không tìm thấy khách hàng"
@@ -223,36 +241,66 @@ export function BorrowCustomersPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((customer, index) => (
-                    <motion.tr
-                      key={customer.id}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: index * 0.02 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-5 py-3.5 text-sm font-medium">{customer.customer_code}</td>
-                      <td className="px-5 py-3.5 text-sm">{customer.full_name}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.email || '-'}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{customer.phone || '-'}</td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
-                      </td>
-                      <td className="px-5 py-3.5 text-sm font-medium text-rose-600 dark:text-rose-400">
-                        {Number(customer.total_fine_balance).toLocaleString('vi-VN')} VND
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <Button size="sm" variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10" onClick={() => openEdit(customer)}>
-                            Sửa
-                          </Button>
-                          <Button size="sm" variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/10" onClick={() => { setNotifyTarget(customer); setNotifyForm({ subject: '', body: '' }); }}>
-                            <Send className="w-3 h-3 mr-1" /> Thông báo
-                          </Button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))
+                  filtered.map((customer, index) => {
+                    const fine = Number(customer.total_fine_balance) || 0;
+                    return (
+                      <motion.tr
+                        key={customer.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(index, 10) * 0.02 }}
+                        className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
+                              {customerInitials(customer.full_name)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold" title={customer.full_name}>{customer.full_name}</p>
+                              <p className="truncate text-xs text-muted-foreground">{customer.customer_code}</p>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+                                <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
+                                {fine > 0 ? <span className="text-xs font-medium text-rose-600 dark:text-rose-400">{formatFine(fine)}</span> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="hidden px-4 py-3 md:table-cell">
+                          <p className="truncate text-sm" title={customer.email || undefined}>{customer.email || '-'}</p>
+                          <p className="truncate text-xs text-muted-foreground">{customer.phone || '-'}</p>
+                        </td>
+                        <td className="hidden px-4 py-3 sm:table-cell">
+                          <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
+                        </td>
+                        <td className={cn('hidden px-4 py-3 text-right text-sm sm:table-cell', fine > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
+                          {fine > 0 ? formatFine(fine) : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              aria-label={`Sửa ${customer.full_name}`}
+                              title="Sửa"
+                              onClick={() => openEdit(customer)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20')}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Gửi thông báo cho ${customer.full_name}`}
+                              title="Gửi thông báo"
+                              onClick={() => { setNotifyTarget(customer); setNotifyForm({ subject: '', body: '' }); }}
+                              className={cn(ICON_BUTTON_CLASS, 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20')}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

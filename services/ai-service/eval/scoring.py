@@ -113,6 +113,73 @@ def aggregate_extraction_scores(results: list[dict]) -> dict:
     }
 
 
+# ── Field-level retrieval metrics (completeness, not just accuracy) ───────────
+# Accuracy above says whether returned values are right; these say how much of the
+# record was filled, at what provider-call and latency cost. The same verdict works
+# for the legacy flow (no `retrieval` trace) so both modes are measured identically.
+
+FILL_RATE_FIELDS = ("publisher", "description", "pageCount", "categories", "publishedDate")
+_NOT_CALLED = {"DISABLED", "SKIPPED"}
+
+
+def _is_filled(value) -> bool:
+    return bool(value) if isinstance(value, list) else value not in (None, "")
+
+
+def field_level_verdict(actual: dict) -> dict:
+    retrieval = actual.get("retrieval") or {}
+    coverage_after = (actual.get("metadataCoverage") or {}).get("ratio", 0.0)
+    if retrieval:
+        coverage_before = (retrieval.get("initialCoverage") or {}).get("ratio", coverage_after)
+        provider_calls = retrieval.get("providerCalls", 0)
+    else:
+        coverage_before = coverage_after
+        provider_calls = sum(1 for s in actual.get("sources") or [] if s.get("status") not in _NOT_CALLED)
+    return {
+        "coverage_before": coverage_before,
+        "coverage_after": coverage_after,
+        "filled": {field: _is_filled(actual.get(field)) for field in FILL_RATE_FIELDS},
+        "provider_calls": provider_calls,
+        "processing_ms": actual.get("processingTimeMs", 0),
+    }
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    ordered = sorted(values)
+    rank = max(1, -(-len(ordered) * fraction // 1))  # ceil without importing math
+    return ordered[int(rank) - 1]
+
+
+def aggregate_field_level_scores(verdicts: list[dict]) -> dict:
+    total = len(verdicts)
+    if not total:
+        return {"total": 0}
+    latencies = [v["processing_ms"] for v in verdicts]
+    return {
+        "total": total,
+        "avg_coverage_before": round(sum(v["coverage_before"] for v in verdicts) / total, 3),
+        "avg_coverage_after": round(sum(v["coverage_after"] for v in verdicts) / total, 3),
+        "fill_rate": {
+            field: round(sum(1 for v in verdicts if v["filled"][field]) / total, 3) for field in FILL_RATE_FIELDS
+        },
+        "avg_provider_calls": round(sum(v["provider_calls"] for v in verdicts) / total, 3),
+        "latency_ms": {"p50": _percentile(latencies, 0.5), "p95": _percentile(latencies, 0.95)},
+    }
+
+
+def compare_modes(legacy: dict, new: dict) -> dict:
+    """new - legacy for each metric (positive coverage/fill deltas are improvements)."""
+    return {
+        "coverage_after": round(new["avg_coverage_after"] - legacy["avg_coverage_after"], 3),
+        "avg_provider_calls": round(new["avg_provider_calls"] - legacy["avg_provider_calls"], 3),
+        "fill_rate": {
+            field: round(new["fill_rate"][field] - legacy["fill_rate"][field], 3) for field in FILL_RATE_FIELDS
+        },
+        "latency_p50_ms": new["latency_ms"]["p50"] - legacy["latency_ms"]["p50"],
+        "latency_p95_ms": new["latency_ms"]["p95"] - legacy["latency_ms"]["p95"],
+    }
+
+
 def tool_selection_verdict(expected_tools: list[str], actual_tools: list[str]) -> dict:
     """Precision/recall for one labeled question. Tool *names* only - call
     arguments are not scored, since the same question can reasonably be
@@ -378,3 +445,76 @@ def aggregate_retrieval_scores(results: list[dict]) -> dict:
         "recall_at_5": round(mean([recall_at_k(r["retrieved_ids"], r["expected_ids"], 5) for r in results]), 4),
         "mrr": round(mean([mean_reciprocal_rank(r["retrieved_ids"], r["expected_ids"]) for r in results]), 4),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Abstention scoring (eval_rag.py + retrieval_confidence.py). recall_at_k()
+# above always scores a no-answer case (empty expected_ids) as 0 and folds it
+# into the same average as answerable cases - useful for "did the top-5
+# contain the answer" but blind to whether the system correctly said "I don't
+# know" for a question with no answer in the corpus. These functions score
+# that abstention decision on its own.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _abstained(result: dict) -> bool:
+    """A case counts as abstained if the confidence layer said NO_EVIDENCE, or
+    - for a result dict with no `decision` key (e.g. an older report, or a run
+    with RAG_ABSTENTION_ENABLED=false) - if nothing at all came back."""
+    if result.get("decision") is not None:
+        return result["decision"] == "NO_EVIDENCE" or not result["retrieved_ids"]
+    return not result["retrieved_ids"]
+
+
+def abstention_metrics(results: list[dict]) -> dict:
+    """`results` items need `expected_ids`, `retrieved_ids`, and optionally
+    `decision` (a retrieval_confidence.py decision string). A no-answer case
+    is one with empty `expected_ids` (the corpus has no real answer to it) -
+    same convention eval_rag.py's dataset already uses."""
+    no_answer = [r for r in results if not r["expected_ids"]]
+    answerable = [r for r in results if r["expected_ids"]]
+
+    no_answer_correct = sum(1 for r in no_answer if _abstained(r))
+    no_answer_accuracy = round(no_answer_correct / len(no_answer), 4) if no_answer else None
+    false_positive_rate = round(1 - no_answer_accuracy, 4) if no_answer_accuracy is not None else None
+
+    answerable_wrongly_abstained = sum(1 for r in answerable if _abstained(r))
+    false_negative_rate = round(answerable_wrongly_abstained / len(answerable), 4) if answerable else None
+
+    abstained_total = sum(1 for r in results if _abstained(r))
+    coverage = round(1 - abstained_total / len(results), 4) if results else None
+
+    # Abstention as a binary classifier over "does this question have no real
+    # answer": true positive = correctly abstained on a genuine no-answer case.
+    true_positive = no_answer_correct
+    false_positive = answerable_wrongly_abstained
+    false_negative = len(no_answer) - no_answer_correct
+    precision = round(true_positive / (true_positive + false_positive), 4) if (true_positive + false_positive) else None
+    recall = round(true_positive / (true_positive + false_negative), 4) if (true_positive + false_negative) else None
+    f1 = round(2 * precision * recall / (precision + recall), 4) if precision and recall and (precision + recall) else None
+
+    return {
+        "no_answer_count": len(no_answer), "answerable_count": len(answerable),
+        "no_answer_accuracy": no_answer_accuracy, "false_positive_rate": false_positive_rate,
+        "false_negative_rate": false_negative_rate, "coverage": coverage,
+        "abstention_precision": precision, "abstention_recall": recall, "abstention_f1": f1,
+    }
+
+
+def answerable_recall(results: list[dict]) -> dict:
+    """aggregate_retrieval_scores() restricted to genuinely answerable cases -
+    the Recall@k a caller would see if the dataset had no no-answer cases at
+    all, so it isn't dragged down by cases that always score 0."""
+    return aggregate_retrieval_scores([r for r in results if r["expected_ids"]])
+
+
+def selective_accuracy(results: list[dict], k: int = 1) -> float | None:
+    """recall_at_k averaged over only the cases the system chose to answer
+    (didn't abstain) - the "selective prediction" complement to Coverage: how
+    good are the answers actually given, not how many are given. A no-answer
+    case the system wrongly answered still scores 0 here (recall_at_k of an
+    empty expected_ids list), correctly penalizing a false positive."""
+    answered = [r for r in results if not _abstained(r)]
+    if not answered:
+        return None
+    return round(sum(recall_at_k(r["retrieved_ids"], r["expected_ids"], k) for r in answered) / len(answered), 4)

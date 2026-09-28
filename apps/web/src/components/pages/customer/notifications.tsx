@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Bell, RefreshCw, CheckCheck } from 'lucide-react';
+import { RefreshCw, CheckCheck } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { SectionCard } from '@/components/ui/section-card';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { cn } from '@/components/ui/utils';
+import { CustomerPageHeader } from './_shared/customer-page-header';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadingOverlay } from '@/components/ui/loading-state';
 import { NotificationListItem } from './_shared/notification-list-item';
 import { toast } from 'sonner';
 
@@ -44,57 +45,58 @@ export function CustomerNotificationsPage() {
   const readRows = filteredRows.filter((row) => Boolean(row.read_at));
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
-      {/* Hero */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-cyan-50 dark:from-indigo-950/40 dark:to-cyan-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40">
-            <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Thông báo của tôi</h1>
-            <p className="text-[13px] text-muted-foreground">Nhắc nhở, cập nhật và cảnh báo tài khoản</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={async () => {
-            try {
-              await customerBorrowService.markAllNotificationsRead();
-              setRows((prev) => prev.map((r) => ({ ...r, read_at: r.read_at || new Date().toISOString() })));
-              toast.success('Đã đánh dấu tất cả là đã đọc');
-            } catch (err) { toast.error(getApiErrorMessage(err, 'Thất bại')); }
-          }} disabled={loading || rows.every((r) => r.read_at)}
-            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors disabled:opacity-50">
-            <CheckCheck className="w-3.5 h-3.5" />
-            Đánh dấu đã đọc tất cả
-          </button>
-          <button onClick={() => void loadNotifications()} disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 rounded-xl border border-input bg-card px-3 text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50">
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <CustomerPageHeader
+        title="Thông báo"
+        subtitle="Nhắc nhở, cập nhật và cảnh báo về tài khoản của bạn"
+        actions={
+          <>
+            <button
+              onClick={async () => {
+                try {
+                  await customerBorrowService.markAllNotificationsRead();
+                  setRows((prev) => prev.map((r) => ({ ...r, read_at: r.read_at || new Date().toISOString() })));
+                  toast.success('Đã đánh dấu tất cả là đã đọc');
+                } catch (err) { toast.error(getApiErrorMessage(err, 'Thất bại')); }
+              }}
+              disabled={loading || rows.every((r) => r.read_at)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:hover:bg-indigo-950/20 dark:hover:text-indigo-400"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Đọc tất cả
+            </button>
+            <button
+              onClick={() => void loadNotifications()}
+              disabled={loading}
+              aria-label="Làm mới thông báo"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+              Làm mới
+            </button>
+          </>
+        }
+      />
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2">
-        {(['ALL', 'UNREAD', 'READ'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`inline-flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium transition-colors ${
-            filter === f
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-card border border-input text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}>
-            {f === 'ALL' ? 'Tất cả' : f === 'UNREAD' ? 'Chưa đọc' : 'Đã đọc'}
-            {f === 'UNREAD' && unreadRows.length > 0 && (
-              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] text-white">{unreadRows.length}</span>
-            )}
-          </button>
-        ))}
+      <div className="max-w-full overflow-x-auto">
+        <SegmentedControl
+          layoutId="customer-notifications-filter"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'ALL', label: `Tất cả (${rows.length})` },
+            { value: 'UNREAD', label: `Chưa đọc (${rows.filter((r) => !r.read_at).length})` },
+            { value: 'READ', label: `Đã đọc (${rows.filter((r) => r.read_at).length})` },
+          ]}
+          className="w-max"
+        />
       </div>
 
       {/* Content */}
       {loading ? (
-        <LoadingOverlay />
+        <div className="space-y-2" aria-busy="true">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl border bg-card" />)}
+        </div>
       ) : error ? (
         <EmptyState variant="error" title="Không tải được thông báo" description={error} action={<button onClick={() => void loadNotifications()} className="text-primary font-medium hover:underline">Thử lại</button>} />
       ) : filteredRows.length === 0 ? (

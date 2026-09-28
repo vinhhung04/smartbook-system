@@ -1,0 +1,8 @@
+{
+  "editions": [{
+    "editionId": "example-1", "workGroup": "example-work-1", "split": "development", "languageGroup": "vi", "secondAnnotator": true,
+    "targetIsbn": "9780439708180",
+    "editionGold": {"fields": {"title": {"status": "known", "value": "Ví dụ"}, "authors": {"status": "known", "value": ["Nguyễn Văn A"]}, "translator": {"status": "absent"}, "publisher": {"status": "unknown"}, "publishedDate": {"status": "unknown"}, "isbn": {"status": "known", "value": "9780439708180"}}},
+    "documents": [{"provider": "annotated-example", "kind": "text", "payload": "Tên sách: Ví dụ\nTác giả: Nguyễn Văn A\nISBN: 9780439708180"}]
+  }]
+}

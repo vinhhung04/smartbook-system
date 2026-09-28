@@ -5,6 +5,7 @@ export interface EditableBookForm {
   title: string;
   subtitle: string;
   authorsText: string;
+  translatorText?: string;
   publisher: string;
   publishedDate: string;
   description: string;
@@ -23,6 +24,7 @@ export const EMPTY_FORM: EditableBookForm = {
   title: "",
   subtitle: "",
   authorsText: "",
+  translatorText: "",
   publisher: "",
   publishedDate: "",
   description: "",

@@ -289,7 +289,7 @@ export function PurchaseOrdersPage() {
 
       <FadeItem>
         <SectionCard noPadding>
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="w-10">
@@ -297,45 +297,69 @@ export function PurchaseOrdersPage() {
                     <Checkbox checked={allSelectableChecked} onCheckedChange={(checked) => toggleAllSelectable(checked === true)} aria-label="Chọn tất cả đơn chờ duyệt" />
                   )}
                 </TableHead>
-                {["Số PO", "Nhà cung cấp", "Kho", "Trạng thái", "Ngày đặt", "Dự kiến", "Dòng", "SL đặt", "SL nhận", "Tổng tiền", "Đối soát"].map((heading) => (
-                  <TableHead key={heading} className="text-[11px] uppercase tracking-wider text-muted-foreground">{heading}</TableHead>
+                {[
+                  { label: "Đơn hàng", className: "" },
+                  { label: "Trạng thái", className: "w-[190px]" },
+                  { label: "Ngày", className: "hidden w-[140px] md:table-cell" },
+                  { label: "Nhận / đặt", className: "hidden w-[130px] sm:table-cell" },
+                  { label: "Tổng tiền", className: "hidden w-[150px] text-right lg:table-cell" },
+                  { label: "Đối soát", className: "hidden w-[140px] xl:table-cell" },
+                ].map((heading) => (
+                  <TableHead key={heading.label} className={cn("px-3 text-[11px] uppercase tracking-wider text-muted-foreground", heading.className)}>{heading.label}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <SkeletonTableRow columns={12} rows={5} />
+                <SkeletonTableRow columns={7} rows={5} />
               ) : rows.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={12} className="whitespace-normal py-12">
+                  <TableCell colSpan={7} className="whitespace-normal py-12">
                     <EmptyState variant="no-data" title="Chưa có đơn đặt hàng" description="Tạo PO để bắt đầu quy trình phê duyệt và đối soát nhập hàng" />
                   </TableCell>
                 </TableRow>
-              ) : rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    {row.status === "PENDING_APPROVAL" && (
-                      <Checkbox checked={selectedIds.has(row.id)} onCheckedChange={(checked) => toggleRow(row.id, checked === true)} aria-label={`Chọn ${row.po_number}`} />
-                    )}
-                  </TableCell>
-                  <TableCell className="text-[13px]"><NavLink to={`/purchase-orders/${row.id}`} className="font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.po_number}</NavLink></TableCell>
-                  <TableCell className="text-[13px]">{row.supplier_name || "-"}</TableCell>
-                  <TableCell className="text-[13px]">{row.warehouse_code || row.warehouse_name || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1.5">
-                      <StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot />
-                      <PoStageDots status={row.status} />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.order_date)}</TableCell>
-                  <TableCell className="text-[12px] text-muted-foreground">{formatDate(row.expected_date)}</TableCell>
-                  <TableCell className="text-[13px]">{row.item_count}</TableCell>
-                  <TableCell className="text-[13px]">{row.total_ordered_qty}</TableCell>
-                  <TableCell className="text-[13px]">{row.total_received_qty}</TableCell>
-                  <TableCell className="text-[12px] font-mono">{formatCurrency(row.total_amount)}</TableCell>
-                  <TableCell><StatusBadge label={row.reconciliation_status} variant={getStatusVariant("purchaseOrder", row.reconciliation_status)} /></TableCell>
-                </TableRow>
-              ))}
+              ) : rows.map((row) => {
+                const ordered = Number(row.total_ordered_qty) || 0;
+                const received = Number(row.total_received_qty) || 0;
+                const receivedPct = ordered > 0 ? Math.min(100, Math.round((received / ordered) * 100)) : 0;
+                const place = [row.supplier_name, row.warehouse_code || row.warehouse_name].filter(Boolean).join(" · ");
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      {row.status === "PENDING_APPROVAL" && (
+                        <Checkbox checked={selectedIds.has(row.id)} onCheckedChange={(checked) => toggleRow(row.id, checked === true)} aria-label={`Chọn ${row.po_number}`} />
+                      )}
+                    </TableCell>
+                    <TableCell className="px-3 py-3">
+                      <NavLink to={`/purchase-orders/${row.id}`} className="block truncate text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{row.po_number}</NavLink>
+                      <p className="truncate text-[12px] text-muted-foreground" title={place}>{place || "-"}</p>
+                      <p className="mt-1 text-[12px] text-muted-foreground sm:hidden">
+                        Nhận {received}/{ordered} · {formatCurrency(row.total_amount)}
+                      </p>
+                    </TableCell>
+                    <TableCell className="px-3 py-3">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <StatusBadge label={row.status} variant={getStatusVariant("purchaseOrder", row.status)} dot />
+                        <PoStageDots status={row.status} />
+                        <span className="xl:hidden"><StatusBadge label={row.reconciliation_status} variant={getStatusVariant("purchaseOrder", row.reconciliation_status)} /></span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden px-3 py-3 text-[12px] text-muted-foreground md:table-cell">
+                      <p>Đặt {formatDate(row.order_date)}</p>
+                      <p>Dự kiến {formatDate(row.expected_date)}</p>
+                    </TableCell>
+                    <TableCell className="hidden px-3 py-3 sm:table-cell">
+                      <p className="text-[13px] font-semibold tabular-nums">{received}<span className="font-normal text-muted-foreground"> / {ordered}</span></p>
+                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã nhận ${receivedPct}%`}>
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${receivedPct}%` }} />
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{row.item_count} dòng</p>
+                    </TableCell>
+                    <TableCell className="hidden px-3 py-3 text-right font-mono text-[12px] lg:table-cell">{formatCurrency(row.total_amount)}</TableCell>
+                    <TableCell className="hidden px-3 py-3 xl:table-cell"><StatusBadge label={row.reconciliation_status} variant={getStatusVariant("purchaseOrder", row.reconciliation_status)} /></TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           {totalPages > 1 && (

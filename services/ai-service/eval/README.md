@@ -2,10 +2,69 @@
 
 Three standalone, manually-run scripts that measure the AI service against a
 labeled ground truth, for the experimental-results chapter. None of them are
-part of CI: all three call out to live systems (public book APIs, a running
-Ollama, or the full running stack) that are slow and non-deterministic, so a
+part of CI: all three call out to live systems (public book APIs, OpenRouter,
+or the full running stack) that are slow and non-deterministic, so a
 red/green pass/fail in CI would be noise, not signal. Run them yourself
 whenever you want a number.
+
+## 0. RAG retrieval + abstention — `eval_rag.py` / `calibrate_rag.py`
+
+Calls the retrieval layer directly (`assistant_tools._score_and_rank_books_with_confidence`
+for `BOOK_METADATA`, `faq_retrieval.find_relevant_with_confidence` for `INTERNAL_DOC`) for
+every entry in `rag_dataset.json` — not through HTTP, so this measures retrieval, not
+auth/conversation/cache.
+
+**Requirements:** a live Postgres with pgvector (`DATABASE_URL`), `OPENROUTER_API_KEY`, and
+`EVAL_AUTH_TOKEN` (a JWT for `/api/books`) for the `BOOK_METADATA` cases — without it those
+cases see an empty catalog and score 0.
+
+```bash
+cd services/ai-service
+python eval/eval_rag.py                          # abstention on (matches production)
+python eval/eval_rag.py --abstention off          # raw RRF, no NO_EVIDENCE suppression - reproduces the pre-abstention baseline
+python eval/eval_rag.py --abstention off --dump-signals   # also writes rag_signals_<ts>.json for calibrate_rag.py
+```
+
+Reports Recall@1/3/5, MRR (as before), plus retrieval_confidence.py's abstention metrics:
+No-answer Accuracy, False Positive/Negative Rate, Coverage, Abstention Precision/Recall/F1,
+Answerable Recall (Recall restricted to genuinely-answerable cases, not dragged down by the
+no-answer cases that always score 0), and Selective Accuracy (accuracy over only the cases
+the system chose to answer). See `eval/scoring.py`'s `abstention_metrics()` /
+`answerable_recall()` / `selective_accuracy()` for the exact definitions, and
+`../test_eval_scoring.py` for their unit tests.
+
+`rag_dataset.json` has 130 cases now (75 `BOOK_METADATA`, 55 `INTERNAL_DOC`; 20 no-answer
+cases per corpus — up from 5 — so the abstention metrics above aren't computed from a
+handful of cases).
+
+### Calibrating `retrieval_confidence.py`'s thresholds — `calibrate_rag.py`
+
+Reads a signals dump (from `--dump-signals`, taken with `--abstention off` so
+`retrieved_ids` is the raw, unfiltered ranking even for cases the *current* thresholds
+would abstain on) and grid-searches `tau_evidence`/`tau_confident` **offline** - no
+OpenRouter/DB calls per candidate - separately for each corpus (their cosine
+distributions differ). Splits the dataset into a `calib` half (used to pick the
+threshold) and a `test` half (used to report it), via a fixed-seed shuffle, so the
+reported numbers aren't the same data that chose the threshold.
+
+```bash
+python eval/eval_rag.py --abstention off --dump-signals
+python eval/calibrate_rag.py eval/reports/rag_signals_<timestamp>.json
+```
+
+Picks the candidate with the best No-answer Accuracy (tie-broken by Abstention F1) among
+those whose `calib`-split Recall@5 doesn't fall more than `RECALL_TOLERANCE` (0.02) below
+the baseline recorded in `calibrate_rag.BASELINE_RECALL_AT_5` (read from
+`eval/reports/rag_20260925_041036.md`, the report cited when
+`FAQ_MATCH_THRESHOLD`/`BOOK_SEMANTIC_THRESHOLD` were lowered to 0.3) — i.e. it will not trade
+away the recall gain that migration bought to reduce false abstentions. Writes
+`eval/reports/calibration_<timestamp>.md` with the full threshold grid, so a rejected
+candidate's numbers are visible too, not just the winner's.
+
+Update `retrieval_confidence.BOOK_CONFIDENCE`/`DOC_CONFIDENCE`'s defaults (or the
+`BOOK_CONF_*`/`DOC_CONF_*` env vars) once you've run this against real data - the values
+shipped in `retrieval_confidence.py` are provisional, seeded from the cosine ranges already
+documented in `faq_retrieval.py`/`book_index.py`'s comments, not from a calibration run.
 
 ## 1. ISBN extraction accuracy — `eval_isbn_extraction.py`
 
@@ -28,6 +87,8 @@ Prints per-ISBN progress and a summary, and writes a full report to
 `eval/reports/isbn_extraction_<timestamp>.md` (accuracy per field, per-ISBN
 pass/fail table, and a list of every title/publisher mismatch so you can see
 *why* a lookup was wrong, not just that it was).
+
+**Field-level retrieval:** `python eval/eval_isbn_extraction.py --mode both` chạy toàn bộ dataset hai lần (cờ tắt rồi bật) trong cùng một phiên và ghi báo cáo so sánh `isbn_field_level_comparison_<timestamp>.md`: accuracy, coverage trước/sau, fill rate từng field, số provider call trung bình, latency p50/p95. Dataset hiện chủ yếu là sách quốc tế nổi tiếng; muốn thấy rõ lợi ích của field-level, thêm các ISBN sách Việt mà Google Books chỉ có title/authors (ground truth phải nhập tay từ nguồn đáng tin cậy).
 
 ### `isbn_dataset.json`
 
@@ -55,11 +116,49 @@ Matching is fuzzy for text fields (`difflib`, accent/case-insensitive,
 threshold 0.85 — see `scoring.py`) so cosmetic differences ("NXB Trẻ" vs
 "Nha Xuat Ban Tre") don't count as mismatches; year matching is exact.
 
+## 1b. Book Metadata Intelligence B1–B5
+
+`metadata_intelligence/run_experiments.py` compares frozen source snapshots with B1 (Google Books), B2 (rule extraction), B3 (Qwen extraction), B4 (hybrid), and B5 (hybrid plus field fusion). It reports precision, recall, F1, correct-field coverage, hallucination/evidence support, edition contamination, review rate, latency, tokens and returned API cost. It never invents a completed 120-edition study: `--strict-protocol` refuses any dataset other than the registered 120 / 40-development / 80-test / 60–60 split with 24 double-annotated editions.
+
+```powershell
+cd services/ai-service
+python eval/metadata_intelligence/run_experiments.py --dataset eval/metadata_intelligence/pilot_dataset.example.json --modes B1,B2,B3,B4,B5
+python eval/metadata_intelligence/run_experiments.py --dataset <frozen-120-edition-manifest>.json --strict-protocol --repeat 3
+```
+
+The runner includes three offline B5 ablations by default: evidence gate disabled, edition gate disabled, and fixed source-priority fusion. Use [the annotation guide](metadata_intelligence/ANNOTATION_GUIDE.md) and schema before creating the final dataset. The pilot manifest is illustrative only and is excluded from thesis results. The existing live `eval_isbn_extraction.py` remains the current-system baseline; run it separately with the same ISBN subset and report it as a live, non-frozen comparison.
+
+## 1c. Field-level Metadata Evidence Fusion — `metadata_fusion/run_eval.py`
+
+Offline, fixture-based (no network, no Postgres) - unlike `eval_isbn_extraction.py`, provider
+metadata is supplied directly by `metadata_fusion/dataset.json` (18 cases: single/multi-source,
+conflicting publisher/pageCount/date, accent/case author-spelling differences, description-only-
+one-source, category merge, low-reliability web-only, "marketplace unavailable"/"source timed
+out" - both represented as an absent provider entry, since fusion cannot and should not tell
+those apart from a provider that simply had nothing to say). This isolates the fusion step
+(`isbn_fusion.py`, via `main._build_isbn_intelligence()`) from retrieval timing/budget and the
+ISBN checksum validator, which `test_isbn_field_level_retrieval.py` and main.py's ISBN
+validation tests already cover.
+
+```bash
+cd services/ai-service
+python eval/metadata_fusion/run_eval.py
+```
+
+Runs both `ISBN_FUSION_MODE` values ("prior": the original single-highest-reliability-source
+rule; "evidence": the new fusion) over the same dataset and reports, per mode: Field
+Accuracy/Precision/Recall, Coverage, Missing-field Detection Accuracy, and Conflict Detection
+Accuracy (case-level exact match) plus Precision/Recall (field-level) - so the report shows the
+before/after this task is meant to demonstrate. Scored with `scoring.field_matches()` (the same
+accent/case-insensitive fuzzy matcher `eval_isbn_extraction.py` uses), never with
+`isbn_fusion.py`'s own normalizer, so the eval can't mark itself correct for free. Writes
+`eval/reports/metadata_fusion_<timestamp>.md`.
+
 ## 2. Assistant tool-selection accuracy — `eval_assistant_tools.py`
 
 For every labeled question in `assistant_dataset.json`, runs the exact same
 system prompt and tool schemas `/assistant` uses (imported from `main.py`)
-against Ollama directly, and compares the set of tools the model chose to
+against OpenRouter directly, and compares the set of tools the model chose to
 call against the expected set. This isolates the model's tool-selection
 decision from the rest of the endpoint (auth, conversation history, caching)
 — those are exercised by `eval_assistant_answers.py` (below) and
@@ -73,14 +172,11 @@ a later round). `ask_once` measures the fast case; `ask_multi_round` measures
 whether the loop's later rounds recover from a first-round miss — a compound
 question that round 1 misses can still succeed in `multi_round`.
 
-**Requirements:** a running Ollama with `ASSISTANT_MODEL` pulled (default
-`llama3.1:8b-instruct-q4_0`). Set `OLLAMA_HOST` if Ollama isn't reachable at
-the in-Docker default (`http://ollama:11434`) — e.g. from a host shell
-against `docker compose`'s Ollama:
+**Requirements:** `OPENROUTER_API_KEY` set (same as the running service).
 
 ```bash
 cd services/ai-service
-OLLAMA_HOST=http://localhost:11434 python eval/eval_assistant_tools.py
+python eval/eval_assistant_tools.py
 ```
 
 Reports exact-match rate plus average precision/recall (a question expecting
@@ -103,7 +199,8 @@ evidence extraction, grounding) via the gateway, and scores the *answer
 text* itself — not just which tools got called.
 
 **Requirements:** the full stack running (`docker compose up`) — gateway,
-auth-service, ai-service, Ollama. It logs itself in (`ASSISTANT_EVAL_USERNAME`
+auth-service, ai-service (with `OPENROUTER_API_KEY` set). It logs itself in
+(`ASSISTANT_EVAL_USERNAME`
 / `ASSISTANT_EVAL_PASSWORD`, default `manager01` / `123456`) and calls
 `POST /ai/assistant` through `SMARTBOOK_GATEWAY_URL` (default
 `http://localhost:3000`).

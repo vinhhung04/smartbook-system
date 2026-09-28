@@ -1,66 +1,80 @@
-import { Menu } from 'lucide-react';
-import { PanelLeftClose, PanelLeftOpen, Moon, Sun } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
+import { BookOpen, ChevronDown } from 'lucide-react';
+import { Moon, Sun } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from 'morphicons/react';
-import { useLocation } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import { NotificationBellDropdown } from './notification-bell-dropdown';
 import { UserAvatarMenu } from './user-avatar-menu';
+import { DISCOVER_NAV, PRIMARY_NAV } from './customer-nav';
 import { LanguageToggle } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
-
-const pageTitleMap: Array<{ test: (pathname: string) => boolean; title: string; subtitle: string }> = [
-  { test: (pathname) => pathname === '/customer', title: 'Tổng quan', subtitle: 'Hoạt động thư viện của bạn' },
-  { test: (pathname) => pathname.startsWith('/customer/books'), title: 'Danh mục sách', subtitle: 'Khám phá và đặt trước sách có sẵn' },
-  { test: (pathname) => pathname.startsWith('/customer/scan-cover'), title: 'Tìm bằng ảnh', subtitle: 'Chụp ảnh bìa để tìm sách trong thư viện' },
-  { test: (pathname) => pathname.startsWith('/customer/loans'), title: 'Phiếu mượn', subtitle: 'Theo dõi hạn trả và gia hạn' },
-  { test: (pathname) => pathname.startsWith('/customer/reservations'), title: 'Đặt trước', subtitle: 'Theo dõi trạng thái đặt trước' },
-  { test: (pathname) => pathname.startsWith('/customer/membership'), title: 'Hội viên', subtitle: 'Thông tin gói và chính sách' },
-  { test: (pathname) => pathname.startsWith('/customer/fines'), title: 'Tiền phạt', subtitle: 'Số dư còn lại và ví của tôi' },
-  { test: (pathname) => pathname.startsWith('/customer/notifications'), title: 'Thông báo', subtitle: 'Cập nhật và nhắc nhở gần đây' },
-  { test: (pathname) => pathname.startsWith('/customer/profile'), title: 'Hồ sơ', subtitle: 'Thông tin tài khoản cá nhân' },
-  { test: (pathname) => pathname.startsWith('/customer/wishlist'), title: 'Yêu thích', subtitle: 'Sách bạn đã thêm vào danh sách' },
-  { test: (pathname) => pathname.startsWith('/customer/recommendations'), title: 'Gợi ý cho bạn', subtitle: 'Sách phù hợp với sở thích đọc của bạn' },
-  { test: (pathname) => pathname.startsWith('/customer/reading-analytics'), title: 'Thống kê đọc sách', subtitle: 'Hành trình đọc sách của bạn' },
-];
-
-interface CustomerHeaderProps {
-  onToggleMobileMenu: () => void;
-  onToggleDesktopCollapse: () => void;
-  isDesktopCollapsed: boolean;
-}
+import { cn } from '@/components/ui/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 function CustomerThemeToggle() {
   const { resolvedTheme, toggleTheme } = useTheme();
   return (
-    <button onClick={toggleTheme} className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted transition-all text-muted-foreground" title="Toggle theme">
-      <MorphIcon icon={resolvedTheme === 'dark' ? Sun : Moon} className="w-4 h-4" />
+    <button
+      onClick={toggleTheme}
+      aria-label="Đổi giao diện sáng/tối"
+      title="Đổi giao diện sáng/tối"
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-all hover:bg-muted"
+    >
+      <MorphIcon icon={resolvedTheme === 'dark' ? Sun : Moon} className="h-4 w-4" />
     </button>
   );
 }
 
-export function CustomerHeader({ onToggleMobileMenu, onToggleDesktopCollapse, isDesktopCollapsed }: CustomerHeaderProps) {
-  const location = useLocation();
-  const current = pageTitleMap.find((item) => item.test(location.pathname)) || {
-    title: 'Cổng khách hàng',
-    subtitle: 'Chào mừng trở lại',
-  };
+const linkClass = (active: boolean) =>
+  cn(
+    'inline-flex h-9 items-center rounded-lg px-3 text-[13px] transition-colors',
+    active ? 'bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+  );
+
+export function CustomerHeader() {
+  const { pathname } = useLocation();
+  const discoverActive = DISCOVER_NAV.some((item) => pathname.startsWith(item.to));
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-white/90 dark:bg-slate-900/90 px-4 py-3 backdrop-blur md:px-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <button onClick={onToggleMobileMenu} className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 lg:hidden">
-              <Menu className="h-4 w-4" />
-            </button>
-            <button onClick={onToggleDesktopCollapse} className="hidden h-9 w-9 items-center justify-center rounded-[10px] border border-border text-muted-foreground transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 lg:inline-flex">
-              <MorphIcon icon={isDesktopCollapsed ? PanelLeftOpen : PanelLeftClose} className="h-4 w-4" />
-            </button>
-            <h1 className="truncate text-[18px] text-foreground" style={{ fontWeight: 700 }}>{current.title}</h1>
-          </div>
-          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{current.subtitle}</p>
-        </div>
+    <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+        <NavLink to="/customer" className="flex shrink-0 items-center gap-2.5" aria-label="SmartBook — trang tổng quan">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 shadow-md shadow-indigo-500/25">
+            <BookOpen className="h-4 w-4 text-white" aria-hidden="true" />
+          </span>
+          <span className="text-[15px] font-bold tracking-tight text-indigo-700 dark:text-indigo-400">SmartBook</span>
+        </NavLink>
 
-        <div className="flex items-center gap-2">
+        <nav aria-label="Điều hướng chính" className="ml-2 hidden items-center gap-1 lg:flex">
+          {PRIMARY_NAV.map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => linkClass(isActive)}>
+              {item.label}
+            </NavLink>
+          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={cn(linkClass(discoverActive), 'gap-1')}>
+                Khám phá <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
+              {DISCOVER_NAV.map((item) => (
+                <DropdownMenuItem key={item.to} asChild className="rounded-lg text-[13px]">
+                  <NavLink to={item.to}>
+                    <item.icon className="h-4 w-4" aria-hidden="true" />
+                    {item.label}
+                  </NavLink>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2">
           <LanguageToggle />
           <CustomerThemeToggle />
           <NotificationBellDropdown />

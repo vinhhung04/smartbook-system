@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ExtractionEvidencePanel } from './extraction-evidence-panel';
 import { aiService, type EnrichMode, type LookupBookByIsbnResponse, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { metadataIntelligenceService, type DuplicateDecisionResult, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
@@ -16,8 +18,7 @@ import { BookInfoTab } from "./book-info-tab";
 import { EmptyLookupState } from "./empty-state";
 import { IsbnLookupProgress } from "./isbn-lookup-progress";
 import { LookupSearchCard } from "./lookup-search-card";
-import { MetadataFoundHero } from "./metadata-found-hero";
-import { MetadataReadiness } from "./metadata-readiness";
+import { BookProfileAside } from "./book-profile-aside";
 import { ReviewTab } from "./review-tab";
 import { StickyFooter } from "./sticky-footer";
 import { EMPTY_FORM, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
@@ -39,6 +40,14 @@ const EMPTY_AI_FIELD_LOADING: Record<AiFieldKey, boolean> = { description: false
 export function AIImportPage() {
   const shouldReduceMotion = useReducedMotion();
   const [isbnInput, setIsbnInput] = useState("");
+  const [pipelineEnabled, setPipelineEnabled] = useState(false);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceType, setSourceType] = useState<'text' | 'html'>('text');
+  useEffect(() => {
+    let active = true;
+    metadataIntelligenceService.capabilities().then(c => { if (active) setPipelineEnabled(c.enabled); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -202,9 +211,9 @@ export function AIImportPage() {
     setActiveWorkspaceTab(reviewIssueCount > 0 ? "review" : "book");
   }, [lookupData, reviewIssueCount]);
 
-  async function handleLookup(rawInput?: string) {
+  async function handleLookup(rawInput?: string, pasted = false) {
     const normalized = normalizeIsbnInput(rawInput ?? isbnInput);
-    if (!normalized) {
+    if (!normalized && !pasted) {
       toast.error("Vui lòng nhập ISBN");
       return;
     }
@@ -218,7 +227,10 @@ export function AIImportPage() {
     setAiFieldCandidates(EMPTY_AI_FIELD_CANDIDATES);
     setQualityCheckResult(null);
     try {
-      const result = await aiService.enrichBookAfterIsbn({
+      const result = pipelineEnabled ? {
+        lookup: await metadataIntelligenceService.extract(pasted ? sourceType : 'isbn', pasted ? sourceText : normalized, pasted ? normalized || undefined : undefined),
+        aiSuggestions: { description: null, summaryVi: null, keywords: [], categories: [], qualityWarnings: [], provider: 'none', confidence: 0 } as PostIsbnAiSuggestions,
+      } : await aiService.enrichBookAfterIsbn({
         isbn: normalized,
         existingCategories,
       });
@@ -270,11 +282,16 @@ export function AIImportPage() {
     }
   }
 
-  async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED") {
+  async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED", override?: unknown) {
     if (!reconciliationDraft) return;
     try {
-      const value = status === "ACCEPTED" ? reconciliationValueFromForm(field, form) : undefined;
+      const value = status === "ACCEPTED" ? override === undefined ? reconciliationValueFromForm(field, form) : override : undefined;
       const decision = await metadataIntelligenceService.decideField(reconciliationDraft.id, field, status, value);
+      if (override !== undefined) {
+        const formField: Record<string, keyof EditableBookForm> = { authors: 'authorsText', translator: 'translatorText', categories: 'categoriesText', isbn: 'isbn13' };
+        const target = formField[field] || field as keyof EditableBookForm;
+        if (target in form || target === 'translatorText') setForm(current => ({ ...current, [target]: Array.isArray(value) ? value.join(', ') : String(value ?? '') }));
+      }
       setReconciliationDraft((current) => current ? {
         ...current,
         decisions: current.decisions.map((item) => item.field === field ? { ...item, status: decision.status, value: decision.value } : item),
@@ -358,7 +375,7 @@ export function AIImportPage() {
             description: result.summaryVi ? { value: result.summaryVi, source: "generated" } : prev.description,
             keywords: result.keywords?.length ? { value: result.keywords.join(", "), source: "generated" } : prev.keywords,
           }));
-          toast.success(`Đã tạo mô tả AI (${result.ai_provider === "anthropic" ? "Anthropic" : "Ollama"})`);
+          toast.success(`Đã tạo mô tả AI (${result.ai_provider === "openrouter" ? "OpenRouter" : result.ai_provider})`);
         } else {
           const result = await aiService.enrichBookMetadata({
             title: form.title.trim(),
@@ -475,6 +492,10 @@ export function AIImportPage() {
   }
 
   async function handleSave() {
+    if (lookupData?.intelligence && !reconciliationDraft) {
+      toast.error('Cần có bản nháp kiểm duyệt trước khi lưu kết quả trích xuất.');
+      return;
+    }
     const normalizedIsbn = normalizeIsbnInput(form.isbn || isbnInput);
     const title = form.title.trim();
     if (!normalizedIsbn) {
@@ -641,6 +662,16 @@ export function AIImportPage() {
       </FadeItem>
 
       <AnimatePresence mode="wait" initial={false}>
+      {pipelineEnabled && <section className="space-y-2 rounded-xl border bg-card p-4">
+        <label htmlFor="metadataSource" className="text-sm font-semibold">Trích xuất từ nội dung sách</label>
+        <p className="text-sm text-muted-foreground">Dán thông tin từ trang sách. ISBN ở ô trên là tùy chọn để đối chiếu ấn bản.</p>
+        <select aria-label="Định dạng nội dung" value={sourceType} onChange={e => setSourceType(e.target.value as 'text' | 'html')} className="rounded border bg-background p-2 text-sm">
+          <option value="text">Văn bản</option><option value="html">HTML</option>
+        </select>
+        <Textarea id="metadataSource" value={sourceText} onChange={e => setSourceText(e.target.value)} maxLength={100000} rows={5} placeholder="Tên sách, tác giả, thông tin xuất bản, mô tả…" />
+        <button type="button" disabled={lookupLoading || !sourceText.trim()} onClick={() => void handleLookup(undefined, true)} className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{lookupLoading ? 'Đang trích xuất…' : 'Trích xuất thông tin'}</button>
+      </section>}
+      {lookupData?.intelligence && <ExtractionEvidencePanel bundle={lookupData.intelligence} draft={reconciliationDraft} onDecide={handleAuthorityDecision} />}
       {lookupLoading ? (
         <motion.div key="lookup-loading" initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}>
           <IsbnLookupProgress />
@@ -654,8 +685,6 @@ export function AIImportPage() {
             transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
             <section className="rounded-lg border border-border/80 bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-6 dark:shadow-none">
-              {lookupData.found ? <MetadataFoundHero lookup={lookupData} form={form} completeSignalCount={completeSignalCount} /> : null}
-
               {manualMode ? (
                 <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
@@ -679,18 +708,23 @@ export function AIImportPage() {
                 </div>
               ) : null}
 
-              <div className="space-y-6 pb-24">
-                <MetadataReadiness signals={reviewSignals} onFocusField={focusField} />
+              <div className="grid grid-cols-1 gap-8 pb-24 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-10">
+                <BookProfileAside
+                  lookup={lookupData}
+                  form={form}
+                  signals={reviewSignals}
+                  onThumbnailChange={(value) => setForm((prev) => ({ ...prev, thumbnail: value }))}
+                  onFocusField={focusField}
+                />
 
-                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="gap-0">
+                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="min-w-0 gap-0">
                   <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 sm:gap-6" aria-label="Không gian làm việc nhập sách">
                     <TabsTrigger
                       value="book"
                       aria-label="Thông tin sách và AI hỗ trợ"
                       className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:text-cyan-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-cyan-300"
                     >
-                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin & AI</span>
-                      <StatusBadge label={`${completeSignalCount}/4`} variant={completeSignalCount === 4 ? "success" : "warning"} />
+                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin sách</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="review"
@@ -730,7 +764,6 @@ export function AIImportPage() {
                       <BookInfoTab
                         form={form}
                         onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
-                        completeSignalCount={completeSignalCount}
                         aiFieldCandidates={aiFieldCandidates}
                         aiFieldLoading={aiFieldLoading}
                         onRegenerateField={(field) => void regenerateAiField(field)}

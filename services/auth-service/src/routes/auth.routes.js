@@ -10,6 +10,7 @@ const {
   requestPasswordReset,
   confirmPasswordReset,
   verifyEmail,
+  resendVerification,
 } = require('../controllers/auth.controller');
 const { authenticateToken } = require('../middlewares/auth.middleware');
 const { createRateLimiter } = require('@smartbook/shared/runtime');
@@ -38,5 +39,6 @@ router.post('/change-password', authenticateToken, changePassword);
 router.post('/password-reset/request', resetRateLimit, requestPasswordReset);
 router.post('/password-reset/confirm', resetRateLimit, confirmPasswordReset);
 router.post('/verify-email', resetRateLimit, verifyEmail);
+router.post('/resend-verification', authenticateToken, resetRateLimit, resendVerification);
 
 module.exports = router;

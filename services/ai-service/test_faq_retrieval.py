@@ -35,14 +35,14 @@ class FindRelevantTest(unittest.TestCase):
         vector_store.set_store(None)
 
     def test_returns_match_above_threshold(self):
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
             matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
         self.assertTrue(matches)
         self.assertEqual(matches[0].entry["id"], "quy-dinh-muon-tra")
 
     def test_entry_shape_unchanged(self):
         """AD-5: retrieval.py doc entry['question'] va entry['answer']."""
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
             matches = faq_retrieval.find_relevant("muon toi da bao nhieu", threshold=0.5)
         self.assertIn("id", matches[0].entry)
         self.assertIn("question", matches[0].entry)
@@ -52,7 +52,7 @@ class FindRelevantTest(unittest.TestCase):
         # [0.6, 0.8] is a real unit vector giving cosine 0.6 against the seeded
         # [1.0, 0.0] entry — a genuine similarity that still clears no bar this
         # high, unlike an exact-match vector which would always score 1.0.
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="openrouter")):
             self.assertEqual(faq_retrieval.find_relevant("bat ky", threshold=0.99), [])
 
     def test_embedding_unavailable_returns_empty(self):
@@ -71,15 +71,41 @@ class FindRelevantTest(unittest.TestCase):
         "phi-phat" ("phi phat ... qua han") va khong token nao cham vao entry
         kia — chi nhanh keyword dua duoc no vao ket qua.
         """
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
             matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.5)
         self.assertIn("phi-phat", [match.entry["id"] for match in matches])
+
+    def test_embedding_failure_still_surfaces_a_real_keyword_match(self):
+        """Unlike the old contract (embedding failure -> always []), a keyword
+        hit must still come back when OpenRouter is unavailable - same
+        degrade-to-keyword-only behaviour book search already has."""
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            matches = faq_retrieval.find_relevant("phi phat qua han")
+        self.assertEqual([match.entry["id"] for match in matches], ["phi-phat"])
+
+    def test_find_relevant_with_confidence_reports_no_evidence_on_empty_query(self):
+        matches, result = faq_retrieval.find_relevant_with_confidence("   ")
+        self.assertEqual(matches, [])
+        self.assertEqual(result.decision, "NO_EVIDENCE")
+
+    def test_find_relevant_with_confidence_is_not_no_evidence_for_a_real_match(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")):
+            matches, result = faq_retrieval.find_relevant_with_confidence("muon toi da bao nhieu", threshold=0.5)
+        self.assertTrue(matches)
+        self.assertNotEqual(result.decision, "NO_EVIDENCE")
+
+    def test_unrelated_query_is_no_evidence_and_abstention_withholds_it(self):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.0, 0.0], model="test-model", provider="openrouter")):
+            matches, result = faq_retrieval.find_relevant_with_confidence("xe dap dien di dau")
+        self.assertEqual(matches, [])
+        self.assertEqual(result.decision, "NO_EVIDENCE")
+        self.assertEqual(faq_retrieval.find_relevant("xe dap dien di dau"), [])
 
     def test_keyword_arm_alone_matches_when_semantic_below_threshold(self):
         """Nguong ap len diem cosine cua nhanh semantic TRUOC fusion, khong ap
         len diem RRF: semantic bi loai sach ma keyword van khop thi van co
         ket qua (cung quy uoc voi gate keyword ben _score_and_rank_books)."""
-        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="ollama")):
+        with mock.patch.object(embeddings, "embed_text", return_value=embeddings.EmbedResult(vector=[0.6, 0.8], model="test-model", provider="openrouter")):
             matches = faq_retrieval.find_relevant("phi phat qua han", threshold=0.99)
         self.assertEqual([match.entry["id"] for match in matches], ["phi-phat"])
 

@@ -98,20 +98,21 @@ class SummaryCache:
     def __init__(self, max_size: int = 200, ttl_seconds: int = 3600):
         self.max_size = max_size
         self.ttl = ttl_seconds
-        self._cache: OrderedDict[str, tuple[dict, float]] = OrderedDict()
+        # value: (data, stored_at, per-entry ttl override or None)
+        self._cache: OrderedDict[str, tuple[dict, float, Optional[int]]] = OrderedDict()
 
     def get(self, key: str) -> Optional[dict]:
         if key in self._cache:
-            data, timestamp = self._cache[key]
-            if time.time() - timestamp < self.ttl:
+            data, timestamp, ttl_override = self._cache[key]
+            if time.time() - timestamp < (ttl_override if ttl_override is not None else self.ttl):
                 self._cache.move_to_end(key)
                 return data
             else:
                 del self._cache[key]
         return None
 
-    def set(self, key: str, data: dict):
-        self._cache[key] = (data, time.time())
+    def set(self, key: str, data: dict, ttl_seconds: Optional[int] = None):
+        self._cache[key] = (data, time.time(), ttl_seconds)
         self._cache.move_to_end(key)
         if len(self._cache) > self.max_size:
             self._cache.popitem(last=False)

@@ -31,7 +31,7 @@ NIGHTLY_BRIEFING_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_TIMEOUT_SEC
 # 800 output tokens) is larger than a normal chat turn — verified live: even a normally-fast
 # cloud provider exceeded 12s on this prompt and silently fell through every time until
 # this was split out into its own longer budget.
-NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS", "180"))
+NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS", "180"))
 # A staff member reads this "this morning", not within minutes like a chat action —
 # the store's DEFAULT_TTL_SECONDS (600s) would expire it long before anyone looks.
 NIGHTLY_BRIEFING_TTL_SECONDS = int(os.getenv("NIGHTLY_BRIEFING_TTL_SECONDS", str(24 * 3600)))
@@ -82,23 +82,20 @@ def _build_prompt(today: str, sections: dict) -> str:
 
 async def _generate_with_text_llm(prompt: str) -> str | None:
     """Calls the same text-generation path _chat_with_text_llm uses
-    (LLM_PROVIDER - OpenRouter/Qwen by default), but with
-    NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS instead of that function's own
-    chat-tuned timeout — see the constant's comment. (Env var name kept as-is
-    for backward compatibility even though it now bounds whichever provider
-    LLM_PROVIDER resolves to, not only Ollama.)"""
+    (OpenRouter/Qwen), but with NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS instead
+    of that function's own chat-tuned timeout — see the constant's comment."""
     try:
         # Lazy import: main.py imports this module to schedule the startup task, so a
         # top-of-file import here would be circular (main -> nightly_briefing -> main).
         from main import _call_text_llm
 
-        # _chat_with_text_llm's predecessor (_chat_with_ollama) wrapped every prompt as
-        # "User: ...\nAssistant:" before calling Ollama's raw generate() API (no chat
-        # template) - kept here for the same instruction-following reason, even though
-        # this now goes through a proper chat-messages call.
+        # Wrapped as "User: ...\nAssistant:" for the same instruction-following
+        # reason a plain single-turn prompt benefits from a role-labelled frame,
+        # even though this goes through a proper chat-messages call.
         reply, ok = await _call_text_llm(
             "", f"User: {prompt}\nAssistant:",
-            max_tokens=800, temperature=0.4, timeout=NIGHTLY_BRIEFING_OLLAMA_TIMEOUT_SECONDS,
+            max_tokens=800, temperature=0.4, timeout=NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS,
+            feature="nightly_briefing",
         )
         return (reply or None) if ok else None
     except Exception as exc:

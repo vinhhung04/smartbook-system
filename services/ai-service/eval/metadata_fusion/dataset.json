@@ -1,0 +1,225 @@
+{
+  "notes": "Offline, fixture-based eval for isbn_fusion.py / main._build_isbn_intelligence(). Each case supplies already-parsed provider metadata (the same shape main.py's provider parsers produce) directly, so it exercises the FUSION step in isolation from network calls, retrieval timing/budget and the ISBN checksum validator - those are covered by test_isbn_field_level_retrieval.py and main.py's ISBN validation tests instead. A source with no entry (or null) represents that provider not answering, whether because it was never called, timed out, errored, or genuinely found nothing - fusion cannot tell those apart and is not supposed to. `synthetic: true` marks a case built by hand for this eval rather than taken from a real lookup.",
+  "cases": [
+    {
+      "id": "single_source_foreign",
+      "note": "single-source book, foreign title, only Google Books answered",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Clean Code", "authors": ["Robert C. Martin"], "publisher": "Prentice Hall", "publishedDate": "2008-08-01", "description": "A handbook of agile software craftsmanship.", "categories": ["Computers"], "language": "en", "pageCount": 464, "thumbnail": "http://img/cc.jpg"}
+      },
+      "expected": {"title": "Clean Code", "authors": ["Robert C. Martin"], "publisher": "Prentice Hall", "pageCount": 464},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "single_source_vietnamese",
+      "note": "single-source book, Vietnamese title, only Fahasa answered",
+      "synthetic": true,
+      "providers": {
+        "fahasa": {"title": "Nhà Giả Kim", "authors": ["Paulo Coelho"], "publisher": "NXB Văn Học", "publishedDate": "2020", "description": "Câu chuyện về hành trình đi tìm kho báu của chàng chăn cừu Santiago.", "categories": ["Tiểu thuyết"], "language": "vi", "pageCount": 227, "thumbnail": null}
+      },
+      "expected": {"title": "Nhà Giả Kim", "authors": ["Paulo Coelho"], "publisher": "NXB Văn Học", "pageCount": 227},
+      "expectedConflicts": [],
+      "expectedMissing": ["thumbnail"]
+    },
+    {
+      "id": "multi_source_agree_publisher_variants",
+      "note": "3 sources spell the same publisher differently - must normalize to agreement, not a 3-way conflict",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Totto-chan bên cửa sổ", "authors": ["Tetsuko Kuroyanagi"], "publisher": "NXB Trẻ", "publishedDate": "2011", "description": null, "categories": [], "language": "vi", "pageCount": null, "thumbnail": null},
+        "fahasa": {"title": "Totto-chan bên cửa sổ", "authors": ["Tetsuko Kuroyanagi"], "publisher": "Nhà Xuất Bản Trẻ", "publishedDate": "2011", "description": "Cuốn sách kể về tuổi thơ của cô bé Totto-chan.", "categories": ["Văn học thiếu nhi"], "language": "vi", "pageCount": 320, "thumbnail": "http://img/totto.jpg"},
+        "tiki": {"title": "Totto-chan bên cửa sổ", "authors": ["Tetsuko Kuroyanagi"], "publisher": "nxb tre", "publishedDate": "2011", "description": null, "categories": [], "language": "vi", "pageCount": 320, "thumbnail": null}
+      },
+      "expected": {"title": "Totto-chan bên cửa sổ", "authors": ["Tetsuko Kuroyanagi"], "publisher": "Nhà Xuất Bản Trẻ", "pageCount": 320},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "multi_source_agree_authors_accent",
+      "note": "same author, with/without accents and with a case difference - must not be flagged as a conflict",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ", "authors": ["Nguyễn Nhật Ánh"], "publisher": "NXB Trẻ", "publishedDate": "2008", "description": "Một cuốn sách về tuổi thơ.", "categories": ["Văn học"], "language": "vi", "pageCount": 275, "thumbnail": null},
+        "openLibrary": {"title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ", "authors": ["nguyen nhat anh"], "publisher": "NXB Trẻ", "publishedDate": "2008", "description": null, "categories": [], "language": "vi", "pageCount": 275, "thumbnail": null}
+      },
+      "expected": {"title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ", "authors": ["Nguyễn Nhật Ánh"], "publisher": "NXB Trẻ", "pageCount": 275},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "author_spelling_case_diff",
+      "note": "same author, pure upper/lower case difference",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Sapiens", "authors": ["Yuval Noah Harari"], "publisher": "Harper", "publishedDate": "2015", "description": null, "categories": [], "language": "en", "pageCount": 443, "thumbnail": null},
+        "worldCat": {"title": "Sapiens", "authors": ["YUVAL NOAH HARARI"], "publisher": null, "publishedDate": null, "description": null, "categories": [], "language": null, "pageCount": null, "thumbnail": null}
+      },
+      "expected": {"title": "Sapiens", "authors": ["Yuval Noah Harari"], "publisher": "Harper", "pageCount": 443},
+      "expectedConflicts": [],
+      "expectedMissing": ["description"]
+    },
+    {
+      "id": "conflict_publisher",
+      "note": "two sources give genuinely different publishers - must be flagged CONFLICTED, not silently overwritten",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Đắc Nhân Tâm", "authors": ["Dale Carnegie"], "publisher": "NXB Tổng Hợp", "publishedDate": "2019", "description": null, "categories": [], "language": "vi", "pageCount": 320, "thumbnail": null},
+        "fahasa": {"title": "Đắc Nhân Tâm", "authors": ["Dale Carnegie"], "publisher": "NXB Kim Đồng", "publishedDate": "2019", "description": "Cuốn sách kỹ năng sống kinh điển.", "categories": ["Kỹ năng sống"], "language": "vi", "pageCount": 320, "thumbnail": null}
+      },
+      "expected": {"title": "Đắc Nhân Tâm", "authors": ["Dale Carnegie"], "pageCount": 320},
+      "expectedConflicts": ["publisher"],
+      "expectedMissing": []
+    },
+    {
+      "id": "conflict_pagecount",
+      "note": "page counts far enough apart to be different editions, not rounding noise",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "1984", "authors": ["George Orwell"], "publisher": "Secker & Warburg", "publishedDate": "1949", "description": null, "categories": [], "language": "en", "pageCount": 328, "thumbnail": null},
+        "openLibrary": {"title": "1984", "authors": ["George Orwell"], "publisher": "Secker & Warburg", "publishedDate": "1949", "description": null, "categories": [], "language": "en", "pageCount": 412, "thumbnail": null}
+      },
+      "expected": {"title": "1984", "authors": ["George Orwell"], "publisher": "Secker & Warburg"},
+      "expectedConflicts": ["pageCount"],
+      "expectedMissing": []
+    },
+    {
+      "id": "agree_pagecount_close",
+      "note": "page counts within rounding/edition tolerance must agree, not conflict",
+      "synthetic": true,
+      "providers": {
+        "tiki": {"title": "Người Giàu Có Nhất Thành Babylon", "authors": ["George S. Clason"], "publisher": "NXB Lao Động", "publishedDate": "2016", "description": null, "categories": [], "language": "vi", "pageCount": 198, "thumbnail": null},
+        "vinabook": {"title": "Người Giàu Có Nhất Thành Babylon", "authors": ["George S. Clason"], "publisher": "NXB Lao Động", "publishedDate": "2016", "description": "Những bài học tài chính kinh điển kể qua thành Babylon cổ đại.", "categories": [], "language": "vi", "pageCount": 200, "thumbnail": null}
+      },
+      "expected": {"title": "Người Giàu Có Nhất Thành Babylon", "authors": ["George S. Clason"], "publisher": "NXB Lao Động"},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "missing_fields",
+      "note": "only title/authors found anywhere - publisher, description, pageCount stay MISSING",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Bí Mật Của May Mắn", "authors": ["Alex Rovira"], "publisher": null, "publishedDate": null, "description": null, "categories": [], "language": null, "pageCount": null, "thumbnail": null}
+      },
+      "expected": {"title": "Bí Mật Của May Mắn", "authors": ["Alex Rovira"]},
+      "expectedConflicts": [],
+      "expectedMissing": ["publisher", "publishedDate", "description", "pageCount", "categories", "language", "thumbnail"]
+    },
+    {
+      "id": "description_single_source",
+      "note": "only one source has a description - must be SUFFICIENT, not penalized for lacking a second opinion",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Educated", "authors": ["Tara Westover"], "publisher": "Random House", "publishedDate": "2018", "description": "A memoir about a young woman who leaves her survivalist family to pursue an education.", "categories": ["Biography"], "language": "en", "pageCount": 334, "thumbnail": null},
+        "openLibrary": {"title": "Educated", "authors": ["Tara Westover"], "publisher": "Random House", "publishedDate": "2018", "description": null, "categories": [], "language": "en", "pageCount": 334, "thumbnail": null}
+      },
+      "expected": {"title": "Educated", "authors": ["Tara Westover"], "publisher": "Random House", "pageCount": 334},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "description_multi_source_richest",
+      "note": "two different (non-conflicting) descriptions - the richer/more detailed one should be selected, both kept as provenance",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "The Hobbit", "authors": ["J.R.R. Tolkien"], "publisher": "George Allen & Unwin", "publishedDate": "1937", "description": "A fantasy novel.", "categories": ["Fantasy"], "language": "en", "pageCount": 310, "thumbnail": null},
+        "openLibrary": {"title": "The Hobbit", "authors": ["J.R.R. Tolkien"], "publisher": "George Allen & Unwin", "publishedDate": "1937", "description": "Bilbo Baggins, a hobbit who enjoys a comfortable life, is swept into an epic quest to reclaim a dwarf kingdom from a fearsome dragon.", "categories": [], "language": "en", "pageCount": 310, "thumbnail": null}
+      },
+      "expected": {"title": "The Hobbit", "authors": ["J.R.R. Tolkien"], "publisher": "George Allen & Unwin", "pageCount": 310},
+      "expectedConflicts": [],
+      "expectedMissing": [],
+      "expectedDescriptionSource": "openLibrary"
+    },
+    {
+      "id": "category_merge",
+      "note": "two sources name different (both true) categories - must be merged into one list, not chosen between",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Freakonomics", "authors": ["Steven D. Levitt", "Stephen J. Dubner"], "publisher": "William Morrow", "publishedDate": "2005", "description": null, "categories": ["Economics"], "language": "en", "pageCount": 320, "thumbnail": null},
+        "tiki": {"title": "Freakonomics", "authors": ["Steven D. Levitt", "Stephen J. Dubner"], "publisher": "William Morrow", "publishedDate": "2005", "description": null, "categories": ["Kinh tế học hành vi"], "language": "en", "pageCount": 320, "thumbnail": null}
+      },
+      "expected": {"title": "Freakonomics", "authors": ["Steven D. Levitt", "Stephen J. Dubner"], "publisher": "William Morrow", "pageCount": 320},
+      "expectedConflicts": [],
+      "expectedMissing": [],
+      "expectedCategoryCount": 2
+    },
+    {
+      "id": "low_reliability_web_only",
+      "note": "only the web-search fallback answered - a value should still surface, but with low confidence",
+      "synthetic": true,
+      "providers": {
+        "webSearch": {"title": "Muôn Kiếp Nhân Sinh", "authors": ["Nguyên Phong"], "publisher": "NXB Tổng Hợp TP.HCM", "publishedDate": "2020", "description": null, "categories": [], "language": null, "pageCount": null, "thumbnail": null}
+      },
+      "expected": {"title": "Muôn Kiếp Nhân Sinh", "authors": ["Nguyên Phong"]},
+      "expectedConflicts": [],
+      "expectedMissing": ["description", "pageCount", "categories", "language", "thumbnail"],
+      "expectLowConfidence": ["title", "authors", "publisher"]
+    },
+    {
+      "id": "marketplace_unavailable",
+      "note": "every Vietnamese marketplace is unavailable (down/rate-limited) - only Google Books answered",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "The Lean Startup", "authors": ["Eric Ries"], "publisher": "Crown Business", "publishedDate": "2011", "description": "How today's entrepreneurs use continuous innovation.", "categories": ["Business"], "language": "en", "pageCount": 336, "thumbnail": null},
+        "fahasa": null,
+        "tiki": null,
+        "vinabook": null
+      },
+      "expected": {"title": "The Lean Startup", "authors": ["Eric Ries"], "publisher": "Crown Business", "pageCount": 336},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "source_timeout_simulated",
+      "note": "Open Library timed out (represented as absent, same as any non-response) - Google + Fahasa still agree",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Atomic Habits", "authors": ["James Clear"], "publisher": "Avery", "publishedDate": "2018", "description": null, "categories": [], "language": "en", "pageCount": 320, "thumbnail": null},
+        "openLibrary": null,
+        "fahasa": {"title": "Atomic Habits", "authors": ["James Clear"], "publisher": "Avery", "publishedDate": "2018", "description": "An easy and proven way to build good habits and break bad ones.", "categories": ["Self-help"], "language": "en", "pageCount": 320, "thumbnail": null}
+      },
+      "expected": {"title": "Atomic Habits", "authors": ["James Clear"], "publisher": "Avery", "pageCount": 320},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "three_source_strong_agreement",
+      "note": "3 independent sources agree on title - confidence should be visibly higher than a 2-source or 1-source agreement",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "The Pragmatic Programmer", "authors": ["David Thomas", "Andrew Hunt"], "publisher": "Addison-Wesley", "publishedDate": "1999", "description": null, "categories": ["Computers"], "language": "en", "pageCount": 352, "thumbnail": null},
+        "openLibrary": {"title": "The Pragmatic Programmer", "authors": ["David Thomas", "Andrew Hunt"], "publisher": "Addison-Wesley", "publishedDate": "1999", "description": null, "categories": [], "language": "en", "pageCount": 352, "thumbnail": null},
+        "worldCat": {"title": "The Pragmatic Programmer", "authors": ["David Thomas", "Andrew Hunt"], "publisher": null, "publishedDate": null, "description": null, "categories": [], "language": null, "pageCount": null, "thumbnail": null}
+      },
+      "expected": {"title": "The Pragmatic Programmer", "authors": ["David Thomas", "Andrew Hunt"], "publisher": "Addison-Wesley", "pageCount": 352},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    },
+    {
+      "id": "vietnamese_book_conflict_date",
+      "note": "two marketplaces disagree on publication YEAR (different editions/reprints, not formatting) - genuine conflict",
+      "synthetic": true,
+      "providers": {
+        "tiki": {"title": "Tuổi Trẻ Đáng Giá Bao Nhiêu", "authors": ["Rosie Nguyễn"], "publisher": "NXB Hội Nhà Văn", "publishedDate": "2016", "description": null, "categories": [], "language": "vi", "pageCount": 260, "thumbnail": null},
+        "vinabook": {"title": "Tuổi Trẻ Đáng Giá Bao Nhiêu", "authors": ["Rosie Nguyễn"], "publisher": "NXB Hội Nhà Văn", "publishedDate": "2021", "description": "Cuốn sách truyền cảm hứng cho tuổi trẻ Việt Nam.", "categories": ["Kỹ năng sống"], "language": "vi", "pageCount": 260, "thumbnail": null}
+      },
+      "expected": {"title": "Tuổi Trẻ Đáng Giá Bao Nhiêu", "authors": ["Rosie Nguyễn"], "publisher": "NXB Hội Nhà Văn", "pageCount": 260},
+      "expectedConflicts": ["publishedDate"],
+      "expectedMissing": []
+    },
+    {
+      "id": "foreign_book_full_coverage",
+      "note": "well-covered foreign title, 2 sources, no conflicts, every field present - the ceiling case",
+      "synthetic": true,
+      "providers": {
+        "googleBooks": {"title": "Deep Work", "authors": ["Cal Newport"], "publisher": "Grand Central Publishing", "publishedDate": "2016-01-05", "description": "Rules for focused success in a distracted world.", "categories": ["Self-help"], "language": "en", "pageCount": 296, "thumbnail": "http://img/dw.jpg"},
+        "openLibrary": {"title": "Deep Work", "authors": ["Cal Newport"], "publisher": "Grand Central Publishing", "publishedDate": "2016", "description": null, "categories": ["Self-help"], "language": "en", "pageCount": 296, "thumbnail": null}
+      },
+      "expected": {"title": "Deep Work", "authors": ["Cal Newport"], "publisher": "Grand Central Publishing", "pageCount": 296},
+      "expectedConflicts": [],
+      "expectedMissing": []
+    }
+  ]
+}

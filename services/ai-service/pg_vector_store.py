@@ -178,3 +178,10 @@ class PgVectorStore:
             "filter_sources": source_ids is not None,
             "source_ids": list(source_ids or []),
         })
+
+    async def delete_chunks_except_model(self, embedding_model: str) -> int:
+        sql = text("DELETE FROM ai_document_chunks WHERE embedding_model != :embedding_model")
+        async with self._session() as session:
+            result = await session.execute(sql, {"embedding_model": embedding_model})
+            await session.commit()
+        return result.rowcount or 0

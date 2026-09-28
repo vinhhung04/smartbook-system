@@ -3,11 +3,11 @@ const { canonicalKey, reconcileMetadata } = require('../services/authority-norma
 const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
 
 const prisma = new PrismaClient();
-const FIELDS = ['title', 'authors', 'publisher', 'categories', 'language', 'publishedDate', 'pageCount', 'coverFormat', 'description'];
+const { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady } = require('../services/metadata-provenance.service');
 // Only authors/publisher/categories are matched against a catalog authority (see reconcileMetadata) and
 // surfaced for staff review in AuthorityReviewPanel. The rest are plain passthrough fields with nothing
 // to reconcile, so they must not stay PENDING forever — that would permanently block save.
-const AUTO_ACCEPT_FIELDS = new Set(['title', 'language', 'publishedDate', 'pageCount', 'coverFormat', 'description']);
+const AUTO_ACCEPT_FIELDS = new Set(['title', 'subtitle', 'translator', 'isbn', 'language', 'publishedDate', 'pageCount', 'coverFormat', 'description']);
 
 function jsonValue(value) {
   return value === null || value === undefined ? Prisma.JsonNull : value;
@@ -31,6 +31,8 @@ function rawLookup(req) {
 function explain(result, raw) {
   return {
     version: 'authority-reconciliation-v1',
+    pipelineProvenance: raw.intelligence?.provenance || {},
+    reviewEvents: [],
     provenance: 'EXTERNAL/RULE',
     sourceEvidence: raw.fieldEvidence || {},
     rule: 'Only exact canonical or approved aliases are auto-matched; similar values require staff review.',
@@ -45,9 +47,20 @@ function explain(result, raw) {
 async function createDraft(req, res) {
   const raw = rawLookup(req);
   const isbn = String(raw.isbn || req.body?.isbn || '').trim();
-  if (!isbn) return res.status(400).json({ message: 'isbn is required' });
+  if (!isbn && !raw.intelligence) return res.status(400).json({ message: 'isbn is required' });
   try {
+    validateBundle(raw.intelligence);
     const result = reconcileMetadata(raw, await readAuthorities());
+    result.normalized.subtitle = raw.subtitle || null;
+    result.normalized.translator = raw.translator || [];
+    result.normalized.isbn = isbn || null;
+    if (raw.intelligence) {
+      // Similar authority names must not silently replace extraction values.
+      result.normalized.authors = result.authorNormalization.map(item => item.status === 'AUTO_MATCH' ? item.matchedEntity.name : item.rawValue);
+      result.normalized.publisher = result.publisherNormalization.status === 'AUTO_MATCH' ? result.publisherNormalization.matchedEntity.name : result.publisherNormalization.rawValue || null;
+      result.normalized.categories = result.categoryNormalization.map(item => item.status === 'AUTO_MATCH' ? item.normalizedValue : item.rawValue);
+      for (const field of FIELDS) validateField(field, result.normalized[field]);
+    }
     // authors/categories only get a review row in AuthorityReviewPanel when reconcileMetadata actually
     // produced a suggestion for them (rawValue was non-empty). An empty input (e.g. no categories found
     // by the lookup) means there is nothing to normalize and nothing for staff to review — leaving that
@@ -55,6 +68,9 @@ async function createDraft(req, res) {
     const autoAcceptFields = new Set(AUTO_ACCEPT_FIELDS);
     if (result.authorNormalization.length === 0) autoAcceptFields.add('authors');
     if (result.categoryNormalization.length === 0) autoAcceptFields.add('categories');
+    for (const [field, decision] of Object.entries(raw.intelligence?.decisions || {})) {
+      if (decision.status === 'REVIEW_REQUIRED') autoAcceptFields.delete(field);
+    }
     const draft = await prisma.metadata_reconciliation_drafts.create({
       data: {
         isbn,
@@ -72,6 +88,7 @@ async function createDraft(req, res) {
     });
     return res.status(201).json({ data: { ...draft, normalizationSuggestions: { authorNormalization: result.authorNormalization, publisherNormalization: result.publisherNormalization, categoryNormalization: result.categoryNormalization }, qualityWarnings: result.qualityWarnings, authorityMatches: result.authorityMatches, explanation: draft.explanation } });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     console.error('Unable to create metadata reconciliation draft', error);
     return res.status(500).json({ message: 'Unable to create metadata reconciliation draft' });
   }
@@ -93,12 +110,23 @@ async function decideField(req, res) {
   if (!FIELDS.includes(field)) return res.status(400).json({ message: 'Unsupported metadata field' });
   if (!['ACCEPTED', 'REJECTED'].includes(status)) return res.status(400).json({ message: 'status must be ACCEPTED or REJECTED' });
   try {
-    const data = await prisma.metadata_reconciliation_field_decisions.update({
+    if (value !== undefined) validateField(field, value);
+    const data = await prisma.$transaction(async (tx) => {
+      const draft = await tx.metadata_reconciliation_drafts.findUnique({ where: { id: req.params.id }, include: { decisions: true } });
+      if (!draft) { const error = new Error('Draft not found'); error.statusCode = 404; throw error; }
+      if (draft.status === 'APPLIED') { const error = new Error('Draft already applied'); error.statusCode = 409; throw error; }
+      const previous = draft.decisions.find(d => d.field === field);
+      const event = reviewEvent(field, previous?.value, value === undefined ? previous?.value : value, req.user.id, status);
+      const row = await tx.metadata_reconciliation_field_decisions.update({
       where: { draft_id_field: { draft_id: req.params.id, field } },
-      data: { status, ...(value !== undefined ? { value: jsonValue(value) } : {}), provenance: 'STAFF_APPROVED', reviewed_by_user_id: req.user.id, reviewed_at: new Date() },
+      data: { status, ...(value !== undefined ? { value: jsonValue(value) } : {}), provenance: event.action === 'EDITED' ? 'HUMAN_EDITED' : previous?.provenance || 'RULE', reviewed_by_user_id: req.user.id, reviewed_at: new Date() },
+      });
+      await tx.metadata_reconciliation_drafts.update({ where: { id: draft.id }, data: { explanation: { ...draft.explanation, reviewEvents: [...(draft.explanation?.reviewEvents || []), event] } } });
+      return row;
     });
     return res.json({ data });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     if (error.code === 'P2025') return res.status(404).json({ message: 'Draft or field not found' });
     console.error('Unable to decide reconciliation field', error);
     return res.status(500).json({ message: 'Unable to decide reconciliation field' });
@@ -171,8 +199,28 @@ async function applyDraft(req, res) {
       if (!draft) {
         const error = new Error('Draft not found'); error.statusCode = 404; throw error;
       }
+      if (draft.status === 'APPLIED') {
+        return { book: await tx.books.findUnique({ where: { id: draft.book_id } }), variantId: draft.explanation?.appliedVariantId || null };
+      }
+      assertReady(draft);
+      if (draft.raw_metadata?.intelligence && finalMetadata.isbn13 && !validIsbn(finalMetadata.isbn13)) {
+        const error = new Error('Invalid ISBN checksum'); error.statusCode = 400; throw error;
+      }
       let bookId = requestedBookId || draft.book_id;
       const accepted = Object.fromEntries(draft.decisions.filter((decision) => decision.status === 'ACCEPTED').map((decision) => [decision.field, decision.value]));
+      const events = [...(draft.explanation?.reviewEvents || [])];
+      const finalToField = { title: 'title', subtitle: 'subtitle', description: 'description', language: 'language', pageCount: 'pageCount', translator: 'translator', publishedDate: 'publishedDate', isbn13: 'isbn' };
+      for (const [name, field] of Object.entries(finalToField)) {
+        if (finalMetadata[name] === undefined) continue;
+        const decision = draft.decisions.find(d => d.field === field);
+        if (decision?.status === 'REJECTED') { delete finalMetadata[name]; continue; }
+        if (draft.raw_metadata?.intelligence) validateField(field, finalMetadata[name]);
+        if (JSON.stringify(accepted[field]) !== JSON.stringify(finalMetadata[name])) {
+          events.push(reviewEvent(field, accepted[field] ?? null, finalMetadata[name], req.user.id, 'ACCEPTED'));
+          accepted[field] = finalMetadata[name];
+          if (decision) await tx.metadata_reconciliation_field_decisions.update({ where: { id: decision.id }, data: { value: jsonValue(finalMetadata[name]), provenance: 'HUMAN_EDITED', reviewed_by_user_id: req.user.id, reviewed_at: new Date() } });
+        }
+      }
       const isbn13 = finalMetadata.isbn13 === undefined ? undefined : normalizeIsbn13(finalMetadata.isbn13);
       const isbn10 = finalMetadata.isbn10 === undefined ? undefined : normalizeIsbn10(finalMetadata.isbn10);
       const publishYear = finalMetadata.publishYear === undefined ? undefined : normalizePublishYear(finalMetadata.publishYear);
@@ -194,21 +242,30 @@ async function applyDraft(req, res) {
       const variantId = requestedVariantId || duplicateReview?.selected_variant_id || book.book_variants[0]?.id || null;
       const variant = variantId ? await tx.book_variants.findUnique({ where: { id: variantId } }) : null;
       if (variantId && (!variant || variant.book_id !== bookId)) { const error = new Error('Variant does not belong to selected book'); error.statusCode = 400; throw error; }
-      const relations = await resolveRelationIds(tx, draft, accepted, createEntities);
       const isLinkedVariant = duplicateReview?.decision === 'LINK_EXISTING_VARIANT';
-      const metadataProvenance = Object.fromEntries(Object.keys(accepted).map((field) => [field, 'STAFF_APPROVED']));
+      const preserveBook = Boolean(draft.raw_metadata?.intelligence && requestedBookId && duplicateReview?.decision === 'CREATE_VARIANT_FOR_EDITION');
+      const relations = await resolveRelationIds(tx, draft, preserveBook ? {} : accepted, createEntities);
+      const metadataProvenance = Object.fromEntries(Object.keys(accepted).map((field) => [field, {
+        ...(draft.raw_metadata?.intelligence?.provenance?.[field] || { field, events: [] }),
+        events: [...(draft.raw_metadata?.intelligence?.provenance?.[field]?.events || []), ...events.filter(e => e.field === field),
+          { stage: 'CATALOG_APPLY', actorType: 'HUMAN', actorId: req.user.id, createdAt: new Date().toISOString() }], draftId: draft.id,
+      }]));
+      const publication = partialDate(accepted.publishedDate || null);
       const data = {
         ...(finalMetadata.title !== undefined ? { title: String(finalMetadata.title || '').trim() } : accepted.title ? { title: String(accepted.title) } : {}),
         ...(finalMetadata.subtitle !== undefined ? { subtitle: String(finalMetadata.subtitle || '').trim() || null } : {}),
         ...(finalMetadata.description !== undefined ? { description: finalMetadata.description } : Object.prototype.hasOwnProperty.call(accepted, 'description') ? { description: accepted.description } : {}),
         ...(finalMetadata.language !== undefined ? { default_language: normalizeLanguageCode(finalMetadata.language) || 'vi' } : Object.prototype.hasOwnProperty.call(accepted, 'language') ? { default_language: accepted.language } : {}),
         ...(pageCount !== undefined ? { page_count: pageCount } : Object.prototype.hasOwnProperty.call(accepted, 'pageCount') ? { page_count: accepted.pageCount } : {}),
-        ...(Object.prototype.hasOwnProperty.call(accepted, 'publishedDate') ? { published_date: accepted.publishedDate ? new Date(`${accepted.publishedDate}T00:00:00.000Z`) : null } : {}),
+        ...(Object.prototype.hasOwnProperty.call(accepted, 'publishedDate') ? { published_date: publication.date } : {}),
         ...(accepted.publisher && relations.publisher ? { publisher_id: relations.publisher.id } : {}),
         metadata: { ...(book.metadata || {}), ...(finalMetadata.summaryVi !== undefined ? { summary_vi: String(finalMetadata.summaryVi || '').trim() || null } : {}), ...(finalMetadata.keywords !== undefined ? { keywords: normalizeKeywords(finalMetadata.keywords) } : {}), metadataProvenance: { ...(book.metadata?.metadataProvenance || {}), ...metadataProvenance, ...(finalMetadata.summaryVi !== undefined ? { summaryVi: 'STAFF_APPROVED' } : {}), ...(finalMetadata.keywords !== undefined ? { keywords: 'STAFF_APPROVED' } : {}) } },
       };
-      const updatedBook = await tx.books.update({ where: { id: bookId }, data });
-      if (accepted.authors && relations.authors.length) {
+      data.metadata.translator = accepted.translator || book.metadata?.translator || [];
+      data.metadata.publishedDate = publication.value;
+      data.metadata.datePrecision = publication.precision;
+      const updatedBook = preserveBook ? book : await tx.books.update({ where: { id: bookId }, data });
+      if (!preserveBook && accepted.authors && relations.authors.length) {
         await tx.book_authors.deleteMany({ where: { book_id: bookId } });
         await tx.book_authors.createMany({ data: relations.authors.map((author, index) => ({ book_id: bookId, author_id: author.id, author_order: index + 1 })) });
         await tx.author_aliases.createMany({ data: relations.authors.filter((author) => author.raw && author.canonicalName && author.raw.trim() !== author.canonicalName.trim()).map((author) => ({ author_id: author.id, alias: author.raw, normalized_alias: canonicalKey(author.raw), confidence: 1, status: 'PENDING' })), skipDuplicates: true });
@@ -216,12 +273,13 @@ async function applyDraft(req, res) {
       if (accepted.publisher && relations.publisher?.raw && relations.publisher.canonicalName && relations.publisher.raw.trim() !== relations.publisher.canonicalName.trim()) {
         await tx.publisher_aliases.createMany({ data: [{ publisher_id: relations.publisher.id, alias: relations.publisher.raw, normalized_alias: canonicalKey(relations.publisher.raw), confidence: 1, status: 'PENDING' }], skipDuplicates: true });
       }
-      if (accepted.categories && relations.categories.length) {
+      if (!preserveBook && accepted.categories && relations.categories.length) {
         await tx.book_categories.deleteMany({ where: { book_id: bookId } });
         await tx.book_categories.createMany({ data: relations.categories.map((categoryId) => ({ book_id: bookId, category_id: categoryId })), skipDuplicates: true });
       }
       if (variant && !isLinkedVariant) {
         const variantData = {
+          metadata: { ...(variant.metadata || {}), bibliographic: accepted, metadataProvenance },
           ...(isbn13 !== undefined ? { isbn13 } : {}),
           ...(isbn10 !== undefined ? { isbn10 } : {}),
           ...(finalMetadata.internalBarcode !== undefined ? { internal_barcode: String(finalMetadata.internalBarcode || '').trim() || null } : {}),
@@ -232,7 +290,7 @@ async function applyDraft(req, res) {
         };
         if (Object.keys(variantData).length) await tx.book_variants.update({ where: { id: variant.id }, data: variantData });
       }
-      await tx.metadata_reconciliation_drafts.update({ where: { id: draft.id }, data: { book_id: bookId, status: 'APPLIED' } });
+      await tx.metadata_reconciliation_drafts.update({ where: { id: draft.id }, data: { book_id: bookId, status: 'APPLIED', explanation: { ...draft.explanation, reviewEvents: events, appliedVariantId: variant?.id || null } } });
       await tx.inventory_audit_logs.create({ data: { actor_user_id: req.user.id, action_name: 'METADATA_RECONCILIATION_APPLIED', entity_type: 'BOOK', entity_id: bookId, before_data: { title: book.title, subtitle: book.subtitle, description: book.description, publisher_id: book.publisher_id, page_count: book.page_count, default_language: book.default_language, metadata: book.metadata, authors: book.book_authors.map((item) => item.author_id), categories: book.book_categories.map((item) => item.category_id), variant: variant ? { isbn13: variant.isbn13, isbn10: variant.isbn10, internal_barcode: variant.internal_barcode } : null }, after_data: { acceptedFields: accepted, finalMetadata, sourceEvidence: draft.raw_metadata?.fieldEvidence || {}, aiSuggestions: draft.ai_suggestions || {}, duplicateReviewId: duplicateReview?.id || null, duplicateDecision: duplicateReview?.decision || null, provenance: metadataProvenance } } });
       return { book: updatedBook, variantId: variant?.id || null };
     });

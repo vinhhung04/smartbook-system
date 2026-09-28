@@ -40,6 +40,31 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+# Vietnamese interrogative markers, for messages that ask a real question
+# without a "?" (common in casual chat input). Used by is_information_seeking()
+# to tell "chào bạn" (small talk) apart from "phí phạt tính thế nào" (a question
+# that deserves an abstention reply rather than silence, when NO_EVIDENCE - see
+# main.py's /chat handler).
+_QUESTION_MARKERS = [
+    "la gi", "nhu the nao", "the nao", "lam sao", "lam the nao", "khi nao",
+    "o dau", "tai sao", "vi sao", "bao nhieu", "bao lau", "duoc khong",
+    "co khong", "ra sao", "bang bao nhieu",
+]
+
+
+def is_information_seeking(message: str) -> bool:
+    """True for a message that is asking something (and so deserves an explicit
+    "chưa đủ dữ liệu" reply when retrieval finds NO_EVIDENCE), False for small
+    talk/greetings that should still reach the LLM even with an empty RAG
+    context."""
+    text = (message or "").strip()
+    if not text:
+        return False
+    if "?" in text:
+        return True
+    return _contains_any(normalize_text(text), _QUESTION_MARKERS)
+
+
 def _iso_date(value: datetime) -> str:
     return value.date().isoformat()
 

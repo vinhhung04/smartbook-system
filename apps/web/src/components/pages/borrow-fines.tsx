@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { CircleAlert, RefreshCw, Wallet, Receipt } from 'lucide-react';
+import { BadgePercent, CircleAlert, Eye, Loader2, RefreshCw, Wallet, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
@@ -58,6 +59,9 @@ const FETCH_PAGE_SIZE = 100;
 function formatVnd(amount: number | string | undefined | null): string {
   return `${Number(amount || 0).toLocaleString('vi-VN')} VND`;
 }
+
+const FILTER_STATUSES = ['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'WAIVED'] as const;
+const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50';
 
 function remainingClass(status: string, remaining: number): string {
   if (remaining <= 0) return 'text-muted-foreground';
@@ -117,6 +121,19 @@ export function BorrowFinesPage() {
       );
     });
   }, [fines, query, statusFilter]);
+
+  const totals = useMemo(() => {
+    let outstanding = 0;
+    let collected = 0;
+    let openCount = 0;
+    for (const fine of fines) {
+      const remaining = Number(fine.summary?.remaining_balance || 0);
+      outstanding += remaining;
+      collected += Number(fine.summary?.paid_amount || 0);
+      if (remaining > 0) openCount += 1;
+    }
+    return { outstanding, collected, openCount };
+  }, [fines]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -206,7 +223,7 @@ export function BorrowFinesPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -232,6 +249,34 @@ export function BorrowFinesPage() {
         />
       </motion.div>
 
+      <motion.section
+        aria-label="Tổng quan tiền phạt"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
+        className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+      >
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[12px] font-medium text-muted-foreground">Còn phải thu</p>
+          <p className={cn('mt-2 font-mono text-[24px] font-bold leading-none tabular-nums', totals.outstanding > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40')}>
+            {loading ? '-' : formatVnd(totals.outstanding)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[12px] font-medium text-muted-foreground">Đã thu</p>
+          <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
+            {loading ? '-' : formatVnd(totals.collected)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-[12px] font-medium text-muted-foreground">Khoản chưa thu xong</p>
+          <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">
+            {loading ? '-' : totals.openCount}
+            <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">/ {fines.length} khoản</span>
+          </p>
+        </div>
+      </motion.section>
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -242,20 +287,17 @@ export function BorrowFinesPage() {
           onSearchChange={setQuery}
           searchPlaceholder="Tìm tiền phạt..."
           filters={
-            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-              {(['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'WAIVED'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all ${
-                    statusFilter === status
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {STATUS_LABELS[status] ?? status}
-                </button>
-              ))}
+            <div className="max-w-full overflow-x-auto">
+              <SegmentedControl
+                layoutId="fine-filter"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={FILTER_STATUSES.map((status) => ({
+                  value: status,
+                  label: `${STATUS_LABELS[status] ?? status} (${status === 'ALL' ? fines.length : fines.filter((item) => item.status === status).length})`,
+                }))}
+                className="w-max"
+              />
             </div>
           }
         />
@@ -268,22 +310,28 @@ export function BorrowFinesPage() {
       >
         <SectionCard noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['Mã phạt', 'Khách hàng', 'Loại phạt', 'Số tiền', 'Còn lại', 'Trạng thái', 'Thao tác'].map((header) => (
-                    <th key={header} className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
-                      {header}
+                  {[
+                    { label: 'Khoản phạt', className: '' },
+                    { label: 'Số tiền', className: 'hidden w-[140px] text-right lg:table-cell' },
+                    { label: 'Còn lại', className: 'hidden w-[160px] text-right sm:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[150px] md:table-cell' },
+                    { label: 'Thao tác', className: 'w-[190px] text-right' },
+                  ].map((header) => (
+                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                      {header.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonTableRow columns={7} rows={5} />
+                  <SkeletonTableRow columns={5} rows={5} />
                 ) : paged.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={5}>
                       <EmptyState
                         variant="no-results"
                         title="Không tìm thấy tiền phạt"
@@ -298,46 +346,42 @@ export function BorrowFinesPage() {
                     const paid = Number(fine.summary?.paid_amount || 0);
                     const remaining = Number(fine.summary?.remaining_balance || 0);
                     const paidPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+                    const customerName = fine.customers?.full_name || fine.customer_id;
                     return (
                       <motion.tr
                         key={fine.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15, delay: index * 0.02 }}
-                        className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                        transition={{ duration: 0.15, delay: Math.min(index, 10) * 0.02 }}
+                        className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
                       >
-                        <td className="px-5 py-3.5 text-sm font-mono text-muted-foreground">{fine.id.slice(0, 8)}</td>
-                        <td className="px-5 py-3.5">
-                          <p className="text-sm text-foreground">{fine.customers?.full_name || fine.customer_id}</p>
-                          {fine.customers?.customer_code ? (
-                            <p className="font-mono text-[11px] text-muted-foreground">{fine.customers.customer_code}</p>
-                          ) : null}
+                        <td className="px-4 py-3">
+                          <p className="truncate text-sm font-semibold text-foreground" title={customerName}>{customerName}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[fine.customers?.customer_code, fine.fine_type].filter(Boolean).join(' · ')}
+                          </p>
+                          <p className="font-mono text-[11px] text-muted-foreground/70">#{fine.id.slice(0, 8)}</p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
+                            <StatusBadge label={fine.status} variant={getStatusVariant('fine', fine.status)} dot />
+                            <span className={cn('font-mono text-xs sm:hidden', remainingClass(fine.status, remaining))}>Còn {formatVnd(remaining)}</span>
+                          </div>
                         </td>
-                        <td className="px-5 py-3.5 text-sm text-muted-foreground">{fine.fine_type}</td>
-                        <td className="px-5 py-3.5 text-sm font-mono tabular-nums text-right text-muted-foreground">{formatVnd(total)}</td>
-                        <td className="px-5 py-3.5">
-                          <div className="text-sm font-mono tabular-nums text-right">
+                        <td className="hidden px-4 py-3 text-right font-mono text-sm tabular-nums text-muted-foreground lg:table-cell">{formatVnd(total)}</td>
+                        <td className="hidden px-4 py-3 sm:table-cell">
+                          <div className="text-right font-mono text-sm tabular-nums">
                             <span className={remainingClass(fine.status, remaining)}>{formatVnd(remaining)}</span>
                           </div>
                           {total > 0 && (
-                            <div className="mt-1.5 h-1 w-24 ml-auto overflow-hidden rounded-full bg-muted">
+                            <div className="ml-auto mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã trả ${paidPct}%`}>
                               <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${paidPct}%` }} />
                             </div>
                           )}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="hidden px-4 py-3 md:table-cell">
                           <StatusBadge label={fine.status} variant={getStatusVariant('fine', fine.status)} dot />
                         </td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              loading={detailLoadingId === fine.id}
-                              onClick={() => void openDetail(fine)}
-                            >
-                              Chi tiết
-                            </Button>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
                               size="sm"
                               variant="success-outline"
@@ -346,14 +390,26 @@ export function BorrowFinesPage() {
                             >
                               Thanh toán
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="warning-outline"
-                              onClick={() => openWaiveDialog(fine)}
-                              disabled={remaining <= 0}
+                            <button
+                              type="button"
+                              aria-label={`Xem chi tiết khoản phạt của ${customerName}`}
+                              title="Chi tiết"
+                              disabled={detailLoadingId === fine.id}
+                              onClick={() => void openDetail(fine)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-input hover:bg-muted')}
                             >
-                              Miễn giảm
-                            </Button>
+                              {detailLoadingId === fine.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Miễn giảm khoản phạt của ${customerName}`}
+                              title="Miễn giảm"
+                              disabled={remaining <= 0}
+                              onClick={() => openWaiveDialog(fine)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
+                            >
+                              <BadgePercent className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </motion.tr>
