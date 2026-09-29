@@ -1,231 +1,153 @@
-import { useState, useEffect } from 'react';
-import { Sparkles, CheckCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen, ShieldCheck, Building2 } from 'lucide-react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { CheckCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen, Sparkles, Building2, XCircle, SlidersHorizontal } from 'lucide-react';
 import { aiService, type PendingAction } from '@/services/ai';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { userService, type WarehouseStaffOption } from '@/services/user';
 import { supplierService, type Supplier } from '@/services/supplier';
+import { authService } from '@/services/auth';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { StatusBadge } from '@/components/status-badge';
 import { getStatusVariant } from '@/lib/status-registry';
-import { AI_ACTION_TYPE_LABEL, AI_ACTION_STATUS_LABEL } from '@/lib/ai-action-labels';
+import { AI_ACTION_STATUS_LABEL } from '@/lib/ai-action-labels';
+import {
+  summarizeStockLines, groupLinesByWarehouse, priorityLabel, priorityTone, canUserConfirmAction,
+  type StockLine,
+} from '@/lib/ai-decision';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AIDecisionCard, DecisionSection, EvidenceList, DecisionWarnings } from '@/components/ai/decision-card';
 
-// Shared confirm/cancel card for an AI-proposed action (PendingAction). Used by both
+// Shared decision card for an AI-proposed action (PendingAction), used by both
 // the floating chatbot widget (ai-chatbot.tsx) and the Decision Assistant page
-// (pages/ai-assistant.tsx) so the two surfaces render the same action UX.
+// (pages/ai-assistant.tsx). Layout: decision -> status -> why -> what happens
+// on confirm -> details (collapsed) -> inputs the person must supply -> actions.
+// Nothing runs until the person presses the action-specific create button.
+
+const RISK_LABEL: Record<string, string> = { LOW: 'Rủi ro thấp', MEDIUM: 'Rủi ro vừa', HIGH: 'Rủi ro cao' };
+const ROLE_LABEL: Record<string, string> = { WAREHOUSE_MANAGER: 'Quản lý kho', WAREHOUSE_STAFF: 'Nhân viên kho', ADMIN: 'Quản trị viên', LIBRARIAN: 'Thủ thư' };
+const TASK_TYPE_LABEL: Record<string, string> = {
+  GENERAL: 'Tổng quát', CHECK_SHELF: 'Kiểm tra kệ', STOCK_CHECK: 'Kiểm kê', LOW_STOCK_REVIEW: 'Xử lý tồn kho thấp',
+  EXCEPTION_FOLLOW_UP: 'Xử lý ngoại lệ', REORDER_REVIEW: 'Xem xét nhập sách', RESERVATION_FOLLOW_UP: 'Theo dõi đặt trước',
+  INVENTORY_AUDIT: 'Kiểm toán kho', OTHER: 'Khác',
+};
+
+const CONFIRM_LABEL: Record<string, string> = {
+  CREATE_REORDER_DRAFT: 'Tạo phiếu đề xuất nhập',
+  CREATE_STOCK_ALERT: 'Tạo cảnh báo',
+  CREATE_STAFF_TASK_DRAFT: 'Tạo nhiệm vụ',
+  CREATE_RESERVATION_DRAFT: 'Tạo đặt trước',
+  CREATE_REPORT_DRAFT: 'Tạo báo cáo nháp',
+};
 
 function ActionTypeIcon({ type }: { type: string }) {
-  const icons: Record<string, React.ReactNode> = {
-    CREATE_REORDER_DRAFT: <ShoppingCart size={13} className="text-foreground" />,
-    CREATE_REPORT_DRAFT: <FileText size={13} className="text-foreground" />,
-    CREATE_RESERVATION_DRAFT: <BookOpen size={13} className="text-foreground" />,
-    CREATE_STOCK_ALERT: <Bell size={13} className="text-foreground" />,
-    CREATE_STAFF_TASK_DRAFT: <ClipboardList size={13} className="text-foreground" />,
+  const cls = 'h-3.5 w-3.5';
+  const icons: Record<string, ReactNode> = {
+    CREATE_REORDER_DRAFT: <ShoppingCart className={cls} aria-hidden="true" />,
+    CREATE_REPORT_DRAFT: <FileText className={cls} aria-hidden="true" />,
+    CREATE_RESERVATION_DRAFT: <BookOpen className={cls} aria-hidden="true" />,
+    CREATE_STOCK_ALERT: <Bell className={cls} aria-hidden="true" />,
+    CREATE_STAFF_TASK_DRAFT: <ClipboardList className={cls} aria-hidden="true" />,
   };
-  return <>{icons[type] ?? <Sparkles size={13} className="text-foreground" />}</>;
+  return <>{icons[type] ?? <Sparkles className={cls} aria-hidden="true" />}</>;
 }
 
-// ── Payload preview by action type ────────────────────────────────────────────
+const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
 
-function PayloadPreview({ action }: { action: PendingAction }) {
-  const p = action.payload;
+// ── Book lines: stacked rows in a narrow card, a compact table when wide ──────
 
-  if (action.type === 'CREATE_REORDER_DRAFT') {
-    const items: any[] = p.items || [];
-    if (!items.length) return <p className="text-muted-foreground italic">Không có dữ liệu items.</p>;
-
-    // Group items by warehouse, collect supplier suggestion per warehouse
-    const itemsWithWh = items.filter((it: any) => it.warehouse_id);
-    const itemsNoWh = items.filter((it: any) => !it.warehouse_id);
-    const byWarehouse: Record<string, { name: string; code: string; items: any[]; supplierName: string }> = {};
-    for (const it of itemsWithWh) {
-      const key = it.warehouse_id;
-      if (!byWarehouse[key]) byWarehouse[key] = { name: it.warehouse_name || it.warehouse_code || key, code: it.warehouse_code || '', items: [], supplierName: '' };
-      byWarehouse[key].items.push(it);
-      // Use first available supplier suggestion for this warehouse group
-      if (!byWarehouse[key].supplierName && it.suggested_supplier_name) {
-        byWarehouse[key].supplierName = it.suggested_supplier_name;
-      }
-    }
-    const warehouseGroups = Object.values(byWarehouse);
-
-    return (
-      <div className="space-y-1.5">
-        {warehouseGroups.length > 0 && (
-          <p className="font-medium text-muted-foreground text-[11px]">
-            Theo kho ({warehouseGroups.length} kho, {itemsWithWh.length} dòng):
-          </p>
-        )}
-        {warehouseGroups.map((group, gi) => (
-          <div key={gi} className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-foreground">
-              <Building2 size={11} className="shrink-0 text-muted-foreground" />
-              {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} sách
-              {group.supplierName && (
-                <span className="ml-1.5 font-normal text-muted-foreground">· NCC: {group.supplierName}</span>
-              )}
-            </p>
-            <div className="space-y-1 max-h-20 overflow-y-auto">
-              {group.items.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-card/70 rounded px-2 py-1">
-                  <span className="truncate flex-1 text-foreground text-[11px]" title={item.title}>{item.title || 'Unknown'}</span>
-                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                    <span className="text-muted-foreground text-[10px]">Còn: {item.current_stock ?? '?'}</span>
-                    <span className="text-foreground font-medium text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
-                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">HIGH</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        {itemsNoWh.length > 0 && (
-          <div className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-              <AlertTriangle size={10} className="shrink-0" />
-              Chưa xác định kho ({itemsNoWh.length} sách):
-            </p>
-            {itemsNoWh.slice(0, 4).map((item: any, i: number) => (
-              <div key={i} className="flex items-center justify-between bg-amber-50/70 rounded px-2 py-1 dark:bg-amber-500/10">
-                <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
-                <span className="text-muted-foreground text-[10px]">Nhập: {item.suggested_quantity ?? 1}</span>
-              </div>
-            ))}
-            {itemsNoWh.length > 4 && <p className="text-muted-foreground text-[10px] text-center">... và {itemsNoWh.length - 4} sách khác</p>}
-          </div>
-        )}
-        {items.length > 10 && <p className="text-muted-foreground text-[10px] text-center">Tổng: {items.length} dòng</p>}
-      </div>
-    );
-  }
-
-  if (action.type === 'CREATE_REPORT_DRAFT') {
-    const lines = (p.report_markdown || '').split('\n').slice(0, 6);
-    return (
-      <div className="space-y-1">
-        <p className="font-medium text-muted-foreground">{p.report_title || 'Báo cáo SmartBook AI'}</p>
-        <pre className="text-[10px] text-muted-foreground bg-card rounded p-2 border border-border whitespace-pre-wrap max-h-24 overflow-y-auto">
-          {lines.join('\n')}{lines.length >= 6 ? '\n...' : ''}
-        </pre>
-      </div>
-    );
-  }
-
-  if (action.type === 'CREATE_RESERVATION_DRAFT') {
-    return (
-      <div className="space-y-1">
-        <div className="bg-card rounded p-2 border border-border space-y-1">
-          <p><span className="text-muted-foreground">Sách:</span> <span className="font-medium text-foreground">{p.title_query || 'N/A'}</span></p>
-          <p><span className="text-muted-foreground">Variant ID:</span> {p.variant_id || p.book_variant_id || <span className="text-amber-600 dark:text-amber-400">Chưa có</span>}</p>
-          <p><span className="text-muted-foreground">Warehouse ID:</span> {p.warehouse_id || <span className="text-amber-600 dark:text-amber-400">Chưa có</span>}</p>
-          <p><span className="text-muted-foreground">Số lượng:</span> {p.quantity || 1}</p>
-        </div>
-        {p.requires_review && (
-          <p className="flex items-start gap-1 text-amber-600 dark:text-amber-400 text-[10px]">
-            <AlertTriangle size={10} className="mt-0.5 shrink-0" />
-            Thiếu variant_id hoặc warehouse_id. Sẽ lưu draft, không gọi API thật.
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (action.type === 'CREATE_STOCK_ALERT') {
-    const items: any[] = p.items || [];
-    const itemsWithWh = items.filter((it: any) => it.warehouse_id);
-    const itemsNoWh = items.filter((it: any) => !it.warehouse_id);
-    const byWarehouse: Record<string, { name: string; code: string; items: any[] }> = {};
-    for (const it of itemsWithWh) {
-      const key = it.warehouse_id;
-      if (!byWarehouse[key]) byWarehouse[key] = { name: it.warehouse_name || it.warehouse_code || key, code: it.warehouse_code || '', items: [] };
-      byWarehouse[key].items.push(it);
-    }
-    const warehouseGroups = Object.values(byWarehouse);
-
-    return (
-      <div className="space-y-1.5">
-        <p className="font-medium text-muted-foreground text-[11px] flex flex-wrap items-center gap-1.5">
-          Loại: <span className="text-red-600 dark:text-red-400">{p.alert_type || 'LOW_STOCK'}</span>
-          · Mức độ: <StatusBadge label={p.severity || 'MEDIUM'} variant={getStatusVariant('pendingActionRisk', p.severity || 'MEDIUM')} />
-        </p>
-        {warehouseGroups.length > 0 && (
-          <p className="text-[10px] text-muted-foreground font-medium">Theo kho ({warehouseGroups.length} kho):</p>
-        )}
-        {warehouseGroups.map((group, gi) => (
-          <div key={gi} className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-foreground">
-              <Building2 size={11} className="shrink-0 text-muted-foreground" />
-              {group.name}{group.code ? ` (${group.code})` : ''} — {group.items.length} cảnh báo
-            </p>
-            <div className="space-y-1 max-h-16 overflow-y-auto">
-              {group.items.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-card/70 rounded px-2 py-1">
-                  <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
-                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                    <span className="text-muted-foreground text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
-                    {item.priority === 'HIGH' && <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-500/10 dark:text-red-400">HIGH</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        {itemsNoWh.length > 0 && (
-          <div className="space-y-1">
-            <p className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-              <AlertTriangle size={10} className="shrink-0" />
-              Chưa xác định kho ({itemsNoWh.length} sách):
-            </p>
-            {itemsNoWh.slice(0, 3).map((item: any, i: number) => (
-              <div key={i} className="flex items-center justify-between bg-amber-50/70 rounded px-2 py-1 dark:bg-amber-500/10">
-                <span className="truncate flex-1 text-foreground text-[11px]">{item.title || 'Unknown'}</span>
-                <span className="text-muted-foreground text-[10px]">Tồn: {item.current_stock ?? '?'}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (action.type === 'CREATE_STAFF_TASK_DRAFT') {
-    const relatedItems: any[] = p.related_items || [];
-    return (
-      <div className="space-y-1.5">
-        <div className="bg-card rounded p-2 border border-border space-y-1">
-          <p><span className="text-muted-foreground">Tiêu đề:</span> <span className="font-medium text-foreground">{p.task_title || p.title || 'N/A'}</span></p>
-          <p><span className="text-muted-foreground">Loại task:</span> {p.task_type || 'N/A'}</p>
-          <p><span className="text-muted-foreground">Ưu tiên:</span> {p.priority || 'MEDIUM'}</p>
-          {!p.assignee_user_id && (
-            <p className="flex items-start gap-1 text-amber-600 dark:text-amber-400 text-[10px]">
-              <AlertTriangle size={10} className="mt-0.5 shrink-0" />
-              Chưa có người thực hiện — chọn nhân viên bên dưới.
-            </p>
-          )}
-        </div>
-        {relatedItems.length > 0 && (
-          <div className="space-y-0.5">
-            <p className="text-[10px] text-muted-foreground font-medium">Sách liên quan ({relatedItems.length}):</p>
-            <div className="max-h-16 overflow-y-auto space-y-0.5">
-              {relatedItems.map((item: any, i: number) => (
-                <div key={i} className="flex items-center justify-between bg-card rounded px-2 py-0.5 border border-border">
-                  <span className="truncate flex-1 text-foreground text-[10px]">{item.title || 'Unknown'}</span>
-                  <span className="text-muted-foreground ml-2 text-[10px]">Còn: {item.quantity ?? '?'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return null;
+interface LineEditState {
+  quantities: Record<number, number>;
+  excluded: Set<number>;
 }
 
-// ── ActionCard component ───────────────────────────────────────────────────────
+function StockLines({
+  lines,
+  showQuantity,
+  edit,
+  onEdit,
+}: {
+  lines: Array<StockLine & { _index: number }>;
+  showQuantity: boolean;
+  edit?: LineEditState | null;
+  onEdit?: (next: LineEditState) => void;
+}) {
+  const groups = groupLinesByWarehouse(lines);
+  const qtyOf = (l: StockLine & { _index: number }) => edit?.quantities[l._index] ?? Math.max(1, Number(l.suggested_quantity) || 1);
+  const setQty = (index: number, value: number) => edit && onEdit?.({ ...edit, quantities: { ...edit.quantities, [index]: value } });
+  const toggle = (index: number) => {
+    if (!edit || !onEdit) return;
+    const excluded = new Set(edit.excluded);
+    if (excluded.has(index)) excluded.delete(index); else excluded.add(index);
+    onEdit({ ...edit, excluded });
+  };
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => (
+        <div key={group.key ?? 'none'} className="space-y-1.5">
+          <p className={`flex items-center gap-1.5 text-[12px] font-semibold ${group.key ? 'text-foreground' : 'text-amber-700 dark:text-amber-400'}`}>
+            {group.key ? <Building2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+            {group.label} · {group.lines.length} đầu sách
+          </p>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            <li className="hidden grid-cols-[1fr_5rem_7rem_7rem] gap-2 bg-muted/40 px-3 py-1.5 text-[11px] font-medium text-muted-foreground @lg:grid" aria-hidden="true">
+              <span>Sách</span><span className="text-right">Tồn kho</span>
+              <span className="text-right">{showQuantity ? 'SL đề xuất' : 'Mức tối thiểu'}</span><span className="text-right">Ưu tiên</span>
+            </li>
+            {group.lines.map((line) => {
+              const excluded = edit?.excluded.has(line._index);
+              const minimum = line.reorder_point ?? line.threshold;
+              return (
+                <li key={line._index} className={`grid grid-cols-[1fr_auto] gap-x-2 gap-y-1 px-3 py-2 text-[13px] @lg:grid-cols-[1fr_5rem_7rem_7rem] @lg:items-center ${excluded ? 'opacity-50' : ''}`}>
+                  <span className="col-span-2 flex min-w-0 items-center gap-2 font-medium text-foreground @lg:col-span-1">
+                    {edit && (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 accent-primary"
+                        checked={!excluded}
+                        onChange={() => toggle(line._index)}
+                        aria-label={`Giữ "${line.title}" trong phiếu`}
+                      />
+                    )}
+                    <span className="truncate" title={line.title ?? undefined}>{line.title}</span>
+                  </span>
+                  <span className="text-[12px] text-muted-foreground @lg:text-right @lg:text-[13px] @lg:text-foreground">
+                    <span className="@lg:hidden">Tồn: </span>{line.current_stock ?? '—'}
+                  </span>
+                  <span className="text-right text-[12px] @lg:text-[13px]">
+                    {showQuantity ? (
+                      edit && !excluded ? (
+                        <Input
+                          type="number"
+                          min={1}
+                          value={qtyOf(line)}
+                          onChange={(e) => setQty(line._index, Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                          className="ml-auto h-8 w-20 text-right text-[13px]"
+                          aria-label={`Số lượng nhập cho "${line.title}"`}
+                        />
+                      ) : (
+                        <span className="font-semibold text-foreground"><span className="font-normal text-muted-foreground @lg:hidden">Nhập: </span>{qtyOf(line)}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground"><span className="@lg:hidden">Tối thiểu: </span>{minimum ?? '—'}</span>
+                    )}
+                  </span>
+                  <span className="col-span-2 @lg:col-span-1 @lg:text-right">
+                    <StatusBadge label={priorityLabel(line.priority)} variant={priorityTone(line.priority)} />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── ActionCard ─────────────────────────────────────────────────────────────────
 
 interface ActionCardProps {
   action: PendingAction;
@@ -236,39 +158,47 @@ interface ActionCardProps {
 export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps) {
   const [localStatus, setLocalStatus] = useState(action.status);
   const [confirming, setConfirming] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [warehouseLoadError, setWarehouseLoadError] = useState<string | null>(null);
-  const [staffList, setStaffList] = useState<WarehouseStaffOption[]>([]);
+  const [staffList, setStaffList] = useState<WarehouseStaffOption[] | null>(null);
+  const [staffLoadError, setStaffLoadError] = useState(false);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
-  const [selectedSupplierName, setSelectedSupplierName] = useState<string>('');
+  const [edit, setEdit] = useState<LineEditState | null>(null);
 
+  const p = action.payload || {};
   const isReorder = action.type === 'CREATE_REORDER_DRAFT';
   const isStockAlert = action.type === 'CREATE_STOCK_ALERT';
   const isStaffTask = action.type === 'CREATE_STAFF_TASK_DRAFT';
+  const isReservation = action.type === 'CREATE_RESERVATION_DRAFT';
+  const isReport = action.type === 'CREATE_REPORT_DRAFT';
   const isDone = localStatus !== 'PENDING_CONFIRMATION';
+  const canConfirm = canUserConfirmAction(authService.getCurrentUser(), action);
 
-  // Warehouse resolution metadata from AI planner
-  const warehouseResolutionStatus = action.payload?.warehouse_resolution_status as string | undefined;
-  const warehouseCandidates: { id: string; code: string; name: string }[] =
-    action.payload?.warehouse_candidates || [];
-  const warehouseHint: string = action.payload?.warehouse_hint || '';
-  const resolvedWarehouseCode: string = action.payload?.resolved_warehouse_code || '';
-  const resolvedWarehouseName: string = action.payload?.resolved_warehouse_name || '';
+  const lines = useMemo(
+    () => ((p.items || []) as StockLine[])
+      .map((line, _index) => ({ ...line, _index }))
+      .filter((line) => line && line.title),
+    [p.items],
+  );
+  const summary = useMemo(() => summarizeStockLines(lines), [lines]);
 
-  // Check if any item is missing warehouse_id (needs fallback selector)
-  const reorderHasItemsWithoutWarehouse = isReorder && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
-  const alertHasItemsWithoutWarehouse = isStockAlert && (action.payload?.items || []).some((it: any) => !it.warehouse_id);
-  // Show warehouse selector when: ambiguous/not-found resolution, stock alert, or missing-warehouse reorder items
+  // Warehouse resolution metadata from the AI planner
+  const warehouseResolutionStatus = p.warehouse_resolution_status as string | undefined;
+  const warehouseCandidates: { id: string; code: string; name: string }[] = p.warehouse_candidates || [];
+  const warehouseHint: string = p.warehouse_hint || '';
+
+  // A warehouse must be picked only when the planner could not pin one down.
   const needsWarehouseSelector =
-    alertHasItemsWithoutWarehouse ||
-    reorderHasItemsWithoutWarehouse ||
+    ((isReorder || isStockAlert) && summary.missingWarehouseCount > 0) ||
     warehouseResolutionStatus === 'AMBIGUOUS' ||
     warehouseResolutionStatus === 'NOT_FOUND';
+  const needsAssignee = isStaffTask && !p.assignee_user_id;
+  const warehouseOptions = warehouseResolutionStatus === 'AMBIGUOUS' && warehouseCandidates.length ? warehouseCandidates : warehouses;
 
-  // Load warehouses for stock alert and reorder items missing warehouse
   useEffect(() => {
     if (!needsWarehouseSelector || isDone) return;
     warehouseService.getAll({ is_active: true }).then((data: any) => {
@@ -277,306 +207,344 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       if (list.length === 1) setSelectedWarehouseId(list[0].id);
     }).catch(() => {
       setWarehouseLoadError('Không tải được danh sách kho. Vui lòng thử lại.');
-      toast.error('Không tải được danh sách kho.');
     });
   }, [needsWarehouseSelector, isDone]);
 
-  // Load suppliers for reorder (optional selection)
+  // Supplier override is part of "Điều chỉnh trước khi tạo" — load only then.
   useEffect(() => {
-    if (!isReorder || isDone) return;
+    if (!isReorder || isDone || !edit || suppliers.length) return;
     supplierService.getAll()
       .then((data: any) => {
         const list: Supplier[] = Array.isArray(data) ? data : (data?.data ?? []);
         setSuppliers(list.filter((s: any) => s.status === 'ACTIVE'));
       })
-      .catch(() => { /* silent — supplier list is optional */ });
-  }, [isReorder, isDone]);
+      .catch(() => { /* optional field — the draft falls back to per-book suppliers */ });
+  }, [isReorder, isDone, edit, suppliers.length]);
 
-  // Load warehouse staff list for staff task picker
   useEffect(() => {
-    if (!isStaffTask || isDone) return;
+    if (!needsAssignee || isDone) return;
     userService.getWarehouseStaff()
       .then((resp) => setStaffList(resp.data || []))
-      .catch(() => {
-        toast.error('Không tải được danh sách nhân viên kho.');
-      });
-  }, [isStaffTask, isDone]);
+      .catch(() => { setStaffLoadError(true); setStaffList([]); });
+  }, [needsAssignee, isDone]);
+
+  const keptLineCount = edit ? lines.filter((l) => !edit.excluded.has(l._index)).length : lines.length;
+  const blockingReason =
+    !canConfirm ? 'Tài khoản của bạn không có quyền xác nhận đề xuất này.'
+    : needsWarehouseSelector && warehouseLoadError ? warehouseLoadError
+    : needsWarehouseSelector && !selectedWarehouseId ? 'Cần chọn kho trước khi tạo.'
+    : needsAssignee && !selectedAssigneeId ? 'Cần chọn người thực hiện trước khi tạo.'
+    : isReorder && edit && keptLineCount === 0 ? 'Cần giữ lại ít nhất một đầu sách.'
+    : null;
 
   const handleConfirm = async () => {
-    if (confirming || isDone) return;
-    if (needsWarehouseSelector && warehouseLoadError) {
-      toast.error('Danh sách kho chưa tải được. Vui lòng thử lại.');
-      return;
-    }
-    // Require warehouse selection when items are missing one, or when resolution was ambiguous/not found
-    const isWarehouseRequired =
-      alertHasItemsWithoutWarehouse ||
-      reorderHasItemsWithoutWarehouse ||
-      warehouseResolutionStatus === 'AMBIGUOUS' ||
-      warehouseResolutionStatus === 'NOT_FOUND';
-    if (isWarehouseRequired && !selectedWarehouseId) {
-      toast.error(
-        warehouseResolutionStatus === 'AMBIGUOUS'
-          ? `Tìm thấy nhiều kho khớp với "${warehouseHint}". Vui lòng chọn đúng kho cần tạo phiếu.`
-          : 'Vui lòng chọn kho trước khi xác nhận.'
-      );
-      return;
-    }
-    // Staff task requires assignee selection if not already in payload
-    if (isStaffTask && !action.payload?.assignee_user_id && !selectedAssigneeId) {
-      toast.error('Vui lòng chọn nhân viên trước khi xác nhận.');
-      return;
-    }
+    if (confirming || isDone || blockingReason) return;
     setConfirming(true);
     try {
-      const overrideMap: Record<string, string> = {};
-      const isWarehouseRequired =
-        alertHasItemsWithoutWarehouse ||
-        reorderHasItemsWithoutWarehouse ||
-        warehouseResolutionStatus === 'AMBIGUOUS' ||
-        warehouseResolutionStatus === 'NOT_FOUND';
-      if (isWarehouseRequired && selectedWarehouseId) {
-        overrideMap.warehouse_id = selectedWarehouseId;
+      const override: Record<string, unknown> = {};
+      if (needsWarehouseSelector && selectedWarehouseId) {
+        override.warehouse_id = selectedWarehouseId;
+        // Sent so result messages can name the warehouse instead of showing its id.
+        const chosen = warehouseOptions.find((wh) => wh.id === selectedWarehouseId);
+        if (chosen) { override.warehouse_name = chosen.name; override.warehouse_code = chosen.code; }
       }
       if (isReorder && selectedSupplierId) {
-        overrideMap.supplier_id = selectedSupplierId;
-        overrideMap.supplier_name = selectedSupplierName;
+        override.supplier_id = selectedSupplierId;
+        override.supplier_name = suppliers.find((s) => s.id === selectedSupplierId)?.name || '';
       }
-      if (isStaffTask && selectedAssigneeId) {
-        overrideMap.assignee_user_id = selectedAssigneeId;
+      if (isReorder && edit) {
+        // The confirm endpoint shallow-merges override_payload into the payload,
+        // and the executor reads items[].suggested_quantity - so adjusted
+        // quantities and removed lines are applied for real.
+        override.items = (p.items || [])
+          .map((item: any, index: number) => ({ item, index }))
+          .filter(({ item, index }: { item: any; index: number }) => !item?.title || !edit.excluded.has(index))
+          .map(({ item, index }: { item: any; index: number }) => (
+            item?.title && edit.quantities[index] ? { ...item, suggested_quantity: edit.quantities[index] } : item
+          ));
       }
-      const override = Object.keys(overrideMap).length > 0 ? overrideMap : undefined;
-      const resp = await aiService.confirmAction(action.id, override);
+      if (needsAssignee && selectedAssigneeId) override.assignee_user_id = selectedAssigneeId;
+      const resp = await aiService.confirmAction(action.id, Object.keys(override).length ? override : undefined);
       setLocalStatus(resp.status);
       onConfirmed(action.id, resp.result, action.type);
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 403) {
-        toast.error('Bạn không có quyền xác nhận hành động này.');
-      } else if (status === 410) {
-        toast.error('Hành động đã hết hạn, vui lòng yêu cầu AI tạo lại.');
-        setLocalStatus('EXPIRED');
-      } else {
-        toast.error(getApiErrorMessage(err, 'Không thể xác nhận hành động.'));
-      }
+      if (status === 403) toast.error('Bạn không có quyền xác nhận đề xuất này.');
+      else if (status === 410) { toast.error('Đề xuất đã hết hạn, vui lòng yêu cầu hệ thống tạo lại.'); setLocalStatus('EXPIRED'); }
+      else toast.error(getApiErrorMessage(err, 'Không thể thực hiện đề xuất.'));
     } finally {
       setConfirming(false);
     }
   };
 
-  const handleCancel = async () => {
-    if (confirming || isDone) return;
+  const handleReject = async () => {
+    if (confirming || rejecting || isDone) return;
+    setRejecting(true);
     try {
       await aiService.cancelAction(action.id);
       setLocalStatus('CANCELLED');
       onCancelled(action.id);
     } catch {
-      toast.error('Không thể hủy hành động.');
+      toast.error('Không thể từ chối đề xuất. Vui lòng thử lại.');
+    } finally {
+      setRejecting(false);
     }
   };
 
-  const hasWarningBlock = action.requires_review || (action.warnings && action.warnings.length > 0);
+  // ── Per-type content ────────────────────────────────────────────────────────
+  let eyebrow = 'Đề xuất hành động';
+  let title: ReactNode = action.summary;
+  let facts: Array<{ label: string; value: ReactNode }> = [];
+  const why: Array<{ text: ReactNode; tone?: 'danger' | 'warning' | 'success' | 'neutral' | 'info' }> = [];
+  let onConfirmEffect: string[] = [];
+  let details: ReactNode = null;
+  let detailsTitle = 'Chi tiết dữ liệu';
+
+  const warehouseFact = summary.warehouses.length === 1 ? summary.warehouses[0]
+    : summary.warehouses.length > 1 ? `${summary.warehouses.length} kho`
+    : 'Cần chọn kho';
+
+  if (isReorder) {
+    eyebrow = 'Đề xuất nhập bổ sung';
+    const kept = edit ? lines.filter((l) => !edit.excluded.has(l._index)) : lines;
+    const keptSummary = summarizeStockLines(kept.map((l) => ({ ...l, suggested_quantity: edit?.quantities[l._index] ?? l.suggested_quantity })));
+    const qty = keptSummary.totalSuggestedQty;
+    title = `Nhập thêm ${fmt(qty)} bản cho ${keptLineCount} đầu sách`;
+    facts = [
+      { label: 'Đầu sách', value: keptLineCount },
+      { label: 'Tổng số bản', value: fmt(qty) },
+      { label: 'Ưu tiên cao', value: keptSummary.highPriorityCount },
+      { label: 'Kho', value: warehouseFact },
+    ];
+    if (summary.outOfStockCount) why.push({ tone: 'danger', text: `${summary.outOfStockCount} đầu sách đã hết hàng (tồn kho = 0)` });
+    if (summary.belowMinimumCount) why.push({ tone: 'warning', text: `${summary.belowMinimumCount} đầu sách dưới mức tồn tối thiểu` });
+    if (summary.highPriorityCount) why.push({ tone: 'warning', text: `${summary.highPriorityCount} đầu sách được đánh dấu ưu tiên cao` });
+    why.push({ tone: 'neutral', text: `Tổng tồn kho hiện tại của các đầu sách này: ${fmt(summary.currentStockTotal)} bản` });
+    if (summary.withSupplierCount) why.push({ tone: 'neutral', text: `${summary.withSupplierCount} đầu sách đã có nhà cung cấp liên kết` });
+    onConfirmEffect = [
+      `Tạo ${keptLineCount} phiếu đề xuất nhập ở trạng thái chờ quản lý duyệt — chưa đặt hàng với nhà cung cấp.`,
+      `Nếu được duyệt và nhập đủ: tồn kho các đầu sách này từ ${fmt(keptSummary.currentStockTotal)} lên ${fmt(keptSummary.currentStockTotal + qty)} bản.`,
+    ];
+    detailsTitle = `Xem ${lines.length} đầu sách`;
+    details = <StockLines lines={lines} showQuantity edit={edit} onEdit={setEdit} />;
+  } else if (isStockAlert) {
+    eyebrow = 'Cảnh báo tồn kho';
+    title = `${summary.lineCount} đầu sách cần chú ý`;
+    facts = [
+      { label: 'Đầu sách', value: summary.lineCount },
+      { label: 'Ưu tiên cao', value: summary.highPriorityCount },
+      { label: 'Hết hàng', value: summary.outOfStockCount },
+      { label: 'Kho', value: warehouseFact },
+    ];
+    if (summary.outOfStockCount) why.push({ tone: 'danger', text: `${summary.outOfStockCount} đầu sách đã hết hàng` });
+    if (summary.belowMinimumCount) why.push({ tone: 'warning', text: `${summary.belowMinimumCount} đầu sách dưới mức tồn tối thiểu` });
+    const roles = ((p.target_roles || []) as string[]).map((r) => ROLE_LABEL[r] || r);
+    onConfirmEffect = [
+      `Tạo ${summary.lineCount} cảnh báo tồn kho${roles.length ? `, hiển thị cho ${roles.join(', ')}` : ''}.`,
+      'Không thay đổi số lượng tồn kho.',
+    ];
+    detailsTitle = `Xem ${summary.lineCount} đầu sách theo kho`;
+    details = <StockLines lines={lines} showQuantity={false} />;
+  } else if (isStaffTask) {
+    eyebrow = 'Đề xuất tạo nhiệm vụ kho';
+    title = p.task_title || p.title || action.summary;
+    const related: any[] = p.related_items || [];
+    const assignee = staffList?.find((s) => s.id === selectedAssigneeId);
+    facts = [
+      { label: 'Loại nhiệm vụ', value: TASK_TYPE_LABEL[p.task_type] || p.task_type || '—' },
+      { label: 'Ưu tiên', value: priorityLabel(p.priority) },
+      { label: 'Sách liên quan', value: related.length },
+      { label: 'Người thực hiện', value: assignee ? (assignee.full_name || assignee.username) : p.assignee_user_id ? 'Đã chỉ định' : 'Chưa chọn' },
+    ];
+    if (p.instructions) why.push({ tone: 'neutral', text: p.instructions });
+    onConfirmEffect = ['Tạo nhiệm vụ và giao cho người được chọn; nhiệm vụ xuất hiện trong danh sách việc của họ.'];
+    if (related.length) {
+      detailsTitle = `Xem ${related.length} sách liên quan`;
+      details = (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {related.map((item, i) => (
+            <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-[13px]">
+              <span className="truncate text-foreground">{item.title || 'Không rõ tên'}</span>
+              <span className="shrink-0 text-[12px] text-muted-foreground">Tồn: {item.quantity ?? '—'}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+  } else if (isReservation) {
+    eyebrow = 'Đề xuất đặt trước sách';
+    const bookTitle = p.book_title || p.title_query || '—';
+    const ready = Boolean((p.variant_id || p.book_variant_id) && p.warehouse_id) && !p.requires_review;
+    // Without a book_id the planner never matched the catalog: its "title" is
+    // just the user's own words, so say so instead of presenting it as a book.
+    title = p.book_id ? `Đặt trước “${bookTitle}”` : `Chưa tìm thấy sách khớp với “${p.title_query || bookTitle}”`;
+    facts = [
+      { label: 'Sách', value: <span className="line-clamp-2 text-[13px]">{p.book_id ? bookTitle : 'Chưa xác định'}</span> },
+      { label: 'Kho', value: p.warehouse_id ? 'Đã xác định' : 'Chưa xác định' },
+      { label: 'Số lượng', value: p.quantity || 1 },
+      { label: 'Trạng thái', value: ready ? 'Đủ thông tin' : 'Thiếu thông tin' },
+    ];
+    onConfirmEffect = ready
+      ? ['Tạo đặt trước và giữ sách trong thời gian giữ chỗ theo gói thành viên.']
+      : ['Chỉ lưu bản nháp — chưa tạo đặt trước thật vì chưa xác định được biến thể sách hoặc kho.'];
+    detailsTitle = 'Chi tiết kỹ thuật';
+    details = (
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+        <dt className="text-muted-foreground">variant_id</dt><dd className="break-all font-mono text-foreground">{p.variant_id || p.book_variant_id || '—'}</dd>
+        <dt className="text-muted-foreground">warehouse_id</dt><dd className="break-all font-mono text-foreground">{p.warehouse_id || '—'}</dd>
+      </dl>
+    );
+  } else if (isReport) {
+    eyebrow = 'Đề xuất tạo báo cáo';
+    title = p.report_title || action.summary;
+    onConfirmEffect = ['Lưu báo cáo nháp để xem và xuất; không thay đổi dữ liệu thư viện.'];
+    detailsTitle = 'Xem trước nội dung';
+    details = (
+      <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-3 text-[12px] text-foreground">
+        {p.report_markdown || ''}
+      </pre>
+    );
+  }
+
+  const warnings = (action.warnings || []).filter((w) => !(needsAssignee && /người thực hiện/i.test(w)));
+  const sources = (p.sources || action.sources || []).map((s: any) => (typeof s === 'string' ? s : s?.name)).filter(Boolean);
+
+  const keptMissingWarehouse = lines.filter((l) => !l.warehouse_id && !edit?.excluded.has(l._index)).length;
+  const warehouseLabel = warehouseResolutionStatus === 'AMBIGUOUS'
+    ? `Chọn kho (có ${warehouseCandidates.length} kho khớp với “${warehouseHint}”)`
+    : warehouseResolutionStatus === 'NOT_FOUND'
+      ? `Chọn kho (không tìm thấy kho “${warehouseHint}”)`
+      : `Chọn kho cho ${keptMissingWarehouse} đầu sách chưa xác định kho`;
 
   return (
-    <div className="mt-2 rounded-xl border border-border bg-card">
-      <div className="p-3.5 space-y-3 text-[11px] min-w-0">
-        {/* Header — framed explicitly as a recommendation awaiting sign-off, not a chat reply.
-            Neutral, not brand-colored: color here is reserved for the risk/status tags below. */}
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          <ShieldCheck size={12} />
-          Đề xuất hành động — cần bạn xác nhận
-        </div>
-        <div className="flex items-center gap-1.5">
-          <ActionTypeIcon type={action.type} />
-          <span className="font-semibold text-foreground flex-1">
-            {AI_ACTION_TYPE_LABEL[action.type] ?? action.type}
-          </span>
-          <StatusBadge label={action.risk} variant={getStatusVariant('pendingActionRisk', action.risk)} />
+    <AIDecisionCard
+      className="mt-2"
+      aria-label={`${eyebrow}: ${typeof title === 'string' ? title : action.summary}`}
+      eyebrow={eyebrow}
+      icon={<ActionTypeIcon type={action.type} />}
+      title={title}
+      facts={facts}
+      badges={(
+        <>
+          <StatusBadge label={RISK_LABEL[action.risk] ?? action.risk} variant={getStatusVariant('pendingActionRisk', action.risk)} />
           <StatusBadge label={AI_ACTION_STATUS_LABEL[localStatus] ?? localStatus} variant={getStatusVariant('aiAction', localStatus)} />
-        </div>
-
-        {/* Summary — the answer to "what is the AI proposing", sized to be read first */}
-        <p className="text-[14px] font-semibold text-foreground leading-snug">{action.summary}</p>
-
-        {/* Review + warnings — one callout, not two different treatments for the same "pay attention" signal */}
-        {hasWarningBlock && (
-          <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400">
-            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            <div className="space-y-0.5">
-              {action.requires_review && (
-                <p>Cần xem xét thêm trước khi xác nhận. Có thể chỉ tạo draft, không gọi API thật.</p>
+        </>
+      )}
+      footer={isDone ? (
+        <p className={`flex items-center gap-1.5 text-[13px] font-medium ${localStatus === 'EXECUTED' ? 'text-emerald-700 dark:text-emerald-400' : localStatus === 'CANCELLED' ? 'text-muted-foreground' : 'text-red-600 dark:text-red-400'}`} role="status">
+          {localStatus === 'EXECUTED' ? <CheckCircle className="h-4 w-4" aria-hidden="true" /> : <XCircle className="h-4 w-4" aria-hidden="true" />}
+          {localStatus === 'EXECUTED' ? 'Đã thực hiện theo xác nhận của bạn. Xem kết quả bên dưới.'
+            : localStatus === 'CANCELLED' ? 'Bạn đã từ chối đề xuất này. Không có thay đổi nào được thực hiện.'
+            : localStatus === 'EXPIRED' ? 'Đề xuất đã hết hạn. Hãy yêu cầu hệ thống tạo lại.'
+            : 'Không thực hiện được đề xuất.'}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {needsWarehouseSelector && (
+            <div className="space-y-1">
+              <label className="text-[12px] font-medium text-foreground" htmlFor={`wh-${action.id}`}>{warehouseLabel} <span className="text-red-600">*</span></label>
+              {warehouseLoadError ? (
+                <p className="text-[12px] text-red-600 dark:text-red-400" role="alert">{warehouseLoadError}</p>
+              ) : warehouseOptions.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">Đang tải danh sách kho…</p>
+              ) : (
+                <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                  <SelectTrigger id={`wh-${action.id}`} size="sm" className="w-full text-[13px]"><SelectValue placeholder="Chọn kho" /></SelectTrigger>
+                  <SelectContent>
+                    {warehouseOptions.map((wh) => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.code})</SelectItem>)}
+                  </SelectContent>
+                </Select>
               )}
-              {action.warnings?.slice(0, 3).map((w, i) => (
-                <p key={i} className="text-[10px]">{w}</p>
-              ))}
             </div>
-          </div>
-        )}
-
-        {/* Payload preview */}
-        <PayloadPreview action={action} />
-
-        {/* Warehouse resolution status banners */}
-        {isReorder && !isDone && warehouseResolutionStatus === 'RESOLVED' && resolvedWarehouseCode && (
-          <div className="text-[10px] bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400">
-            Kho xác định từ yêu cầu của bạn: <strong>{resolvedWarehouseCode} — {resolvedWarehouseName}</strong>
-          </div>
-        )}
-        {isReorder && !isDone && warehouseResolutionStatus === 'AMBIGUOUS' && (
-          <div className="flex items-start gap-1.5 text-[10px] bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400">
-            <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-            <span>AI tìm thấy {warehouseCandidates.length} kho khớp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn đúng kho cần tạo phiếu bên dưới.</span>
-          </div>
-        )}
-        {isReorder && !isDone && warehouseResolutionStatus === 'NOT_FOUND' && warehouseHint && (
-          <div className="flex items-start gap-1.5 text-[10px] bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 text-red-700 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400">
-            <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-            <span>Không tìm thấy kho phù hợp với &ldquo;{warehouseHint}&rdquo;. Vui lòng chọn kho từ danh sách.</span>
-          </div>
-        )}
-
-        {/* Warehouse selector for stock alerts, reorder fallback, ambiguous/not-found resolution */}
-        {needsWarehouseSelector && !isDone && (
-          <div className="space-y-1">
-            <label className="text-[10px] font-medium text-muted-foreground">
-              {warehouseResolutionStatus === 'AMBIGUOUS'
-                ? `Chọn kho (tìm thấy ${warehouseCandidates.length} kho khớp)`
-                : warehouseResolutionStatus === 'NOT_FOUND'
-                ? 'Chọn kho (không tìm thấy kho phù hợp)'
-                : isStockAlert
-                ? 'Chọn kho tạo cảnh báo'
-                : 'Chọn kho dự phòng cho sách chưa xác định kho'}
-              <span className="text-red-500"> *</span>
-            </label>
-            {warehouseLoadError ? (
-              <p className="text-[10px] text-red-500">{warehouseLoadError}</p>
-            ) : warehouses.length === 0 && warehouseCandidates.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic">Đang tải danh sách kho...</p>
-            ) : (
-              <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                <SelectTrigger size="sm" className="w-full text-[11px]">
-                  <SelectValue placeholder="-- Chọn kho --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(warehouseResolutionStatus === 'AMBIGUOUS' && warehouseCandidates.length > 0
-                    ? warehouseCandidates
-                    : warehouses
-                  ).map((wh) => (
-                    <SelectItem key={wh.id} value={wh.id}>
-                      {wh.name} ({wh.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          )}
+          {needsAssignee && (
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-[12px] font-medium text-amber-800 dark:text-amber-300" htmlFor={`assignee-${action.id}`}>
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Cần chọn người thực hiện <span className="text-red-600">*</span>
+              </label>
+              {staffLoadError ? (
+                <p className="text-[12px] text-red-600 dark:text-red-400" role="alert">Không tải được danh sách nhân viên kho.</p>
+              ) : staffList === null ? (
+                <p className="text-[12px] text-muted-foreground">Đang tải danh sách nhân viên…</p>
+              ) : staffList.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">Chưa có nhân viên kho nào để giao.</p>
+              ) : (
+                <Select value={selectedAssigneeId} onValueChange={setSelectedAssigneeId}>
+                  <SelectTrigger id={`assignee-${action.id}`} size="sm" className="w-full text-[13px]"><SelectValue placeholder="Chọn nhân viên" /></SelectTrigger>
+                  <SelectContent>
+                    {staffList.map((s) => <SelectItem key={s.id} value={s.id}>{s.full_name || s.username}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+          {blockingReason && (
+            <p className="text-[12px] text-muted-foreground" id={`block-${action.id}`}>{blockingReason}</p>
+          )}
+          <div className="flex flex-col-reverse gap-2 @xl:flex-row @xl:items-center @xl:justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => void handleReject()} disabled={confirming} loading={rejecting} loadingLabel="Đang từ chối…" className="text-[13px] text-muted-foreground">
+              Từ chối đề xuất
+            </Button>
+            {isReorder && canConfirm && (
+              <Button type="button" variant="outline" size="sm" onClick={() => setEdit(edit ? null : { quantities: {}, excluded: new Set() })} disabled={confirming} aria-pressed={Boolean(edit)} className="text-[13px]">
+                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                {edit ? 'Hủy điều chỉnh' : 'Điều chỉnh trước khi tạo'}
+              </Button>
             )}
-          </div>
-        )}
-
-        {/* Supplier selector for reorder drafts (optional) */}
-        {isReorder && !isDone && (
-          <div className="space-y-1">
-            <label className="text-[10px] font-medium text-muted-foreground">
-              Nhà cung cấp{' '}
-              <span className="text-muted-foreground/70 font-normal">(tùy chọn — ghi vào phiếu như gợi ý cho quản lý)</span>
-            </label>
-            {suppliers.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic">Đang tải hoặc chưa có NCC trong hệ thống...</p>
-            ) : (
-              <Select
-                value={selectedSupplierId}
-                onValueChange={(value) => {
-                  setSelectedSupplierId(value);
-                  const s = suppliers.find((sup) => sup.id === value);
-                  setSelectedSupplierName(s?.name || '');
-                }}
-              >
-                <SelectTrigger size="sm" className="w-full text-[11px]">
-                  <SelectValue placeholder="-- Dùng NCC gợi ý tự động theo từng sách --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}{s.code ? ` (${s.code})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {!selectedSupplierId && (
-              <p className="text-[10px] text-muted-foreground">
-                Hệ thống sẽ dùng NCC liên kết với từng đầu sách (nếu có). Nếu chưa có liên kết, phiếu vẫn được tạo và quản lý chọn NCC khi duyệt.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Staff assignee selector for staff task drafts */}
-        {isStaffTask && !action.payload?.assignee_user_id && !isDone && (
-          <div className="space-y-1">
-            <label className="text-[10px] font-medium text-muted-foreground">
-              Giao cho nhân viên <span className="text-red-500">*</span>
-            </label>
-            {staffList.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground italic">Đang tải danh sách nhân viên...</p>
-            ) : (
-              <Select value={selectedAssigneeId} onValueChange={setSelectedAssigneeId}>
-                <SelectTrigger size="sm" className="w-full text-[11px]">
-                  <SelectValue placeholder="-- Chọn nhân viên --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {staffList.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.full_name || s.username}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        )}
-
-        {/* Buttons — Xác nhận carries the decision, Hủy is the quiet exit, not an equal-weight twin */}
-        {!isDone && (
-          <div className="flex items-center gap-3 pt-1">
             <Button
               type="button"
               size="sm"
               onClick={() => void handleConfirm()}
-              disabled={confirming || (needsWarehouseSelector && !!warehouseLoadError)}
+              disabled={Boolean(blockingReason)}
+              aria-describedby={blockingReason ? `block-${action.id}` : undefined}
               loading={confirming}
-              loadingLabel="Đang xử lý..."
-              className="flex-1 text-[12px] font-semibold bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+              loadingLabel="Đang thực hiện…"
+              className="text-[13px] font-semibold"
             >
-              <CheckCircle size={13} />
-              Xác nhận
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => void handleCancel()}
-              disabled={confirming}
-              className="text-[11px] text-muted-foreground"
-            >
-              Hủy
+              <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              {isReservation && !((p.variant_id || p.book_variant_id) && p.warehouse_id) ? 'Lưu bản nháp' : CONFIRM_LABEL[action.type] ?? 'Chấp nhận đề xuất'}
             </Button>
           </div>
-        )}
+        </div>
+      )}
+    >
+      {!isDone && <DecisionWarnings items={warnings} />}
 
-        {/* Done states */}
-        {localStatus === 'EXECUTED' && (
-          <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-            <CheckCircle size={11} />
-            Đã xác nhận. Xem kết quả bên dưới.
-          </div>
-        )}
-        {localStatus === 'CANCELLED' && (
-          <p className="text-muted-foreground">Hành động đã bị hủy.</p>
-        )}
-        {localStatus === 'EXPIRED' && (
-          <p className="text-red-500 dark:text-red-400">Hành động đã hết hạn. Hãy hỏi AI để tạo lại.</p>
-        )}
-      </div>
-    </div>
+      {why.length > 0 && (
+        <DecisionSection title="Tại sao hệ thống đề xuất?">
+          <EvidenceList items={why} />
+        </DecisionSection>
+      )}
+
+      {onConfirmEffect.length > 0 && !isDone && (
+        <DecisionSection title="Khi bạn xác nhận">
+          <EvidenceList items={onConfirmEffect.map((text) => ({ text, tone: 'info' as const }))} />
+        </DecisionSection>
+      )}
+
+      {isReorder && edit && !isDone && (
+        <div className="space-y-1 rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-[12px] font-semibold text-foreground">Điều chỉnh trước khi tạo</p>
+          <p className="text-[12px] text-muted-foreground">Bỏ chọn đầu sách không muốn nhập hoặc sửa số lượng trong danh sách bên dưới.</p>
+          <label className="block pt-1 text-[12px] font-medium text-foreground" htmlFor={`sup-${action.id}`}>Nhà cung cấp chung (tùy chọn)</label>
+          <Select value={selectedSupplierId || 'auto'} onValueChange={(v) => setSelectedSupplierId(v === 'auto' ? '' : v)}>
+            <SelectTrigger id={`sup-${action.id}`} size="sm" className="w-full text-[13px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Dùng nhà cung cấp liên kết của từng đầu sách</SelectItem>
+              {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ''}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {details && (
+        <DecisionSection title={detailsTitle} collapsible defaultOpen={Boolean(edit)} key={edit ? 'edit' : 'view'}>
+          {details}
+          {sources.length > 0 && (
+            <p className="pt-2 text-[11px] text-muted-foreground">Nguồn dữ liệu: {sources.join(', ')}</p>
+          )}
+        </DecisionSection>
+      )}
+    </AIDecisionCard>
   );
 }

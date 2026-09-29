@@ -84,10 +84,11 @@ async function getBookRatingStats(req, res) {
 
 async function createOrUpdateMyReview(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { book_id, rating, comment } = req.body;
     if (!book_id) {
@@ -100,7 +101,7 @@ async function createOrUpdateMyReview(req, res) {
 
     const review = await prisma.book_reviews.upsert({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id,
         },
@@ -154,15 +155,16 @@ async function getMyReviews(req, res) {
 
 async function getMyReviewForBook(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { bookId } = req.params;
     const review = await prisma.book_reviews.findUnique({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id: bookId,
         },
@@ -178,16 +180,17 @@ async function getMyReviewForBook(req, res) {
 
 async function deleteMyReview(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { bookId } = req.params;
 
     const existing = await prisma.book_reviews.findUnique({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id: bookId,
         },

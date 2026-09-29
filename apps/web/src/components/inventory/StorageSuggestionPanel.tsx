@@ -1,24 +1,20 @@
 import { useState, useCallback } from "react";
-import {
-  MapPin,
-  Sparkles,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  Package,
-} from "lucide-react";
+import { MapPin, Search, AlertTriangle, CheckCircle2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingSpinner } from "@/components/ui/loading-state";
+import { StatusBadge } from "@/components/status-badge";
+import { AIRecommendationNotice, DecisionSection, EvidenceList } from "@/components/ai/decision-card";
 import { hasPermission } from "@/services/http-clients";
 import {
   storageSuggestionService,
   type StorageSuggestion,
   type SuggestionResponse,
-  type ConfidenceLevel,
 } from "@/services/storage-suggestion";
 import { getApiErrorMessage } from "@/services/api";
+import { storageSuitability } from "@/lib/ai-decision";
 
 interface StorageSuggestionPanelProps {
   warehouseId: string;
@@ -35,26 +31,9 @@ interface StorageSuggestionPanelProps {
   disabled?: boolean;
 }
 
-const confidenceConfig: Record<
-  ConfidenceLevel,
-  { label: string; color: string; bgColor: string }
-> = {
-  HIGH: {
-    label: "Cao",
-    color: "text-emerald-700",
-    bgColor: "bg-emerald-50 border-emerald-200",
-  },
-  MEDIUM: {
-    label: "Trung bình",
-    color: "text-amber-700",
-    bgColor: "bg-amber-50 border-amber-200",
-  },
-  LOW: {
-    label: "Thấp",
-    color: "text-slate-700",
-    bgColor: "bg-slate-50 border-slate-200",
-  },
-};
+// Rule-based location ranking (inventory-service storage-suggestion.service.js).
+// `confidence` from the API is only a threshold on that rule score, so it is
+// shown as "Mức phù hợp" of the location — never as AI certainty.
 
 export function StorageSuggestionPanel({
   warehouseId,
@@ -66,9 +45,10 @@ export function StorageSuggestionPanel({
 }: StorageSuggestionPanelProps) {
   const [suggestions, setSuggestions] = useState<StorageSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasPermissionToRead, setHasPermissionToRead] = useState<boolean | null>(null);
+  const [requested, setRequested] = useState(false);
   const [fallback, setFallback] = useState(false);
   const [message, setMessage] = useState<string | undefined>();
+  const [error, setError] = useState<string | null>(null);
   const [bookTitle, setBookTitle] = useState<string | undefined>();
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
@@ -89,63 +69,47 @@ export function StorageSuggestionPanel({
       toast.error("Vui lòng chọn kho trước");
       return;
     }
-
-    if (!bookId && !variantId) {
-      toast.error("Vui lòng chọn sách hoặc biến thể sách");
-      return;
-    }
-
-    setHasPermissionToRead(canViewSuggestions);
-
-    if (!canViewSuggestions) {
-      toast.error("Bạn cần quyền inventory.stock.read hoặc inventory.operation.decide");
+    if (!variantId) {
+      toast.error("Vui lòng chọn biến thể sách (variant) cụ thể trước khi lấy gợi ý");
       return;
     }
 
     try {
       setIsLoading(true);
+      setRequested(true);
       setSuggestions([]);
       setFallback(false);
       setMessage(undefined);
+      setError(null);
       setSelectedLocationId(null);
 
-      const response: SuggestionResponse =
-        await storageSuggestionService.getSuggestions({
-          warehouse_id: warehouseId,
-          book_id: bookId,
-          variant_id: variantId,
-          quantity: quantity,
-          mode: "RECEIVING",
-        });
+      const response: SuggestionResponse = await storageSuggestionService.getSuggestions({
+        warehouse_id: warehouseId,
+        variant_id: variantId,
+        book_id: bookId,
+        quantity,
+        mode: "RECEIVING",
+      });
 
       if (response.success) {
         setSuggestions(response.suggestions || []);
         setFallback(response.fallback || false);
         setMessage(response.message);
         setBookTitle(response.bookTitle);
-
-        if (response.fallback && response.message) {
-          toast.info(response.message);
-        }
       } else {
-        toast.error(response.error || "Không thể lấy gợi ý vị trí");
+        setError(response.error || "Không thể lấy gợi ý vị trí");
       }
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Lỗi khi lấy gợi ý vị trí"));
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Lỗi khi lấy gợi ý vị trí"));
     } finally {
       setIsLoading(false);
     }
-  }, [warehouseId, bookId, variantId, quantity, canViewSuggestions]);
+  }, [warehouseId, bookId, variantId, quantity]);
 
   const handleSelectLocation = useCallback(
     (suggestion: StorageSuggestion) => {
-      if (!canSelectSuggestion) {
-        toast.warning("Bạn không có quyền thao tác vị trí. Vui lòng liên hệ quản lý.");
-        return;
-      }
-
+      if (!canSelectSuggestion) return;
       setSelectedLocationId(suggestion.locationId);
-
       onSelectLocation?.({
         locationId: suggestion.locationId,
         locationCode: suggestion.locationCode,
@@ -153,137 +117,122 @@ export function StorageSuggestionPanel({
         shelf: suggestion.shelf,
         bin: suggestion.bin,
       });
-
       toast.success(`Đã chọn vị trí: ${suggestion.locationCode}`);
     },
-    [canSelectSuggestion, onSelectLocation]
+    [canSelectSuggestion, onSelectLocation],
   );
 
-  const getLocationPath = (suggestion: StorageSuggestion): string => {
-    const parts = [
-      suggestion.zone,
-      suggestion.shelf,
-      suggestion.bin,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" / ") : suggestion.locationCode;
+  const getLocationPath = (suggestion: StorageSuggestion): string | null => {
+    const parts = [suggestion.zone, suggestion.shelf, suggestion.bin].filter(Boolean);
+    return parts.length > 0 ? parts.join(" / ") : null;
   };
 
-  if (hasPermissionToRead === false) {
-    return null;
+  if (!canViewSuggestions) {
+    return (
+      <Card className="w-full">
+        <CardContent className="py-2">
+          <EmptyState
+            variant="no-permission"
+            title="Không có quyền xem gợi ý vị trí"
+            description="Cần quyền inventory.stock.read hoặc inventory.operation.decide. Vui lòng liên hệ quản lý."
+            className="py-6"
+          />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
     <Card className="w-full">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <MapPin className="h-4 w-4 text-blue-600" />
+            <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             Gợi ý vị trí lưu trữ
           </CardTitle>
           <Button
             variant="default-outline"
             size="sm"
             onClick={() => void handleGetSuggestions()}
-            disabled={isLoading || disabled || !warehouseId || (!bookId && !variantId)}
+            disabled={isLoading || disabled || !warehouseId || !variantId}
             loading={isLoading}
+            loadingLabel="Đang tìm vị trí…"
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            Gợi ý ngay
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            {requested ? "Gợi ý lại" : "Gợi ý vị trí"}
           </Button>
         </div>
-
-        {bookTitle && (
-          <p className="mt-1 text-sm text-slate-500">
-            Sách: <span className="font-medium text-slate-700">{bookTitle}</span>
-          </p>
-        )}
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          {bookTitle ? <>Sách: <span className="font-medium text-foreground">{bookTitle}</span> · </> : null}
+          Số lượng cần xếp: <span className="font-medium text-foreground">{quantity}</span>
+        </p>
+        <AIRecommendationNotice className="mt-1" />
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-            <span className="ml-2 text-sm text-slate-500">
-              Đang phân tích kho và tìm vị trí phù hợp...
-            </span>
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner message="Đang xếp hạng các vị trí trong kho…" />
           </div>
-        )}
-
-        {!isLoading && suggestions.length === 0 && !fallback && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Package className="mb-3 h-10 w-10 text-slate-300" />
-            <p className="text-sm text-slate-500">
-              Bấm "Gợi ý ngay" để hệ thống phân tích và đề xuất vị trí lưu trữ tối ưu
+        ) : error ? (
+          <EmptyState
+            variant="error"
+            title="Không lấy được gợi ý vị trí"
+            description={error}
+            action={<Button variant="outline" size="sm" onClick={() => void handleGetSuggestions()}>Thử lại</Button>}
+            className="py-6"
+          />
+        ) : !requested ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <Package className="mb-3 h-9 w-9 text-muted-foreground/50" aria-hidden="true" />
+            <p className="max-w-sm text-[13px] text-muted-foreground">
+              Bấm “Gợi ý vị trí” để hệ thống xếp hạng các vị trí phù hợp dựa trên tồn kho hiện có, sức chứa và thể loại.
             </p>
           </div>
-        )}
-
-        {fallback && !isLoading && (
-          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        ) : fallback || suggestions.length === 0 ? (
+          <div role="status" className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             <div>
-              <p className="text-sm font-medium text-amber-800">
-                Không có vị trí phù hợp
-              </p>
-              <p className="mt-1 text-xs text-amber-700">
-                {message ||
-                  "Vui lòng tạo vị trí mới hoặc chọn vị trí thủ công trong kho."}
+              <p className="text-[13px] font-medium text-amber-800 dark:text-amber-300">Không có vị trí phù hợp</p>
+              <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-400">
+                {message || "Vui lòng tạo vị trí mới hoặc chọn vị trí thủ công trong kho."}
               </p>
             </div>
           </div>
-        )}
-
-        {suggestions.length > 0 && (
+        ) : (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <TrendingUp className="h-3.5 w-3.5" />
-              <span>Tìm thấy {suggestions.length} vị trí phù hợp nhất</span>
-            </div>
+            <p className="text-[12px] text-muted-foreground">
+              {suggestions.length} vị trí được xếp hạng theo mức phù hợp. Bạn chọn vị trí cuối cùng.
+            </p>
 
             {suggestions.map((suggestion) => {
-              const confidence = confidenceConfig[suggestion.confidence];
+              const suitability = storageSuitability(suggestion.confidence);
               const isSelected = selectedLocationId === suggestion.locationId;
+              const path = getLocationPath(suggestion);
 
               return (
-                <div
+                <article
                   key={suggestion.locationId}
-                  className={`group relative rounded-lg border p-4 transition-all ${
-                    isSelected
-                      ? "border-blue-400 bg-blue-50"
-                      : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+                  aria-label={`Vị trí hạng ${suggestion.rank}: ${suggestion.locationCode}`}
+                  className={`rounded-lg border p-4 transition-colors ${
+                    isSelected ? "border-primary bg-primary/5" : "border-border"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded bg-blue-100 text-xs font-bold text-blue-700">
-                          {suggestion.rank}
-                        </span>
-                        <span className="font-mono text-sm font-semibold text-slate-800">
-                          {suggestion.locationCode}
-                        </span>
-                        <span
-                          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${confidence.color} ${confidence.bgColor}`}
-                        >
-                          {confidence.label}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          ({suggestion.score} điểm)
-                        </span>
-                      </div>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        {getLocationPath(suggestion)}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <p className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-semibold text-muted-foreground">#{suggestion.rank}</span>
+                        <span className="font-mono text-[15px] font-semibold text-foreground">{suggestion.locationCode}</span>
                       </p>
-
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                          Sức chứa: {formatCapacity(suggestion.availableCapacity)}
-                        </span>
-                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                          Hiện tại: {suggestion.currentOnHand ?? "—"}
-                        </span>
-                      </div>
+                      {path && <p className="text-[12px] text-muted-foreground">{path}</p>}
+                      <p className="flex items-center gap-2 text-[13px]">
+                        <span className="text-muted-foreground">Mức phù hợp:</span>
+                        <StatusBadge label={suitability.label} variant={suitability.tone} />
+                      </p>
+                      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+                        <div className="flex gap-1"><dt className="text-muted-foreground">Sức chứa khả dụng:</dt><dd className="font-medium text-foreground">{formatCapacity(suggestion.availableCapacity)}</dd></div>
+                        <div className="flex gap-1"><dt className="text-muted-foreground">Đang chứa:</dt><dd className="font-medium text-foreground">{suggestion.currentOnHand ?? "—"}</dd></div>
+                      </dl>
                     </div>
 
                     <Button
@@ -291,57 +240,44 @@ export function StorageSuggestionPanel({
                       size="sm"
                       onClick={() => handleSelectLocation(suggestion)}
                       disabled={!canSelectSuggestion}
-                      className="shrink-0"
+                      aria-pressed={isSelected}
+                      className="w-full shrink-0 sm:w-auto"
                     >
                       {isSelected ? (
-                        <>
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Đã chọn
-                        </>
-                      ) : (
-                        "Chọn"
-                      )}
+                        <><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Đã chọn</>
+                      ) : "Chọn vị trí"}
                     </Button>
                   </div>
 
                   {suggestion.warnings.length > 0 && (
-                    <div className="mt-3 flex items-start gap-2 rounded border border-amber-200 bg-amber-50 p-2">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-                      <div className="space-y-0.5">
-                        {suggestion.warnings.map((warning, idx) => (
-                          <p key={idx} className="text-[10px] text-amber-700">
-                            {warning}
-                          </p>
-                        ))}
-                      </div>
+                    <div className="mt-3">
+                      <EvidenceList items={suggestion.warnings.map((text) => ({ text, tone: "warning" as const }))} />
                     </div>
                   )}
 
-                  {suggestion.reasons.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      {suggestion.reasons.map((reason, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-start gap-1.5 text-[11px] text-slate-600"
-                        >
-                          <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-emerald-400" />
-                          {reason}
-                        </div>
-                      ))}
+                  {(suggestion.reasons.length > 0 || suggestion.aiExplanation) && (
+                    <div className="mt-3">
+                      <DecisionSection title="Lý do" collapsible defaultOpen={suggestion.rank === 1} meta={`${suggestion.reasons.length} tiêu chí`}>
+                        <EvidenceList items={suggestion.reasons.map((text) => ({ text, tone: "success" as const }))} />
+                        {suggestion.aiExplanation && (
+                          <p className="mt-2 text-[12px] text-muted-foreground">
+                            <span className="font-medium">Diễn giải bằng AI (tóm tắt các lý do trên): </span>
+                            {suggestion.aiExplanation}
+                          </p>
+                        )}
+                      </DecisionSection>
                     </div>
                   )}
-                </div>
+                </article>
               );
             })}
 
             {!canSelectSuggestion && (
-              <div className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 p-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-                <p className="text-xs text-slate-600">
-                  Bạn không có quyền thao tác vị trí. Vui lòng liên hệ quản lý để được phân quyền{" "}
-                  <code className="rounded bg-slate-200 px-1 text-[10px]">
-                    inventory.operation.decide
-                  </code>
+              <div role="note" className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <p className="text-[12px] text-muted-foreground">
+                  Bạn chỉ có quyền xem gợi ý. Để chọn vị trí, cần quyền{" "}
+                  <code className="rounded bg-muted px-1 text-[11px]">inventory.operation.decide</code>.
                 </p>
               </div>
             )}

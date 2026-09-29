@@ -6,15 +6,15 @@
 export const AI_ACTION_TYPE_LABEL: Record<string, string> = {
   CREATE_REORDER_DRAFT: 'Đề xuất nhập sách',
   CREATE_REPORT_DRAFT: 'Tạo báo cáo',
-  CREATE_RESERVATION_DRAFT: 'Đặt chỗ sách',
+  CREATE_RESERVATION_DRAFT: 'Đặt trước sách',
   CREATE_STOCK_ALERT: 'Cảnh báo tồn kho',
-  CREATE_STAFF_TASK_DRAFT: 'Task cho staff',
+  CREATE_STAFF_TASK_DRAFT: 'Nhiệm vụ kho',
 };
 
 export const AI_ACTION_STATUS_LABEL: Record<string, string> = {
-  PENDING_CONFIRMATION: 'Chờ xác nhận',
+  PENDING_CONFIRMATION: 'Cần xác nhận',
   EXECUTED: 'Đã thực thi',
-  CANCELLED: 'Đã hủy',
+  CANCELLED: 'Đã từ chối',
   EXPIRED: 'Hết hạn',
   FAILED: 'Thất bại',
 };

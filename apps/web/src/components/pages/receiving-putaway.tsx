@@ -541,9 +541,7 @@ export function ReceivingPutawayPage() {
   }) => {
     const candidate = candidateMap.get(location.locationId);
     if (!candidate) {
-      toast.warning(
-        `Vị trí ${location.locationCode} không còn trong danh sách hợp lệ. Vui lòng tải lại vị trí.`
-      );
+      toast.warning("Trạng thái vị trí đã thay đổi. Vui lòng lấy gợi ý mới.");
       return;
     }
 
