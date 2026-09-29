@@ -104,6 +104,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.getByTestId('putaway-confirm-button').click();
 
   // Assertion cuối: on_hand at the receiving location has decreased,
-  // confirming the shelf-transfer mutation actually happened.
-  await expect(page.getByText(/on_hand \d+/)).toBeVisible();
+  // confirming the shelf-transfer mutation actually happened. The book picker
+  // labels stock as "tồn N".
+  await expect(page.getByText(/tồn \d+/).first()).toBeVisible();
 });

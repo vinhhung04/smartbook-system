@@ -21,7 +21,8 @@ const { VALID_SUGGESTION_MODES } = storageSuggestionService;
  *   "variant_id": "uuid",      // required — putaway needs a concrete variant
  *   "book_id": "uuid",         // optional; if given, must belong to variant_id
  *   "quantity": 10,            // default 1
- *   "mode": "RECEIVING"       // RECEIVING, PUTAWAY, RELOCATION, AI_IMPORT
+ *   "mode": "RECEIVING",      // RECEIVING, PUTAWAY, RELOCATION, AI_IMPORT
+ *   "explain": true           // optional; false skips the AI paraphrase (ranking only)
  * }
  */
 async function getSuggestions(req, res) {
@@ -99,7 +100,8 @@ async function getSuggestions(req, res) {
       variantId,
       quantity,
       mode,
-      req.requestId
+      req.requestId,
+      { explain: req.body?.explain !== false },
     );
 
     return res.json(result);

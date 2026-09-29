@@ -104,6 +104,8 @@ export interface GetSuggestionsRequest {
   book_id?: string;
   quantity?: number;
   mode?: SuggestionMode;
+  /** false = ranking only, skip the AI paraphrase (cheaper; for list previews). Default true. */
+  explain?: boolean;
 }
 
 export const storageSuggestionService = {

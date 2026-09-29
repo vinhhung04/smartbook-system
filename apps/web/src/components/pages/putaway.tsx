@@ -104,11 +104,11 @@ export function PutawayPage() {
     setClaimingId(receiptId);
     try {
       await putawayService.claimSelf(receiptId);
-      toast.success("Đã nhận task thành công");
+      toast.success("Đã nhận nhiệm vụ cất hàng");
       const data = await putawayService.getReadyReceipts();
       setReceipts(Array.isArray(data) ? data : []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không thể nhận task"));
+      toast.error(getApiErrorMessage(error, "Không thể nhận nhiệm vụ"));
     } finally {
       setClaimingId("");
     }
@@ -117,17 +117,17 @@ export function PutawayPage() {
   const handleAssign = async (receiptId: string) => {
     const staffId = assignState[receiptId];
     if (!staffId) {
-      toast.error("Chọn nhân viên trước khi giao task");
+      toast.error("Chọn nhân viên trước khi giao nhiệm vụ");
       return;
     }
     setAssigningId(receiptId);
     try {
       await putawayService.assignStaff(receiptId, staffId);
-      toast.success("Đã giao putaway task cho nhân viên");
+      toast.success("Đã giao nhiệm vụ cất hàng cho nhân viên");
       const data = await putawayService.getReadyReceipts();
       setReceipts(Array.isArray(data) ? data : []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Giao task thất bại"));
+      toast.error(getApiErrorMessage(error, "Giao nhiệm vụ thất bại"));
     } finally {
       setAssigningId("");
     }
@@ -147,7 +147,7 @@ export function PutawayPage() {
       <FadeItem>
         <PageHeader
           icon={ClipboardCheck}
-          title="Nhập kệ (Putaway)"
+          title="Cất hàng vào kệ"
           description="Cất sách từ phiếu nhập đã duyệt vào vị trí trên kệ"
           iconBg="bg-blue-100 dark:bg-blue-500/15"
           iconColor="text-blue-600 dark:text-blue-400"
@@ -157,9 +157,9 @@ export function PutawayPage() {
       {receipts.length > 0 && (
         <FadeItem>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-            <span><span className="font-semibold text-foreground">{receipts.length}</span> phiếu chờ putaway</span>
+            <span><span className="font-semibold text-foreground">{receipts.length}</span> phiếu chờ cất hàng</span>
             <span aria-hidden="true">·</span>
-            <span><span className="font-semibold text-foreground">{totalRemaining}</span> quyển chưa nhập kệ</span>
+            <span><span className="font-semibold text-foreground">{totalRemaining}</span> quyển chưa lên kệ</span>
             {unassignedCount > 0 ? <StatusBadge label={`${unassignedCount} chưa nhận`} variant="warning" dot /> : null}
             {assignedToMeCount > 0 ? <StatusBadge label={`${assignedToMeCount} của bạn`} variant="success" dot /> : null}
           </p>
@@ -200,7 +200,7 @@ export function PutawayPage() {
                     <td colSpan={5} className="py-12 text-center">
                       <EmptyState
                         variant="no-data"
-                        title="Không có phiếu nhập nào sẵn sàng putaway"
+                        title="Không có phiếu nhập nào chờ cất hàng"
                         description="Các phiếu nhập đã duyệt sẽ hiện ở đây"
                       />
                     </td>

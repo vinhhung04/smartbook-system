@@ -510,8 +510,15 @@ async function generateAIExplanation(bookInfo, suggestions, requestId) {
   return null;
 }
 
-async function generateSuggestions(warehouseId, variantId, quantity = 1, mode = 'RECEIVING', requestId) {
-  const cacheKey = getCacheKey(warehouseId, variantId, quantity, mode);
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.explain=true] - call the AI paraphrase layer. Callers
+ *   that only need the ranking (e.g. a per-line preview on the putaway receipt)
+ *   pass false, so listing N lines does not trigger N LLM calls. Cached
+ *   separately so an explained request never receives an unexplained result.
+ */
+async function generateSuggestions(warehouseId, variantId, quantity = 1, mode = 'RECEIVING', requestId, { explain = true } = {}) {
+  const cacheKey = `${getCacheKey(warehouseId, variantId, quantity, mode)}${explain ? '' : ':noexplain'}`;
 
   const cached = await getCached(cacheKey);
   if (cached) {
@@ -598,7 +605,7 @@ async function generateSuggestions(warehouseId, variantId, quantity = 1, mode = 
     ...loc,
   }));
 
-  const aiExplanations = await generateAIExplanation(bookInfo, suggestions, requestId);
+  const aiExplanations = explain ? await generateAIExplanation(bookInfo, suggestions, requestId) : null;
   if (aiExplanations) {
     suggestions = suggestions.map((s, idx) => ({
       ...s,

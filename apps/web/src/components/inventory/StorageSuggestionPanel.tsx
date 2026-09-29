@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { MapPin, Search, AlertTriangle, CheckCircle2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,13 @@ interface StorageSuggestionPanelProps {
     bin: string | null;
   }) => void;
   disabled?: boolean;
+  /** Fetch automatically (debounced) whenever warehouse / variant / quantity change. */
+  autoRequest?: boolean;
+  /** Locations the parent has already put into its allocation lines. */
+  selectedLocationIds?: string[];
 }
+
+const AUTO_REQUEST_DEBOUNCE_MS = 400;
 
 // Rule-based location ranking (inventory-service storage-suggestion.service.js).
 // `confidence` from the API is only a threshold on that rule score, so it is
@@ -42,6 +48,8 @@ export function StorageSuggestionPanel({
   quantity = 1,
   onSelectLocation,
   disabled = false,
+  autoRequest = false,
+  selectedLocationIds = [],
 }: StorageSuggestionPanelProps) {
   const [suggestions, setSuggestions] = useState<StorageSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +58,6 @@ export function StorageSuggestionPanel({
   const [message, setMessage] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [bookTitle, setBookTitle] = useState<string | undefined>();
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
 
   const canRead = hasPermission("inventory.stock.read");
   const canWrite = hasPermission("inventory.operation.decide");
@@ -81,7 +88,6 @@ export function StorageSuggestionPanel({
       setFallback(false);
       setMessage(undefined);
       setError(null);
-      setSelectedLocationId(null);
 
       const response: SuggestionResponse = await storageSuggestionService.getSuggestions({
         warehouse_id: warehouseId,
@@ -106,10 +112,16 @@ export function StorageSuggestionPanel({
     }
   }, [warehouseId, bookId, variantId, quantity]);
 
+  useEffect(() => {
+    if (!autoRequest || disabled || !warehouseId || !variantId || !canViewSuggestions) return;
+    const timer = setTimeout(() => { void handleGetSuggestions(); }, AUTO_REQUEST_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [autoRequest, disabled, warehouseId, variantId, canViewSuggestions, handleGetSuggestions]);
+
   const handleSelectLocation = useCallback(
     (suggestion: StorageSuggestion) => {
       if (!canSelectSuggestion) return;
-      setSelectedLocationId(suggestion.locationId);
+      // The parent owns the result (allocation lines) and reports it; no toast here.
       onSelectLocation?.({
         locationId: suggestion.locationId,
         locationCode: suggestion.locationCode,
@@ -117,7 +129,6 @@ export function StorageSuggestionPanel({
         shelf: suggestion.shelf,
         bin: suggestion.bin,
       });
-      toast.success(`Đã chọn vị trí: ${suggestion.locationCode}`);
     },
     [canSelectSuggestion, onSelectLocation],
   );
@@ -164,7 +175,9 @@ export function StorageSuggestionPanel({
         </div>
         <p className="mt-1 text-[13px] text-muted-foreground">
           {bookTitle ? <>Sách: <span className="font-medium text-foreground">{bookTitle}</span> · </> : null}
-          Số lượng cần xếp: <span className="font-medium text-foreground">{quantity}</span>
+          {disabled && requested
+            ? <span className="font-medium text-foreground">Đã đủ số lượng — tạm dừng gợi ý</span>
+            : <>Số lượng cần xếp: <span className="font-medium text-foreground">{quantity}</span></>}
         </p>
         <AIRecommendationNotice className="mt-1" />
       </CardHeader>
@@ -207,7 +220,7 @@ export function StorageSuggestionPanel({
 
             {suggestions.map((suggestion) => {
               const suitability = storageSuitability(suggestion.confidence);
-              const isSelected = selectedLocationId === suggestion.locationId;
+              const isSelected = selectedLocationIds.includes(suggestion.locationId);
               const path = getLocationPath(suggestion);
 
               return (
