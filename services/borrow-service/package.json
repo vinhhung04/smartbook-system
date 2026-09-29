@@ -10,6 +10,8 @@
     "prisma:push": "prisma db push",
     "pretest": "prisma generate",
     "prisma:seed-history": "node prisma/seed-history.js",
+    "simulation:dry-run": "node prisma/simulation/seed-simulation.js --dry-run",
+    "simulation:catalog": "node prisma/simulation/build-catalog-manifest.js",
     "test": "node --test test/*.test.js"
   },
   "keywords": [],

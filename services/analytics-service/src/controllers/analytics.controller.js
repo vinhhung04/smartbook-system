@@ -1218,8 +1218,10 @@ const LATE_RETURN_ROW_SQL = `
   LEFT JOIN LATERAL (
     SELECT MIN(lr.old_due_date) AS old_due_date FROM loan_renewals lr WHERE lr.loan_item_id = li.id
   ) orig ON true
-  -- Everything below is scoped to lt2.borrow_date < lt.borrow_date - only
-  -- what the customer's history looked like strictly before THIS loan.
+  -- Everything below is scoped to what the customer's history looked like
+  -- strictly before THIS loan: a prior loan counts only once its outcome was
+  -- known (returned before this borrow_date), and a fine counts as unpaid if
+  -- it had not been paid yet AT borrow_date (not by its current status).
   LEFT JOIN LATERAL (
     SELECT
       COUNT(*) AS prior_loans,
@@ -1227,11 +1229,13 @@ const LATE_RETURN_ROW_SQL = `
       COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM loan_renewals lr2 WHERE lr2.loan_item_id = li2.id)) AS prior_renewal_count
     FROM loan_items li2
     JOIN loan_transactions lt2 ON lt2.id = li2.loan_id
-    WHERE lt2.customer_id = c.id AND lt2.borrow_date < lt.borrow_date AND li2.return_date IS NOT NULL
+    WHERE lt2.customer_id = c.id AND lt2.borrow_date < lt.borrow_date
+      AND li2.return_date IS NOT NULL AND li2.return_date < lt.borrow_date
   ) prior ON true
   LEFT JOIN LATERAL (
     SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
-    WHERE f.customer_id = c.id AND f.status = 'UNPAID' AND f.issued_at < lt.borrow_date
+    WHERE f.customer_id = c.id AND f.issued_at < lt.borrow_date
+      AND (f.status = 'UNPAID' OR (f.status = 'PAID' AND f.paid_at > lt.borrow_date))
   ) unpaid ON true
 `;
 
@@ -1300,9 +1304,10 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
 });
 
 // Same shape as the late-return query above: shared row SQL, WHERE clause
-// picks training vs. scoring rows. active_loans_at_reservation reads the
-// loan's CURRENT status (not a point-in-time reconstruction) - an accepted
-// approximation, since loan_transactions has no history table.
+// picks training vs. scoring rows. Every aggregate is point-in-time as of
+// r.reserved_at: prior outcomes only once known (picked up / expired before
+// reserved_at), fines unpaid at that moment, loans open at that moment
+// (borrowed before and not closed until after reserved_at).
 const NO_SHOW_ROW_SQL = `
   SELECT
     r.id::text AS reservation_id,
@@ -1330,14 +1335,17 @@ const NO_SHOW_ROW_SQL = `
     WHERE r2.customer_id = r.customer_id AND r2.reserved_at < r.reserved_at
       AND r2.pickup_code_issued_at IS NOT NULL AND r2.status <> 'CANCELLED'
       AND (r2.pickup_code_used_at IS NOT NULL OR r2.status = 'EXPIRED')
+      AND COALESCE(r2.pickup_code_used_at, r2.expires_at) < r.reserved_at
   ) prior ON true
   LEFT JOIN LATERAL (
     SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
-    WHERE f.customer_id = r.customer_id AND f.status = 'UNPAID' AND f.issued_at < r.reserved_at
+    WHERE f.customer_id = r.customer_id AND f.issued_at < r.reserved_at
+      AND (f.status = 'UNPAID' OR (f.status = 'PAID' AND f.paid_at > r.reserved_at))
   ) unpaid ON true
   LEFT JOIN LATERAL (
     SELECT COUNT(*) AS active_loans FROM loan_transactions lt
-    WHERE lt.customer_id = r.customer_id AND lt.borrow_date < r.reserved_at AND lt.status IN ('BORROWED', 'OVERDUE')
+    WHERE lt.customer_id = r.customer_id AND lt.borrow_date < r.reserved_at
+      AND (lt.closed_at IS NULL OR lt.closed_at > r.reserved_at)
   ) active ON true
 `;
 

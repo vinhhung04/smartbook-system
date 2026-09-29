@@ -314,6 +314,8 @@ services:
     command: node prisma/seed-history.js
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${BORROW_DB_NAME:-borrow_db}?schema=public
+      # Read-only use: re-maps the simulation's catalog ids by sku/book_code.
+      - INVENTORY_DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
     depends_on:
