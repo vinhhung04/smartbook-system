@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -53,10 +53,22 @@ export default function TaskDetailScreen() {
     }
   }, [taskType, taskId, user?.id]);
 
-  useEffect(() => {
-    setIsLoading(true);
-    load().finally(() => setIsLoading(false));
-  }, [load]);
+  // useFocusEffect (not a plain mount-only useEffect) — this screen stays mounted
+  // underneath /picking/[taskType]/[taskId]/scan while the user is there confirming a
+  // line, so coming back here after a partial pick used to show stale picked_qty (still
+  // 0/N) and hide "Khai báo thiếu hàng" until the screen was fully remounted from scratch.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      setIsLoading(true);
+      load().finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [load]),
+  );
 
   async function handleConfirmPresence(value: string) {
     const trimmed = value.trim();

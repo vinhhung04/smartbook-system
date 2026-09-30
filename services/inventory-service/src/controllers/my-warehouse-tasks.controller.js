@@ -71,10 +71,14 @@ async function getAvailableTasks(req, res) {
         take: 50,
       }),
       // 3. Outbound confirmation (outbound_orders READY_FOR_OUTBOUND/READY_TO_SHIP, chưa có outbound assignee)
+      // Excludes orders whose Packing task isn't COMPLETED yet — /confirm rejects those
+      // with a 409 regardless, so surfacing them here as "claimable" just lets someone
+      // claim a task they can't finish, mirroring the same guard listOutboundQueue uses.
       prisma.outbound_orders.findMany({
         where: {
           status: { in: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'] },
           outbound_assigned_user_id: null,
+          packing_tasks: { some: { status: 'COMPLETED' } },
           ...(warehouseId ? { warehouse_id: warehouseId } : {}),
         },
         select: {

@@ -44,17 +44,29 @@ async function upsertFine(tx, input) {
   // $executeRaw only needs the statement to execute, never parses a result set.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine:${loanItemId}:${fineType}`}, 0))`;
 
+  // Matches on customer+loan_item+fine_type regardless of status — by design, only one
+  // fine per (loan item, fine type) is ever meant to exist. Restricting this lookup to
+  // UNPAID/PARTIALLY_PAID used to let a paid-off fine "disappear" from view, so the next
+  // overdue sweep (or the return-time recompute in applyReturnFines) would find no match
+  // and mint a brand-new fine for the same already-settled overdue period — charging the
+  // customer twice for one overdue stretch.
   const existing = await tx.fines.findFirst({
     where: {
       customer_id: customerId,
       loan_item_id: loanItemId,
       fine_type: fineType,
-      status: { in: ['UNPAID', 'PARTIALLY_PAID'] },
     },
     orderBy: [{ issued_at: 'desc' }],
   });
 
   if (existing) {
+    // Already paid or explicitly waived: settled, one way or another. Leave it as-is —
+    // continuing to accrue after settlement isn't a re-open, it's a second bill for the
+    // same debt.
+    if (existing.status === 'PAID' || existing.status === 'WAIVED') {
+      return existing;
+    }
+
     if (normalizeMoney(existing.amount) === finalAmount) {
       return existing;
     }
@@ -278,7 +290,10 @@ async function runOverdueSweep(prisma, options = {}) {
           note: `Scheduled overdue fine for ${overdueDayCount} day(s)`,
         });
 
-        if (fine) {
+        // A PAID/WAIVED fine returned untouched (see upsertFine) isn't a fine this sweep
+        // generated or updated — don't count it, so callers relying on generated_fines to
+        // mean "how many fine records this run actually touched" aren't misled.
+        if (fine && fine.status !== 'PAID' && fine.status !== 'WAIVED') {
           generatedFines += 1;
         }
       }

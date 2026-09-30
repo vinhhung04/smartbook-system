@@ -303,61 +303,78 @@ async function approveStockAudit(req, res) {
       const audit = await tx.stock_audits.findUnique({ where: { id } });
       const allLines = await tx.stock_audit_lines.findMany({ where: { stock_audit_id: id } });
       const baseTimestamp = Date.now();
-      const linesToAdjust = allLines.filter(
-        (l) => l.variance_qty !== null && l.variance_qty !== 0 && !l.adjustment_posted,
+      const candidateLines = allLines.filter(
+        (l) => l.counted_qty !== null && !l.adjustment_posted,
       );
 
-      for (const [index, line] of linesToAdjust.entries()) {
-        await tx.stock_balances.updateMany({
+      let adjustmentsPosted = 0;
+      for (const [index, line] of candidateLines.entries()) {
+        // Recompute the delta against the CURRENT on-hand quantity rather than trusting
+        // the stored variance_qty, which was computed against a snapshot taken when this
+        // line was counted. If another audit covering the same variant/location was
+        // approved in between, that snapshot is stale — reapplying the old variance would
+        // double-post the same adjustment. Locking the row first also serializes this
+        // against a concurrent approval of an overlapping audit.
+        const current = await tx.stock_balances.findFirst({
           where: { variant_id: line.variant_id, location_id: line.location_id },
-          data: {
-            on_hand_qty: { increment: line.variance_qty },
-            available_qty: { increment: line.variance_qty },
-          },
         });
+        const currentOnHand = current?.on_hand_qty ?? 0;
+        const liveDelta = line.counted_qty - currentOnHand;
 
-        await tx.stock_movements.create({
-          data: {
-            movement_number: createMovementNumber(baseTimestamp, index),
-            movement_type: 'ADJUSTMENT',
-            movement_status: 'POSTED',
-            warehouse_id: audit.warehouse_id,
-            variant_id: line.variant_id,
-            to_location_id: line.variance_qty > 0 ? line.location_id : null,
-            from_location_id: line.variance_qty < 0 ? line.location_id : null,
-            quantity: Math.abs(line.variance_qty),
-            reason_code: 'CYCLE_COUNT',
-            source_service: 'inventory-service',
-            reference_type: 'stock_audit',
-            reference_id: line.id,
-            created_by_user_id: reviewerId,
-          },
-        });
-
-        await tx.integration_outbox.create({
-          data: {
-            aggregate_type: 'STOCK_BALANCE',
-            aggregate_id: line.variant_id,
-            event_type: 'inventory.stock.changed',
-            payload: {
-              variant_id: line.variant_id,
-              location_id: line.location_id,
-              warehouse_id: audit.warehouse_id,
-              delta_qty: line.variance_qty,
-              reason_code: 'STOCK_AUDIT_ADJUSTMENT',
-              source_reference_type: 'STOCK_AUDIT',
-              source_reference_id: id,
+        if (liveDelta !== 0) {
+          await tx.stock_balances.updateMany({
+            where: { variant_id: line.variant_id, location_id: line.location_id },
+            data: {
+              on_hand_qty: { increment: liveDelta },
+              available_qty: { increment: liveDelta },
             },
-          },
-        });
+          });
+
+          await tx.stock_movements.create({
+            data: {
+              movement_number: createMovementNumber(baseTimestamp, index),
+              movement_type: 'ADJUSTMENT',
+              movement_status: 'POSTED',
+              warehouse_id: audit.warehouse_id,
+              variant_id: line.variant_id,
+              to_location_id: liveDelta > 0 ? line.location_id : null,
+              from_location_id: liveDelta < 0 ? line.location_id : null,
+              quantity: Math.abs(liveDelta),
+              reason_code: 'CYCLE_COUNT',
+              source_service: 'inventory-service',
+              reference_type: 'stock_audit',
+              reference_id: line.id,
+              created_by_user_id: reviewerId,
+            },
+          });
+
+          await tx.integration_outbox.create({
+            data: {
+              aggregate_type: 'STOCK_BALANCE',
+              aggregate_id: line.variant_id,
+              event_type: 'inventory.stock.changed',
+              payload: {
+                variant_id: line.variant_id,
+                location_id: line.location_id,
+                warehouse_id: audit.warehouse_id,
+                delta_qty: liveDelta,
+                reason_code: 'STOCK_AUDIT_ADJUSTMENT',
+                source_reference_type: 'STOCK_AUDIT',
+                source_reference_id: id,
+              },
+            },
+          });
+
+          adjustmentsPosted += 1;
+        }
 
         await tx.stock_audit_lines.update({
           where: { id: line.id },
-          data: { adjustment_posted: true },
+          data: { adjustment_posted: true, variance_qty: liveDelta },
         });
       }
 
-      return { data: audit, adjustments_posted: linesToAdjust.length };
+      return { data: audit, adjustments_posted: adjustmentsPosted };
     });
 
     if (result.conflict) {

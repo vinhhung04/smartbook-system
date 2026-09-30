@@ -1,39 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import * as putawayApi from '../../src/api/putaway';
-import { ApiError } from '../../src/auth/auth-context';
-import { notifyScanError, notifyScanSuccess } from '../../src/scanner/haptics';
-import { ScanField } from '../../src/scanner/ScanField';
-import { StampBadge } from '../../src/components/StampBadge';
-import type { CompartmentCandidate, ReceivingItem, VariantMatch } from '../../src/types/putaway';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import * as putawayApi from '../../../src/api/putaway';
+import { ApiError } from '../../../src/auth/auth-context';
+import { notifyScanError, notifyScanSuccess } from '../../../src/scanner/haptics';
+import { ScanField } from '../../../src/scanner/ScanField';
+import { StampBadge } from '../../../src/components/StampBadge';
+import type { CompartmentCandidate, PutawayReceiptDetail, PutawayReceiptItem } from '../../../src/types/putaway';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../../src/theme/tokens';
 
-type SelectedItem = {
-  variant_id: string;
-  book_title: string;
-  on_hand_qty: number;
-};
+/**
+ * Putaway locked to one goods receipt — the mobile counterpart of the web app's
+ * putaway-detail → locked receiving-putaway flow. Unlike putting away any SKU sitting in a
+ * receiving bin regardless of which receipt it came from, this screen only offers this
+ * receipt's own lines and passes goods_receipt_id through on confirm, so the receipt's own
+ * remaining_quantity tracks what was actually put
+ * away instead of staying stuck at "chưa cất" forever.
+ */
+export default function PutawayReceiptScreen() {
+  const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
 
-export default function PutawayReceivingScreen() {
-  const { receivingId, warehouseId } = useLocalSearchParams<{ receivingId: string; warehouseId: string }>();
-
-  const [items, setItems] = useState<ReceivingItem[]>([]);
+  const [detail, setDetail] = useState<PutawayReceiptDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [scanBookInput, setScanBookInput] = useState('');
-  const [isLookingUpBook, setIsLookingUpBook] = useState(false);
-  const [bookMessage, setBookMessage] = useState<{ text: string; ok: boolean } | null>(null);
-  const [ambiguousMatches, setAmbiguousMatches] = useState<VariantMatch[]>([]);
-  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
-
+  const [selectedItem, setSelectedItem] = useState<PutawayReceiptItem | null>(null);
+  const [sourceReceiving, setSourceReceiving] = useState<{ id: string; location_code: string } | null>(null);
   const [candidates, setCandidates] = useState<CompartmentCandidate[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
 
   const [locationInput, setLocationInput] = useState('');
-  const [resolvedLocation, setResolvedLocation] = useState<CompartmentCandidate | { id: string; location_code: string } | null>(null);
+  const [resolvedLocation, setResolvedLocation] = useState<{ id: string; location_code: string } | null>(null);
   const [locationMessage, setLocationMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   const [quantity, setQuantity] = useState('');
@@ -43,23 +41,21 @@ export default function PutawayReceivingScreen() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const result = await putawayApi.getReceivingItems(receivingId);
-      setItems(result.items);
+      const result = await putawayApi.getReceiptDetail(receiptId);
+      setDetail(result);
     } catch (err) {
-      setLoadError(err instanceof ApiError ? err.message : 'Không tải được danh sách sách');
+      setLoadError(err instanceof ApiError ? err.message : 'Không tải được phiếu nhập');
     }
-  }, [receivingId]);
+  }, [receiptId]);
 
   useEffect(() => {
     setIsLoading(true);
     load().finally(() => setIsLoading(false));
   }, [load]);
 
-  function resetAfterSuccess() {
-    setScanBookInput('');
-    setBookMessage(null);
-    setAmbiguousMatches([]);
+  function resetSelection() {
     setSelectedItem(null);
+    setSourceReceiving(null);
     setCandidates([]);
     setLocationInput('');
     setResolvedLocation(null);
@@ -68,16 +64,25 @@ export default function PutawayReceivingScreen() {
     setSubmitError(null);
   }
 
-  async function selectItem(item: SelectedItem) {
+  async function selectItem(item: PutawayReceiptItem) {
+    if (!detail) return;
     setSelectedItem(item);
-    setBookMessage({ text: `Đã chọn: ${item.book_title}`, ok: true });
+    setSourceReceiving(null);
     setLocationInput('');
     setResolvedLocation(null);
     setLocationMessage(null);
-    setQuantity(String(item.on_hand_qty));
+    setSubmitError(null);
+    setQuantity(String(item.remaining_quantity));
     setIsLoadingCandidates(true);
     try {
-      const result = await putawayApi.getCandidates(receivingId, item.variant_id);
+      const { receivings } = await putawayApi.getWarehouseReceivings(detail.warehouse_id);
+      const receiving = receivings[0];
+      if (!receiving) {
+        setSubmitError('Kho này chưa có khu vực chờ cất (RECEIVING), liên hệ quản lý kho.');
+        return;
+      }
+      setSourceReceiving({ id: receiving.id, location_code: receiving.location_code });
+      const result = await putawayApi.getCandidates(receiving.id, item.variant_id);
       setCandidates(result.candidates);
     } catch (err) {
       setLocationMessage({ text: err instanceof ApiError ? err.message : 'Không lấy được gợi ý vị trí', ok: false });
@@ -86,50 +91,12 @@ export default function PutawayReceivingScreen() {
     }
   }
 
-  async function handleScanBook(value: string) {
-    const code = value.trim();
-    if (!code) return;
-    setIsLookingUpBook(true);
-    setBookMessage(null);
-    setAmbiguousMatches([]);
-    try {
-      const result = await putawayApi.lookupVariantByBarcode(code);
-      if (result.ambiguous) {
-        setAmbiguousMatches(result.matches);
-        setBookMessage({ text: 'Mã trùng nhiều sản phẩm, chọn đúng bên dưới.', ok: false });
-        return;
-      }
-      if (!result.selected) {
-        notifyScanError();
-        setBookMessage({ text: 'Không tìm thấy sản phẩm', ok: false });
-        return;
-      }
-      const inReceiving = items.find((i) => i.variant_id === result.selected!.variant_id);
-      if (!inReceiving) {
-        notifyScanError();
-        setBookMessage({ text: 'Sách này không có ở khu vực chờ cất hàng hiện tại', ok: false });
-        return;
-      }
-      notifyScanSuccess();
-      await selectItem({
-        variant_id: inReceiving.variant_id,
-        book_title: inReceiving.book_title,
-        on_hand_qty: inReceiving.on_hand_qty,
-      });
-    } catch (err) {
-      notifyScanError();
-      setBookMessage({ text: err instanceof ApiError ? err.message : 'Không tra được mã sách', ok: false });
-    } finally {
-      setIsLookingUpBook(false);
-    }
-  }
-
   async function handleScanLocation(value: string) {
     const code = value.trim();
-    if (!code || !warehouseId) return;
+    if (!code || !detail) return;
     setLocationMessage(null);
     try {
-      const location = await putawayApi.lookupLocationByBarcode(warehouseId, code);
+      const location = await putawayApi.lookupLocationByBarcode(detail.warehouse_id, code);
       notifyScanSuccess();
       setResolvedLocation(location);
       setLocationMessage({ text: `Đúng vị trí: ${location.location_code}`, ok: true });
@@ -141,14 +108,14 @@ export default function PutawayReceivingScreen() {
   }
 
   async function handleConfirm() {
-    if (!selectedItem || !resolvedLocation || !warehouseId) return;
+    if (!selectedItem || !sourceReceiving || !resolvedLocation || !detail) return;
     const qty = Number(quantity);
     if (!qty || qty <= 0) {
       setSubmitError('Số lượng phải lớn hơn 0');
       return;
     }
-    if (qty > selectedItem.on_hand_qty) {
-      setSubmitError(`Số lượng không được vượt quá ${selectedItem.on_hand_qty}`);
+    if (qty > selectedItem.remaining_quantity) {
+      setSubmitError(`Số lượng không được vượt quá ${selectedItem.remaining_quantity} (còn lại của phiếu này)`);
       return;
     }
 
@@ -156,23 +123,25 @@ export default function PutawayReceivingScreen() {
     setSubmitError(null);
     try {
       const result = await putawayApi.transferToShelf({
-        warehouse_id: warehouseId,
-        source_receiving_location_id: receivingId,
+        warehouse_id: detail.warehouse_id,
+        source_receiving_location_id: sourceReceiving.id,
         variant_id: selectedItem.variant_id,
+        goods_receipt_id: detail.id,
         allocations: [
           {
             target_location_id: resolvedLocation.id,
             quantity: qty,
             reason: 'Putaway qua mobile app',
             scanned_location_barcode: locationInput.trim() || undefined,
-            scanned_product_barcode: scanBookInput.trim() || undefined,
           },
         ],
       });
 
-      Alert.alert('Đã cất hàng', `Đã chuyển ${result.data.moved_quantity} sản phẩm vào ${resolvedLocation.location_code}.`);
-      resetAfterSuccess();
+      notifyScanSuccess();
+      setSubmitError(null);
+      resetSelection();
       await load();
+      setLocationMessage({ text: `Đã chuyển ${result.data.moved_quantity} sản phẩm vào ${resolvedLocation.location_code}.`, ok: true });
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Xác nhận thất bại');
     } finally {
@@ -188,78 +157,58 @@ export default function PutawayReceivingScreen() {
     );
   }
 
-  if (loadError) {
+  if (loadError || !detail) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>{loadError}</Text>
+        <Text style={styles.error}>{loadError || 'Không tìm thấy phiếu'}</Text>
       </View>
     );
   }
 
+  const remainingItems = detail.items.filter((item) => item.remaining_quantity > 0);
   const topCandidate = candidates[0] ?? null;
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Chọn sách để cất' }} />
+      <Stack.Screen options={{ headerShown: true, title: detail.receipt_number }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.headerCard}>
+          <Text style={styles.headerTitle}>{detail.receipt_number}</Text>
+          <Text style={styles.headerSubtitle}>
+            {detail.warehouse_code ?? '-'} · còn {detail.remaining_quantity}/{detail.total_quantity} sản phẩm
+          </Text>
+        </View>
+
         <View style={styles.stepCard}>
           <View style={styles.stepHeader}>
             <View style={styles.stepBadge}>
               <Text style={styles.stepBadgeText}>1</Text>
             </View>
-            <Text style={styles.stepLabel}>Quét mã sách đang cầm trên tay</Text>
+            <Text style={styles.stepLabel}>Chọn dòng cần cất của phiếu này</Text>
           </View>
-          <ScanField
-            value={scanBookInput}
-            onChangeText={setScanBookInput}
-            onSubmit={handleScanBook}
-            placeholder="Quét hoặc nhập ISBN sách"
-            autoFocus
-          />
-          {isLookingUpBook ? <ActivityIndicator color={colors.primary} /> : null}
-          {bookMessage ? <StampBadge text={bookMessage.text} tone={bookMessage.ok ? 'success' : 'danger'} /> : null}
-
-          {ambiguousMatches.length > 0 && (
-            <View style={styles.ambiguousBox}>
-              {ambiguousMatches.map((match) => {
-                const inReceiving = items.find((i) => i.variant_id === match.variant_id);
-                if (!inReceiving) return null;
-                return (
-                  <Pressable
-                    key={match.variant_id}
-                    style={({ pressed }) => [styles.ambiguousItem, pressed && styles.rowPressed]}
-                    onPress={() =>
-                      selectItem({
-                        variant_id: inReceiving.variant_id,
-                        book_title: inReceiving.book_title,
-                        on_hand_qty: inReceiving.on_hand_qty,
-                      })
-                    }
-                  >
-                    <Text style={styles.ambiguousText}>{match.book_title}</Text>
-                  </Pressable>
-                );
-              })}
+          {remainingItems.length === 0 ? (
+            <StampBadge text="Phiếu này đã cất hết lên kệ." tone="success" />
+          ) : (
+            <View style={styles.itemList}>
+              {remainingItems.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.itemRow,
+                    selectedItem?.id === item.id && styles.itemRowSelected,
+                    pressed && styles.rowPressed,
+                  ]}
+                  onPress={() => selectItem(item)}
+                >
+                  <View style={styles.itemBody}>
+                    <Text style={styles.itemTitle}>{item.book_title}</Text>
+                    <Text style={styles.itemMeta}>Còn lại: {item.remaining_quantity}/{item.quantity}</Text>
+                  </View>
+                  <Text style={styles.itemQty}>{item.remaining_quantity}</Text>
+                </Pressable>
+              ))}
             </View>
           )}
-
-          <Text style={styles.sectionTitle}>Hoặc chọn từ danh sách đang chờ cất:</Text>
-          <View style={styles.itemList}>
-            {items.map((item) => (
-              <Pressable
-                key={item.variant_id}
-                style={({ pressed }) => [
-                  styles.itemRow,
-                  selectedItem?.variant_id === item.variant_id && styles.itemRowSelected,
-                  pressed && styles.rowPressed,
-                ]}
-                onPress={() => selectItem({ variant_id: item.variant_id, book_title: item.book_title, on_hand_qty: item.on_hand_qty })}
-              >
-                <Text style={styles.itemTitle}>{item.book_title}</Text>
-                <Text style={styles.itemQty}>{item.on_hand_qty}</Text>
-              </Pressable>
-            ))}
-          </View>
         </View>
 
         {selectedItem && (
@@ -270,6 +219,9 @@ export default function PutawayReceivingScreen() {
               </View>
               <Text style={styles.stepLabel}>Vị trí gợi ý</Text>
             </View>
+            {sourceReceiving ? (
+              <Text style={styles.itemMeta}>Lấy từ khu chờ cất: {sourceReceiving.location_code}</Text>
+            ) : null}
             {isLoadingCandidates ? (
               <ActivityIndicator color={colors.primary} />
             ) : topCandidate ? (
@@ -353,10 +305,18 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: 13,
   },
-  success: {
-    ...typography.code,
-    color: colors.success,
-    fontSize: 13,
+  headerCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: 2,
+    ...shadow.card,
+  },
+  headerTitle: {
+    ...typography.h3,
+  },
+  headerSubtitle: {
+    ...typography.caption,
   },
   stepCard: {
     padding: spacing.lg,
@@ -386,15 +346,12 @@ const styles = StyleSheet.create({
   stepLabel: {
     ...typography.h3,
   },
-  sectionTitle: {
-    ...typography.caption,
-    marginTop: spacing.xs,
-  },
   itemList: {
     gap: spacing.xs + 2,
   },
   itemRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
@@ -409,29 +366,21 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.7,
   },
-  itemTitle: {
+  itemBody: {
     flex: 1,
     marginRight: spacing.sm,
+  },
+  itemTitle: {
     color: colors.textPrimary,
+  },
+  itemMeta: {
+    ...typography.caption,
+    marginTop: 2,
   },
   itemQty: {
     ...typography.code,
     color: colors.textSecondary,
     fontSize: 14,
-  },
-  ambiguousBox: {
-    gap: spacing.xs + 2,
-  },
-  ambiguousItem: {
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: spacing.sm + 2,
-  },
-  ambiguousText: {
-    fontSize: 13,
-    color: colors.textPrimary,
   },
   infoBox: {
     backgroundColor: colors.primarySoft,

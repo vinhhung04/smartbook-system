@@ -73,14 +73,14 @@ export default function PutawayListScreen() {
   }
 
   async function handleOpenMine(receipt: PutawayReceiptSummary) {
-    router.push(`/putaway/warehouse/${receipt.warehouse_id}`);
+    router.push(`/putaway/receipt/${receipt.id}`);
   }
 
   async function handleClaim(receipt: PutawayReceiptSummary) {
     setClaimingId(receipt.id);
     try {
       await putawayApi.claimReceipt(receipt.id);
-      router.push(`/putaway/warehouse/${receipt.warehouse_id}`);
+      router.push(`/putaway/receipt/${receipt.id}`);
       load();
     } catch (err) {
       Alert.alert('Nhận phiếu thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');

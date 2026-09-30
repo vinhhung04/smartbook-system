@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { encodeMetaValue } = require("./picking-note.service");
 
 function generateTaskNumber() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -7,9 +8,34 @@ function generateTaskNumber() {
 }
 
 /**
+ * A short-picked line spawns a REPICK outbound_orders row (see picking.controller.js's
+ * maybeCreateRepickFromOutbound) whose own processed_qty accrues separately from the root
+ * order's. The order only reaches READY_TO_SHIP once root + all repicks together cover the
+ * requested quantity, so what's physically sitting in Shipping — and thus what packing must
+ * verify — is root.processed_qty + repick.processed_qty per variant, not just the root's.
+ */
+async function sumRepickProcessedQtyByVariant(tx, rootOrderId) {
+  const repickOrders = await tx.outbound_orders.findMany({
+    where: {
+      note: { contains: `root_task_id=${encodeMetaValue(rootOrderId)}` },
+      status: { not: "CANCELLED" },
+    },
+    select: { outbound_order_items: { select: { variant_id: true, processed_qty: true } } },
+  });
+
+  const totals = new Map();
+  for (const item of repickOrders.flatMap((o) => o.outbound_order_items)) {
+    const prev = totals.get(item.variant_id) || 0;
+    totals.set(item.variant_id, prev + Number(item.processed_qty || 0));
+  }
+  return totals;
+}
+
+/**
  * Snapshot the order's picked line items into a new packing_tasks/packing_task_items pair.
- * expected_qty is taken from outbound_order_items.processed_qty — i.e. what Picking actually
- * moved to the shipping location, not the originally requested quantity.
+ * expected_qty is what Picking actually moved to the shipping location for that variant —
+ * outbound_order_items.processed_qty on the root line, PLUS any REPICK orders spawned from a
+ * short pick, since those ship in the same package and must be scanned too.
  */
 async function createPackingTask(tx, { outboundOrder, warehouseId, orderItems }) {
   const task = await tx.packing_tasks.create({
@@ -21,14 +47,21 @@ async function createPackingTask(tx, { outboundOrder, warehouseId, orderItems })
     },
   });
 
-  const items = (orderItems || []).filter((item) => Number(item.processed_qty || 0) > 0);
+  const repickTotals = await sumRepickProcessedQtyByVariant(tx, outboundOrder.id);
+  const items = (orderItems || [])
+    .map((item) => ({
+      ...item,
+      expected_qty: Number(item.processed_qty || 0) + (repickTotals.get(item.variant_id) || 0),
+    }))
+    .filter((item) => item.expected_qty > 0);
+
   if (items.length > 0) {
     await tx.packing_task_items.createMany({
       data: items.map((item) => ({
         packing_task_id: task.id,
         outbound_order_item_id: item.id,
         variant_id: item.variant_id,
-        expected_qty: item.processed_qty,
+        expected_qty: item.expected_qty,
         scanned_qty: 0,
         status: "PENDING",
       })),
