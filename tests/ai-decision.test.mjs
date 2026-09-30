@@ -1,13 +1,24 @@
 // Decision-support UX rules for the web app's AI surfaces.
-// Pure logic is imported straight from apps/web/src/lib/ai-decision.ts (Node
-// strips the type annotations); UI wording rules are asserted on the sources,
-// since the web app has no component-test runner.
+// Pure logic comes from apps/web/src/lib/ai-decision.ts, transpiled here with the
+// web app's own TypeScript so this runs on Node 20 (CI and the Docker images),
+// which cannot load .ts files natively. ai-decision.ts must stay import-free for
+// that. UI wording rules are asserted on the sources, since the web app has no
+// component-test runner.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import {
+
+const root = resolve(import.meta.dirname, '..');
+const src = (p) => readFileSync(resolve(root, 'apps/web/src', p), 'utf8');
+
+const ts = createRequire(resolve(root, 'apps/web/package.json'))('typescript');
+const { outputText } = ts.transpileModule(src('lib/ai-decision.ts'), {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+});
+const {
   recommendationTier,
   recommendationFactors,
   RECOMMENDATION_TIER_LABEL,
@@ -18,10 +29,7 @@ import {
   groupLinesByWarehouse,
   priorityLabel,
   canUserConfirmAction,
-} from '../apps/web/src/lib/ai-decision.ts';
-
-const root = resolve(import.meta.dirname, '..');
-const src = (p) => readFileSync(resolve(root, 'apps/web/src', p), 'utf8');
+} = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 test('recommendation score maps to ranking tiers, not percentages', () => {
   assert.equal(recommendationTier(RECOMMENDATION_TIER_HIGH_MIN_SCORE), 'STRONG');

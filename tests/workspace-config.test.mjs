@@ -27,6 +27,20 @@ test("CI installs dependencies reproducibly", () => {
   assert.doesNotMatch(workflow, /test_stock_request\.py is excluded/);
 });
 
+test("every CI job that boots the stack lifts the login rate limit", () => {
+  // The production default is 10 logins per 15 minutes. The Docker jobs log in far more
+  // often than that (7 integration scripts; a Playwright suite with a login per test),
+  // so each job that generates a .env must also raise it, or logins start returning 429.
+  const workflow = readFileSync(
+    resolve(repositoryRoot, ".github/workflows/ci.yml"),
+    "utf8",
+  );
+  const stacks = workflow.match(/node scripts\/init-demo-env\.mjs/g) ?? [];
+  const lifted = workflow.match(/AUTH_LOGIN_RATE_LIMIT_MAX=\d+" >> \.env/g) ?? [];
+  assert.ok(stacks.length >= 2, "expected the integration and e2e jobs to generate a .env");
+  assert.equal(lifted.length, stacks.length);
+});
+
 test("workspace exposes one complete verification command", () => {
   const manifest = readJson("package.json");
   assert.match(manifest.scripts.verify, /lint:ci/);
@@ -66,6 +80,17 @@ test("web build and lint commands use locally installed tools", () => {
   const manifest = readJson("apps/web/package.json");
   assert.match(manifest.scripts.build, /vite\.js build/);
   assert.match(manifest.scripts.lint, /eslint\.js/);
+});
+
+test("workspace lint and build quote their package globs", () => {
+  // Unquoted, sh (CI) expands ./apps/* into ./apps/api-gateway ./apps/mobile ...
+  // and pnpm then treats ./apps/mobile as the script name: it prints "None of the
+  // selected packages has a script" and exits 0, so lint/build silently never run.
+  // \" (not ') so cmd on Windows strips the quotes as well.
+  const manifest = readJson("package.json");
+  for (const name of ["lint", "build"]) {
+    assert.match(manifest.scripts[name], /--filter "\.\/apps\/\*"/, `${name} must quote its ./apps/* filter`);
+  }
 });
 
 test("Node Docker images build from the workspace lockfile", () => {

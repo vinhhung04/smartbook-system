@@ -169,7 +169,11 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Generate local .env
-        run: node scripts/init-demo-env.mjs
+        run: |
+          node scripts/init-demo-env.mjs
+          # Each Playwright test logs in on its own — past the production default of
+          # 10 logins per 15 minutes, the rest get 429 and never leave /login.
+          echo "AUTH_LOGIN_RATE_LIMIT_MAX=1000" >> .env
 
       # Full stack including smartbook-ui: the built production image, not the Vite dev
       # server — same thing a real user's browser hits, and one less moving part in CI.

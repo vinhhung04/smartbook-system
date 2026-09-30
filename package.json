@@ -5,8 +5,8 @@
   "packageManager": "pnpm@10.6.2",
   "scripts": {
     "dev": "pnpm -r --parallel --filter ./apps/* --filter ./services/* dev",
-    "build": "pnpm -r --filter ./apps/* build",
-    "lint": "pnpm -r --filter ./apps/* lint",
+    "build": "pnpm -r --filter \"./apps/*\" build",
+    "lint": "pnpm -r --filter \"./apps/*\" lint",
     "lint:ci": "pnpm lint",
     "typecheck": "pnpm --filter web exec tsc --noEmit",
     "test:node": "pnpm -r --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
