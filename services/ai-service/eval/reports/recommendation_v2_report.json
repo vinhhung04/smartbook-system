@@ -1,0 +1,2207 @@
+{
+  "title": "Recommendation V2 Evaluation",
+  "dataset": {
+    "source": "services/borrow-service/prisma/simulation/output/recommendation-events.json",
+    "sha256": "41c35ea0d43b93bcd88b4e439eb212bb10cb5b25c469a7bd732ffb3f8446a8ec",
+    "seed": 20260928,
+    "synthetic": true,
+    "users": 600,
+    "books": 113,
+    "interactions": 33866,
+    "interactions_by_kind": {
+      "LOAN": 18456,
+      "WISHLIST": 8268,
+      "REVIEW": 3083,
+      "RESERVATION": 4059
+    },
+    "malformed_dropped": 0,
+    "train_range": [
+      "2024-09-28T00:00:00.000Z",
+      "2026-01-26T02:34:52.827000Z"
+    ],
+    "validation_range": [
+      "2026-01-26T02:34:52.827000Z",
+      "2026-05-30T18:50:54.068000Z"
+    ],
+    "test_range": [
+      "2026-05-30T18:50:54.068000Z",
+      "2026-09-28T00:00:00Z"
+    ],
+    "validation_eligible_users": 329,
+    "test_eligible_users": 344,
+    "test_users_all_segments": 415,
+    "min_train_loans": 3,
+    "protocol": "audited point-in-time (see recsys_protocol.py)"
+  },
+  "model_configuration": {
+    "V2": {
+      "weights": {
+        "preference": 1.0,
+        "author": 0.25,
+        "semantic": 1.0,
+        "collaborative": 2.0,
+        "popularity": 1.0,
+        "recency": 1.0,
+        "quality": 0.25,
+        "availability": 0.1
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5797385077916367,
+        "author": 0.3660797589226211,
+        "semantic": 0.06640162028252902,
+        "collaborative": 0.11590088517856878,
+        "popularity": 0.8839197521424553,
+        "recency": 0.7795678506871105,
+        "quality": 0.07442084489467166,
+        "availability": 0.43082135564886176
+      },
+      "validation_objective": 0.42358,
+      "objective": "ndcg@10",
+      "evaluations": 277
+    },
+    "V2-collaborative": {
+      "weights": {
+        "preference": 0.5,
+        "author": 0.0,
+        "semantic": 0.5,
+        "collaborative": 0.0,
+        "popularity": 1.0,
+        "recency": 0.5,
+        "quality": 0.0,
+        "availability": 0.0
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 50.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 0.0,
+        "trend_window_days": 30,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5397889817261156,
+        "author": 0.3478896419894879,
+        "semantic": 0.06622096912664664,
+        "collaborative": 0.10861742295150509,
+        "popularity": 0.878646965793064,
+        "recency": 0.7404391952494455,
+        "quality": 0.07441867314731138,
+        "availability": 0.43475777124693193
+      },
+      "validation_objective": 0.41222,
+      "objective": "ndcg@10",
+      "evaluations": 192
+    },
+    "V2-semantic": {
+      "weights": {
+        "preference": 2.0,
+        "author": 0.5,
+        "semantic": 0.0,
+        "collaborative": 3.0,
+        "popularity": 1.0,
+        "recency": 1.0,
+        "quality": 0.1,
+        "availability": 0.1
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 30,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5792399786881467,
+        "author": 0.36360356606745975,
+        "semantic": 0.0665607370548185,
+        "collaborative": 0.11540145605628256,
+        "popularity": 0.8781286977579326,
+        "recency": 0.740106663871805,
+        "quality": 0.07440429427984181,
+        "availability": 0.43449367184655335
+      },
+      "validation_objective": 0.42649,
+      "objective": "ndcg@10",
+      "evaluations": 123
+    },
+    "V2-preference": {
+      "weights": {
+        "preference": 0.0,
+        "author": 0.0,
+        "semantic": 1.0,
+        "collaborative": 3.0,
+        "popularity": 0.1,
+        "recency": 1.0,
+        "quality": 0.1,
+        "availability": 0.25
+      },
+      "params": {
+        "prior_strength": 3.0,
+        "half_life_days": 180,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 0.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.667184331662524,
+        "author": 0.23991175756294217,
+        "semantic": 0.06624002212241425,
+        "collaborative": 0.11524373737223412,
+        "popularity": 0.8832154588354163,
+        "recency": 0.7790842616568838,
+        "quality": 0.07447565917714942,
+        "availability": 0.4316062286900567
+      },
+      "validation_objective": 0.40825,
+      "objective": "ndcg@10",
+      "evaluations": 164
+    },
+    "V2-popularity": {
+      "weights": {
+        "preference": 0.5,
+        "author": 0.1,
+        "semantic": 1.0,
+        "collaborative": 3.0,
+        "popularity": 0.0,
+        "recency": 1.0,
+        "quality": 0.0,
+        "availability": 0.25
+      },
+      "params": {
+        "prior_strength": 3.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.7919476251118223,
+        "author": 0.3655869857740413,
+        "semantic": 0.06643547583249634,
+        "collaborative": 0.11577809263550408,
+        "popularity": 0.8828289413628054,
+        "recency": 0.7786319528498787,
+        "quality": 0.074437407548663,
+        "availability": 0.4314237414765044
+      },
+      "validation_objective": 0.41496,
+      "objective": "ndcg@10",
+      "evaluations": 187
+    },
+    "V2-quality": {
+      "weights": {
+        "preference": 1.0,
+        "author": 0.25,
+        "semantic": 1.0,
+        "collaborative": 2.0,
+        "popularity": 1.0,
+        "recency": 1.0,
+        "quality": 0.0,
+        "availability": 0.1
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 10.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5798840627389994,
+        "author": 0.3661892615759494,
+        "semantic": 0.06641898335017786,
+        "collaborative": 0.11670428329683273,
+        "popularity": 0.8841781259919432,
+        "recency": 0.7797818282657237,
+        "quality": 0.07441419172040681,
+        "availability": 0.4308454885321487
+      },
+      "validation_objective": 0.41959,
+      "objective": "ndcg@10",
+      "evaluations": 121
+    },
+    "V2-availability": {
+      "weights": {
+        "preference": 1.0,
+        "author": 0.1,
+        "semantic": 1.0,
+        "collaborative": 2.0,
+        "popularity": 1.0,
+        "recency": 1.0,
+        "quality": 0.25,
+        "availability": 0.0
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5797385077916367,
+        "author": 0.3660797589226211,
+        "semantic": 0.06640162028252902,
+        "collaborative": 0.11590088517856878,
+        "popularity": 0.8839197521424553,
+        "recency": 0.7795678506871105,
+        "quality": 0.07442084489467166,
+        "availability": 0.43082135564886176
+      },
+      "validation_objective": 0.42286,
+      "objective": "ndcg@10",
+      "evaluations": 122
+    },
+    "V2-recency": {
+      "weights": {
+        "preference": 0.5,
+        "author": 0.1,
+        "semantic": 0.5,
+        "collaborative": 2.0,
+        "popularity": 1.0,
+        "recency": 0.0,
+        "quality": 0.0,
+        "availability": 0.1
+      },
+      "params": {
+        "prior_strength": 10.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 0.0,
+        "trend_window_days": 30,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.5396302058857037,
+        "author": 0.3476919539908874,
+        "semantic": 0.06619977462713471,
+        "collaborative": 0.11489138658873559,
+        "popularity": 0.8781534987667158,
+        "recency": 0.7401210165496137,
+        "quality": 0.0744193688899119,
+        "availability": 0.4345666154347026
+      },
+      "validation_objective": 0.42287,
+      "objective": "ndcg@10",
+      "evaluations": 186
+    },
+    "CONTENT_ONLY": {
+      "weights": {
+        "preference": 3.0,
+        "author": 0.25,
+        "semantic": 0.1,
+        "collaborative": 0.0,
+        "popularity": 0.0,
+        "recency": 0.0,
+        "quality": 0.0,
+        "availability": 0.0
+      },
+      "params": {
+        "prior_strength": 1.0,
+        "half_life_days": null,
+        "cf_shrinkage": 50.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 90,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.9819826338282955,
+        "author": 0.3659340011258092,
+        "semantic": 0.06646881850414237,
+        "collaborative": 0.10948259958944781,
+        "popularity": 0.8835625874484981,
+        "recency": 0.7792565472276656,
+        "quality": 0.07442183837611079,
+        "availability": 0.43147754884793865
+      },
+      "validation_objective": 0.17969,
+      "objective": "ndcg@10",
+      "evaluations": 96
+    },
+    "CF_ONLY": {
+      "weights": {
+        "preference": 0.0,
+        "author": 0.0,
+        "semantic": 0.0,
+        "collaborative": 1.0,
+        "popularity": 0.0,
+        "recency": 0.0,
+        "quality": 0.0,
+        "availability": 0.0
+      },
+      "params": {
+        "prior_strength": 3.0,
+        "half_life_days": null,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 0.5,
+        "liked_rating_weight": 2.0,
+        "trend_window_days": 30,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 0.8393945186388091,
+        "author": 0.3790012594139606,
+        "semantic": 0.06658420949340907,
+        "collaborative": 0.11575532611039373,
+        "popularity": 0.877410833828322,
+        "recency": 0.738638926026668,
+        "quality": 0.07446750930024507,
+        "availability": 0.43501055081571355
+      },
+      "validation_objective": 0.40514,
+      "objective": "ndcg@10",
+      "evaluations": 35
+    }
+  },
+  "selected_max_per_category": null,
+  "category_cap_validation": {
+    "without": 0.42358,
+    "cap3": 0.41664
+  },
+  "results": {
+    "RANDOM": {
+      "users": 344,
+      "hit_rate@5": 0.2674,
+      "recall@5": 0.0866,
+      "ndcg@5": 0.0782,
+      "mrr": 0.1707,
+      "catalog_coverage@5": 0.9912,
+      "personalization@5": 0.9725,
+      "hit_rate@10": 0.439,
+      "recall@10": 0.1659,
+      "ndcg@10": 0.1091,
+      "catalog_coverage@10": 1.0,
+      "personalization@10": 0.9457,
+      "novelty@10": 8.0155,
+      "popularity_bias_arp@10": 0.4149,
+      "category_diversity@10": 0.6319
+    },
+    "POPULARITY": {
+      "users": 344,
+      "hit_rate@5": 0.6366,
+      "recall@5": 0.282,
+      "ndcg@5": 0.2934,
+      "mrr": 0.4695,
+      "catalog_coverage@5": 0.6283,
+      "personalization@5": 0.8988,
+      "hit_rate@10": 0.7674,
+      "recall@10": 0.4445,
+      "ndcg@10": 0.3516,
+      "catalog_coverage@10": 0.7965,
+      "personalization@10": 0.8537,
+      "novelty@10": 6.0792,
+      "popularity_bias_arp@10": 0.8162,
+      "category_diversity@10": 0.6366
+    },
+    "V1_PRODUCTION": {
+      "users": 344,
+      "hit_rate@5": 0.4651,
+      "recall@5": 0.1768,
+      "ndcg@5": 0.1759,
+      "mrr": 0.311,
+      "catalog_coverage@5": 0.8053,
+      "personalization@5": 0.9139,
+      "hit_rate@10": 0.5785,
+      "recall@10": 0.2753,
+      "ndcg@10": 0.2117,
+      "catalog_coverage@10": 0.9381,
+      "personalization@10": 0.8856,
+      "novelty@10": 8.0043,
+      "popularity_bias_arp@10": 0.419,
+      "category_diversity@10": 0.1977
+    },
+    "V2": {
+      "users": 344,
+      "hit_rate@5": 0.7326,
+      "recall@5": 0.368,
+      "ndcg@5": 0.3684,
+      "mrr": 0.5327,
+      "catalog_coverage@5": 0.7965,
+      "personalization@5": 0.931,
+      "hit_rate@10": 0.8605,
+      "recall@10": 0.5409,
+      "ndcg@10": 0.4275,
+      "catalog_coverage@10": 0.885,
+      "personalization@10": 0.8946,
+      "novelty@10": 6.4565,
+      "popularity_bias_arp@10": 0.7387,
+      "category_diversity@10": 0.6676
+    },
+    "V2+CATEGORY_CAP3": {
+      "users": 344,
+      "hit_rate@5": 0.7413,
+      "recall@5": 0.3699,
+      "ndcg@5": 0.3691,
+      "mrr": 0.5334,
+      "catalog_coverage@5": 0.7788,
+      "personalization@5": 0.9301,
+      "hit_rate@10": 0.875,
+      "recall@10": 0.5419,
+      "ndcg@10": 0.4258,
+      "catalog_coverage@10": 0.9115,
+      "personalization@10": 0.888,
+      "novelty@10": 6.3634,
+      "popularity_bias_arp@10": 0.7557,
+      "category_diversity@10": 0.7295
+    },
+    "V2_NO_CANDIDATE_PRUNING": {
+      "users": 344,
+      "hit_rate@5": 0.7326,
+      "recall@5": 0.368,
+      "ndcg@5": 0.3684,
+      "mrr": 0.5328,
+      "catalog_coverage@5": 0.7965,
+      "personalization@5": 0.931,
+      "hit_rate@10": 0.8605,
+      "recall@10": 0.5409,
+      "ndcg@10": 0.4275,
+      "catalog_coverage@10": 0.885,
+      "personalization@10": 0.8946,
+      "novelty@10": 6.4565,
+      "popularity_bias_arp@10": 0.7387,
+      "category_diversity@10": 0.6676
+    },
+    "CONTENT_ONLY": {
+      "users": 344,
+      "hit_rate@5": 0.3692,
+      "recall@5": 0.1401,
+      "ndcg@5": 0.1398,
+      "mrr": 0.2549,
+      "catalog_coverage@5": 0.8673,
+      "personalization@5": 0.9219,
+      "hit_rate@10": 0.5203,
+      "recall@10": 0.2331,
+      "ndcg@10": 0.1783,
+      "catalog_coverage@10": 0.9469,
+      "personalization@10": 0.8797,
+      "novelty@10": 8.2621,
+      "popularity_bias_arp@10": 0.3645,
+      "category_diversity@10": 0.1492
+    },
+    "CF_ONLY": {
+      "users": 344,
+      "hit_rate@5": 0.7064,
+      "recall@5": 0.3428,
+      "ndcg@5": 0.3384,
+      "mrr": 0.4929,
+      "catalog_coverage@5": 0.6814,
+      "personalization@5": 0.9154,
+      "hit_rate@10": 0.8343,
+      "recall@10": 0.5227,
+      "ndcg@10": 0.4,
+      "catalog_coverage@10": 0.8407,
+      "personalization@10": 0.8726,
+      "novelty@10": 6.1977,
+      "popularity_bias_arp@10": 0.7935,
+      "category_diversity@10": 0.6661
+    },
+    "ORACLE_TRUE_PREFERENCE": {
+      "users": 344,
+      "hit_rate@5": 0.7558,
+      "recall@5": 0.3748,
+      "ndcg@5": 0.3725,
+      "mrr": 0.522,
+      "catalog_coverage@5": 0.8319,
+      "personalization@5": 0.9292,
+      "hit_rate@10": 0.8779,
+      "recall@10": 0.5534,
+      "ndcg@10": 0.4323,
+      "catalog_coverage@10": 0.9381,
+      "personalization@10": 0.8995,
+      "novelty@10": 6.5866,
+      "popularity_bias_arp@10": 0.7087,
+      "category_diversity@10": 0.6204
+    }
+  },
+  "bootstrap_95ci": {
+    "RANDOM": {
+      "hit_rate@10": {
+        "mean": 0.439,
+        "low": 0.3837,
+        "high": 0.4913,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.1091,
+        "low": 0.0916,
+        "high": 0.1274,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.1659,
+        "low": 0.1391,
+        "high": 0.1934,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.1707,
+        "low": 0.1467,
+        "high": 0.1988,
+        "n": 344
+      }
+    },
+    "POPULARITY": {
+      "hit_rate@10": {
+        "mean": 0.7674,
+        "low": 0.7238,
+        "high": 0.811,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.3516,
+        "low": 0.3233,
+        "high": 0.3812,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.4445,
+        "low": 0.4104,
+        "high": 0.4814,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.4695,
+        "low": 0.43,
+        "high": 0.51,
+        "n": 344
+      }
+    },
+    "V1_PRODUCTION": {
+      "hit_rate@10": {
+        "mean": 0.5785,
+        "low": 0.5262,
+        "high": 0.6308,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.2117,
+        "low": 0.1872,
+        "high": 0.2371,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.2753,
+        "low": 0.242,
+        "high": 0.3079,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.311,
+        "low": 0.2754,
+        "high": 0.3479,
+        "n": 344
+      }
+    },
+    "V2": {
+      "hit_rate@10": {
+        "mean": 0.8605,
+        "low": 0.8256,
+        "high": 0.8983,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.4275,
+        "low": 0.3995,
+        "high": 0.4549,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.5409,
+        "low": 0.5066,
+        "high": 0.5727,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.5327,
+        "low": 0.4959,
+        "high": 0.5722,
+        "n": 344
+      }
+    },
+    "V2+CATEGORY_CAP3": {
+      "hit_rate@10": {
+        "mean": 0.875,
+        "low": 0.8372,
+        "high": 0.9128,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.4258,
+        "low": 0.3986,
+        "high": 0.4526,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.5419,
+        "low": 0.5069,
+        "high": 0.5761,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.5334,
+        "low": 0.4969,
+        "high": 0.5728,
+        "n": 344
+      }
+    },
+    "V2_NO_CANDIDATE_PRUNING": {
+      "hit_rate@10": {
+        "mean": 0.8605,
+        "low": 0.8256,
+        "high": 0.8983,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.4275,
+        "low": 0.3995,
+        "high": 0.4549,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.5409,
+        "low": 0.5066,
+        "high": 0.5727,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.5328,
+        "low": 0.496,
+        "high": 0.5723,
+        "n": 344
+      }
+    },
+    "CONTENT_ONLY": {
+      "hit_rate@10": {
+        "mean": 0.5203,
+        "low": 0.468,
+        "high": 0.5698,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.1783,
+        "low": 0.1546,
+        "high": 0.2024,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.2331,
+        "low": 0.2026,
+        "high": 0.2643,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.2549,
+        "low": 0.22,
+        "high": 0.2886,
+        "n": 344
+      }
+    },
+    "CF_ONLY": {
+      "hit_rate@10": {
+        "mean": 0.8343,
+        "low": 0.7965,
+        "high": 0.875,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.4,
+        "low": 0.3723,
+        "high": 0.4278,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.5227,
+        "low": 0.4884,
+        "high": 0.5584,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.4929,
+        "low": 0.4549,
+        "high": 0.5324,
+        "n": 344
+      }
+    },
+    "ORACLE_TRUE_PREFERENCE": {
+      "hit_rate@10": {
+        "mean": 0.8779,
+        "low": 0.843,
+        "high": 0.9128,
+        "n": 344
+      },
+      "ndcg@10": {
+        "mean": 0.4323,
+        "low": 0.4037,
+        "high": 0.4607,
+        "n": 344
+      },
+      "recall@10": {
+        "mean": 0.5534,
+        "low": 0.5176,
+        "high": 0.589,
+        "n": 344
+      },
+      "mrr": {
+        "mean": 0.522,
+        "low": 0.4827,
+        "high": 0.562,
+        "n": 344
+      }
+    }
+  },
+  "comparisons": {
+    "V2_vs_V1": {
+      "hit_rate@10": {
+        "mean": 0.282,
+        "low": 0.2238,
+        "high": 0.343,
+        "n": 344,
+        "wins": 112,
+        "losses": 15,
+        "ties": 217
+      },
+      "ndcg@10": {
+        "mean": 0.2158,
+        "low": 0.1859,
+        "high": 0.2471,
+        "n": 344,
+        "wins": 243,
+        "losses": 64,
+        "ties": 37
+      },
+      "recall@10": {
+        "mean": 0.2656,
+        "low": 0.2253,
+        "high": 0.308,
+        "n": 344,
+        "wins": 204,
+        "losses": 40,
+        "ties": 100
+      },
+      "mrr": {
+        "mean": 0.2216,
+        "low": 0.1744,
+        "high": 0.2671,
+        "n": 344,
+        "wins": 224,
+        "losses": 75,
+        "ties": 45
+      }
+    },
+    "V2_vs_POPULARITY": {
+      "hit_rate@10": {
+        "mean": 0.093,
+        "low": 0.0581,
+        "high": 0.1308,
+        "n": 344,
+        "wins": 41,
+        "losses": 9,
+        "ties": 294
+      },
+      "ndcg@10": {
+        "mean": 0.076,
+        "low": 0.05,
+        "high": 0.1009,
+        "n": 344,
+        "wins": 175,
+        "losses": 106,
+        "ties": 63
+      },
+      "recall@10": {
+        "mean": 0.0964,
+        "low": 0.0663,
+        "high": 0.1282,
+        "n": 344,
+        "wins": 120,
+        "losses": 45,
+        "ties": 179
+      },
+      "mrr": {
+        "mean": 0.0632,
+        "low": 0.0238,
+        "high": 0.1034,
+        "n": 344,
+        "wins": 142,
+        "losses": 102,
+        "ties": 100
+      }
+    },
+    "V1_vs_POPULARITY": {
+      "hit_rate@10": {
+        "mean": -0.189,
+        "low": -0.2529,
+        "high": -0.1279,
+        "n": 344,
+        "wins": 38,
+        "losses": 103,
+        "ties": 203
+      },
+      "ndcg@10": {
+        "mean": -0.1398,
+        "low": -0.1796,
+        "high": -0.0977,
+        "n": 344,
+        "wins": 103,
+        "losses": 197,
+        "ties": 44
+      },
+      "recall@10": {
+        "mean": -0.1692,
+        "low": -0.2185,
+        "high": -0.1216,
+        "n": 344,
+        "wins": 74,
+        "losses": 169,
+        "ties": 101
+      },
+      "mrr": {
+        "mean": -0.1585,
+        "low": -0.2082,
+        "high": -0.1076,
+        "n": 344,
+        "wins": 113,
+        "losses": 200,
+        "ties": 31
+      }
+    }
+  },
+  "per_user_ndcg@10_distribution": {
+    "RANDOM": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.1815,
+      "max": 1.0,
+      "share_zero": 0.561
+    },
+    "POPULARITY": {
+      "min": 0.0,
+      "q1": 0.1131,
+      "median": 0.3155,
+      "q3": 0.5329,
+      "max": 1.0,
+      "share_zero": 0.2326
+    },
+    "V1_PRODUCTION": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.1413,
+      "q3": 0.3552,
+      "max": 1.0,
+      "share_zero": 0.4215
+    },
+    "V2": {
+      "min": 0.0,
+      "q1": 0.2372,
+      "median": 0.4307,
+      "q3": 0.6238,
+      "max": 1.0,
+      "share_zero": 0.1395
+    },
+    "V2+CATEGORY_CAP3": {
+      "min": 0.0,
+      "q1": 0.2372,
+      "median": 0.4197,
+      "q3": 0.6131,
+      "max": 1.0,
+      "share_zero": 0.125
+    },
+    "V2_NO_CANDIDATE_PRUNING": {
+      "min": 0.0,
+      "q1": 0.2372,
+      "median": 0.4307,
+      "q3": 0.6238,
+      "max": 1.0,
+      "share_zero": 0.1395
+    },
+    "CONTENT_ONLY": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0843,
+      "q3": 0.2749,
+      "max": 1.0,
+      "share_zero": 0.4797
+    },
+    "CF_ONLY": {
+      "min": 0.0,
+      "q1": 0.2021,
+      "median": 0.3869,
+      "q3": 0.6053,
+      "max": 1.0,
+      "share_zero": 0.1657
+    },
+    "ORACLE_TRUE_PREFERENCE": {
+      "min": 0.0,
+      "q1": 0.2372,
+      "median": 0.4329,
+      "q3": 0.611,
+      "max": 1.0,
+      "share_zero": 0.1221
+    }
+  },
+  "ablation": {
+    "V2 full": {
+      "users": 344,
+      "hit_rate@5": 0.7326,
+      "recall@5": 0.368,
+      "ndcg@5": 0.3684,
+      "mrr": 0.5327,
+      "catalog_coverage@5": 0.7965,
+      "personalization@5": 0.931,
+      "hit_rate@10": 0.8605,
+      "recall@10": 0.5409,
+      "ndcg@10": 0.4275,
+      "catalog_coverage@10": 0.885,
+      "personalization@10": 0.8946,
+      "novelty@10": 6.4565,
+      "popularity_bias_arp@10": 0.7387,
+      "category_diversity@10": 0.6676
+    },
+    "V2 - collaborative": {
+      "users": 344,
+      "hit_rate@5": 0.7006,
+      "recall@5": 0.3461,
+      "ndcg@5": 0.3541,
+      "mrr": 0.5209,
+      "catalog_coverage@5": 0.6991,
+      "personalization@5": 0.9248,
+      "hit_rate@10": 0.8459,
+      "recall@10": 0.5113,
+      "ndcg@10": 0.4081,
+      "catalog_coverage@10": 0.8496,
+      "personalization@10": 0.8875,
+      "novelty@10": 6.4278,
+      "popularity_bias_arp@10": 0.7467,
+      "category_diversity@10": 0.6634
+    },
+    "V2 - semantic": {
+      "users": 344,
+      "hit_rate@5": 0.7587,
+      "recall@5": 0.3801,
+      "ndcg@5": 0.3825,
+      "mrr": 0.5472,
+      "catalog_coverage@5": 0.7788,
+      "personalization@5": 0.9365,
+      "hit_rate@10": 0.8721,
+      "recall@10": 0.553,
+      "ndcg@10": 0.4408,
+      "catalog_coverage@10": 0.9027,
+      "personalization@10": 0.898,
+      "novelty@10": 6.4181,
+      "popularity_bias_arp@10": 0.7463,
+      "category_diversity@10": 0.669
+    },
+    "V2 - preference": {
+      "users": 344,
+      "hit_rate@5": 0.6977,
+      "recall@5": 0.3411,
+      "ndcg@5": 0.343,
+      "mrr": 0.5065,
+      "catalog_coverage@5": 0.6726,
+      "personalization@5": 0.916,
+      "hit_rate@10": 0.8459,
+      "recall@10": 0.5235,
+      "ndcg@10": 0.4064,
+      "catalog_coverage@10": 0.8496,
+      "personalization@10": 0.8763,
+      "novelty@10": 6.2502,
+      "popularity_bias_arp@10": 0.7825,
+      "category_diversity@10": 0.6733
+    },
+    "V2 - popularity": {
+      "users": 344,
+      "hit_rate@5": 0.7267,
+      "recall@5": 0.358,
+      "ndcg@5": 0.3631,
+      "mrr": 0.5281,
+      "catalog_coverage@5": 0.7611,
+      "personalization@5": 0.9255,
+      "hit_rate@10": 0.8634,
+      "recall@10": 0.5389,
+      "ndcg@10": 0.4253,
+      "catalog_coverage@10": 0.885,
+      "personalization@10": 0.8883,
+      "novelty@10": 6.367,
+      "popularity_bias_arp@10": 0.7608,
+      "category_diversity@10": 0.6696
+    },
+    "V2 - quality": {
+      "users": 344,
+      "hit_rate@5": 0.7297,
+      "recall@5": 0.3638,
+      "ndcg@5": 0.3645,
+      "mrr": 0.5281,
+      "catalog_coverage@5": 0.8053,
+      "personalization@5": 0.9295,
+      "hit_rate@10": 0.8663,
+      "recall@10": 0.5417,
+      "ndcg@10": 0.4251,
+      "catalog_coverage@10": 0.8673,
+      "personalization@10": 0.8944,
+      "novelty@10": 6.4317,
+      "popularity_bias_arp@10": 0.745,
+      "category_diversity@10": 0.6672
+    },
+    "V2 - availability": {
+      "users": 344,
+      "hit_rate@5": 0.7384,
+      "recall@5": 0.3696,
+      "ndcg@5": 0.3703,
+      "mrr": 0.5351,
+      "catalog_coverage@5": 0.8053,
+      "personalization@5": 0.931,
+      "hit_rate@10": 0.8605,
+      "recall@10": 0.538,
+      "ndcg@10": 0.428,
+      "catalog_coverage@10": 0.8673,
+      "personalization@10": 0.8937,
+      "novelty@10": 6.4313,
+      "popularity_bias_arp@10": 0.7444,
+      "category_diversity@10": 0.6669
+    },
+    "V2 - recency": {
+      "users": 344,
+      "hit_rate@5": 0.7297,
+      "recall@5": 0.3617,
+      "ndcg@5": 0.3666,
+      "mrr": 0.5311,
+      "catalog_coverage@5": 0.708,
+      "personalization@5": 0.924,
+      "hit_rate@10": 0.8576,
+      "recall@10": 0.5396,
+      "ndcg@10": 0.4277,
+      "catalog_coverage@10": 0.8407,
+      "personalization@10": 0.8854,
+      "novelty@10": 6.2965,
+      "popularity_bias_arp@10": 0.7735,
+      "category_diversity@10": 0.676
+    }
+  },
+  "ablation_paired_delta_full_minus_ablated": {
+    "V2 - collaborative": {
+      "hit_rate@10": {
+        "mean": 0.0145,
+        "low": -0.0058,
+        "high": 0.0378,
+        "n": 344,
+        "wins": 10,
+        "losses": 5,
+        "ties": 329
+      },
+      "ndcg@10": {
+        "mean": 0.0195,
+        "low": 0.0078,
+        "high": 0.0312,
+        "n": 344,
+        "wins": 143,
+        "losses": 108,
+        "ties": 93
+      },
+      "recall@10": {
+        "mean": 0.0297,
+        "low": 0.0129,
+        "high": 0.0489,
+        "n": 344,
+        "wins": 54,
+        "losses": 26,
+        "ties": 264
+      },
+      "mrr": {
+        "mean": 0.0118,
+        "low": -0.0098,
+        "high": 0.0373,
+        "n": 344,
+        "wins": 102,
+        "losses": 80,
+        "ties": 162
+      }
+    },
+    "V2 - semantic": {
+      "hit_rate@10": {
+        "mean": -0.0116,
+        "low": -0.032,
+        "high": 0.0087,
+        "n": 344,
+        "wins": 5,
+        "losses": 9,
+        "ties": 330
+      },
+      "ndcg@10": {
+        "mean": -0.0133,
+        "low": -0.0256,
+        "high": -0.0016,
+        "n": 344,
+        "wins": 111,
+        "losses": 142,
+        "ties": 91
+      },
+      "recall@10": {
+        "mean": -0.012,
+        "low": -0.0308,
+        "high": 0.0068,
+        "n": 344,
+        "wins": 29,
+        "losses": 43,
+        "ties": 272
+      },
+      "mrr": {
+        "mean": -0.0145,
+        "low": -0.0349,
+        "high": 0.0076,
+        "n": 344,
+        "wins": 74,
+        "losses": 108,
+        "ties": 162
+      }
+    },
+    "V2 - preference": {
+      "hit_rate@10": {
+        "mean": 0.0145,
+        "low": -0.0116,
+        "high": 0.0378,
+        "n": 344,
+        "wins": 12,
+        "losses": 7,
+        "ties": 325
+      },
+      "ndcg@10": {
+        "mean": 0.0211,
+        "low": 0.0064,
+        "high": 0.0352,
+        "n": 344,
+        "wins": 148,
+        "losses": 101,
+        "ties": 95
+      },
+      "recall@10": {
+        "mean": 0.0174,
+        "low": -0.0042,
+        "high": 0.0379,
+        "n": 344,
+        "wins": 45,
+        "losses": 30,
+        "ties": 269
+      },
+      "mrr": {
+        "mean": 0.0262,
+        "low": 0.0019,
+        "high": 0.0493,
+        "n": 344,
+        "wins": 113,
+        "losses": 71,
+        "ties": 160
+      }
+    },
+    "V2 - popularity": {
+      "hit_rate@10": {
+        "mean": -0.0029,
+        "low": -0.0262,
+        "high": 0.0203,
+        "n": 344,
+        "wins": 8,
+        "losses": 9,
+        "ties": 327
+      },
+      "ndcg@10": {
+        "mean": 0.0022,
+        "low": -0.0072,
+        "high": 0.0116,
+        "n": 344,
+        "wins": 115,
+        "losses": 109,
+        "ties": 120
+      },
+      "recall@10": {
+        "mean": 0.002,
+        "low": -0.0174,
+        "high": 0.0208,
+        "n": 344,
+        "wins": 28,
+        "losses": 32,
+        "ties": 284
+      },
+      "mrr": {
+        "mean": 0.0046,
+        "low": -0.0096,
+        "high": 0.021,
+        "n": 344,
+        "wins": 76,
+        "losses": 67,
+        "ties": 201
+      }
+    },
+    "V2 - quality": {
+      "hit_rate@10": {
+        "mean": -0.0058,
+        "low": -0.0233,
+        "high": 0.0116,
+        "n": 344,
+        "wins": 4,
+        "losses": 6,
+        "ties": 334
+      },
+      "ndcg@10": {
+        "mean": 0.0024,
+        "low": -0.0045,
+        "high": 0.0102,
+        "n": 344,
+        "wins": 103,
+        "losses": 92,
+        "ties": 149
+      },
+      "recall@10": {
+        "mean": -0.0007,
+        "low": -0.0164,
+        "high": 0.0146,
+        "n": 344,
+        "wins": 18,
+        "losses": 17,
+        "ties": 309
+      },
+      "mrr": {
+        "mean": 0.0046,
+        "low": -0.0079,
+        "high": 0.018,
+        "n": 344,
+        "wins": 65,
+        "losses": 59,
+        "ties": 220
+      }
+    },
+    "V2 - availability": {
+      "hit_rate@10": {
+        "mean": 0.0,
+        "low": -0.0087,
+        "high": 0.0087,
+        "n": 344,
+        "wins": 1,
+        "losses": 1,
+        "ties": 342
+      },
+      "ndcg@10": {
+        "mean": -0.0005,
+        "low": -0.0051,
+        "high": 0.0044,
+        "n": 344,
+        "wins": 41,
+        "losses": 60,
+        "ties": 243
+      },
+      "recall@10": {
+        "mean": 0.0029,
+        "low": -0.0038,
+        "high": 0.0104,
+        "n": 344,
+        "wins": 5,
+        "losses": 6,
+        "ties": 333
+      },
+      "mrr": {
+        "mean": -0.0025,
+        "low": -0.0129,
+        "high": 0.0081,
+        "n": 344,
+        "wins": 33,
+        "losses": 36,
+        "ties": 275
+      }
+    },
+    "V2 - recency": {
+      "hit_rate@10": {
+        "mean": 0.0029,
+        "low": -0.0174,
+        "high": 0.0233,
+        "n": 344,
+        "wins": 8,
+        "losses": 7,
+        "ties": 329
+      },
+      "ndcg@10": {
+        "mean": -0.0002,
+        "low": -0.011,
+        "high": 0.0113,
+        "n": 344,
+        "wins": 110,
+        "losses": 116,
+        "ties": 118
+      },
+      "recall@10": {
+        "mean": 0.0013,
+        "low": -0.0172,
+        "high": 0.0185,
+        "n": 344,
+        "wins": 31,
+        "losses": 35,
+        "ties": 278
+      },
+      "mrr": {
+        "mean": 0.0016,
+        "low": -0.0163,
+        "high": 0.0201,
+        "n": 344,
+        "wins": 82,
+        "losses": 70,
+        "ties": 192
+      }
+    }
+  },
+  "cold_start": {
+    "new_users_0_train_loans": {
+      "users": 58,
+      "models": {
+        "RANDOM": {
+          "users": 58,
+          "hit_rate@10": 0.2414,
+          "recall@10": 0.0563,
+          "ndcg@10": 0.0393,
+          "mrr": 0.1063,
+          "catalog_coverage@10": 0.9823,
+          "personalization@10": 0.9487
+        },
+        "POPULARITY": {
+          "users": 58,
+          "hit_rate@10": 0.7586,
+          "recall@10": 0.452,
+          "ndcg@10": 0.4288,
+          "mrr": 0.5923,
+          "catalog_coverage@10": 0.1062,
+          "personalization@10": 0.0115
+        },
+        "V1_PRODUCTION": {
+          "users": 58,
+          "hit_rate@10": 0.5345,
+          "recall@10": 0.1865,
+          "ndcg@10": 0.2215,
+          "mrr": 0.4374,
+          "catalog_coverage@10": 0.2389,
+          "personalization@10": 0.0918
+        },
+        "V2": {
+          "users": 58,
+          "hit_rate@10": 0.7931,
+          "recall@10": 0.4693,
+          "ndcg@10": 0.4324,
+          "mrr": 0.579,
+          "catalog_coverage@10": 0.177,
+          "personalization@10": 0.0568
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 58,
+          "hit_rate@10": 0.8276,
+          "recall@10": 0.5015,
+          "ndcg@10": 0.4422,
+          "mrr": 0.5794,
+          "catalog_coverage@10": 0.1593,
+          "personalization@10": 0.0509
+        },
+        "V2_NO_CANDIDATE_PRUNING": {
+          "users": 58,
+          "hit_rate@10": 0.7931,
+          "recall@10": 0.4693,
+          "ndcg@10": 0.4324,
+          "mrr": 0.5794,
+          "catalog_coverage@10": 0.177,
+          "personalization@10": 0.0568
+        },
+        "CONTENT_ONLY": {
+          "users": 58,
+          "hit_rate@10": 0.431,
+          "recall@10": 0.1294,
+          "ndcg@10": 0.1269,
+          "mrr": 0.2464,
+          "catalog_coverage@10": 0.2743,
+          "personalization@10": 0.0822
+        },
+        "CF_ONLY": {
+          "users": 58,
+          "hit_rate@10": 0.3621,
+          "recall@10": 0.0812,
+          "ndcg@10": 0.083,
+          "mrr": 0.206,
+          "catalog_coverage@10": 0.2832,
+          "personalization@10": 0.0979
+        },
+        "ORACLE_TRUE_PREFERENCE": {
+          "users": 58,
+          "hit_rate@10": 0.8793,
+          "recall@10": 0.5708,
+          "ndcg@10": 0.4998,
+          "mrr": 0.6078,
+          "catalog_coverage@10": 0.2212,
+          "personalization@10": 0.446
+        }
+      }
+    },
+    "sparse_users_1_2_train_loans": {
+      "users": 13,
+      "models": {
+        "RANDOM": {
+          "users": 13,
+          "hit_rate@10": 0.1538,
+          "recall@10": 0.0449,
+          "ndcg@10": 0.0344,
+          "mrr": 0.08,
+          "catalog_coverage@10": 0.7699,
+          "personalization@10": 0.96
+        },
+        "POPULARITY": {
+          "users": 13,
+          "hit_rate@10": 0.7692,
+          "recall@10": 0.5092,
+          "ndcg@10": 0.4069,
+          "mrr": 0.5724,
+          "catalog_coverage@10": 0.1239,
+          "personalization@10": 0.3605
+        },
+        "V1_PRODUCTION": {
+          "users": 13,
+          "hit_rate@10": 0.2308,
+          "recall@10": 0.1923,
+          "ndcg@10": 0.1508,
+          "mrr": 0.1964,
+          "catalog_coverage@10": 0.4602,
+          "personalization@10": 0.8633
+        },
+        "V2": {
+          "users": 13,
+          "hit_rate@10": 0.6923,
+          "recall@10": 0.4066,
+          "ndcg@10": 0.2855,
+          "mrr": 0.384,
+          "catalog_coverage@10": 0.2301,
+          "personalization@10": 0.5899
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 13,
+          "hit_rate@10": 0.6923,
+          "recall@10": 0.4451,
+          "ndcg@10": 0.3026,
+          "mrr": 0.3918,
+          "catalog_coverage@10": 0.2035,
+          "personalization@10": 0.5421
+        },
+        "V2_NO_CANDIDATE_PRUNING": {
+          "users": 13,
+          "hit_rate@10": 0.6923,
+          "recall@10": 0.4066,
+          "ndcg@10": 0.2855,
+          "mrr": 0.3847,
+          "catalog_coverage@10": 0.2301,
+          "personalization@10": 0.5899
+        },
+        "CONTENT_ONLY": {
+          "users": 13,
+          "hit_rate@10": 0.0769,
+          "recall@10": 0.0192,
+          "ndcg@10": 0.0087,
+          "mrr": 0.0359,
+          "catalog_coverage@10": 0.6106,
+          "personalization@10": 0.9199
+        },
+        "CF_ONLY": {
+          "users": 13,
+          "hit_rate@10": 0.6923,
+          "recall@10": 0.4707,
+          "ndcg@10": 0.3551,
+          "mrr": 0.4194,
+          "catalog_coverage@10": 0.2035,
+          "personalization@10": 0.5973
+        },
+        "ORACLE_TRUE_PREFERENCE": {
+          "users": 13,
+          "hit_rate@10": 0.7692,
+          "recall@10": 0.4817,
+          "ndcg@10": 0.4239,
+          "mrr": 0.5412,
+          "catalog_coverage@10": 0.1947,
+          "personalization@10": 0.5758
+        }
+      }
+    },
+    "regular_users_3plus_train_loans": {
+      "users": 344,
+      "models": {
+        "RANDOM": {
+          "users": 344,
+          "hit_rate@10": 0.439,
+          "recall@10": 0.1659,
+          "ndcg@10": 0.1091,
+          "mrr": 0.1707,
+          "catalog_coverage@10": 1.0,
+          "personalization@10": 0.9457
+        },
+        "POPULARITY": {
+          "users": 344,
+          "hit_rate@10": 0.7674,
+          "recall@10": 0.4445,
+          "ndcg@10": 0.3516,
+          "mrr": 0.4695,
+          "catalog_coverage@10": 0.7965,
+          "personalization@10": 0.8537
+        },
+        "V1_PRODUCTION": {
+          "users": 344,
+          "hit_rate@10": 0.5785,
+          "recall@10": 0.2753,
+          "ndcg@10": 0.2117,
+          "mrr": 0.311,
+          "catalog_coverage@10": 0.9381,
+          "personalization@10": 0.8856
+        },
+        "V2": {
+          "users": 344,
+          "hit_rate@10": 0.8605,
+          "recall@10": 0.5409,
+          "ndcg@10": 0.4275,
+          "mrr": 0.5327,
+          "catalog_coverage@10": 0.885,
+          "personalization@10": 0.8946
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 344,
+          "hit_rate@10": 0.875,
+          "recall@10": 0.5419,
+          "ndcg@10": 0.4258,
+          "mrr": 0.5334,
+          "catalog_coverage@10": 0.9115,
+          "personalization@10": 0.888
+        },
+        "V2_NO_CANDIDATE_PRUNING": {
+          "users": 344,
+          "hit_rate@10": 0.8605,
+          "recall@10": 0.5409,
+          "ndcg@10": 0.4275,
+          "mrr": 0.5328,
+          "catalog_coverage@10": 0.885,
+          "personalization@10": 0.8946
+        },
+        "CONTENT_ONLY": {
+          "users": 344,
+          "hit_rate@10": 0.5203,
+          "recall@10": 0.2331,
+          "ndcg@10": 0.1783,
+          "mrr": 0.2549,
+          "catalog_coverage@10": 0.9469,
+          "personalization@10": 0.8797
+        },
+        "CF_ONLY": {
+          "users": 344,
+          "hit_rate@10": 0.8343,
+          "recall@10": 0.5227,
+          "ndcg@10": 0.4,
+          "mrr": 0.4929,
+          "catalog_coverage@10": 0.8407,
+          "personalization@10": 0.8726
+        },
+        "ORACLE_TRUE_PREFERENCE": {
+          "users": 344,
+          "hit_rate@10": 0.8779,
+          "recall@10": 0.5534,
+          "ndcg@10": 0.4323,
+          "mrr": 0.522,
+          "catalog_coverage@10": 0.9381,
+          "personalization@10": 0.8995
+        }
+      }
+    },
+    "empty_recommendation_lists": {
+      "RANDOM": 0,
+      "POPULARITY": 0,
+      "V1_PRODUCTION": 0,
+      "V2": 0,
+      "V2+CATEGORY_CAP3": 0,
+      "V2_NO_CANDIDATE_PRUNING": 0,
+      "CONTENT_ONLY": 0,
+      "CF_ONLY": 0
+    },
+    "item_cold_start": {
+      "masked_books": 16,
+      "rule": "sha1(book_id) % 10 == 0; all their interactions before the test cutoff removed from features (targets unchanged). zero_evidence = popularity/CF/recency left at 0; neutral_imputation = those features set to the mean of the reader's other candidates; new_arrival_slot = additionally the best-scoring new title is guaranteed one of the top-10 places (production policy: both)",
+      "V2_with_history": {
+        "users": 153,
+        "recall@10": 0.6531
+      },
+      "V2_as_new_books_zero_evidence": {
+        "users": 153,
+        "recall@10": 0.0
+      },
+      "V2_as_new_books_neutral_imputation": {
+        "users": 153,
+        "recall@10": 0.0196
+      },
+      "V2_as_new_books_imputation_plus_new_arrival_slot": {
+        "users": 153,
+        "recall@10": 0.1694
+      },
+      "POPULARITY_as_new_books": {
+        "users": 153,
+        "recall@10": 0.0
+      },
+      "V1_PRODUCTION": {
+        "users": 153,
+        "recall@10": 0.2026
+      },
+      "RANDOM": {
+        "users": 153,
+        "recall@10": 0.1122
+      }
+    }
+  },
+  "legacy_protocol": {
+    "results": {
+      "POPULARITY": {
+        "users": 368,
+        "hit_rate@5": 0.6766,
+        "recall@5": 0.2898,
+        "ndcg@5": 0.3176,
+        "mrr": 0.5122,
+        "catalog_coverage@5": 0.6283,
+        "personalization@5": 0.8991,
+        "hit_rate@10": 0.8043,
+        "recall@10": 0.4496,
+        "ndcg@10": 0.372,
+        "catalog_coverage@10": 0.7965,
+        "personalization@10": 0.8542
+      },
+      "V1_PRODUCTION": {
+        "users": 368,
+        "hit_rate@5": 0.5109,
+        "recall@5": 0.1847,
+        "ndcg@5": 0.2046,
+        "mrr": 0.3605,
+        "catalog_coverage@5": 0.8407,
+        "personalization@5": 0.9172,
+        "hit_rate@10": 0.6223,
+        "recall@10": 0.2841,
+        "ndcg@10": 0.2362,
+        "catalog_coverage@10": 0.9735,
+        "personalization@10": 0.8915
+      },
+      "V2": {
+        "users": 368,
+        "hit_rate@5": 0.6902,
+        "recall@5": 0.2978,
+        "ndcg@5": 0.3226,
+        "mrr": 0.4986,
+        "catalog_coverage@5": 0.7965,
+        "personalization@5": 0.9336,
+        "hit_rate@10": 0.8016,
+        "recall@10": 0.4409,
+        "ndcg@10": 0.3652,
+        "catalog_coverage@10": 0.8761,
+        "personalization@10": 0.8967
+      },
+      "V2_LEGACY_EXCLUSIONS": {
+        "users": 368,
+        "hit_rate@5": 0.8234,
+        "recall@5": 0.416,
+        "ndcg@5": 0.4396,
+        "mrr": 0.6261,
+        "catalog_coverage@5": 0.7965,
+        "personalization@5": 0.9335,
+        "hit_rate@10": 0.9158,
+        "recall@10": 0.5888,
+        "ndcg@10": 0.4922,
+        "catalog_coverage@10": 0.8584,
+        "personalization@10": 0.8952
+      },
+      "ORACLE_TRUE_PREFERENCE": {
+        "users": 368,
+        "hit_rate@5": 0.8207,
+        "recall@5": 0.412,
+        "ndcg@5": 0.4259,
+        "mrr": 0.5952,
+        "catalog_coverage@5": 0.8496,
+        "personalization@5": 0.9295,
+        "hit_rate@10": 0.9185,
+        "recall@10": 0.5852,
+        "ndcg@10": 0.4803,
+        "catalog_coverage@10": 0.9469,
+        "personalization@10": 0.8997
+      }
+    },
+    "parity_with_simulation_report": {
+      "POPULARITY": {
+        "max_abs_diff": 0.0,
+        "diffs": {
+          "hit_rate@10": 0.0,
+          "ndcg@10": 0.0,
+          "mrr": 0.0,
+          "users": 0.0
+        }
+      },
+      "V1_PRODUCTION": {
+        "max_abs_diff": 0.0,
+        "diffs": {
+          "hit_rate@10": 0.0,
+          "ndcg@10": 0.0,
+          "mrr": 0.0,
+          "users": 0.0
+        }
+      },
+      "ORACLE_TRUE_PREFERENCE": {
+        "max_abs_diff": 0.0,
+        "diffs": {
+          "hit_rate@10": 0.0,
+          "ndcg@10": 0.0,
+          "mrr": 0.0,
+          "users": 0.0
+        }
+      }
+    }
+  },
+  "error_analysis": {
+    "v2_vs_popularity_ndcg@10_per_user": {
+      "mean": 0.076,
+      "low": 0.05,
+      "high": 0.1009,
+      "n": 344,
+      "wins": 175,
+      "losses": 106,
+      "ties": 63
+    },
+    "v2_vs_v1_ndcg@10_per_user": {
+      "mean": 0.2158,
+      "low": 0.1859,
+      "high": 0.2471,
+      "n": 344,
+      "wins": 243,
+      "losses": 64,
+      "ties": 37
+    },
+    "by_activity_tertile": {
+      "low (<= 19 train loans)": {
+        "users": 121,
+        "models": {
+          "RANDOM": {
+            "users": 121,
+            "hit_rate@10": 0.3719,
+            "recall@10": 0.136,
+            "ndcg@10": 0.0884,
+            "mrr": 0.1505,
+            "catalog_coverage@10": 1.0,
+            "personalization@10": 0.9504
+          },
+          "POPULARITY": {
+            "users": 121,
+            "hit_rate@10": 0.8017,
+            "recall@10": 0.5194,
+            "ndcg@10": 0.4087,
+            "mrr": 0.5213,
+            "catalog_coverage@10": 0.2655,
+            "personalization@10": 0.6659
+          },
+          "V1_PRODUCTION": {
+            "users": 121,
+            "hit_rate@10": 0.4793,
+            "recall@10": 0.2113,
+            "ndcg@10": 0.1653,
+            "mrr": 0.2643,
+            "catalog_coverage@10": 0.7699,
+            "personalization@10": 0.8695
+          },
+          "V2": {
+            "users": 121,
+            "hit_rate@10": 0.8264,
+            "recall@10": 0.5384,
+            "ndcg@10": 0.4258,
+            "mrr": 0.5368,
+            "catalog_coverage@10": 0.5133,
+            "personalization@10": 0.7769
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 121,
+            "hit_rate@10": 0.876,
+            "recall@10": 0.5749,
+            "ndcg@10": 0.4369,
+            "mrr": 0.538,
+            "catalog_coverage@10": 0.4602,
+            "personalization@10": 0.7542
+          },
+          "V2_NO_CANDIDATE_PRUNING": {
+            "users": 121,
+            "hit_rate@10": 0.8264,
+            "recall@10": 0.5384,
+            "ndcg@10": 0.4258,
+            "mrr": 0.5369,
+            "catalog_coverage@10": 0.5133,
+            "personalization@10": 0.7769
+          },
+          "CONTENT_ONLY": {
+            "users": 121,
+            "hit_rate@10": 0.3471,
+            "recall@10": 0.12,
+            "ndcg@10": 0.104,
+            "mrr": 0.1865,
+            "catalog_coverage@10": 0.9027,
+            "personalization@10": 0.8984
+          },
+          "CF_ONLY": {
+            "users": 121,
+            "hit_rate@10": 0.8182,
+            "recall@10": 0.5411,
+            "ndcg@10": 0.4196,
+            "mrr": 0.4972,
+            "catalog_coverage@10": 0.3097,
+            "personalization@10": 0.7239
+          },
+          "ORACLE_TRUE_PREFERENCE": {
+            "users": 121,
+            "hit_rate@10": 0.876,
+            "recall@10": 0.5669,
+            "ndcg@10": 0.4429,
+            "mrr": 0.5267,
+            "catalog_coverage@10": 0.4779,
+            "personalization@10": 0.7607
+          }
+        }
+      },
+      "mid (20-39)": {
+        "users": 112,
+        "models": {
+          "RANDOM": {
+            "users": 112,
+            "hit_rate@10": 0.3929,
+            "recall@10": 0.1278,
+            "ndcg@10": 0.0875,
+            "mrr": 0.1472,
+            "catalog_coverage@10": 0.9735,
+            "personalization@10": 0.9439
+          },
+          "POPULARITY": {
+            "users": 112,
+            "hit_rate@10": 0.7143,
+            "recall@10": 0.3618,
+            "ndcg@10": 0.291,
+            "mrr": 0.4232,
+            "catalog_coverage@10": 0.4425,
+            "personalization@10": 0.8072
+          },
+          "V1_PRODUCTION": {
+            "users": 112,
+            "hit_rate@10": 0.5982,
+            "recall@10": 0.2798,
+            "ndcg@10": 0.2222,
+            "mrr": 0.337,
+            "catalog_coverage@10": 0.8142,
+            "personalization@10": 0.8616
+          },
+          "V2": {
+            "users": 112,
+            "hit_rate@10": 0.9018,
+            "recall@10": 0.5499,
+            "ndcg@10": 0.4165,
+            "mrr": 0.5116,
+            "catalog_coverage@10": 0.6637,
+            "personalization@10": 0.881
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 112,
+            "hit_rate@10": 0.875,
+            "recall@10": 0.5126,
+            "ndcg@10": 0.3996,
+            "mrr": 0.51,
+            "catalog_coverage@10": 0.6549,
+            "personalization@10": 0.8762
+          },
+          "V2_NO_CANDIDATE_PRUNING": {
+            "users": 112,
+            "hit_rate@10": 0.9018,
+            "recall@10": 0.5499,
+            "ndcg@10": 0.4165,
+            "mrr": 0.5118,
+            "catalog_coverage@10": 0.6637,
+            "personalization@10": 0.881
+          },
+          "CONTENT_ONLY": {
+            "users": 112,
+            "hit_rate@10": 0.6696,
+            "recall@10": 0.302,
+            "ndcg@10": 0.2324,
+            "mrr": 0.3177,
+            "catalog_coverage@10": 0.7345,
+            "personalization@10": 0.8598
+          },
+          "CF_ONLY": {
+            "users": 112,
+            "hit_rate@10": 0.8393,
+            "recall@10": 0.4952,
+            "ndcg@10": 0.3628,
+            "mrr": 0.4579,
+            "catalog_coverage@10": 0.5044,
+            "personalization@10": 0.8498
+          },
+          "ORACLE_TRUE_PREFERENCE": {
+            "users": 112,
+            "hit_rate@10": 0.875,
+            "recall@10": 0.5272,
+            "ndcg@10": 0.4037,
+            "mrr": 0.4972,
+            "catalog_coverage@10": 0.7168,
+            "personalization@10": 0.8923
+          }
+        }
+      },
+      "high (> 39)": {
+        "users": 111,
+        "models": {
+          "RANDOM": {
+            "users": 111,
+            "hit_rate@10": 0.5586,
+            "recall@10": 0.2369,
+            "ndcg@10": 0.1534,
+            "mrr": 0.2163,
+            "catalog_coverage@10": 0.9292,
+            "personalization@10": 0.9384
+          },
+          "POPULARITY": {
+            "users": 111,
+            "hit_rate@10": 0.7838,
+            "recall@10": 0.4464,
+            "ndcg@10": 0.3504,
+            "mrr": 0.4598,
+            "catalog_coverage@10": 0.7876,
+            "personalization@10": 0.8817
+          },
+          "V1_PRODUCTION": {
+            "users": 111,
+            "hit_rate@10": 0.6667,
+            "recall@10": 0.3405,
+            "ndcg@10": 0.2518,
+            "mrr": 0.3358,
+            "catalog_coverage@10": 0.8053,
+            "personalization@10": 0.848
+          },
+          "V2": {
+            "users": 111,
+            "hit_rate@10": 0.8559,
+            "recall@10": 0.5347,
+            "ndcg@10": 0.4405,
+            "mrr": 0.5495,
+            "catalog_coverage@10": 0.8673,
+            "personalization@10": 0.9187
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 111,
+            "hit_rate@10": 0.8739,
+            "recall@10": 0.5353,
+            "ndcg@10": 0.44,
+            "mrr": 0.552,
+            "catalog_coverage@10": 0.885,
+            "personalization@10": 0.9127
+          },
+          "V2_NO_CANDIDATE_PRUNING": {
+            "users": 111,
+            "hit_rate@10": 0.8559,
+            "recall@10": 0.5347,
+            "ndcg@10": 0.4405,
+            "mrr": 0.5495,
+            "catalog_coverage@10": 0.8673,
+            "personalization@10": 0.9187
+          },
+          "CONTENT_ONLY": {
+            "users": 111,
+            "hit_rate@10": 0.5586,
+            "recall@10": 0.2868,
+            "ndcg@10": 0.2048,
+            "mrr": 0.2661,
+            "catalog_coverage@10": 0.7788,
+            "personalization@10": 0.8154
+          },
+          "CF_ONLY": {
+            "users": 111,
+            "hit_rate@10": 0.8468,
+            "recall@10": 0.5304,
+            "ndcg@10": 0.4163,
+            "mrr": 0.5235,
+            "catalog_coverage@10": 0.8319,
+            "personalization@10": 0.9071
+          },
+          "ORACLE_TRUE_PREFERENCE": {
+            "users": 111,
+            "hit_rate@10": 0.8829,
+            "recall@10": 0.5649,
+            "ndcg@10": 0.4494,
+            "mrr": 0.5419,
+            "catalog_coverage@10": 0.9292,
+            "personalization@10": 0.9212
+          }
+        }
+      }
+    },
+    "head_vs_tail_targets": {
+      "head_definition": "top 23 books by train loan count",
+      "RANDOM": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.1121
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.1779
+        }
+      },
+      "POPULARITY": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.9195
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.1872
+        }
+      },
+      "V1_PRODUCTION": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.1534
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.3115
+        }
+      },
+      "V2": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.8525
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.3495
+        }
+      },
+      "V2+CATEGORY_CAP3": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.8865
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.328
+        }
+      },
+      "V2_NO_CANDIDATE_PRUNING": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.8525
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.3495
+        }
+      },
+      "CONTENT_ONLY": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.0914
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.2925
+        }
+      },
+      "CF_ONLY": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.9062
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.3041
+        }
+      },
+      "ORACLE_TRUE_PREFERENCE": {
+        "head": {
+          "users": 214,
+          "recall@10": 0.827
+        },
+        "tail": {
+          "users": 293,
+          "recall@10": 0.3697
+        }
+      }
+    },
+    "candidate_pool": {
+      "mean_pool_size": 66.8953,
+      "per_source_k": 40,
+      "target_recall_of_pool": 0.9822
+    }
+  },
+  "acceptance": {
+    "rule": "V2 - baseline > 0 with paired 95% bootstrap CI above zero, for NDCG@10, Recall@10 and MRR, against V1_PRODUCTION and POPULARITY",
+    "checks": {
+      "V2_vs_V1:ndcg@10": true,
+      "V2_vs_V1:recall@10": true,
+      "V2_vs_V1:mrr": true,
+      "V2_vs_POPULARITY:ndcg@10": true,
+      "V2_vs_POPULARITY:recall@10": true,
+      "V2_vs_POPULARITY:mrr": true
+    },
+    "passed": true
+  },
+  "runtime_seconds": 262.4,
+  "conclusion": [
+    "V2 vs V1_PRODUCTION on 344 test users: hit_rate@10 better (Δ=+0.2820, 95% CI [+0.2238, +0.3430]); ndcg@10 better (Δ=+0.2158, 95% CI [+0.1859, +0.2471]); recall@10 better (Δ=+0.2656, 95% CI [+0.2253, +0.3080]); mrr better (Δ=+0.2216, 95% CI [+0.1744, +0.2671]).",
+    "V2 vs POPULARITY on 344 test users: hit_rate@10 better (Δ=+0.0930, 95% CI [+0.0581, +0.1308]); ndcg@10 better (Δ=+0.0760, 95% CI [+0.0500, +0.1009]); recall@10 better (Δ=+0.0964, 95% CI [+0.0663, +0.1282]); mrr better (Δ=+0.0632, 95% CI [+0.0238, +0.1034]).",
+    "V2 closes 94.1% of the NDCG@10 gap between POPULARITY and the latent-truth ORACLE ceiling.",
+    "Coverage@10 / Personalization@10: POPULARITY 0.7965/0.8537, V1_PRODUCTION 0.9381/0.8856, V2 0.885/0.8946.",
+    "Ablation (NDCG@10, paired CI): removing collaborative, preference significantly hurts; popularity, quality, availability, recency show no significant effect; removing semantic would help.",
+    "Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.1694, imputation only 0.0196, zero evidence 0.0, POPULARITY 0.0, RANDOM 0.1122 (V2 when their history is known: 0.6531).",
+    "Cold start, new users (n=58): NDCG@10 V2 0.4324 vs POPULARITY 0.4288 (V2 higher).",
+    "Cold start, sparse users (n=13, small sample - indicative only): NDCG@10 V2 0.2855 vs POPULARITY 0.4069 (POPULARITY higher).",
+    "Acceptance PASSED - V2 may become the production default."
+  ]
+}

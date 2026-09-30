@@ -57,6 +57,22 @@ test('recommendation factors come only from the server breakdown', () => {
   assert.equal(f.length, 4);
 });
 
+test('a server-computed V2 tier wins over score thresholds; invalid tiers fall back', () => {
+  assert.equal(recommendationTier(1, 'EXPLORE'), 'EXPLORE');
+  assert.equal(recommendationTier(0, 'strong'), 'STRONG');
+  assert.equal(recommendationTier(RECOMMENDATION_TIER_HIGH_MIN_SCORE, 'NOT_A_TIER'), 'STRONG');
+  assert.equal(recommendationTier(0, null), 'EXPLORE');
+});
+
+test('V2 factors come only from server reason codes and never show numbers', () => {
+  const f = recommendationFactors({ affinity: 0.9, semantic: 0.9, quality: 0.9, availability: null }, ['MATCHED_AUTHOR', 'SIMILAR_USERS_LIKED', 'AVAILABLE_NOW', 'UNKNOWN']);
+  assert.deepEqual(f.length, 2);
+  for (const text of f) assert.doesNotMatch(text, /%|\d/);
+  assert.deepEqual(recommendationFactors({ affinity: 0.9 }, []), []);
+  // Unknown stock (null) is not reported as out of stock.
+  assert.deepEqual(recommendationFactors({ semantic: 0, affinity: 0, quality: 0, availability: null }), []);
+});
+
 test('storage suggestion confidence is presented as suitability, not AI confidence', () => {
   assert.equal(storageSuitability('HIGH').label, 'Rất phù hợp');
   assert.equal(storageSuitability('MEDIUM').label, 'Phù hợp');

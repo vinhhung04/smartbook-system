@@ -121,9 +121,15 @@ mượn, no-show trước đó chỉ tính các lần đã có kết quả, số
    dùng trạng thái phạt/khoản vay *hiện tại*). Đã sửa thành point-in-time; `evaluation.js` báo cáo cả hai
    ngữ nghĩa (`point_in_time`, `legacy_sql`) để định lượng ảnh hưởng.
 4. **Tách theo thời gian**: rủi ro dùng `temporalSplit` của risk-model.js; gợi ý dùng hold-out theo mốc thời gian
-   (80% đầu → profile, 20% sau → đánh giá), không chia ngẫu nhiên.
+   (80% đầu → profile, 20% sau → đánh giá), không chia ngẫu nhiên. Recommendation V2 dùng train `< p60` /
+   validation `[p60, p80)` (chọn trọng số) / test `[p80, end]` (báo cáo một lần).
 5. Truth chỉ được dùng cho: trần Bayes, ranker tham chiếu `ORACLE_TRUE_PREFERENCE` (ghi rõ không triển khai được),
    và *preference recovery* (so sánh sở thích suy ra từ lịch sử quan sát với sở thích thật).
+6. **Wishlist point-in-time.** Bảng `book_wishlists` là ảnh chụp cuối kỳ (DB xoá cứng wishlist khi đã mượn), nên
+   một wishlist tạo trước mốc cắt và bị xoá sau mốc cắt biến mất khỏi dữ liệu train (survivorship). Simulator giữ
+   `removed_at` trong bộ nhớ (không đổi dòng DB, không tiêu thụ RNG) và xuất vào
+   `output/recommendation-events.json`, để V2 dựng lại wishlist đúng như tại mốc cắt. Giao thức "audited" cũng coi
+   sách đang được đặt trước tại mốc cắt là đã thấy (không gợi ý, không phải target).
 
 ## 7. Đánh giá
 
@@ -135,6 +141,12 @@ mượn, no-show trước đó chỉ tính các lần đã có kết quả, số
 * **Recommendation**: `services/ai-service/eval/eval_recommendation_synthetic.py` chạy `recommendation.py`
   (collect_signals → build_taste_profile → rank_candidates, không embedding) trên lịch sử trước mốc cắt;
   so với POPULARITY, RANDOM, ORACLE; HitRate/Recall/NDCG@5,10, MRR, Coverage, Personalization; preference recovery.
+  (POPULARITY trước đây đếm hai lần các lượt mượn của user eligible — đã sửa.)
+* **Recommendation V2**: `python services/ai-service/eval/eval_recommendation_v2.py` đọc
+  `output/recommendation-events.json` (chỉ dữ liệu quan sát được) và riêng `output/recommendation-oracle.json`
+  (chỉ baseline ORACLE); chọn trọng số trên validation, báo cáo test với RANDOM/POPULARITY/V1/V2/ORACLE, ablation,
+  cold-start, bootstrap CI → `services/ai-service/eval/reports/recommendation_v2_report.{json,md}`; kèm bảng
+  "legacy protocol" khớp đúng `simulation-report.json`.
 * **Turnover/Storage suggestion**: phân tầng variant HIGH/MEDIUM/LOW theo số lượt mượn 90 ngày.
 
 ## 8. Kiểm tra thống kê

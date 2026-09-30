@@ -87,6 +87,7 @@ function buildManifest(sql) {
         id: b.id,
         book_code: b.book_code,
         title: b.title,
+        description: b.description || null,
         page_count: b.page_count === null ? null : Number(b.page_count),
         categories: cats.length ? cats : ['chua-phan-loai'],
         authors: auths,

@@ -285,3 +285,31 @@ test('cleanup deletes only SIM-/HIST- scoped rows and never issues an unscoped d
   const tables = new Set(calls.map((c) => c.table));
   for (const t of ['customers', 'loan_transactions', 'loan_reservations', 'book_reviews', 'book_wishlists', 'availability_alerts', 'fines']) assert.ok(tables.has(t));
 });
+
+// ── Recommendation V2 event log (input of ai-service/eval/eval_recommendation_v2.py) ──
+
+test('recommendation event log is observable-only, point-in-time reconstructable and deterministic', () => {
+  const { recommendationEventLog, recommendationOracleExport } = require('../prisma/simulation/evaluation');
+  const small = generateDataset(SMALL);
+  const log = recommendationEventLog(small);
+  assert.equal(log.synthetic, true);
+  // No latent truth leaks into the model input: persona, traits, preferences, popularity prior, quality.
+  const text = JSON.stringify(log);
+  for (const latent of ['persona', 'traits', 'prefs', 'authorAffinity', 'popularity', 'quality', 'exploration']) {
+    assert.ok(!text.includes(`"${latent}"`), `latent key ${latent} in event log`);
+  }
+  assert.equal(log.events.filter((e) => e.kind === 'LOAN').length, small.tables.loan_items.length);
+  assert.equal(log.events.filter((e) => e.kind === 'REVIEW').length, small.tables.book_reviews.length);
+  // Removed wishlist rows are kept with their removal time; survivors equal the DB table.
+  const wish = log.events.filter((e) => e.kind === 'WISHLIST');
+  assert.equal(wish.filter((e) => e.until === null).length, small.tables.book_wishlists.length);
+  for (const w of wish) if (w.until) assert.ok(w.until >= w.at, 'wishlist removed before it was created');
+  assert.ok(wish.some((w) => w.until), 'some wishlist rows are removed on borrow');
+  // Sorted by time, and identical on a rerun.
+  for (let i = 1; i < log.events.length; i += 1) assert.ok(log.events[i - 1].at <= log.events[i].at);
+  assert.equal(JSON.stringify(recommendationEventLog(generateDataset(SMALL))), text);
+  // The oracle lives in a separate export, clearly labelled.
+  const oracle = recommendationOracleExport(small);
+  assert.equal(oracle.latent_truth, true);
+  assert.equal(Object.keys(oracle.scores).length, small.customers.length);
+});

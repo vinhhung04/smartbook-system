@@ -10,7 +10,7 @@
 export type Tone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
 
 // ── Recommendation ranking tiers ────────────────────────────────────────────
-// ai-service/recommendation.py returns score = 0.40*semantic + 0.35*affinity
+// V1: ai-service/recommendation.py returns score = 0.40*semantic + 0.35*affinity
 // + 0.15*quality + 0.10*availability. It is a ranking score, NOT a calibrated
 // probability of the reader liking the book, so it is shown as a tier.
 // Without embeddings (semantic = 0) the maximum reachable score is 0.60, which
@@ -32,7 +32,15 @@ export const RECOMMENDATION_TIER_TONE: Record<RecommendationTier, Tone> = {
   EXPLORE: 'neutral',
 };
 
-export function recommendationTier(score: number | null | undefined): RecommendationTier {
+const TIERS: readonly RecommendationTier[] = ['STRONG', 'GOOD', 'EXPLORE'];
+
+// Recommendation V2 sends its own `tier`, derived from which signals lifted the
+// book (see recommendation_v2.tier); its `score` is only a rank position inside
+// the reader's candidate pool. When a valid server tier is present it wins;
+// otherwise (V1) the score thresholds above apply.
+export function recommendationTier(score: number | null | undefined, serverTier?: string | null): RecommendationTier {
+  const t = String(serverTier || '').toUpperCase() as RecommendationTier;
+  if (TIERS.includes(t)) return t;
   const s = typeof score === 'number' && Number.isFinite(score) ? score : 0;
   if (s >= RECOMMENDATION_TIER_HIGH_MIN_SCORE) return 'STRONG';
   if (s >= RECOMMENDATION_TIER_MID_MIN_SCORE) return 'GOOD';
@@ -40,11 +48,27 @@ export function recommendationTier(score: number | null | undefined): Recommenda
 }
 
 export interface RecommendationBreakdown {
-  semantic?: number;
-  affinity?: number;
-  quality?: number;
-  availability?: number;
+  semantic?: number | null;
+  affinity?: number | null;
+  quality?: number | null;
+  availability?: number | null;
 }
+
+// V2 reason codes -> the factor line shown under "Vì sao gợi ý sách này?".
+// Each code is emitted by the server only when that signal actually lifted the
+// book above the reader's average candidate.
+export const REASON_CODE_FACTOR: Record<string, string> = {
+  MATCHED_CATEGORY: 'Thuộc thể loại bạn thường mượn',
+  MATCHED_AUTHOR: 'Cùng tác giả với sách bạn đã đọc',
+  SIMILAR_USERS_LIKED: 'Bạn đọc có lịch sử mượn giống bạn cũng mượn cuốn này',
+  SIMILAR_CONTENT: 'Nội dung gần với những cuốn bạn đã đọc',
+  POPULAR_IN_RECENT_PERIOD: 'Đang được mượn nhiều gần đây',
+  POPULAR_OVERALL: 'Thuộc nhóm sách được mượn nhiều',
+  HIGH_RATING: 'Được bạn đọc khác đánh giá tốt',
+  NEW_ARRIVAL: 'Sách mới về thư viện',
+  CURRENTLY_UNAVAILABLE: 'Hiện đang hết sách — có thể đặt trước',
+  COLD_START_FALLBACK: 'Gợi ý chung khi chưa có lịch sử đọc của bạn',
+};
 
 // Thresholds mirror the ones ai-service uses to phrase its own reasons
 // (_build_recommendation_reason_prompt / rule_based_reason), so the listed
@@ -54,13 +78,19 @@ export const FACTOR_SEMANTIC_MIN = 0.6;
 export const FACTOR_QUALITY_MIN = 0.7;
 
 /** Human-readable factors that genuinely contributed to the ranking. */
-export function recommendationFactors(breakdown: RecommendationBreakdown | null | undefined): string[] {
+export function recommendationFactors(
+  breakdown: RecommendationBreakdown | null | undefined,
+  reasonCodes?: string[] | null,
+): string[] {
+  if (Array.isArray(reasonCodes)) {
+    return reasonCodes.map((code) => REASON_CODE_FACTOR[code]).filter((text): text is string => Boolean(text));
+  }
   if (!breakdown) return [];
   const factors: string[] = [];
   if ((breakdown.affinity ?? 0) >= FACTOR_AFFINITY_MIN) factors.push('Cùng thể loại hoặc tác giả với sách bạn đã mượn, yêu thích hay đánh giá cao');
   if ((breakdown.semantic ?? 0) >= FACTOR_SEMANTIC_MIN) factors.push('Nội dung gần với những cuốn bạn đã đọc');
   if ((breakdown.quality ?? 0) >= FACTOR_QUALITY_MIN) factors.push('Được bạn đọc khác đánh giá tốt');
-  if (breakdown.availability !== undefined && breakdown.availability < 1) factors.push('Hiện đang hết sách — có thể đặt trước');
+  if (typeof breakdown.availability === 'number' && breakdown.availability < 1) factors.push('Hiện đang hết sách — có thể đặt trước');
   return factors;
 }
 

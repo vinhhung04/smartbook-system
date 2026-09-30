@@ -379,11 +379,23 @@ export interface AIRecommendation {
   score: number;
   /** Per-component contribution to `score`, computed server-side (never by the LLM). */
   breakdown?: {
-    semantic: number;
-    affinity: number;
-    quality: number;
-    availability: number;
+    semantic: number | null;
+    affinity: number | null;
+    quality: number | null;
+    /** null when stock is unknown (V2 never fakes it). */
+    availability: number | null;
+    /** V2 only: the remaining signals and their contribution relative to the reader's average candidate. */
+    collaborative?: number | null;
+    popularity?: number | null;
+    recency?: number | null;
+    author?: number | null;
+    final_score?: number;
+    contributions?: Record<string, number>;
   };
+  /** V2 only: ranking tier derived from which signals lifted the book. */
+  tier?: 'STRONG' | 'GOOD' | 'EXPLORE';
+  /** V2 only: facts behind the recommendation (MATCHED_CATEGORY, SIMILAR_USERS_LIKED, ...). */
+  reason_codes?: string[];
 }
 
 export interface AIRecommendationsResult {
@@ -400,8 +412,12 @@ export interface AIRecommendationsResult {
     wishlist_used: number;
     ratings_used: number;
     loans_status: number | null;
+    global_interactions?: number;
+    candidate_pool?: number;
   };
   semantic_used: boolean;
+  /** Which ranker answered (RECOMMENDATION_MODEL on ai-service). */
+  model?: 'v1' | 'v2';
 }
 
 export interface ReadingStatsResponse {

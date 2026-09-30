@@ -19,7 +19,7 @@
  * LOAN-, RSV-, CARD-) is never touched.
  *
  * OUTPUTS (prisma/simulation/): simulation-truth.json, simulation-report.json,
- * simulation-report.md, output/recommendation-eval-input.json; plus the
+ * simulation-report.md, output/recommendation-{eval-input,events,oracle}.json; plus the
  * backward-compatible prisma/seed-history-truth.json.
  */
 
@@ -30,7 +30,9 @@ const { DEFAULTS, SIM_PREFIX, LEGACY_PREFIX } = require('./config');
 const { buildCatalog, remapCatalog } = require('./catalog');
 const { generateDataset } = require('./simulate');
 const { validateDataset } = require('./validation');
-const { evaluateAll, recommendationEvalInput } = require('./evaluation');
+const {
+  evaluateAll, recommendationEvalInput, recommendationEventLog, recommendationOracleExport,
+} = require('./evaluation');
 const { buildTruth, legacyTruth, provenance } = require('./truth');
 const { renderMarkdown } = require('./report');
 
@@ -163,6 +165,9 @@ async function run({ dryRun, skipEvaluation, seed, setPrisma }) {
     fs.mkdirSync(EVAL_DIR, { recursive: true });
     const inputPath = path.join(EVAL_DIR, 'recommendation-eval-input.json');
     writeJson(inputPath, recommendationEvalInput(dataset));
+    // Recommendation V2 harness inputs: observable event log + (separately) the oracle.
+    fs.writeFileSync(path.join(EVAL_DIR, 'recommendation-events.json'), JSON.stringify(recommendationEventLog(dataset)));
+    fs.writeFileSync(path.join(EVAL_DIR, 'recommendation-oracle.json'), JSON.stringify(recommendationOracleExport(dataset)));
     const prod = productionRankings(inputPath);
     console.log(`[simulation] ${prod.note}`);
     evaluation = evaluateAll(dataset, { productionRankings: prod.rankings });

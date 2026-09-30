@@ -365,8 +365,9 @@ function rankingMetrics(rankings, split, catalogSize, k) {
 
 function baselineRankings(dataset, split) {
   const { catalog } = dataset;
+  // Train-window loan items of ALL customers, each counted once. (An earlier
+  // version also added the eligible users' train loans a second time.)
   const popularity = new Map();
-  for (const x of split.users) for (const l of x.train_loans) popularity.set(l.book_id, (popularity.get(l.book_id) || 0) + 1);
   const loans = new Map(dataset.tables.loan_transactions.map((l) => [l.id, l]));
   for (const i of dataset.tables.loan_items) {
     const l = loans.get(i.loan_id);
@@ -464,6 +465,80 @@ function recommendationEvalInput(dataset) {
   };
 }
 
+// ── Recommendation V2 input: a timestamped, point-in-time-reconstructable event log ──
+// Everything here is observable by the real system (rows of loans, wishlists,
+// reviews, reservations, copies per variant) plus wishlist removal times that
+// the DB loses when it hard-deletes a row. No latent truth. The Python harness
+// (services/ai-service/eval/eval_recommendation_v2.py) applies the cutoffs
+// itself, so train / validation / test windows are chosen in one place.
+const iso = (d) => (d ? d.toISOString() : null);
+
+function recommendationEventLog(dataset) {
+  const { tables: t, catalog } = dataset;
+  const loans = new Map(t.loan_transactions.map((l) => [l.id, l]));
+  const events = [];
+  for (const i of t.loan_items) {
+    const l = loans.get(i.loan_id);
+    events.push({
+      kind: 'LOAN', customer_id: l.customer_id, book_id: catalog.variantToBook.get(i.variant_id).id,
+      variant_id: i.variant_id, at: iso(l.borrow_date), until: iso(i.return_date),
+    });
+  }
+  for (const c of dataset.customers) {
+    for (const [bookId, w] of c.wishlist) {
+      events.push({ kind: 'WISHLIST', customer_id: c.id, book_id: bookId, at: iso(w.created_at), until: iso(w.removed_at || null) });
+    }
+  }
+  for (const r of t.book_reviews) {
+    events.push({ kind: 'REVIEW', customer_id: r.customer_id, book_id: r.book_id, rating: r.rating, at: iso(r.created_at) });
+  }
+  const terminal = new Set(['CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN']);
+  for (const r of t.loan_reservations) {
+    events.push({
+      kind: 'RESERVATION', customer_id: r.customer_id, book_id: catalog.variantToBook.get(r.variant_id).id,
+      variant_id: r.variant_id, at: iso(r.reserved_at), until: terminal.has(r.status) ? iso(r.updated_at) : null,
+    });
+  }
+  events.sort((a, b) => a.at.localeCompare(b.at) || a.kind.localeCompare(b.kind)
+    || a.customer_id.localeCompare(b.customer_id) || a.book_id.localeCompare(b.book_id));
+  return {
+    synthetic: true,
+    seed: dataset.meta.seed,
+    window_start: iso(dataset.meta.windowStart),
+    window_end: iso(dataset.meta.end),
+    catalog: catalog.books.map((b) => ({
+      id: b.id,
+      title: b.title,
+      author: b.authors[0] || 'Chưa cập nhật',
+      category: catalog.categoryName.get(b.categories[0]) || 'Chưa phân loại',
+      description: b.description || '',
+      variant_ids: b.variants.map((v) => v.id),
+      is_active: true,
+    })),
+    copies: Object.fromEntries(Array.from(dataset.copies.entries()).sort(([a], [b]) => a.localeCompare(b))),
+    customers: t.customers.map((c) => ({ id: c.id, created_at: iso(c.created_at) })),
+    events,
+  };
+}
+
+// Per-customer ORACLE_TRUE_PREFERENCE scores - READS THE LATENT TRUTH, so it is
+// written to its own file and only the clearly labelled oracle baseline loads it.
+function recommendationOracleExport(dataset) {
+  const { catalog } = dataset;
+  const scores = {};
+  for (const c of dataset.customers) {
+    const row = {};
+    for (const b of catalog.books) {
+      const pref = Math.max(...b.categories.map((s) => c.prefs.effective[s] || 0));
+      const catSize = Math.max(...b.categories.map((s) => catalog.booksByCategory.get(s).length));
+      const author = Math.max(1, ...b.authors.map((a) => c.authorAffinity[a] || 1));
+      row[b.id] = (pref / catSize) * b.popularity * author;
+    }
+    scores[c.id] = row;
+  }
+  return { synthetic: true, latent_truth: true, note: 'Reference ceiling only - never a model input.', scores };
+}
+
 function evaluateAll(dataset, { productionRankings = null } = {}) {
   const analytics = loadAnalytics();
   return {
@@ -482,6 +557,8 @@ module.exports = {
   recommendationSplit,
   evaluateRecommendation,
   recommendationEvalInput,
+  recommendationEventLog,
+  recommendationOracleExport,
   rankingMetrics,
   evaluateAll,
   loadAnalytics,

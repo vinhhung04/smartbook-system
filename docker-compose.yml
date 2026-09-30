@@ -348,6 +348,10 @@ services:
       # inventory-service's actual PORT=3001 above, and every request 503s.
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      # Recommendation V2 reads the library-wide interaction feed from borrow-service
+      # (/internal/recommendation/interactions). RECOMMENDATION_MODEL=v1 rolls back.
+      - BORROW_SERVICE_URL=http://borrow-service:3005
+      - RECOMMENDATION_MODEL=${RECOMMENDATION_MODEL:-v2}
       - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
       - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
       # OpenRouter — the sole inference backend this service depends on: text,

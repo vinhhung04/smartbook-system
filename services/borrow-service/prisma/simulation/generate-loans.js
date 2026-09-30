@@ -112,7 +112,13 @@ function createLoan(ctx, customer, borrowAt, entries, opts = {}) {
     customer.recentCategories.push(p.book.categories[0]);
     if (customer.recentCategories.length > 10) customer.recentCategories.shift();
     const wish = customer.wishlist.get(p.book.id);
-    if (wish && !wish.removed && rng.chance(WISHLIST.removeOnBorrow)) wish.removed = true;
+    if (wish && !wish.removed && rng.chance(WISHLIST.removeOnBorrow)) {
+      // removed_at is kept in memory only (the DB hard-deletes the row); the
+      // offline recommendation eval needs it to rebuild the wishlist as it
+      // stood at a past cutoff instead of the end-of-window survivors.
+      wish.removed = true;
+      wish.removed_at = borrowAt;
+    }
 
     const row = {
       id: itemId, loan_id: loanId, variant_id: p.variant.id,

@@ -12,7 +12,7 @@
     "simulation_end": "2026-09-28T00:00:00.000Z",
     "simulation_months": 24
   },
-  "generated_at": "2026-09-28T07:24:53.814Z",
+  "generated_at": "2026-09-30T07:40:30.573Z",
   "generator_counters": {
     "loan": 14308,
     "reservation": 4059,
@@ -967,15 +967,15 @@
           "users": 368,
           "hit_rate@5": 0.6766,
           "recall@5": 0.2898,
-          "ndcg@5": 0.3177,
-          "mrr": 0.5124,
+          "ndcg@5": 0.3176,
+          "mrr": 0.5122,
           "catalog_coverage@5": 0.6283,
           "personalization@5": 0.8991,
-          "hit_rate@10": 0.8071,
-          "recall@10": 0.4498,
-          "ndcg@10": 0.3721,
+          "hit_rate@10": 0.8043,
+          "recall@10": 0.4496,
+          "ndcg@10": 0.372,
           "catalog_coverage@10": 0.7965,
-          "personalization@10": 0.854
+          "personalization@10": 0.8542
         },
         "RANDOM": {
           "users": 368,

@@ -42,8 +42,8 @@ interface RecommendationCardProps {
 // thêm"), never as a percentage: it is a weighted ranking sum, not a
 // probability. "Vì sao" lists only factors the server's breakdown supports.
 export function RecommendationCard({ rec, href, coverUrl, actions }: RecommendationCardProps) {
-  const tier = recommendationTier(rec.score);
-  const factors = recommendationFactors(rec.breakdown);
+  const tier = recommendationTier(rec.score, rec.tier);
+  const factors = recommendationFactors(rec.breakdown, rec.reason_codes);
 
   return (
     <article className="flex h-full flex-col rounded-xl border border-border bg-card p-4" aria-label={`Gợi ý: ${rec.title}`}>

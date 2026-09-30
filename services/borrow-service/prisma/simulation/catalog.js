@@ -33,6 +33,7 @@ function buildCatalog(seed, source = manifest) {
     id: b.id,
     book_code: b.book_code,
     title: b.title,
+    description: b.description || '',
     categories: b.categories,
     authors: b.authors,
     page_count: b.page_count || imputePageCount(b),

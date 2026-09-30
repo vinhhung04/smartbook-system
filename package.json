@@ -13,6 +13,7 @@
     "test:ai": "python -m pytest services/ai-service -q",
     "test:workspace-config": "node --test tests/*.test.mjs",
     "test:smoke": "node scripts/demo-smoke.mjs",
+    "eval:recommendation": "node services/borrow-service/prisma/simulation/seed-simulation.js --dry-run && python services/ai-service/eval/eval_recommendation_v2.py",
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build && pnpm test:workspace-config && pnpm test:node && pnpm test:ai",
     "demo:env": "node scripts/init-demo-env.mjs",
     "demo:seed": "docker compose --profile demo run --rm demo-seed-auth && docker compose --profile demo run --rm demo-seed-inventory && node scripts/seed-catalog-enrichment.mjs && docker compose --profile demo run --rm demo-seed-borrow",

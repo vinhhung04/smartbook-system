@@ -53,6 +53,8 @@ import book_index
 import embeddings
 import vector_store
 import recommendation
+import recommendation_v2
+import recommendation_v2_service
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
 from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
 from socket_emitter import push_ai_action_event
@@ -204,6 +206,14 @@ ASSISTANT_LLM_TIMEOUT_SECONDS = float(os.getenv("ASSISTANT_LLM_TIMEOUT_SECONDS",
 # wishlist, ratings, catalog). Kept short: a slow dependency should degrade the
 # recommendation, not hold the page open.
 RECOMMENDATION_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDATION_TIMEOUT_SECONDS", "10"))
+# v1 = recommendation.py (hand-set weights); v2 = recommendation_v2.py with the
+# weights selected on the temporal validation split (recommendation_v2_weights.json,
+# see eval/reports/recommendation_v2_report.md - acceptance passed, so v2 is the
+# default). Rollback: RECOMMENDATION_MODEL=v1. Without the weights file v1 is used.
+RECOMMENDATION_MODEL = os.getenv("RECOMMENDATION_MODEL", "v2").strip().lower()
+BORROW_SERVICE_URL = os.getenv("BORROW_SERVICE_URL", "http://borrow-service:3005").rstrip("/")
+# The library-wide model (popularity, co-borrowing) changes slowly; per-reader data is never cached.
+RECOMMENDATION_GLOBAL_TTL_SECONDS = float(os.getenv("RECOMMENDATION_GLOBAL_TTL_SECONDS", "600"))
 ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 # num_predict is a cap, not a target: a tool-selection round stops at the
 # tool call regardless of this value, so one constant costs nothing on those
@@ -4908,6 +4918,8 @@ _REC_WISHLIST_ENDPOINT = "/borrow/my/wishlists"
 _REC_REVIEWS_ENDPOINT = "/borrow/my/reviews"
 _REC_CATALOG_ENDPOINT = "/api/books"
 _REC_RATING_STATS_ENDPOINT = "/borrow/reviews/stats"
+_REC_RESERVATIONS_ENDPOINT = "/borrow/my/reservations"
+_REC_INTERACTIONS_PATH = "/internal/recommendation/interactions"
 # getBookRatingStats rejects more than 100 ids per call.
 _REC_RATING_STATS_CHUNK = 100
 
@@ -5053,7 +5065,24 @@ def _build_recommendation_reason_prompt(entries: list[dict], profile: dict) -> s
     return "\n".join(lines)
 
 
-async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> str:
+def _build_recommendation_reason_prompt_v2(entries: list[dict], profile: dict) -> str:
+    """Same prompt layout as V1, but the per-book signals are the V2 reason codes -
+    facts that actually lifted the book in the ranking, nothing else."""
+    lines = _build_recommendation_reason_prompt([], profile).split("\n")[:3]
+    lines.append("")
+    lines.append("[SÁCH ĐƯỢC HỆ THỐNG CHỌN]")
+    for entry in entries:
+        hints = recommendation_v2.reason_hints_v2(entry)
+        lines.append(
+            f"- book_id={entry['book_id']} | {entry['title']} | tác giả {entry.get('author') or 'chưa rõ'} "
+            f"| thể loại {entry.get('category') or 'chưa rõ'} | tín hiệu: {'; '.join(hints) or 'khám phá thêm ngoài thói quen đọc'}"
+        )
+    lines.append("")
+    lines.append("Hãy trả về JSON object, khóa là book_id ở trên, giá trị là một câu lý do tiếng Việt.")
+    return "\n".join(lines)
+
+
+async def _attach_recommendation_reasons(entries: list[dict], profile: dict, model: str = "v1") -> str:
     """Fill in `reason` for each entry. Returns the provider actually used.
 
     The model only writes prose: any key it returns that is not one of our chosen
@@ -5063,9 +5092,10 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
     allowed = {entry["book_id"] for entry in entries}
     reasons: dict = {}
     provider = "rules"
+    build_prompt = _build_recommendation_reason_prompt_v2 if model == "v2" else _build_recommendation_reason_prompt
 
     if entries:
-        user_prompt = _build_recommendation_reason_prompt(entries, profile)
+        user_prompt = build_prompt(entries, profile)
         parsed, ok = await _call_text_llm_json(RECOMMENDATION_REASON_SYSTEM_PROMPT, user_prompt, feature="recommendation")
         if ok and parsed:
             provider = _get_text_llm_provider().name
@@ -5077,22 +5107,89 @@ async def _attach_recommendation_reasons(entries: list[dict], profile: dict) -> 
             }
 
     for entry in entries:
-        entry["reason"] = reasons.get(entry["book_id"]) or recommendation.rule_based_reason(entry, profile)
+        fallback = recommendation_v2.rule_based_reason_v2(entry) if model == "v2" else recommendation.rule_based_reason(entry, profile)
+        entry["reason"] = reasons.get(entry["book_id"]) or fallback
     if not reasons:
         provider = "rules"
     return provider
+
+
+_rec_v2_config = recommendation_v2.load_config()
+_rec_v2_cache = recommendation_v2_service.GlobalModelCache(RECOMMENDATION_GLOBAL_TTL_SECONDS)
+
+
+async def _rec_fetch_global_interactions(client: httpx.AsyncClient):
+    """Library-wide anonymous interactions, straight from borrow-service (internal
+    key; not exposed through the gateway). None when unavailable."""
+    try:
+        response = await client.get(
+            f"{BORROW_SERVICE_URL}{_REC_INTERACTIONS_PATH}",
+            headers={"x-internal-service-key": INTERNAL_SERVICE_KEY},
+        )
+        if response.status_code >= 400:
+            logger.warning("recommendations: interactions feed returned %s", response.status_code)
+            return None
+        return response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("recommendations: interactions feed failed: %s", type(exc).__name__)
+        return None
+
+
+async def _get_recommendations_v2(auth_header: str | None, limit: int) -> dict:
+    config = _rec_v2_config
+    async with httpx.AsyncClient(timeout=httpx.Timeout(RECOMMENDATION_TIMEOUT_SECONDS)) as client:
+        (
+            (loans_payload, loans_status), (wishlist_payload, _), (reviews_payload, _),
+            (reservations_payload, _), (catalog_payload, _), global_payload,
+        ) = await asyncio.gather(
+            _rec_fetch(client, _REC_LOANS_ENDPOINT, auth_header, {"pageSize": 100}),
+            _rec_fetch(client, _REC_WISHLIST_ENDPOINT, auth_header),
+            _rec_fetch(client, _REC_REVIEWS_ENDPOINT, auth_header),
+            _rec_fetch(client, _REC_RESERVATIONS_ENDPOINT, auth_header),
+            _rec_fetch(client, _REC_CATALOG_ENDPOINT, auth_header),
+            _rec_fetch_global_interactions(client),
+        )
+    catalog = [book for book in _rec_unwrap(catalog_payload) if isinstance(book, dict)]
+    model, global_count = recommendation_v2_service.build_global(catalog, global_payload, config, _rec_v2_cache)
+    result = recommendation_v2_service.build_response(
+        catalog,
+        {
+            "loans": _rec_unwrap(loans_payload),
+            "wishlists": _rec_unwrap(wishlist_payload),
+            "reviews": _rec_unwrap(reviews_payload),
+            "reservations": _rec_unwrap(reservations_payload),
+            "loans_status": loans_status,
+        },
+        model,
+        config,
+        limit,
+        global_count,
+    )
+    profile = recommendation_v2_service.llm_profile_summary(result.pop("profile"))
+    result["ai_provider"] = await _attach_recommendation_reasons(result["recommendations"], profile, model="v2")
+    return result
 
 
 @app.post("/recommendations")
 async def get_recommendations(request: Request, req: RecommendationRequest):
     """Personalised book recommendations for the signed-in reader.
 
-    Candidates are generated and ranked in code (recommendation.py) from the
-    caller's own borrow/wishlist/rating history, so every returned book_id exists
-    in the catalog by construction. The LLM is only asked to phrase each reason.
+    Candidates are generated and ranked in code (recommendation.py, or
+    recommendation_v2.py when RECOMMENDATION_MODEL=v2) from the caller's own
+    history, so every returned book_id exists in the catalog by construction.
+    The LLM is only asked to phrase each reason.
     """
     auth_header = request.headers.get("authorization")
     limit = max(1, min(int(req.limit or 6), 20))
+
+    model_name, fallback_reason = recommendation_v2_service.select_model(RECOMMENDATION_MODEL, _rec_v2_config)
+    if fallback_reason:
+        logger.warning("recommendations: using v1 (%s)", fallback_reason)
+    if model_name == "v2":
+        try:
+            return await _get_recommendations_v2(auth_header, limit)
+        except Exception:  # noqa: BLE001 - rollback path: a V2 defect serves V1 instead of an error page
+            logger.exception("recommendations: v2 failed, falling back to v1")
 
     signals = await _load_reader_signals(auth_header)
     candidates = signals["candidates"]
@@ -5117,6 +5214,7 @@ async def get_recommendations(request: Request, req: RecommendationRequest):
         "personalized": signals["personalized"],
         "basis": signals["basis"],
         "semantic_used": bool(semantic),
+        "model": "v1",
     }
 
 

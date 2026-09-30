@@ -1,0 +1,64 @@
+{
+  "model": "v2",
+  "note": "Selected by eval/eval_recommendation_v2.py on the validation window of the synthetic dataset. Do not edit by hand.",
+  "weights": {
+    "preference": 1.0,
+    "author": 0.25,
+    "semantic": 1.0,
+    "collaborative": 2.0,
+    "popularity": 1.0,
+    "recency": 1.0,
+    "quality": 0.25,
+    "availability": 0.1
+  },
+  "feature_scale": {
+    "preference": 0.579739,
+    "author": 0.36608,
+    "semantic": 0.066402,
+    "collaborative": 0.115901,
+    "popularity": 0.88392,
+    "recency": 0.779568,
+    "quality": 0.074421,
+    "availability": 0.430821
+  },
+  "params": {
+    "prior_strength": 10.0,
+    "half_life_days": null,
+    "cf_shrinkage": 0.0,
+    "wishlist_weight": 0.5,
+    "liked_rating_weight": 1.0,
+    "trend_window_days": 90,
+    "quality_prior_count": 5.0,
+    "per_source_k": 40,
+    "new_book_days": 60,
+    "new_arrival_slots": 1
+  },
+  "max_per_category": null,
+  "provenance": {
+    "dataset_sha256": "41c35ea0d43b93bcd88b4e439eb212bb10cb5b25c469a7bd732ffb3f8446a8ec",
+    "dataset_seed": 20260928,
+    "train_range": [
+      "2024-09-28T00:00:00.000Z",
+      "2026-01-26T02:34:52.827000Z"
+    ],
+    "validation_range": [
+      "2026-01-26T02:34:52.827000Z",
+      "2026-05-30T18:50:54.068000Z"
+    ],
+    "objective": "ndcg@10",
+    "validation_objective": 0.42358,
+    "test_ndcg@10": 0.4275
+  },
+  "acceptance": {
+    "rule": "V2 - baseline > 0 with paired 95% bootstrap CI above zero, for NDCG@10, Recall@10 and MRR, against V1_PRODUCTION and POPULARITY",
+    "checks": {
+      "V2_vs_V1:ndcg@10": true,
+      "V2_vs_V1:recall@10": true,
+      "V2_vs_V1:mrr": true,
+      "V2_vs_POPULARITY:ndcg@10": true,
+      "V2_vs_POPULARITY:recall@10": true,
+      "V2_vs_POPULARITY:mrr": true
+    },
+    "passed": true
+  }
+}
