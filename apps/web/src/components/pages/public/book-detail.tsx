@@ -12,7 +12,7 @@ import { buildLoginUrl } from '@/lib/return-url';
 import { rememberViewed } from '@/lib/recently-viewed';
 import { cn } from '@/components/ui/utils';
 import { EmptyState } from '@/components/ui/empty-state';
-import { BookCover } from '@/components/public/book-cover';
+import { BackCover, SpinningBook } from '@/components/public/spinning-book';
 import { AvailabilityStamp } from '@/components/public/availability-stamp';
 import { BookRow } from '@/components/public/book-row';
 import { useReserveAction } from '@/components/public/use-reserve-action';
@@ -176,7 +176,7 @@ export function PublicBookDetailPage() {
       type="button"
       onClick={() => requestReserve(book)}
       data-testid={inBar ? undefined : 'reserve-book-button'}
-      className="inline-flex h-11 shrink-0 items-center rounded-md bg-indigo-700 px-6 text-[14.5px] font-semibold text-white hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+      className="inline-flex h-11 shrink-0 items-center rounded-full bg-indigo-700 px-6 text-[14.5px] font-semibold text-white hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400"
     >
       Đặt mượn
     </button>
@@ -187,7 +187,7 @@ export function PublicBookDetailPage() {
       disabled={alertBusy}
       aria-pressed={isCustomer ? alertOn : undefined}
       className={cn(
-        'inline-flex h-11 shrink-0 items-center gap-2 rounded-md px-5 text-[14.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 disabled:opacity-60',
+        'inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[14.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 disabled:opacity-60',
         alertOn ? 'border border-indigo-300 text-indigo-700 dark:border-indigo-500/40 dark:text-indigo-300' : 'bg-indigo-700 text-white hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-400',
       )}
     >
@@ -221,143 +221,171 @@ export function PublicBookDetailPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-16 px-4 pb-24 pt-6 sm:px-6 md:pb-6 lg:px-8">
-      <nav aria-label="Đường dẫn" className="text-[13px] text-muted-foreground">
-        <ol className="flex flex-wrap items-center gap-1">
-          <li><Link to="/" className="hover:text-foreground hover:underline">Trang chủ</Link></li>
-          <li aria-hidden="true">/</li>
-          <li><Link to="/books" className="hover:text-foreground hover:underline">Khám phá</Link></li>
-          {book.category_slug ? (
-            <>
-              <li aria-hidden="true">/</li>
-              <li><Link to={`/categories/${book.category_slug}`} className="hover:text-foreground hover:underline">{book.category}</Link></li>
-            </>
-          ) : null}
-        </ol>
-      </nav>
-
-      <article className="grid gap-8 md:grid-cols-[280px_1fr] md:gap-12">
-        <div className="mx-auto w-full max-w-[150px] sm:max-w-[200px] md:sticky md:top-24 md:max-w-none md:self-start">
-          <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} eager />
-        </div>
-
-        <div className="min-w-0">
-          <h1 className="font-serif text-[30px] font-semibold leading-[1.1] tracking-tight sm:text-[40px]">{book.title}</h1>
-          {book.subtitle ? <p className="mt-2 text-[16px] text-muted-foreground">{book.subtitle}</p> : null}
-          <p className="mt-3 text-[15px]">
-            {book.authors.length ? book.authors.map((author, index) => (
-              <span key={author}>
-                {index > 0 ? ', ' : ''}
-                <Link to={`/books?author=${encodeURIComponent(author)}`} className="font-medium hover:underline">{author}</Link>
-              </span>
-            )) : <span className="text-muted-foreground">Chưa rõ tác giả</span>}
-          </p>
-          <a href="#danh-gia" className="mt-2 inline-flex items-center gap-1.5 text-[13.5px] text-muted-foreground hover:underline">
-            {rating ? (
+    <div className="relative overflow-x-clip">
+      {/* Same atmosphere as the homepage hero, fading out below the fold. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-gradient-to-b from-indigo-50/80 to-transparent dark:from-indigo-950/30" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(circle_at_1px_1px,rgba(79,70,229,0.12)_1px,transparent_0)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_60%_70%_at_25%_10%,black,transparent)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(165,180,252,0.1)_1px,transparent_0)]" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-24 top-10 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl dark:bg-indigo-600/20" aria-hidden="true" />
+      <div className="relative mx-auto max-w-6xl space-y-16 px-4 pb-24 pt-6 sm:px-6 md:pb-6 lg:px-8">
+        <nav aria-label="Đường dẫn" className="text-[13px] text-muted-foreground">
+          <ol className="flex flex-wrap items-center gap-1">
+            <li><Link to="/" className="hover:text-foreground hover:underline">Trang chủ</Link></li>
+            <li aria-hidden="true">/</li>
+            <li><Link to="/books" className="hover:text-foreground hover:underline">Khám phá</Link></li>
+            {book.category_slug ? (
               <>
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                <span className="font-semibold text-foreground">{rating.rating_avg.toFixed(1)}</span> · {rating.rating_count} đánh giá
+                <li aria-hidden="true">/</li>
+                <li><Link to={`/categories/${book.category_slug}`} className="hover:text-foreground hover:underline">{book.category}</Link></li>
               </>
-            ) : 'Chưa có đánh giá'}
-          </a>
-
-          <section aria-labelledby="tinh-trang" className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
-            <h2 id="tinh-trang" className="sr-only">Tình trạng sách</h2>
-            <AvailabilityStamp book={book} className="text-[11.5px]" />
-            {book.pickup_branches.length > 0 ? (
-              <ul className="mt-3 space-y-1.5" aria-label="Chi nhánh còn sách">
-                {book.pickup_branches.map((branch) => (
-                  <li key={branch.warehouse_id} className="flex items-center gap-2 text-[13.5px]">
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <span className="flex-1">{branch.warehouse_name}</span>
-                    <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{branch.available_quantity} cuốn</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 text-[13.5px] text-muted-foreground">
-                {book.availability_status === 'INCOMING' ? 'Sách đang được nhập kho và sẽ sớm lên kệ.' : 'Tất cả bản đang được mượn.'} Bật thông báo để biết ngay khi có bản trả về.
-              </p>
-            )}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {primaryAction()}
-              <button
-                type="button"
-                onClick={() => void toggleWishlist()}
-                disabled={wishlistBusy}
-                aria-pressed={isCustomer ? inWishlist : undefined}
-                className={cn(
-                  'inline-flex h-11 items-center gap-2 rounded-md border px-4 text-[14px] font-medium transition-colors disabled:opacity-60',
-                  inWishlist ? 'border-rose-300 text-rose-700 dark:border-rose-500/40 dark:text-rose-400' : 'border-border hover:bg-muted',
-                )}
-              >
-                <Heart className={cn('h-4 w-4', inWishlist && 'fill-current')} aria-hidden="true" />
-                {inWishlist ? 'Đã yêu thích' : 'Yêu thích'}
-              </button>
-            </div>
-            {!isAuthenticated ? (
-              <p className="mt-3 text-[12.5px] text-muted-foreground">
-                {book.reservable ? 'Cần đăng nhập để đặt mượn.' : 'Cần đăng nhập để nhận thông báo.'} Sau khi đăng nhập, bạn sẽ quay lại đúng cuốn sách này.
-              </p>
             ) : null}
-          </section>
+          </ol>
+        </nav>
 
-          <section aria-labelledby="gioi-thieu" className="mt-8">
-            <h2 id="gioi-thieu" className="text-[16px] font-semibold">Giới thiệu</h2>
-            {description ? (
-              <>
-                <p className="mt-2 whitespace-pre-line text-[14.5px] leading-[1.7] text-foreground/85">{shownDescription}</p>
-                {isLong ? (
-                  <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded} className="mt-1 text-[13px] font-semibold text-indigo-700 hover:underline dark:text-indigo-300">
-                    {expanded ? 'Thu gọn' : 'Đọc thêm'}
-                  </button>
-                ) : null}
-              </>
-            ) : <p className="mt-2 text-[13.5px] text-muted-foreground">Sách này chưa có phần giới thiệu.</p>}
-          </section>
-
-          {book.summary_vi ? (
-            <section aria-labelledby="tom-tat-ai" className="mt-5 rounded-lg border border-border bg-muted/40 p-4">
-              <h2 id="tom-tat-ai" className="flex items-center gap-1.5 text-[13px] font-semibold">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" /> Tóm tắt do AI tạo
-              </h2>
-              <p className="mt-2 whitespace-pre-line text-[13.5px] leading-relaxed text-foreground/85">{book.summary_vi}</p>
-              <p className="mt-2 text-[11.5px] text-muted-foreground">Tóm tắt tự động từ thông tin sách, có thể chưa chính xác hoàn toàn.</p>
-            </section>
-          ) : null}
-
-          <section aria-labelledby="thong-tin" className="mt-8">
-            <h2 id="thong-tin" className="text-[16px] font-semibold">Thông tin sách</h2>
-            <dl className="mt-2 grid gap-x-10 sm:grid-cols-2">
-              {details.filter((item) => item.value !== null && item.value !== undefined && item.value !== '').map((item) => (
-                <div key={item.label} className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 text-[13.5px]">
-                  <dt className="shrink-0 whitespace-nowrap text-muted-foreground">{item.label}</dt>
-                  <dd className={cn('min-w-0 text-right font-medium [overflow-wrap:anywhere]', item.mono && 'font-mono text-[12.5px]')}>{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        </div>
-      </article>
-
-      <BookReviews bookId={book.id} />
-
-      <BookRow id="cung-the-loai" title="Cùng thể loại" books={book.related} seeAllTo={book.category_slug ? `/categories/${book.category_slug}` : undefined} />
-
-      {/* Phones: the action stays reachable while reading the description and reviews. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-6xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13.5px] font-semibold">{book.title}</p>
-            <p className="truncate text-[12px] text-muted-foreground">
-              {book.reservable ? `Còn ${book.available_quantity} cuốn` : book.availability_status === 'INCOMING' ? 'Đang nhập kho' : 'Đã được mượn hết'}
-            </p>
+        <article className="grid gap-8 md:grid-cols-[280px_1fr] md:gap-12">
+          <div className="mx-auto w-full max-w-[160px] sm:max-w-[210px] md:sticky md:top-24 md:max-w-none md:self-start">
+            <SpinningBook
+              title={book.title}
+              author={book.author}
+              imageUrl={book.cover_image_url}
+              eager
+              back={(
+                <BackCover
+                  title={book.title}
+                  author={book.author}
+                  facts={[
+                    ...(rating ? [{ label: 'Đánh giá', value: `★ ${rating.rating_avg.toFixed(1)} · ${rating.rating_count}` }] : []),
+                    ...(book.isbn ? [{ label: 'ISBN', value: book.isbn }] : []),
+                    ...(book.page_count ? [{ label: 'Số trang', value: String(book.page_count) }] : []),
+                    { label: 'Tình trạng', value: book.available_quantity > 0 ? `Còn ${book.available_quantity}` : 'Đã mượn hết' },
+                  ]}
+                />
+              )}
+            />
           </div>
-          {primaryAction(true)}
-        </div>
-      </div>
 
-      <ReserveModal book={target} onClose={closeReserve} onSuccess={() => { closeReserve(); void load(); }} />
+          <div className="min-w-0">
+            {book.category_slug ? (
+              <Link to={`/categories/${book.category_slug}`} className="mb-3 inline-block font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-indigo-700 hover:underline dark:text-indigo-300">
+                {book.category}
+              </Link>
+            ) : null}
+            <h1 className="text-balance font-serif text-[32px] font-semibold leading-[1.08] tracking-tight sm:text-[46px]">{book.title}</h1>
+            {book.subtitle ? <p className="mt-2 text-[16px] text-muted-foreground">{book.subtitle}</p> : null}
+            <p className="mt-3 text-[15px]">
+              {book.authors.length ? book.authors.map((author, index) => (
+                <span key={author}>
+                  {index > 0 ? ', ' : ''}
+                  <Link to={`/books?author=${encodeURIComponent(author)}`} className="font-medium hover:underline">{author}</Link>
+                </span>
+              )) : <span className="text-muted-foreground">Chưa rõ tác giả</span>}
+            </p>
+            <a href="#danh-gia" className="mt-2 inline-flex items-center gap-1.5 text-[13.5px] text-muted-foreground hover:underline">
+              {rating ? (
+                <>
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                  <span className="font-semibold text-foreground">{rating.rating_avg.toFixed(1)}</span> · {rating.rating_count} đánh giá
+                </>
+              ) : 'Chưa có đánh giá'}
+            </a>
+
+            <section aria-labelledby="tinh-trang" className="mt-7 rounded-2xl border border-border bg-card/90 p-5 shadow-[0_14px_36px_-24px_rgba(15,23,42,0.4)] backdrop-blur sm:p-6">
+              <h2 id="tinh-trang" className="sr-only">Tình trạng sách</h2>
+              <AvailabilityStamp book={book} className="text-[11.5px]" />
+              {book.pickup_branches.length > 0 ? (
+                <ul className="mt-3 space-y-1.5" aria-label="Chi nhánh còn sách">
+                  {book.pickup_branches.map((branch) => (
+                    <li key={branch.warehouse_id} className="flex items-center gap-2 text-[13.5px]">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="flex-1">{branch.warehouse_name}</span>
+                      <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{branch.available_quantity} cuốn</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-[13.5px] text-muted-foreground">
+                  {book.availability_status === 'INCOMING' ? 'Sách đang được nhập kho và sẽ sớm lên kệ.' : 'Tất cả bản đang được mượn.'} Bật thông báo để biết ngay khi có bản trả về.
+                </p>
+              )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {primaryAction()}
+                <button
+                  type="button"
+                  onClick={() => void toggleWishlist()}
+                  disabled={wishlistBusy}
+                  aria-pressed={isCustomer ? inWishlist : undefined}
+                  className={cn(
+                    'inline-flex h-11 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-colors disabled:opacity-60',
+                    inWishlist ? 'border-rose-300 text-rose-700 dark:border-rose-500/40 dark:text-rose-400' : 'border-border hover:bg-muted',
+                  )}
+                >
+                  <Heart className={cn('h-4 w-4', inWishlist && 'fill-current')} aria-hidden="true" />
+                  {inWishlist ? 'Đã yêu thích' : 'Yêu thích'}
+                </button>
+              </div>
+              {!isAuthenticated ? (
+                <p className="mt-3 text-[12.5px] text-muted-foreground">
+                  {book.reservable ? 'Cần đăng nhập để đặt mượn.' : 'Cần đăng nhập để nhận thông báo.'} Sau khi đăng nhập, bạn sẽ quay lại đúng cuốn sách này.
+                </p>
+              ) : null}
+            </section>
+
+            <section aria-labelledby="gioi-thieu" className="mt-8">
+              <h2 id="gioi-thieu" className="font-serif text-[22px] font-semibold tracking-tight">Giới thiệu</h2>
+              {description ? (
+                <>
+                  <p className="mt-2 whitespace-pre-line text-[14.5px] leading-[1.7] text-foreground/85">{shownDescription}</p>
+                  {isLong ? (
+                    <button type="button" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded} className="mt-1 text-[13px] font-semibold text-indigo-700 hover:underline dark:text-indigo-300">
+                      {expanded ? 'Thu gọn' : 'Đọc thêm'}
+                    </button>
+                  ) : null}
+                </>
+              ) : <p className="mt-2 text-[13.5px] text-muted-foreground">Sách này chưa có phần giới thiệu.</p>}
+            </section>
+
+            {book.summary_vi ? (
+              <section aria-labelledby="tom-tat-ai" className="mt-5 rounded-2xl border border-indigo-200/70 bg-indigo-50/50 p-5 dark:border-indigo-500/20 dark:bg-indigo-950/20">
+                <h2 id="tom-tat-ai" className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" /> Tóm tắt do AI tạo
+                </h2>
+                <p className="mt-2 whitespace-pre-line text-[13.5px] leading-relaxed text-foreground/85">{book.summary_vi}</p>
+                <p className="mt-2 text-[11.5px] text-muted-foreground">Tóm tắt tự động từ thông tin sách, có thể chưa chính xác hoàn toàn.</p>
+              </section>
+            ) : null}
+
+            <section aria-labelledby="thong-tin" className="mt-8">
+              <h2 id="thong-tin" className="font-serif text-[22px] font-semibold tracking-tight">Thông tin sách</h2>
+              <dl className="mt-2 grid gap-x-10 sm:grid-cols-2">
+                {details.filter((item) => item.value !== null && item.value !== undefined && item.value !== '').map((item) => (
+                  <div key={item.label} className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 text-[13.5px]">
+                    <dt className="shrink-0 whitespace-nowrap text-muted-foreground">{item.label}</dt>
+                    <dd className={cn('min-w-0 text-right font-medium [overflow-wrap:anywhere]', item.mono && 'font-mono text-[12.5px]')}>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          </div>
+        </article>
+
+        <BookReviews bookId={book.id} />
+
+        <BookRow id="cung-the-loai" eyebrow="Gợi ý thêm" title="Cùng thể loại" books={book.related} seeAllTo={book.category_slug ? `/categories/${book.category_slug}` : undefined} />
+
+        {/* Phones: the action stays reachable while reading the description and reviews. */}
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13.5px] font-semibold">{book.title}</p>
+              <p className="truncate text-[12px] text-muted-foreground">
+                {book.reservable ? `Còn ${book.available_quantity} cuốn` : book.availability_status === 'INCOMING' ? 'Đang nhập kho' : 'Đã được mượn hết'}
+              </p>
+            </div>
+            {primaryAction(true)}
+          </div>
+        </div>
+
+        <ReserveModal book={target} onClose={closeReserve} onSuccess={() => { closeReserve(); void load(); }} />
+      </div>
     </div>
   );
 }

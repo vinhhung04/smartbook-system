@@ -91,7 +91,7 @@ function ReviewForm({ bookId, onSaved }: { bookId: string; onSaved: () => void }
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+    <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <h3 className="text-[14px] font-semibold">{hasReview ? 'Đánh giá của bạn' : 'Viết đánh giá'}</h3>
       <div className="mt-2"><StarRating value={rating} onChange={setRating} size={24} /></div>
       <label className="mt-3 block">
@@ -106,11 +106,11 @@ function ReviewForm({ bookId, onSaved }: { bookId: string; onSaved: () => void }
         />
       </label>
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={() => void save()} disabled={busy || rating < 1} className="h-9 rounded-md bg-indigo-700 px-4 text-[13px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-500">
+        <button type="button" onClick={() => void save()} disabled={busy || rating < 1} className="h-9 rounded-full bg-indigo-700 px-4 text-[13px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50 dark:bg-indigo-500">
           {busy ? 'Đang lưu…' : hasReview ? 'Cập nhật đánh giá' : 'Gửi đánh giá'}
         </button>
         {hasReview ? (
-          <button type="button" onClick={() => void remove()} disabled={busy} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-[13px] text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/30">
+          <button type="button" onClick={() => void remove()} disabled={busy} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/30">
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Xóa
           </button>
         ) : null}
@@ -144,7 +144,8 @@ export function BookReviews({ bookId }: { bookId: string }) {
 
   return (
     <section id="danh-gia" aria-labelledby="danh-gia-heading" className="scroll-mt-24">
-      <h2 id="danh-gia-heading" className="font-serif text-[22px] font-semibold tracking-tight">Đánh giá của bạn đọc</h2>
+      <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-indigo-700 dark:text-indigo-300">Đánh giá</p>
+      <h2 id="danh-gia-heading" className="font-serif text-[26px] font-semibold leading-[1.1] tracking-tight sm:text-[32px]">Đánh giá của bạn đọc</h2>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[260px_1fr]">
         <div className="space-y-5">
