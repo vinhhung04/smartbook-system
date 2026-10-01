@@ -23,7 +23,7 @@ test.describe('Anonymous discovery', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Khám phá cuốn sách tiếp theo của bạn.' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Đăng nhập' }).first()).toBeVisible();
 
-    await page.getByRole('link', { name: 'Khám phá sách' }).click();
+    await page.getByRole('link', { name: /Khám phá toàn bộ \d+ đầu sách/ }).click();
     await expect(page).toHaveURL(/\/books$/);
     const firstCard = page.locator('article').first();
     await expect(firstCard).toBeVisible({ timeout: 15_000 });

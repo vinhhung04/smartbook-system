@@ -46,7 +46,7 @@ export function PublicBookCard({ book, onReserve, className }: PublicBookCardPro
               type="button"
               onClick={() => onReserve(book)}
               data-testid="reserve-book-button"
-              className="w-full rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2"
+              className="h-9 w-full rounded-full border border-indigo-600/70 px-3 text-[12.5px] font-semibold text-indigo-700 transition-colors hover:border-indigo-600 hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:border-indigo-400/60 dark:text-indigo-300 dark:hover:bg-indigo-500 dark:hover:text-white"
             >
               Đặt trước
             </button>

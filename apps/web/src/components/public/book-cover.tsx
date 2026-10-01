@@ -37,7 +37,9 @@ export function BookCover({ title, author, imageUrl, className, eager = false }:
           style={{ backgroundColor: bindingFor(title) }}
         >
           <span className="h-px w-1/3 bg-[#F3EBD8]/50" aria-hidden="true" />
-          <span className="line-clamp-5 font-serif text-[clamp(7px,15cqw,20px)] font-semibold leading-[1.15] [overflow-wrap:anywhere]">{title}</span>
+          {/* Thumbnails too narrow for a readable title get a monogram instead. */}
+          <span className="font-serif text-[46cqw] font-semibold leading-none @[3.5rem]:hidden" aria-hidden="true">{title.trim().charAt(0).toUpperCase()}</span>
+          <span className="hidden font-serif text-[clamp(7px,15cqw,20px)] font-semibold leading-[1.15] [overflow-wrap:anywhere] @[3.5rem]:line-clamp-5">{title}</span>
           <span className="hidden line-clamp-2 text-[clamp(8px,7.5cqw,12px)] uppercase tracking-[0.08em] text-[#F3EBD8]/75 @[5.5rem]:block">{author || 'SmartBook'}</span>
         </div>
       )}

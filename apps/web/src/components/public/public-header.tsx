@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { BookOpen, LayoutDashboard, Menu, Moon, Sun, X } from 'lucide-react';
 import { useAuthUser } from '@/hooks/useAuthUser';
@@ -59,6 +59,17 @@ export function PublicHeader() {
   const params = new URLSearchParams(search);
   const { user, isAuthenticated, isCustomer, isStaff } = useAuthUser();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Transparent while it sits on top of the page, a frosted bar once content scrolls under it.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 8);
+    const frame = requestAnimationFrame(update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', update);
+    };
+  }, []);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeMenu = () => setMenuOpen(false);
   useDialogA11y(menuOpen, closeMenu, sheetRef);
@@ -81,7 +92,14 @@ export function PublicHeader() {
   ) : null;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+    <header
+      className={cn(
+        'sticky top-0 z-30 border-b transition-[background-color,border-color,box-shadow] duration-300',
+        scrolled
+          ? 'border-border bg-background/85 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-background/70'
+          : 'border-transparent bg-transparent',
+      )}
+    >
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
         <Wordmark />
 

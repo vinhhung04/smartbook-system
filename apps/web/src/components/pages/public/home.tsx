@@ -11,7 +11,8 @@ import { clearRecentlyViewed, readRecentlyViewed, type RecentlyViewedBook } from
 import { BookCover } from '@/components/public/book-cover';
 import { Book3D } from '@/components/public/book-3d';
 import { useShelfTilt } from '@/components/public/use-shelf-tilt';
-import { BookRow, BookRowSkeleton, SectionHeading } from '@/components/public/book-row';
+import { BookRow, BookRowSkeleton, Reveal, SectionHeading } from '@/components/public/book-row';
+import { CategoryShowcase, FeaturedTrending, TopTenBand } from '@/components/public/home-sections';
 import { HowBorrowingWorks } from '@/components/public/how-borrowing-works';
 import { DiscoveryBox } from '@/components/public/discovery-box';
 import { SearchAutocomplete } from '@/components/public/search-autocomplete';
@@ -98,57 +99,6 @@ function RecentlyViewedRow() {
   );
 }
 
-function MostBorrowedList({ books, days }: { books: PublicBook[]; days: number }) {
-  if (books.length === 0) return null;
-  return (
-    <section aria-labelledby="duoc-muon-nhieu">
-      <SectionHeading id="duoc-muon-nhieu" title="Được mượn nhiều" basis={`Xếp theo số lượt mượn trong ${days} ngày qua.`} seeAllTo="/books?sort=popular" />
-      <ol className="grid gap-x-10 sm:grid-cols-2">
-        {books.map((book, index) => (
-          <li key={book.id} className="border-b border-border">
-            <Link to={`/books/${book.id}`} className="group flex items-center gap-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
-              <span className="w-7 shrink-0 text-right font-serif text-[22px] font-semibold tabular-nums text-muted-foreground/70">{index + 1}</span>
-              <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} className="w-10 shrink-0" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-semibold text-foreground group-hover:underline">{book.title}</span>
-                <span className="block truncate text-[12.5px] text-muted-foreground">{book.author || 'Chưa rõ tác giả'}</span>
-              </span>
-              <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">{numberFormat.format(book.signals?.borrow_count || 0)} lượt</span>
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function CategoryTiles({ categories }: { categories: PublicHome['categories'] }) {
-  if (categories.length === 0) return null;
-  return (
-    <section aria-labelledby="the-loai">
-      <SectionHeading id="the-loai" title="Khám phá theo thể loại" seeAllTo="/categories" />
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
-        {categories.map((category) => (
-          <li key={category.slug}>
-            <Link to={`/categories/${category.slug}`} className="group flex h-full items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 dark:hover:border-indigo-500/40">
-              <span className="relative flex h-14 w-14 shrink-0 items-end" aria-hidden="true">
-                {category.covers.slice(0, 2).map((cover, index) => (
-                  <img key={cover} src={cover} alt="" loading="lazy" decoding="async" className={`absolute bottom-0 h-14 w-10 rounded-[3px] object-cover shadow ${index === 0 ? 'left-0 -rotate-6' : 'left-4 rotate-3'}`} />
-                ))}
-                {category.covers.length === 0 ? <span className="h-14 w-10 rounded-[3px] bg-muted" /> : null}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[14px] font-semibold text-foreground group-hover:underline">{category.name}</span>
-                <span className="block text-[12px] text-muted-foreground">{numberFormat.format(category.book_count)} đầu sách</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 /** "Dành riêng cho bạn": Recommendation V2, signed-in readers only. */
 function ForYouRow() {
   const [result, setResult] = useState<AIRecommendationsResult | null>(null);
@@ -162,11 +112,11 @@ function ForYouRow() {
   if (!result?.personalized || result.recommendations.length === 0) return null;
   return (
     <section aria-labelledby="danh-cho-ban">
-      <SectionHeading id="danh-cho-ban" title="Dành riêng cho bạn" basis="Dựa trên sách bạn đã mượn, yêu thích và đánh giá." seeAllTo="/customer/recommendations" />
+      <SectionHeading id="danh-cho-ban" eyebrow="Recommendation V2" title="Dành riêng cho bạn" basis="Dựa trên sách bạn đã mượn, yêu thích và đánh giá." seeAllTo="/customer/recommendations" />
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {result.recommendations.map((item) => (
           <li key={item.book_id}>
-            <Link to={`/books/${item.book_id}`} className="group flex h-full gap-3 rounded-lg border border-border bg-card p-3 hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
+            <Link to={`/books/${item.book_id}`} className="group flex h-full gap-3 rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 motion-reduce:transform-none">
               <BookCover title={item.title} author={item.author} className="w-14 shrink-0" />
               <span className="min-w-0">
                 <span className="block truncate text-[14px] font-semibold group-hover:underline">{item.title}</span>
@@ -212,32 +162,60 @@ export function PublicHomePage() {
     return { books, onShelf: books.length > 0 && books.every((book) => book.reservable) };
   }, [home]);
 
+  const days = home?.windows?.recent_days ?? 90;
+
   return (
     <>
-      <section ref={heroRef} className="overflow-x-clip border-b border-border bg-gradient-to-b from-indigo-50/70 to-background dark:from-indigo-950/20">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:px-8 lg:pb-20 lg:pt-16">
+      <section ref={heroRef} className="relative overflow-x-clip border-b border-border bg-gradient-to-b from-indigo-50/80 via-background to-background dark:from-indigo-950/30">
+        {/* Atmosphere: faint dot grid fading out, two soft lights. Decorative only. */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(79,70,229,0.13)_1px,transparent_0)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,black,transparent)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(165,180,252,0.12)_1px,transparent_0)]" aria-hidden="true" />
+        <div className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl dark:bg-indigo-600/20" aria-hidden="true" />
+        <div className="pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" aria-hidden="true" />
+
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-20">
           <div className="min-w-0">
-            <p className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-indigo-700 dark:text-indigo-300">
-              Thư viện SmartBook{home ? ` · ${numberFormat.format(home.stats.total_titles)} đầu sách` : ''}
-            </p>
-            <h1 className="mt-4 max-w-[16ch] text-balance font-serif text-[40px] font-semibold leading-[1.05] tracking-tight text-foreground sm:text-[54px]">
-              Khám phá cuốn sách tiếp theo của bạn.
+            {home ? (
+              <Link
+                to="/books?availability=available"
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-600/25 bg-card/80 py-1 pl-2 pr-3 text-[12.5px] font-medium text-foreground shadow-sm backdrop-blur hover:border-emerald-600/50"
+              >
+                <span className="relative flex h-2 w-2" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:hidden" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                {numberFormat.format(home.stats.available_titles)} đầu sách có sẵn hôm nay
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              </Link>
+            ) : (
+              <span className="inline-block h-7 w-56 animate-pulse rounded-full bg-muted" aria-hidden="true" />
+            )}
+            <h1 className="mt-6 max-w-[17ch] text-balance font-serif text-[42px] font-semibold leading-[1.04] tracking-tight text-foreground sm:text-[58px]">
+              Khám phá cuốn sách{' '}
+              <span className="whitespace-nowrap bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-500 bg-clip-text text-transparent dark:from-indigo-300 dark:via-violet-300 dark:to-cyan-300">tiếp theo</span>{' '}
+              của bạn.
             </h1>
-            <p className="mt-5 max-w-lg text-[16px] leading-relaxed text-muted-foreground">
+            <p className="mt-5 max-w-lg text-[16.5px] leading-relaxed text-muted-foreground">
               Tìm theo tên sách, tác giả hoặc thể loại. Xem ngay chi nhánh nào còn sách và đặt mượn trước khi đến thư viện.
             </p>
-            <div className="mt-7"><SearchAutocomplete variant="hero" /></div>
-            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
-              <Link to="/books" className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-indigo-700 hover:underline dark:text-indigo-300">
-                Khám phá sách <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link to="/categories" className="text-[14px] font-medium text-foreground/80 hover:text-foreground hover:underline">Xem theo thể loại</Link>
-              {home ? (
-                <span className="font-mono text-[12px] text-muted-foreground">
-                  {numberFormat.format(home.stats.total_titles)} đầu sách · {home.stats.category_count} thể loại
-                </span>
-              ) : null}
-            </div>
+            <div className="mt-8"><SearchAutocomplete variant="hero" /></div>
+            {home && home.categories.length ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-[12.5px] text-muted-foreground">Phổ biến:</span>
+                {home.categories.slice(0, 4).map((category) => (
+                  <Link
+                    key={category.slug}
+                    to={`/categories/${category.slug}`}
+                    className="rounded-full border border-border bg-card/80 px-3 py-1 text-[12.5px] font-medium text-foreground/85 backdrop-blur transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300"
+                  >
+                    {category.name}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+            <Link to="/books" className="group mt-7 inline-flex items-center gap-1.5 text-[14px] font-semibold text-indigo-700 dark:text-indigo-300">
+              Khám phá toàn bộ{home ? ` ${numberFormat.format(home.stats.total_titles)}` : ''} đầu sách
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </Link>
           </div>
           <div className="min-w-0 lg:pl-4">
             {home ? <HeroShelf books={shelf.books} onShelf={shelf.onShelf} /> : <div className="aspect-[7/3] animate-pulse rounded-md bg-muted/60" aria-hidden="true" />}
@@ -245,7 +223,7 @@ export function PublicHomePage() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-7xl space-y-16 px-4 pt-14 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-20 px-4 pt-16 sm:px-6 sm:space-y-24 lg:px-8">
         {error ? (
           <EmptyState
             variant="error"
@@ -263,30 +241,35 @@ export function PublicHomePage() {
             <RecentlyViewedRow />
             <BookRow
               id="co-san"
+              eyebrow="Mượn ngay hôm nay"
               title="Có sẵn để mượn ngay"
               basis={`${numberFormat.format(home.stats.available_titles)} đầu sách đang có bản trên kệ — đặt trước rồi đến chi nhánh nhận sách.`}
               books={home.available_now}
               seeAllTo="/books?availability=available"
               onReserve={requestReserve}
             />
-            <BookRow
-              id="dang-duoc-yeu-thich"
-              title="Đang được yêu thích"
-              basis={`Được mượn, đặt trước và thêm vào yêu thích nhiều trong ${home.windows?.recent_days ?? 90} ngày qua, ngoài các sách ở bảng “Được mượn nhiều”.`}
-              books={home.trending}
-              seeAllTo="/books?sort=popular"
-              onReserve={requestReserve}
-            />
-            {isCustomer ? <ForYouRow /> : null}
-            <BookRow id="sach-moi" title="Sách mới về" basis="Đầu sách được thêm vào thư viện gần đây nhất." books={home.new_arrivals} seeAllTo="/books?sort=newest" onReserve={requestReserve} />
-            <DiscoveryBox />
-            <CategoryTiles categories={home.categories} />
-            <MostBorrowedList books={home.most_borrowed} days={home.windows?.borrow_days ?? 365} />
-            <BookRow id="danh-gia-cao" title="Bạn đọc đánh giá cao" basis="Điểm trung bình từ ít nhất 2 đánh giá của bạn đọc." books={home.top_rated} seeAllTo="/books?sort=rating" onReserve={requestReserve} />
+            <FeaturedTrending books={home.trending} days={days} onReserve={requestReserve} />
+            {isCustomer ? <Reveal><ForYouRow /></Reveal> : null}
+            <BookRow id="sach-moi" eyebrow="Mới cập nhật" title="Sách mới về" basis="Đầu sách được thêm vào thư viện gần đây nhất." books={home.new_arrivals} seeAllTo="/books?sort=newest" onReserve={requestReserve} />
+            <Reveal><DiscoveryBox /></Reveal>
+            <CategoryShowcase categories={home.categories} />
           </>
         )}
+      </div>
 
-        <HowBorrowingWorks cta={isAuthenticated ? null : { to: buildLoginUrl('/', 'register'), label: 'Tạo tài khoản bạn đọc' }} />
+      {home ? <div className="mt-20 sm:mt-24"><TopTenBand books={home.most_borrowed} days={home.windows?.borrow_days ?? 365} /></div> : null}
+
+      <div className="mx-auto max-w-7xl space-y-20 px-4 pt-20 sm:space-y-24 sm:px-6 sm:pt-24 lg:px-8">
+        {home ? (
+          <BookRow id="danh-gia-cao" eyebrow="Bạn đọc chấm điểm" title="Bạn đọc đánh giá cao" basis="Điểm trung bình từ ít nhất 2 đánh giá của bạn đọc." books={home.top_rated} seeAllTo="/books?sort=rating" onReserve={requestReserve} />
+        ) : null}
+        <Reveal>
+          <HowBorrowingWorks
+            variant="band"
+            cta={isAuthenticated ? null : { to: buildLoginUrl('/', 'register'), label: 'Tạo tài khoản bạn đọc' }}
+            secondary={isAuthenticated ? { to: '/customer', label: 'Đến Sách của tôi' } : { to: '/books', label: 'Duyệt danh mục' }}
+          />
+        </Reveal>
       </div>
 
       <ReserveModal book={target} onClose={closeReserve} onSuccess={() => { closeReserve(); reload(); }} />
