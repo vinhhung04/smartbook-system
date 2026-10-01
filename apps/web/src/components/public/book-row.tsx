@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
 import { BookCardSkeleton, PublicBookCard } from './public-book-card';
@@ -34,7 +35,14 @@ export function SectionHeading({ id, title, basis, seeAllTo }: Pick<BookRowProps
 export function BookRow({ id, title, basis, books, seeAllTo, onReserve }: BookRowProps) {
   if (books.length === 0) return null;
   return (
-    <section aria-labelledby={id}>
+    <motion.section
+      aria-labelledby={id}
+      // Rows ease in once as they scroll into view (off under reduced motion via MotionConfig).
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+    >
       <SectionHeading id={id} title={title} basis={basis} seeAllTo={seeAllTo} />
       <ul className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-6 lg:gap-5 lg:overflow-visible lg:px-0">
         {books.slice(0, 6).map((book) => (
@@ -43,7 +51,7 @@ export function BookRow({ id, title, basis, books, seeAllTo, onReserve }: BookRo
           </li>
         ))}
       </ul>
-    </section>
+    </motion.section>
   );
 }
 

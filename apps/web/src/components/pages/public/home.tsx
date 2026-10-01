@@ -9,6 +9,8 @@ import { usePageMeta } from '@/lib/page-meta';
 import { buildLoginUrl } from '@/lib/return-url';
 import { clearRecentlyViewed, readRecentlyViewed, type RecentlyViewedBook } from '@/lib/recently-viewed';
 import { BookCover } from '@/components/public/book-cover';
+import { Book3D } from '@/components/public/book-3d';
+import { useShelfTilt } from '@/components/public/use-shelf-tilt';
 import { BookRow, BookRowSkeleton, SectionHeading } from '@/components/public/book-row';
 import { HowBorrowingWorks } from '@/components/public/how-borrowing-works';
 import { DiscoveryBox } from '@/components/public/discovery-box';
@@ -26,28 +28,33 @@ function HeroShelf({ books, onShelf }: { books: PublicBook[]; onShelf: boolean }
   // uneven heights of books standing on a shelf without ever overflowing it.
   const weights = [0.9, 1, 0.94, 0.84, 0.97];
   return (
-    <figure>
-      <ul className="flex items-end gap-2 sm:gap-3" aria-label={onShelf ? 'Sách đang có trên kệ' : 'Một số đầu sách trong thư viện'}>
+    <figure className="relative">
+      {/* Soft light on the wall behind the shelf. */}
+      <div className="pointer-events-none absolute -inset-x-8 -top-10 bottom-0 bg-[radial-gradient(ellipse_at_50%_75%,rgba(79,70,229,0.16),transparent_65%)] dark:bg-[radial-gradient(ellipse_at_50%_75%,rgba(129,140,248,0.18),transparent_65%)]" aria-hidden="true" />
+      <ul className="relative z-10 flex items-end gap-3 px-3 sm:gap-4" aria-label={onShelf ? 'Sách đang có trên kệ' : 'Một số đầu sách trong thư viện'}>
         {books.map((book, index) => (
           <motion.li
             key={book.id}
-            initial={{ opacity: 0, y: 16 }}
+            // Books are slid onto the shelf one after another.
+            initial={{ opacity: 0, y: -24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 * index, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.1 * index, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             style={{ flexGrow: weights[index % weights.length], flexBasis: 0 }}
-            className="min-w-0"
+            className="relative min-w-0 hover:z-20 focus-within:z-20"
           >
             <Link
               to={`/books/${book.id}`}
-              className="block transition-transform duration-200 hover:-translate-y-2 focus-visible:-translate-y-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 motion-reduce:transform-none"
+              className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
               title={book.title}
             >
-              <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} eager />
+              <Book3D title={book.title} author={book.author} imageUrl={book.cover_image_url} pose="shelf" eager />
             </Link>
           </motion.li>
         ))}
       </ul>
-      <div className="h-2.5 rounded-b-sm bg-gradient-to-b from-stone-300 to-stone-400 shadow-[0_6px_14px_-6px_rgba(0,0,0,0.35)] dark:from-stone-600 dark:to-stone-700" aria-hidden="true" />
+      {/* Plank: a lit top surface the books stand on, then the front edge. */}
+      <div className="relative -mt-2 h-4 origin-top rounded-t-sm bg-gradient-to-b from-stone-200 to-stone-300 [transform:perspective(500px)_rotateX(48deg)] dark:from-stone-500 dark:to-stone-600" aria-hidden="true" />
+      <div className="relative -mt-1 h-3 rounded-b-sm bg-gradient-to-b from-stone-400 to-stone-500 shadow-[0_14px_24px_-12px_rgba(15,23,42,0.55)] dark:from-stone-700 dark:to-stone-800" aria-hidden="true" />
       <figcaption className="mt-3 flex items-center justify-between gap-3 text-[12.5px] text-muted-foreground">
         {onShelf ? (
           <>
@@ -176,6 +183,7 @@ function ForYouRow() {
 
 export function PublicHomePage() {
   usePageMeta({});
+  const heroRef = useShelfTilt<HTMLElement>();
   const { isAuthenticated, isCustomer } = useAuthUser();
   const [home, setHome] = useState<PublicHome | null>(null);
   const [error, setError] = useState(false);
@@ -206,7 +214,7 @@ export function PublicHomePage() {
 
   return (
     <>
-      <section className="border-b border-border bg-gradient-to-b from-indigo-50/70 to-background dark:from-indigo-950/20">
+      <section ref={heroRef} className="overflow-x-clip border-b border-border bg-gradient-to-b from-indigo-50/70 to-background dark:from-indigo-950/20">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:px-8 lg:pb-20 lg:pt-16">
           <div className="min-w-0">
             <p className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-indigo-700 dark:text-indigo-300">

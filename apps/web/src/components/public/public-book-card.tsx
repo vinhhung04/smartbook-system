@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { Star } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
-import { BookCover } from './book-cover';
+import { Book3D } from './book-3d';
 import { AvailabilityStamp } from './availability-stamp';
 
 interface PublicBookCardProps {
@@ -20,8 +20,8 @@ export function PublicBookCard({ book, onReserve, className }: PublicBookCardPro
 
   return (
     <article className={cn('group flex h-full flex-col', className)}>
-      <Link to={detailPath} tabIndex={-1} aria-hidden="true" className="block transition-transform duration-200 group-hover:-translate-y-1 motion-reduce:transform-none">
-        <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} />
+      <Link to={detailPath} tabIndex={-1} aria-hidden="true" className="block">
+        <Book3D title={book.title} author={book.author} imageUrl={book.cover_image_url} pose="card" />
       </Link>
 
       <div className="mt-3 flex flex-1 flex-col">
