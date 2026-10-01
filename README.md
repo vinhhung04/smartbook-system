@@ -33,7 +33,8 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 | 📦 **Service lớn nhất** | Inventory Service — ~28 route file (mua hàng, nhập/xuất kho) |
 | 🗄️ **Cơ sở dữ liệu** | PostgreSQL + pgvector (3 domain DB: `auth_db`, `inventory_db`, `borrow_db`) + Redis cache |
 | 🐳 **Triển khai** | Docker Compose — 14 container mặc định (AI, pgAdmin, seed demo, k6 là profile tùy chọn) |
-| 🤖 **AI** | OpenRouter (Qwen) là backend inference duy nhất (đã bỏ Anthropic/Groq/Ollama) cho chat/tóm tắt/tool-calling/vision-OCR/embedding — không cần GPU; CLIP local (CPU) cho visual similarity ảnh bìa; tìm kiếm hybrid semantic (pgvector) + keyword qua RRF |
+| 🤖 **AI** | OpenRouter (Qwen) là backend inference duy nhất (đã bỏ Anthropic/Groq/Ollama) cho chat/tóm tắt/tool-calling/vision-OCR/embedding — không cần GPU; CLIP local (CPU) cho visual similarity ảnh bìa; tìm kiếm hybrid semantic (pgvector) + keyword qua RRF; **Recommendation V2** — bộ xếp hạng lai (hybrid ranker) có trọng số chọn trên tập validation theo thời gian |
+| 🧪 **Dữ liệu đánh giá** | Bộ dữ liệu hành vi **tổng hợp** (synthetic) có điều kiện theo persona, có ground truth — dùng để đánh giá mô hình rủi ro, dự báo và gợi ý sách (không phải dữ liệu người dùng thật) |
 | 📱 **Mobile** | Expo/React Native — app cho nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán) |
 | 📨 **Event-driven** | RabbitMQ + transactional outbox (Inventory Service phát sự kiện, API Gateway relay qua Socket.IO) |
 | 📈 **Observability** | OpenTelemetry tracing (Tempo), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log tập trung) |
@@ -56,6 +57,7 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 - 📖 Mượn, gia hạn, trả sách
 - 💸 Sinh phí phạt khi quá hạn / mất / hư sách; 💳 thanh toán phạt online qua VNPay
 - ❤️ Wishlist, review, thông báo cho khách hàng
+- ✨ Gợi ý sách cá nhân hóa (Recommendation V2) kèm lý do "Vì sao gợi ý"
 - 📱 App di động cho khách hàng (Expo/React Native)
 
 </td>
@@ -66,10 +68,12 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 - 🛒 Purchase Request → Purchase Order → gửi nhà cung cấp
 - 🚚 Supplier Portal (token công khai) + Supplier Account (đăng nhập)
 - 📥 Goods Receipt — chỉ cộng tồn khi **post**
-- 🗂️ Putaway — gợi ý vị trí kệ trống
-- 🧺 Picking & Packing có bằng chứng ảnh/video (manager có thể override kèm lý do khi thiếu video)
+- 🗂️ Putaway — gợi ý vị trí theo từng dòng phiếu nhập, chia hàng ra nhiều kệ theo sức chứa
+- 🔫 Picking với một ô quét duy nhất (có mặt → kệ → sách) và toàn bộ lộ trình lấy hàng
+- 🧺 Packing có bằng chứng ảnh/video (manager có thể override kèm lý do khi thiếu video)
 - 🧮 Stock Audit, Exception Report, Reslotting
-- ⚠️ Shortage report & giao bù (redelivery)
+- ⚠️ Đối soát giao hàng thừa/thiếu, shortage report & giao bù (redelivery)
+- 🤝 AI hỗ trợ ra quyết định: hệ thống đề xuất, con người duyệt
 - 🔐 Phân quyền đọc/ghi theo từng kho (warehouse scope)
 - 📱 App di động cho nhân viên kho (picking/putaway/outbound/audit)
 
@@ -99,6 +103,7 @@ Mở **http://localhost:5173**, đăng nhập bằng tài khoản demo `hung` / 
 - [🏗️ Kiến trúc tổng quan](#kiến-trúc-tổng-quan)
 - [🧭 Các domain nghiệp vụ](#các-domain-nghiệp-vụ)
 - [📨 Kiến trúc hướng sự kiện & Observability](#kiến-trúc-hướng-sự-kiện--observability)
+- [🧪 Dữ liệu hành vi tổng hợp & đánh giá mô hình](#dữ-liệu-hành-vi-tổng-hợp--đánh-giá-mô-hình)
 - [🔁 Luồng nghiệp vụ chính](#luồng-nghiệp-vụ-chính)
 - [🧱 Service catalog](#service-catalog)
 - [🛠️ Công nghệ sử dụng](#công-nghệ-sử-dụng)
@@ -137,19 +142,19 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 
 - 🔐 Auth/IAM: đăng nhập, JWT, user, role, permission, phân quyền theo API, quên/đặt lại mật khẩu qua email.
 - 📖 Borrow: customer, membership, reservation, loan, return, renewal, fine, notification, wallet/account ledger.
-- 🙋 Customer Portal: customer xem catalog, đặt sách, xem reservation, mã pickup/QR, loan, fine, wishlist, review, notification.
+- 🙋 Customer Portal: customer xem catalog, đặt sách, xem reservation, mã pickup/QR, loan, fine, wishlist, review, notification, gợi ý sách cá nhân hóa.
 
 ### 📦 Nhóm Kho vận & Mua hàng
 
 - 🏷️ Catalog & tồn kho: books, variants, warehouse, location/shelf, stock balance, stock movement, stock alert.
 - 🛒 Mua hàng: purchase request, purchase order (submit/approve/reject/cancel/gửi nhà cung cấp), supplier, supplier account, supplier portal (token công khai), supplier delivery, shortage report/redelivery.
-- 📥 Nhập kho: goods receipt (draft/post), receiving thông minh có gợi ý AI, putaway (xếp hàng vào kệ), receiving-putaway, transfer receiving.
+- 📥 Nhập kho: goods receipt (draft/post), receiving thông minh có gợi ý AI, putaway (xếp hàng vào kệ, gợi ý vị trí theo từng dòng, chia nhiều kệ theo sức chứa), receiving-putaway, transfer receiving.
 - 📤 Xuất kho: order request (outbound/transfer), picking, packing (có bằng chứng ảnh/video), outbound.
 - 🧮 Vận hành kho: stock audit, exception report, reslotting/storage suggestion, staff task, "my warehouse tasks".
 
 ### 🧰 Nền Tảng Dùng Chung
 
-- 🤖 AI Service: tra cứu thông tin sách theo ISBN, tìm sách bằng ảnh bìa, OCR hóa đơn nhập kho, metadata enrichment, chat/agent, trợ lý ra quyết định và báo cáo tổng hợp mỗi đêm (nightly briefing).
+- 🤖 AI Service: tra cứu thông tin sách theo ISBN, tìm sách bằng ảnh bìa, OCR hóa đơn nhập kho, metadata enrichment, chat/agent, trợ lý ra quyết định, báo cáo tổng hợp mỗi đêm (nightly briefing) và gợi ý sách cá nhân hóa (Recommendation V2).
 - 📊 Analytics Service: tổng hợp KPI/báo cáo thật từ dữ liệu thư viện lẫn kho vận.
 - 🔔 Real-time: API Gateway phát sự kiện qua WebSocket (Socket.IO) cho cả hai phía thư viện và kho vận.
 - 📨 Event bus: RabbitMQ + transactional outbox — Inventory Service ghi sự kiện nghiệp vụ (đặt/nhả/tiêu tồn kho, duyệt/gửi PO, post goods receipt) vào cùng transaction rồi publish bất đồng bộ; API Gateway consume để đẩy realtime.
@@ -255,12 +260,13 @@ Customer Portal là phần trải nghiệm khách hàng:
 - Theo dõi reservation, hạn nhận sách, xem pickup code/QR khi sách sẵn sàng nhận.
 - Xem loan, yêu cầu gia hạn, xem fine, thanh toán fine (online qua VNPay hoặc tại quầy).
 - Wishlist, review, notification, preference.
+- ✨ Trang **Gợi ý cho bạn**: sách xếp theo mức phù hợp (tier) thay vì phần trăm/số sao, kèm "Vì sao gợi ý" lấy từ các tín hiệu thật của bộ xếp hạng, ảnh bìa và nút "Thêm yêu thích" (xem [✨ Gợi ý sách](#gợi-ý-sách-cá-nhân-hóa-recommendation-v2)).
 
 ### 📱 Mobile App
 
 Một app Expo/React Native duy nhất (`apps/mobile`, tên hiển thị "SmartBook Picking") phục vụ hai nhóm người dùng khác nhau:
 
-- **Nhân viên kho**: đăng nhập, danh sách task (`(tabs)/tasks`), quét barcode, picking theo task, putaway theo kho/phiếu nhập, outbound (quét xuất kho + lịch sử theo phiên), stock audit, báo cáo exception, tra cứu nhanh (`lookup`).
+- **Nhân viên kho**: đăng nhập, danh sách task (`(tabs)/tasks`), quét barcode, picking theo task, putaway theo từng phiếu nhập (`putaway/receipt/[receiptId]`), outbound (quét xuất kho + lịch sử theo phiên), stock audit, báo cáo exception, tra cứu nhanh (`lookup`).
 - **Khách hàng** (dưới `app/customer/`): duyệt catalog, tìm sách bằng ảnh bìa (`customer/scan-cover.tsx`), xem sách đang mượn/đặt, quản lý ví và **thanh toán phạt qua VNPay ngay trên app** (`customer/wallet/pay/[fineId].tsx`).
 
 Dùng `expo-camera` để quét mã vạch/QR và chụp ảnh bìa, `expo-secure-store` để lưu token đăng nhập.
@@ -288,13 +294,14 @@ Dùng `expo-camera` để quét mã vạch/QR và chụp ảnh bìa, `expo-secur
 
 - Goods Receipt: tạo/sửa phiếu nhập ở trạng thái draft, gán người xác nhận, chỉ cộng tồn kho khi phiếu được **post**.
 - Receiving-smart: nhân viên nhập liệu nhanh bằng cách khớp (match) hàng thực nhận với đơn hàng, AI hỗ trợ tạo/convert draft.
-- Putaway & Receiving-putaway: gợi ý ô kệ trống, quét barcode vị trí/variant, xác nhận xếp hàng vào kệ, có thể đảo ngược (reverse) khi xếp nhầm.
+- Putaway & Receiving-putaway: tự động gợi ý vị trí cho phần số lượng **còn phải cất** của từng dòng phiếu nhập; chọn một gợi ý sẽ thay dòng mặc định hoặc thêm dòng mới cho phần còn lại (chia hàng ra nhiều kệ), hiển thị tiến độ "Cần cất / Đã phân bổ / Còn lại" và dừng gợi ý khi đã phân bổ đủ. Quét barcode vị trí/variant, xác nhận xếp hàng vào kệ, có thể đảo ngược (reverse) khi xếp nhầm. Trang chi tiết putaway có thêm cột "Vị trí gợi ý" cho từng dòng còn lại.
+- Sức chứa vị trí: `location-capacity.service.js` dùng chung cho storage suggestion và putaway, nên vị trí được gợi ý luôn tính theo sức chứa còn trống thật.
 - Transfer receiving: nhận hàng chuyển kho nội bộ, có hàng chờ (queue), gán người nhận, xác nhận.
 
 **📤 Xuất kho (Fulfillment)** (`/api/order-requests`, `/api/picking`, `/api/packing`, `/api/outbound`)
 
-- Order Request: tạo yêu cầu xuất kho (outbound) hoặc chuyển kho (transfer), cần approve/reject trước khi thực thi.
-- Picking: danh sách task lấy hàng theo `taskType`/`taskId`, nhận task, xử lý repick khi thiếu hàng, xem theo cây (picking-tasks/children).
+- Order Request: tạo yêu cầu xuất kho (outbound) hoặc chuyển kho (transfer), cần approve/reject trước khi thực thi; người có quyền duyệt mở trang sẽ vào thẳng "Hàng chờ duyệt".
+- Picking: danh sách task lấy hàng theo `taskType`/`taskId` (mặc định xem mọi kho, task của chính mình xếp trước), nhận task, xử lý repick khi thiếu hàng, xem theo cây (picking-tasks/children). Màn hình thực hiện hiển thị kệ, sách, số lượng ngay đầu cùng toàn bộ lộ trình; **một ô quét duy nhất** tự hiểu ngữ cảnh: xác nhận có mặt → quét kệ → quét sách (quét kệ đầu tiên cũng tính là xác nhận có mặt). Dòng chưa gán kệ không còn bị kẹt — backend kiểm tra khi xác nhận.
 - Packing: quét hóa đơn để bắt đầu đóng gói, nhận task, quét từng item, upload bằng chứng (ảnh/ghi hình), hoàn tất hoặc hủy task, xem lịch sử. Bằng chứng ảnh còn được AI xác minh (`ai_verification_status`: `MATCH`/`MISMATCH`) để đối chiếu số lượng/tên sách phát hiện được. Hoàn tất task **bắt buộc có video bằng chứng**; nếu thiếu, nhân viên thường bị chặn hẳn (`PACKING_VIDEO_EVIDENCE_REQUIRED`), còn manager/admin được phép override kèm lý do bắt buộc (`PACKING_VIDEO_EVIDENCE_OVERRIDE_REASON_REQUIRED`) — lý do này được ghi vào audit log.
 - Outbound: hàng đợi xuất kho, gán/nhận task, xác nhận xuất.
 
@@ -302,7 +309,7 @@ Dùng `expo-camera` để quét mã vạch/QR và chụp ảnh bìa, `expo-secur
 
 - Stock Audit: tạo phiếu kiểm kê, gán người kiểm, nhập số lượng đếm theo từng dòng, submit rồi approve/cancel.
 - Exception Report: nhân viên báo cáo sự cố kho, manager gán và xử lý.
-- Storage/Reslotting Suggestion: gợi ý vị trí lưu trữ tối ưu (AI hỗ trợ) và đề xuất tái sắp xếp kệ.
+- Storage/Reslotting Suggestion: gợi ý vị trí lưu trữ tối ưu theo sức chứa, hiển thị "Mức phù hợp" (heuristic) kèm giải thích do AI viết lại — có thể tắt phần giải thích bằng `explain: false` trên `POST /api/storage-suggestions` (cache riêng). Re-slotting hiển thị vị trí hiện tại → vị trí đề xuất kèm tốc độ luân chuyển 90 ngày, và tạo task di chuyển sau khi người dùng xác nhận.
 - Staff Task & My Warehouse Tasks: giao việc chung cho nhân viên kho, theo dõi task khả dụng và task của riêng mình.
 
 **🔗 Tích hợp với Borrow Service** (`/api/borrow-integration`)
@@ -318,6 +325,8 @@ Hai kênh để nhà cung cấp tương tác với hệ thống, dùng chung m�
 
 Cả hai kênh chỉ cho phép: xác nhận đơn hàng, nộp hóa đơn/phiếu giao hàng, xác nhận (acknowledge) hoặc báo không thể giao khi thiếu hàng, nộp hóa đơn giao bù (redelivery).
 
+Phía kho, màn hình nhận hàng từ nhà cung cấp (`/supplier-deliveries/:id`) đối soát từng dòng theo các cột PO đặt / đã nhận / còn lại / trên hóa đơn / sẽ nhận, và kết luận **thừa** hoặc **thiếu** đúng chiều (trước đây giao thừa bị báo nhầm thành thiếu). Danh sách giao hàng sắp theo ngày dự kiến và đánh dấu các chuyến giao trễ.
+
 > [!IMPORTANT]
 > Endpoint `create-goods-receipt` và `post-goods-receipt` phía nhà cung cấp cố tình trả lỗi (`supplierCannotPostStock`) — nhà cung cấp **không bao giờ** được tự tạo hoặc post goods receipt, không được sửa tồn kho. Việc tạo và post goods receipt luôn do warehouse staff thực hiện từ hóa đơn nhà cung cấp gửi lên (`/api/supplier-deliveries/:id/create-goods-receipt`).
 
@@ -332,7 +341,33 @@ AI Service hỗ trợ tự động hóa nhập liệu và ra quyết định:
 - 🌙 **Nightly briefing** — job chạy mỗi đêm (`nightly_briefing.py`, bật bằng `ENABLE_NIGHTLY_BRIEFING`), tự gọi 6 endpoint `/analytics/*` (quá hạn, phạt, rủi ro tồn kho, gợi ý nhập hàng, funnel reservation, gợi ý thanh lý), tóm tắt bằng LLM rồi tạo sẵn một **pending action** (`CREATE_REPORT_DRAFT`) để staff duyệt vào sáng hôm sau — không tự động publish gì cả.
 - 📷 **Tìm sách bằng ảnh bìa** — `POST /find-book-by-cover`: kết hợp visual embedding (CLIP, local) so khớp với gallery bìa sách đã index sẵn (`ai_cover_embeddings`) và OCR (OpenRouter vision — Qwen) đọc tên sách/tác giả rồi so khớp catalog, trả về danh sách candidate kèm độ tin cậy (`confidence`) và bằng chứng từng tín hiệu (`evidence`). Dùng chung ở cả Web (modal cho staff) và Mobile (màn hình quét bìa cho khách hàng).
 - 🔎 **Tìm kiếm hybrid** — `pg_vector_store.py` (semantic qua pgvector) kết hợp `search_keyword` (full-text, không phân biệt dấu) qua **Reciprocal Rank Fusion (RRF)** trong `faq_retrieval.py`, thay vì chỉ semantic hoặc chỉ keyword.
+- 🤝 **AI hỗ trợ ra quyết định (Web)** — mọi đề xuất của AI (đặt hàng bổ sung, cảnh báo tồn kho, giao việc, giữ sách...) hiển thị qua bộ thẻ dùng chung `AIDecisionCard` theo thứ tự: quyết định → trạng thái → vì sao → điều gì xảy ra khi xác nhận → chi tiết (thu gọn) → hành động. Người dùng có thể "Từ chối đề xuất" hoặc "Điều chỉnh trước khi tạo" (sửa số lượng/loại trừ dòng, gửi qua `override_payload`); quyền được kiểm tra trước khi hiện nút. Nguyên tắc: **hệ thống đề xuất, con người quyết định**.
 - 🔎 **Embedding** (`embeddings.py`) — OpenRouter (`qwen/qwen3-embedding-8b`, 768 chiều) là provider duy nhất cho semantic search; `embed_batch()`/`embed_text()` không bao giờ raise, lỗi thì trả `None` và caller tự degrade xuống keyword-only search.
+
+#### ✨ Gợi ý sách cá nhân hóa (Recommendation V2)
+
+`POST /ai/recommendations` trả về danh sách sách gợi ý cho khách hàng đang đăng nhập. Ứng viên được sinh và xếp hạng **hoàn toàn bằng code** (`recommendation_v2.py`), nên mọi `book_id` trả về chắc chắn có trong catalog — LLM chỉ viết câu lý do tiếng Việt từ các mã lý do (reason code) thật của bộ xếp hạng.
+
+- **Sinh ứng viên** từ 5 nguồn: sở thích thể loại, collaborative filtering item-item, nội dung (TF-IDF trên tên/tác giả/thể loại/mô tả), sách phổ biến và sách đang lên (trending).
+- **Chấm điểm log-linear** trên 8 đặc trưng: `preference`, `author`, `semantic`, `collaborative`, `popularity`, `recency`, `quality`, `availability`. Trọng số được chọn bằng coordinate search trên **cửa sổ validation theo thời gian** (train `< p60`, validation `[p60, p80)`, test `[p80, end]` chỉ báo cáo một lần) và lưu ở `recommendation_v2_weights.json`.
+- **Luật nghiệp vụ**: loại sách ngừng kinh doanh, sách đã đọc / đang trong wishlist / đang đặt trước; hạ hạng sách hết hàng; chừa một chỗ cho sách mới về.
+- **Dữ liệu toàn thư viện**: AI Service đọc luồng tương tác ẩn danh từ Borrow Service (`GET /internal/recommendation/interactions`, xác thực bằng `INTERNAL_SERVICE_KEY`, không mở qua Gateway) và cache mô hình chung (`RECOMMENDATION_GLOBAL_TTL_SECONDS`, mặc định 600 giây).
+- **Rollback an toàn**: `RECOMMENDATION_MODEL=v2` (mặc định) hoặc `v1` (bộ xếp hạng trọng số thủ công cũ). Nếu V2 lỗi khi chạy, hệ thống tự phục vụ bằng V1 thay vì trả lỗi.
+
+Kết quả trên tập test (344 khách hàng, dữ liệu **tổng hợp** — xem [🧪 Dữ liệu hành vi tổng hợp](#dữ-liệu-hành-vi-tổng-hợp--đánh-giá-mô-hình)):
+
+| Mô hình | HR@10 | NDCG@10 | Recall@10 | MRR |
+|---|---:|---:|---:|---:|
+| RANDOM | 0.439 | 0.109 | 0.166 | 0.171 |
+| POPULARITY | 0.767 | 0.352 | 0.445 | 0.470 |
+| V1 (production cũ) | 0.579 | 0.212 | 0.275 | 0.311 |
+| **V2** | **0.861** | **0.428** | **0.541** | **0.533** |
+| ORACLE (đọc sở thích ẩn — trần tham chiếu, không triển khai được) | 0.878 | 0.432 | 0.553 | 0.522 |
+
+V2 tốt hơn V1 và POPULARITY có ý nghĩa thống kê (bootstrap CI 95%) trên cả bốn chỉ số, và thu hẹp 94.1% khoảng cách NDCG@10 giữa POPULARITY và ORACLE. Báo cáo đầy đủ (coverage/diversity, cold-start, ablation, giới hạn): `services/ai-service/eval/reports/recommendation_v2_report.md`.
+
+> [!NOTE]
+> Đây là số đo trên dữ liệu mô phỏng, phản ánh khả năng V2 khôi phục sở thích từ dữ liệu quan sát được — **không** phải độ chính xác trên người dùng thật.
 
 ### 📊 Analytics
 
@@ -342,6 +377,8 @@ Analytics Service là module dành cho báo cáo vận hành:
 - Phục vụ dashboard staff/manager/admin qua API Gateway prefix `/analytics`.
 - Là nơi duy nhất gom dữ liệu chéo domain cho báo cáo; các service nghiệp vụ khác không query chéo database.
 - Không dùng fake data hoặc số liệu hardcode ở frontend.
+- Phân quyền theo domain: các báo cáo phía thư viện (xu hướng mượn, quá hạn, phạt, reservation — có thể chứa thông tin khách hàng) cần quyền `analytics.borrow.read`, mặc định chỉ ADMIN có; WAREHOUSE_MANAGER bị từ chối (403).
+- Dashboard hiển thị xu hướng dạng đường có điền 0 cho ngày trống, tách reservation **đang mở** khỏi **kết quả tích lũy**, top sách dạng danh sách xếp hạng và phí phạt chia theo số tiền/lý do.
 
 Các endpoint chính:
 
@@ -418,6 +455,32 @@ Toàn bộ stack có thể quan sát được qua ba trụ cột kinh điển, k
 > AI Service (Python/FastAPI) hiện **chưa** có OpenTelemetry tracing như các service Node.js — chỉ các service Node (auth/inventory/borrow/analytics) mới xuất trace về Tempo.
 
 Truy cập: Grafana http://localhost:3100, Prometheus http://localhost:9090.
+
+## 🧪 Dữ Liệu Hành Vi Tổng Hợp & Đánh Giá Mô Hình
+
+> [!IMPORTANT]
+> Đây là **dữ liệu tổng hợp mô phỏng hành vi người dùng**, không phải dữ liệu thu thập từ người dùng thật. Mọi persona, phân phối nhân khẩu học và xác suất hành vi đều là giả định mô phỏng do nhóm thiết kế.
+
+Dữ liệu demo viết tay chỉ có vài chục giao dịch — không đủ để huấn luyện/đánh giá mô hình rủi ro trả trễ, no-show, dự báo nhu cầu hay gợi ý sách. Vì vậy `services/borrow-service/prisma/simulation/` sinh một quần thể **600 khách hàng trong 24 tháng** bằng mô phỏng sự kiện rời rạc, **có ground truth**:
+
+```text
+Nhân khẩu học (tuổi → nghề nghiệp) → Persona (8 loại) → Đặc điểm ẩn (activity, punctuality, digital, exploration...)
+→ Sở thích thể loại/tác giả → Thói quen thời gian → Mô phỏng sự kiện (tồn kho dùng chung)
+→ Dữ liệu borrow_db + simulation-truth.json + simulation-report.{json,md}
+```
+
+- **Chuỗi nhân quả đầy đủ**: khám phá → wishlist → mượn; hết hàng → wishlist/cảnh báo → đặt trước → mã nhận → nhận sách | no-show | hủy; mượn → gia hạn → trả → phạt → thanh toán → review.
+- **Ground truth rủi ro** công bố dạng logistic, nên đo được mô hình đạt bao nhiêu so với trần lý thuyết (Bayes AUC).
+- **Chống rò rỉ dữ liệu**: mô hình production không bao giờ đọc file truth (có test quét mã nguồn); đặc trưng tính **point-in-time**; tách tập theo thời gian, không chia ngẫu nhiên. Quá trình này cũng phát hiện và sửa một lỗi rò rỉ tương lai trong SQL huấn luyện của `analytics.controller.js`.
+- **Tái lập được**: mọi phép ngẫu nhiên đi qua PRNG có seed — cùng seed cho ra cùng từng dòng, kể cả khóa chính. Dữ liệu sinh ra mang tiền tố `SIM-`, chạy lại idempotent và không đụng tới dữ liệu demo viết tay.
+
+```powershell
+pnpm demo:seed:history                                       # ghi dữ liệu mô phỏng vào borrow_db (Docker)
+npm --prefix services/borrow-service run simulation:dry-run  # không cần DB: sinh + kiểm tra + đánh giá + báo cáo
+pnpm eval:recommendation                                     # sinh dữ liệu (dry-run) rồi đánh giá Recommendation V2
+```
+
+Chi tiết persona, công thức và giới hạn: `docs/SYNTHETIC_BEHAVIOR_DATASET.md`.
 
 ## 🔁 Luồng Nghiệp Vụ Chính
 
@@ -504,7 +567,7 @@ Purchase Request (staff tạo)
 → warehouse staff tạo Goods Receipt (draft) từ hóa đơn
 → staff post Goods Receipt
 → tồn kho tăng
-→ putaway: xếp hàng vào đúng vị trí kệ
+→ putaway: gợi ý vị trí theo từng dòng, có thể chia ra nhiều kệ theo sức chứa
 ```
 
 Quy tắc nghiệp vụ:
@@ -514,6 +577,7 @@ Quy tắc nghiệp vụ:
 - 📄 Goods Receipt cho một PO phải xuất phát từ hóa đơn/phiếu giao hàng của nhà cung cấp.
 - 🚫 Over-receiving (nhận nhiều hơn đặt) bị chặn ở backend.
 - ⚠️ Thiếu hàng được ghi nhận thành shortage report riêng, không tự trừ vào PO.
+- 🗂️ Putaway chỉ gợi ý vị trí còn đủ sức chứa cho phần số lượng chưa cất; một dòng phiếu nhập có thể được chia ra nhiều kệ.
 
 ### 5. 🔧 Supplier Portal / xử lý thiếu hàng & giao bù
 
@@ -548,8 +612,8 @@ Quy tắc nghiệp vụ:
 | 🚪 API Gateway | **:3000** (host) | Cổng vào tập trung + WebSocket | `/health`, `/auth`, `/iam`, `/api`, `/borrow`, `/analytics`, `/ai`, `socket.io` |
 | 🔐 Auth Service | 3002 (nội bộ) | Xác thực và phân quyền | `/auth/login`, `/auth/me`, `/iam/users`, `/iam/roles` |
 | 📦 Inventory Service | 3001 (nội bộ) | Catalog, tồn kho, mua hàng, kho vận | `/api/books`, `/api/warehouses`, `/api/purchase-orders`, `/api/picking`, `/api/packing`, `/api/borrow-integration/*` |
-| 📖 Borrow Service | 3005 (nội bộ) | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*` |
-| 🤖 AI Service | 8000 (nội bộ) | OCR/metadata enrichment | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant` |
+| 📖 Borrow Service | 3005 (nội bộ) | Lưu thông sách | `/borrow/reservations`, `/borrow/loans`, `/borrow/fines`, `/my/*`, `/internal/recommendation/interactions` |
+| 🤖 AI Service | 8000 (nội bộ) | OCR/metadata enrichment, trợ lý, gợi ý sách | `/health`, `/lookup-book-by-isbn`, `/scan-receipt`, `/assistant`, `/recommendations` |
 | 📊 Analytics Service | 3006 (nội bộ) | Báo cáo/KPI từ dữ liệu thật | `/analytics/dashboard/kpis`, `/analytics/borrow-trends`, `/analytics/top-books` |
 | 📱 Mobile App | — | App Expo cho staff kho + khách hàng | Chạy qua Expo, không phải container Docker |
 | 🐘 PostgreSQL | 5432 (nội bộ) | Lưu dữ liệu + pgvector cho AI | `auth_db`, `inventory_db`, `borrow_db` |
@@ -597,6 +661,7 @@ Quy tắc nghiệp vụ:
 - OpenRouter (Qwen) là backend inference duy nhất — chat/tóm tắt/tool-calling/NLU, vision/OCR (bìa sách, đóng gói, hóa đơn) và embedding, đều qua cùng một provider (đã bỏ Anthropic/Groq/Ollama, không cần GPU).
 - pgvector cho tìm kiếm semantic (embedding OpenRouter), kết hợp keyword search qua Reciprocal Rank Fusion.
 - CLIP embedding (local, CPU) cho tìm sách bằng ảnh bìa — độc lập với LLM.
+- Recommendation V2: hybrid ranker (item-item CF + TF-IDF + sở thích + phổ biến/xu hướng), đánh giá offline bằng HR/Recall/NDCG/MRR và bootstrap CI.
 - OCR/metadata lookup (Google Books, Open Library, marketplace scraping).
 
 **🐳 DevOps & Observability**
@@ -605,7 +670,8 @@ Quy tắc nghiệp vụ:
 - pgAdmin.
 - OpenTelemetry + Tempo (trace), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log).
 - k6 (load test, `scripts/k6/`, profile `loadtest`).
-- Seed data theo từng service.
+- Seed data theo từng service + bộ mô phỏng dữ liệu hành vi tổng hợp (seed cố định, tái lập được).
+- GitHub Actions CI: `pnpm verify`, integration test và Playwright E2E trên stack Docker đầy đủ.
 
 ## 🐳 Chạy Project Bằng Docker
 
@@ -627,6 +693,7 @@ Các biến quan trọng:
 - `VITE_API_BASE_URL`, `VITE_AUTH_BASE_URL`, `VITE_AI_BASE_URL`
 - `ALLOWED_ORIGINS`, `SOCKET_CORS_ORIGIN`
 - `OPENROUTER_API_KEY`, `OPENROUTER_TEXT_MODEL` (chỉ cần khi bật profile AI — xem `.env.example`)
+- `RECOMMENDATION_MODEL` (`v2` mặc định, `v1` để rollback bộ xếp hạng gợi ý sách)
 
 ### 2️⃣ Chạy toàn bộ stack
 
@@ -637,7 +704,7 @@ pnpm demo:status
 docker compose ps
 ```
 
-Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Restart container không tự seed và không ghi đè dữ liệu. Để reset hoàn toàn dữ liệu demo:
+Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Để reset hoàn toàn dữ liệu demo:
 
 ```powershell
 docker compose down -v
@@ -739,6 +806,10 @@ Ngoài các script tích hợp Node ở dưới, project còn có ba lớp kiể
   npm --prefix services/analytics-service run test:contract
   npm --prefix services/inventory-service run test:contract
   ```
+- **Đánh giá mô hình gợi ý sách** — sinh dữ liệu tổng hợp rồi chạy đánh giá Recommendation V2, ghi báo cáo vào `services/ai-service/eval/reports/`:
+  ```powershell
+  pnpm eval:recommendation
+  ```
 - **Load test (k6)** — kiểm tra hành vi dưới tải (catalog browsing, race condition khi đặt sách), chỉ chạy khi cần:
   ```powershell
   docker compose --profile loadtest run --rm k6 run /scripts/smoke.js
@@ -831,7 +902,7 @@ PASS=14 TOTAL=14
 <details>
 <summary>Xem lệnh chạy &amp; kết quả</summary>
 
-Script này đăng nhập bằng tài khoản staff demo, gọi đủ 7 endpoint `/analytics` qua API Gateway, kiểm tra response có field `data`, kiểm tra kiểu dữ liệu cơ bản và xác nhận customer token bị chặn 403:
+Script này gọi đủ 7 endpoint `/analytics` qua API Gateway — endpoint phía kho bằng tài khoản `manager01`, endpoint phía thư viện (cần `analytics.borrow.read`) bằng tài khoản admin `hung` — kiểm tra response có field `data` và kiểu dữ liệu cơ bản, xác nhận `manager01` bị chặn 403 ở các endpoint phía thư viện và customer token bị chặn 403:
 
 ```powershell
 node scripts\analytics-integration.mjs
@@ -847,6 +918,10 @@ PASS analytics/overdue-summary
 PASS analytics/fine-summary
 PASS analytics/warehouse-stock-risk
 PASS analytics/reservation-funnel
+PASS analytics/borrow-trends (denied to manager01)
+PASS analytics/overdue-summary (denied to manager01)
+PASS analytics/fine-summary (denied to manager01)
+PASS analytics/reservation-funnel (denied to manager01)
 PASS analytics/customer-denied
 PASS=7 TOTAL=7
 ACCESS=1 TOTAL=1
@@ -972,8 +1047,8 @@ smartbook-system/
 |- services/
 |  |- auth-service/
 |  |- inventory-service/
-|  |- borrow-service/
-|  |- ai-service/
+|  |- borrow-service/   # prisma/simulation/: bộ sinh dữ liệu hành vi tổng hợp
+|  |- ai-service/       # eval/: đánh giá Recommendation V2 + báo cáo
 |  \- analytics-service/
 |- packages/
 |  \- shared/
@@ -986,6 +1061,7 @@ smartbook-system/
 |  \- TEST_GUIDES/
 |- scripts/
 |  \- k6/               # Load test scenarios (profile loadtest)
+|- tests/               # Test cấu hình workspace, AI decision, data enrichment
 |- docker-compose.yml
 \- README.md
 ```
@@ -999,6 +1075,9 @@ smartbook-system/
 - 📖 Borrow Service: `docs/SERVICES/BORROW_SERVICE.md`
 - 🤖 AI Service: `docs/SERVICES/AI_SERVICE.md`
 - 📊 Analytics Dashboard: `scripts/analytics-integration.mjs`, `/analytics/*`
+- 🧪 Dữ liệu hành vi tổng hợp: `docs/SYNTHETIC_BEHAVIOR_DATASET.md`
+- ✨ Báo cáo đánh giá Recommendation V2: `services/ai-service/eval/reports/recommendation_v2_report.md`
+- 🗂️ Kiểm thử gợi ý vị trí lưu kho: `docs/STORAGE_SUGGESTION_TEST.md`
 - 🧪 Test guides: `docs/TEST_GUIDES/`
 
 ## 📝 Ghi Chú Phát Triển
@@ -1008,6 +1087,7 @@ smartbook-system/
 - 🔁 Các thao tác tạo/cancel/convert/return nên dùng `Idempotency-Key` để tránh double-processing.
 - 📲 Reservation `READY_FOR_PICKUP` phải được convert bằng pickup code hoặc QR payload.
 - 🚫 Nhà cung cấp không bao giờ được cấp quyền tạo/post goods receipt hay sửa tồn kho, dù qua supplier account hay supplier portal token.
+- 🧪 Không mô tả dữ liệu `SIM-` là dữ liệu người dùng thật; mô hình production không được đọc `simulation-truth.json`.
 - 🐛 Khi debug tồn kho, kiểm tra bảng `stock_balances` trong `inventory_db` với ba trường chính: `available_qty`, `reserved_qty`, `borrowed_qty`.
 
 ---
