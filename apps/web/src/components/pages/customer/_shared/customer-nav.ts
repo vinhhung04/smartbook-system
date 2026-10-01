@@ -13,7 +13,7 @@ export interface CustomerNavItem {
 /** Everyday destinations: shown in the top bar on desktop and the bottom tab bar on phones. */
 export const PRIMARY_NAV: CustomerNavItem[] = [
   { to: '/customer', label: 'Tổng quan', icon: House, end: true },
-  { to: '/customer/books', label: 'Danh mục', icon: BookOpen },
+  { to: '/books', label: 'Danh mục', icon: BookOpen },
   { to: '/customer/loans', label: 'Phiếu mượn', icon: HandCoins },
   { to: '/customer/reservations', label: 'Đặt trước', icon: CalendarClock },
   { to: '/customer/wishlist', label: 'Yêu thích', icon: Heart },

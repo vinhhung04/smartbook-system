@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, NavLink } from 'react-router';
+import { useNavigate, NavLink, useSearchParams } from 'react-router';
 import { motion } from 'motion/react';
 import { Mail, Lock, BookOpen, Calendar, Star, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Eye, EyeOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
@@ -7,9 +7,12 @@ import { MorphIcon } from 'morphicons/react';
 import { authService } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
+import { safeReturnUrl, withReturnUrl } from '@/lib/return-url';
 
 export function CustomerLoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,7 +33,7 @@ export function CustomerLoginPage() {
         return;
       }
       toast.success('Đăng nhập thành công');
-      navigate('/customer');
+      navigate(returnUrl || '/customer');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Đăng nhập thất bại'));
     } finally {
@@ -186,12 +189,18 @@ export function CustomerLoginPage() {
 
           <div className="mt-6 text-center text-[13px] text-muted-foreground">
             Chưa có tài khoản?{' '}
-            <NavLink to="/customer/register" className="text-primary font-semibold hover:text-primary/80 transition-colors">
+            <NavLink to={withReturnUrl('/customer/register', returnUrl)} className="text-primary font-semibold hover:text-primary/80 transition-colors">
               Tạo tài khoản
             </NavLink>
           </div>
 
           {/* Back to admin */}
+          <div className="mt-3 text-center text-[13px]">
+            <NavLink to={returnUrl || '/'} className="text-muted-foreground hover:text-foreground hover:underline">
+              Tiếp tục xem sách mà không cần đăng nhập
+            </NavLink>
+          </div>
+
           <div className="mt-5 pt-5 border-t border-border text-center">
             <NavLink to="/login" className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">
               <ArrowRight className="w-3 h-3 rotate-180" />

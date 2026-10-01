@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, NavLink } from 'react-router';
+import { useNavigate, NavLink, useSearchParams } from 'react-router';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, BookOpen, ArrowRight, CheckCircle2, Star, Calendar, ShieldCheck } from 'lucide-react';
 import { Eye, EyeOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
@@ -7,9 +7,13 @@ import { MorphIcon } from 'morphicons/react';
 import { authService } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
+import { safeReturnUrl, withReturnUrl } from '@/lib/return-url';
 
 export function CustomerRegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Carried through to login so a new reader still lands back on the book they wanted.
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const [form, setForm] = useState({
     full_name: '',
     email: '',
@@ -63,7 +67,7 @@ export function CustomerRegisterPage() {
         password: form.password,
       });
       toast.success('Đăng ký thành công. Vui lòng đăng nhập.');
-      navigate('/customer/login');
+      navigate(withReturnUrl('/customer/login', returnUrl));
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Đăng ký thất bại'));
     } finally {
@@ -283,8 +287,14 @@ export function CustomerRegisterPage() {
 
           <div className="mt-5 text-center text-[13px] text-muted-foreground">
             Đã có tài khoản?{' '}
-            <NavLink to="/customer/login" className="text-primary font-semibold hover:text-primary/80 transition-colors">
+            <NavLink to={withReturnUrl('/customer/login', returnUrl)} className="text-primary font-semibold hover:text-primary/80 transition-colors">
               Đăng nhập
+            </NavLink>
+          </div>
+
+          <div className="mt-3 text-center text-[13px]">
+            <NavLink to={returnUrl || '/'} className="text-muted-foreground hover:text-foreground hover:underline">
+              Tiếp tục xem sách mà không cần tài khoản
             </NavLink>
           </div>
 

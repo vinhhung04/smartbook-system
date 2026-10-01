@@ -97,6 +97,7 @@ from tool_context import render_tool_result as _compact_tool_result
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
+from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
 from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
 
@@ -119,6 +120,7 @@ app.add_middleware(
 app.include_router(actions_router)
 app.include_router(conversations_router)
 app.include_router(cover_search_router)
+app.include_router(public_discover_router)
 
 Instrumentator().instrument(app).expose(app)
 

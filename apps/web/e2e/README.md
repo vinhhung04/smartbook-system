@@ -29,6 +29,11 @@ pnpm test:e2e
 
 - `auth.spec.ts` — staff and customer login reach the right app; a wrong password is
   rejected without a redirect.
+- `public-discovery.spec.ts` — the public website: anonymous home → catalog → search → book
+  detail → "Đặt mượn" redirects to login with `returnUrl`; after login the reader lands back on
+  the book with the reservation step open (cancelled, so no stock is used); account/staff routes
+  still redirect; public API reads never contain cost/SKU/location fields and anonymous writes
+  are rejected. API checks use `GATEWAY_URL` (default `http://localhost:3000`).
 - `reservation-pickup-loan-return.spec.ts` — the core library flow end to end: customer
   reserves a book → staff confirms → staff marks it ready for pickup (pickup code issued)
   → staff converts the pickup code to a loan at the counter → staff returns the loan.

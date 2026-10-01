@@ -28,7 +28,7 @@ export function UserAvatarMenu() {
   const handleLogout = async () => {
     await authService.logout();
     toast.success('Đã đăng xuất');
-    navigate('/customer/login');
+    navigate('/');
   };
 
   return (

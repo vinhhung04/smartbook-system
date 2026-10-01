@@ -12,6 +12,7 @@ const { ewma, linearTrendSlope, stdDev, projectedDemand, rollingBacktest } = req
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
 const { allocateBudget } = require('../utils/budget-allocation');
 const { classifyWeedingCandidate } = require('../utils/weeding');
+const { mergeCatalogSignals } = require('../utils/catalog-signals');
 const { LATE_RETURN_FEATURES, NO_SHOW_FEATURES, toLateReturnSample, toNoShowSample } = require('../utils/risk-features');
 const { trainAndEvaluate, scoreRows } = require('../utils/risk-model');
 const { getOrTrain } = require('../lib/model-cache');
@@ -1423,6 +1424,79 @@ const getBookTurnover = asyncHandler(async (req, res) => {
   });
 });
 
+// Discovery signals for the public website's popular / trending / top-rated
+// sections (inventory-service /public/catalog calls this with the internal key
+// and caches it). Aggregate counts only — no customer ids leave this endpoint.
+const getCatalogSignals = asyncHandler(async (req, res) => {
+  const borrowDays = parsePositiveInteger(req.query.borrowDays, 365, 730, 'borrowDays');
+  const recentDays = parsePositiveInteger(req.query.recentDays, 90, 365, 'recentDays');
+  const now = Date.now();
+  const borrowFrom = new Date(now - borrowDays * DAY_MS);
+  const recentFrom = new Date(now - recentDays * DAY_MS);
+
+  const [loanRows, reservationRows, wishlistRows, ratingRows] = await Promise.all([
+    query(
+      borrowPool,
+      `
+      SELECT li.variant_id::text AS variant_id,
+             COUNT(*) AS borrow_count,
+             COUNT(*) FILTER (WHERE lt.borrow_date >= $2::timestamptz) AS recent_borrow_count
+      FROM loan_items li
+      JOIN loan_transactions lt ON lt.id = li.loan_id
+      WHERE lt.borrow_date >= $1::timestamptz
+      GROUP BY li.variant_id
+      `,
+      [borrowFrom, recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT variant_id::text AS variant_id, COUNT(*) AS reservation_count
+      FROM loan_reservations
+      WHERE reserved_at >= $1::timestamptz
+      GROUP BY variant_id
+      `,
+      [recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT book_id::text AS book_id, COUNT(*) AS wishlist_count
+      FROM book_wishlists
+      WHERE created_at >= $1::timestamptz
+      GROUP BY book_id
+      `,
+      [recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT book_id::text AS book_id, AVG(rating) AS rating_avg, COUNT(*) AS rating_count
+      FROM book_reviews
+      WHERE status = 'VISIBLE'
+      GROUP BY book_id
+      `,
+    ),
+  ]);
+
+  const variantIds = Array.from(new Set([...loanRows, ...reservationRows].map((row) => row.variant_id)));
+  const variantBookRows = variantIds.length
+    ? await query(
+      inventoryPool,
+      'SELECT id::text AS variant_id, book_id::text AS book_id FROM book_variants WHERE id = ANY($1::uuid[])',
+      [variantIds],
+    )
+    : [];
+
+  res.json({
+    data: {
+      generated_at: new Date(now).toISOString(),
+      windows: { borrow_days: borrowDays, recent_days: recentDays },
+      books: mergeCatalogSignals({ loanRows, reservationRows, wishlistRows, ratingRows, variantBookRows }),
+    },
+  });
+});
+
 const getAgingInventory = asyncHandler(async (req, res) => {
   const days = parsePositiveInteger(req.query.days, 90, 365, 'days');
   const limit = parseLimit(req.query.limit, 50, 200);
@@ -1690,6 +1764,7 @@ module.exports = {
   getReservationFunnel,
   getAgingInventory,
   getBookTurnover,
+  getCatalogSignals,
   getWeedingSuggestions,
   getForecastAccuracy,
   getLateReturnRisk,

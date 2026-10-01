@@ -212,7 +212,77 @@ async function deleteMyReview(req, res) {
   }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Anonymous visitors see a reviewer as "given name + family initial"
+// (Vietnamese order: "Nguyễn Văn An" -> "An N."), never the customer id,
+// customer_code or full name the staff-facing endpoint returns.
+function maskReviewerName(fullName) {
+  const words = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'Bạn đọc';
+  if (words.length === 1) return words[0];
+  return `${words[words.length - 1]} ${words[0].charAt(0).toUpperCase()}.`;
+}
+
+function toPublicReview(review) {
+  return {
+    id: review.id,
+    rating: review.rating,
+    comment: review.comment,
+    created_at: review.created_at,
+    reviewer_name: maskReviewerName(review.customers?.full_name),
+  };
+}
+
+async function getPublicReviewsByBook(req, res) {
+  try {
+    const { bookId } = req.params;
+    if (!UUID_PATTERN.test(String(bookId || ''))) {
+      return res.status(400).json({ message: 'Invalid book id' });
+    }
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(20, Math.max(1, Number(req.query.pageSize) || 10));
+    const where = { book_id: bookId, status: 'VISIBLE' };
+
+    const [reviews, byRating] = await Promise.all([
+      prisma.book_reviews.findMany({
+        where,
+        select: { id: true, rating: true, comment: true, created_at: true, customers: { select: { full_name: true } } },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.book_reviews.groupBy({ by: ['rating'], where, _count: { rating: true } }),
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let total = 0;
+    let sum = 0;
+    for (const row of byRating) {
+      const count = row._count.rating;
+      distribution[row.rating] = count;
+      total += count;
+      sum += row.rating * count;
+    }
+
+    return res.json({
+      data: reviews.map(toPublicReview),
+      stats: {
+        averageRating: total ? Number((sum / total).toFixed(1)) : 0,
+        totalReviews: total,
+        distribution,
+      },
+      meta: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    });
+  } catch (error) {
+    console.error('[review] getPublicReviewsByBook error:', error);
+    return res.status(500).json({ message: 'Failed to load reviews' });
+  }
+}
+
 module.exports = {
+  maskReviewerName,
+  getPublicReviewsByBook,
   getReviewsByBook,
   getBookRatingStats,
   createOrUpdateMyReview,

@@ -20,7 +20,7 @@ export const navGroups = [
       { to: "/my-purchase-requests", icon: ShoppingCart, labelKey: "sidebar.my_purchase_requests", access: ROUTE_ACCESS.purchaseRequestSelf, activeColor: "from-orange-500/15 to-amber-500/10", textColor: "text-orange-700", iconBg: "bg-orange-500/10" },
       { to: "/my-exception-reports", icon: AlertTriangle, labelKey: "sidebar.my_exception_reports", access: ROUTE_ACCESS.exceptionReportSelf, activeColor: "from-red-500/15 to-rose-500/10", textColor: "text-red-700", iconBg: "bg-red-500/10" },
       { to: "/staff-tasks", icon: ClipboardCheck, labelKey: "sidebar.staff_tasks", access: ROUTE_ACCESS.staffTaskProgress, activeColor: "from-violet-500/15 to-fuchsia-500/10", textColor: "text-violet-700", iconBg: "bg-violet-500/10" },
-      { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
+      { to: "/dashboard", icon: LayoutDashboard, labelKey: "sidebar.dashboard", access: ROUTE_ACCESS.reports, activeColor: "from-indigo-500/15 to-blue-500/10", textColor: "text-indigo-600", iconBg: "bg-indigo-500/10" },
     ],
   },
   {

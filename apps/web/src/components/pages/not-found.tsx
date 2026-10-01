@@ -11,9 +11,9 @@ export function NotFoundPage() {
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
         className="text-center max-w-md">
-        <h1 className="text-[22px] text-foreground mb-2" style={{ fontWeight: 700 }}>Page not found</h1>
+        <h1 className="text-[22px] text-foreground mb-2" style={{ fontWeight: 700 }}>Không tìm thấy trang</h1>
         <p className="text-[14px] text-muted-foreground leading-relaxed">
-          The page you're looking for doesn't exist or has been moved.
+          Đường dẫn này không tồn tại hoặc đã được chuyển đi.
         </p>
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
@@ -21,7 +21,7 @@ export function NotFoundPage() {
         <NavLink to="/"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] shadow-lg hover:shadow-xl transition-all"
           style={{ fontWeight: 600 }}>
-          <Home className="w-4 h-4" /> Back to Dashboard
+          <Home className="w-4 h-4" /> Về trang chủ
         </NavLink>
       </motion.div>
     </div>
