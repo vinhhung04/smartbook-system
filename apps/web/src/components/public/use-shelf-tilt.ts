@@ -15,16 +15,19 @@ export function useShelfTilt<T extends HTMLElement>() {
     if (!window.matchMedia('(pointer: fine)').matches || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
 
     let frame = 0;
-    const apply = (tiltX: number, tiltY: number) => {
+    // Also exposes the raw pointer position (-0.5..0.5) for the hero's depth layers.
+    const apply = (tiltX: number, tiltY: number, pointerX = 0, pointerY = 0) => {
       element.style.setProperty('--shelf-tilt-x', `${tiltX.toFixed(2)}deg`);
       element.style.setProperty('--shelf-tilt-y', `${tiltY.toFixed(2)}deg`);
+      element.style.setProperty('--pointer-x', pointerX.toFixed(3));
+      element.style.setProperty('--pointer-y', pointerY.toFixed(3));
     };
     const onMove = (event: PointerEvent) => {
       const rect = element.getBoundingClientRect();
       const x = (event.clientX - rect.left) / rect.width - 0.5;
       const y = (event.clientY - rect.top) / rect.height - 0.5;
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => apply(-y * 10, x * 30));
+      frame = requestAnimationFrame(() => apply(-y * 10, x * 30, x, y));
     };
     const onLeave = () => {
       cancelAnimationFrame(frame);

@@ -109,6 +109,52 @@
   transform: translateZ(24px) rotateY(26deg);
 }
 
+/* Cover flow: rotation/depth come from the carousel (--flow-ry / --flow-z per
+ * item, updated on scroll), so a book turned toward the centre shows its spine. */
+.book3d--flow .book3d__body {
+  transform: translateZ(var(--flow-z, 0px)) rotateY(var(--flow-ry, 0deg));
+  transition: transform 0.25s ease-out;
+}
+
+/* Drag-to-spin (featured book): --spin follows the pointer; no easing while
+ * dragging so the book stays under the finger, eased when let go/flipped. */
+.book3d--spin {
+  perspective: 1100px;
+}
+
+.book3d--spin .book3d__body {
+  transform: rotateX(-4deg) rotateY(var(--spin, 0deg));
+  transition-duration: 0.7s;
+}
+
+.spin-stage {
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.spin-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.spin-stage.is-dragging .book3d__body {
+  transition: none;
+}
+
+/* Back cover with real content (author, rating, availability). */
+.book3d__back--content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6%;
+  padding: 10% 9%;
+  overflow: hidden;
+  color: #f3ebd8;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.25)),
+    var(--book-binding);
+}
+
 /* Soft contact shadow under a standing book. */
 .book3d__shadow {
   position: absolute;
@@ -129,9 +175,68 @@
   opacity: 0.55;
 }
 
+/* ── Pointer tilt cards (bento, categories, recommendations) ──────────── */
+.tilt-card {
+  position: relative;
+  transform: perspective(900px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg)) translateZ(0);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+
+.tilt-card.is-tilting {
+  transition-duration: 0.08s;
+}
+
+/* Glare that follows the pointer across the card surface. */
+.tilt-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s;
+  background: radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, 50%), rgba(255, 255, 255, 0.35), transparent 55%);
+  mix-blend-mode: soft-light;
+}
+
+.tilt-card.is-tilting::after {
+  opacity: 1;
+}
+
+/* ── Hero depth: layers drift with the pointer at different depths ──────── */
+.hero-depth-far,
+.hero-depth-near {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-depth-far {
+  transform: translate3d(calc(var(--pointer-x, 0) * -18px), calc(var(--pointer-y, 0) * -12px), 0);
+}
+
+.hero-depth-near {
+  transform: translate3d(calc(var(--pointer-x, 0) * -48px), calc(var(--pointer-y, 0) * -30px), 0);
+}
+
+/* ── Cover flow track ────────────────────────────────────────────────────── */
+.cover-flow__item {
+  transition: opacity 0.25s ease-out, filter 0.25s ease-out;
+}
+
+.cover-flow__reflect {
+  -webkit-box-reflect: below 6px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.22));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .book3d__body {
     transition: none;
+  }
+
+  .book3d--flow .book3d__body,
+  .tilt-card,
+  .hero-depth-far,
+  .hero-depth-near {
+    transform: none;
   }
 
   .book3d--shelf:hover .book3d__body,

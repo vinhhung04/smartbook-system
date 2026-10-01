@@ -13,6 +13,8 @@ import { Book3D } from '@/components/public/book-3d';
 import { useShelfTilt } from '@/components/public/use-shelf-tilt';
 import { BookRow, BookRowSkeleton, Reveal, SectionHeading } from '@/components/public/book-row';
 import { CategoryShowcase, FeaturedTrending, TopTenBand } from '@/components/public/home-sections';
+import { CoverFlow } from '@/components/public/cover-flow';
+import { TiltCard } from '@/components/public/tilt-card';
 import { HowBorrowingWorks } from '@/components/public/how-borrowing-works';
 import { DiscoveryBox } from '@/components/public/discovery-box';
 import { SearchAutocomplete } from '@/components/public/search-autocomplete';
@@ -116,7 +118,8 @@ function ForYouRow() {
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {result.recommendations.map((item) => (
           <li key={item.book_id}>
-            <Link to={`/books/${item.book_id}`} className="group flex h-full gap-3 rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 motion-reduce:transform-none">
+            <TiltCard className="h-full rounded-2xl">
+            <Link to={`/books/${item.book_id}`} className="group flex h-full gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
               <BookCover title={item.title} author={item.author} className="w-14 shrink-0" />
               <span className="min-w-0">
                 <span className="block truncate text-[14px] font-semibold group-hover:underline">{item.title}</span>
@@ -124,6 +127,7 @@ function ForYouRow() {
                 <span className="mt-1 line-clamp-2 block text-[12.5px] text-foreground/80">{item.reason}</span>
               </span>
             </Link>
+            </TiltCard>
           </li>
         ))}
       </ul>
@@ -168,9 +172,9 @@ export function PublicHomePage() {
     <>
       <section ref={heroRef} className="relative overflow-x-clip border-b border-border bg-gradient-to-b from-indigo-50/80 via-background to-background dark:from-indigo-950/30">
         {/* Atmosphere: faint dot grid fading out, two soft lights. Decorative only. */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(79,70,229,0.13)_1px,transparent_0)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,black,transparent)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(165,180,252,0.12)_1px,transparent_0)]" aria-hidden="true" />
-        <div className="pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl dark:bg-indigo-600/20" aria-hidden="true" />
-        <div className="pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" aria-hidden="true" />
+        <div className="hero-depth-far pointer-events-none absolute -inset-8 bg-[radial-gradient(circle_at_1px_1px,rgba(79,70,229,0.13)_1px,transparent_0)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_30%,black,transparent)] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(165,180,252,0.12)_1px,transparent_0)]" aria-hidden="true" />
+        <div className="hero-depth-near pointer-events-none absolute -left-32 top-10 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl dark:bg-indigo-600/20" aria-hidden="true" />
+        <div className="hero-depth-near pointer-events-none absolute -right-20 top-40 h-72 w-72 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/10" aria-hidden="true" />
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-20">
           <div className="min-w-0">
@@ -250,7 +254,7 @@ export function PublicHomePage() {
             />
             <FeaturedTrending books={home.trending} days={days} onReserve={requestReserve} />
             {isCustomer ? <Reveal><ForYouRow /></Reveal> : null}
-            <BookRow id="sach-moi" eyebrow="Mới cập nhật" title="Sách mới về" basis="Đầu sách được thêm vào thư viện gần đây nhất." books={home.new_arrivals} seeAllTo="/books?sort=newest" onReserve={requestReserve} />
+            <CoverFlow id="sach-moi" eyebrow="Mới cập nhật" title="Sách mới về" basis="Đầu sách được thêm vào thư viện gần đây nhất. Lướt hoặc bấm vào một cuốn để đưa ra giữa." books={home.new_arrivals} seeAllTo="/books?sort=newest" onReserve={requestReserve} />
             <Reveal><DiscoveryBox /></Reveal>
             <CategoryShowcase categories={home.categories} />
           </>

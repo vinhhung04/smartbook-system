@@ -1,5 +1,6 @@
+import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, Flame, Star } from 'lucide-react';
+import { ArrowRight, Flame, Hand, RotateCcw, Star } from 'lucide-react';
 import type { PublicBook, PublicHome } from '@/services/public-catalog';
 import { bindingFor } from '@/lib/book-binding';
 import { cn } from '@/components/ui/utils';
@@ -7,8 +8,104 @@ import { AvailabilityStamp } from './availability-stamp';
 import { Book3D } from './book-3d';
 import { BookCover } from './book-cover';
 import { Reveal, SectionHeading } from './book-row';
+import { TiltCard } from './tilt-card';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
+
+const SPIN_REST = 22;
+
+/**
+ * The featured book as an object you can turn: drag sideways to spin it, let go
+ * and it settles on the front or back cover. The back prints real data (author,
+ * rating, recent activity, availability). The button does the same for keyboard
+ * and screen-reader users.
+ */
+function SpinningBook({ book, days }: { book: PublicBook; days: number }) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const angle = useRef(SPIN_REST);
+  const drag = useRef<{ x: number; start: number; moved: boolean } | null>(null);
+  const [showingBack, setShowingBack] = useState(false);
+
+  const apply = (degrees: number) => {
+    angle.current = degrees;
+    stageRef.current?.style.setProperty('--spin', `${degrees}deg`);
+  };
+  const settle = () => {
+    const turns = Math.round((angle.current - SPIN_REST) / 180);
+    apply(SPIN_REST + turns * 180);
+    setShowingBack(Math.abs(turns) % 2 === 1);
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { x: event.clientX, start: angle.current, moved: false };
+    event.currentTarget.classList.add('is-dragging');
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    const dx = event.clientX - drag.current.x;
+    if (Math.abs(dx) > 3) drag.current.moved = true;
+    apply(drag.current.start + dx * 0.75);
+  };
+  const onPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    drag.current = null;
+    event.currentTarget.classList.remove('is-dragging');
+    settle();
+  };
+
+  const rating = book.signals && book.signals.rating_count > 0 ? book.signals : null;
+  const back = (
+    <>
+      <div>
+        <p className="font-mono text-[clamp(6px,5cqw,10px)] uppercase tracking-[0.14em] opacity-70">SmartBook</p>
+        <p className="mt-[5%] line-clamp-4 font-serif text-[clamp(8px,9cqw,17px)] font-semibold leading-tight">{book.title}</p>
+        <p className="mt-[3%] text-[clamp(7px,6cqw,12px)] opacity-80">{book.author || 'Chưa rõ tác giả'}</p>
+      </div>
+      <dl className="space-y-[4%] text-[clamp(7px,6cqw,12px)]">
+        {rating ? (
+          <div className="flex justify-between gap-2 border-t border-white/20 pt-[4%]">
+            <dt className="opacity-70">Đánh giá</dt>
+            <dd className="font-semibold">★ {rating.rating_avg.toFixed(1)} · {rating.rating_count}</dd>
+          </div>
+        ) : null}
+        <div className="flex justify-between gap-2 border-t border-white/20 pt-[4%]">
+          <dt className="opacity-70">{days} ngày qua</dt>
+          <dd className="font-semibold">{numberFormat.format(book.signals?.recent_activity || 0)} lượt</dd>
+        </div>
+        <div className="flex justify-between gap-2 border-t border-white/20 pt-[4%]">
+          <dt className="opacity-70">Tình trạng</dt>
+          <dd className="font-semibold">{book.available_quantity > 0 ? `Còn ${book.available_quantity}` : 'Đã mượn hết'}</dd>
+        </div>
+      </dl>
+    </>
+  );
+
+  return (
+    <div className="mx-auto flex w-40 shrink-0 flex-col items-center gap-3 sm:mx-0 sm:w-48">
+      <div
+        ref={stageRef}
+        className="spin-stage w-full"
+        style={{ '--spin': `${SPIN_REST}deg` } as CSSProperties}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        aria-hidden="true"
+      >
+        <Book3D title={book.title} author={book.author} imageUrl={book.cover_image_url} pose="spin" back={back} />
+      </div>
+      <button
+        type="button"
+        onClick={() => { apply(angle.current + 180); settle(); }}
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        {showingBack ? <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> : <Hand className="h-3.5 w-3.5" aria-hidden="true" />}
+        {showingBack ? 'Xem bìa trước' : 'Xoay xem bìa sau'}
+      </button>
+    </div>
+  );
+}
 
 /**
  * "Đang được yêu thích" as a bento: the most-active book gets a feature panel,
@@ -34,9 +131,7 @@ export function FeaturedTrending({ books, days, onReserve }: { books: PublicBook
           <article className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-indigo-50 via-card to-card p-6 dark:from-indigo-950/40 sm:p-8">
             <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-indigo-400/20 blur-3xl dark:bg-indigo-500/20" aria-hidden="true" />
             <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-              <Link to={`/books/${lead.id}`} tabIndex={-1} aria-hidden="true" className="mx-auto w-36 shrink-0 sm:mx-0 sm:w-44">
-                <Book3D title={lead.title} author={lead.author} imageUrl={lead.cover_image_url} pose="card" />
-              </Link>
+              <SpinningBook book={lead} days={days} />
               <div className="min-w-0">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-[11.5px] font-semibold text-white">
                   <Flame className="h-3.5 w-3.5" aria-hidden="true" /> #1 đang được quan tâm
@@ -77,9 +172,10 @@ export function FeaturedTrending({ books, days, onReserve }: { books: PublicBook
           <ol className="grid gap-3 sm:grid-cols-2 lg:gap-4">
             {rest.slice(0, 4).map((book, index) => (
               <li key={book.id}>
+                <TiltCard className="h-full rounded-2xl">
                 <Link
                   to={`/books/${book.id}`}
-                  className="group flex h-full items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-[0_12px_30px_-18px_rgba(79,70,229,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 motion-reduce:transform-none dark:hover:border-indigo-500/40"
+                  className="group flex h-full items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-[border-color,box-shadow] hover:border-indigo-300 hover:shadow-[0_12px_30px_-18px_rgba(79,70,229,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 dark:hover:border-indigo-500/40"
                 >
                   <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} className="w-16 shrink-0" />
                   <span className="min-w-0">
@@ -91,6 +187,7 @@ export function FeaturedTrending({ books, days, onReserve }: { books: PublicBook
                     </span>
                   </span>
                 </Link>
+                </TiltCard>
               </li>
             ))}
           </ol>
@@ -162,10 +259,11 @@ export function CategoryShowcase({ categories }: { categories: PublicHome['categ
           {/* 1 large + 4 small fills the 3-column bento exactly. */}
           {categories.slice(0, 5).map((category, index) => (
             <li key={category.slug} className={cn(index === 0 && 'lg:row-span-2')}>
+              <TiltCard className="h-full rounded-2xl" max={5}>
               <Link
                 to={`/categories/${category.slug}`}
                 className={cn(
-                  'group relative flex h-full min-h-40 overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 motion-reduce:transform-none',
+                  'group relative flex h-full min-h-40 overflow-hidden rounded-2xl border border-border bg-card p-6 transition-shadow hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50',
                   index === 0 && 'lg:min-h-[21rem]',
                 )}
               >
@@ -202,6 +300,7 @@ export function CategoryShowcase({ categories }: { categories: PublicHome['categ
                   ))}
                 </span>
               </Link>
+              </TiltCard>
             </li>
           ))}
         </ul>
