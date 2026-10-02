@@ -296,7 +296,7 @@ export function PublicBookDetailPage() {
                   {book.pickup_branches.map((branch) => (
                     <li key={branch.warehouse_id} className="flex items-center gap-2 text-[13.5px]">
                       <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      <span className="flex-1">{branch.warehouse_name}</span>
+                      <Link to={`/branches/${branch.warehouse_id}`} className="flex-1 hover:text-indigo-700 hover:underline dark:hover:text-indigo-300">{branch.warehouse_name}</Link>
                       <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{branch.available_quantity} cuốn</span>
                     </li>
                   ))}

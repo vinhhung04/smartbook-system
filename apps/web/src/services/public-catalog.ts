@@ -68,6 +68,8 @@ export interface FacetValue<T = string> {
 
 export interface CatalogFacets {
   categories: Array<{ name: string; slug: string; count: number }>;
+  /** Branches holding at least one title, with how many. */
+  branches: Array<{ id: string; name: string; count: number }>;
   authors: FacetValue[];
   publishers: FacetValue[];
   languages: FacetValue[];
@@ -79,6 +81,8 @@ export type CatalogSort = 'relevance' | 'popular' | 'newest' | 'rating' | 'title
 export interface CatalogQuery {
   q?: string;
   category?: string;
+  /** Branch id: books held there; with availability=available, reservable there. */
+  branch?: string;
   author?: string;
   publisher?: string;
   language?: string;
@@ -94,6 +98,47 @@ export interface CatalogPage {
   meta: { page: number; pageSize: number; total: number; totalPages: number; sort: CatalogSort };
   facets: CatalogFacets;
   signals_available: boolean;
+  /** The branch filter that was applied; null when none was given or it doesn't exist. */
+  branch: { id: string; name: string } | null;
+}
+
+export interface BranchStats {
+  /** Titles with a copy on this branch's shelves, lent out or not. */
+  title_count: number;
+  /** Titles reservable for pickup here today. */
+  available_title_count: number;
+  available_copies: number;
+}
+
+export interface PublicBranch {
+  id: string;
+  name: string;
+  address: string | null;
+  stats: BranchStats;
+}
+
+export interface PublicBranchDetail extends PublicBranch {
+  available_books: PublicBook[];
+  new_arrivals: PublicBook[];
+  categories: Array<{ name: string; slug: string; book_count: number; available_count: number }>;
+}
+
+export interface PublicMembershipPlan {
+  id: string;
+  name: string;
+  description: string | null;
+  max_active_loans: number;
+  max_loan_days: number;
+  max_renewal_count: number;
+  reservation_hold_hours: number;
+  fine_per_day: number;
+  /** The plan a newly created account receives (business rule, not a ranking). */
+  is_default: boolean;
+}
+
+export interface PublicMembershipPlans {
+  data: PublicMembershipPlan[];
+  card_validity_days: number;
 }
 
 export interface PublicHome {
@@ -155,5 +200,14 @@ export const publicCatalogService = {
   },
   async getReviews(bookId: string, page = 1): Promise<PublicReviewPage> {
     return (await publicAPI.get(`/reviews/book/${encodeURIComponent(bookId)}`, { params: { page, pageSize: 10 } })).data;
+  },
+  async getBranches(): Promise<PublicBranch[]> {
+    return (await publicAPI.get('/catalog/branches')).data?.data ?? [];
+  },
+  async getBranch(id: string): Promise<PublicBranchDetail> {
+    return (await publicAPI.get(`/catalog/branches/${encodeURIComponent(id)}`)).data;
+  },
+  async getMembershipPlans(): Promise<PublicMembershipPlans> {
+    return (await publicAPI.get('/membership/plans')).data;
   },
 };

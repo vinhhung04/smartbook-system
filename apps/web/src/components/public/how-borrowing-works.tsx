@@ -13,14 +13,21 @@ interface Cta {
   label: string;
 }
 
+export interface BorrowingStep {
+  title: string;
+  body: string;
+}
+
 interface HowBorrowingWorksProps {
   cta: Cta | null;
   secondary?: Cta | null;
   /** card: inline panel (About page); band: closing call-to-action on the homepage. */
   variant?: 'card' | 'band';
+  /** Replaces the default three steps (e.g. the membership page starts with creating an account). */
+  steps?: BorrowingStep[];
 }
 
-export function HowBorrowingWorks({ cta, secondary = null, variant = 'card' }: HowBorrowingWorksProps) {
+export function HowBorrowingWorks({ cta, secondary = null, variant = 'card', steps = STEPS }: HowBorrowingWorksProps) {
   const band = variant === 'band';
   return (
     <section
@@ -39,12 +46,12 @@ export function HowBorrowingWorks({ cta, secondary = null, variant = 'card' }: H
         </>
       ) : null}
       <div className="relative">
-        {band ? <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-indigo-100">3 bước</p> : null}
+        {band ? <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-indigo-100">{steps.length} bước</p> : null}
         <h2 id="cach-muon-sach" className={cn('font-serif font-semibold tracking-tight', band ? 'text-[30px] leading-tight sm:text-[38px]' : 'text-[22px] sm:text-[26px]')}>
           Mượn sách thế nào?
         </h2>
-        <ol className={cn('grid gap-6 sm:grid-cols-3', band ? 'mt-8' : 'mt-6')}>
-          {STEPS.map((step, index) => (
+        <ol className={cn('grid gap-6', steps.length === 4 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3', band ? 'mt-8' : 'mt-6')}>
+          {steps.map((step, index) => (
             <li key={step.title} className={cn('flex gap-3', band && 'rounded-2xl bg-white/10 p-5 ring-1 ring-white/15 backdrop-blur-sm')}>
               <span
                 className={cn(

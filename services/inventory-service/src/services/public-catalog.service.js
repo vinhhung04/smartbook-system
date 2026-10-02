@@ -60,6 +60,21 @@ const PUBLIC_BOOK_SELECT = {
 
 const PUBLIC_BOOK_WHERE = { is_active: true };
 
+// Branches (warehouses) as visitors see them: a name and a street address.
+// No code, type, manager, settings, locations or capacity — same whitelist rule
+// as books. Every active warehouse is a pickup point for reservations.
+const PUBLIC_BRANCH_SELECT = {
+  id: true,
+  name: true,
+  address_line1: true,
+  address_line2: true,
+  ward: true,
+  district: true,
+  province: true,
+};
+const BRANCH_FEATURED_SIZE = 12;
+const BRANCH_CATEGORY_SIZE = 8;
+
 // Books created as placeholders during receiving ("Chưa có tiêu đề", no author)
 // are not ready for readers. Checked in JS: a Prisma NOT on a JSON path would
 // also drop every row whose metadata lacks the key (NULL comparison).
@@ -158,6 +173,29 @@ function toPublicBook(book) {
   };
 }
 
+/** Branches holding a shelf copy of any borrowable edition, lent out or not —
+ *  "sách của chi nhánh". What is reservable there now is `pickup_branches`. */
+function branchHoldings(book) {
+  const held = new Set();
+  for (const variant of book.book_variants || []) {
+    if (variant.is_borrowable === false) continue;
+    for (const stock of variant.stock_balances || []) {
+      if (stock.warehouses && stock.warehouses.is_active === false) continue;
+      if (RECEIVING_LOCATION_TYPES.includes(stock.locations?.location_type)) continue;
+      if ((stock.on_hand_qty || 0) > 0 || (stock.available_qty || 0) > 0) held.add(stock.warehouse_id);
+    }
+  }
+  return held;
+}
+
+function toPublicBranch(row) {
+  const address = [row.address_line1, row.address_line2, row.ward, row.district, row.province]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
+  return { id: row.id, name: row.name, address: address || null };
+}
+
 function toPublicBookDetail(book) {
   return {
     ...toPublicBook(book),
@@ -222,6 +260,9 @@ function parseCatalogQuery(raw = {}) {
     q,
     ids,
     category: String(raw.category || '').trim().toLowerCase(),
+    // Kept even when malformed so the caller can answer "no such branch"
+    // instead of silently dropping the filter and listing every book.
+    branch: String(raw.branch || '').trim().toLowerCase().slice(0, 64),
     author: normalizeText(raw.author),
     publisher: normalizeText(raw.publisher),
     language: String(raw.language || '').trim().toLowerCase(),
@@ -233,13 +274,22 @@ function parseCatalogQuery(raw = {}) {
   };
 }
 
-function searchCatalog(books, query) {
+/** At a branch, "available" means reservable there — the same branches the
+ *  book page offers for pickup — so a branch listing never shows a book the
+ *  reader then can't reserve at that branch. */
+function isAtBranch(book, branchId, heldAt, availableOnly) {
+  if (availableOnly) return book.pickup_branches.some((branch) => branch.warehouse_id === branchId);
+  return Boolean(heldAt?.get(book.id)?.has(branchId));
+}
+
+function searchCatalog(books, query, heldAt = null) {
   let rows = books;
   if (query.ids?.length) {
     const wanted = new Set(query.ids);
     rows = rows.filter((book) => wanted.has(book.id));
   }
   if (query.q) rows = rows.filter((book) => matchesQuery(book, query.q));
+  if (query.branch) rows = rows.filter((book) => isAtBranch(book, query.branch, heldAt, query.availableOnly));
   if (query.category) rows = rows.filter((book) => book.categories.some((c) => c.slug === query.category));
   if (query.author) rows = rows.filter((book) => book.authors.some((author) => normalizeText(author) === query.author));
   if (query.publisher) rows = rows.filter((book) => normalizeText(book.publisher) === query.publisher);
@@ -280,10 +330,53 @@ function buildCategories(books) {
   return Array.from(map.values()).sort((a, b) => b.book_count - a.book_count || a.name.localeCompare(b.name, 'vi'));
 }
 
+/** Per-branch counts in one pass over the catalog: titles the branch holds,
+ *  titles reservable there today and the copies on its shelves. */
+function summarizeBranches(books, branches, heldAt) {
+  const stats = new Map(branches.map((branch) => [branch.id, { title_count: 0, available_title_count: 0, available_copies: 0 }]));
+  for (const book of books) {
+    for (const branchId of heldAt?.get(book.id) || []) {
+      const entry = stats.get(branchId);
+      if (entry) entry.title_count += 1;
+    }
+    for (const pickup of book.pickup_branches) {
+      const entry = stats.get(pickup.warehouse_id);
+      if (!entry) continue;
+      entry.available_title_count += 1;
+      entry.available_copies += pickup.available_quantity;
+    }
+  }
+  return stats;
+}
+
+function buildBranchList(books, branches, heldAt) {
+  const stats = summarizeBranches(books, branches, heldAt);
+  return branches.map((branch) => ({ ...branch, stats: stats.get(branch.id) }));
+}
+
+/** Branch page: what the branch has on its shelves, built from the same
+ *  snapshot as the catalog so the counts agree with /books?branch=. */
+function buildBranchDetail(books, branch, heldAt) {
+  const stats = summarizeBranches(books, [branch], heldAt).get(branch.id);
+  const held = books.filter((book) => isAtBranch(book, branch.id, heldAt, false));
+  const available = held.filter((book) => isAtBranch(book, branch.id, heldAt, true));
+  return {
+    ...branch,
+    stats,
+    available_books: [...available].sort(byPopular).slice(0, BRANCH_FEATURED_SIZE),
+    new_arrivals: [...held].sort(byNewest).slice(0, BRANCH_FEATURED_SIZE),
+    categories: buildCategories(held).slice(0, BRANCH_CATEGORY_SIZE).map(({ name, slug, book_count, available_count }) => ({ name, slug, book_count, available_count })),
+  };
+}
+
 /** Filter options built from what the catalog actually holds. */
-function buildFacets(books) {
+function buildFacets(books, branches = [], heldAt = null) {
+  const branchStats = summarizeBranches(books, branches, heldAt);
   return {
     categories: buildCategories(books).map(({ name, slug, book_count }) => ({ name, slug, count: book_count })),
+    branches: branches
+      .map((branch) => ({ id: branch.id, name: branch.name, count: branchStats.get(branch.id).title_count }))
+      .filter((branch) => branch.count > 0),
     authors: countBy(books.flatMap((book) => book.authors)).slice(0, 40),
     publishers: countBy(books.map((book) => book.publisher)).slice(0, 40),
     languages: countBy(books.map((book) => book.language)),
@@ -371,13 +464,17 @@ async function fetchCatalogSignals() {
 function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}) {
   const getSignals = createCachedLoader(fetchSignals, SIGNALS_TTL_MS, SIGNALS_FAILURE_TTL_MS);
   const getBooks = createCachedLoader(async () => {
-    const rows = await prisma.books.findMany({ where: PUBLIC_BOOK_WHERE, select: PUBLIC_BOOK_SELECT });
-    return rows.filter(isPublishable).map(toPublicBook);
+    const rows = (await prisma.books.findMany({ where: PUBLIC_BOOK_WHERE, select: PUBLIC_BOOK_SELECT })).filter(isPublishable);
+    return { books: rows.map(toPublicBook), heldAt: new Map(rows.map((row) => [row.id, branchHoldings(row)])) };
+  }, SNAPSHOT_TTL_MS);
+  const getBranches = createCachedLoader(async () => {
+    const rows = await prisma.warehouses.findMany({ where: { is_active: true }, select: PUBLIC_BRANCH_SELECT, orderBy: { name: 'asc' } });
+    return rows.map(toPublicBranch);
   }, SNAPSHOT_TTL_MS);
 
   async function getSnapshot() {
-    const [books, signals] = await Promise.all([getBooks(), getSignals()]);
-    return { books: books.map((book) => withSignals(book, signals?.byBook)), signals };
+    const [{ books, heldAt }, signals, branches] = await Promise.all([getBooks(), getSignals(), getBranches()]);
+    return { books: books.map((book) => withSignals(book, signals?.byBook)), heldAt, signals, branches };
   }
 
   return {
@@ -386,11 +483,29 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
       return { generated_at: new Date().toISOString(), ...buildHome(books, signals) };
     },
     async list(rawQuery) {
-      const { books, signals } = await getSnapshot();
+      const { books, heldAt, signals, branches } = await getSnapshot();
       const query = parseCatalogQuery(rawQuery);
       // Without signals a popularity/rating order would be arbitrary — say so.
       if (!signals && (query.sort === 'popular' || query.sort === 'rating')) query.sort = query.q ? 'relevance' : 'newest';
-      return { ...searchCatalog(books, query), facets: buildFacets(books), signals_available: Boolean(signals) };
+      const branch = query.branch ? branches.find((item) => item.id === query.branch) || null : null;
+      const facets = buildFacets(books, branches, heldAt);
+      const extra = { facets, signals_available: Boolean(signals), branch: branch ? { id: branch.id, name: branch.name } : null };
+      // Unknown or closed branch: an empty page the UI can explain, not the whole catalog.
+      if (query.branch && !branch) {
+        return { data: [], meta: { page: 1, pageSize: query.pageSize, total: 0, totalPages: 1, sort: query.sort }, ...extra };
+      }
+      return { ...searchCatalog(books, query, heldAt), ...extra };
+    },
+    async branches() {
+      const { books, heldAt, branches } = await getSnapshot();
+      return buildBranchList(books, branches, heldAt);
+    },
+    async branch(id) {
+      const branchId = String(id || '').toLowerCase();
+      if (!UUID_PATTERN.test(branchId)) return null;
+      const { books, heldAt, branches } = await getSnapshot();
+      const branch = branches.find((item) => item.id === branchId);
+      return branch ? buildBranchDetail(books, branch, heldAt) : null;
     },
     async categories() {
       const { books } = await getSnapshot();
@@ -409,7 +524,11 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
 
 module.exports = {
   PUBLIC_BOOK_SELECT,
+  PUBLIC_BRANCH_SELECT,
   isPublishable,
+  branchHoldings,
+  buildBranchDetail,
+  buildBranchList,
   buildCategories,
   buildFacets,
   buildHome,
@@ -421,5 +540,6 @@ module.exports = {
   searchCatalog,
   toPublicBook,
   toPublicBookDetail,
+  toPublicBranch,
   withSignals,
 };

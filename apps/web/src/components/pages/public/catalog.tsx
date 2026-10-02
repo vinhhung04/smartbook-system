@@ -19,7 +19,7 @@ import { ReserveModal } from '@/components/pages/customer/_shared/reserve-modal'
 
 const SEARCH_DEBOUNCE_MS = 350;
 // Filters in the panel/sheet; availability is its own toggle in the results bar.
-const FILTER_KEYS = ['category', 'author', 'publisher', 'language', 'year'] as const;
+const FILTER_KEYS = ['category', 'branch', 'author', 'publisher', 'language', 'year'] as const;
 const SORT_LABELS: Record<CatalogSort, string> = {
   relevance: 'Liên quan nhất',
   popular: 'Phổ biến',
@@ -101,6 +101,7 @@ export function PublicCatalogPage() {
   const query: CatalogQuery = useMemo(() => ({
     q: urlQuery,
     category: slug || params.get('category') || '',
+    branch: params.get('branch') || '',
     author: params.get('author') || '',
     publisher: params.get('publisher') || '',
     language: params.get('language') || '',
@@ -150,16 +151,23 @@ export function PublicCatalogPage() {
 
   const facets = result?.facets;
   const categoryName = query.category ? facets?.categories.find((c) => c.slug === query.category)?.name : null;
+  // The server names the branch it filtered by; null means the id matched no open branch.
+  const branch = query.branch && result ? result.branch : null;
+  const unknownBranch = Boolean(query.branch && result && !result.branch);
+  const branchPage = Boolean(branch && !slug && !isSearchPage);
   const heading = slug
     ? categoryName || 'Thể loại'
     : isSearchPage
       ? (urlQuery ? `Kết quả cho “${urlQuery}”` : 'Tìm sách')
-      : query.sort === 'newest' ? 'Sách mới về' : 'Khám phá sách';
+      : branchPage && branch ? `Sách tại ${branch.name}`
+        : query.sort === 'newest' ? 'Sách mới về' : 'Khám phá sách';
   usePageMeta({
     title: heading,
     description: slug && categoryName
       ? `Sách thể loại ${categoryName} tại thư viện SmartBook — xem còn sách ở chi nhánh nào và đặt mượn trực tuyến.`
-      : undefined,
+      : branchPage && branch
+        ? `Sách tại ${branch.name} — xem cuốn nào còn trên kệ và đặt trước để nhận tại chi nhánh.`
+        : undefined,
   });
 
   const activeFilterCount = FILTER_KEYS.filter((key) => key !== 'category' || !slug).filter((key) => params.get(key)).length;
@@ -184,6 +192,15 @@ export function PublicCatalogPage() {
         <FilterSelect label="Thể loại" value={query.category || ''} onChange={(value) => updateParams({ category: value })}>
           <option value="">Tất cả thể loại</option>
           {facets.categories.map((c) => <option key={c.slug} value={c.slug}>{c.name} ({c.count})</option>)}
+        </FilterSelect>
+      ) : null}
+      {facets.branches.length || query.branch ? (
+        <FilterSelect label="Chi nhánh" value={query.branch || ''} onChange={(value) => updateParams({ branch: value })}>
+          <option value="">Mọi chi nhánh</option>
+          {facets.branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.count})</option>)}
+          {query.branch && !facets.branches.some((b) => b.id === query.branch) ? (
+            <option value={query.branch}>{branch?.name || 'Chi nhánh không tồn tại'}</option>
+          ) : null}
         </FilterSelect>
       ) : null}
       <FilterSelect label="Tác giả" value={query.author || ''} onChange={(value) => updateParams({ author: value })}>
@@ -216,15 +233,18 @@ export function PublicCatalogPage() {
 
   const chips = facets ? [
     !slug && query.category ? { key: 'category', label: categoryName || query.category } : null,
+    query.branch ? { key: 'branch', label: `Chi nhánh: ${branch?.name || 'không tồn tại'}` } : null,
     query.author ? { key: 'author', label: `Tác giả: ${query.author}` } : null,
     query.publisher ? { key: 'publisher', label: `NXB: ${query.publisher}` } : null,
     query.language ? { key: 'language', label: languageLabel(query.language) } : null,
     query.year ? { key: 'year', label: `Năm ${query.year}` } : null,
   ].filter((chip): chip is { key: string; label: string } => Boolean(chip)) : [];
 
-  const eyebrow = slug ? 'Thể loại' : isSearchPage ? 'Tìm kiếm' : query.sort === 'newest' ? 'Mới cập nhật' : 'Danh mục';
+  const eyebrow = slug ? 'Thể loại' : isSearchPage ? 'Tìm kiếm' : branchPage ? 'Chi nhánh' : query.sort === 'newest' ? 'Mới cập nhật' : 'Danh mục';
   const description = slug
     ? (result ? `${result.meta.total} đầu sách trong thể loại này.` : 'Sách trong thể loại này.')
+    : branchPage && result
+      ? `${result.meta.total} đầu sách ${query.availability === 'available' ? 'có sẵn để đặt trước và nhận tại chi nhánh này' : 'chi nhánh này đang giữ, kể cả cuốn đang được mượn'}.`
     : isSearchPage && urlQuery
       ? (result ? `Tìm thấy ${result.meta.total} đầu sách khớp tên sách, tác giả hoặc ISBN.` : 'Đang tìm…')
       : 'Lọc theo thể loại, tác giả, năm xuất bản và xem ngay sách nào còn trên kệ.';
@@ -240,6 +260,12 @@ export function PublicCatalogPage() {
             <Link to="/categories" className="hover:text-foreground hover:underline">Thể loại</Link>
             <span aria-hidden="true"> / </span>
             <span className="text-foreground">{categoryName || slug}</span>
+          </nav>
+        ) : branchPage && branch ? (
+          <nav aria-label="Đường dẫn" className="text-[13px] text-muted-foreground">
+            <Link to="/branches" className="hover:text-foreground hover:underline">Chi nhánh</Link>
+            <span aria-hidden="true"> / </span>
+            <Link to={`/branches/${branch.id}`} className="text-foreground hover:underline">{branch.name}</Link>
           </nav>
         ) : undefined}
       >
@@ -311,7 +337,7 @@ export function PublicCatalogPage() {
                   )}
                 >
                   <span className={cn('h-1.5 w-1.5 rounded-full', query.availability === 'available' ? 'bg-white' : 'bg-emerald-500')} aria-hidden="true" />
-                  Chỉ sách có sẵn
+                  {query.branch ? 'Có sẵn tại chi nhánh' : 'Chỉ sách có sẵn'}
                 </button>
               </div>
               <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -336,6 +362,18 @@ export function PublicCatalogPage() {
                 title="Không tải được danh sách sách"
                 description={error}
                 action={<button type="button" onClick={() => setReloadKey((key) => key + 1)} className="font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Thử lại</button>}
+              />
+            ) : unknownBranch ? (
+              <EmptyState
+                variant="no-results"
+                title="Không tìm thấy chi nhánh này"
+                description="Chi nhánh không tồn tại hoặc đã ngừng hoạt động."
+                action={
+                  <div className="flex flex-wrap justify-center gap-4">
+                    <button type="button" onClick={() => updateParams({ branch: '' })} className="font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Bỏ lọc chi nhánh</button>
+                    <Link to="/branches" className="font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Xem các chi nhánh</Link>
+                  </div>
+                }
               />
             ) : loading && !result ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 xl:grid-cols-4" aria-busy="true">

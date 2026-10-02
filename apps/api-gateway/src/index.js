@@ -383,7 +383,8 @@ app.get("/system/health", requireAdminToken, async (_req, res) => {
 });
 
 // --------------- Public (anonymous) read-only API ---------------
-// The public website browses the catalog and reads reviews without a token.
+// The public website browses the catalog (books, categories, branches), reads
+// reviews and the active membership plans without a token.
 // Only the prefixes below are proxied, only GET/HEAD get through, and a tighter
 // per-IP budget than the global limiter bounds scraping. Reserving, wishlists,
 // reviews and everything account-related stay on /my/* (JWT, customer-only).
@@ -431,6 +432,16 @@ app.use(
     changeOrigin: true,
     xfwd: true,
     pathRewrite: (path) => `/public/reviews${path}`,
+  }),
+);
+
+app.use(
+  "/public/membership",
+  createProxyMiddleware({
+    target: borrowTarget,
+    changeOrigin: true,
+    xfwd: true,
+    pathRewrite: (path) => `/public/membership${path}`,
   }),
 );
 

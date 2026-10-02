@@ -15,6 +15,7 @@ const loanRoutes = require('./routes/loan.routes');
 const fineRoutes = require('./routes/fine.routes');
 const reviewRoutes = require('./routes/review.routes');
 const publicReviewRoutes = require('./routes/public-review.routes');
+const publicMembershipRoutes = require('./routes/public-membership.routes');
 const auditRoutes = require('./routes/audit.routes');
 const membershipPlanRoutes = require('./routes/membership-plan.routes');
 const notificationAdminRoutes = require('./routes/notification-admin.routes');
@@ -79,6 +80,8 @@ app.use('/internal/recommendation', recommendationInternalRoutes);
 app.use('/webhooks/vnpay', vnpayWebhookRoutes);
 // Read-only, anonymised reviews for the public website (no JWT; see routes/public-review.routes.js).
 app.use('/public/reviews', publicReviewRoutes);
+// Active membership plans for the public /membership page (whitelisted fields, GET only).
+app.use('/public/membership', publicMembershipRoutes);
 
 app.use('/borrow', authenticateToken);
 

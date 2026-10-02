@@ -4,29 +4,55 @@ import { useAuthUser } from '@/hooks/useAuthUser';
 import { RouteErrorBoundary } from '@/components/route-error-boundary';
 import { PublicHeader, Wordmark } from './public-header';
 
+const FOOTER_LINK = 'block py-1 text-foreground/80 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-sm';
+
+function FooterColumn({ label, links }: { label: string; links: Array<{ to: string; label: string }> }) {
+  return (
+    <nav aria-label={label} className="space-y-1.5 text-[13px]">
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      {links.map((link) => <Link key={link.to} to={link.to} className={FOOTER_LINK}>{link.label}</Link>)}
+    </nav>
+  );
+}
+
 function PublicFooter() {
+  const { isAuthenticated } = useAuthUser();
   return (
     <footer className="mt-20 border-t border-border">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
-        <div className="space-y-3">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:px-8">
+        <div className="space-y-3 sm:col-span-3 lg:col-span-1">
           <Wordmark />
           <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
             Tìm sách, xem chi nhánh nào còn sách và đặt mượn trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
           </p>
         </div>
-        <nav aria-label="Khám phá" className="space-y-2 text-[13px]">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Khám phá</p>
-          <Link to="/books" className="block text-foreground/80 hover:text-foreground">Tất cả sách</Link>
-          <Link to="/categories" className="block text-foreground/80 hover:text-foreground">Thể loại</Link>
-          <Link to="/books?sort=newest" className="block text-foreground/80 hover:text-foreground">Sách mới về</Link>
-          <Link to="/books?sort=popular" className="block text-foreground/80 hover:text-foreground">Được mượn nhiều</Link>
-        </nav>
-        <nav aria-label="Bạn đọc" className="space-y-2 text-[13px]">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Bạn đọc</p>
-          <Link to="/about" className="block text-foreground/80 hover:text-foreground">Cách mượn sách</Link>
-          <Link to="/customer" className="block text-foreground/80 hover:text-foreground">Sách của tôi</Link>
-          <Link to="/login" className="block text-foreground/80 hover:text-foreground">Đăng nhập nhân viên</Link>
-        </nav>
+        <FooterColumn
+          label="Khám phá"
+          links={[
+            { to: '/books', label: 'Tất cả sách' },
+            { to: '/categories', label: 'Thể loại' },
+            { to: '/books?sort=newest', label: 'Sách mới về' },
+            { to: '/discover', label: 'AI gợi ý sách' },
+          ]}
+        />
+        <FooterColumn
+          label="Thư viện"
+          links={[
+            { to: '/branches', label: 'Chi nhánh' },
+            { to: '/membership', label: 'Thẻ bạn đọc' },
+            { to: '/about', label: 'Về SmartBook' },
+          ]}
+        />
+        <FooterColumn
+          label="Hỗ trợ"
+          links={[
+            { to: '/about', label: 'Cách mượn sách' },
+            ...(isAuthenticated
+              ? [{ to: '/customer', label: 'Sách của tôi' }]
+              : [{ to: '/customer/login', label: 'Đăng nhập' }, { to: '/customer/register', label: 'Đăng ký' }]),
+            { to: '/login', label: 'Đăng nhập nhân viên' },
+          ]}
+        />
       </div>
     </footer>
   );

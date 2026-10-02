@@ -17,12 +17,16 @@ interface NavItem {
   isActive: (pathname: string, search: URLSearchParams) => boolean;
 }
 
+// The wordmark is the way home; "Sách mới" lives on the homepage and in the footer.
 const DISCOVER_ITEMS: NavItem[] = [
-  { to: '/', label: 'Trang chủ', isActive: (p) => p === '/' },
-  { to: '/books', label: 'Khám phá', isActive: (p, s) => (p.startsWith('/books') || p === '/search') && s.get('sort') !== 'newest' },
+  { to: '/books', label: 'Khám phá', isActive: (p) => p.startsWith('/books') || p === '/search' },
   { to: '/categories', label: 'Thể loại', isActive: (p) => p.startsWith('/categories') },
+  { to: '/branches', label: 'Chi nhánh', isActive: (p) => p.startsWith('/branches') },
 ];
-const NEW_ARRIVALS: NavItem = { to: '/books?sort=newest', label: 'Sách mới', isActive: (p, s) => p === '/books' && s.get('sort') === 'newest' };
+const VISITOR_ITEMS: NavItem[] = [
+  { to: '/discover', label: 'AI gợi ý', isActive: (p) => p === '/discover' },
+  { to: '/about', label: 'Về SmartBook', isActive: (p) => p === '/about' },
+];
 const CUSTOMER_ITEMS: NavItem[] = [
   { to: '/customer/recommendations', label: 'Gợi ý cho bạn', isActive: () => false },
   { to: '/customer', label: 'Sách của tôi', isActive: () => false },
@@ -74,7 +78,7 @@ export function PublicHeader() {
   const closeMenu = () => setMenuOpen(false);
   useDialogA11y(menuOpen, closeMenu, sheetRef);
 
-  const navItems = [...DISCOVER_ITEMS, ...(isCustomer ? CUSTOMER_ITEMS : [NEW_ARRIVALS])];
+  const navItems = [...DISCOVER_ITEMS, ...(isCustomer ? CUSTOMER_ITEMS : VISITOR_ITEMS)];
   const loginUrl = buildLoginUrl(`${pathname}${search}`);
   const registerUrl = buildLoginUrl(`${pathname}${search}`, 'register');
   // The home hero and the search page already have a big search field.
@@ -112,14 +116,14 @@ export function PublicHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          {showHeaderSearch ? <div className={cn('hidden md:block', isAuthenticated ? 'w-48 lg:hidden xl:block xl:w-56' : 'w-56 xl:w-72')}><SearchAutocomplete placeholder="Tìm sách, tác giả…" /></div> : null}
+          {showHeaderSearch ? <div className={cn('hidden md:block lg:hidden xl:block', isAuthenticated ? 'w-48 xl:w-56' : 'w-56 2xl:w-72')}><SearchAutocomplete placeholder="Tìm sách, tác giả…" /></div> : null}
           <ThemeToggle />
           {isAuthenticated ? (
             <div className="hidden items-center gap-2 sm:flex">{accountActions}</div>
           ) : (
             <div className="hidden items-center gap-2 sm:flex">
-              <Link to={loginUrl} className="inline-flex h-9 items-center rounded-md px-3 text-[13.5px] font-semibold text-foreground hover:bg-muted">Đăng nhập</Link>
-              <Link to={registerUrl} className="inline-flex h-9 items-center rounded-md bg-indigo-700 px-3.5 text-[13.5px] font-semibold text-white hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-400">Đăng ký</Link>
+              <Link to={loginUrl} className="inline-flex h-9 items-center whitespace-nowrap rounded-md px-3 text-[13.5px] font-semibold text-foreground hover:bg-muted">Đăng nhập</Link>
+              <Link to={registerUrl} className="inline-flex h-9 items-center whitespace-nowrap rounded-md bg-indigo-700 px-3.5 text-[13.5px] font-semibold text-white hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-400">Đăng ký</Link>
             </div>
           )}
           <button type="button" onClick={() => setMenuOpen(true)} aria-label="Mở menu" aria-expanded={menuOpen} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-foreground hover:bg-muted lg:hidden">
@@ -160,6 +164,7 @@ export function PublicHeader() {
                 <>
                   <Link to={loginUrl} onClick={closeMenu} className="inline-flex h-11 items-center justify-center rounded-md border border-border text-[14px] font-semibold">Đăng nhập</Link>
                   <Link to={registerUrl} onClick={closeMenu} className="inline-flex h-11 items-center justify-center rounded-md bg-indigo-700 text-[14px] font-semibold text-white dark:bg-indigo-500">Tạo tài khoản bạn đọc</Link>
+                  <Link to="/membership" onClick={closeMenu} className="inline-flex h-11 items-center justify-center rounded-md text-[14px] font-semibold text-indigo-700 hover:bg-muted dark:text-indigo-300">Quyền lợi thẻ bạn đọc</Link>
                 </>
               )}
             </div>

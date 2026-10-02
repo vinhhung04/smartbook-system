@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   PUBLIC_BOOK_SELECT,
+  PUBLIC_BRANCH_SELECT,
+  branchHoldings,
   buildHome,
   createCachedLoader,
   createPublicCatalog,
@@ -10,6 +12,7 @@ const {
   searchCatalog,
   toPublicBook,
   toPublicBookDetail,
+  toPublicBranch,
   withSignals,
 } = require('../src/services/public-catalog.service');
 const publicCatalogRoutes = require('../src/routes/public-catalog.routes');
@@ -69,7 +72,7 @@ test('public router exposes GET handlers only', () => {
   const endpoints = publicCatalogRoutes.stack
     .filter((layer) => layer.route)
     .map((layer) => `${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`);
-  assert.deepEqual(endpoints, ['GET /home', 'GET /categories', 'GET /books', 'GET /books/:id']);
+  assert.deepEqual(endpoints, ['GET /home', 'GET /categories', 'GET /books', 'GET /books/:id', 'GET /branches', 'GET /branches/:id']);
 });
 
 test('Prisma select never asks the database for cost, SKU, barcode or location codes', () => {
@@ -188,7 +191,7 @@ test('home sections only rank books that have the signal — nothing is padded w
 });
 
 test('when analytics is down the catalog still serves and does not pretend to sort by popularity', async () => {
-  const prisma = { books: { findMany: async () => [makeBook()], findFirst: async () => makeBook() } };
+  const prisma = { books: { findMany: async () => [makeBook()], findFirst: async () => makeBook() }, warehouses: { findMany: async () => [] } };
   const catalog = createPublicCatalog(prisma, { fetchSignals: async () => { throw new Error('analytics down'); } });
   const list = await catalog.list({ sort: 'popular' });
   assert.equal(list.signals_available, false);
@@ -201,7 +204,7 @@ test('when analytics is down the catalog still serves and does not pretend to so
 
 test('detail rejects non-UUID ids without querying the database', async () => {
   let queried = false;
-  const prisma = { books: { findMany: async () => [], findFirst: async () => { queried = true; return null; } } };
+  const prisma = { books: { findMany: async () => [], findFirst: async () => { queried = true; return null; } }, warehouses: { findMany: async () => [] } };
   const catalog = createPublicCatalog(prisma, { fetchSignals: async () => ({ windows: null, byBook: new Map() }) });
   assert.equal(await catalog.detail("1' OR '1'='1"), null);
   assert.equal(queried, false);
@@ -245,4 +248,136 @@ test('available_now lists only reservable books, most borrowed first', () => {
   // "Đắc nhân tâm" has no shelf stock, so it never appears here.
   assert.deepEqual(home.available_now.map((b) => b.title), ['Lập trình Python', 'Trí tuệ nhân tạo cho người mới']);
   assert.ok(home.available_now.every((b) => b.reservable));
+});
+
+// ── branches ────────────────────────────────────────────────────────────────
+
+const WH_Q1 = 'aaaaaaaa-0000-4000-8000-000000000001';
+const WH_Q3 = 'aaaaaaaa-0000-4000-8000-000000000003';
+const WH_CLOSED = 'aaaaaaaa-0000-4000-8000-000000000009';
+
+const WAREHOUSE_ROWS = [
+  // Columns a careless select could pass through; the public shape must drop them.
+  { id: WH_Q1, code: 'BR-HCM-01', warehouse_type: 'BRANCH', manager_user_id: 'staff-1', name: 'Chi nhánh Quận 1', address_line1: '78 Lê Duẩn', address_line2: null, ward: 'Bến Nghé', district: 'Quận 1', province: 'TP. Hồ Chí Minh', is_active: true },
+  { id: WH_Q3, code: 'BR-HCM-02', warehouse_type: 'BRANCH', manager_user_id: 'staff-2', name: 'Chi nhánh Quận 3', address_line1: '  ', address_line2: null, ward: null, district: null, province: null, is_active: true },
+  { id: WH_CLOSED, code: 'BR-OLD', warehouse_type: 'BRANCH', manager_user_id: null, name: 'Chi nhánh đã đóng', address_line1: '1 Cũ', is_active: false },
+];
+
+function shelf(warehouseId, available, onHand = available) {
+  return {
+    warehouse_id: warehouseId,
+    available_qty: available,
+    on_hand_qty: onHand,
+    locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'A-01' },
+    warehouses: { name: warehouseId === WH_Q1 ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3', is_active: true },
+  };
+}
+
+function branchFixtureRows() {
+  const variant = makeBook().book_variants[0];
+  return [
+    // Reservable at Q1 only.
+    makeBook({ id: '11111111-1111-4111-8111-111111111111', title: 'Sách có ở Q1', book_variants: [{ ...variant, stock_balances: [shelf(WH_Q1, 2)] }] }),
+    // Every Q3 copy is lent out: Q3 holds it, nothing is reservable.
+    makeBook({ id: '22222222-2222-4222-8222-222222222222', title: 'Sách Q3 đang được mượn', created_at: new Date('2026-06-01T00:00:00Z'), book_variants: [{ ...variant, stock_balances: [shelf(WH_Q3, 0, 1)] }] }),
+    // Only in Q1's receiving area: not on any shelf yet.
+    makeBook({ id: '33333333-3333-4333-8333-333333333333', title: 'Sách đang nhập kho', book_variants: [{ ...variant, stock_balances: [{ ...shelf(WH_Q1, 0, 4), locations: { location_type: 'RECEIVING' } }] }] }),
+  ];
+}
+
+function branchCatalog(rows = branchFixtureRows()) {
+  const calls = { warehouses: [] };
+  const prisma = {
+    books: { findMany: async () => rows, findFirst: async () => rows[0] },
+    warehouses: {
+      findMany: async (args) => {
+        calls.warehouses.push(args);
+        return WAREHOUSE_ROWS.filter((row) => !args.where?.is_active || row.is_active);
+      },
+    },
+  };
+  return { catalog: createPublicCatalog(prisma, { fetchSignals: async () => ({ windows: null, byBook: new Map() }) }), calls };
+}
+
+const FORBIDDEN_BRANCH_KEYS = ['code', 'warehouse_type', 'manager_user_id', 'is_active', 'locations', 'location_code', 'location_id', 'on_hand_qty', 'reserved_qty', 'capacity', 'warehouse_settings', 'stock_movements'];
+
+test('branch select only asks for the name and address', () => {
+  assert.deepEqual(Object.keys(PUBLIC_BRANCH_SELECT).sort(), ['address_line1', 'address_line2', 'district', 'id', 'name', 'province', 'ward']);
+});
+
+test('public branch shape joins the address and drops internal columns', () => {
+  assert.deepEqual(toPublicBranch(WAREHOUSE_ROWS[0]), { id: WH_Q1, name: 'Chi nhánh Quận 1', address: '78 Lê Duẩn, Bến Nghé, Quận 1, TP. Hồ Chí Minh' });
+  // No address on file stays null rather than an empty string.
+  assert.equal(toPublicBranch(WAREHOUSE_ROWS[1]).address, null);
+});
+
+test('branch holdings count shelf copies (lent out too) but not receiving, closed branches or non-borrowable editions', () => {
+  const variant = makeBook().book_variants[0];
+  const held = branchHoldings(makeBook({
+    book_variants: [
+      { ...variant, stock_balances: [shelf(WH_Q1, 0, 2), { ...shelf(WH_Q3, 0, 3), locations: { location_type: 'STAGING' } }] },
+      { ...variant, id: 'v-closed', stock_balances: [{ ...shelf(WH_CLOSED, 5), warehouses: { name: 'x', is_active: false } }] },
+      { ...variant, id: 'v-reference', is_borrowable: false, stock_balances: [shelf(WH_Q3, 5)] },
+    ],
+  }));
+  assert.deepEqual([...held], [WH_Q1]);
+});
+
+test('anonymous branch list: only active branches, real counts, no internal fields', async () => {
+  const { catalog, calls } = branchCatalog();
+  const branches = await catalog.branches();
+  assert.deepEqual(calls.warehouses[0].where, { is_active: true });
+  assert.deepEqual(branches.map((b) => b.name), ['Chi nhánh Quận 1', 'Chi nhánh Quận 3']);
+  assert.deepEqual(branches[0].stats, { title_count: 1, available_title_count: 1, available_copies: 2 });
+  assert.deepEqual(branches[1].stats, { title_count: 1, available_title_count: 0, available_copies: 0 });
+  const keys = collectKeys(branches);
+  for (const key of FORBIDDEN_BRANCH_KEYS) assert.equal(keys.has(key), false, `leaked ${key}`);
+});
+
+test('branch detail lists what is reservable there and rejects unknown, closed or malformed ids', async () => {
+  const { catalog } = branchCatalog();
+  const q1 = await catalog.branch(WH_Q1);
+  assert.equal(q1.name, 'Chi nhánh Quận 1');
+  assert.deepEqual(q1.available_books.map((b) => b.title), ['Sách có ở Q1']);
+  assert.deepEqual(q1.categories, [{ name: 'Công nghệ', slug: 'cong-nghe', book_count: 1, available_count: 1 }]);
+  const keys = collectKeys(q1);
+  for (const key of FORBIDDEN_BRANCH_KEYS) assert.equal(keys.has(key), false, `leaked ${key}`);
+
+  // Ids are matched case-insensitively, like Postgres UUIDs.
+  const q3 = await catalog.branch(WH_Q3.toUpperCase());
+  assert.deepEqual(q3.available_books, []);
+  assert.deepEqual(q3.new_arrivals.map((b) => b.title), ['Sách Q3 đang được mượn']);
+
+  assert.equal(await catalog.branch(WH_CLOSED), null);
+  assert.equal(await catalog.branch('bbbbbbbb-0000-4000-8000-000000000000'), null);
+  assert.equal(await catalog.branch("x' OR 1=1 --"), null);
+});
+
+test('catalog branch filter: held vs reservable there, combined with other filters', async () => {
+  const { catalog } = branchCatalog();
+  const atQ3 = await catalog.list({ branch: WH_Q3 });
+  assert.deepEqual(atQ3.data.map((b) => b.title), ['Sách Q3 đang được mượn']);
+  assert.deepEqual(atQ3.branch, { id: WH_Q3, name: 'Chi nhánh Quận 3' });
+  assert.equal((await catalog.list({ branch: WH_Q3, availability: 'available' })).meta.total, 0);
+
+  const availableQ1 = await catalog.list({ branch: WH_Q1, availability: 'available', category: 'cong-nghe', q: 'sach', sort: 'title', page: '1' });
+  assert.deepEqual(availableQ1.data.map((b) => b.title), ['Sách có ở Q1']);
+  // Receiving-only stock never puts a book "at" the branch.
+  assert.equal((await catalog.list({ branch: WH_Q1 })).data.some((b) => b.title === 'Sách đang nhập kho'), false);
+  // The facet only offers branches that hold something, with their title counts.
+  assert.deepEqual(availableQ1.facets.branches, [{ id: WH_Q1, name: 'Chi nhánh Quận 1', count: 1 }, { id: WH_Q3, name: 'Chi nhánh Quận 3', count: 1 }]);
+
+  const all = await catalog.list({});
+  assert.equal(all.meta.total, 3);
+  assert.equal(all.branch, null);
+});
+
+test('invalid or closed branch filter returns an empty page instead of the whole catalog', async () => {
+  const { catalog } = branchCatalog();
+  for (const branch of ['not-a-uuid', WH_CLOSED, 'bbbbbbbb-0000-4000-8000-000000000000', "'; DROP TABLE books; --"]) {
+    const result = await catalog.list({ branch });
+    assert.equal(result.meta.total, 0, branch);
+    assert.deepEqual(result.data, []);
+    assert.equal(result.branch, null);
+  }
 });

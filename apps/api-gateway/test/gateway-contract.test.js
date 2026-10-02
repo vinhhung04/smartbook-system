@@ -40,6 +40,15 @@ test('public website API is read-only, rate limited and limited to catalog + rev
   assert.ok(source.indexOf('publicReadOnly,') < source.indexOf('"/public/catalog"'));
 });
 
+test('public membership plans are proxied to borrow-service behind the same read-only guard', () => {
+  assert.match(source, /"\/public\/membership",[\s\S]{0,120}target: borrowTarget/);
+  assert.match(source, /"\/public\/membership"[\s\S]{0,200}pathRewrite: \(path\) => `\/public\/membership\$\{path\}`/);
+  const guard = source.indexOf('publicReadOnly,');
+  const proxy = source.indexOf('"/public/membership"');
+  const notFound = source.indexOf('app.use("/public", (req, res) => res.status(404)');
+  assert.ok(guard < proxy && proxy < notFound, 'membership proxy must sit between the GET/HEAD guard and the /public 404');
+});
+
 test('public AI discovery has its own per-IP budget and degrades like the other AI routes', () => {
   assert.match(source, /"\/public\/discover",\s*createRateLimiter\([\s\S]{0,200}createRateLimiter\([\s\S]{0,200}target: aiTarget/);
   assert.match(source, /"\/public\/discover"[\s\S]{0,700}on: \{ error: handleAiProxyError \}/);

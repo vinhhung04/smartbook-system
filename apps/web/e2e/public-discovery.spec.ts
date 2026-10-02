@@ -17,6 +17,22 @@ async function findReservableBook(request: APIRequestContext) {
   return book as { id: string; title: string };
 }
 
+interface BranchSummary {
+  id: string;
+  name: string;
+  stats: { title_count: number; available_title_count: number; available_copies: number };
+}
+
+/** A branch with something reservable on its shelves (demo data from pnpm demo:seed). */
+async function findStockedBranch(request: APIRequestContext) {
+  const response = await request.get(`${GATEWAY}/public/catalog/branches`);
+  expect(response.status()).toBe(200);
+  const branches = (await response.json()).data as BranchSummary[];
+  const branch = branches.find((item) => item.stats.available_title_count > 0);
+  expect(branch, 'seeded data needs a branch with a reservable book (pnpm demo:seed)').toBeTruthy();
+  return branch as BranchSummary;
+}
+
 test.describe('Anonymous discovery', () => {
   test('homepage → catalog → search → book detail → reserve asks for login', async ({ page, request }) => {
     await page.goto('/');
@@ -100,6 +116,73 @@ test.describe('Anonymous discovery', () => {
   });
 });
 
+test.describe('Branches (anonymous)', () => {
+  test('header → branches → branch → its books → book detail, never asked to log in', async ({ page, request }) => {
+    const branch = await findStockedBranch(request);
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Điều hướng chính' }).getByRole('link', { name: 'Chi nhánh' }).click();
+    await expect(page).toHaveURL('/branches');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tìm chi nhánh SmartBook gần bạn' })).toBeVisible();
+
+    await page.getByRole('link', { name: `Xem chi tiết ${branch.name}` }).click();
+    await expect(page).toHaveURL(`/branches/${branch.id}`);
+    await expect(page.getByRole('heading', { level: 1, name: branch.name })).toBeVisible();
+    await expect(page.getByText('Đang hoạt động').first()).toBeVisible();
+
+    await page.getByRole('link', { name: 'Khám phá sách tại chi nhánh này' }).click();
+    await expect(page).toHaveURL(`/books?branch=${branch.id}&availability=available`);
+    await expect(page.getByRole('heading', { level: 1, name: `Sách tại ${branch.name}` })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Có sẵn tại chi nhánh' })).toHaveAttribute('aria-checked', 'true');
+
+    // Other catalog state combines with the branch and lives in the URL.
+    await page.getByRole('combobox', { name: 'Sắp xếp' }).selectOption('title');
+    await expect(page).toHaveURL(new RegExp(`branch=${branch.id}`));
+    await expect(page).toHaveURL(/sort=title/);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: `Sách tại ${branch.name}` })).toBeVisible();
+
+    const card = page.locator('article').first();
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    const title = (await card.locator('h3').innerText()).trim();
+    await card.locator('h3 a').click();
+    await expect(page).toHaveURL(/\/books\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+    // Reservable at this branch, so the book page offers it for pickup and links back.
+    const pickup = page.getByRole('list', { name: 'Chi nhánh còn sách' }).getByRole('link', { name: branch.name });
+    await expect(pickup).toBeVisible();
+    await pickup.click();
+    await expect(page).toHaveURL(`/branches/${branch.id}`);
+  });
+
+  test('an unknown branch is a clear empty state, not the whole catalog or a crash', async ({ page }) => {
+    await page.goto('/books?branch=00000000-0000-4000-8000-000000000000');
+    await expect(page.getByText('Không tìm thấy chi nhánh này')).toBeVisible();
+    await page.goto('/branches/00000000-0000-4000-8000-000000000000');
+    await expect(page.getByText('Không tìm thấy chi nhánh', { exact: true })).toBeVisible();
+  });
+});
+
+test.describe('Membership', () => {
+  test('anonymous: real plans, and "Tạo tài khoản" registers then returns to the card', async ({ page, request }) => {
+    const plans = (await (await request.get(`${GATEWAY}/public/membership/plans`)).json()).data as Array<{ name: string }>;
+    await page.goto('/membership');
+    await expect(page.getByRole('heading', { level: 1, name: 'Đọc nhiều hơn với tài khoản SmartBook' })).toBeVisible();
+    for (const plan of plans) {
+      await expect(page.getByRole('heading', { level: 3, name: plan.name })).toBeVisible();
+    }
+    await page.getByRole('link', { name: 'Tạo tài khoản', exact: true }).first().click();
+    await expect(page).toHaveURL(`/customer/register?returnUrl=${encodeURIComponent('/customer/membership')}`);
+  });
+
+  test('customer: the call to action opens their own card', async ({ page }) => {
+    await loginCustomer(page);
+    await page.goto('/membership');
+    await expect(page.getByRole('link', { name: 'Tạo tài khoản', exact: true })).toHaveCount(0);
+    await page.getByRole('link', { name: 'Xem thẻ bạn đọc của tôi' }).first().click();
+    await expect(page).toHaveURL('/customer/membership');
+  });
+});
+
 test.describe('Public API security', () => {
   test('anonymous reads are allowed and never carry internal fields', async ({ request }) => {
     const list = await request.get(`${GATEWAY}/public/catalog/books`, { params: { pageSize: '48' } });
@@ -123,6 +206,35 @@ test.describe('Public API security', () => {
     expect((await request.get(`${GATEWAY}/public/catalog/home`)).status()).toBe(200);
     expect((await request.get(`${GATEWAY}/public/catalog/categories`)).status()).toBe(200);
 
+    const branches = await request.get(`${GATEWAY}/public/catalog/branches`);
+    expect(branches.status()).toBe(200);
+    const branchesText = await branches.text();
+    for (const field of ['"code"', 'warehouse_type', 'manager_user_id', 'location_code', 'on_hand_qty', 'reserved_qty']) {
+      expect(branchesText).not.toContain(field);
+    }
+    const branchList = JSON.parse(branchesText).data as BranchSummary[];
+    if (branchList.length) {
+      const branchDetail = await request.get(`${GATEWAY}/public/catalog/branches/${branchList[0].id}`);
+      expect(branchDetail.status()).toBe(200);
+      const branchDetailText = await branchDetail.text();
+      for (const field of ['"code"', 'warehouse_type', 'manager_user_id', 'location_code', 'unit_cost', '"sku"']) {
+        expect(branchDetailText).not.toContain(field);
+      }
+      const filtered = await request.get(`${GATEWAY}/public/catalog/books`, { params: { branch: branchList[0].id } });
+      expect((await filtered.json()).branch).toEqual({ id: branchList[0].id, name: branchList[0].name });
+    }
+    expect((await request.get(`${GATEWAY}/public/catalog/branches/not-a-uuid`)).status()).toBe(404);
+    const badBranch = await request.get(`${GATEWAY}/public/catalog/books`, { params: { branch: 'not-a-uuid' } });
+    expect(badBranch.status()).toBe(200);
+    expect((await badBranch.json()).meta.total).toBe(0);
+
+    const plans = await request.get(`${GATEWAY}/public/membership/plans`);
+    expect(plans.status()).toBe(200);
+    const plansText = await plans.text();
+    for (const field of ['"code"', 'created_at', 'updated_at', '"_count"', 'customer_memberships', 'card_number']) {
+      expect(plansText).not.toContain(field);
+    }
+
     const reviews = await request.get(`${GATEWAY}/public/reviews/book/${book.id}`);
     expect(reviews.status()).toBe(200);
     const reviewsText = await reviews.text();
@@ -142,6 +254,9 @@ test.describe('Public API security', () => {
     // /public is read-only at the gateway, whatever the path.
     expect((await request.post(`${GATEWAY}/public/catalog/books`, { data: {} })).status()).toBe(405);
     expect((await request.delete(`${GATEWAY}/public/reviews/book/x`)).status()).toBe(405);
+    expect((await request.post(`${GATEWAY}/public/membership/plans`, { data: { name: 'x' } })).status()).toBe(405);
+    expect((await request.put(`${GATEWAY}/public/membership/plans`, { data: {} })).status()).toBe(405);
+    expect((await request.delete(`${GATEWAY}/public/catalog/branches/x`)).status()).toBe(405);
     // The authenticated catalog (cost, shelf locations) is still behind a token.
     expect([401, 403]).toContain((await request.get(`${GATEWAY}/catalog/books`)).status());
   });

@@ -39,4 +39,12 @@ router.get('/books/:id', cacheFor(30), handle(async (req, res) => {
   return res.json(book);
 }));
 
+router.get('/branches', cacheFor(60), handle(async (_req, res) => res.json({ data: await catalog.branches() })));
+
+router.get('/branches/:id', cacheFor(60), handle(async (req, res) => {
+  const branch = await catalog.branch(req.params.id);
+  if (!branch) return res.status(404).json({ message: 'Không tìm thấy chi nhánh' });
+  return res.json(branch);
+}));
+
 module.exports = router;

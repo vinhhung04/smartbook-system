@@ -51,7 +51,19 @@ function resolveRenewalStart(currentEndDate, today = new Date()) {
   return end.getTime() > today.getTime() ? end : today;
 }
 
+/**
+ * The plan a new reader account is given — the same lookup customer
+ * provisioning in customer.controller does (configured code first, else the
+ * oldest active plan). Read-only: it never creates a fallback plan.
+ */
+async function findDefaultMembershipPlan(client, select) {
+  const code = String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim();
+  return await client.membership_plans.findFirst({ where: { is_active: true, code }, select })
+    || await client.membership_plans.findFirst({ where: { is_active: true }, orderBy: [{ created_at: 'asc' }], select });
+}
+
 module.exports = {
+  findDefaultMembershipPlan,
   resolveActiveMembership,
   computeMembershipEndDate,
   resolveRenewalStart,
