@@ -94,6 +94,9 @@ async function createMyReservation(req, res) {
       customer_id: customer.id,
       source_channel: req.body?.source_channel || 'WEB',
     };
+    // Set here, never read from the body: inventory limits a reader's own reservations
+    // to reader-facing pickup locations (BRANCH/LIBRARY); staff routes don't set it.
+    req.reservationChannel = 'CUSTOMER';
 
     return createReservation(req, res);
   } catch (error) {

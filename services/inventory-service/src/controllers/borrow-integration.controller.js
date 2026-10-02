@@ -1,8 +1,28 @@
 const { PrismaClient } = require('@prisma/client');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
+const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
 
 const prisma = new PrismaClient();
+
+// Borrow-service marks reservations a reader makes for themselves (/my/reservations)
+// with this channel: those may only be picked up at a reader-facing location. Staff
+// flows (counter loans, reservations made on a customer's behalf) send no channel and
+// keep access to every warehouse.
+const CUSTOMER_RESERVATION_CHANNEL = 'CUSTOMER';
+const INVALID_PICKUP_WAREHOUSE_MESSAGE = 'Selected warehouse is not a valid pickup location';
+
+function isCustomerReservation(channel) {
+  return String(channel || '').trim().toUpperCase() === CUSTOMER_RESERVATION_CHANNEL;
+}
+
+async function isValidPickupWarehouse(db, warehouseId) {
+  const warehouse = await db.warehouses.findUnique({
+    where: { id: warehouseId },
+    select: { is_active: true, warehouse_type: true },
+  });
+  return isPublicPickupWarehouse(warehouse);
+}
 
 function parsePositiveInteger(value, fallback = 1) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
@@ -130,6 +150,10 @@ async function getAvailability(req, res) {
   }
 
   try {
+    if (isCustomerReservation(req.query.reservation_channel) && !(await isValidPickupWarehouse(prisma, String(warehouse_id)))) {
+      return res.status(409).json({ message: INVALID_PICKUP_WAREHOUSE_MESSAGE });
+    }
+
     const balances = await prisma.stock_balances.findMany({
       where: {
         variant_id: String(variant_id),
@@ -182,6 +206,7 @@ async function reserveFromBorrow(req, res) {
     expires_at,
     created_by_user_id,
     idempotency_key,
+    reservation_channel,
   } = req.body;
 
   const normalizedQuantity = parsePositiveInteger(quantity, 1);
@@ -226,6 +251,10 @@ async function reserveFromBorrow(req, res) {
         if (reservationByReference) {
           return { alreadyReserved: true, reservation: reservationByReference };
         }
+      }
+
+      if (isCustomerReservation(reservation_channel) && !(await isValidPickupWarehouse(tx, warehouse_id))) {
+        throw new Error('INVALID_PICKUP_WAREHOUSE');
       }
 
       const variant = await tx.book_variants.findUnique({
@@ -339,6 +368,9 @@ async function reserveFromBorrow(req, res) {
       idempotent: Boolean(result.alreadyReserved),
     });
   } catch (error) {
+    if (error.message === 'INVALID_PICKUP_WAREHOUSE') {
+      return res.status(409).json({ message: INVALID_PICKUP_WAREHOUSE_MESSAGE });
+    }
     if (error.message === 'VARIANT_NOT_BORROWABLE') {
       return res.status(409).json({ message: 'Variant is not borrowable' });
     }

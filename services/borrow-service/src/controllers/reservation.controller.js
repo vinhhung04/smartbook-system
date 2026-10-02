@@ -212,6 +212,7 @@ async function createReservation(req, res) {
       variant_id,
       warehouse_id,
       quantity: normalizedQuantity,
+      reservation_channel: req.reservationChannel,
       authHeader,
       requestId: req.requestId,
     });
@@ -230,6 +231,7 @@ async function createReservation(req, res) {
       expires_at: expiresAt.toISOString(),
       created_by_user_id: actorUserId,
       idempotency_key: idempotencyKey,
+      reservation_channel: req.reservationChannel,
       authHeader,
       requestId: req.requestId,
     });

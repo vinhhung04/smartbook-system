@@ -56,9 +56,10 @@ function correlationHeader(requestId) {
   return requestId ? { 'x-request-id': requestId } : {};
 }
 
-async function checkAvailability({ variant_id, warehouse_id, quantity, authHeader, requestId }) {
+async function checkAvailability({ variant_id, warehouse_id, quantity, reservation_channel, authHeader, requestId }) {
+  const channelParam = reservation_channel ? `&reservation_channel=${encodeURIComponent(reservation_channel)}` : '';
   return requestInventory(
-    `/api/borrow-integration/availability?variant_id=${encodeURIComponent(variant_id)}&warehouse_id=${encodeURIComponent(warehouse_id)}&quantity=${encodeURIComponent(String(quantity || 1))}`,
+    `/api/borrow-integration/availability?variant_id=${encodeURIComponent(variant_id)}&warehouse_id=${encodeURIComponent(warehouse_id)}&quantity=${encodeURIComponent(String(quantity || 1))}${channelParam}`,
     {
       method: 'GET',
       headers: {
@@ -69,7 +70,7 @@ async function checkAvailability({ variant_id, warehouse_id, quantity, authHeade
   );
 }
 
-async function reserveStock({ reservation_id, reservation_number, customer_id, variant_id, warehouse_id, quantity, expires_at, created_by_user_id, idempotency_key, authHeader, requestId }) {
+async function reserveStock({ reservation_id, reservation_number, customer_id, variant_id, warehouse_id, quantity, expires_at, created_by_user_id, idempotency_key, reservation_channel, authHeader, requestId }) {
   return requestInventory('/api/borrow-integration/reservations/reserve', {
     method: 'POST',
     headers: {
@@ -87,6 +88,7 @@ async function reserveStock({ reservation_id, reservation_number, customer_id, v
       expires_at,
       created_by_user_id,
       idempotency_key,
+      reservation_channel,
     }),
   });
 }
