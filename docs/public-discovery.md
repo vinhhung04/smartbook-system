@@ -99,9 +99,20 @@ Vẫn bắt buộc đăng nhập: `POST /my/reservations`, `POST /my/wishlists`,
 - Gateway: `/public` chỉ GET/HEAD (405 cho method khác), rate limit 300 req/5 phút/IP (`PUBLIC_RATE_LIMIT_MAX`),
   từ chối `..`/`%2e%2e` (400), prefix lạ dưới `/public` → 404, không proxy tới service khác.
 - Review công khai không trả `customer_id`, `customer_code`, họ tên đầy đủ; ID không phải UUID bị từ chối trước khi chạm DB.
-- **Chi nhánh**: `PUBLIC_BRANCH_SELECT` chỉ select `id, name, address_line1/2, ward, district, province`; không bao giờ có
-  `code`, `warehouse_type`, `manager_user_id`, settings, location/kệ, sức chứa, tồn receiving/staging hay stock movement.
-  Chỉ kho `is_active` (mọi kho active đều là điểm nhận sách — trùng với luồng đặt trước). Số liệu tính trên snapshot catalog
+- **Chi nhánh = điểm phục vụ bạn đọc, không phải mọi kho.** Chi nhánh/điểm nhận sách công khai là một tập con của bảng
+  `warehouses`: chỉ kho `is_active` có `warehouse_type` thuộc `PUBLIC_PICKUP_WAREHOUSE_TYPES` = `['BRANCH', 'LIBRARY']`
+  (`services/inventory-service/src/utils/constants.js` — nguồn duy nhất). `WAREHOUSE` (kho tổng, vận hành nội bộ) và
+  `STORE` (cửa hàng — trong code chỉ là đích xuất `TRANSFER_TO_STORE`, không phải nơi nhận sách mượn) **không** được public,
+  và tồn kho ở đó **không** được tính là có sẵn cho bạn đọc. Một hàm duy nhất `isPublicPickupWarehouse()` áp dụng rule cho:
+  danh sách/chi tiết chi nhánh, bộ lọc `?branch=`, `facets.branches`, `pickup_branches`, `available_quantity`, `reservable`,
+  `availability_status` (kể cả "Đang nhập kho": hàng ở khu nhận của kho tổng không tính), `available_now` trên trang chủ,
+  holdings/số liệu chi nhánh — và vì modal đặt trước trên web công khai chỉ dựng từ `pickup_branches`, web công khai không
+  bao giờ gửi một kho nội bộ làm nơi nhận sách. Query kho lọc ở DB (`PUBLIC_BRANCH_WHERE`) rồi kiểm lại bằng cùng hàm.
+  `id` của kho nội bộ ở `/public/catalog/branches/:id` → 404, ở `?branch=` → trang rỗng `branch: null` — giống chi nhánh đã
+  đóng, không tiết lộ đó là kho nội bộ. Muốn mở thêm loại (vd `STORE`) chỉ sửa hằng số này.
+- `PUBLIC_BRANCH_SELECT` chỉ select `id, name, warehouse_type, is_active, address_line1/2, ward, district, province`
+  (type/active chỉ để kiểm rule, `toPublicBranch` bỏ đi); JSON không bao giờ có `code`, `warehouse_type`, `manager_user_id`,
+  settings, location/kệ, sức chứa, tồn receiving/staging hay stock movement. Số liệu tính trên snapshot catalog
   đã cache (1 query sách + 1 query kho mỗi TTL, không N+1). Bộ lọc `branch` chạy ở server; id sai/không tồn tại/đã đóng trả
   trang rỗng với `branch: null` (không lặng lẽ bỏ bộ lọc để trả toàn bộ catalog). "Có sẵn tại chi nhánh" = chi nhánh nằm
   trong `pickup_branches` của sách, nên sách thấy ở trang chi nhánh luôn đặt trước được tại đúng chi nhánh đó.
@@ -134,6 +145,8 @@ Bổ sung cho chi nhánh + thẻ bạn đọc:
 | File | Nội dung |
 |---|---|
 | `services/inventory-service/test/public-catalog.test.js` (+7) | router có `GET /branches(/:id)`; select chi nhánh chỉ name/address; JSON không lộ code/type/manager/location/tồn; chỉ chi nhánh active; holdings bỏ receiving/kho đóng/biến thể không cho mượn nhưng tính bản đang được mượn; detail chỉ liệt kê sách đặt được tại chi nhánh; filter `branch` kết hợp `q/category/availability/sort/page`; branch sai/đóng/chuỗi SQL → trang rỗng, không crash |
+| `services/inventory-service/test/public-catalog.test.js` (+6, sửa 5) | rule loại kho: chỉ `BRANCH`/`LIBRARY` active (không `WAREHOUSE`, `STORE`, đã đóng, thiếu type); `WAREHOUSE 10 + BRANCH 0` → `reservable=false, available_quantity=0, pickup_branches=[]`; `WAREHOUSE 10 + BRANCH 2` → `available_quantity=2`, 1 pickup branch; hàng ở khu nhận của kho tổng không thành "Đang nhập kho"; kho tổng 100 bản không có trong `/branches`, `facets.branches`, `pickup_branches`, `available_now`, JSON; `?branch=<kho tổng/cửa hàng>` → rỗng + `branch: null`; `branch(<kho tổng>)` → null (404); `LIBRARY` active được liệt kê/lọc/đếm; danh sách vẫn đúng nếu query trả nhầm kho nội bộ. Trên code cũ 10 test fail. |
+| `apps/web/e2e/public-discovery.spec.ts` (mở rộng) | mọi `pickup_branches` và `facets.branches` của catalog đều nằm trong `/public/catalog/branches`; số thẻ trên `/branches` bằng số chi nhánh API trả |
 | `services/borrow-service/test/public-membership.test.js` (5) | router chỉ `GET /plans`; select không có code/audit/_count; HTTP thật: chỉ gói active, whitelist key, `fine_per_day` là số, `Cache-Control: public`; `is_default` theo `DEFAULT_MEMBERSHIP_PLAN_CODE` rồi gói cũ nhất; POST/PUT/PATCH/DELETE không có route; DB lỗi → 500 không lộ lỗi |
 | `apps/api-gateway/test/gateway-contract.test.js` (+1) | `/public/membership` proxy tới borrow-service, nằm sau guard GET/HEAD và trước 404 của `/public` |
 | `apps/web/e2e/public-discovery.spec.ts` (+4, mở rộng 2) | anonymous: header → `/branches` → chi nhánh → "Khám phá sách tại chi nhánh này" → URL giữ `branch` + `sort` sau reload → chi tiết sách → link chi nhánh nhận sách quay lại `/branches/:id`, không bị đẩy login; branch không tồn tại → empty state; `/membership` hiện đúng tên gói từ API, "Tạo tài khoản" → `/customer/register?returnUrl=%2Fcustomer%2Fmembership`; customer → `/customer/membership`; API: branches/plans không lộ trường nội bộ, POST/PUT `/public/membership`, DELETE `/public/catalog/branches` → 405 |
@@ -193,6 +206,9 @@ Test thêm: `available_now` (inventory unit), typeahead bàn phím và "Báo khi
   địa chỉ ("Địa chỉ đang được cập nhật" nếu trống), số đầu sách và số đầu sách có sẵn; CTA "Xem sách tại chi nhánh"
   (`/books?branch=<id>&availability=available`, hoặc bỏ `availability` khi mọi bản đang được mượn để không thành ngõ cụt) và
   "Xem chi tiết". Chi nhánh chưa có sách → chữ "Chi nhánh chưa có sách trên kệ", không hiện số 0 vô nghĩa.
+- **Dữ liệu demo**: trước đây mọi bản sách trên kệ trong seed nằm ở 2 kho `WAREHOUSE`, còn 2 kho `BRANCH` không có kệ nào.
+  Seed inventory nay tạo kệ `BR-SHELF-01` cho mỗi chi nhánh và đặt bản sách lên đó (D1: 6 variant, D3: 6 variant, 1 variant
+  có ở cả hai). Tồn kho tổng giữ nguyên (vẫn dùng cho nhập/putaway nội bộ) nhưng không hiện trên web.
 - **`/branches/:id`**: breadcrumb, `PageHero`, ba số liệu, hàng "Có sẵn tại chi nhánh" (đặt trước ngay), "Sách khác tại chi
   nhánh", thể loại tại chi nhánh (link `/books?branch=…&category=…`), CTA "Khám phá sách tại chi nhánh này". 404/lỗi/rỗng có
   trạng thái riêng.
@@ -220,8 +236,11 @@ Test thêm: `available_now` (inventory unit), typeahead bàn phím và "Báo khi
 - **Chi nhánh — dữ liệu còn thiếu**: bảng `warehouses` chưa có số điện thoại, giờ mở cửa, slug hay toạ độ. Trang `/branches`
   chỉ hiện dữ liệu đang có (tên, địa chỉ, số sách) và không bịa thêm. Muốn hiển thị cần migration thêm cột (vd `phone`,
   `opening_hours` JSON, `slug` unique), form nhập ở trang quản lý kho, seed, rồi thêm vào `PUBLIC_BRANCH_SELECT` + test.
-  Hiện mọi kho active (kể cả loại `WAREHOUSE`) đều là điểm nhận sách vì luồng đặt trước cho chọn mọi kho active; nếu nghiệp vụ
-  muốn chỉ `BRANCH` mới là nơi nhận sách thì phải đổi cả luồng đặt trước, không chỉ trang công khai.
+- **Rule điểm nhận sách chưa áp ở backend đặt trước**: web công khai chỉ đưa chi nhánh `BRANCH`/`LIBRARY`, nhưng
+  `POST /my/reservations` (borrow-service → inventory `reserveFromBorrow`) vẫn nhận mọi `warehouse_id` active, và màn
+  "Tìm sách bằng ảnh bìa" trong cổng bạn đọc (`/customer/scan-cover`) dựng lựa chọn kho từ `locations` của catalog có xác thực
+  (chưa lọc loại kho). Nhân viên đặt hộ ở trang quản lý cũng dùng mọi kho. Nếu nghiệp vụ muốn chặn cứng, thêm kiểm tra
+  `PUBLIC_PICKUP_WAREHOUSE_TYPES` cho kênh `CUSTOMER` ở `reserveFromBorrow` và lọc `locations` ở scan-cover.
 - **Gói thẻ — dữ liệu còn thiếu**: `membership_plans` không có phí/giá và thời hạn riêng từng gói (thẻ cấp khi đăng ký có hạn
   `DEFAULT_MEMBERSHIP_DURATION_DAYS` = 365 ngày); đổi gói chỉ do nhân viên làm (`POST /borrow/customers/:id/membership/renew`).
   Mô tả gói trong seed demo đang là tiếng Việt không dấu — nên sửa dữ liệu ở trang quản lý gói.

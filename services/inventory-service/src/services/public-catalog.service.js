@@ -6,7 +6,7 @@
 // whitelist — a new column on books/book_variants never reaches the public API
 // unless it is added below on purpose.
 
-const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
+const { PUBLIC_PICKUP_WAREHOUSE_TYPES, RECEIVING_LOCATION_TYPES } = require('../utils/constants');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
 const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
@@ -51,7 +51,8 @@ const PUBLIC_BOOK_SELECT = {
           available_qty: true,
           on_hand_qty: true,
           locations: { select: { location_type: true } },
-          warehouses: { select: { name: true, is_active: true } },
+          // warehouse_type is read to apply the pickup rule, never returned.
+          warehouses: { select: { name: true, is_active: true, warehouse_type: true } },
         },
       },
     },
@@ -60,12 +61,27 @@ const PUBLIC_BOOK_SELECT = {
 
 const PUBLIC_BOOK_WHERE = { is_active: true };
 
-// Branches (warehouses) as visitors see them: a name and a street address.
-// No code, type, manager, settings, locations or capacity — same whitelist rule
-// as books. Every active warehouse is a pickup point for reservations.
+/** The one rule for "can a reader see this location and pick a book up there". */
+function isPublicPickupWarehouse(warehouse) {
+  return Boolean(
+    warehouse
+    && warehouse.is_active !== false
+    && PUBLIC_PICKUP_TYPES.has(String(warehouse.warehouse_type || '').toUpperCase()),
+  );
+}
+
+// Branches as visitors see them: a name and a street address. Only reader-facing
+// locations (PUBLIC_PICKUP_WAREHOUSE_TYPES) are branches; internal warehouses are
+// never listed and their stock never counts as public availability.
+const PUBLIC_PICKUP_TYPES = new Set(PUBLIC_PICKUP_WAREHOUSE_TYPES);
+const PUBLIC_BRANCH_WHERE = { is_active: true, warehouse_type: { in: PUBLIC_PICKUP_WAREHOUSE_TYPES } };
+// type/is_active are selected to re-check the rule; toPublicBranch drops them,
+// as it drops code, manager, settings, locations and capacity (never selected).
 const PUBLIC_BRANCH_SELECT = {
   id: true,
   name: true,
+  warehouse_type: true,
+  is_active: true,
   address_line1: true,
   address_line2: true,
   ward: true,
@@ -97,14 +113,16 @@ function readMetadataString(metadata, key) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-/** Per-variant shelf stock grouped by branch. Receiving/staging stock is not
+/** Per-variant shelf stock grouped by public branch. Stock in internal
+ *  warehouses is skipped entirely — a reader can't pick it up, so it is neither
+ *  available nor "incoming". Receiving/staging stock at a branch is not
  *  reservable yet, so it only feeds the "đang nhập kho" status. */
 function summarizeVariantStock(variant) {
   const branches = new Map();
   let available = 0;
   let incoming = 0;
   for (const stock of variant.stock_balances || []) {
-    if (stock.warehouses && stock.warehouses.is_active === false) continue;
+    if (!isPublicPickupWarehouse(stock.warehouses)) continue;
     if (RECEIVING_LOCATION_TYPES.includes(stock.locations?.location_type)) {
       incoming += Math.max(0, stock.on_hand_qty || 0);
       continue;
@@ -180,7 +198,7 @@ function branchHoldings(book) {
   for (const variant of book.book_variants || []) {
     if (variant.is_borrowable === false) continue;
     for (const stock of variant.stock_balances || []) {
-      if (stock.warehouses && stock.warehouses.is_active === false) continue;
+      if (!isPublicPickupWarehouse(stock.warehouses)) continue;
       if (RECEIVING_LOCATION_TYPES.includes(stock.locations?.location_type)) continue;
       if ((stock.on_hand_qty || 0) > 0 || (stock.available_qty || 0) > 0) held.add(stock.warehouse_id);
     }
@@ -468,8 +486,9 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
     return { books: rows.map(toPublicBook), heldAt: new Map(rows.map((row) => [row.id, branchHoldings(row)])) };
   }, SNAPSHOT_TTL_MS);
   const getBranches = createCachedLoader(async () => {
-    const rows = await prisma.warehouses.findMany({ where: { is_active: true }, select: PUBLIC_BRANCH_SELECT, orderBy: { name: 'asc' } });
-    return rows.map(toPublicBranch);
+    const rows = await prisma.warehouses.findMany({ where: PUBLIC_BRANCH_WHERE, select: PUBLIC_BRANCH_SELECT, orderBy: { name: 'asc' } });
+    // The query already filters; checking again keeps the rule in one function.
+    return rows.filter(isPublicPickupWarehouse).map(toPublicBranch);
   }, SNAPSHOT_TTL_MS);
 
   async function getSnapshot() {
@@ -525,7 +544,9 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
 module.exports = {
   PUBLIC_BOOK_SELECT,
   PUBLIC_BRANCH_SELECT,
+  PUBLIC_BRANCH_WHERE,
   isPublishable,
+  isPublicPickupWarehouse,
   branchHoldings,
   buildBranchDetail,
   buildBranchList,

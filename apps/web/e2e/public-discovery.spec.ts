@@ -123,6 +123,9 @@ test.describe('Branches (anonymous)', () => {
     await page.getByRole('navigation', { name: 'Điều hướng chính' }).getByRole('link', { name: 'Chi nhánh' }).click();
     await expect(page).toHaveURL('/branches');
     await expect(page.getByRole('heading', { level: 1, name: 'Tìm chi nhánh SmartBook gần bạn' })).toBeVisible();
+    // The page lists exactly what the API calls branches (internal warehouses are filtered server-side).
+    const listed = (await (await request.get(`${GATEWAY}/public/catalog/branches`)).json()).data as BranchSummary[];
+    await expect(page.getByRole('list', { name: 'Chi nhánh' }).getByRole('article')).toHaveCount(listed.length);
 
     await page.getByRole('link', { name: `Xem chi tiết ${branch.name}` }).click();
     await expect(page).toHaveURL(`/branches/${branch.id}`);
@@ -213,6 +216,16 @@ test.describe('Public API security', () => {
       expect(branchesText).not.toContain(field);
     }
     const branchList = JSON.parse(branchesText).data as BranchSummary[];
+
+    // One pickup rule everywhere: every pickup branch and branch facet the catalog
+    // offers is a listed public branch, so an internal warehouse can't leak through
+    // book availability even if it never shows up on /branches.
+    const publicBranchIds = new Set(branchList.map((item) => item.id));
+    const catalog = await (await request.get(`${GATEWAY}/public/catalog/books`, { params: { pageSize: '48' } })).json();
+    for (const facet of catalog.facets.branches as Array<{ id: string }>) expect(publicBranchIds.has(facet.id)).toBe(true);
+    for (const item of catalog.data as Array<{ pickup_branches: Array<{ warehouse_id: string }> }>) {
+      for (const pickup of item.pickup_branches) expect(publicBranchIds.has(pickup.warehouse_id)).toBe(true);
+    }
     if (branchList.length) {
       const branchDetail = await request.get(`${GATEWAY}/public/catalog/branches/${branchList[0].id}`);
       expect(branchDetail.status()).toBe(200);

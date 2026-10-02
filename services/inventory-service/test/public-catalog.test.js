@@ -3,10 +3,12 @@ const assert = require('node:assert/strict');
 const {
   PUBLIC_BOOK_SELECT,
   PUBLIC_BRANCH_SELECT,
+  PUBLIC_BRANCH_WHERE,
   branchHoldings,
   buildHome,
   createCachedLoader,
   createPublicCatalog,
+  isPublicPickupWarehouse,
   isPublishable,
   parseCatalogQuery,
   searchCatalog,
@@ -16,6 +18,7 @@ const {
   withSignals,
 } = require('../src/services/public-catalog.service');
 const publicCatalogRoutes = require('../src/routes/public-catalog.routes');
+const { PUBLIC_PICKUP_WAREHOUSE_TYPES } = require('../src/utils/constants');
 
 function makeBook(overrides = {}) {
   return {
@@ -46,9 +49,9 @@ function makeBook(overrides = {}) {
       sku: 'SKU-001',
       internal_barcode: 'INT-001',
       stock_balances: [
-        { warehouse_id: 'wh-1', available_qty: 3, on_hand_qty: 3, locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'A-01-02' }, warehouses: { name: 'Chi nhánh Q1', is_active: true } },
-        { warehouse_id: 'wh-2', available_qty: 1, on_hand_qty: 1, locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'B-09' }, warehouses: { name: 'Chi nhánh Q3', is_active: true } },
-        { warehouse_id: 'wh-1', available_qty: 0, on_hand_qty: 5, locations: { location_type: 'RECEIVING', location_code: 'RCV' }, warehouses: { name: 'Chi nhánh Q1', is_active: true } },
+        { warehouse_id: 'wh-1', available_qty: 3, on_hand_qty: 3, locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'A-01-02' }, warehouses: { name: 'Chi nhánh Q1', is_active: true, warehouse_type: 'BRANCH' } },
+        { warehouse_id: 'wh-2', available_qty: 1, on_hand_qty: 1, locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'B-09' }, warehouses: { name: 'Chi nhánh Q3', is_active: true, warehouse_type: 'BRANCH' } },
+        { warehouse_id: 'wh-1', available_qty: 0, on_hand_qty: 5, locations: { location_type: 'RECEIVING', location_code: 'RCV' }, warehouses: { name: 'Chi nhánh Q1', is_active: true, warehouse_type: 'BRANCH' } },
       ],
     }],
     ...overrides,
@@ -114,7 +117,7 @@ test('non-borrowable editions and inactive branches do not count as available', 
   const book = toPublicBook(makeBook({
     book_variants: [
       { ...base, is_borrowable: false },
-      { ...base, id: 'variant-2', stock_balances: [{ ...base.stock_balances[0], warehouses: { name: 'Đóng cửa', is_active: false } }] },
+      { ...base, id: 'variant-2', stock_balances: [{ ...base.stock_balances[0], warehouses: { name: 'Đóng cửa', is_active: false, warehouse_type: 'BRANCH' } }] },
     ],
   }));
   assert.equal(book.available_quantity, 0);
@@ -255,21 +258,32 @@ test('available_now lists only reservable books, most borrowed first', () => {
 const WH_Q1 = 'aaaaaaaa-0000-4000-8000-000000000001';
 const WH_Q3 = 'aaaaaaaa-0000-4000-8000-000000000003';
 const WH_CLOSED = 'aaaaaaaa-0000-4000-8000-000000000009';
+const WH_LIBRARY = 'aaaaaaaa-0000-4000-8000-000000000005';
+const WH_CENTRAL = 'aaaaaaaa-0000-4000-8000-000000000007';
+const WH_STORE = 'aaaaaaaa-0000-4000-8000-000000000008';
 
 const WAREHOUSE_ROWS = [
   // Columns a careless select could pass through; the public shape must drop them.
   { id: WH_Q1, code: 'BR-HCM-01', warehouse_type: 'BRANCH', manager_user_id: 'staff-1', name: 'Chi nhánh Quận 1', address_line1: '78 Lê Duẩn', address_line2: null, ward: 'Bến Nghé', district: 'Quận 1', province: 'TP. Hồ Chí Minh', is_active: true },
   { id: WH_Q3, code: 'BR-HCM-02', warehouse_type: 'BRANCH', manager_user_id: 'staff-2', name: 'Chi nhánh Quận 3', address_line1: '  ', address_line2: null, ward: null, district: null, province: null, is_active: true },
   { id: WH_CLOSED, code: 'BR-OLD', warehouse_type: 'BRANCH', manager_user_id: null, name: 'Chi nhánh đã đóng', address_line1: '1 Cũ', is_active: false },
+  { id: WH_LIBRARY, code: 'LIB-01', warehouse_type: 'LIBRARY', manager_user_id: null, name: 'Thư viện Trung tâm', address_line1: '1 Thư Viện', is_active: true },
+  // Internal, active and holding the most stock: must never become public.
+  { id: WH_CENTRAL, code: 'WH-HCM-01', warehouse_type: 'WAREHOUSE', manager_user_id: 'staff-9', name: 'Kho HCM Chinh', address_line1: '123 Nguyễn Huệ', is_active: true },
+  { id: WH_STORE, code: 'ST-01', warehouse_type: 'STORE', manager_user_id: null, name: 'Cửa hàng Q5', address_line1: '5 Trần Hưng Đạo', is_active: true },
 ];
 
+const WAREHOUSE_BY_ID = new Map(WAREHOUSE_ROWS.map((row) => [row.id, row]));
+
+/** A stock_balances row as PUBLIC_BOOK_SELECT reads it, joined to its warehouse. */
 function shelf(warehouseId, available, onHand = available) {
+  const warehouse = WAREHOUSE_BY_ID.get(warehouseId);
   return {
     warehouse_id: warehouseId,
     available_qty: available,
     on_hand_qty: onHand,
     locations: { location_type: 'SHELF_COMPARTMENT', location_code: 'A-01' },
-    warehouses: { name: warehouseId === WH_Q1 ? 'Chi nhánh Quận 1' : 'Chi nhánh Quận 3', is_active: true },
+    warehouses: { name: warehouse.name, is_active: warehouse.is_active, warehouse_type: warehouse.warehouse_type },
   };
 }
 
@@ -282,6 +296,10 @@ function branchFixtureRows() {
     makeBook({ id: '22222222-2222-4222-8222-222222222222', title: 'Sách Q3 đang được mượn', created_at: new Date('2026-06-01T00:00:00Z'), book_variants: [{ ...variant, stock_balances: [shelf(WH_Q3, 0, 1)] }] }),
     // Only in Q1's receiving area: not on any shelf yet.
     makeBook({ id: '33333333-3333-4333-8333-333333333333', title: 'Sách đang nhập kho', book_variants: [{ ...variant, stock_balances: [{ ...shelf(WH_Q1, 0, 4), locations: { location_type: 'RECEIVING' } }] }] }),
+    // Only in the central warehouse (shelf + receiving) and a store: nothing a reader can pick up.
+    makeBook({ id: '44444444-4444-4444-8444-444444444444', title: 'Sách chỉ có ở kho tổng', book_variants: [{ ...variant, stock_balances: [shelf(WH_CENTRAL, 100), shelf(WH_STORE, 7), { ...shelf(WH_CENTRAL, 0, 30), locations: { location_type: 'RECEIVING' } }] }] }),
+    // Central warehouse 10 + library 2: only the library's 2 copies are public.
+    makeBook({ id: '55555555-5555-4555-8555-555555555555', title: 'Sách ở thư viện và kho tổng', book_variants: [{ ...variant, stock_balances: [shelf(WH_CENTRAL, 10), shelf(WH_LIBRARY, 2)] }] }),
   ];
 }
 
@@ -292,7 +310,8 @@ function branchCatalog(rows = branchFixtureRows()) {
     warehouses: {
       findMany: async (args) => {
         calls.warehouses.push(args);
-        return WAREHOUSE_ROWS.filter((row) => !args.where?.is_active || row.is_active);
+        const types = args.where?.warehouse_type?.in;
+        return WAREHOUSE_ROWS.filter((row) => (!args.where?.is_active || row.is_active) && (!types || types.includes(row.warehouse_type)));
       },
     },
   };
@@ -301,8 +320,93 @@ function branchCatalog(rows = branchFixtureRows()) {
 
 const FORBIDDEN_BRANCH_KEYS = ['code', 'warehouse_type', 'manager_user_id', 'is_active', 'locations', 'location_code', 'location_id', 'on_hand_qty', 'reserved_qty', 'capacity', 'warehouse_settings', 'stock_movements'];
 
-test('branch select only asks for the name and address', () => {
-  assert.deepEqual(Object.keys(PUBLIC_BRANCH_SELECT).sort(), ['address_line1', 'address_line2', 'district', 'id', 'name', 'province', 'ward']);
+test('branch select only asks for name, address and the fields the pickup rule needs', () => {
+  assert.deepEqual(Object.keys(PUBLIC_BRANCH_SELECT).sort(), ['address_line1', 'address_line2', 'district', 'id', 'is_active', 'name', 'province', 'ward', 'warehouse_type']);
+  for (const key of ['code', 'manager_user_id', 'warehouse_settings', 'locations', 'capacity']) assert.equal(key in PUBLIC_BRANCH_SELECT, false);
+});
+
+test('pickup rule: active BRANCH and LIBRARY only; WAREHOUSE, STORE, inactive or untyped never', () => {
+  assert.deepEqual([...PUBLIC_PICKUP_WAREHOUSE_TYPES].sort(), ['BRANCH', 'LIBRARY']);
+  assert.equal(isPublicPickupWarehouse({ warehouse_type: 'BRANCH', is_active: true }), true);
+  assert.equal(isPublicPickupWarehouse({ warehouse_type: 'library', is_active: true }), true);
+  assert.equal(isPublicPickupWarehouse({ warehouse_type: 'WAREHOUSE', is_active: true }), false);
+  assert.equal(isPublicPickupWarehouse({ warehouse_type: 'STORE', is_active: true }), false);
+  assert.equal(isPublicPickupWarehouse({ warehouse_type: 'BRANCH', is_active: false }), false);
+  assert.equal(isPublicPickupWarehouse({ name: 'no type', is_active: true }), false);
+  assert.equal(isPublicPickupWarehouse(null), false);
+  // The database query filters on the same constant.
+  assert.deepEqual(PUBLIC_BRANCH_WHERE, { is_active: true, warehouse_type: { in: PUBLIC_PICKUP_WAREHOUSE_TYPES } });
+});
+
+test('internal warehouse stock is never public availability (WAREHOUSE 10 + BRANCH 0 / BRANCH 2)', () => {
+  const variant = makeBook().book_variants[0];
+  const centralOnly = toPublicBook(makeBook({ book_variants: [{ ...variant, stock_balances: [shelf(WH_CENTRAL, 10), shelf(WH_Q1, 0)] }] }));
+  assert.equal(centralOnly.available_quantity, 0);
+  assert.equal(centralOnly.reservable, false);
+  assert.equal(centralOnly.variant_id, null);
+  assert.deepEqual(centralOnly.pickup_branches, []);
+  assert.equal(centralOnly.availability_status, 'UNAVAILABLE');
+
+  const mixed = toPublicBook(makeBook({ book_variants: [{ ...variant, stock_balances: [shelf(WH_CENTRAL, 10), shelf(WH_Q1, 2)] }] }));
+  assert.equal(mixed.available_quantity, 2);
+  assert.equal(mixed.reservable, true);
+  assert.deepEqual(mixed.pickup_branches, [{ warehouse_id: WH_Q1, warehouse_name: 'Chi nhánh Quận 1', available_quantity: 2 }]);
+});
+
+test('receiving stock only reads as "incoming" when it is at a public branch', () => {
+  const variant = makeBook().book_variants[0];
+  const receiving = (warehouseId) => ({ ...shelf(warehouseId, 0, 6), locations: { location_type: 'RECEIVING' } });
+  assert.equal(toPublicBook(makeBook({ book_variants: [{ ...variant, stock_balances: [receiving(WH_CENTRAL)] }] })).availability_status, 'UNAVAILABLE');
+  assert.equal(toPublicBook(makeBook({ book_variants: [{ ...variant, stock_balances: [receiving(WH_Q1)] }] })).availability_status, 'INCOMING');
+});
+
+test('a WAREHOUSE with 100 copies is invisible everywhere on the public catalog', async () => {
+  const { catalog } = branchCatalog();
+  const branches = await catalog.branches();
+  assert.deepEqual(branches.map((b) => b.name).sort(), ['Chi nhánh Quận 1', 'Chi nhánh Quận 3', 'Thư viện Trung tâm']);
+
+  const list = await catalog.list({});
+  const centralOnly = list.data.find((b) => b.title === 'Sách chỉ có ở kho tổng');
+  assert.equal(centralOnly.reservable, false);
+  assert.equal(centralOnly.available_quantity, 0);
+  assert.deepEqual(centralOnly.pickup_branches, []);
+  assert.deepEqual(list.facets.branches.map((b) => b.id).sort(), [WH_Q1, WH_Q3, WH_LIBRARY].sort());
+  const json = JSON.stringify([branches, list]);
+  for (const hidden of [WH_CENTRAL, WH_STORE, 'Kho HCM Chinh', 'Cửa hàng Q5', 'warehouse_type', 'WAREHOUSE']) {
+    assert.equal(json.includes(hidden), false, `public JSON mentions ${hidden}`);
+  }
+
+  const home = await catalog.home();
+  assert.equal(home.available_now.some((b) => b.title === 'Sách chỉ có ở kho tổng'), false);
+
+  const filtered = await catalog.list({ branch: WH_CENTRAL });
+  assert.deepEqual(filtered.data, []);
+  assert.equal(filtered.meta.total, 0);
+  assert.equal(filtered.branch, null);
+  assert.equal((await catalog.list({ branch: WH_STORE })).meta.total, 0);
+  assert.equal(await catalog.branch(WH_CENTRAL), null);
+  assert.equal(await catalog.branch(WH_STORE), null);
+});
+
+test('an active LIBRARY is a pickup branch like a BRANCH: listed, filterable, counted', async () => {
+  const { catalog } = branchCatalog();
+  const library = await catalog.branch(WH_LIBRARY);
+  assert.deepEqual(library.stats, { title_count: 1, available_title_count: 1, available_copies: 2 });
+  assert.deepEqual(library.available_books.map((b) => b.title), ['Sách ở thư viện và kho tổng']);
+  const atLibrary = await catalog.list({ branch: WH_LIBRARY, availability: 'available' });
+  assert.deepEqual(atLibrary.data.map((b) => b.title), ['Sách ở thư viện và kho tổng']);
+  assert.equal(atLibrary.data[0].available_quantity, 2);
+  assert.deepEqual(atLibrary.branch, { id: WH_LIBRARY, name: 'Thư viện Trung tâm' });
+});
+
+test('the branch list re-checks the rule even if the query returned an internal warehouse', async () => {
+  const prisma = {
+    books: { findMany: async () => [], findFirst: async () => null },
+    // A query that ignores its where clause.
+    warehouses: { findMany: async () => WAREHOUSE_ROWS },
+  };
+  const catalog = createPublicCatalog(prisma, { fetchSignals: async () => ({ windows: null, byBook: new Map() }) });
+  assert.deepEqual((await catalog.branches()).map((b) => b.id).sort(), [WH_Q1, WH_Q3, WH_LIBRARY].sort());
 });
 
 test('public branch shape joins the address and drops internal columns', () => {
@@ -316,7 +420,7 @@ test('branch holdings count shelf copies (lent out too) but not receiving, close
   const held = branchHoldings(makeBook({
     book_variants: [
       { ...variant, stock_balances: [shelf(WH_Q1, 0, 2), { ...shelf(WH_Q3, 0, 3), locations: { location_type: 'STAGING' } }] },
-      { ...variant, id: 'v-closed', stock_balances: [{ ...shelf(WH_CLOSED, 5), warehouses: { name: 'x', is_active: false } }] },
+      { ...variant, id: 'v-closed', stock_balances: [{ ...shelf(WH_CLOSED, 5), warehouses: { name: 'x', is_active: false, warehouse_type: 'BRANCH' } }] },
       { ...variant, id: 'v-reference', is_borrowable: false, stock_balances: [shelf(WH_Q3, 5)] },
     ],
   }));
@@ -326,8 +430,8 @@ test('branch holdings count shelf copies (lent out too) but not receiving, close
 test('anonymous branch list: only active branches, real counts, no internal fields', async () => {
   const { catalog, calls } = branchCatalog();
   const branches = await catalog.branches();
-  assert.deepEqual(calls.warehouses[0].where, { is_active: true });
-  assert.deepEqual(branches.map((b) => b.name), ['Chi nhánh Quận 1', 'Chi nhánh Quận 3']);
+  assert.deepEqual(calls.warehouses[0].where, { is_active: true, warehouse_type: { in: ['BRANCH', 'LIBRARY'] } });
+  assert.deepEqual(branches.map((b) => b.name), ['Chi nhánh Quận 1', 'Chi nhánh Quận 3', 'Thư viện Trung tâm']);
   assert.deepEqual(branches[0].stats, { title_count: 1, available_title_count: 1, available_copies: 2 });
   assert.deepEqual(branches[1].stats, { title_count: 1, available_title_count: 0, available_copies: 0 });
   const keys = collectKeys(branches);
@@ -365,16 +469,20 @@ test('catalog branch filter: held vs reservable there, combined with other filte
   // Receiving-only stock never puts a book "at" the branch.
   assert.equal((await catalog.list({ branch: WH_Q1 })).data.some((b) => b.title === 'Sách đang nhập kho'), false);
   // The facet only offers branches that hold something, with their title counts.
-  assert.deepEqual(availableQ1.facets.branches, [{ id: WH_Q1, name: 'Chi nhánh Quận 1', count: 1 }, { id: WH_Q3, name: 'Chi nhánh Quận 3', count: 1 }]);
+  assert.deepEqual(availableQ1.facets.branches, [
+    { id: WH_Q1, name: 'Chi nhánh Quận 1', count: 1 },
+    { id: WH_Q3, name: 'Chi nhánh Quận 3', count: 1 },
+    { id: WH_LIBRARY, name: 'Thư viện Trung tâm', count: 1 },
+  ]);
 
   const all = await catalog.list({});
-  assert.equal(all.meta.total, 3);
+  assert.equal(all.meta.total, 5);
   assert.equal(all.branch, null);
 });
 
 test('invalid or closed branch filter returns an empty page instead of the whole catalog', async () => {
   const { catalog } = branchCatalog();
-  for (const branch of ['not-a-uuid', WH_CLOSED, 'bbbbbbbb-0000-4000-8000-000000000000', "'; DROP TABLE books; --"]) {
+  for (const branch of ['not-a-uuid', WH_CLOSED, WH_CENTRAL, 'bbbbbbbb-0000-4000-8000-000000000000', "'; DROP TABLE books; --"]) {
     const result = await catalog.list({ branch });
     assert.equal(result.meta.total, 0, branch);
     assert.deepEqual(result.data, []);
