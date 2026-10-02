@@ -32,7 +32,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 |---|---|---|
 | GET | /health | Kiểm tra trạng thái service |
 | GET | /recommendations | Gợi ý đọc sách |
-| POST | /recommendations | Gợi ý đọc sách theo payload |
+| POST | /recommendations | Gợi ý đọc sách cá nhân hoá (V1/V2, xem mục dưới) |
 | POST | /lookup-book-by-isbn | Tra cứu metadata theo ISBN |
 | POST | /isbn-intelligence | Tra cứu ISBN có bằng chứng nguồn, confidence theo field và conflict |
 | POST | /generate-book-summary | Tạo tóm tắt sách |
@@ -387,3 +387,22 @@ python main.py
 - README root: ../../README.md
 - Docker runbook: ../RUN_WITH_DOCKER.md
 - Kiến trúc tổng quan: ../PROJECT_OVERVIEW.md
+
+## Gợi ý sách (POST /recommendations)
+
+`RECOMMENDATION_MODEL=v2` (mặc định) dùng `recommendation_v2.py`; `v1` dùng `recommendation.py` cũ (rollback).
+Không có `recommendation_v2_weights.json` hoặc V2 lỗi → tự động dùng V1 (có log).
+
+- **Pipeline V2**: candidate generation (PREFERENCE, COLLABORATIVE, SEMANTIC, POPULAR, TRENDING; hợp nhất + dedupe)
+  → features (preference `log P̂(category|reader)` có Dirichlet smoothing, author, TF-IDF content, item-item CF,
+  popularity, recency, quality có Bayesian shrinkage, availability) → điểm log-linear `Σ w·f/scale`
+  → ràng buộc (loại sách inactive / đã mượn / đã đánh giá / đang trong wishlist / đang đặt trước; hết hàng chỉ bị hạ hạng)
+  → evidence (`breakdown.contributions`, `reason_codes`, `tier`).
+- **Trọng số** không đặt tay: `eval/eval_recommendation_v2.py --write-weights` chọn bằng coordinate search trên cửa sổ
+  validation theo thời gian và ghi `recommendation_v2_weights.json`.
+- **Dữ liệu**: đọc của chính người dùng qua gateway (`/borrow/my/loans|wishlists|reviews|reservations`, `/api/books`) và
+  feed ẩn danh toàn thư viện `GET {BORROW_SERVICE_URL}/internal/recommendation/interactions` (header
+  `x-internal-service-key`; gateway không proxy `/internal`). Model toàn thư viện được cache
+  `RECOMMENDATION_GLOBAL_TTL_SECONDS` (mặc định 600s); dữ liệu cá nhân không cache.
+- **LLM (Qwen)** chỉ viết câu lý do từ `reason_codes`; không chọn sách, không chấm điểm. `score` là vị trí tương đối
+  trong pool của người đọc (không phải xác suất); UI hiển thị `tier` ("Rất phù hợp"/"Phù hợp"/"Khám phá thêm").

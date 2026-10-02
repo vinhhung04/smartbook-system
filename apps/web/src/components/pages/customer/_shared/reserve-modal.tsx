@@ -1,13 +1,23 @@
 import { useMemo, useRef, useState } from 'react';
 import { X, MapPin, CheckCircle, Loader2 } from 'lucide-react';
 import { CustomerCatalogBook } from '@/services/customer-catalog';
+import type { PickupBranch } from '@/services/public-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 
+/** The public catalog sends per-branch availability already grouped
+ *  (`pickup_branches`); the authenticated catalog sends raw `locations`. */
+interface ReservableBook {
+  title: string;
+  variant_id?: string | null;
+  pickup_branches?: PickupBranch[];
+  locations?: CustomerCatalogBook['locations'];
+}
+
 interface ReserveModalProps {
-  book: CustomerCatalogBook | null;
+  book: ReservableBook | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -25,6 +35,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   useDialogA11y(Boolean(book), onClose, containerRef);
 
   const availableWarehouses = useMemo<WarehouseOption[]>(() => {
+    if (book?.pickup_branches) return book.pickup_branches.filter((branch) => branch.available_quantity > 0);
     if (!book?.locations) return [];
     const map = new Map<string, WarehouseOption>();
     for (const loc of book.locations) {
@@ -43,7 +54,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
       }
     }
     return Array.from(map.values()).sort((a, b) => b.available_quantity - a.available_quantity);
-  }, [book?.locations]);
+  }, [book?.pickup_branches, book?.locations]);
 
   const autoSelected = availableWarehouses.length === 1 ? availableWarehouses[0].warehouse_id : '';
   const effectiveWarehouseId = selectedWarehouseId || autoSelected;

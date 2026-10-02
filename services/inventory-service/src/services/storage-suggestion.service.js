@@ -1,37 +1,28 @@
 /**
  * Storage Suggestion Service
  *
- * Rule-based scoring algorithm + AI explanation + Redis cache
- * to suggest optimal storage locations for books.
+ * Deterministic, rule-based scoring + AI (Qwen) explanation + Redis cache to
+ * suggest optimal storage locations for books. Capacity and location-type
+ * eligibility are delegated to location-capacity.service.js, the single
+ * source of truth shared with receiving-putaway.controller.js — this file
+ * must never compute those independently.
  *
- * Scoring Rules:
- * 1. Same variant already at location: +40 points
- * 2. Same book, different variant: +30 points
- * 3. Same category: +20 points
- * 4. Sufficient capacity: +20 points
- * 5. Location active and pickable: +10 points
- * 6. Empty location: +8 points
- * 7. Recent movement history for similar books: +10 points
- *
- * Confidence Levels:
- * - score >= 80: HIGH
- * - score >= 50: MEDIUM
- * - score < 50: LOW
+ * `confidence` (HIGH/MEDIUM/LOW, from `score`) is a heuristic recommendation
+ * strength derived from the weighted feature sum below. It is NOT a
+ * calibrated ML probability and must not be presented to users as one.
  */
 
 const { PrismaClient } = require('@prisma/client');
+const { toInt } = require('../utils/validation');
+const {
+  VALID_SUGGESTION_MODES,
+  getEligibleLocationTypes,
+  isLocationEligibleForMode,
+  getLocationCapacityContext,
+  getLocationCapacityContextBatch,
+} = require('./location-capacity.service');
 
 const prisma = new PrismaClient();
-
-const SCORING = {
-  SAME_VARIANT: 40,
-  SAME_BOOK: 30,
-  SAME_CATEGORY: 20,
-  SUFFICIENT_CAPACITY: 20,
-  ACTIVE_PICKABLE: 10,
-  EMPTY_LOCATION: 8,
-  RECENT_MOVEMENT: 10,
-};
 
 const CONFIDENCE_THRESHOLDS = {
   HIGH: 80,
@@ -41,6 +32,76 @@ const CONFIDENCE_THRESHOLDS = {
 const RECENT_MOVEMENT_DAYS = 90;
 
 const REDIS_CACHE_TTL = 120;
+
+// Reward "fits comfortably" up to ~85% full after adding the incoming quantity;
+// flat beyond that point (overflow can't happen — capacity is a hard constraint
+// before scoring runs at all). Tunable, not a fixed-forever business constant.
+const IDEAL_FILL_RATIO = 0.85;
+
+// Distinct-variant count at which skuMixPenalty reaches its per-mode maximum.
+const SKU_MIX_SOFT_CAP = 5;
+
+// Number of OTHER locations already holding this variant/book before placing
+// it at yet another empty/unrelated location counts as "spreading it further".
+const FRAGMENTATION_THRESHOLD = 3;
+
+// Relative feature weights per mode. Not required to sum to 100 — the score is
+// normalized against each mode's own weight sum, so only the relative balance
+// between features matters.
+const MODE_WEIGHTS = {
+  RECEIVING: {
+    sameVariant: 35,
+    sameBook: 20,
+    categoryAffinity: 15,
+    capacityFit: 15,
+    emptyLocation: 8,
+    movement: 7,
+    skuMixPenaltyMax: 10,
+    fragmentationPenaltyMax: 8,
+  },
+  PUTAWAY: {
+    sameVariant: 35,
+    sameBook: 20,
+    categoryAffinity: 15,
+    capacityFit: 15,
+    emptyLocation: 8,
+    movement: 7,
+    skuMixPenaltyMax: 10,
+    fragmentationPenaltyMax: 8,
+  },
+  // Relocation is about tidying up existing placement, not fast intake:
+  // prioritize consolidation (sameVariant/sameBook) and capacity utilization,
+  // penalize fragmentation/SKU-mixing harder, de-emphasize "empty"/"recent
+  // movement" (those matter for receiving, not for cleanup).
+  RELOCATION: {
+    sameVariant: 20,
+    sameBook: 12,
+    categoryAffinity: 8,
+    capacityFit: 25,
+    emptyLocation: 2,
+    movement: 3,
+    skuMixPenaltyMax: 20,
+    fragmentationPenaltyMax: 20,
+  },
+  // No confirmed real caller uses mode=AI_IMPORT anywhere in the codebase today
+  // (grepped services + apps/web). Falls back to the RECEIVING policy rather
+  // than inventing business rules for an undefined flow.
+  // TODO: define a dedicated policy once a real AI_IMPORT destination flow exists.
+  AI_IMPORT: {
+    sameVariant: 35,
+    sameBook: 20,
+    categoryAffinity: 15,
+    capacityFit: 15,
+    emptyLocation: 8,
+    movement: 7,
+    skuMixPenaltyMax: 10,
+    fragmentationPenaltyMax: 8,
+  },
+};
+
+function getModeWeights(mode) {
+  return MODE_WEIGHTS[mode] || MODE_WEIGHTS.RECEIVING;
+}
 
 let redisClient = null;
 let redisInitialized = false;
@@ -93,8 +154,10 @@ async function invalidateCache(warehouseId) {
   }
 }
 
-function getCacheKey(warehouseId, variantId, bookId, quantity) {
-  return `storage_suggestion:${warehouseId}:${variantId || bookId}:${quantity}`;
+// mode is part of the key because different modes now use different scoring
+// policies (MODE_WEIGHTS) — two modes must never share a cached result.
+function getCacheKey(warehouseId, variantId, quantity, mode) {
+  return `storage_suggestion:${warehouseId}:${variantId}:${quantity}:${mode}`;
 }
 
 function getConfidence(score) {
@@ -103,20 +166,9 @@ function getConfidence(score) {
   return 'LOW';
 }
 
-function calculateAvailableCapacity(location) {
-  if (!location.capacity_qty) return Infinity;
-  return location.capacity_qty - (location.occupied_qty || 0);
-}
-
-async function getBookInfo(bookId, variantId) {
-  const variantWhere = variantId ? { id: variantId } : {};
-  const bookWhere = bookId ? { id: bookId } : {};
-
-  const variant = await prisma.book_variants.findFirst({
-    where: {
-      ...variantWhere,
-      ...(bookId ? { book_id: bookId } : {}),
-    },
+async function getBookInfo(variantId) {
+  const variant = await prisma.book_variants.findUnique({
+    where: { id: variantId },
     include: {
       books: {
         include: {
@@ -207,42 +259,43 @@ async function getBookStockInWarehouse(warehouseId, bookId) {
   });
 }
 
-async function getLocationsWithSameCategory(warehouseId, categoryIds) {
-  if (!categoryIds || categoryIds.length === 0) return [];
+// Per-location on_hand_qty of stock whose book shares at least one category
+// with the incoming book. Used as the numerator of a ratio (against total
+// occupancy at that location), not a flat "has ≥1 match" boolean.
+async function getCategoryStockByLocation(warehouseId, categoryIds) {
+  const map = new Map();
+  if (!categoryIds || categoryIds.length === 0) return map;
 
-  const variantIds = await prisma.book_categories.findMany({
+  const categoryBooks = await prisma.book_categories.findMany({
     where: { category_id: { in: categoryIds } },
     select: { book_id: true },
   });
 
-  const uniqueBookIds = [...new Set(variantIds.map((v) => v.book_id))];
+  const uniqueBookIds = [...new Set(categoryBooks.map((v) => v.book_id))];
+  if (uniqueBookIds.length === 0) return map;
 
   const variants = await prisma.book_variants.findMany({
     where: { book_id: { in: uniqueBookIds } },
     select: { id: true },
   });
 
-  const variantIds2 = variants.map((v) => v.id);
+  const variantIds = variants.map((v) => v.id);
+  if (variantIds.length === 0) return map;
 
   const balances = await prisma.stock_balances.findMany({
     where: {
       warehouse_id: warehouseId,
-      variant_id: { in: variantIds2 },
+      variant_id: { in: variantIds },
       on_hand_qty: { gt: 0 },
     },
-    select: { location_id: true },
+    select: { location_id: true, on_hand_qty: true },
   });
 
-  const locationIds = [...new Set(balances.map((b) => b.location_id))];
-
-  if (locationIds.length === 0) return [];
-
-  return prisma.locations.findMany({
-    where: {
-      id: { in: locationIds },
-      is_active: true,
-    },
+  balances.forEach((b) => {
+    map.set(b.location_id, (map.get(b.location_id) || 0) + b.on_hand_qty);
   });
+
+  return map;
 }
 
 async function getRecentMovements(warehouseId, bookId, categoryIds, days = RECENT_MOVEMENT_DAYS) {
@@ -290,12 +343,12 @@ async function getRecentMovements(warehouseId, bookId, categoryIds, days = RECEN
   return [...locationIds];
 }
 
-async function getCandidateLocations(warehouseId) {
+async function getCandidateLocations(warehouseId, mode) {
   return prisma.locations.findMany({
     where: {
       warehouse_id: warehouseId,
       is_active: true,
-      location_type: { in: ['SHELF_COMPARTMENT', 'BIN'] },
+      location_type: { in: getEligibleLocationTypes(mode) },
     },
     include: {
       stock_balances: {
@@ -308,8 +361,13 @@ async function getCandidateLocations(warehouseId) {
   });
 }
 
+/**
+ * Pure scoring function — no DB access. `location` must already carry
+ * pre-computed capacity fields (effectiveCapacity/occupiedQty/remainingCapacity)
+ * and `distinctSkuCount`; `context` carries the request + pre-fetched
+ * same-variant/same-book/category/movement location data.
+ */
 function calculateLocationScore(location, context) {
-  let score = 0;
   const reasons = [];
   const warnings = [];
 
@@ -317,58 +375,96 @@ function calculateLocationScore(location, context) {
     return { score: 0, reasons, warnings, isValid: false };
   }
 
-  if (location.capacity_qty && location.available <= 0) {
-    warnings.push('Vị trí đã hết sức chứa');
+  // Defense in depth: getCandidateLocations already filters by eligible type,
+  // but scoring must never silently accept a location sourced another way.
+  if (!isLocationEligibleForMode(location, context.mode)) {
     return { score: 0, reasons, warnings, isValid: false };
   }
 
-  if (context.quantity > location.available) {
-    warnings.push(`Số lượng nhập (${context.quantity}) vượt sức chứa khả dụng (${location.available})`);
+  if (context.quantity > location.remainingCapacity) {
+    warnings.push(`Số lượng nhập (${context.quantity}) vượt sức chứa khả dụng (${location.remainingCapacity})`);
+    return { score: 0, reasons, warnings, isValid: false };
   }
 
-  if (context.sameVariantLocations.includes(location.id)) {
-    score += SCORING.SAME_VARIANT;
-    reasons.push('Vị trí này đã có cùng đầu sách (cùng ISBN/bìa), dễ quản lý tồn kho');
+  const weights = getModeWeights(context.mode);
+  const isSameVariant = context.sameVariantLocations.includes(location.id);
+  const isSameBook = !isSameVariant && context.sameBookLocations.includes(location.id);
+
+  const features = {
+    sameVariant: isSameVariant ? 1 : 0,
+    sameBook: isSameBook ? 1 : 0,
+    categoryAffinity: 0,
+    capacityFit: 0,
+    emptyLocation: location.occupiedQty === 0 ? 1 : 0,
+    movement: context.recentMovementLocations.includes(location.id) ? 1 : 0,
+  };
+
+  if (isSameVariant) {
+    reasons.push('Vị trí này đã có cùng variant (cùng ISBN/edition), dễ gom và quản lý tồn kho');
+  } else if (isSameBook) {
+    reasons.push('Vị trí có cùng tác phẩm/book record nhưng khác variant (khác bìa/năm xuất bản)');
   }
 
-  if (context.sameBookLocations.includes(location.id) && !context.sameVariantLocations.includes(location.id)) {
-    score += SCORING.SAME_BOOK;
-    reasons.push('Vị trí có cùng sách nhưng khác biến thể (khác bìa/năm xuất bản)');
-  }
-
-  if (context.sameCategoryLocations.includes(location.id)) {
-    score += SCORING.SAME_CATEGORY;
+  const categoryQty = context.categoryStockByLocation.get(location.id) || 0;
+  if (location.occupiedQty > 0 && categoryQty > 0) {
+    features.categoryAffinity = categoryQty / location.occupiedQty;
     const catText = context.categoryNames.slice(0, 2).join(', ');
-    reasons.push(`Nằm trong khu vực có nhiều sách cùng thể loại (${catText})`);
+    reasons.push(`${Math.round(features.categoryAffinity * 100)}% tồn kho tại vị trí này cùng thể loại (${catText})`);
   }
 
-  if (location.available >= context.quantity) {
-    score += SCORING.SUFFICIENT_CAPACITY;
-    reasons.push('Còn đủ sức chứa cho số lượng nhập');
-  }
+  const postFillRatio = location.effectiveCapacity > 0
+    ? (location.occupiedQty + context.quantity) / location.effectiveCapacity
+    : 0;
+  features.capacityFit = Math.min(postFillRatio / IDEAL_FILL_RATIO, 1);
+  reasons.push(`Còn đủ sức chứa cho số lượng nhập (còn lại ${location.remainingCapacity})`);
 
-  score += SCORING.ACTIVE_PICKABLE;
-  reasons.push('Vị trí đang hoạt động và có thể chọn');
-
-  const totalOccupied = location.stock_balances?.reduce((sum, sb) => sum + sb.on_hand_qty, 0) || 0;
-  const isEmpty = totalOccupied === 0;
-
-  if (isEmpty) {
-    score += SCORING.EMPTY_LOCATION;
+  if (features.emptyLocation) {
     reasons.push('Vị trí trống, sẵn sàng nhận hàng mới');
   }
 
-  if (context.recentMovementLocations.includes(location.id)) {
-    score += SCORING.RECENT_MOVEMENT;
+  if (features.movement) {
     reasons.push('Có lịch sử xuất/nhập gần đây cho cùng loại sách');
   }
 
+  const positiveWeightSum = weights.sameVariant
+    + weights.sameBook
+    + weights.categoryAffinity
+    + weights.capacityFit
+    + weights.emptyLocation
+    + weights.movement;
+
+  const weightedSum = weights.sameVariant * features.sameVariant
+    + weights.sameBook * features.sameBook
+    + weights.categoryAffinity * features.categoryAffinity
+    + weights.capacityFit * features.capacityFit
+    + weights.emptyLocation * features.emptyLocation
+    + weights.movement * features.movement;
+
+  let score = positiveWeightSum > 0 ? (100 * weightedSum) / positiveWeightSum : 0;
+
+  const skuMixRatio = Math.min(location.distinctSkuCount / SKU_MIX_SOFT_CAP, 1);
+  const skuMixPenalty = skuMixRatio * weights.skuMixPenaltyMax;
+  if (skuMixPenalty > 0) {
+    warnings.push('Vị trí đang chứa nhiều đầu sách khác nhau (SKU mix cao)');
+  }
+
+  const existingLocationsForItem = new Set([...context.sameVariantLocations, ...context.sameBookLocations]);
+  const isNewSpreadPoint = !isSameVariant && !isSameBook;
+  const fragmentationPenalty = (isNewSpreadPoint && existingLocationsForItem.size >= FRAGMENTATION_THRESHOLD)
+    ? weights.fragmentationPenaltyMax
+    : 0;
+  if (fragmentationPenalty > 0) {
+    warnings.push('Sách này đã có mặt ở nhiều vị trí khác; chọn vị trí này sẽ làm phân tán tồn kho hơn nữa');
+  }
+
+  score = Math.max(0, Math.min(100, score - skuMixPenalty - fragmentationPenalty));
+
   return {
-    score,
+    score: Math.round(score),
     reasons,
     warnings,
     isValid: true,
-    occupiedQty: totalOccupied,
+    occupiedQty: location.occupiedQty,
   };
 }
 
@@ -414,8 +510,15 @@ async function generateAIExplanation(bookInfo, suggestions, requestId) {
   return null;
 }
 
-async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1, mode = 'RECEIVING', requestId) {
-  const cacheKey = getCacheKey(warehouseId, variantId, bookId, quantity);
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.explain=true] - call the AI paraphrase layer. Callers
+ *   that only need the ranking (e.g. a per-line preview on the putaway receipt)
+ *   pass false, so listing N lines does not trigger N LLM calls. Cached
+ *   separately so an explained request never receives an unexplained result.
+ */
+async function generateSuggestions(warehouseId, variantId, quantity = 1, mode = 'RECEIVING', requestId, { explain = true } = {}) {
+  const cacheKey = `${getCacheKey(warehouseId, variantId, quantity, mode)}${explain ? '' : ':noexplain'}`;
 
   const cached = await getCached(cacheKey);
   if (cached) {
@@ -428,12 +531,12 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
     mode,
     sameVariantLocations: [],
     sameBookLocations: [],
-    sameCategoryLocations: [],
+    categoryStockByLocation: new Map(),
     recentMovementLocations: [],
     categoryNames: [],
   };
 
-  const bookInfo = await getBookInfo(bookId, variantId);
+  const bookInfo = await getBookInfo(variantId);
   if (!bookInfo) {
     return {
       success: false,
@@ -444,31 +547,38 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
 
   context.categoryNames = bookInfo.categoryNames;
 
-  const [variantStock, bookStock, categoryLocations, recentLocations] = await Promise.all([
+  const [variantStock, bookStock, categoryStockByLocation, recentLocations] = await Promise.all([
     getVariantStockInWarehouse(warehouseId, bookInfo.variantId),
-    bookInfo.bookId !== bookInfo.variantId ? getBookStockInWarehouse(warehouseId, bookInfo.bookId) : Promise.resolve([]),
-    getLocationsWithSameCategory(warehouseId, bookInfo.categories),
+    getBookStockInWarehouse(warehouseId, bookInfo.bookId),
+    getCategoryStockByLocation(warehouseId, bookInfo.categories),
     getRecentMovements(warehouseId, bookInfo.bookId, bookInfo.categories),
   ]);
 
   context.sameVariantLocations = variantStock.map((s) => s.location_id);
   context.sameBookLocations = bookStock.map((s) => s.location_id);
-  context.sameCategoryLocations = categoryLocations.map((l) => l.id);
+  context.categoryStockByLocation = categoryStockByLocation;
   context.recentMovementLocations = recentLocations;
 
-  const locations = await getCandidateLocations(warehouseId);
+  const locations = await getCandidateLocations(warehouseId, mode);
+  const capacityContexts = await getLocationCapacityContextBatch(prisma, locations);
 
   const scoredLocations = [];
 
   for (const location of locations) {
-    const availableCapacity = calculateAvailableCapacity(location);
-    const locationWithAvailable = {
+    const capacityContext = capacityContexts.get(location.id);
+    const distinctSkuCount = new Set(
+      (location.stock_balances || [])
+        .filter((sb) => sb.on_hand_qty > 0)
+        .map((sb) => sb.variant_id),
+    ).size;
+
+    const locationForScoring = {
       ...location,
-      available: availableCapacity,
-      occupied_qty: location.stock_balances?.reduce((sum, sb) => sum + sb.on_hand_qty, 0) || 0,
+      ...capacityContext,
+      distinctSkuCount,
     };
 
-    const scoring = calculateLocationScore(locationWithAvailable, context);
+    const scoring = calculateLocationScore(locationForScoring, context);
 
     if (scoring.isValid) {
       scoredLocations.push({
@@ -480,8 +590,8 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
         bin: location.bin,
         score: scoring.score,
         confidence: getConfidence(scoring.score),
-        availableCapacity: availableCapacity,
-        currentOnHand: scoring.occupiedQty,
+        availableCapacity: capacityContext.remainingCapacity,
+        currentOnHand: capacityContext.occupiedQty,
         reasons: scoring.reasons,
         warnings: scoring.warnings,
       });
@@ -495,7 +605,7 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
     ...loc,
   }));
 
-  const aiExplanations = await generateAIExplanation(bookInfo, suggestions, requestId);
+  const aiExplanations = explain ? await generateAIExplanation(bookInfo, suggestions, requestId) : null;
   if (aiExplanations) {
     suggestions = suggestions.map((s, idx) => ({
       ...s,
@@ -526,15 +636,15 @@ async function generateSuggestions(warehouseId, bookId, variantId, quantity = 1,
   return result;
 }
 
-async function getContext(warehouseId, variantId, bookId) {
-  const bookInfo = await getBookInfo(bookId, variantId);
+async function getContext(warehouseId, variantId) {
+  const bookInfo = await getBookInfo(variantId);
   if (!bookInfo) {
     return { success: false, error: 'Không tìm thấy thông tin sách/variant' };
   }
 
   const [variantStock, bookStock, emptyLocations, allActiveLocations] = await Promise.all([
     getVariantStockInWarehouse(warehouseId, bookInfo.variantId),
-    bookInfo.bookId !== bookInfo.variantId ? getBookStockInWarehouse(warehouseId, bookInfo.bookId) : Promise.resolve([]),
+    getBookStockInWarehouse(warehouseId, bookInfo.bookId),
     getEmptyLocations(warehouseId),
     getAllActiveLocations(warehouseId),
   ]);
@@ -616,13 +726,22 @@ async function getAllActiveLocations(warehouseId) {
   });
 }
 
-async function applySuggestion(warehouseId, variantId, locationId, quantity) {
-  const location = await prisma.locations.findUnique({
+async function applySuggestion(warehouseId, variantId, locationId, quantity, mode = 'RECEIVING', client) {
+  const db = client || prisma;
+
+  const parsedQuantity = toInt(quantity);
+  if (!parsedQuantity || parsedQuantity <= 0) {
+    return { success: false, error: 'quantity phải là số nguyên dương' };
+  }
+
+  const location = await db.locations.findUnique({
     where: { id: locationId },
     select: {
       id: true,
       warehouse_id: true,
       is_active: true,
+      is_pickable: true,
+      location_type: true,
       capacity_qty: true,
     },
   });
@@ -639,19 +758,31 @@ async function applySuggestion(warehouseId, variantId, locationId, quantity) {
     return { success: false, error: 'Vị trí không còn hoạt động' };
   }
 
-  const currentStock = await prisma.stock_balances.findUnique({
-    where: {
-      variant_id_location_id: { variant_id: variantId, location_id: locationId },
-    },
-    select: { on_hand_qty: true },
+  if (!isLocationEligibleForMode(location, mode)) {
+    return { success: false, error: `Loại vị trí (${location.location_type}) không phù hợp với nghiệp vụ ${mode}` };
+  }
+
+  if (!location.is_pickable) {
+    return { success: false, error: 'Vị trí không thể chọn (is_pickable = false)' };
+  }
+
+  const variant = await db.book_variants.findUnique({
+    where: { id: variantId },
+    select: { id: true },
   });
 
-  const currentQty = currentStock?.on_hand_qty || 0;
+  if (!variant) {
+    return { success: false, error: 'Không tìm thấy biến thể sách' };
+  }
 
-  if (location.capacity_qty && currentQty + quantity > location.capacity_qty) {
+  // Fresh read at apply time — sums ALL variants currently at the location,
+  // not just this one, and never reuses a value computed at suggestion time.
+  const capacityContext = await getLocationCapacityContext(db, location);
+
+  if (parsedQuantity > capacityContext.remainingCapacity) {
     return {
       success: false,
-      error: `Vượt sức chứa. Sức chứa: ${location.capacity_qty}, hiện tại: ${currentQty}, muốn thêm: ${quantity}`,
+      error: `Vượt sức chứa. Sức chứa khả dụng: ${capacityContext.effectiveCapacity}, hiện tại: ${capacityContext.occupiedQty}, muốn thêm: ${parsedQuantity}`,
     };
   }
 
@@ -664,19 +795,20 @@ async function applySuggestion(warehouseId, variantId, locationId, quantity) {
       warehouseId,
       variantId,
       locationId,
-      quantity,
-      availableCapacity: location.capacity_qty
-        ? location.capacity_qty - currentQty
-        : null,
+      quantity: parsedQuantity,
+      availableCapacity: capacityContext.remainingCapacity,
     },
   };
 }
 
 module.exports = {
+  VALID_SUGGESTION_MODES,
   generateSuggestions,
   getContext,
   applySuggestion,
   getConfidence,
   calculateLocationScore,
   invalidateCache,
+  getCacheKey,
+  getBookInfo,
 };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, BookOpen, Layers3, Warehouse } from "lucide-react";
+import { ArrowDown, ArrowRight, BookOpen, ClipboardList, Layers3, Warehouse } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -19,7 +19,12 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StatusBadge } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AIRecommendationNotice, DecisionSection } from "@/components/ai/decision-card";
+import { hasPermission } from "@/services/http-clients";
+import { staffTaskService } from "@/services/staff-tasks";
+import { userService, type WarehouseStaffOption } from "@/services/user";
 
 function formatQty(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -65,10 +70,10 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] text-foreground font-semibold">{compartment.code}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{formatQty(compartment.occupiedQty)} / {formatQty(compartment.capacityQty)} books</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{formatQty(compartment.occupiedQty)} / {formatQty(compartment.capacityQty)} cuốn</p>
         </div>
         <div className="text-right">
-          <p className="text-[11px] text-muted-foreground">Available</p>
+          <p className="text-[11px] text-muted-foreground">Khả dụng</p>
           <p className="text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(compartment.availableQty)}</p>
         </div>
       </div>
@@ -80,12 +85,12 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
           <thead>
             <tr className="bg-muted/50">
               {[
-                "Book",
-                "Book Code",
+                "Sách",
+                "Mã sách",
                 "SKU",
-                "ISBN13",
-                "On Hand",
-                "Inbound At",
+                "ISBN-13",
+                "Tồn hiện tại",
+                "Ngày nhập",
               ].map((header) => (
                 <th key={header} className="text-left text-[11px] text-muted-foreground px-3 py-2 uppercase tracking-wider font-medium">{header}</th>
               ))}
@@ -94,7 +99,7 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
           <tbody>
             {compartment.books.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-[12px] text-muted-foreground text-center">Compartment has no books.</td>
+                <td colSpan={6} className="px-3 py-4 text-[12px] text-muted-foreground text-center">Ngăn này chưa có sách.</td>
               </tr>
             ) : (
               compartment.books.map((book) => (
@@ -115,6 +120,157 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
   );
 }
 
+function LocationBox({ label, code, emphasis }: { label: string; code: string; emphasis?: boolean }) {
+  return (
+    <div className={`min-w-0 flex-1 rounded-lg border px-3 py-2 ${emphasis ? "border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-border bg-muted/40"}`}>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="truncate font-mono text-[14px] font-semibold text-foreground">{code}</p>
+    </div>
+  );
+}
+
+// One re-slotting proposal: which book, where it is, where it should go, why.
+// Figures come straight from the API (90-day loans, rank out of all evaluated
+// placements); nothing is estimated client-side.
+function ReslottingSuggestionRow({
+  item,
+  total,
+  canCreateTask,
+  onCreateTask,
+}: {
+  item: ReslottingSuggestionItem;
+  total: number;
+  canCreateTask: boolean;
+  onCreateTask: (item: ReslottingSuggestionItem) => void;
+}) {
+  return (
+    <li className="space-y-3 py-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <p className="text-[14px] font-semibold text-foreground">{item.title}</p>
+        <p className="text-[12px] text-muted-foreground">
+          {formatQty(item.turnover_count)} lượt mượn / 90 ngày · phổ biến hạng {item.turnover_rank}/{total}
+        </p>
+      </div>
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        <LocationBox label={`Hiện tại · dễ lấy hạng ${item.accessibility_rank}/${total}`} code={item.current_location_code} />
+        <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
+        <ArrowDown className="mx-auto h-4 w-4 text-muted-foreground sm:hidden" aria-hidden="true" />
+        <LocationBox label="Đề xuất (dễ tiếp cận hơn)" code={item.suggested_location_code} emphasis />
+      </div>
+      <p className="text-[13px] text-foreground/85">
+        Sách được mượn nhiều nhưng đang ở vị trí khó lấy hơn; đề xuất hoán đổi với sách ít được mượn đang ở {item.suggested_location_code}.
+      </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <DecisionSection title="Chi tiết" collapsible>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">{item.reason}</p>
+          </DecisionSection>
+        </div>
+        {canCreateTask && (
+          <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => onCreateTask(item)}>
+            <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+            Tạo task di chuyển
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+// Human confirmation step: the proposal only becomes a staff task after a
+// manager picks who does it and presses "Tạo nhiệm vụ". Stock itself does not
+// move until staff carry the task out.
+function MoveTaskDialog({
+  item,
+  warehouseId,
+  onClose,
+}: {
+  item: ReslottingSuggestionItem | null;
+  warehouseId: string;
+  onClose: () => void;
+}) {
+  const [staff, setStaff] = useState<WarehouseStaffOption[] | null>(null);
+  const [staffError, setStaffError] = useState(false);
+  const [assigneeId, setAssigneeId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!item || staff) return;
+    userService.getWarehouseStaff()
+      .then((resp) => setStaff(resp.data || []))
+      .catch(() => { setStaffError(true); setStaff([]); });
+  }, [item, staff]);
+
+  useEffect(() => { if (!item) setAssigneeId(""); }, [item]);
+
+  const submit = async () => {
+    if (!item || !assigneeId) return;
+    setSaving(true);
+    try {
+      await staffTaskService.create({
+        title: `Hoán đổi vị trí: "${item.title}" ${item.current_location_code} → ${item.suggested_location_code}`,
+        description: `Chuyển "${item.title}" từ ${item.current_location_code} sang ${item.suggested_location_code} và chuyển sách đang ở ${item.suggested_location_code} về ${item.current_location_code}. Lý do (đề xuất hệ thống): ${item.reason}`,
+        task_type: "GENERAL",
+        priority: "MEDIUM",
+        assignee_user_id: assigneeId,
+        warehouse_id: warehouseId,
+      });
+      toast.success("Đã tạo nhiệm vụ di chuyển");
+      onClose();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể tạo nhiệm vụ"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={Boolean(item)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Tạo nhiệm vụ di chuyển</DialogTitle>
+          <DialogDescription>
+            Hệ thống chỉ tạo nhiệm vụ cho nhân viên kho. Tồn kho chỉ thay đổi khi nhân viên thực hiện chuyển vị trí.
+          </DialogDescription>
+        </DialogHeader>
+        {item && (
+          <div className="space-y-3">
+            <p className="text-[14px] font-semibold text-foreground">{item.title}</p>
+            <div className="flex items-center gap-2">
+              <LocationBox label="Từ" code={item.current_location_code} />
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <LocationBox label="Đến" code={item.suggested_location_code} emphasis />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="move-task-assignee" className="text-[12px] font-medium text-foreground">Người thực hiện <span className="text-red-600">*</span></label>
+              {staffError ? (
+                <p className="text-[12px] text-red-600 dark:text-red-400" role="alert">Không tải được danh sách nhân viên kho.</p>
+              ) : staff === null ? (
+                <p className="text-[12px] text-muted-foreground">Đang tải danh sách nhân viên…</p>
+              ) : staff.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">Chưa có nhân viên kho nào để giao.</p>
+              ) : (
+                <Select value={assigneeId} onValueChange={setAssigneeId}>
+                  <SelectTrigger id="move-task-assignee" className="w-full"><SelectValue placeholder="Chọn nhân viên" /></SelectTrigger>
+                  <SelectContent>
+                    {staff.map((s) => <SelectItem key={s.id} value={s.id}>{s.full_name || s.username}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Hủy</Button>
+          <Button type="button" onClick={() => void submit()} disabled={!assigneeId} loading={saving} loadingLabel="Đang tạo…">
+            Tạo nhiệm vụ
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ShelvesPage() {
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
   const [warehouseId, setWarehouseId] = useState("");
@@ -126,6 +282,10 @@ export function ShelvesPage() {
   const [detail, setDetail] = useState<ShelfDetailResponse | null>(null);
   const [reslottingItems, setReslottingItems] = useState<ReslottingSuggestionItem[]>([]);
   const [loadingReslotting, setLoadingReslotting] = useState(false);
+  const [reslottingError, setReslottingError] = useState<{ forbidden: boolean; message: string } | null>(null);
+  const [reslottingTotal, setReslottingTotal] = useState(0);
+  const [taskItem, setTaskItem] = useState<ReslottingSuggestionItem | null>(null);
+  const canCreateMoveTask = hasPermission("inventory.operation.decide");
 
   const selectedShelf = useMemo(
     () => shelves.find((item) => item.id === selectedShelfId) || null,
@@ -207,10 +367,16 @@ export function ShelvesPage() {
     }
     try {
       setLoadingReslotting(true);
+      setReslottingError(null);
       const data = await reslottingSuggestionsService.getSuggestions(warehouseId);
       setReslottingItems(data.items);
+      setReslottingTotal(data.total_placements_evaluated);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không tải được gợi ý tối ưu vị trí"));
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      setReslottingError({
+        forbidden: status === 403,
+        message: getApiErrorMessage(error, "Không tải được đề xuất tối ưu vị trí"),
+      });
       setReslottingItems([]);
     } finally {
       setLoadingReslotting(false);
@@ -403,33 +569,41 @@ export function ShelvesPage() {
       >
         <SectionCard
           title="Đề xuất tối ưu vị trí"
-          subtitle="Sách được mượn nhiều nhưng đang ở vị trí khó lấy — đề xuất hoán đổi với vị trí dễ tiếp cận hơn"
+          subtitle="Sách được mượn nhiều nhưng đang ở vị trí khó lấy — hệ thống đề xuất hoán đổi với vị trí dễ tiếp cận hơn"
         >
           {!warehouseId ? (
-            <EmptyState variant="no-data" title="Chọn kho để xem đề xuất" description="Chọn một kho ở bộ lọc phía trên để xem gợi ý tối ưu vị trí" />
+            <EmptyState variant="no-data" title="Chọn kho để xem đề xuất" description="Chọn một kho ở bộ lọc phía trên để xem đề xuất tối ưu vị trí" />
           ) : loadingReslotting ? (
             <LoadingOverlay />
+          ) : reslottingError ? (
+            <EmptyState
+              variant={reslottingError.forbidden ? "no-permission" : "error"}
+              title={reslottingError.forbidden ? "Không có quyền xem đề xuất" : "Không tải được đề xuất"}
+              description={reslottingError.message}
+              action={reslottingError.forbidden ? undefined : <Button variant="outline" size="sm" onClick={() => void loadReslotting()}>Thử lại</Button>}
+            />
           ) : reslottingItems.length === 0 ? (
-            <EmptyState variant="no-data" title="Chưa có đề xuất" description="Vị trí sách trong kho này hiện đã hợp lý theo tần suất mượn" />
+            <EmptyState variant="no-data" title="Chưa có đề xuất" description="Vị trí sách trong kho này hiện đã hợp lý theo tần suất mượn 90 ngày gần nhất" />
           ) : (
-            <div className="divide-y divide-border">
-              {reslottingItems.map((item) => (
-                <div key={`${item.variant_id}-${item.current_location_id}`} className="flex items-start justify-between gap-4 py-3.5">
-                  <div className="min-w-0">
-                    <p className="text-[13px] text-foreground font-semibold">{item.title}</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">{item.reason}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <StatusBadge label={item.current_location_code} variant="neutral" />
-                    <ArrowRightLeft className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
-                    <StatusBadge label={item.suggested_location_code} variant="success" />
-                  </div>
-                </div>
-              ))}
+            <div>
+              <AIRecommendationNotice />
+              <ul className="divide-y divide-border">
+                {reslottingItems.map((item) => (
+                  <ReslottingSuggestionRow
+                    key={`${item.variant_id}-${item.current_location_id}`}
+                    item={item}
+                    total={reslottingTotal}
+                    canCreateTask={canCreateMoveTask}
+                    onCreateTask={setTaskItem}
+                  />
+                ))}
+              </ul>
             </div>
           )}
         </SectionCard>
       </motion.div>
+
+      <MoveTaskDialog item={taskItem} warehouseId={warehouseId} onClose={() => setTaskItem(null)} />
     </div>
   );
 }

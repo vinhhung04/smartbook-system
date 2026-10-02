@@ -3,11 +3,12 @@ import { motion, useReducedMotion } from "motion/react";
 import { Mail, Lock, Loader2, TriangleAlert, ArrowRight } from "lucide-react";
 import { Eye, EyeOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from "morphicons/react";
-import { NavLink, useNavigate } from "react-router";
+import { NavLink, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { getHomePathForUser } from "@/lib/rbac";
+import { safeReturnUrl } from "@/lib/return-url";
 import { AuthLayout } from "@/components/auth-layout";
 
 interface FormErrors {
@@ -17,6 +18,7 @@ interface FormErrors {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const shouldReduceMotion = useReducedMotion();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +50,7 @@ export function LoginPage() {
         localStorage.removeItem('smartbook-saved-identifier');
       }
       toast.success("Đăng nhập thành công");
-      navigate(getHomePathForUser(loginData.user));
+      navigate(safeReturnUrl(searchParams.get("returnUrl")) || getHomePathForUser(loginData.user));
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Đăng nhập thất bại"));
     } finally {

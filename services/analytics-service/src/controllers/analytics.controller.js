@@ -12,6 +12,7 @@ const { ewma, linearTrendSlope, stdDev, projectedDemand, rollingBacktest } = req
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
 const { allocateBudget } = require('../utils/budget-allocation');
 const { classifyWeedingCandidate } = require('../utils/weeding');
+const { mergeCatalogSignals } = require('../utils/catalog-signals');
 const { LATE_RETURN_FEATURES, NO_SHOW_FEATURES, toLateReturnSample, toNoShowSample } = require('../utils/risk-features');
 const { trainAndEvaluate, scoreRows } = require('../utils/risk-model');
 const { getOrTrain } = require('../lib/model-cache');
@@ -1218,8 +1219,10 @@ const LATE_RETURN_ROW_SQL = `
   LEFT JOIN LATERAL (
     SELECT MIN(lr.old_due_date) AS old_due_date FROM loan_renewals lr WHERE lr.loan_item_id = li.id
   ) orig ON true
-  -- Everything below is scoped to lt2.borrow_date < lt.borrow_date - only
-  -- what the customer's history looked like strictly before THIS loan.
+  -- Everything below is scoped to what the customer's history looked like
+  -- strictly before THIS loan: a prior loan counts only once its outcome was
+  -- known (returned before this borrow_date), and a fine counts as unpaid if
+  -- it had not been paid yet AT borrow_date (not by its current status).
   LEFT JOIN LATERAL (
     SELECT
       COUNT(*) AS prior_loans,
@@ -1227,11 +1230,13 @@ const LATE_RETURN_ROW_SQL = `
       COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM loan_renewals lr2 WHERE lr2.loan_item_id = li2.id)) AS prior_renewal_count
     FROM loan_items li2
     JOIN loan_transactions lt2 ON lt2.id = li2.loan_id
-    WHERE lt2.customer_id = c.id AND lt2.borrow_date < lt.borrow_date AND li2.return_date IS NOT NULL
+    WHERE lt2.customer_id = c.id AND lt2.borrow_date < lt.borrow_date
+      AND li2.return_date IS NOT NULL AND li2.return_date < lt.borrow_date
   ) prior ON true
   LEFT JOIN LATERAL (
     SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
-    WHERE f.customer_id = c.id AND f.status = 'UNPAID' AND f.issued_at < lt.borrow_date
+    WHERE f.customer_id = c.id AND f.issued_at < lt.borrow_date
+      AND (f.status = 'UNPAID' OR (f.status = 'PAID' AND f.paid_at > lt.borrow_date))
   ) unpaid ON true
 `;
 
@@ -1300,9 +1305,10 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
 });
 
 // Same shape as the late-return query above: shared row SQL, WHERE clause
-// picks training vs. scoring rows. active_loans_at_reservation reads the
-// loan's CURRENT status (not a point-in-time reconstruction) - an accepted
-// approximation, since loan_transactions has no history table.
+// picks training vs. scoring rows. Every aggregate is point-in-time as of
+// r.reserved_at: prior outcomes only once known (picked up / expired before
+// reserved_at), fines unpaid at that moment, loans open at that moment
+// (borrowed before and not closed until after reserved_at).
 const NO_SHOW_ROW_SQL = `
   SELECT
     r.id::text AS reservation_id,
@@ -1330,14 +1336,17 @@ const NO_SHOW_ROW_SQL = `
     WHERE r2.customer_id = r.customer_id AND r2.reserved_at < r.reserved_at
       AND r2.pickup_code_issued_at IS NOT NULL AND r2.status <> 'CANCELLED'
       AND (r2.pickup_code_used_at IS NOT NULL OR r2.status = 'EXPIRED')
+      AND COALESCE(r2.pickup_code_used_at, r2.expires_at) < r.reserved_at
   ) prior ON true
   LEFT JOIN LATERAL (
     SELECT SUM(f.amount - f.waived_amount) AS amount FROM fines f
-    WHERE f.customer_id = r.customer_id AND f.status = 'UNPAID' AND f.issued_at < r.reserved_at
+    WHERE f.customer_id = r.customer_id AND f.issued_at < r.reserved_at
+      AND (f.status = 'UNPAID' OR (f.status = 'PAID' AND f.paid_at > r.reserved_at))
   ) unpaid ON true
   LEFT JOIN LATERAL (
     SELECT COUNT(*) AS active_loans FROM loan_transactions lt
-    WHERE lt.customer_id = r.customer_id AND lt.borrow_date < r.reserved_at AND lt.status IN ('BORROWED', 'OVERDUE')
+    WHERE lt.customer_id = r.customer_id AND lt.borrow_date < r.reserved_at
+      AND (lt.closed_at IS NULL OR lt.closed_at > r.reserved_at)
   ) active ON true
 `;
 
@@ -1411,6 +1420,79 @@ const getBookTurnover = asyncHandler(async (req, res) => {
       generated_at: new Date().toISOString(),
       days,
       items: Array.from(borrowByVariant.entries()).map(([variant_id, borrow_count]) => ({ variant_id, borrow_count })),
+    },
+  });
+});
+
+// Discovery signals for the public website's popular / trending / top-rated
+// sections (inventory-service /public/catalog calls this with the internal key
+// and caches it). Aggregate counts only — no customer ids leave this endpoint.
+const getCatalogSignals = asyncHandler(async (req, res) => {
+  const borrowDays = parsePositiveInteger(req.query.borrowDays, 365, 730, 'borrowDays');
+  const recentDays = parsePositiveInteger(req.query.recentDays, 90, 365, 'recentDays');
+  const now = Date.now();
+  const borrowFrom = new Date(now - borrowDays * DAY_MS);
+  const recentFrom = new Date(now - recentDays * DAY_MS);
+
+  const [loanRows, reservationRows, wishlistRows, ratingRows] = await Promise.all([
+    query(
+      borrowPool,
+      `
+      SELECT li.variant_id::text AS variant_id,
+             COUNT(*) AS borrow_count,
+             COUNT(*) FILTER (WHERE lt.borrow_date >= $2::timestamptz) AS recent_borrow_count
+      FROM loan_items li
+      JOIN loan_transactions lt ON lt.id = li.loan_id
+      WHERE lt.borrow_date >= $1::timestamptz
+      GROUP BY li.variant_id
+      `,
+      [borrowFrom, recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT variant_id::text AS variant_id, COUNT(*) AS reservation_count
+      FROM loan_reservations
+      WHERE reserved_at >= $1::timestamptz
+      GROUP BY variant_id
+      `,
+      [recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT book_id::text AS book_id, COUNT(*) AS wishlist_count
+      FROM book_wishlists
+      WHERE created_at >= $1::timestamptz
+      GROUP BY book_id
+      `,
+      [recentFrom],
+    ),
+    query(
+      borrowPool,
+      `
+      SELECT book_id::text AS book_id, AVG(rating) AS rating_avg, COUNT(*) AS rating_count
+      FROM book_reviews
+      WHERE status = 'VISIBLE'
+      GROUP BY book_id
+      `,
+    ),
+  ]);
+
+  const variantIds = Array.from(new Set([...loanRows, ...reservationRows].map((row) => row.variant_id)));
+  const variantBookRows = variantIds.length
+    ? await query(
+      inventoryPool,
+      'SELECT id::text AS variant_id, book_id::text AS book_id FROM book_variants WHERE id = ANY($1::uuid[])',
+      [variantIds],
+    )
+    : [];
+
+  res.json({
+    data: {
+      generated_at: new Date(now).toISOString(),
+      windows: { borrow_days: borrowDays, recent_days: recentDays },
+      books: mergeCatalogSignals({ loanRows, reservationRows, wishlistRows, ratingRows, variantBookRows }),
     },
   });
 });
@@ -1682,6 +1764,7 @@ module.exports = {
   getReservationFunnel,
   getAgingInventory,
   getBookTurnover,
+  getCatalogSignals,
   getWeedingSuggestions,
   getForecastAccuracy,
   getLateReturnRisk,

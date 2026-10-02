@@ -12,6 +12,7 @@ const { toInt } = require('../utils/validation');
 const { normalizeLocationType } = require('../utils/validation');
 const { createMovementNumber } = require('../utils/inventory');
 const { MAX_COMPARTMENT_CAPACITY } = require('../utils/constants');
+const { invalidateCache } = require('../services/storage-suggestion.service');
 
 function getAncestorByType(location, locationMap, targetType) {
   const normalizedTarget = normalizeLocationType(targetType);
@@ -534,6 +535,8 @@ async function confirmPutaway(req, res) {
     return res.status(400).json({ message: 'allocations is required' });
   }
 
+  let committedWarehouseId = null;
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const receipt = await tx.goods_receipts.findUnique({
@@ -555,6 +558,8 @@ async function confirmPutaway(req, res) {
       if (!canAccessReceipt(req, receipt)) {
         return { forbidden: true };
       }
+
+      committedWarehouseId = receipt.warehouse_id;
 
       const receiptItems = await tx.goods_receipt_items.findMany({
         where: { goods_receipt_id: receiptId },
@@ -970,6 +975,10 @@ async function confirmPutaway(req, res) {
 
     if (result.invalid) {
       return res.status(400).json({ message: result.message });
+    }
+
+    if (committedWarehouseId) {
+      await invalidateCache(committedWarehouseId);
     }
 
     return res.status(201).json({

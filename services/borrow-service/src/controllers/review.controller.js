@@ -84,10 +84,11 @@ async function getBookRatingStats(req, res) {
 
 async function createOrUpdateMyReview(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { book_id, rating, comment } = req.body;
     if (!book_id) {
@@ -100,7 +101,7 @@ async function createOrUpdateMyReview(req, res) {
 
     const review = await prisma.book_reviews.upsert({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id,
         },
@@ -154,15 +155,16 @@ async function getMyReviews(req, res) {
 
 async function getMyReviewForBook(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { bookId } = req.params;
     const review = await prisma.book_reviews.findUnique({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id: bookId,
         },
@@ -178,16 +180,17 @@ async function getMyReviewForBook(req, res) {
 
 async function deleteMyReview(req, res) {
   try {
-    const customerId = req.user?.customer_id || req.user?.id;
-    if (!customerId) {
-      return res.status(401).json({ message: 'Customer identity required' });
-    }
+    // The JWT carries the auth user id, not the customer id (see getMyReviews).
+    const { ensureCurrentCustomer } = require('./customer.controller');
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    const customerId = customer.id;
 
     const { bookId } = req.params;
 
     const existing = await prisma.book_reviews.findUnique({
       where: {
-        uniq_book_reviews_customer_book: {
+        customer_id_book_id: {
           customer_id: customerId,
           book_id: bookId,
         },
@@ -209,7 +212,77 @@ async function deleteMyReview(req, res) {
   }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Anonymous visitors see a reviewer as "given name + family initial"
+// (Vietnamese order: "Nguyễn Văn An" -> "An N."), never the customer id,
+// customer_code or full name the staff-facing endpoint returns.
+function maskReviewerName(fullName) {
+  const words = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'Bạn đọc';
+  if (words.length === 1) return words[0];
+  return `${words[words.length - 1]} ${words[0].charAt(0).toUpperCase()}.`;
+}
+
+function toPublicReview(review) {
+  return {
+    id: review.id,
+    rating: review.rating,
+    comment: review.comment,
+    created_at: review.created_at,
+    reviewer_name: maskReviewerName(review.customers?.full_name),
+  };
+}
+
+async function getPublicReviewsByBook(req, res) {
+  try {
+    const { bookId } = req.params;
+    if (!UUID_PATTERN.test(String(bookId || ''))) {
+      return res.status(400).json({ message: 'Invalid book id' });
+    }
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(20, Math.max(1, Number(req.query.pageSize) || 10));
+    const where = { book_id: bookId, status: 'VISIBLE' };
+
+    const [reviews, byRating] = await Promise.all([
+      prisma.book_reviews.findMany({
+        where,
+        select: { id: true, rating: true, comment: true, created_at: true, customers: { select: { full_name: true } } },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.book_reviews.groupBy({ by: ['rating'], where, _count: { rating: true } }),
+    ]);
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let total = 0;
+    let sum = 0;
+    for (const row of byRating) {
+      const count = row._count.rating;
+      distribution[row.rating] = count;
+      total += count;
+      sum += row.rating * count;
+    }
+
+    return res.json({
+      data: reviews.map(toPublicReview),
+      stats: {
+        averageRating: total ? Number((sum / total).toFixed(1)) : 0,
+        totalReviews: total,
+        distribution,
+      },
+      meta: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
+    });
+  } catch (error) {
+    console.error('[review] getPublicReviewsByBook error:', error);
+    return res.status(500).json({ message: 'Failed to load reviews' });
+  }
+}
+
 module.exports = {
+  maskReviewerName,
+  getPublicReviewsByBook,
   getReviewsByBook,
   getBookRatingStats,
   createOrUpdateMyReview,

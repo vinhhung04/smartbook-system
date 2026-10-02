@@ -36,6 +36,9 @@ function authenticateInternalOrUser(permissionCheck = readAnalytics) {
 
 router.get('/aging-inventory', authenticateInternalOrUser(), analyticsController.getAgingInventory);
 router.get('/book-turnover', authenticateInternalOrUser(), analyticsController.getBookTurnover);
+// inventory-service's public catalog (popular / trending / top rated) calls this
+// with the internal service key; the response holds aggregate counts only.
+router.get('/catalog-signals', authenticateInternalOrUser(), analyticsController.getCatalogSignals);
 // The borrow-service due-soon reminder job calls this with the internal
 // service key, not a user JWT - same convention as the two routes above.
 router.get('/late-return-risk', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getLateReturnRisk);

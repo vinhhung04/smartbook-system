@@ -3,6 +3,9 @@ import crypto from 'node:crypto';
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const username = process.env.ANALYTICS_TEST_USERNAME || 'manager01';
 const password = process.env.ANALYTICS_TEST_PASSWORD || '123456';
+// Borrow-domain analytics (fines, overdue loans, reservations - some with customer PII) need
+// analytics.borrow.read, which only ADMIN holds; WAREHOUSE_MANAGER is denied on purpose.
+const adminUsername = process.env.ANALYTICS_TEST_ADMIN_USERNAME || 'hung';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
 
 function b64url(input) {
@@ -42,11 +45,11 @@ async function request(path, token, options = {}) {
   return { response, body };
 }
 
-async function login() {
+async function login(identifier) {
   const response = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier: username, password }),
+    body: JSON.stringify({ identifier, password }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body?.token) {
@@ -95,6 +98,7 @@ const endpointChecks = [
   },
   {
     name: 'analytics/borrow-trends',
+    borrowDomain: true,
     path: '/analytics/borrow-trends',
     validate(data) {
       assertArray(data, 'data');
@@ -115,6 +119,7 @@ const endpointChecks = [
   },
   {
     name: 'analytics/overdue-summary',
+    borrowDomain: true,
     path: '/analytics/overdue-summary',
     validate(data) {
       assertObject(data, 'data');
@@ -127,6 +132,7 @@ const endpointChecks = [
   },
   {
     name: 'analytics/fine-summary',
+    borrowDomain: true,
     path: '/analytics/fine-summary',
     validate(data) {
       assertObject(data, 'data');
@@ -154,6 +160,7 @@ const endpointChecks = [
   },
   {
     name: 'analytics/reservation-funnel',
+    borrowDomain: true,
     path: '/analytics/reservation-funnel',
     validate(data) {
       assertObject(data, 'data');
@@ -164,11 +171,12 @@ const endpointChecks = [
 ];
 
 async function run() {
-  const staffToken = await login();
+  const staffToken = await login(username);
+  const adminToken = await login(adminUsername);
   let passed = 0;
 
   for (const check of endpointChecks) {
-    const { response, body } = await request(check.path, staffToken);
+    const { response, body } = await request(check.path, check.borrowDomain ? adminToken : staffToken);
     if (!response.ok) {
       throw new Error(`${check.name} failed (${response.status}): ${JSON.stringify(body)}`);
     }
@@ -178,6 +186,14 @@ async function run() {
     check.validate(body.data);
     passed += 1;
     console.log(`PASS ${check.name}`);
+  }
+
+  for (const check of endpointChecks.filter((item) => item.borrowDomain)) {
+    const denied = await request(check.path, staffToken);
+    if (denied.response.status !== 403) {
+      throw new Error(`${check.name} must be 403 for ${username} (no analytics.borrow.read), got ${denied.response.status}`);
+    }
+    console.log(`PASS ${check.name} (denied to ${username})`);
   }
 
   const customerToken = signJwt({

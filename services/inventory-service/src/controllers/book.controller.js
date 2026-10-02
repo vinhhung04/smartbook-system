@@ -127,6 +127,8 @@ function mapBookSummary(book) {
     available_quantity: availableQty,
     receiving_quantity: receivingQty,
     is_incomplete: Boolean(book.metadata?.is_incomplete),
+    // Lets consumers such as ai-service recommendations skip deactivated titles.
+    is_active: book.is_active !== false,
     variant_count: variants.length,
     created_at: book.created_at,
     updated_at: book.updated_at,

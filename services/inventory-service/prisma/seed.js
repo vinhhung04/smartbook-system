@@ -1520,7 +1520,46 @@ const hanoiStock = await Promise.all([
   }),
 ]);
 
-console.log(`✅ Created ${receivingStockHCM.length + shelfStockHCM.length + hanoiStock.length} stock balances`);
+// Reader-facing branches. The two WAREHOUSE-type sites above are internal
+// (kho tổng); readers reserve and pick up only at BRANCH/LIBRARY locations, so
+// each branch gets its own shelf with copies the public website can offer.
+const branchShelves = await Promise.all([warehouses[2], warehouses[3]].map((branch) => prisma.locations.upsert({
+  where: { warehouse_id_location_code: { warehouse_id: branch.id, location_code: 'BR-SHELF-01' } },
+  update: {},
+  create: {
+    warehouse_id: branch.id,
+    location_code: 'BR-SHELF-01',
+    location_type: 'SHELF_COMPARTMENT',
+    barcode: `LOC-${branch.code}-SHELF-01`,
+    capacity_qty: 100,
+    is_pickable: true,
+    is_active: true,
+  },
+})));
+
+// [branch index, variant index, copies on the shelf]
+const branchStockPlan = [
+  [0, 0, 4], [0, 1, 3], [0, 2, 2], [0, 3, 5], [0, 4, 2], [0, 5, 3],
+  [1, 0, 2], [1, 6, 3], [1, 7, 2], [1, 8, 4], [1, 9, 2], [1, 10, 3],
+];
+const branchStock = await Promise.all(branchStockPlan.map(([branchIndex, variantIndex, copies]) => prisma.stock_balances.upsert({
+  where: { variant_id_location_id: { variant_id: variants[variantIndex].id, location_id: branchShelves[branchIndex].id } },
+  update: {},
+  create: {
+    warehouse_id: branchShelves[branchIndex].warehouse_id,
+    variant_id: variants[variantIndex].id,
+    location_id: branchShelves[branchIndex].id,
+    on_hand_qty: copies,
+    available_qty: copies,
+    reserved_qty: 0,
+    safety_stock_qty: 1,
+    reorder_point: 1,
+    version: 1,
+    last_movement_at: new Date(),
+  },
+})));
+
+console.log(`✅ Created ${receivingStockHCM.length + shelfStockHCM.length + hanoiStock.length + branchStock.length} stock balances`);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STEP 12: STOCK ALERTS

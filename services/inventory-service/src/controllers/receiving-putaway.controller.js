@@ -5,13 +5,18 @@ const prisma = new PrismaClient();
 const {
   RECEIVING_LOCATION_TYPES,
   TARGET_COMPARTMENT_TYPE,
-  MAX_COMPARTMENT_CAPACITY,
 } = require("../utils/constants");
 const { parseId, normalizeText } = require("../utils/validation");
 const { toInt } = require("../utils/validation");
 const { normalizeLocationType } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
 const { toSerializableError } = require("../utils/inventory");
+const {
+  getEligibleLocationTypes,
+  computeEffectiveCapacity,
+  getLocationCapacityContextBatch,
+} = require("../services/location-capacity.service");
+const { invalidateCache } = require("../services/storage-suggestion.service");
 
 function buildVariantBarcode(variant) {
   return (
@@ -187,13 +192,14 @@ async function getCompartmentCandidates(req, res) {
         parent_location_id: true,
         location_type: true,
         location_code: true,
+        capacity_qty: true,
       },
     });
 
     const locationMap = new Map(allLocations.map((item) => [item.id, item]));
-    const compartments = allLocations.filter(
-      (item) =>
-        normalizeLocationType(item.location_type) === TARGET_COMPARTMENT_TYPE,
+    const eligibleTypes = getEligibleLocationTypes("RECEIVING");
+    const compartments = allLocations.filter((item) =>
+      eligibleTypes.includes(normalizeLocationType(item.location_type)),
     );
 
     if (compartments.length === 0) {
@@ -209,20 +215,10 @@ async function getCompartmentCandidates(req, res) {
 
     const compartmentIds = compartments.map((item) => item.id);
 
-    const occupancyGrouped = await prisma.stock_balances.groupBy({
-      by: ["location_id"],
-      where: {
-        location_id: { in: compartmentIds },
-      },
-      _sum: {
-        on_hand_qty: true,
-      },
-    });
-
-    const occupancyMap = new Map();
-    occupancyGrouped.forEach((row) => {
-      occupancyMap.set(row.location_id, Number(row._sum.on_hand_qty || 0));
-    });
+    const capacityContexts = await getLocationCapacityContextBatch(
+      prisma,
+      compartments,
+    );
 
     const skuMixGrouped = await prisma.stock_balances.groupBy({
       by: ["location_id", "variant_id"],
@@ -293,9 +289,10 @@ async function getCompartmentCandidates(req, res) {
         const zone = getAncestorByType(compartment, "ZONE");
         if (!shelf || !zone) return null;
 
-        const currentOnHand = Number(occupancyMap.get(compartment.id) || 0);
-        const maxCapacity = MAX_COMPARTMENT_CAPACITY;
-        const remainingCapacity = Math.max(maxCapacity - currentOnHand, 0);
+        const capacityContext = capacityContexts.get(compartment.id);
+        const currentOnHand = capacityContext.occupiedQty;
+        const maxCapacity = capacityContext.effectiveCapacity;
+        const remainingCapacity = capacityContext.remainingCapacity;
         if (remainingCapacity <= 0) return null;
 
         const skuMixCount = Number(skuMixMap.get(compartment.id) || 0);
@@ -794,10 +791,12 @@ async function transferReceivingToShelf(req, res) {
         }
 
         // Verify target locations (Prisma ORM handles types correctly)
+        const eligibleTargetTypes = getEligibleLocationTypes("RECEIVING");
         for (const location of targetLocations) {
           if (
-            normalizeLocationType(location.location_type) !==
-            TARGET_COMPARTMENT_TYPE
+            !eligibleTargetTypes.includes(
+              normalizeLocationType(location.location_type),
+            )
           ) {
             return {
               invalid: true,
@@ -851,11 +850,7 @@ async function transferReceivingToShelf(req, res) {
           const currentOnHand = Number(
             occupancyMap.get(allocation.target_location_id) || 0,
           );
-          const locationCapacity = Number(target?.capacity_qty || 0);
-          const maxCapacity =
-            locationCapacity > 0
-              ? Math.min(locationCapacity, MAX_COMPARTMENT_CAPACITY)
-              : MAX_COMPARTMENT_CAPACITY;
+          const maxCapacity = computeEffectiveCapacity(target?.capacity_qty);
           const remaining = Math.max(maxCapacity - currentOnHand, 0);
 
           if (allocation.quantity > remaining) {
@@ -986,6 +981,8 @@ async function transferReceivingToShelf(req, res) {
     if (result.invalid) {
       return res.status(400).json({ message: result.message });
     }
+
+    await invalidateCache(warehouseId);
 
     return res.status(201).json({
       message: "Transferred from RECEIVING to shelf successfully",
@@ -1244,6 +1241,8 @@ async function reverseShelfToReceiving(req, res) {
     if (result.invalid) {
       return res.status(400).json({ message: result.message });
     }
+
+    await invalidateCache(warehouseId);
 
     return res.status(201).json({
       message: "Moved from shelf back to RECEIVING successfully",

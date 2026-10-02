@@ -318,9 +318,15 @@ async function run() {
   expect(redeliveryPo.status === 'RECEIVED', `Expected redelivery PO RECEIVED, got ${redeliveryPo.status}`);
   pass('redelivery GR posted');
 
-  await okRequest('POST', `/api/purchase-orders/${shortagePoId}/shortage-reports/${shortageReport.id}/resolve`, token);
+  // The redelivery covers every short line, so receiving it closes the report on
+  // its own (supplier-delivery.controller) — staff don't resolve it by hand, and
+  // the status guard refuses a second, manual resolve.
   const resolvedReports = await okRequest('GET', `/api/purchase-orders/${shortagePoId}/shortage-reports`, token);
-  expect(resolvedReports.data.find((report) => report.id === shortageReport.id)?.status === 'RESOLVED', 'Shortage report should be RESOLVED');
+  const resolvedReport = resolvedReports.data.find((report) => report.id === shortageReport.id);
+  expect(resolvedReport?.status === 'RESOLVED', `Shortage report should be auto-RESOLVED by the redelivery, got ${resolvedReport?.status}`);
+  expect(Boolean(resolvedReport?.resolved_at), 'Auto-resolved shortage report should have resolved_at');
+  const resolveAgain = await request('POST', `/api/purchase-orders/${shortagePoId}/shortage-reports/${shortageReport.id}/resolve`, token);
+  expect(resolveAgain.response.status === 400, `Resolving an already RESOLVED report should be 400, got ${resolveAgain.response.status}`);
   pass('shortage resolved');
 
   const portalForbidden = await request('POST', `/api/supplier-portal/orders/${fullPortalToken}/post-goods-receipt`, null, {});

@@ -1,0 +1,1032 @@
+{
+  "provenance": {
+    "synthetic": true,
+    "dataset_name": "SmartBook Persona-conditioned Synthetic Behavioral Dataset",
+    "disclaimer_vi": "Đây là dữ liệu tổng hợp mô phỏng hành vi người dùng, không phải dữ liệu thu thập từ người dùng thực tế.",
+    "disclaimer_en": "Synthetic data from a behavioural simulation. Not collected from real users.",
+    "generator": "services/borrow-service/prisma/simulation",
+    "generator_version": "2.0.0",
+    "seed": 20260928,
+    "customer_count": 600,
+    "simulation_start": "2024-09-28T00:00:00.000Z",
+    "simulation_end": "2026-09-28T00:00:00.000Z",
+    "simulation_months": 24
+  },
+  "generated_at": "2026-09-30T07:40:30.573Z",
+  "generator_counters": {
+    "loan": 14308,
+    "reservation": 4059,
+    "choices": 22355,
+    "exploredChoices": 5615,
+    "unavailableChoices": 3266,
+    "blockedSessions": 1380
+  },
+  "validation": {
+    "counts": {
+      "customers": 600,
+      "customer_memberships": 600,
+      "loan_transactions": 14308,
+      "loan_items": 18456,
+      "loan_renewals": 2284,
+      "loan_reservations": 4059,
+      "fines": 4040,
+      "fine_payments": 3807,
+      "book_wishlists": 6514,
+      "book_reviews": 3083,
+      "availability_alerts": 1203
+    },
+    "distributions": {
+      "persona_distribution": {
+        "HEAVY_READER": 42,
+        "LOW_ENGAGEMENT": 109,
+        "PARENT_READER": 41,
+        "TECH_FOCUSED_READER": 61,
+        "SELF_DEVELOPMENT_READER": 86,
+        "LITERATURE_LOVER": 61,
+        "CASUAL_READER": 132,
+        "EXPLORER": 68
+      },
+      "age_distribution": {
+        "55+": 43,
+        "19-24": 204,
+        "25-34": 154,
+        "35-44": 95,
+        "45-54": 58,
+        "15-18": 46
+      },
+      "gender_distribution": {
+        "FEMALE": 295,
+        "MALE": 268,
+        "OTHER": 14,
+        "UNSPECIFIED": 23
+      },
+      "occupation_distribution": {
+        "RETIRED": 24,
+        "BUSINESS_STUDENT": 30,
+        "PARENT": 66,
+        "UNIVERSITY_STUDENT": 67,
+        "SELF_EMPLOYED": 72,
+        "RESEARCHER": 25,
+        "OTHER": 42,
+        "OFFICE_WORKER": 108,
+        "TECH_WORKER": 63,
+        "TEACHER": 26,
+        "IT_STUDENT": 35,
+        "HIGH_SCHOOL_STUDENT": 42
+      },
+      "membership_distribution": {
+        "SILVER": 199,
+        "BASIC": 279,
+        "GOLD": 90,
+        "VIP": 32
+      },
+      "tenure_distribution": {
+        "ESTABLISHED_BEFORE_WINDOW": 211,
+        "JOINED_IN_WINDOW": 389
+      },
+      "reservation_status": {
+        "CONVERTED_TO_LOAN": 2844,
+        "CANCELLED": 341,
+        "EXPIRED": 865,
+        "READY_FOR_PICKUP": 5,
+        "PENDING": 4
+      },
+      "reservation_channel": {
+        "WEB": 2967,
+        "STAFF": 1092
+      },
+      "alert_status": {
+        "NOTIFIED": 1160,
+        "ACTIVE": 43
+      },
+      "rating_distribution": {
+        "1": 107,
+        "2": 255,
+        "3": 526,
+        "4": 992,
+        "5": 1203
+      },
+      "late_return_rate": 0.226,
+      "avg_loans_per_customer": 23.85,
+      "fine_paid_share": 0.942
+    },
+    "sanity": {
+      "passed": true,
+      "failed": [],
+      "checks": {
+        "reviews_of_books_not_borrowed_and_returned_before_review": 0,
+        "loans_before_customer_created_at": 0,
+        "reservations_before_customer_created_at": 0,
+        "wishlists_before_customer_created_at": 0,
+        "memberships_starting_before_customer_created_day": 0,
+        "return_date_before_borrow_date": 0,
+        "pickup_before_reservation": 0,
+        "rating_outside_1_5": 0,
+        "impossible_due_dates": 0,
+        "renewals_out_of_order": 0,
+        "fines_paid_before_issued": 0,
+        "fines_without_late_return": 0,
+        "late_returns_without_fine": 0,
+        "alert_notified_before_created": 0,
+        "converted_reservation_loan_mismatch": 0,
+        "events_after_simulation_end": 0,
+        "invalid_foreign_keys": 0,
+        "duplicate_review_customer_book": 0,
+        "duplicate_wishlist_customer_book": 0,
+        "duplicate_alert_customer_book": 0,
+        "duplicate_natural_keys": 0,
+        "rows_without_simulation_prefix": 0
+      }
+    },
+    "relationships": {
+      "persona_activity": [
+        {
+          "persona": "HEAVY_READER",
+          "customers": 42,
+          "loans_per_year": 50.01,
+          "items_per_loan": 1.37,
+          "reservations_per_year": 17.57,
+          "wishlists_per_year": 17.61,
+          "reviews_per_year": 15.38,
+          "late_rate": 0.229,
+          "web_share": 0.738
+        },
+        {
+          "persona": "TECH_FOCUSED_READER",
+          "customers": 61,
+          "loans_per_year": 29.28,
+          "items_per_loan": 1.2,
+          "reservations_per_year": 10.96,
+          "wishlists_per_year": 12.97,
+          "reviews_per_year": 3.72,
+          "late_rate": 0.224,
+          "web_share": 0.879
+        },
+        {
+          "persona": "LITERATURE_LOVER",
+          "customers": 61,
+          "loans_per_year": 26.12,
+          "items_per_loan": 1.31,
+          "reservations_per_year": 6,
+          "wishlists_per_year": 11.71,
+          "reviews_per_year": 6.21,
+          "late_rate": 0.201,
+          "web_share": 0.597
+        },
+        {
+          "persona": "SELF_DEVELOPMENT_READER",
+          "customers": 86,
+          "loans_per_year": 21.12,
+          "items_per_loan": 1.22,
+          "reservations_per_year": 6.67,
+          "wishlists_per_year": 11.18,
+          "reviews_per_year": 4.8,
+          "late_rate": 0.195,
+          "web_share": 0.701
+        },
+        {
+          "persona": "EXPLORER",
+          "customers": 68,
+          "loans_per_year": 20.82,
+          "items_per_loan": 1.36,
+          "reservations_per_year": 5.66,
+          "wishlists_per_year": 13.14,
+          "reviews_per_year": 5.41,
+          "late_rate": 0.254,
+          "web_share": 0.731
+        },
+        {
+          "persona": "PARENT_READER",
+          "customers": 41,
+          "loans_per_year": 15.08,
+          "items_per_loan": 1.44,
+          "reservations_per_year": 3.52,
+          "wishlists_per_year": 7.39,
+          "reviews_per_year": 2.5,
+          "late_rate": 0.263,
+          "web_share": 0.6
+        },
+        {
+          "persona": "CASUAL_READER",
+          "customers": 132,
+          "loans_per_year": 6.71,
+          "items_per_loan": 1.17,
+          "reservations_per_year": 1.07,
+          "wishlists_per_year": 3.16,
+          "reviews_per_year": 0.5,
+          "late_rate": 0.242,
+          "web_share": 0.649
+        },
+        {
+          "persona": "LOW_ENGAGEMENT",
+          "customers": 109,
+          "loans_per_year": 1.38,
+          "items_per_loan": 1.12,
+          "reservations_per_year": 0.07,
+          "wishlists_per_year": 1.03,
+          "reviews_per_year": 0.02,
+          "late_rate": 0.347,
+          "web_share": 0.6
+        }
+      ],
+      "activity_concentration": {
+        "top_10pct_customers_share_of_loan_items": 0.349,
+        "gini_loan_items_per_customer": 0.56,
+        "customers_with_zero_loans": 59
+      },
+      "punctuality_vs_late_rate": [
+        {
+          "bucket": "0.0-0.2",
+          "customers": 13,
+          "returned_items": 28,
+          "late_rate": 0.714
+        },
+        {
+          "bucket": "0.2-0.4",
+          "customers": 67,
+          "returned_items": 816,
+          "late_rate": 0.463
+        },
+        {
+          "bucket": "0.4-0.6",
+          "customers": 184,
+          "returned_items": 4247,
+          "late_rate": 0.331
+        },
+        {
+          "bucket": "0.6-0.8",
+          "customers": 212,
+          "returned_items": 7435,
+          "late_rate": 0.205
+        },
+        {
+          "bucket": "0.8-1.0",
+          "customers": 124,
+          "returned_items": 5341,
+          "late_rate": 0.134
+        }
+      ],
+      "digital_affinity_vs_web_reservations": [
+        {
+          "bucket": "LOW (<0.4)",
+          "customers": 117,
+          "reservations": 222,
+          "web_share": 0.428
+        },
+        {
+          "bucket": "MEDIUM (0.4-0.7)",
+          "customers": 268,
+          "reservations": 1482,
+          "web_share": 0.603
+        },
+        {
+          "bucket": "HIGH (>=0.7)",
+          "customers": 215,
+          "reservations": 2355,
+          "web_share": 0.84
+        }
+      ],
+      "exploration_vs_diversity": [
+        {
+          "bucket": "LOW (<0.2)",
+          "customers": 169,
+          "unique_categories_first_10_items": 3.62,
+          "unique_categories_per_year": 3.12,
+          "category_entropy": 0.779,
+          "share_outside_top_preference": 0.561
+        },
+        {
+          "bucket": "MEDIUM (0.2-0.4)",
+          "customers": 151,
+          "unique_categories_first_10_items": 4.17,
+          "unique_categories_per_year": 3.21,
+          "category_entropy": 0.881,
+          "share_outside_top_preference": 0.666
+        },
+        {
+          "bucket": "HIGH (>=0.4)",
+          "customers": 63,
+          "unique_categories_first_10_items": 4.46,
+          "unique_categories_per_year": 3.29,
+          "category_entropy": 0.941,
+          "share_outside_top_preference": 0.768
+        }
+      ],
+      "preference_vs_borrowed_categories": {
+        "customers": 383,
+        "mean_spearman_pref_vs_borrow_share": 0.683,
+        "mean_share_of_items_in_top_preferred_category": 0.364,
+        "mean_true_preference_of_top_category": 0.405,
+        "most_borrowed_category_is_top_preference_rate": 0.632,
+        "catalog_share_by_category": {
+          "kinh-te": 0.168,
+          "ky-nang-song": 0.221,
+          "truyen-ngan": 0.221,
+          "van-hoc-nuoc-ngoai": 0.035,
+          "van-hoc-viet-nam": 0.354
+        }
+      },
+      "taste_match_vs_rating": [
+        {
+          "bucket": "LOW (<0.4)",
+          "reviews": 668,
+          "avg_rating": 2.9
+        },
+        {
+          "bucket": "MEDIUM (0.4-0.7)",
+          "reviews": 807,
+          "avg_rating": 3.756
+        },
+        {
+          "bucket": "HIGH (>=0.7)",
+          "reviews": 1608,
+          "avg_rating": 4.484
+        }
+      ],
+      "page_count_vs_renewal": [
+        {
+          "bucket": "<250 pages",
+          "items": 5308,
+          "renewal_rate": 0.096
+        },
+        {
+          "bucket": "250-400 pages",
+          "items": 11136,
+          "renewal_rate": 0.125
+        },
+        {
+          "bucket": ">400 pages",
+          "items": 2012,
+          "renewal_rate": 0.171
+        }
+      ],
+      "payment_reliability_vs_fine_paid": [
+        {
+          "bucket": "LOW (<0.5)",
+          "fines": 202,
+          "paid_share": 0.663
+        },
+        {
+          "bucket": "MEDIUM (0.5-0.8)",
+          "fines": 2295,
+          "paid_share": 0.939
+        },
+        {
+          "bucket": "HIGH (>=0.8)",
+          "fines": 1543,
+          "paid_share": 0.983
+        }
+      ],
+      "activity_vs_membership_plan": [
+        {
+          "activity": "Q1 (<0.3)",
+          "customers": 138,
+          "gold_or_vip_share": 0.072,
+          "plans": {
+            "BASIC": 91,
+            "SILVER": 37,
+            "GOLD": 7,
+            "VIP": 3
+          }
+        },
+        {
+          "activity": "Q2 (0.3-0.5)",
+          "customers": 139,
+          "gold_or_vip_share": 0.137,
+          "plans": {
+            "BASIC": 70,
+            "SILVER": 50,
+            "GOLD": 12,
+            "VIP": 7
+          }
+        },
+        {
+          "activity": "Q3 (0.5-0.7)",
+          "customers": 198,
+          "gold_or_vip_share": 0.232,
+          "plans": {
+            "SILVER": 71,
+            "GOLD": 37,
+            "BASIC": 81,
+            "VIP": 9
+          }
+        },
+        {
+          "activity": "Q4 (>=0.7)",
+          "customers": 125,
+          "gold_or_vip_share": 0.376,
+          "plans": {
+            "SILVER": 41,
+            "BASIC": 37,
+            "VIP": 13,
+            "GOLD": 34
+          }
+        }
+      ],
+      "gender_fairness": [
+        {
+          "gender": "FEMALE",
+          "customers": 295,
+          "loans_per_year": 17.68,
+          "late_rate": 0.211,
+          "literature_share_of_items": 0.586,
+          "gold_or_vip_share": 0.203,
+          "mean_true_punctuality": 0.626
+        },
+        {
+          "gender": "MALE",
+          "customers": 268,
+          "loans_per_year": 16.61,
+          "late_rate": 0.231,
+          "literature_share_of_items": 0.555,
+          "gold_or_vip_share": 0.183,
+          "mean_true_punctuality": 0.614
+        },
+        {
+          "gender": "UNSPECIFIED",
+          "customers": 23,
+          "loans_per_year": 17.7,
+          "late_rate": 0.339,
+          "literature_share_of_items": 0.627,
+          "gold_or_vip_share": 0.391,
+          "mean_true_punctuality": 0.602
+        },
+        {
+          "gender": "OTHER",
+          "customers": 14,
+          "loans_per_year": 20.95,
+          "late_rate": 0.234,
+          "literature_share_of_items": 0.647,
+          "gold_or_vip_share": 0.286,
+          "mean_true_punctuality": 0.679
+        }
+      ],
+      "temporal_by_life_stage": [
+        {
+          "life_stage": "WORKING",
+          "loans": 7664,
+          "hour_distribution": {
+            "08-11": 0.209,
+            "11-14": 0.215,
+            "14-17": 0.092,
+            "17-20": 0.38
+          },
+          "month_index": [
+            0.91,
+            0.73,
+            1.15,
+            0.98,
+            1.05,
+            1.01,
+            1.02,
+            1.22,
+            1.25,
+            0.9,
+            0.87,
+            0.91
+          ]
+        },
+        {
+          "life_stage": "RETIRED",
+          "loans": 662,
+          "hour_distribution": {
+            "08-11": 0.565,
+            "11-14": 0.16,
+            "14-17": 0.165,
+            "17-20": 0.035
+          },
+          "month_index": [
+            1.07,
+            0.78,
+            1.11,
+            1,
+            1.34,
+            0.96,
+            1.03,
+            1.09,
+            0.98,
+            0.94,
+            0.89,
+            0.82
+          ]
+        },
+        {
+          "life_stage": "STUDENT",
+          "loans": 4753,
+          "hour_distribution": {
+            "08-11": 0.181,
+            "11-14": 0.113,
+            "14-17": 0.265,
+            "17-20": 0.335
+          },
+          "month_index": [
+            0.94,
+            0.56,
+            1.19,
+            1.11,
+            1.16,
+            0.87,
+            0.7,
+            1.03,
+            1.45,
+            0.99,
+            0.96,
+            1.04
+          ]
+        },
+        {
+          "life_stage": "PARENT",
+          "loans": 1229,
+          "hour_distribution": {
+            "08-11": 0.182,
+            "11-14": 0.075,
+            "14-17": 0.273,
+            "17-20": 0.393
+          },
+          "month_index": [
+            0.9,
+            0.61,
+            0.9,
+            1.05,
+            1.02,
+            1.09,
+            1.6,
+            1.45,
+            0.91,
+            0.83,
+            0.81,
+            0.83
+          ]
+        }
+      ],
+      "book_popularity": {
+        "books": 113,
+        "top_10_books_share_of_items": 0.377,
+        "median_items_per_book": 93,
+        "max_items_per_book": 1627,
+        "min_items_per_book": 16,
+        "gini_items_per_book": 0.533,
+        "variant_turnover_tiers_last_90_days": {
+          "HIGH (>=30)": 28,
+          "LOW (<8)": 27,
+          "MEDIUM (8-29)": 59
+        }
+      },
+      "event_chains": {
+        "loans_created_from_reservation_pickup": 2844,
+        "alerts_notified": 1160,
+        "wishlists_later_borrowed": 2547
+      }
+    }
+  },
+  "evaluation": {
+    "risk": {
+      "late_return": {
+        "bayes_auc_ceiling": 0.7128,
+        "labelled_samples": 17867,
+        "point_in_time": {
+          "status": "OK",
+          "train_size": 13400,
+          "test_size": 4467,
+          "split_at": "2026-04-15T07:27:06.008Z",
+          "test_auc": 0.676,
+          "test_brier": 0.1544,
+          "test_ece": 0.0085,
+          "test_base_rate": 0.2104,
+          "best_threshold": {
+            "threshold": 0.24,
+            "precision": 0.35920177383592017,
+            "recall": 0.5170212765957447,
+            "f1": 0.4238988225032709
+          },
+          "lift": [
+            {
+              "k": 50,
+              "captured": 27,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.54,
+              "lift": 2.566148936170213
+            },
+            {
+              "k": 100,
+              "captured": 53,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.53,
+              "lift": 2.5186276595744683
+            },
+            {
+              "k": 200,
+              "captured": 104,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.52,
+              "lift": 2.471106382978723
+            }
+          ],
+          "weights": {
+            "loan_days": 0.1298,
+            "items_in_loan": 0.1789,
+            "prior_loans": -0.2482,
+            "prior_late_rate": 0.2102,
+            "prior_late_count": 0.1622,
+            "prior_renewal_rate": 0.0882,
+            "customer_tenure_days": 0.0074,
+            "unpaid_fines_at_checkout": 0.1092,
+            "plan_max_loan_days": 0.1298,
+            "plan_fine_per_day": -0.0949,
+            "from_reservation": -0.0226,
+            "condition_worn_at_checkout": 0
+          }
+        },
+        "legacy_sql": {
+          "status": "OK",
+          "train_size": 13400,
+          "test_size": 4467,
+          "split_at": "2026-04-15T07:27:06.008Z",
+          "test_auc": 0.6711,
+          "test_brier": 0.1553,
+          "test_ece": 0.0165,
+          "test_base_rate": 0.2104,
+          "best_threshold": {
+            "threshold": 0.2,
+            "precision": 0.30990899898887764,
+            "recall": 0.652127659574468,
+            "f1": 0.42015078821110347
+          },
+          "lift": [
+            {
+              "k": 50,
+              "captured": 22,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.44,
+              "lift": 2.090936170212766
+            },
+            {
+              "k": 100,
+              "captured": 49,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.49,
+              "lift": 2.328542553191489
+            },
+            {
+              "k": 200,
+              "captured": 100,
+              "base_rate": 0.21043205730915604,
+              "precision_at_k": 0.5,
+              "lift": 2.376063829787234
+            }
+          ],
+          "weights": {
+            "loan_days": 0.0952,
+            "items_in_loan": 0.1831,
+            "prior_loans": -0.2493,
+            "prior_late_rate": 0.2279,
+            "prior_late_count": 0.2174,
+            "prior_renewal_rate": 0.0734,
+            "customer_tenure_days": 0.0271,
+            "unpaid_fines_at_checkout": 0.023,
+            "plan_max_loan_days": 0.0952,
+            "plan_fine_per_day": -0.0848,
+            "from_reservation": -0.0267,
+            "condition_worn_at_checkout": 0
+          }
+        }
+      },
+      "no_show": {
+        "bayes_auc_ceiling": 0.7349,
+        "labelled_samples": 3579,
+        "point_in_time": {
+          "status": "OK",
+          "train_size": 2684,
+          "test_size": 895,
+          "split_at": "2026-05-08T04:55:32.038Z",
+          "test_auc": 0.6902,
+          "test_brier": 0.1636,
+          "test_ece": 0.035,
+          "test_base_rate": 0.2302,
+          "best_threshold": {
+            "threshold": 0.19,
+            "precision": 0.3508771929824561,
+            "recall": 0.6796116504854369,
+            "f1": 0.4628099173553719
+          },
+          "lift": [
+            {
+              "k": 50,
+              "captured": 26,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.52,
+              "lift": 2.259223300970874
+            },
+            {
+              "k": 100,
+              "captured": 49,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.49,
+              "lift": 2.128883495145631
+            },
+            {
+              "k": 200,
+              "captured": 88,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.44,
+              "lift": 1.9116504854368932
+            }
+          ],
+          "weights": {
+            "hold_hours": -0.552,
+            "lead_hours": 0.3209,
+            "quantity": -0.2966,
+            "channel_web": 0.3372,
+            "prior_reservations": -0.0373,
+            "prior_no_show_rate": 0.4996,
+            "customer_tenure_days": -0.0063,
+            "unpaid_fines_at_reservation": 0.1212,
+            "active_loans_at_reservation": 0.2652
+          }
+        },
+        "legacy_sql": {
+          "status": "OK",
+          "train_size": 2684,
+          "test_size": 895,
+          "split_at": "2026-05-08T04:55:32.038Z",
+          "test_auc": 0.6542,
+          "test_brier": 0.1678,
+          "test_ece": 0.0338,
+          "test_base_rate": 0.2302,
+          "best_threshold": {
+            "threshold": 0.2,
+            "precision": 0.3333333333333333,
+            "recall": 0.6310679611650486,
+            "f1": 0.436241610738255
+          },
+          "lift": [
+            {
+              "k": 50,
+              "captured": 25,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.5,
+              "lift": 2.1723300970873787
+            },
+            {
+              "k": 100,
+              "captured": 45,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.45,
+              "lift": 1.9550970873786409
+            },
+            {
+              "k": 200,
+              "captured": 75,
+              "base_rate": 0.23016759776536314,
+              "precision_at_k": 0.375,
+              "lift": 1.629247572815534
+            }
+          ],
+          "weights": {
+            "hold_hours": -0.4383,
+            "lead_hours": 0.3429,
+            "quantity": -0.293,
+            "channel_web": 0.3385,
+            "prior_reservations": 0.0091,
+            "prior_no_show_rate": 0.5007,
+            "customer_tenure_days": -0.0266,
+            "unpaid_fines_at_reservation": -0.094,
+            "active_loans_at_reservation": 0
+          }
+        }
+      }
+    },
+    "forecast": {
+      "window_days": 180,
+      "horizon_days": 7,
+      "min_train_days": 30,
+      "variants_with_demand": 114,
+      "variants_backtested_ok": 114,
+      "variants_insufficient_data": 0,
+      "mean_zero_demand_day_share": 0.7948,
+      "overall_models": [
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 0.3314,
+          "rmse": 0.4583,
+          "wape": 1.5809,
+          "samples": 16758
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 0.3381,
+          "rmse": 0.4822,
+          "wape": 1.6009,
+          "samples": 16758
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 0.3382,
+          "rmse": 0.498,
+          "wape": 1.582,
+          "samples": 16758
+        },
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 0.3577,
+          "rmse": 0.6289,
+          "wape": 1.5812,
+          "samples": 16758
+        }
+      ],
+      "best_model_votes": {
+        "MOVING_AVERAGE_30": 35,
+        "NAIVE_LAST_VALUE": 52,
+        "CURRENT_EWMA_TREND": 12,
+        "MOVING_AVERAGE_7": 15
+      },
+      "top_5_demand_variants": [
+        {
+          "variant_id": "86936782-5b22-4351-a186-842a2dbfe829",
+          "borrows": 534,
+          "best_model": "MOVING_AVERAGE_30",
+          "models": [
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 1.4576
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 1.5044
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 1.577
+            },
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 1.9048
+            }
+          ]
+        },
+        {
+          "variant_id": "b895862b-45f0-400c-87ce-8d791ff59f3b",
+          "borrows": 256,
+          "best_model": "MOVING_AVERAGE_30",
+          "models": [
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.9676
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.9942
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 1.0347
+            },
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 1.2925
+            }
+          ]
+        },
+        {
+          "variant_id": "82ff6d4d-db0a-41dd-9846-af7e15856b29",
+          "borrows": 238,
+          "best_model": "MOVING_AVERAGE_30",
+          "models": [
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.9927
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 1.068
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 1.1059
+            },
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 1.5306
+            }
+          ]
+        },
+        {
+          "variant_id": "8420a581-4b6a-4045-9b27-fafc3d71d933",
+          "borrows": 217,
+          "best_model": "MOVING_AVERAGE_30",
+          "models": [
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.9027
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.945
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.9563
+            },
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 1.102
+            }
+          ]
+        },
+        {
+          "variant_id": "2815929a-f172-4186-a2d0-4f3974815d6d",
+          "borrows": 155,
+          "best_model": "MOVING_AVERAGE_30",
+          "models": [
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.7717
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.8999
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.903
+            },
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 1.0136
+            }
+          ]
+        }
+      ]
+    },
+    "recommendation": {
+      "protocol": "temporal hold-out: global cutoff at the 80th percentile of loan-item borrow times; relevance = books first borrowed after the cutoff that were not borrowed/wishlisted/rated before it",
+      "cutoff": "2026-05-30T18:50:54.068Z",
+      "eligible_users": 368,
+      "models": {
+        "POPULARITY": {
+          "users": 368,
+          "hit_rate@5": 0.6766,
+          "recall@5": 0.2898,
+          "ndcg@5": 0.3176,
+          "mrr": 0.5122,
+          "catalog_coverage@5": 0.6283,
+          "personalization@5": 0.8991,
+          "hit_rate@10": 0.8043,
+          "recall@10": 0.4496,
+          "ndcg@10": 0.372,
+          "catalog_coverage@10": 0.7965,
+          "personalization@10": 0.8542
+        },
+        "RANDOM": {
+          "users": 368,
+          "hit_rate@5": 0.2065,
+          "recall@5": 0.0589,
+          "ndcg@5": 0.0574,
+          "mrr": 0.1471,
+          "catalog_coverage@5": 0.9912,
+          "personalization@5": 0.9718,
+          "hit_rate@10": 0.4266,
+          "recall@10": 0.1542,
+          "ndcg@10": 0.0974,
+          "catalog_coverage@10": 1,
+          "personalization@10": 0.9457
+        },
+        "ORACLE_TRUE_PREFERENCE": {
+          "users": 368,
+          "hit_rate@5": 0.8207,
+          "recall@5": 0.412,
+          "ndcg@5": 0.4259,
+          "mrr": 0.5952,
+          "catalog_coverage@5": 0.8496,
+          "personalization@5": 0.9295,
+          "hit_rate@10": 0.9185,
+          "recall@10": 0.5852,
+          "ndcg@10": 0.4803,
+          "catalog_coverage@10": 0.9469,
+          "personalization@10": 0.8997
+        },
+        "SMARTBOOK_PRODUCTION_RANKER": {
+          "users": 368,
+          "hit_rate@5": 0.5109,
+          "recall@5": 0.1847,
+          "ndcg@5": 0.2046,
+          "mrr": 0.3605,
+          "catalog_coverage@5": 0.8407,
+          "personalization@5": 0.9172,
+          "hit_rate@10": 0.6223,
+          "recall@10": 0.2841,
+          "ndcg@10": 0.2362,
+          "catalog_coverage@10": 0.9735,
+          "personalization@10": 0.8915
+        }
+      },
+      "production_ranker_included": true,
+      "preference_recovery": {
+        "users": 368,
+        "mean_spearman_inferred_vs_true_category_preference": 0.6543,
+        "top_category_agreement": 0.6467,
+        "note": "Inferred from observable history only; the truth vector is used solely as the comparison target."
+      }
+    }
+  }
+}

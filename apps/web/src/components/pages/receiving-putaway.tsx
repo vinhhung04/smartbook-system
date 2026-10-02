@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router";
-import { AlertTriangle, ArrowRightLeft, Filter, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, ChevronDown, Filter, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "motion/react";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
@@ -25,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button, IconButton } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface DraftAllocationLine {
   id: string;
@@ -34,6 +34,11 @@ interface DraftAllocationLine {
   scanned_location_barcode: string;
   scanned_product_barcode: string;
 }
+
+const LOCATION_TYPE_LABEL: Record<string, string> = {
+  RECEIVING: "Khu nhận hàng",
+  STAGING: "Khu tập kết",
+};
 
 function makeLineId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -87,9 +92,9 @@ export function ReceivingPutawayPage() {
   const [reverseQuantity, setReverseQuantity] = useState(0);
   const [reverseReason, setReverseReason] = useState("");
 
-  // Storage suggestion state
-  const [showStorageSuggestion, setShowStorageSuggestion] = useState(false);
-  const [suggestionQuantity, setSuggestionQuantity] = useState(1);
+  // The line auto-created from the first candidate. Picking a suggested
+  // location replaces it while the user has not edited it yet.
+  const [defaultLineId, setDefaultLineId] = useState<string | null>(null);
 
   const selectedVariantItem = useMemo(
     () => receivingItems.find((item) => item.variant_id === selectedVariantId) || null,
@@ -100,6 +105,23 @@ export function ReceivingPutawayPage() {
     () => draftLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
     [draftLines],
   );
+
+  // How many books this putaway still has to place: the source stock, capped
+  // by what the goods receipt has left when coming from a receipt.
+  const neededQty = selectedVariantItem
+    ? Math.min(selectedVariantItem.on_hand_qty, receiptMaxQty ?? Number.POSITIVE_INFINITY)
+    : 0;
+  const remainingToAllocate = Math.max(0, neededQty - totalDraftQty);
+  // Picking a suggestion replaces the untouched default line, so suggestions
+  // are requested for everything not covered by lines the user chose.
+  const defaultLineQty = Number(draftLines.find((line) => line.id === defaultLineId)?.quantity || 0);
+  const remainingForSuggestions = neededQty - (totalDraftQty - defaultLineQty);
+  // Once chosen lines cover everything, stop re-ranking so the list the user
+  // picked from stays on screen.
+  const suggestionsPaused = remainingForSuggestions <= 0;
+  // Coming from a goods receipt whose remaining quantity is now fully on shelves.
+  const receiptDone = receiptMaxQty !== null && receiptMaxQty <= 0;
+  const suggestionQty = Math.max(1, suggestionsPaused ? neededQty : remainingForSuggestions);
 
   const candidateMap = useMemo(() => {
     const map = new Map<string, PutawayCandidate>();
@@ -161,7 +183,7 @@ export function ReceivingPutawayPage() {
     setReceivingItems(items);
     const lockedVariantExists = lockedCtx.variantId && items.some((i) => i.variant_id === lockedCtx.variantId);
     if (lockedCtx.variantId && !lockedVariantExists) {
-      toast.warning("Không tìm thấy sách này trong khu RECEIVING đang chọn. Hãy thử chọn khu khác.");
+      toast.warning("Không tìm thấy sách này trong khu nhận hàng đang chọn. Hãy thử chọn khu khác.");
     }
     const preferredVariantId = (lockedVariantExists ? lockedCtx.variantId : items[0]?.variant_id) || "";
     setSelectedVariantId(preferredVariantId);
@@ -180,11 +202,14 @@ export function ReceivingPutawayPage() {
       const res = await receivingPutawayService.getCandidates(receivingId, variantId);
       setCandidates(res.candidates || []);
       setDraftLines([]);
+      setDefaultLineId(null);
       if ((res.candidates || []).length > 0) {
         const top = res.candidates[0];
+        const lineId = makeLineId();
+        setDefaultLineId(lineId);
         setDraftLines([
           {
-            id: makeLineId(),
+            id: lineId,
             target_location_id: top.id,
             quantity: 1,
             reason: "",
@@ -228,7 +253,7 @@ export function ReceivingPutawayPage() {
   useEffect(() => {
     if (!selectedReceivingId) return;
     void loadReceivingItems(selectedReceivingId).catch((error) => {
-      toast.error(getApiErrorMessage(error, "Không tải được tồn kho RECEIVING"));
+      toast.error(getApiErrorMessage(error, "Không tải được tồn kho khu nhận hàng"));
     });
   }, [selectedReceivingId, loadReceivingItems]);
 
@@ -284,6 +309,7 @@ export function ReceivingPutawayPage() {
   };
 
   const updateLine = (id: string, patch: Partial<DraftAllocationLine>) => {
+    if (id === defaultLineId) setDefaultLineId(null);
     setDraftLines((prev) => prev.map((line) => (line.id === id ? { ...line, ...patch } : line)));
   };
 
@@ -321,7 +347,7 @@ export function ReceivingPutawayPage() {
 
       const inReceiving = receivingItems.find((item) => item.variant_id === selected.variant_id);
       if (!inReceiving) {
-        toast.error("SKU này không tồn tại trong RECEIVING đang chọn");
+        toast.error("Sách này không có trong khu nhận hàng đang chọn");
         return;
       }
 
@@ -335,7 +361,7 @@ export function ReceivingPutawayPage() {
 
   const handleScanTargetLocation = async () => {
     if (!selectedWarehouseId || draftLines.length === 0) {
-      toast.error("Vui lòng chọn kho và tạo dòng allocation trước");
+      toast.error("Vui lòng chọn kho và tạo dòng phân bổ trước");
       return;
     }
 
@@ -386,17 +412,17 @@ export function ReceivingPutawayPage() {
   };
 
   const validateDraft = (): string | null => {
-    if (!selectedVariantItem) return "Chưa chọn SKU nguồn";
-    if (draftLines.length === 0) return "Chưa có allocation nào";
+    if (!selectedVariantItem) return "Chưa chọn sách cần cất";
+    if (draftLines.length === 0) return "Chưa có dòng phân bổ nào";
 
     for (const line of draftLines) {
       const qty = Number(line.quantity || 0);
       if (!line.target_location_id || !Number.isFinite(qty) || qty <= 0) {
-        return "Mỗi dòng allocation phải có vị trí đích và số lượng > 0";
+        return "Mỗi dòng phân bổ phải có vị trí đích và số lượng lớn hơn 0";
       }
 
       if (!line.reason.trim()) {
-        return "Mỗi dòng allocation bắt buộc có lý do";
+        return "Mỗi dòng phân bổ bắt buộc có lý do";
       }
 
       const candidate = candidateMap.get(line.target_location_id);
@@ -410,7 +436,7 @@ export function ReceivingPutawayPage() {
     }
 
     if (totalDraftQty > selectedVariantItem.on_hand_qty) {
-      return "Tổng số lượng allocation vượt quá tồn trong RECEIVING";
+      return "Tổng số lượng phân bổ vượt quá tồn trong khu nhận hàng";
     }
 
     if (receiptMaxQty !== null && totalDraftQty > receiptMaxQty) {
@@ -422,7 +448,7 @@ export function ReceivingPutawayPage() {
 
   const handleConfirmTransfer = async () => {
     if (!selectedWarehouseId || !selectedReceivingId || !selectedVariantId) {
-      toast.error("Chưa chọn đủ kho / receiving / SKU");
+      toast.error("Chưa chọn đủ kho / khu nhận hàng / sách");
       return;
     }
 
@@ -479,7 +505,7 @@ export function ReceivingPutawayPage() {
 
   const handleReverse = async () => {
     if (!selectedWarehouseId || !selectedReverseCompartmentId || !reverseReceivingId || !reverseVariantId) {
-      toast.error("Vui lòng chọn đủ thông tin reverse");
+      toast.error("Vui lòng chọn đủ thông tin hoàn trả");
       return;
     }
 
@@ -487,17 +513,17 @@ export function ReceivingPutawayPage() {
 
     const qty = Number(reverseQuantity || 0);
     if (!Number.isFinite(qty) || qty <= 0) {
-      toast.error("Số lượng reverse phải > 0");
+      toast.error("Số lượng hoàn trả phải lớn hơn 0");
       return;
     }
 
     if (!reverseReason.trim()) {
-      toast.error("Lý do reverse là bắt buộc");
+      toast.error("Lý do hoàn trả là bắt buộc");
       return;
     }
 
     if (!reverseItem || qty > reverseItem.on_hand_qty) {
-      toast.error("Số lượng reverse vượt quá tồn trong ngăn");
+      toast.error("Số lượng hoàn trả vượt quá tồn trong ngăn");
       return;
     }
 
@@ -523,15 +549,16 @@ export function ReceivingPutawayPage() {
         selectedReceivingId && selectedVariantId ? loadCandidates(selectedReceivingId, selectedVariantId) : Promise.resolve(),
       ]);
 
-      toast.success(`Đã trả về RECEIVING ${res.data.moved_quantity} quyển`);
+      toast.success(`Đã trả ${res.data.moved_quantity} quyển về khu nhận hàng`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Reverse thất bại"));
+      toast.error(getApiErrorMessage(error, "Hoàn trả thất bại"));
     } finally {
       setSavingReverse(false);
     }
   };
 
-  // Handle storage suggestion selection
+  // Picking a suggested location never finalises anything: it only fills an
+  // allocation line that the user still reviews and confirms.
   const handleSelectSuggestedLocation = (location: {
     locationId: string;
     locationCode: string;
@@ -541,41 +568,36 @@ export function ReceivingPutawayPage() {
   }) => {
     const candidate = candidateMap.get(location.locationId);
     if (!candidate) {
-      toast.warning(
-        `Vị trí ${location.locationCode} không còn trong danh sách hợp lệ. Vui lòng tải lại vị trí.`
-      );
+      toast.warning("Trạng thái vị trí đã thay đổi. Vui lòng lấy gợi ý mới.");
+      return;
+    }
+    if (draftLines.some((line) => line.target_location_id === location.locationId && line.id !== defaultLineId)) {
+      toast.info(`Vị trí ${location.locationCode} đã có trong danh sách phân bổ`);
       return;
     }
 
-    const maxQty = Math.min(
-      suggestionQuantity,
-      selectedVariantItem?.on_hand_qty ?? suggestionQuantity,
-      candidate.remaining_capacity
-    );
-    const safeQty = Math.max(1, maxQty);
-    const autoReason = `Gợi ý từ hệ thống: ${location.locationCode}`;
-
-    if (draftLines.length > 0) {
-      updateLine(draftLines[0].id, {
-        target_location_id: location.locationId,
-        quantity: safeQty,
-        reason: autoReason,
-      });
-      toast.success(`Đã áp dụng vị trí gợi ý: ${location.locationCode}`);
-    } else {
-      setDraftLines([
-        {
-          id: makeLineId(),
-          target_location_id: location.locationId,
-          quantity: safeQty,
-          reason: autoReason,
-          scanned_location_barcode: "",
-          scanned_product_barcode: "",
-        },
-      ]);
-      toast.success(`Đã tạo dòng allocation với vị trí: ${location.locationCode}`);
+    const replacing = draftLines.length === 1 && draftLines[0].id === defaultLineId;
+    const stillNeeded = replacing ? neededQty : remainingToAllocate;
+    if (stillNeeded <= 0) {
+      toast.info("Đã phân bổ đủ số lượng cần cất. Giảm số lượng ở dòng khác trước khi thêm vị trí mới.");
+      return;
     }
-    setShowStorageSuggestion(false);
+    const quantity = Math.max(1, Math.min(stillNeeded, candidate.remaining_capacity));
+    const line: DraftAllocationLine = {
+      id: makeLineId(),
+      target_location_id: location.locationId,
+      quantity,
+      reason: `Theo gợi ý hệ thống: ${location.locationCode}`,
+      scanned_location_barcode: "",
+      scanned_product_barcode: "",
+    };
+    setDraftLines((prev) => (replacing ? [line] : [...prev, line]));
+    setDefaultLineId(null);
+    toast.success(
+      quantity < stillNeeded
+        ? `Đã thêm ${location.locationCode} (${quantity} cuốn). Còn ${stillNeeded - quantity} cuốn — chọn thêm một vị trí.`
+        : `Đã thêm ${location.locationCode} (${quantity} cuốn)`,
+    );
   };
 
   if (loading) {
@@ -591,8 +613,8 @@ export function ReceivingPutawayPage() {
       <FadeItem>
         <PageHeader
           icon={ArrowRightLeft}
-          title="Receiving - Shelf Putaway"
-          description="Chuyển hàng từ RECEIVING lên SHELF_COMPARTMENT và reverse ngược lại"
+          title="Nhận & cất hàng lên kệ"
+          description="Chuyển sách từ khu nhận hàng lên ngăn kệ, hoặc hoàn trả về khu nhận hàng"
           iconBg="bg-violet-100 dark:bg-violet-500/15"
           iconColor="text-violet-600 dark:text-violet-400"
         />
@@ -600,17 +622,21 @@ export function ReceivingPutawayPage() {
           <Alert className="mt-3 border-violet-200 bg-violet-50 dark:border-violet-500/20 dark:bg-violet-500/10">
             <Lock className="text-violet-600 dark:text-violet-400" />
             <AlertDescription className="text-violet-800 dark:text-violet-300">
-              Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
-              <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
-              Kho và SKU đã được khoá theo phiếu nhập.
+              <p>
+                Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
+                <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
+                {' '}Kho và sách đã được khoá theo phiếu nhập.
+              </p>
             </AlertDescription>
           </Alert>
         ) : (
           <Alert className="mt-3 border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
             <AlertTriangle className="text-amber-600 dark:text-amber-400" />
             <AlertDescription className="text-amber-800 dark:text-amber-300">
+              <p>
               Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
-              <a href="/putaway" className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200">Putaway queue (/putaway)</a>.
+              <Link to="/putaway" className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200">Cất hàng vào kệ</Link>.
+              </p>
             </AlertDescription>
           </Alert>
         )}
@@ -618,7 +644,7 @@ export function ReceivingPutawayPage() {
 
       {/* Warehouse Filter */}
       <FadeItem>
-        <SectionCard title="Phạm vi làm việc" subtitle="Chọn kho và khu RECEIVING đang thao tác" icon={Filter}>
+        <SectionCard title="Phạm vi làm việc" subtitle="Chọn kho và khu nhận hàng đang thao tác" icon={Filter}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}</p>
@@ -638,14 +664,14 @@ export function ReceivingPutawayPage() {
               </Select>
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Nguồn RECEIVING</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu nhận hàng nguồn</p>
               <Select value={selectedReceivingId || "none"} onValueChange={(value) => setSelectedReceivingId(value === "none" ? "" : value)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn khu RECEIVING/STAGING" />
+                  <SelectValue placeholder="Chọn khu nhận hàng" />
                 </SelectTrigger>
                 <SelectContent>
                   {receivings.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>{location.location_code} ({location.location_type})</SelectItem>
+                    <SelectItem key={location.id} value={location.id}>{location.location_code} · {LOCATION_TYPE_LABEL[location.location_type] ?? location.location_type}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -661,11 +687,11 @@ export function ReceivingPutawayPage() {
 
       {/* Section A: Receiving -> Shelf */}
       <FadeItem>
-        <SectionCard title="A. Receiving → Shelf" subtitle="Chuyển sách từ vùng nhận hàng lên kệ" icon={ArrowRightLeft}>
+        <SectionCard title="A. Cất hàng lên kệ" subtitle="Chuyển sách từ khu nhận hàng lên ngăn kệ" icon={ArrowRightLeft}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
-                SKU trong RECEIVING {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}
+                Sách trong khu nhận hàng {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}
               </p>
               <Select
                 value={selectedVariantId || "none"}
@@ -673,12 +699,12 @@ export function ReceivingPutawayPage() {
                 disabled={isVariantLocked}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn SKU" />
+                  <SelectValue placeholder="Chọn sách" />
                 </SelectTrigger>
                 <SelectContent>
                   {receivingItems.map((item) => (
                     <SelectItem key={item.variant_id} value={item.variant_id}>
-                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | on_hand {item.on_hand_qty}
+                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | tồn {item.on_hand_qty}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -708,7 +734,7 @@ export function ReceivingPutawayPage() {
                 <Input
                   value={scanTargetBarcodeInput}
                   onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
-                  placeholder="locations.barcode"
+                  placeholder="Mã vạch ngăn kệ"
                   className="flex-1 h-auto py-2.5"
                 />
                 <IconButton variant="outline" onClick={handleScanTargetLocation} label="Quét vị trí đích">
@@ -741,100 +767,58 @@ export function ReceivingPutawayPage() {
             </div>
           ) : null}
 
-          <div className="mt-4 overflow-hidden rounded-[12px] border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
-                    <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingCandidates ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="whitespace-normal py-6 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</TableCell>
-                  </TableRow>
-                ) : candidates.length === 0 ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="whitespace-normal">
-                      <EmptyState
-                        variant="no-data"
-                        title="Không có ngăn còn chỗ trống"
-                        description="Kho này chưa có ngăn kệ nào còn chỗ. Hãy kiểm tra cấu hình kệ/ngăn của kho trước khi cất hàng."
-                        action={<Link to="/shelves" className="text-[12px] font-medium text-indigo-600 hover:underline">Mở trang Kệ hàng</Link>}
-                        className="py-6"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ) : candidates.map((candidate) => (
-                  <TableRow key={candidate.id} className="hover:bg-muted/30">
-                    <TableCell className="text-[12px] font-semibold">{candidate.location_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.zone_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.shelf_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.current_on_hand}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.max_capacity}</TableCell>
-                    <TableCell className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-[12px] text-muted-foreground">
-              Tổng draft: {totalDraftQty} / tồn nguồn: {selectedVariantItem?.on_hand_qty || 0}
-              {receiptMaxQty !== null && (
-                <span className={`ml-2 font-semibold ${totalDraftQty > receiptMaxQty ? 'text-red-600 dark:text-red-400' : 'text-violet-700 dark:text-violet-400'}`}>
-                  · giới hạn phiếu: {receiptMaxQty} cuốn
-                </span>
+          {receiptDone ? (
+            <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+              Đã cất đủ số lượng của phiếu cho sách này.{" "}
+              {lockedCtx.goodsReceiptId && (
+                <Link to={`/putaway/${lockedCtx.goodsReceiptId}`} className="font-semibold underline">Quay lại phiếu nhập</Link>
               )}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowStorageSuggestion(!showStorageSuggestion)}
-                className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/15"
-              >
-                {showStorageSuggestion ? "Ẩn gợi ý" : "Gợi ý vị trí (AI)"}
-              </Button>
-              <Button variant="outline" size="sm" onClick={addDraftLine}>Thêm dòng allocation</Button>
             </div>
-          </div>
+          ) : (<>
+          {loadingCandidates ? (
+            <p className="mt-4 py-4 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</p>
+          ) : candidates.length === 0 ? (
+            <EmptyState
+              variant="no-data"
+              title="Không có ngăn còn chỗ trống"
+              description="Kho này chưa có ngăn kệ nào còn chỗ. Hãy kiểm tra cấu hình kệ/ngăn của kho trước khi cất hàng."
+              action={<Link to="/shelves" className="text-[12px] font-medium text-indigo-600 hover:underline">Mở trang Kệ hàng</Link>}
+              className="mt-4 py-6"
+            />
+          ) : null}
 
-          {/* Storage Suggestion Panel */}
-          {showStorageSuggestion && selectedWarehouseId && selectedVariantId && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4"
-            >
-              <div className="mb-3 flex items-center gap-3">
-                <label className="text-[12px] text-muted-foreground">Số lượng cần gợi ý:</label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={suggestionQuantity}
-                  onChange={(e) => setSuggestionQuantity(Math.max(1, Number(e.target.value)))}
-                  className="h-auto w-20 py-1.5 text-[12px]"
-                />
-              </div>
+          {/* Primary path: ranked suggestions for what is still left to place. */}
+          {selectedWarehouseId && selectedVariantId && candidates.length > 0 && (
+            <div className="mt-4">
               <StorageSuggestionPanel
                 warehouseId={selectedWarehouseId}
                 variantId={selectedVariantId}
-                quantity={suggestionQuantity}
+                quantity={suggestionQty}
+                autoRequest
+                disabled={suggestionsPaused}
+                selectedLocationIds={draftLines.filter((line) => line.id !== defaultLineId).map((line) => line.target_location_id)}
                 onSelectLocation={handleSelectSuggestedLocation}
               />
-            </motion.div>
+            </div>
           )}
 
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-muted-foreground" aria-live="polite">
+              {selectedVariantItem && (<>
+              Cần cất: <span className="font-semibold text-foreground">{neededQty}</span> cuốn
+              {" · "}Đã phân bổ: <span className="font-semibold text-foreground">{totalDraftQty}</span>
+              {" · "}Còn lại:{" "}
+              <span className={`font-semibold ${totalDraftQty > neededQty ? "text-red-600 dark:text-red-400" : remainingToAllocate === 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                {totalDraftQty > neededQty ? `vượt ${totalDraftQty - neededQty}` : remainingToAllocate}
+              </span>
+              {receiptMaxQty !== null && <span className="ml-1">(giới hạn theo phiếu: {receiptMaxQty} cuốn)</span>}
+              </>)}
+            </p>
+            <Button variant="outline" size="sm" onClick={addDraftLine}>Thêm vị trí thủ công</Button>
+          </div>
           <div className="mt-3 space-y-2">
             {draftLines.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground text-center py-4">Chưa có allocation nào</p>
+              <p className="text-[12px] text-muted-foreground text-center py-4">Chưa có dòng phân bổ nào — chọn một vị trí đề xuất ở trên hoặc thêm vị trí thủ công.</p>
             ) : draftLines.map((line) => {
               const lineCandidate = candidateMap.get(line.target_location_id);
               return (
@@ -889,6 +873,42 @@ export function ReceivingPutawayPage() {
             })}
           </div>
 
+          {candidates.length > 0 && !loadingCandidates && (
+            <Collapsible className="mt-4">
+              <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md py-1 text-left text-[12px] font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50">
+                Tất cả ngăn còn chỗ ({candidates.length})
+                <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <div className="overflow-hidden rounded-[12px] border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
+                    <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {candidates.map((candidate) => (
+                  <TableRow key={candidate.id} className="hover:bg-muted/30">
+                    <TableCell className="text-[12px] font-semibold">{candidate.location_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.zone_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.shelf_code}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.current_on_hand}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.max_capacity}</TableCell>
+                    <TableCell className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           <div className="flex justify-end mt-4">
             <Button
               onClick={handleConfirmTransfer}
@@ -900,12 +920,13 @@ export function ReceivingPutawayPage() {
               Xác nhận chuyển lên kệ
             </Button>
           </div>
+          </>)}
         </SectionCard>
       </FadeItem>
 
       {/* Section B: Reverse — chỉ manager/admin mới thấy */}
       {isManager && <FadeItem>
-        <SectionCard title="B. Hoàn trả từ kệ về RECEIVING" subtitle="Trả sách từ kệ về vùng nhận hàng" icon={RefreshCw}>
+        <SectionCard title="B. Hoàn trả từ kệ về khu nhận hàng" subtitle="Trả sách từ ngăn kệ về khu nhận hàng" icon={RefreshCw}>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn nguồn</p>
@@ -918,26 +939,26 @@ export function ReceivingPutawayPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {occupiedCompartments.map((compartment) => (
-                    <SelectItem key={compartment.id} value={compartment.id}>{compartment.location_code} (on_hand {compartment.on_hand_qty})</SelectItem>
+                    <SelectItem key={compartment.id} value={compartment.id}>{compartment.location_code} (tồn {compartment.on_hand_qty})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">SKU trong ngăn</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Sách trong ngăn</p>
               <Select
                 value={reverseVariantId || "none"}
                 onValueChange={(value) => setReverseVariantId(value === "none" ? "" : value)}
                 disabled={loadingReverseItems}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn SKU" />
+                  <SelectValue placeholder="Chọn sách" />
                 </SelectTrigger>
                 <SelectContent>
                   {reverseItems.map((item) => (
                     <SelectItem key={item.variant_id} value={item.variant_id}>
-                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | on_hand {item.on_hand_qty}
+                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | tồn {item.on_hand_qty}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -945,13 +966,13 @@ export function ReceivingPutawayPage() {
             </div>
 
             <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu RECEIVING đích</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu nhận hàng đích</p>
               <Select
                 value={reverseReceivingId || "none"}
                 onValueChange={(value) => setReverseReceivingId(value === "none" ? "" : value)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn khu RECEIVING" />
+                  <SelectValue placeholder="Chọn khu nhận hàng" />
                 </SelectTrigger>
                 <SelectContent>
                   {receivings.map((receiving) => (
@@ -990,7 +1011,7 @@ export function ReceivingPutawayPage() {
               loading={savingReverse}
               className="bg-gradient-to-r from-amber-600 to-orange-600 hover:opacity-90"
             >
-              Hoàn trả về RECEIVING
+              Hoàn trả về khu nhận hàng
             </Button>
           </div>
         </SectionCard>

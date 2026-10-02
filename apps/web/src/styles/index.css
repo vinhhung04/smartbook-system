@@ -1,6 +1,7 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+@import './book-3d.css';
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

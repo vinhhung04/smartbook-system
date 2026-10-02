@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { motion } from "motion/react";
 import {
-  Sparkles, BookOpen, RefreshCw, Star, TrendingUp,
+  Sparkles, BookOpen, RefreshCw, TrendingUp,
   BarChart3, AlertCircle,
 } from "lucide-react";
 import {
@@ -17,29 +17,11 @@ import { analyticsService } from "@/services/analytics";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSpinner } from "@/components/ui/loading-state";
+import { Button } from "@/components/ui/button";
+import { AIRecommendationNotice } from "@/components/ai/decision-card";
+import { RecommendationCard } from "@/components/ai/recommendation-card";
 
 const PIE_COLORS = ["#6366f1", "#a78bfa", "#c084fc", "#e879f9", "#f472b6", "#fb7185", "#38bdf8", "#34d399"];
-
-// Falls back to the category-colored icon when a book has no cover or the image
-// fails to load — same graceful-degradation pattern as CatalogBookThumbnail.
-function RecommendationCover({ title, imageUrl, color }: { title: string; imageUrl?: string; color: string }) {
-  const [imgError, setImgError] = useState(false);
-  if (imageUrl && !imgError) {
-    return (
-      <img
-        src={imageUrl}
-        alt={title}
-        className="w-10 h-14 rounded-[8px] object-cover shrink-0 shadow-sm border border-border"
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-  return (
-    <div className="w-10 h-14 rounded-[8px] flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>
-      <BookOpen className="w-5 h-5 text-white" />
-    </div>
-  );
-}
 
 // Aggregated server-side (SQL GROUP BY over the whole loan_items table), not a
 // client-side sample — so this is an honest "toàn thư viện" ranking regardless
@@ -62,14 +44,6 @@ export function RecommendationsPage() {
   // The top-books analytics endpoint is not readable by every staff role. Surfacing
   // that is the point: an empty chart caused by a 403 must not look like "no data yet".
   const [topBooksError, setTopBooksError] = useState("");
-
-  // Shared with the recommendation cards below so a card's icon color always
-  // matches its category's slice in the pie chart legend.
-  const categoryColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    categoryData.forEach((c, i) => { map[c.name] = PIE_COLORS[i % PIE_COLORS.length]; });
-    return map;
-  }, [categoryData]);
 
   const loadRecommendations = useCallback(async () => {
     try {
@@ -121,7 +95,7 @@ export function RecommendationsPage() {
     } catch (err) {
       console.error("Failed to load recommendations:", err);
       setError("Không thể tải gợi ý. Vui lòng thử lại.");
-      toast.error("Failed to load AI recommendations");
+      toast.error("Không thể tải gợi ý sách");
     } finally {
       setLoading(false);
     }
@@ -186,7 +160,7 @@ export function RecommendationsPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={categoryData} cx="38%" cy="50%" outerRadius={70} dataKey="value">
-                    {categoryData.map((entry, i) => <Cell key={i} fill={categoryColorMap[entry.name] || PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    {categoryData.map((entry, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                   </Pie>
                   <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: "1px solid #e2e8f0" }} formatter={(value: number, name: string) => [`${value}`, name]} />
                   <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: 11 }} />
@@ -204,8 +178,9 @@ export function RecommendationsPage() {
           <Sparkles className="w-4 h-4 text-violet-500 dark:text-violet-400" />
           {personalized ? "Gợi ý cho bạn" : "Gợi ý theo đánh giá và mức phổ biến"}
         </h3>
+        <AIRecommendationNotice className="mt-1" />
         {!personalized && (
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[12px] text-muted-foreground mt-1">
             Tài khoản nhân viên không có lịch sử mượn cá nhân, nên đây là gợi ý chung của thư viện.
             Bạn đọc xem gợi ý riêng của mình trong mục &quot;Gợi ý cho bạn&quot; của cổng khách hàng.
           </p>
@@ -236,36 +211,16 @@ export function RecommendationsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {recommendations.map((rec, i) => (
             <motion.div key={rec.book_id || i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-              <NavLink to={`/book/${rec.book_id}`}
-                className="block h-full bg-card rounded-[14px] border border-border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:shadow-none transition-all group">
-              <div className="flex items-start gap-3 mb-3">
-                <RecommendationCover
-                  title={rec.title}
-                  imageUrl={coverByBookId[rec.book_id]}
-                  color={categoryColorMap[rec.category] || "#94a3b8"}
-                />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[13px] truncate text-foreground group-hover:text-violet-700 dark:group-hover:text-violet-400 transition-colors" style={{ fontWeight: 650 }}>{rec.title}</h4>
-                  <p className="text-[11px] text-muted-foreground truncate">{rec.author}</p>
-                </div>
-              </div>
-              {rec.category && (
-                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] bg-violet-50 text-violet-600 border border-violet-100/60 dark:bg-violet-500/10 dark:text-violet-400 dark:border-violet-500/20 mb-2" style={{ fontWeight: 550 }}>
-                  {rec.category}
-                </span>
-              )}
-              <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">{rec.reason}</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: 5 }).map((_, si) => (
-                    <Star key={si} className={`w-3 h-3 ${si < Math.round((rec.score || 0) * 5) ? "text-amber-400 fill-amber-400" : "text-slate-200 dark:text-slate-700"}`} />
-                  ))}
-                </div>
-                <span className="text-[10px] text-muted-foreground" style={{ fontWeight: 550 }}>
-                  Phù hợp {Math.round((rec.score || 0) * 100)}%
-                </span>
-              </div>
-              </NavLink>
+              <RecommendationCard
+                rec={rec}
+                href={`/book/${rec.book_id}`}
+                coverUrl={coverByBookId[rec.book_id]}
+                actions={(
+                  <Button asChild size="sm" variant="outline">
+                    <NavLink to={`/book/${rec.book_id}`}>Xem sách</NavLink>
+                  </Button>
+                )}
+              />
             </motion.div>
           ))}
         </div>

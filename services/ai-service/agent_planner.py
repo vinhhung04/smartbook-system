@@ -645,9 +645,9 @@ def _build_reservation_draft(
     requires_review = not (variant_id and warehouse_id)
     warnings = []
     if not variant_id:
-        warnings.append("Missing book_variant_id. Cannot confirm real reservation without variant_id.")
+        warnings.append("Chưa xác định được biến thể sách (variant) — chỉ có thể lưu bản nháp, chưa tạo đặt trước thật.")
     if not warehouse_id:
-        warnings.append("Missing warehouse_id. Cannot confirm real reservation without warehouse_id.")
+        warnings.append("Chưa xác định được kho còn sách — chỉ có thể lưu bản nháp, chưa tạo đặt trước thật.")
 
     user_roles = {r.upper().replace("-", "_") for r in (user_context.roles if user_context else [])}
     requires_customer_selection = bool(
@@ -659,6 +659,8 @@ def _build_reservation_draft(
         "summary": f"Tạo đặt chỗ sách '{found_title}'",
         "payload": {
             "title_query": query,
+            # Resolved catalog title for display (additive; title_query stays the raw query).
+            "book_title": found_title,
             "book_id": book_id,
             "book_variant_id": variant_id,
             "variant_id": variant_id,

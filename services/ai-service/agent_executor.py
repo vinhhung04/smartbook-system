@@ -35,6 +35,18 @@ def _user_roles_set(user_context: UserContext) -> set[str]:
 
 # ── Reorder Draft Executor ─────────────────────────────────────────────────────
 
+def _warehouse_display(item: dict, effective_warehouse_id: str, payload: dict) -> str:
+    """Human-readable warehouse for result messages. The item's own name is
+    only right when the item's warehouse is the one actually used; when the
+    user picked a warehouse at confirm time (fallback or AMBIGUOUS override),
+    use the name the UI sent alongside that id. The raw id is a last resort."""
+    if item.get("warehouse_id") == effective_warehouse_id:
+        name = item.get("warehouse_name") or item.get("warehouse_code")
+    else:
+        name = payload.get("warehouse_name") or payload.get("warehouse_code")
+    return name or effective_warehouse_id
+
+
 async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict:
     payload = pending_action.payload
 
@@ -168,7 +180,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                         "title": title,
                         "warehouse_id": item.get("warehouse_id") or effective_warehouse_id,
                         "warehouse_code": item.get("warehouse_code"),
-                        "warehouse_name": item.get("warehouse_name") or item.get("warehouse_code") or effective_warehouse_id,
+                        "warehouse_name": _warehouse_display(item, effective_warehouse_id, payload),
                         "request_number": req_data.get("request_number"),
                         "quantity": quantity,
                         "suggested_supplier_name": effective_supplier_name,
@@ -425,7 +437,7 @@ async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
                     data = resp.json()
                     created_alerts.append({
                         "title": title,
-                        "warehouse_name": item.get("warehouse_name") or item.get("warehouse_code") or effective_warehouse_id,
+                        "warehouse_name": _warehouse_display(item, effective_warehouse_id, payload),
                         "id": (data.get("data") or {}).get("id"),
                         "alert_type": alert_type,
                     })

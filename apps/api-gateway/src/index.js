@@ -382,6 +382,92 @@ app.get("/system/health", requireAdminToken, async (_req, res) => {
   });
 });
 
+// --------------- Public (anonymous) read-only API ---------------
+// The public website browses the catalog (books, categories, branches), reads
+// reviews and the active membership plans without a token.
+// Only the prefixes below are proxied, only GET/HEAD get through, and a tighter
+// per-IP budget than the global limiter bounds scraping. Reserving, wishlists,
+// reviews and everything account-related stay on /my/* (JWT, customer-only).
+const PUBLIC_READ_METHODS = new Set(["GET", "HEAD"]);
+// http-proxy forwards the raw path, so "/public/catalog/../../api/..." would reach
+// the upstream verbatim. Upstream routing would 404 it, but refuse it here anyway.
+const DOT_SEGMENT = /(?:^|\/|%2f)(?:\.|%2e){2}(?:\/|%2f|$)/i;
+
+function publicReadOnly(req, res, next) {
+  if (DOT_SEGMENT.test(req.originalUrl.split("?")[0])) {
+    return res.status(400).json({ message: "Bad request", code: "BAD_PATH", request_id: req.requestId || null });
+  }
+  if (PUBLIC_READ_METHODS.has(req.method)) return next();
+  return res.status(405).json({
+    message: "Method not allowed",
+    code: "METHOD_NOT_ALLOWED",
+    request_id: req.requestId || null,
+  });
+}
+
+app.use(
+  "/public",
+  publicReadOnly,
+  createRateLimiter({
+    max: Number(process.env.PUBLIC_RATE_LIMIT_MAX || 300),
+    windowMs: 5 * 60 * 1000,
+    trustedProxyHops: 1,
+  }),
+);
+
+app.use(
+  "/public/catalog",
+  createProxyMiddleware({
+    target: inventoryTarget,
+    changeOrigin: true,
+    xfwd: true,
+    pathRewrite: (path) => `/public/catalog${path}`,
+  }),
+);
+
+app.use(
+  "/public/reviews",
+  createProxyMiddleware({
+    target: borrowTarget,
+    changeOrigin: true,
+    xfwd: true,
+    pathRewrite: (path) => `/public/reviews${path}`,
+  }),
+);
+
+app.use(
+  "/public/membership",
+  createProxyMiddleware({
+    target: borrowTarget,
+    changeOrigin: true,
+    xfwd: true,
+    pathRewrite: (path) => `/public/membership${path}`,
+  }),
+);
+
+// "Không biết nên đọc gì?": each uncached query costs an OpenRouter embedding
+// call, so visitors get a much smaller budget here than for plain browsing
+// (ai-service additionally caps the library-wide total and caches queries).
+app.use(
+  "/public/discover",
+  createRateLimiter({ max: Number(process.env.PUBLIC_DISCOVER_RATE_LIMIT_PER_MINUTE || 6), windowMs: 60 * 1000, trustedProxyHops: 1 }),
+  createRateLimiter({ max: Number(process.env.PUBLIC_DISCOVER_RATE_LIMIT_PER_HOUR || 40), windowMs: 60 * 60 * 1000, trustedProxyHops: 1 }),
+  createProxyMiddleware({
+    target: aiTarget,
+    changeOrigin: true,
+    xfwd: true,
+    // Mounted path arrives as "/?q=..."; drop that bare "/" before the query.
+    pathRewrite: (path) => `/public/discover${path.replace(/^\/(?=\?|$)/, "")}`,
+    on: { error: handleAiProxyError },
+  }),
+);
+
+app.use("/public", (req, res) => res.status(404).json({
+  message: "Not found",
+  code: "NOT_FOUND",
+  request_id: req.requestId || null,
+}));
+
 app.use(
   createProxyMiddleware({
     pathFilter: "/auth",

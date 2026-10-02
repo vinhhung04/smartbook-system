@@ -29,7 +29,7 @@ async function addToWishlist(req, res) {
     if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id must be a valid UUID' });
 
     const item = await prisma.book_wishlists.upsert({
-      where: { uniq_book_wishlists_customer_book: { customer_id: customer.id, book_id: bookId } },
+      where: { customer_id_book_id: { customer_id: customer.id, book_id: bookId } },
       create: { customer_id: customer.id, book_id: bookId },
       update: {},
     });
@@ -82,7 +82,7 @@ async function subscribeAvailabilityAlert(req, res) {
     if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id must be a valid UUID' });
 
     const alert = await prisma.availability_alerts.upsert({
-      where: { uniq_availability_alerts_customer_book: { customer_id: customer.id, book_id: bookId } },
+      where: { customer_id_book_id: { customer_id: customer.id, book_id: bookId } },
       create: { customer_id: customer.id, book_id: bookId, status: 'ACTIVE' },
       update: { status: 'ACTIVE', notified_at: null },
     });

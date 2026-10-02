@@ -6,7 +6,9 @@
 
 const storageSuggestionService = require('../services/storage-suggestion.service');
 const { requireWarehouseReadAccess, requireWarehouseWriteAccess } = require('../utils/warehouse-scope.utils');
-const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
+const { parseId, toInt } = require('../utils/validation');
+
+const { VALID_SUGGESTION_MODES } = storageSuggestionService;
 
 /**
  * POST /api/storage-suggestions
@@ -16,27 +18,46 @@ const { authorizeAnyPermission } = require('../middlewares/auth.middleware');
  * Request body:
  * {
  *   "warehouse_id": "uuid",
- *   "book_id": "uuid",        // optional if variant_id provided
- *   "variant_id": "uuid",      // optional if book_id provided
+ *   "variant_id": "uuid",      // required — putaway needs a concrete variant
+ *   "book_id": "uuid",         // optional; if given, must belong to variant_id
  *   "quantity": 10,            // default 1
- *   "mode": "RECEIVING"       // RECEIVING, PUTAWAY, RELOCATION, AI_IMPORT
+ *   "mode": "RECEIVING",      // RECEIVING, PUTAWAY, RELOCATION, AI_IMPORT
+ *   "explain": true           // optional; false skips the AI paraphrase (ranking only)
  * }
  */
 async function getSuggestions(req, res) {
-  const { warehouse_id, book_id, variant_id, quantity, mode } = req.body;
+  const warehouseId = parseId(req.body?.warehouse_id);
+  const variantId = parseId(req.body?.variant_id);
+  const bookId = parseId(req.body?.book_id);
   const user = req.user;
 
-  if (!warehouse_id) {
+  if (!warehouseId) {
     return res.status(400).json({
       success: false,
       error: 'warehouse_id là bắt buộc',
     });
   }
 
-  if (!book_id && !variant_id) {
+  if (!variantId) {
     return res.status(400).json({
       success: false,
-      error: 'book_id hoặc variant_id là bắt buộc',
+      error: 'variant_id là bắt buộc',
+    });
+  }
+
+  const quantity = toInt(req.body?.quantity ?? 1);
+  if (!quantity || quantity <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'quantity phải là số nguyên dương',
+    });
+  }
+
+  const mode = req.body?.mode || 'RECEIVING';
+  if (!VALID_SUGGESTION_MODES.includes(mode)) {
+    return res.status(400).json({
+      success: false,
+      error: `mode phải là một trong: ${VALID_SUGGESTION_MODES.join(', ')}`,
     });
   }
 
@@ -54,17 +75,33 @@ async function getSuggestions(req, res) {
     });
   }
 
-  const canAccess = await requireWarehouseReadAccess(req, res, warehouse_id);
+  const canAccess = await requireWarehouseReadAccess(req, res, warehouseId);
   if (!canAccess) return;
 
   try {
+    if (bookId) {
+      const bookInfo = await storageSuggestionService.getBookInfo(variantId);
+      if (!bookInfo) {
+        return res.status(400).json({
+          success: false,
+          error: 'Không tìm thấy thông tin sách/variant',
+        });
+      }
+      if (bookInfo.bookId !== bookId) {
+        return res.status(400).json({
+          success: false,
+          error: 'variant_id không thuộc book_id đã cho',
+        });
+      }
+    }
+
     const result = await storageSuggestionService.generateSuggestions(
-      warehouse_id,
-      book_id || null,
-      variant_id || null,
-      quantity || 1,
-      mode || 'RECEIVING',
-      req.requestId
+      warehouseId,
+      variantId,
+      quantity,
+      mode,
+      req.requestId,
+      { explain: req.body?.explain !== false },
     );
 
     return res.json(result);
@@ -84,24 +121,24 @@ async function getSuggestions(req, res) {
  *
  * Query params:
  * - warehouse_id: "uuid" (required)
- * - variant_id: "uuid" (optional)
- * - book_id: "uuid" (optional)
+ * - variant_id: "uuid" (required)
  */
 async function getContext(req, res) {
-  const { warehouse_id, variant_id, book_id } = req.query;
+  const warehouseId = parseId(req.query.warehouse_id);
+  const variantId = parseId(req.query.variant_id);
   const user = req.user;
 
-  if (!warehouse_id) {
+  if (!warehouseId) {
     return res.status(400).json({
       success: false,
       error: 'warehouse_id là bắt buộc',
     });
   }
 
-  if (!book_id && !variant_id) {
+  if (!variantId) {
     return res.status(400).json({
       success: false,
-      error: 'book_id hoặc variant_id là bắt buộc',
+      error: 'variant_id là bắt buộc',
     });
   }
 
@@ -118,15 +155,11 @@ async function getContext(req, res) {
     });
   }
 
-  const canAccess = await requireWarehouseReadAccess(req, res, warehouse_id);
+  const canAccess = await requireWarehouseReadAccess(req, res, warehouseId);
   if (!canAccess) return;
 
   try {
-    const result = await storageSuggestionService.getContext(
-      warehouse_id,
-      variant_id || null,
-      book_id || null
-    );
+    const result = await storageSuggestionService.getContext(warehouseId, variantId);
 
     return res.json(result);
   } catch (error) {
@@ -150,17 +183,36 @@ async function getContext(req, res) {
  *   "warehouse_id": "uuid",
  *   "variant_id": "uuid",
  *   "location_id": "uuid",
- *   "quantity": 10
+ *   "quantity": 10,
+ *   "mode": "RECEIVING"        // optional, default RECEIVING
  * }
  */
 async function applySuggestion(req, res) {
-  const { warehouse_id, variant_id, location_id, quantity } = req.body;
+  const warehouseId = parseId(req.body?.warehouse_id);
+  const variantId = parseId(req.body?.variant_id);
+  const locationId = parseId(req.body?.location_id);
   const user = req.user;
 
-  if (!warehouse_id || !variant_id || !location_id || !quantity) {
+  if (!warehouseId || !variantId || !locationId || !req.body?.quantity) {
     return res.status(400).json({
       success: false,
       error: 'warehouse_id, variant_id, location_id và quantity là bắt buộc',
+    });
+  }
+
+  const quantity = toInt(req.body.quantity);
+  if (!quantity || quantity <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'quantity phải là số nguyên dương',
+    });
+  }
+
+  const mode = req.body?.mode || 'RECEIVING';
+  if (!VALID_SUGGESTION_MODES.includes(mode)) {
+    return res.status(400).json({
+      success: false,
+      error: `mode phải là một trong: ${VALID_SUGGESTION_MODES.join(', ')}`,
     });
   }
 
@@ -174,15 +226,16 @@ async function applySuggestion(req, res) {
     });
   }
 
-  const canAccess = await requireWarehouseWriteAccess(req, res, warehouse_id);
+  const canAccess = await requireWarehouseWriteAccess(req, res, warehouseId);
   if (!canAccess) return;
 
   try {
     const result = await storageSuggestionService.applySuggestion(
-      warehouse_id,
-      variant_id,
-      location_id,
-      quantity
+      warehouseId,
+      variantId,
+      locationId,
+      quantity,
+      mode
     );
 
     if (!result.success) {

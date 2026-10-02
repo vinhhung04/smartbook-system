@@ -4,11 +4,18 @@ import { redirect } from "react-router";
 import { authService } from "@/services/auth";
 import { canAccess, getHomePathForUser, ROUTE_ACCESS, type RouteAccessMeta } from "@/lib/rbac";
 import { RouteErrorPage } from "@/components/route-error-boundary";
+import { safeReturnUrl } from "@/lib/return-url";
 
-async function requireAuthLoader() {
+/** "/customer/loans?page=2" -> "?returnUrl=%2Fcustomer%2Floans%3Fpage%3D2" */
+function returnUrlQuery(request: Request) {
+  const url = new URL(request.url);
+  return `?returnUrl=${encodeURIComponent(`${url.pathname}${url.search}`)}`;
+}
+
+async function requireAuthLoader({ request }: LoaderFunctionArgs) {
   const user = await authService.hydrateCurrentUser();
   if (!user) {
-    throw redirect("/login");
+    throw redirect(`/login${returnUrlQuery(request)}`);
   }
   if (Array.isArray(user.roles) && user.roles.includes("CUSTOMER")) {
     throw redirect("/customer");
@@ -17,7 +24,7 @@ async function requireAuthLoader() {
     throw redirect("/supplier");
   }
   if (!canAccess(user, ROUTE_ACCESS.internal)) {
-    throw redirect(`/forbidden?from=${encodeURIComponent("/")}`);
+    throw redirect("/");
   }
   return null;
 }
@@ -26,7 +33,7 @@ function requireRoleOrPermissionLoader(meta: RouteAccessMeta) {
   return async ({ request }: LoaderFunctionArgs) => {
     const user = await authService.hydrateCurrentUser();
     if (!user) {
-      throw redirect("/login");
+      throw redirect(`/login${returnUrlQuery(request)}`);
     }
     if (Array.isArray(user.roles) && user.roles.includes("CUSTOMER")) {
       throw redirect("/customer");
@@ -41,8 +48,12 @@ function requireRoleOrPermissionLoader(meta: RouteAccessMeta) {
   };
 }
 
-function publicOnlyLoader() {
+function publicOnlyLoader({ request }: LoaderFunctionArgs) {
   if (authService.isAuthenticated()) {
+    const returnUrl = safeReturnUrl(new URL(request.url).searchParams.get("returnUrl"));
+    if (returnUrl) {
+      throw redirect(returnUrl);
+    }
     if (authService.isCustomer()) {
       throw redirect("/customer");
     }
@@ -54,10 +65,10 @@ function publicOnlyLoader() {
   return null;
 }
 
-async function requireCustomerAuthLoader() {
+async function requireCustomerAuthLoader({ request }: LoaderFunctionArgs) {
   const user = await authService.hydrateCurrentUser();
   if (!user) {
-    throw redirect('/customer/login');
+    throw redirect(`/customer/login${returnUrlQuery(request)}`);
   }
   if (!Array.isArray(user.roles) || !user.roles.includes('CUSTOMER')) {
     throw redirect(getHomePathForUser(user));
@@ -65,12 +76,12 @@ async function requireCustomerAuthLoader() {
   return null;
 }
 
-function customerPublicOnlyLoader() {
+function customerPublicOnlyLoader({ request }: LoaderFunctionArgs) {
   if (!authService.isAuthenticated()) {
     return null;
   }
   if (authService.isCustomer()) {
-    throw redirect('/customer');
+    throw redirect(safeReturnUrl(new URL(request.url).searchParams.get("returnUrl")) || '/customer');
   }
   throw redirect(getHomePathForUser(authService.getCurrentUser()));
 }
@@ -136,9 +147,10 @@ export const router = createBrowserRouter([
       { index: true, lazy: { Component: async () => (await import("@/components/pages/customer/dashboard")).CustomerDashboardPage } },
       { path: 'profile', lazy: { Component: async () => (await import("@/components/pages/customer/profile")).CustomerProfilePage } },
       { path: 'membership', lazy: { Component: async () => (await import("@/components/pages/customer/membership")).CustomerMembershipPage } },
-      { path: 'books', lazy: { Component: async () => (await import("@/components/pages/customer/catalog")).CustomerCatalogPage } },
+      // The catalog and book pages are public now; old portal links keep working.
+      { path: 'books', loader: ({ request }: LoaderFunctionArgs) => redirect(`/books${new URL(request.url).search}`) },
       { path: 'scan-cover', lazy: { Component: async () => (await import("@/components/pages/customer/scan-cover")).CustomerScanCoverPage } },
-      { path: 'books/:id', lazy: { Component: async () => (await import("@/components/pages/customer/book-detail")).CustomerBookDetailPage } },
+      { path: 'books/:id', loader: ({ params }: LoaderFunctionArgs) => redirect(`/books/${params.id}`) },
       { path: 'reservations', lazy: { Component: async () => (await import("@/components/pages/customer/reservations")).CustomerReservationsPage } },
       { path: 'loans', lazy: { Component: async () => (await import("@/components/pages/customer/loans")).CustomerLoansPage } },
       { path: 'loans/:id', lazy: { Component: async () => (await import("@/components/pages/customer/loan-detail")).CustomerLoanDetailPage } },
@@ -160,14 +172,48 @@ export const router = createBrowserRouter([
     errorElement: createElement(RouteErrorPage),
     lazy: { Component: async () => (await import("@/components/pages/supplier/supplier-account")).SupplierAccountPage },
   },
+  // "/my/..." is the reader-facing alias of the authenticated customer portal.
+  { path: "/my", loader: () => redirect("/customer") },
   {
-    path: "/",
+    path: "/my/*",
+    loader: ({ params }: LoaderFunctionArgs) => {
+      const section = String(params["*"] || "");
+      return redirect(`/customer/${section === "wallet" ? "fines" : section}`);
+    },
+  },
+  {
+    // Public website: browsing needs no account; actions ask for login when used.
+    id: "public",
+    hydrateFallbackElement,
+    errorElement: createElement(RouteErrorPage),
+    lazy: { Component: async () => (await import("@/components/public/public-layout")).PublicLayout },
+    children: [
+      { index: true, lazy: { Component: async () => (await import("@/components/pages/public/home")).PublicHomePage } },
+      { path: "books", lazy: { Component: async () => (await import("@/components/pages/public/catalog")).PublicCatalogPage } },
+      { path: "search", lazy: { Component: async () => (await import("@/components/pages/public/catalog")).PublicCatalogPage } },
+      { path: "books/:id", lazy: { Component: async () => (await import("@/components/pages/public/book-detail")).PublicBookDetailPage } },
+      { path: "categories", lazy: { Component: async () => (await import("@/components/pages/public/categories")).PublicCategoriesPage } },
+      { path: "categories/:slug", lazy: { Component: async () => (await import("@/components/pages/public/catalog")).PublicCatalogPage } },
+      { path: "discover", lazy: { Component: async () => (await import("@/components/pages/public/discover")).PublicDiscoverPage } },
+      { path: "about", lazy: { Component: async () => (await import("@/components/pages/public/about")).PublicAboutPage } },
+      { path: "branches", lazy: { Component: async () => (await import("@/components/pages/public/branches")).PublicBranchesPage } },
+      { path: "branches/:id", lazy: { Component: async () => (await import("@/components/pages/public/branch-detail")).PublicBranchDetailPage } },
+      { path: "membership", lazy: { Component: async () => (await import("@/components/pages/public/membership")).PublicMembershipPage } },
+      { path: "new-arrivals", loader: () => redirect("/books?sort=newest") },
+      { path: "popular", loader: () => redirect("/books?sort=popular") },
+      { path: "*", lazy: { Component: async () => (await import("@/components/pages/not-found")).NotFoundPage } },
+    ],
+  },
+  {
+    // Internal staff app. Pathless so "/" can be the public homepage; the staff
+    // dashboard moved to /dashboard.
+    id: "staff",
     loader: requireAuthLoader,
     hydrateFallbackElement,
     errorElement: createElement(RouteErrorPage),
     lazy: { Component: async () => (await import("@/components/layout")).AppLayout },
     children: [
-      { index: true, lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
+      { path: "dashboard", lazy: { Component: async () => (await import("@/components/pages/dashboard")).DashboardPage } },
       { path: "forbidden", lazy: { Component: async () => (await import("@/components/pages/forbidden")).ForbiddenPage } },
       { path: "account", lazy: { Component: async () => (await import("@/components/pages/account")).AccountPage } },
       { path: "my-warehouse-tasks", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTasks), lazy: { Component: async () => (await import("@/components/pages/my-warehouse-tasks")).MyWarehouseTasksPage } },
@@ -220,7 +266,6 @@ export const router = createBrowserRouter([
       { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), lazy: { Component: async () => (await import("@/components/pages/suppliers")).SuppliersPage } },
       { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/users")).UsersPage } },
       { path: "roles", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/roles")).RolesPage } },
-      { path: "*", lazy: { Component: async () => (await import("@/components/pages/not-found")).NotFoundPage } },
     ],
   },
 ]);

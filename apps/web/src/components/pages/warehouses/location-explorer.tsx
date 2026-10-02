@@ -34,6 +34,19 @@ const VIEW_OPTIONS = [
 
 const COUNT_TYPES = ["ZONE", "SHELF", "SHELF_COMPARTMENT"] as const;
 
+/**
+ * Runs `sync` during render whenever a dependency changes (including the first
+ * render). React's "adjust state when props change" pattern: unlike a
+ * useEffect that only calls setState, it doesn't commit a stale frame first.
+ */
+function useSyncOnChange(deps: readonly unknown[], sync: () => void) {
+  const [prev, setPrev] = useState<readonly unknown[] | null>(null);
+  if (prev === null || prev.some((dep, i) => !Object.is(dep, deps[i]))) {
+    setPrev(deps);
+    sync();
+  }
+}
+
 interface LocationExplorerProps {
   warehouse: Warehouse;
   onBack: () => void;
@@ -96,27 +109,27 @@ export function LocationExplorer({
   }, [flatLocations]);
 
   // Keep root nodes expanded by default, without collapsing branches the user opened manually.
-  useEffect(() => {
+  useSyncOnChange([locationTree], () => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       locationTree.forEach((root) => next.add(root.id));
       return next;
     });
-  }, [locationTree]);
+  });
 
   // Reveal the ancestor chain whenever the controlled selection changes (e.g. after create/edit).
-  useEffect(() => {
+  useSyncOnChange([selectedLocationId, flatLocations], () => {
     if (!selectedLocationId) return;
     const ancestors = ancestorIds(selectedLocationId, flatLocations);
     if (ancestors.length === 0) return;
     setExpandedIds((prev) => new Set([...prev, ...ancestors]));
-  }, [selectedLocationId, flatLocations]);
+  });
 
   // Auto-expand every branch that matches an active search.
-  useEffect(() => {
+  useSyncOnChange([search, displayedTree], () => {
     if (!search.trim()) return;
     setExpandedIds((prev) => new Set([...prev, ...collectIds(displayedTree)]));
-  }, [search, displayedTree]);
+  });
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
