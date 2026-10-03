@@ -164,7 +164,7 @@ export function PublicCatalogPage() {
   usePageMeta({
     title: heading,
     description: slug && categoryName
-      ? `Sách thể loại ${categoryName} tại thư viện SmartBook — xem còn sách ở chi nhánh nào và đặt mượn trực tuyến.`
+      ? `Sách thể loại ${categoryName} tại thư viện SmartBook — xem còn sách ở chi nhánh nào và đặt trước trực tuyến.`
       : branchPage && branch
         ? `Sách tại ${branch.name} — xem cuốn nào còn trên kệ và đặt trước để nhận tại chi nhánh.`
         : undefined,

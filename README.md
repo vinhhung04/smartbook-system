@@ -704,7 +704,7 @@ pnpm demo:status
 docker compose ps
 ```
 
-Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Để reset hoàn toàn dữ liệu demo:
+Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Khi cập nhật code mà database đã có dữ liệu cũ, seed mới (ví dụ kệ và tồn kho của các chi nhánh, nếu thiếu thì web công khai báo 0 sách khả dụng) **không tự áp dụng** — chạy `pnpm demo:upgrade` (build lại và chạy lại seed inventory + catalog-enrichment; idempotent, không xóa dữ liệu hiện có). Để reset hoàn toàn dữ liệu demo:
 
 ```powershell
 docker compose down -v
@@ -742,9 +742,11 @@ Ba database, Redis và các service nội bộ chỉ nằm trong Docker network;
 | ❤️ Liveness | http://localhost:3000/health |
 | ✅ Readiness nghiệp vụ lõi | http://localhost:3000/ready |
 | 🛠️ pgAdmin (profile `tools`) | http://localhost:8080 |
-| 📈 Grafana | http://localhost:3100 |
-| 📊 Prometheus | http://localhost:9090 |
-| 🐰 RabbitMQ management | http://localhost:15672 |
+| 📈 Grafana | http://localhost:3100 (chỉ truy cập từ chính máy; đăng nhập `admin` + `GRAFANA_ADMIN_PASSWORD` trong `.env`) |
+| 📊 Prometheus | http://localhost:9090 (chỉ truy cập từ chính máy) |
+| 🐰 RabbitMQ management | http://localhost:15672 (chỉ truy cập từ chính máy) |
+
+Web UI bản Docker mặc định gọi API tại `http://localhost:3000`. Muốn mở từ máy khác trong LAN, đặt `WEB_API_ORIGIN` và `WEB_WS_ORIGIN` trong `.env` (xem `.env.example`; thêm origin của UI vào `ALLOWED_ORIGINS` và `SOCKET_CORS_ORIGIN`) rồi `docker compose up -d --build smartbook-ui` — giá trị này vừa được build vào bundle vừa được dùng cho Content-Security-Policy của nginx.
 
 `GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency (gọi `/ready` của từng service lõi, gồm cả kết nối database) và không công khai URL/topology nội bộ. `GET /system/health` trả trạng thái, độ trễ và chi tiết từng service (kể cả AI) cho trang Giám sát hệ thống — yêu cầu JWT có vai trò `ADMIN` (hoặc quyền quản trị như `auth.users.read`), cùng điều kiện với trang `/admin/monitor`.
 

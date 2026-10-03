@@ -178,7 +178,7 @@ export function PublicBookDetailPage() {
       data-testid={inBar ? undefined : 'reserve-book-button'}
       className="inline-flex h-11 shrink-0 items-center rounded-full bg-indigo-700 px-6 text-[14.5px] font-semibold text-white hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400"
     >
-      Đặt mượn
+      Đặt trước
     </button>
   ) : (
     <button
@@ -324,7 +324,7 @@ export function PublicBookDetailPage() {
               </div>
               {!isAuthenticated ? (
                 <p className="mt-3 text-[12.5px] text-muted-foreground">
-                  {book.reservable ? 'Cần đăng nhập để đặt mượn.' : 'Cần đăng nhập để nhận thông báo.'} Sau khi đăng nhập, bạn sẽ quay lại đúng cuốn sách này.
+                  {book.reservable ? 'Cần đăng nhập để đặt trước.' : 'Cần đăng nhập để nhận thông báo.'} Sau khi đăng nhập, bạn sẽ quay lại đúng cuốn sách này.
                 </p>
               ) : null}
             </section>

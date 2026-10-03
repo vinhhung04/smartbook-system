@@ -197,8 +197,8 @@ async function recordFinePayment(req, res) {
         customer_id: fine.customer_id,
         channel: 'IN_APP',
         template_code: 'FINE_PAYMENT_RECORDED',
-        subject: 'Fine payment recorded by staff',
-        body: `Payment ${amount.toFixed(2)} has been applied to fine ${fine.id}.`,
+        subject: 'Nhân viên đã ghi nhận thanh toán tiền phạt',
+        body: `Khoản thanh toán ${Number(amount).toLocaleString('vi-VN')}đ đã được áp dụng cho khoản phạt ${fine.id}.`,
         reference_type: 'FINE',
         reference_id: fine.id,
         metadata: {
@@ -321,8 +321,8 @@ async function waiveFine(req, res) {
         customer_id: fine.customer_id,
         channel: 'IN_APP',
         template_code: 'FINE_WAIVED',
-        subject: 'Fine adjusted by staff',
-        body: `Fine ${fine.id} has been adjusted by ${waiveAmount.toFixed(2)}.`,
+        subject: 'Khoản phạt được điều chỉnh',
+        body: `Khoản phạt ${fine.id} đã được giảm ${Number(waiveAmount).toLocaleString('vi-VN')}đ.`,
         reference_type: 'FINE',
         reference_id: fine.id,
         metadata: {

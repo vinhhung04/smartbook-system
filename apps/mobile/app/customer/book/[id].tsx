@@ -7,6 +7,7 @@ import * as customerBorrowApi from '../../../src/api/customerBorrow';
 import * as customerCatalogApi from '../../../src/api/customerCatalog';
 import { ApiError } from '../../../src/auth/auth-context';
 import { getCategoryGradient, getMonogramLetter } from '../../../src/lib/posterArt';
+import { describePickup } from '../../../src/lib/publicCatalog';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../../src/theme/customerTokens';
 import type { CustomerCatalogBook } from '../../../src/types/customerCatalog';
 
@@ -44,12 +45,12 @@ export default function CustomerBookDetailScreen() {
         pickup_location_id: book.default_location_id ?? undefined,
         quantity: 1,
       });
-      Alert.alert('Đặt sách thành công', 'Xem phiếu đặt của bạn ở tab "Sách của tôi".', [
+      Alert.alert('Đặt trước thành công', 'Xem phiếu đặt của bạn ở tab "Sách của tôi".', [
         { text: 'Xem phiếu đặt', onPress: () => router.replace('/customer/my-books') },
         { text: 'Đóng', style: 'cancel' },
       ]);
     } catch (err) {
-      Alert.alert('Không đặt được sách', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
+      Alert.alert('Không đặt trước được', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
     } finally {
       setIsReserving(false);
     }
@@ -78,7 +79,8 @@ export default function CustomerBookDetailScreen() {
               <MetaRow label="Thể loại" value={book.category ?? '—'} />
               <MetaRow label="Nhà xuất bản" value={book.publisher ?? '—'} />
               <MetaRow label="ISBN" value={book.isbn ?? '—'} />
-              <MetaRow label="Còn lại" value={`${book.available_quantity}/${book.quantity}`} />
+              <MetaRow label="Còn lại" value={`${book.available_quantity} cuốn`} />
+              <MetaRow label="Nhận tại" value={describePickup(book)} />
             </View>
 
             {book.description ? (
@@ -107,7 +109,7 @@ export default function CustomerBookDetailScreen() {
               {isReserving ? (
                 <ActivityIndicator color={colors.onPrimary} />
               ) : (
-                <Text style={styles.buttonText}>{canReserve ? 'Đặt sách' : 'Hiện không thể đặt'}</Text>
+                <Text style={styles.buttonText}>{canReserve ? 'Đặt trước' : 'Hiện không thể đặt trước'}</Text>
               )}
             </Pressable>
           </View>

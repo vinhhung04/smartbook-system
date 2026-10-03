@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 const SITE_NAME = 'SmartBook';
 const DEFAULT_TITLE = 'SmartBook — Thư viện sách';
-const DEFAULT_DESCRIPTION = 'Tìm sách, xem còn bao nhiêu cuốn ở chi nhánh nào và đặt mượn trực tuyến tại thư viện SmartBook.';
+const DEFAULT_DESCRIPTION = 'Tìm sách, xem còn bao nhiêu cuốn ở chi nhánh nào và đặt trước trực tuyến tại thư viện SmartBook.';
 
 interface PageMeta {
   title?: string;

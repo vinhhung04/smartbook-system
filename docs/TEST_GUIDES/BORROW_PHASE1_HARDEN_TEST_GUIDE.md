@@ -106,7 +106,7 @@ curl -X POST "http://localhost:3000/borrow/reservations" \
 
 Expected:
 - `409`
-- message says unpaid fine balance.
+- message says the customer has an unpaid fine balance ("Khách còn tiền phạt chưa thanh toán").
 
 ## Case 6: reservation blocked by membership limit
 

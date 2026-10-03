@@ -827,7 +827,8 @@ export function ReceivingPutawayPage() {
                     <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn đích</p>
                     <Select
                       value={line.target_location_id || "none"}
-                      onValueChange={(value) => updateLine(line.id, { target_location_id: value === "none" ? "" : value })}
+                      // A barcode scanned for the previous target says nothing about the new one — the server checks it.
+                      onValueChange={(value) => updateLine(line.id, { target_location_id: value === "none" ? "" : value, scanned_location_barcode: "" })}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Chọn vị trí đích" />

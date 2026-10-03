@@ -30,6 +30,8 @@ import { borrowService, type Loan, type Fine } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { stockMovementService } from '@/services/stock-movement';
 import { getApiErrorMessage } from '@/services/api';
+import { authService } from '@/services/auth';
+import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
 import { exportToCsv, exportToPdf, exportSummaryReport, type ExportColumn } from '@/lib/export-utils';
 import { toast } from 'sonner';
 
@@ -282,9 +284,14 @@ export function ReportsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      // Same gate as the Borrow section of the sidebar: roles without it (e.g. warehouse manager) would
+      // only get 403s from these two endpoints, so don't send the requests at all.
+      const noBorrowAccess = !canAccess(authService.getCurrentUser(), ROUTE_ACCESS.borrowRead);
+      if (noBorrowAccess) setBorrowDenied(true);
+      const emptyPage = <T,>() => Promise.resolve({ rows: [] as T[], truncated: false });
       const [loanResp, fineResp, bookResp, movResp] = await Promise.allSettled([
-        fetchAllPages<Loan>((p) => borrowService.getLoans(p)),
-        fetchAllPages<Fine>((p) => borrowService.getFines(p)),
+        noBorrowAccess ? emptyPage<Loan>() : fetchAllPages<Loan>((p) => borrowService.getLoans(p)),
+        noBorrowAccess ? emptyPage<Fine>() : fetchAllPages<Fine>((p) => borrowService.getFines(p)),
         bookService.getAll(),
         stockMovementService.getAll({ pageSize: 500 }),
       ]);

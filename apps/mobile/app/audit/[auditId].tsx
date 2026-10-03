@@ -12,6 +12,7 @@ import { ScanField } from '../../src/scanner/ScanField';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import { StampBadge } from '../../src/components/StampBadge';
 import { ChecklistMeter } from '../../src/components/ChecklistMeter';
+import { findAuditLineByCode } from '../../src/lib/stockAuditScan';
 import type { StockAuditDetail, StockAuditLine } from '../../src/types/stockAudit';
 import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
 
@@ -70,9 +71,7 @@ export default function StockAuditDetailScreen() {
     const code = value.trim().toLowerCase();
     if (!code || !audit || savingLineId) return;
 
-    const line = audit.items.find(
-      (l) => (l.sku && l.sku.toLowerCase() === code) || (l.isbn13 && l.isbn13.toLowerCase() === code),
-    );
+    const line = findAuditLineByCode(audit.items, code);
 
     if (!line) {
       notifyScanError();

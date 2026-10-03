@@ -74,7 +74,7 @@ test.describe('Anonymous discovery', () => {
     await page.getByRole('button', { name: 'Đăng nhập' }).click();
 
     await expect(page).toHaveURL(`/books/${book.id}`, { timeout: 15_000 });
-    const dialog = page.getByRole('dialog', { name: 'Chọn cửa hàng đặt trước' });
+    const dialog = page.getByRole('dialog', { name: 'Chọn chi nhánh đặt trước' });
     await expect(dialog).toBeVisible();
     // Don't actually reserve: this test must not drain demo stock.
     await dialog.getByRole('button', { name: 'Hủy' }).click();

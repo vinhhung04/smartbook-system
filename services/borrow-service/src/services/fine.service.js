@@ -188,8 +188,8 @@ async function applyReturnFines(tx, input) {
       customer_id: customerId,
       channel: 'IN_APP',
       template_code: 'FINE_CREATED',
-      subject: 'New fine generated',
-      body: `Loan ${loan.loan_number} generated ${createdOrUpdated.length} fine record(s).`,
+      subject: 'Có khoản phạt mới',
+      body: `Phiếu mượn ${loan.loan_number} phát sinh ${createdOrUpdated.length} khoản phạt.`,
       reference_type: 'LOAN_TRANSACTION',
       reference_id: loan.id,
       metadata: {
@@ -303,8 +303,8 @@ async function runOverdueSweep(prisma, options = {}) {
           customer_id: loan.customer_id,
           channel: 'IN_APP',
           template_code: 'LOAN_OVERDUE',
-          subject: 'Loan item overdue',
-          body: `Loan ${loan.loan_number} has overdue item(s). Please return as soon as possible.`,
+          subject: 'Sách quá hạn trả',
+          body: `Phiếu mượn ${loan.loan_number} có sách quá hạn. Vui lòng trả sách sớm nhất có thể.`,
           reference_type: 'LOAN_TRANSACTION',
           reference_id: loan.id,
           metadata: {

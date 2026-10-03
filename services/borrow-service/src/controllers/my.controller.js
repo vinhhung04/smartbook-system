@@ -287,8 +287,8 @@ async function requestMyLoanRenewal(req, res) {
         customer_id: customer.id,
         channel: 'IN_APP',
         template_code: 'LOAN_RENEWAL_REQUEST',
-        subject: 'Renewal request submitted',
-        body: `Renewal request for loan ${loan.loan_number} has been submitted.`,
+        subject: 'Đã gửi yêu cầu gia hạn',
+        body: `Yêu cầu gia hạn phiếu mượn ${loan.loan_number} đã được gửi.`,
         reference_type: 'LOAN_TRANSACTION',
         reference_id: loan.id,
         metadata: {
@@ -468,8 +468,8 @@ async function payMyFine(req, res) {
         customer_id: customer.id,
         channel: 'IN_APP',
         template_code: 'FINE_PAYMENT_RECORDED',
-        subject: 'Fine payment recorded',
-        body: `Payment ${amount.toFixed(2)} has been applied to fine ${fine.id}.`,
+        subject: 'Đã ghi nhận thanh toán tiền phạt',
+        body: `Khoản thanh toán ${Number(amount).toLocaleString('vi-VN')}đ đã được áp dụng cho khoản phạt ${fine.id}.`,
         reference_type: 'FINE',
         reference_id: fine.id,
         metadata: {

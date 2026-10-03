@@ -28,6 +28,65 @@ function buildVariantBarcode(variant) {
   );
 }
 
+const PUTAWAY_MOVEMENT_REFERENCE = "RECEIVING_SHELF_PUTAWAY";
+const LOCATION_SCAN_PATTERN = /^[A-Z0-9][A-Z0-9._-]{1,63}$/;
+
+function normalizeScanCode(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+// A scanned location code is accepted if it is the location's barcode or its code, with or
+// without the "LOC-" prefix labels carry.
+function locationScanMatches(scanned, location) {
+  const input = normalizeScanCode(scanned);
+  if (!input) return false;
+  const candidates = [location?.barcode, location?.location_code]
+    .filter(Boolean)
+    .map(normalizeScanCode);
+  if (location?.location_code) candidates.push(`LOC-${normalizeScanCode(location.location_code)}`);
+  return candidates.includes(input) || candidates.includes(`LOC-${input}`);
+}
+
+function variantScanMatches(scanned, variant) {
+  const input = normalizeScanCode(scanned);
+  if (!input) return false;
+  return [variant?.internal_barcode, variant?.sku, variant?.isbn13, variant?.isbn10]
+    .filter(Boolean)
+    .map(normalizeScanCode)
+    .includes(input);
+}
+
+// Mirrors putaway.controller.js's per-item putaway_quantity/remaining_quantity so the server-side
+// cap agrees with what the receipt screens show: PUTAWAY-bucket movements stamped with this
+// receipt, falling back to "already allocated" for items carrying a location_id.
+async function getReceiptVariantRemaining(tx, receiptId, variantId) {
+  const items = await tx.goods_receipt_items.findMany({
+    where: { goods_receipt_id: receiptId, variant_id: variantId },
+    select: { quantity: true, location_id: true },
+  });
+  if (items.length === 0) return null;
+
+  const received = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const movements = await tx.stock_movements.findMany({
+    where: {
+      reference_type: PUTAWAY_MOVEMENT_REFERENCE,
+      reference_id: receiptId,
+      variant_id: variantId,
+      movement_status: "POSTED",
+    },
+    select: { quantity: true, metadata: true },
+  });
+  const putaway = movements
+    .filter((movement) => movement.metadata?.movement_bucket === "PUTAWAY")
+    .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0);
+  const preAllocated = items
+    .filter((item) => item.location_id)
+    .reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+  const done = putaway > 0 ? Math.min(received, putaway) : preAllocated;
+  return Math.max(received - done, 0);
+}
+
 async function getWarehouseReceivings(req, res) {
   const warehouseId = parseId(req.params.warehouseId);
 
@@ -347,8 +406,6 @@ async function lookupCompartmentByBarcode(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
   const rawInput = normalizeText(req.query.barcode);
   const normalizedInput = rawInput?.toUpperCase() || null;
-  const locationCodePattern = /^[A-Z]-\d{2}-\d{3}$/;
-  const barcodePattern = /^LOC-[A-Z]-\d{2}-\d{3}$/;
 
   if (!warehouseId || !rawInput) {
     return res
@@ -356,34 +413,36 @@ async function lookupCompartmentByBarcode(req, res) {
       .json({ message: "warehouse_id and barcode are required" });
   }
 
-  if (
-    !locationCodePattern.test(normalizedInput) &&
-    !barcodePattern.test(normalizedInput)
-  ) {
+  // Location codes are not all "<letter>-NN-NNN" (e.g. HN-A-01-001, BR-SHELF-01), so only the
+  // character set is checked here; whether the code really exists is decided by the lookup.
+  if (!LOCATION_SCAN_PATTERN.test(normalizedInput)) {
     console.info("[receiving-putaway] lookup location scan result", {
       raw_input: rawInput,
       normalized_input: normalizedInput,
       result: "invalid_format",
     });
-    return res.status(400).json({ message: "Location format invalid" });
+    return res.status(400).json({ message: "Mã vị trí không hợp lệ" });
   }
 
-  const normalizedBarcode = normalizedInput.startsWith("LOC-")
+  const prefixedBarcode = normalizedInput.startsWith("LOC-")
     ? normalizedInput
     : `LOC-${normalizedInput}`;
 
   try {
     console.info("[receiving-putaway] lookup location scan", {
       raw_input: rawInput,
-      normalized_barcode: normalizedBarcode,
-      query_field: "locations.barcode",
+      normalized_barcode: prefixedBarcode,
+      query_field: "locations.barcode|location_code",
     });
 
     const location = await prisma.locations.findFirst({
       where: {
         warehouse_id: warehouseId,
-        barcode: normalizedBarcode,
         is_active: true,
+        OR: [
+          { barcode: { in: [normalizedInput, prefixedBarcode] } },
+          { location_code: normalizedInput },
+        ],
       },
       select: {
         id: true,
@@ -396,10 +455,10 @@ async function lookupCompartmentByBarcode(req, res) {
     if (!location) {
       console.info("[receiving-putaway] lookup location scan result", {
         raw_input: rawInput,
-        normalized_barcode: normalizedBarcode,
+        normalized_barcode: prefixedBarcode,
         result: "not_found",
       });
-      return res.status(404).json({ message: "Location barcode not found" });
+      return res.status(404).json({ message: "Không tìm thấy vị trí với mã này" });
     }
 
     if (
@@ -408,13 +467,13 @@ async function lookupCompartmentByBarcode(req, res) {
       return res
         .status(400)
         .json({
-          message: "Barcode must point to a SHELF_COMPARTMENT location",
+          message: "Mã quét không phải ngăn kệ (SHELF_COMPARTMENT)",
         });
     }
 
     console.info("[receiving-putaway] lookup location scan result", {
       raw_input: rawInput,
-      normalized_barcode: normalizedBarcode,
+      normalized_barcode: prefixedBarcode,
       matched_location_id: location.id,
       matched_location_code: location.location_code,
       matched_compartment: location.location_code,
@@ -426,7 +485,9 @@ async function lookupCompartmentByBarcode(req, res) {
       location_code: location.location_code,
       location_type: location.location_type,
       barcode: location.barcode,
-      normalized_barcode: normalizedBarcode,
+      // The location's real barcode: clients echo this back as scanned_location_barcode,
+      // which transferReceivingToShelf now verifies against the target.
+      normalized_barcode: location.barcode || prefixedBarcode,
     });
   } catch (error) {
     console.error("Error while looking up compartment barcode:", error);
@@ -779,6 +840,7 @@ async function transferReceivingToShelf(req, res) {
             id: true,
             location_type: true,
             location_code: true,
+            barcode: true,
             capacity_qty: true,
           },
         });
@@ -788,6 +850,74 @@ async function transferReceivingToShelf(req, res) {
             invalid: true,
             message: "One or more target locations are invalid or inactive",
           };
+        }
+
+        // A scanned barcode is evidence the picker stood at the shelf; if one was sent it must
+        // be the target's own, otherwise it is only an unchecked string in movement metadata.
+        const targetById = new Map(targetLocations.map((item) => [item.id, item]));
+        for (const allocation of mergedAllocations) {
+          if (
+            allocation.scanned_location_barcode &&
+            !locationScanMatches(
+              allocation.scanned_location_barcode,
+              targetById.get(allocation.target_location_id),
+            )
+          ) {
+            return {
+              invalid: true,
+              message: `Mã vị trí quét không khớp vị trí đích ${targetById.get(allocation.target_location_id).location_code}`,
+            };
+          }
+        }
+
+        if (mergedAllocations.some((item) => item.scanned_product_barcode)) {
+          const variant = await tx.book_variants.findUnique({
+            where: { id: variantId },
+            select: { sku: true, isbn13: true, isbn10: true, internal_barcode: true },
+          });
+          if (!variant) {
+            return { invalid: true, message: "Không tìm thấy sách (variant)" };
+          }
+          const badProduct = mergedAllocations.find(
+            (item) =>
+              item.scanned_product_barcode &&
+              !variantScanMatches(item.scanned_product_barcode, variant),
+          );
+          if (badProduct) {
+            return {
+              invalid: true,
+              message: "Mã sách quét không khớp sách đang cất",
+            };
+          }
+        }
+
+        // When the putaway is scoped to a goods receipt, that receipt's own remaining quantity
+        // is the ceiling — otherwise a receipt already fully put away keeps accepting stock
+        // stamped against it and its putaway_quantity overshoots total_quantity.
+        if (goodsReceiptId) {
+          const receipt = await tx.goods_receipts.findUnique({
+            where: { id: goodsReceiptId },
+            select: { id: true, warehouse_id: true, status: true },
+          });
+          if (!receipt) {
+            return { invalid: true, message: "Không tìm thấy phiếu nhập" };
+          }
+          if (receipt.warehouse_id !== warehouseId) {
+            return { invalid: true, message: "Phiếu nhập không thuộc kho này" };
+          }
+          if (receipt.status !== "POSTED") {
+            return { invalid: true, message: "Chỉ cất hàng cho phiếu nhập đã ghi sổ (POSTED)" };
+          }
+          const receiptRemaining = await getReceiptVariantRemaining(tx, goodsReceiptId, variantId);
+          if (receiptRemaining === null) {
+            return { invalid: true, message: "Sách này không thuộc phiếu nhập đã chọn" };
+          }
+          if (totalQuantity > receiptRemaining) {
+            return {
+              invalid: true,
+              message: `Số lượng cất (${totalQuantity}) vượt quá số còn lại của phiếu này (${receiptRemaining})`,
+            };
+          }
         }
 
         // Verify target locations (Prisma ORM handles types correctly)

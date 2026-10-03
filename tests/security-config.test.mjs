@@ -43,6 +43,37 @@ test('compose requires secrets instead of supplying public defaults', () => {
   assert.doesNotMatch(compose, /JWT_SECRET:-/);
   assert.doesNotMatch(compose, /INTERNAL_SERVICE_KEY:-/);
   assert.doesNotMatch(compose, /POSTGRES_PASSWORD:-password/);
+  assert.doesNotMatch(compose, /GRAFANA_ADMIN_PASSWORD:-/);
+});
+
+test('observability and broker consoles are bound to loopback, not the LAN', () => {
+  const compose = read('docker-compose.yml');
+  for (const port of ['9090:9090', '3100:3000', '5672:5672', '15672:15672']) {
+    assert.match(compose, new RegExp(`"127\\.0\\.0\\.1:${port}"`), port);
+    assert.doesNotMatch(compose, new RegExp(`- "${port}"`), port);
+  }
+});
+
+test('the web CSP takes its API origin from the environment and allows Google Fonts', () => {
+  const nginx = read('apps/web/nginx.conf');
+  assert.match(nginx, /connect-src 'self' \$\{API_ORIGIN\} \$\{API_WS_ORIGIN\}/);
+  assert.doesNotMatch(nginx, /connect-src[^;]*localhost/);
+  assert.match(nginx, /style-src[^;]*https:\/\/fonts\.googleapis\.com/);
+  assert.match(nginx, /font-src[^;]*https:\/\/fonts\.gstatic\.com/);
+  assert.match(read('apps/web/Dockerfile'), /NGINX_ENVSUBST_FILTER=\^API_/);
+});
+
+test('long-lived infrastructure restarts itself after a crash or a Docker restart', () => {
+  const compose = read('docker-compose.yml');
+  for (const service of ['db', 'redis', 'rabbitmq', 'api-gateway']) {
+    const block = compose.split(new RegExp(`^  ${service}:\\r?$`, 'm'))[1]?.split(/^  [a-z-]+:\r?$/m)[0] ?? '';
+    assert.match(block, /restart: unless-stopped/, service);
+  }
+});
+
+test('the generated demo environment covers the Grafana password', () => {
+  assert.match(read('.env.example'), /GRAFANA_ADMIN_PASSWORD=GENERATE_GRAFANA_PASSWORD/);
+  assert.match(read('scripts/init-demo-env.mjs'), /GENERATE_GRAFANA_PASSWORD/);
 });
 
 test('demo environment is generated instead of documenting reusable secrets', () => {

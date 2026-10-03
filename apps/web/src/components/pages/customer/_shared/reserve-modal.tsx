@@ -87,7 +87,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 id="reserve-modal-title" className="text-[15px] text-foreground" style={{ fontWeight: 700 }}>Chọn cửa hàng đặt trước</h2>
+            <h2 id="reserve-modal-title" className="text-[15px] text-foreground" style={{ fontWeight: 700 }}>Chọn chi nhánh đặt trước</h2>
             <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500 line-clamp-1">{book.title}</p>
           </div>
           <button
@@ -104,12 +104,12 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
           {availableWarehouses.length === 0 ? (
             <div className="py-6 text-center">
               <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" />
-              <p className="text-[13px] text-muted-foreground">Hiện không có cửa hàng nào có sách trên kệ</p>
+              <p className="text-[13px] text-muted-foreground">Hiện không có chi nhánh nào có sách trên kệ</p>
               <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">Sách có thể đang trong quá trình nhập kho</p>
             </div>
           ) : availableWarehouses.length === 1 ? (
             <div className="space-y-3">
-              <p className="text-[12px] text-muted-foreground">Cửa hàng có sách:</p>
+              <p className="text-[12px] text-muted-foreground">Chi nhánh có sách:</p>
               <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800/40 dark:bg-indigo-950/30">
                 <CheckCircle className="h-4 w-4 text-indigo-500 shrink-0" />
                 <div className="min-w-0 flex-1">
@@ -120,7 +120,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[12px] text-muted-foreground">Chọn cửa hàng bạn muốn đến lấy sách:</p>
+              <p className="text-[12px] text-muted-foreground">Chọn chi nhánh bạn muốn đến lấy sách:</p>
               <div className="space-y-2 max-h-56 overflow-y-auto">
                 {availableWarehouses.map((wh) => {
                   const selected = effectiveWarehouseId === wh.warehouse_id;

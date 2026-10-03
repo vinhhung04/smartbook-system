@@ -19,7 +19,7 @@ import { cn } from "@/components/ui/utils";
 import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import { myWarehouseTaskService, type AvailableWarehouseTask, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
-import { getWarehouseTaskStatusVariant } from "@/lib/status-registry";
+import { getWarehouseTaskStatusLabel, getWarehouseTaskStatusVariant } from "@/lib/status-registry";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận hàng",
@@ -328,7 +328,7 @@ export function MyWarehouseTasksPage() {
                           </p>
                           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                             <p className="truncate font-mono text-[13px] font-medium text-foreground" title={task.title}>{task.title}</p>
-                            <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                            <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={taskStatusVariant(task.status)} dot />
                           </div>
                           <p className="mt-1 truncate text-[12px] text-muted-foreground">
                             {task.warehouse || "-"} · Tạo {formatDate(task.created_at)}
@@ -479,7 +479,7 @@ export function MyWarehouseTasksPage() {
                               {task.type === "TRANSFER_RECEIVING" && <p className="text-[10px] text-muted-foreground">Nhận chuyển kho</p>}
                             </div>
                           </div>
-                          <StatusBadge label={task.status} variant={taskStatusVariant(task.status)} dot />
+                          <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={taskStatusVariant(task.status)} dot />
                         </div>
                         <p className="font-mono text-[13px] font-medium text-foreground truncate">{task.title}</p>
                         <div className="flex items-center gap-2 text-[12px] text-muted-foreground">

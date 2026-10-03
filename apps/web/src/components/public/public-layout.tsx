@@ -23,7 +23,7 @@ function PublicFooter() {
         <div className="space-y-3 sm:col-span-3 lg:col-span-1">
           <Wordmark />
           <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
-            Tìm sách, xem chi nhánh nào còn sách và đặt mượn trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
+            Tìm sách, xem chi nhánh nào còn sách và đặt trước trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
           </p>
         </div>
         <FooterColumn

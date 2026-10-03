@@ -170,7 +170,7 @@ async function createDirectLoan(req, res) {
 
     if (Number(customer.total_fine_balance) > 0) {
       return res.status(409).json({
-        message: 'Customer has unpaid fine balance',
+        message: 'Khách còn tiền phạt chưa thanh toán',
         detail: { total_fine_balance: Number(customer.total_fine_balance) },
       });
     }
@@ -356,8 +356,8 @@ async function createDirectLoan(req, res) {
           customer_id,
           channel: 'IN_APP',
           template_code: 'LOAN_CREATED',
-          subject: 'Direct loan created',
-          body: `Direct loan ${loan.loan_number} has been created.`,
+          subject: 'Đã tạo phiếu mượn',
+          body: `Phiếu mượn ${loan.loan_number} đã được tạo.`,
           reference_type: 'LOAN_TRANSACTION',
           reference_id: loan.id,
         });
@@ -604,10 +604,10 @@ async function reviewLoanRenewal(req, res) {
         customer_id: loan.customer_id,
         channel: 'IN_APP',
         template_code: 'LOAN_RENEWAL_REVIEWED',
-        subject: decision === 'APPROVE' ? 'Renewal approved' : 'Renewal rejected',
+        subject: decision === 'APPROVE' ? 'Gia hạn được duyệt' : 'Gia hạn bị từ chối',
         body: decision === 'APPROVE'
-          ? `Renewal request for loan ${loan.loan_number} was approved for ${extensionDays} day(s).`
-          : `Renewal request for loan ${loan.loan_number} was rejected.`,
+          ? `Yêu cầu gia hạn phiếu mượn ${loan.loan_number} đã được duyệt thêm ${extensionDays} ngày.`
+          : `Yêu cầu gia hạn phiếu mượn ${loan.loan_number} đã bị từ chối.`,
         reference_type: 'LOAN_TRANSACTION',
         reference_id: loan.id,
         metadata: {
@@ -761,7 +761,7 @@ async function convertReservationToLoan(req, res) {
 
     if (Number(customer.total_fine_balance) > 0) {
       return res.status(409).json({
-        message: 'Customer has unpaid fine balance',
+        message: 'Khách còn tiền phạt chưa thanh toán',
         detail: { total_fine_balance: Number(customer.total_fine_balance) },
       });
     }
@@ -922,10 +922,10 @@ async function convertReservationToLoan(req, res) {
           customer_id: reservation.customer_id,
           channel: 'IN_APP',
           template_code: 'LOAN_CREATED',
-          subject: 'Loan created',
+          subject: 'Đã tạo phiếu mượn',
           body: borrowFeeAmount > 0
-            ? `Reservation ${reservation.reservation_number} is converted to loan ${loan.loan_number}. Borrow fee ${borrowFeeAmount.toFixed(2)} VND was auto-debited.`
-            : `Reservation ${reservation.reservation_number} is converted to loan ${loan.loan_number}.`,
+            ? `Đặt trước ${reservation.reservation_number} đã chuyển thành phiếu mượn ${loan.loan_number}. Phí mượn ${borrowFeeAmount.toLocaleString('vi-VN')}đ đã được trừ tự động.`
+            : `Đặt trước ${reservation.reservation_number} đã chuyển thành phiếu mượn ${loan.loan_number}.`,
           reference_type: 'LOAN_TRANSACTION',
           reference_id: loan.id,
           metadata: {
@@ -1171,10 +1171,10 @@ async function returnLoan(req, res) {
         customer_id: loan.customer_id,
         channel: 'IN_APP',
         template_code: 'LOAN_RETURNED',
-        subject: remaining === 0 ? 'Loan fully returned' : 'Loan item returned',
+        subject: remaining === 0 ? 'Đã trả đủ sách' : 'Đã trả sách',
         body: remaining === 0
-          ? `Loan ${loan.loan_number} has been fully returned.`
-          : `${targets.length} item(s) from loan ${loan.loan_number} have been returned.`,
+          ? `Phiếu mượn ${loan.loan_number} đã được trả đủ.`
+          : `Đã trả ${targets.length} cuốn thuộc phiếu mượn ${loan.loan_number}.`,
         reference_type: 'LOAN_TRANSACTION',
         reference_id: loan.id,
         metadata: {

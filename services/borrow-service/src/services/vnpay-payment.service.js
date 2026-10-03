@@ -109,8 +109,8 @@ async function finalizeVnpayPayment(prismaClient, verifiedParams) {
       customer_id: fine.customer_id,
       channel: 'IN_APP',
       template_code: 'FINE_PAYMENT_RECORDED',
-      subject: 'Fine payment confirmed via VNPay',
-      body: `Payment ${amount.toFixed(2)} has been applied to fine ${fine.id} via VNPay.`,
+      subject: 'Thanh toán tiền phạt qua VNPay thành công',
+      body: `Khoản thanh toán ${Number(amount).toLocaleString('vi-VN')}đ qua VNPay đã được áp dụng cho khoản phạt ${fine.id}.`,
       reference_type: 'FINE',
       reference_id: fine.id,
       metadata: {

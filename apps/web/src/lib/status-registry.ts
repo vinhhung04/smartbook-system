@@ -148,6 +148,36 @@ export function getWarehouseTaskStatusVariant(status: string): Tone {
   return 'neutral';
 }
 
+// Vietnamese labels for the raw statuses of the task types in "Công việc kho" (picking, outbound,
+// putaway, receiving, transfer, requests). Unknown statuses fall back to the raw value. Wording
+// matches pages/outbound.tsx so the same status never reads two ways.
+const WAREHOUSE_TASK_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Nháp',
+  PENDING: 'Chờ xử lý',
+  PENDING_APPROVAL: 'Chờ duyệt',
+  REQUESTED: 'Chờ duyệt',
+  SUBMITTED: 'Đã gửi',
+  APPROVED: 'Đã duyệt',
+  CONVERTED: 'Đã chuyển PO',
+  PICKING: 'Đang lấy',
+  PARTIAL_PICKED: 'Lấy một phần',
+  REPICKING: 'Đang re-pick',
+  READY_FOR_OUTBOUND: 'Sẵn xuất kho',
+  READY_TO_SHIP: 'Sẵn xuất kho',
+  IN_PROGRESS: 'Đang thực hiện',
+  IN_TRANSIT: 'Đang vận chuyển',
+  POSTED: 'Đã ghi sổ',
+  RECEIVED: 'Đã nhận',
+  COMPLETED: 'Hoàn tất',
+  RESOLVED: 'Đã xử lý',
+  REJECTED: 'Từ chối',
+  CANCELLED: 'Đã hủy',
+};
+
+export function getWarehouseTaskStatusLabel(status: string): string {
+  return WAREHOUSE_TASK_STATUS_LABELS[String(status || '').toUpperCase()] ?? status;
+}
+
 // Customer-portal statuses (loan / reservation / fine / generic workflow) —
 // consumed by components/pages/customer/_shared/customer-status.ts, which
 // keeps its own softer visual shell but now sources label+tone from here

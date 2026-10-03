@@ -199,7 +199,7 @@ export function PublicHomePage() {
               của bạn.
             </h1>
             <p className="mt-5 max-w-lg text-[16.5px] leading-relaxed text-muted-foreground">
-              Tìm theo tên sách, tác giả hoặc thể loại. Xem ngay chi nhánh nào còn sách và đặt mượn trước khi đến thư viện.
+              Tìm theo tên sách, tác giả hoặc thể loại. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
             </p>
             <div className="mt-8"><SearchAutocomplete variant="hero" /></div>
             {home && home.categories.length ? (

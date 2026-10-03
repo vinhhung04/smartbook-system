@@ -8,6 +8,7 @@ const { createNotificationRecord } = require('../lib/notifications');
 const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
 
 const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+const DUPLICATE_RESERVATION_MESSAGE = 'Khách đã có một đặt chỗ đang hoạt động cho cuốn sách này';
 const RESERVATION_EXPIRY_BATCH_SIZE = 100;
 
 function isUuid(value) {
@@ -154,7 +155,7 @@ async function createReservation(req, res) {
 
     if (Number(customer.total_fine_balance) > 0) {
       return res.status(409).json({
-        message: 'Customer has unpaid fine balance',
+        message: 'Khách còn tiền phạt chưa thanh toán',
         detail: { total_fine_balance: Number(customer.total_fine_balance) },
       });
     }
@@ -208,6 +209,16 @@ async function createReservation(req, res) {
       return res.status(200).json({ data: existingByIdempotency, idempotent: true });
     }
 
+    // One live reservation per customer per book. Checked after the idempotent replay above so a
+    // retried request still returns its own reservation, and again under the customer lock in the
+    // transaction below so two simultaneous requests cannot both slip past this read.
+    const duplicateReservation = await prisma.loan_reservations.count({
+      where: { customer_id, variant_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
+    });
+    if (duplicateReservation > 0) {
+      return res.status(409).json({ message: DUPLICATE_RESERVATION_MESSAGE });
+    }
+
     await checkAvailability({
       variant_id,
       warehouse_id,
@@ -257,6 +268,15 @@ async function createReservation(req, res) {
           throw limitError;
         }
 
+        const recheckDuplicate = await tx.loan_reservations.count({
+          where: { customer_id, variant_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
+        });
+        if (recheckDuplicate > 0) {
+          const duplicateError = new Error(DUPLICATE_RESERVATION_MESSAGE);
+          duplicateError.status = 409;
+          throw duplicateError;
+        }
+
         const reservation = await tx.loan_reservations.create({
           data: {
             id: reservationId,
@@ -290,8 +310,8 @@ async function createReservation(req, res) {
           customer_id,
           channel: 'IN_APP',
           template_code: 'RESERVATION_CREATED',
-          subject: 'Reservation created',
-          body: `Reservation ${reservation.reservation_number} has been created successfully.`,
+          subject: 'Đặt trước thành công',
+          body: `Đặt trước ${reservation.reservation_number} đã được tạo thành công.`,
           reference_type: 'LOAN_RESERVATION',
           reference_id: reservation.id,
           metadata: {
@@ -399,8 +419,8 @@ async function cancelReservation(req, res) {
         customer_id: reservation.customer_id,
         channel: 'IN_APP',
         template_code: 'RESERVATION_CANCELLED',
-        subject: 'Reservation cancelled',
-        body: `Reservation ${reservation.reservation_number} has been cancelled.`,
+        subject: 'Đã hủy đặt trước',
+        body: `Đặt trước ${reservation.reservation_number} đã được hủy.`,
         reference_type: 'LOAN_RESERVATION',
         reference_id: reservation.id,
       });
@@ -555,10 +575,10 @@ async function confirmReservation(req, res) {
         customer_id: reservation.customer_id,
         channel: 'IN_APP',
         template_code: 'RESERVATION_CONFIRMED',
-        subject: nextStatus === 'READY_FOR_PICKUP' ? 'Reservation ready for pickup' : 'Reservation confirmed',
+        subject: nextStatus === 'READY_FOR_PICKUP' ? 'Sách sẵn sàng để nhận' : 'Đặt trước đã được xác nhận',
         body: nextStatus === 'READY_FOR_PICKUP'
-          ? `Reservation ${reservation.reservation_number} is ready for pickup. Pickup code: ${reservation.pickup_code}.`
-          : `Reservation ${reservation.reservation_number} has been confirmed by staff.`,
+          ? `Đặt trước ${reservation.reservation_number} đã sẵn sàng để nhận. Mã nhận sách: ${reservation.pickup_code}.`
+          : `Đặt trước ${reservation.reservation_number} đã được nhân viên xác nhận.`,
         reference_type: 'LOAN_RESERVATION',
         reference_id: reservation.id,
         metadata: {
@@ -624,8 +644,8 @@ async function releaseExpiredReservation(reservation, options = {}) {
       customer_id: expired.customer_id,
       channel: 'IN_APP',
       template_code: 'RESERVATION_EXPIRED',
-      subject: 'Reservation expired',
-      body: `Reservation ${expired.reservation_number} has expired and the reserved stock was released.`,
+      subject: 'Đặt trước đã hết hạn',
+      body: `Đặt trước ${expired.reservation_number} đã hết hạn và sách giữ chỗ đã được trả về kho.`,
       reference_type: 'LOAN_RESERVATION',
       reference_id: expired.id,
       metadata: {

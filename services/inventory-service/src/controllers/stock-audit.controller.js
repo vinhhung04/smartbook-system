@@ -32,6 +32,8 @@ function lineSummary(line) {
     location_code: line.locations?.location_code || null,
     sku: line.book_variants?.sku || null,
     isbn13: line.book_variants?.isbn13 || null,
+    isbn10: line.book_variants?.isbn10 || null,
+    barcode: line.book_variants?.internal_barcode || null,
     title: line.book_variants?.books?.title || null,
     expected_qty: line.expected_qty,
     counted_qty: line.counted_qty,
@@ -109,7 +111,7 @@ async function getStockAuditById(req, res) {
         stock_audit_lines: {
           include: {
             locations: { select: { location_code: true } },
-            book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+            book_variants: { select: { sku: true, isbn13: true, isbn10: true, internal_barcode: true, books: { select: { title: true } } } },
           },
         },
       },

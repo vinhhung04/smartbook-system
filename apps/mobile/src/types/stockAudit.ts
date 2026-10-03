@@ -5,6 +5,8 @@ export type StockAuditLine = {
   location_code: string | null;
   sku: string | null;
   isbn13: string | null;
+  isbn10: string | null;
+  barcode: string | null;
   title: string | null;
   expected_qty: number;
   counted_qty: number | null;

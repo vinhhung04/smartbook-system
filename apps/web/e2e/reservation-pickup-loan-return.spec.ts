@@ -32,7 +32,7 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
     await bookCard.getByRole('button', { name: 'Đặt trước', exact: true }).click();
 
     // Reserve modal: single available warehouse auto-selects, otherwise pick the first option.
-    const reserveDialog = customerPage.getByRole('dialog', { name: 'Chọn cửa hàng đặt trước' });
+    const reserveDialog = customerPage.getByRole('dialog', { name: 'Chọn chi nhánh đặt trước' });
     await expect(reserveDialog).toBeVisible();
     const warehouseOptions = reserveDialog.locator('button').filter({ hasText: 'cuốn sẵn sàng' });
     if (await warehouseOptions.count() > 0) {

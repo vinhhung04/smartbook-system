@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 
 import * as stockAuditApi from '../../src/api/stockAudit';
 import { ApiError } from '../../src/auth/auth-context';
+import { getAuditStatusLabel } from '../../src/lib/stockAuditScan';
 import type { StockAuditSummary } from '../../src/types/stockAudit';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
@@ -53,7 +54,7 @@ export default function StockAuditListScreen() {
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>{item.audit_number}</Text>
                   <Text style={styles.cardSubtitle}>
-                    {item.warehouse_code ?? '-'} · {item.status} · {item.line_count} dòng
+                    {item.warehouse_code ?? '-'} · {getAuditStatusLabel(item.status)} · {item.line_count} dòng
                   </Text>
                   {item.variance_count > 0 ? (
                     <View style={styles.varianceBadge}>

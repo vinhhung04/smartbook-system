@@ -71,7 +71,7 @@ export default function OutboundScanSessionScreen() {
       const resolved = resolveScannedCode(code, mode, available.data, mine.data);
 
       if (resolved.kind === 'not-found') {
-        attempt = { code, success: false, message: 'Không tìm thấy đơn với mã này', order_number: null, timestamp: new Date().toISOString() };
+        attempt = { code, success: false, message: 'Không có đơn đang chờ xuất với mã này (đơn có thể đã được xuất kho)', order_number: null, timestamp: new Date().toISOString() };
       } else if (resolved.kind === 'wrong-mode') {
         attempt = {
           code,

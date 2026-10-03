@@ -1858,7 +1858,7 @@ async function lookupVariantByBarcode(req, res) {
     const matches = await resolveVariantMatchesByBarcode(prisma, barcode);
 
     if (matches.length === 0) {
-      return res.status(404).json({ message: "No variant matched barcode" });
+      return res.status(404).json({ message: "Không tìm thấy sách khớp với mã vạch này" });
     }
 
     const topPriority = matches[0].match_priority;
@@ -3979,6 +3979,16 @@ async function declareOutboundShortage(req, res) {
         return { invalid: true, message: 'All items are fully picked. No shortage to declare.' };
       }
 
+      // Nothing picked yet means there is no partial pick to top up: a bin that is empty
+      // outright is an incident (exception report), not a shortage to repick the whole order.
+      const totalPicked = items.reduce((sum, i) => sum + Number(i.processed_qty || 0), 0);
+      if (totalPicked <= 0) {
+        return {
+          invalid: true,
+          message: 'Chưa lấy cuốn nào nên không thể khai báo thiếu. Nếu kệ trống hoàn toàn, hãy gửi báo cáo sự cố.',
+        };
+      }
+
       // Write SHORT_PICK markers for each short line
       const itemsForRepick = [];
       for (const item of items) {
@@ -4120,6 +4130,14 @@ async function declareTransferShortage(req, res) {
       const hasShortage = items.some((i) => i.quantity - (i.shipped_qty || 0) > 0);
       if (!hasShortage) {
         return { invalid: true, message: 'All items are fully shipped. No shortage to declare.' };
+      }
+
+      const totalShipped = items.reduce((sum, i) => sum + Number(i.shipped_qty || 0), 0);
+      if (totalShipped <= 0) {
+        return {
+          invalid: true,
+          message: 'Chưa lấy cuốn nào nên không thể khai báo thiếu. Nếu kệ trống hoàn toàn, hãy gửi báo cáo sự cố.',
+        };
       }
 
       // Write SHORT_PICK markers on short lines

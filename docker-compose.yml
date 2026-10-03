@@ -1,6 +1,7 @@
 services:
   db:
     image: pgvector/pgvector:pg15
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -32,6 +33,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -43,12 +45,14 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      # Loopback only: the broker and its management UI are not meant for the LAN.
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -75,7 +79,7 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null 2>&1 || exit 1"]
       interval: 5s
@@ -102,6 +106,12 @@ services:
       - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9080/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     depends_on:
       loki:
         condition: service_healthy
@@ -109,12 +119,18 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3100:3000"
+      - "127.0.0.1:3100:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     depends_on:
       prometheus:
         condition: service_healthy
@@ -433,6 +449,7 @@ services:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
@@ -472,14 +489,30 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      # Vite bakes VITE_* into the bundle at build time, so they belong here - as runtime
+      # `environment` values (where they used to be) they never reached the app.
+      args:
+        VITE_API_BASE_URL: ${WEB_API_ORIGIN:-http://localhost:3000}
+        VITE_AUTH_BASE_URL: ${WEB_API_ORIGIN:-http://localhost:3000}
+        VITE_AI_BASE_URL: ${WEB_API_ORIGIN:-http://localhost:3000}/ai
+        VITE_GATEWAY_BASE_URL: ${WEB_API_ORIGIN:-http://localhost:3000}
+        VITE_GATEWAY_HEALTH_URL: ${WEB_API_ORIGIN:-http://localhost:3000}/health
+        VITE_GATEWAY_READY_URL: ${WEB_API_ORIGIN:-http://localhost:3000}/ready
+        VITE_GATEWAY_SYSTEM_HEALTH_URL: ${WEB_API_ORIGIN:-http://localhost:3000}/system/health
+        VITE_AI_HEALTH_URL: ${WEB_API_ORIGIN:-http://localhost:3000}/ai/health
+        VITE_PACKING_RECORD_DELAY_SECONDS: ${PACKING_RECORD_DELAY_SECONDS:-15}
     ports:
       - "5173:80"
     environment:
-      - VITE_API_BASE_URL=http://localhost:3000
-      - VITE_AUTH_BASE_URL=http://localhost:3000
-      - VITE_AI_BASE_URL=http://localhost:3000/ai
-      - VITE_GATEWAY_BASE_URL=http://localhost:3000
-      - VITE_PACKING_RECORD_DELAY_SECONDS=${PACKING_RECORD_DELAY_SECONDS:-15}
+      # Origins the nginx Content-Security-Policy lets the browser connect to (apps/web/nginx.conf).
+      - API_ORIGIN=${WEB_API_ORIGIN:-http://localhost:3000}
+      - API_WS_ORIGIN=${WEB_WS_ORIGIN:-ws://localhost:3000}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     depends_on:
       api-gateway:
         condition: service_healthy

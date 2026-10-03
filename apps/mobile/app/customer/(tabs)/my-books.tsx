@@ -65,7 +65,7 @@ export default function CustomerMyBooksScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={load} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={styles.empty}>Bạn chưa có phiếu đặt sách nào</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>Bạn chưa có phiếu đặt trước nào</Text>}
           renderItem={({ item }) => {
             const display = getReservationStatusDisplay(item.status);
             return (

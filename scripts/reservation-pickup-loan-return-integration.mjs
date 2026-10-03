@@ -130,6 +130,23 @@ async function run() {
     return;
   }
 
+  // 1b. A customer holds at most one live reservation per book: a second one for the same variant
+  // (fresh Idempotency-Key, so not a replay) is refused and takes no extra stock.
+  const duplicate = await request(
+    'POST',
+    '/borrow/reservations',
+    {
+      customer_id: customerId,
+      variant_id: variantId,
+      warehouse_id: warehouseId,
+      quantity: 1,
+      source_channel: 'COUNTER',
+      notes: 'duplicate reservation must be refused',
+    },
+    idemHeader(),
+  );
+  add('1b.second live reservation for the same book -> 409', duplicate.status === 409 && /đặt chỗ đang hoạt động/.test(duplicate.data?.message || ''), `status=${duplicate.status} ${JSON.stringify(duplicate.data)}`);
+
   // 2. Staff confirms reservation -> CONFIRMED
   const confirmed = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'CONFIRMED' }, idemHeader());
   add('2.confirm -> CONFIRMED', confirmed.ok && confirmed.data?.data?.status === 'CONFIRMED', JSON.stringify(confirmed.data));

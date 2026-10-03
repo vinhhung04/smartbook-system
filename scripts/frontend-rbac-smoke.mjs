@@ -3,6 +3,8 @@ import path from 'node:path';
 
 const root = process.cwd();
 const sidebarPath = path.join(root, 'apps/web/src/components/sidebar.tsx');
+// The nav items (labelKey/access) live in lib/nav-groups.ts — the sidebar component only renders them.
+const navGroupsPath = path.join(root, 'apps/web/src/lib/nav-groups.ts');
 const routesPath = path.join(root, 'apps/web/src/app/routes.ts');
 const loginPath = path.join(root, 'apps/web/src/components/pages/login.tsx');
 const rbacPath = path.join(root, 'apps/web/src/lib/rbac.ts');
@@ -18,6 +20,8 @@ const i18nPath = path.join(root, 'apps/web/src/lib/i18n.tsx');
 const orderDetailPath = path.join(root, 'apps/web/src/components/pages/order-detail.tsx');
 const goodsReceiptPath = path.join(root, 'apps/web/src/components/pages/goods-receipt.tsx');
 const outboundPath = path.join(root, 'apps/web/src/components/pages/outbound.tsx');
+const reportsPath = path.join(root, 'apps/web/src/components/pages/reports.tsx');
+const receivingPutawayPath = path.join(root, 'apps/web/src/components/pages/receiving-putaway.tsx');
 
 let passed = 0;
 let total = 0;
@@ -36,8 +40,8 @@ async function read(file) {
 }
 
 async function runStaticSmoke() {
-  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports, exceptionReportsPage, indexHtml, i18nFile, orderDetail, goodsReceipt, outbound] = await Promise.all([
-    read(sidebarPath),
+  const [sidebar, routes, login, rbac, myTasks, picking, purchaseRequestsService, exceptionReportsService, myPurchaseRequests, myExceptionReports, exceptionReportsPage, indexHtml, i18nFile, orderDetail, goodsReceipt, outbound, reports, receivingPutaway] = await Promise.all([
+    Promise.all([read(sidebarPath), read(navGroupsPath)]).then((parts) => parts.join('\n')),
     read(routesPath),
     read(loginPath),
     read(rbacPath),
@@ -53,8 +57,12 @@ async function runStaticSmoke() {
     read(orderDetailPath),
     read(goodsReceiptPath),
     read(outboundPath),
+    read(reportsPath),
+    read(receivingPutawayPath),
   ]);
 
+  expect('Reports page skips borrow requests for roles without borrowRead (no pointless 403s)', reports.includes('ROUTE_ACCESS.borrowRead') && reports.includes('noBorrowAccess ? emptyPage<Loan>()'));
+  expect('Putaway page drops the scanned location barcode when the target is changed by hand (server verifies it)', receivingPutaway.includes('target_location_id: value === "none" ? "" : value, scanned_location_barcode: ""'));
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
   expect('WAREHOUSE_STAFF home path is my warehouse tasks', rbac.includes('role === "WAREHOUSE_STAFF"') && rbac.includes('return "/my-warehouse-tasks"'));
   expect('WAREHOUSE_MANAGER home path is reports', rbac.includes('role === "WAREHOUSE_MANAGER"') && rbac.includes('return "/reports"'));
@@ -95,7 +103,7 @@ async function runStaticSmoke() {
   expect('My Warehouse Tasks page links to execution routes', myTasks.includes('getTaskActionPath') && myTasks.includes('taskActionLabel'));
   expect('My Warehouse Tasks handles purchase request type', myTasks.includes('PURCHASE_REQUEST'));
   expect('My Warehouse Tasks handles exception report type', myTasks.includes('EXCEPTION_REPORT'));
-  expect('Picking page has manager task assignment UI', picking.includes('Giao task') && picking.includes('userService.getWarehouseStaff') && picking.includes('pickerUserId'));
+  expect('Picking page has manager task assignment UI', picking.includes('handleAssignTask') && picking.includes('userService.getWarehouseStaff') && picking.includes('pickerUserId'));
   expect('stockWrite no longer includes staff roles', rbac.includes('stockWrite: { roles: MANAGER_OPERATION_ROLES'));
   expect('staff cannot satisfy manager inventory read roles', rbac.includes('managerInventoryRead: { roles: MANAGER_OPERATION_ROLES'));
   expect('manager operation roles separated from staff tracking roles', rbac.includes('MANAGER_OPERATION_ROLES') && rbac.includes('STAFF_TRACKING_ROLES'));
@@ -123,7 +131,7 @@ async function runStaticSmoke() {
   // Phase 1 — i18n & encoding foundation
   expect('index.html declares lang="vi"', indexHtml.includes('lang="vi"'));
   expect('index.html declares UTF-8 charset', indexHtml.includes('charset="UTF-8"'));
-  expect('index.html title is Vietnamese', indexHtml.includes('Hệ thống quản lý thư viện'));
+  expect('index.html title is Vietnamese', indexHtml.includes('<html lang="vi">') && indexHtml.includes('Thư viện sách'));
   expect('i18n provider syncs document.documentElement.lang', i18nFile.includes('document.documentElement.lang = locale'));
   expect('i18n covers staff self-service sidebar labels (vi)', i18nFile.includes("'sidebar.my_tasks': 'Công việc kho của tôi'") && i18nFile.includes("'sidebar.my_purchase_requests': 'Yêu cầu mua hàng của tôi'") && i18nFile.includes("'sidebar.my_exception_reports': 'Báo cáo sự cố của tôi'"));
   expect('sidebar uses useI18n for label rendering', sidebar.includes('useI18n') && sidebar.includes('t(item.labelKey)') && sidebar.includes('t(group.labelKey)'));

@@ -54,7 +54,7 @@ export default function CustomerReservationDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: reservation?.reservation_number ?? 'Phiếu đặt sách' }} />
+      <Stack.Screen options={{ headerShown: true, title: reservation?.reservation_number ?? 'Phiếu đặt trước' }} />
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />

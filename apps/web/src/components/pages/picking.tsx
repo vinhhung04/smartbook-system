@@ -67,7 +67,7 @@ function taskTypeLabel(orderType: string): string {
   if (orderType === "OUTBOUND_REPICK") return "Xuất kho · lấy bù";
   if (orderType === "WAREHOUSE_TRANSFER_REPICK") return "Chuyển kho · lấy bù";
   if (orderType === "WAREHOUSE_TRANSFER") return "Chuyển kho";
-  if (orderType.startsWith("OUTBOUND_")) return "Xuất kho / cửa hàng";
+  if (orderType.startsWith("OUTBOUND_")) return "Xuất kho";
   return orderType;
 }
 
