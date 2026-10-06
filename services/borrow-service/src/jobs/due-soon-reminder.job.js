@@ -75,7 +75,8 @@ async function sendReminderIfNeeded(candidate) {
       body: `Phiếu mượn ${loan.loan_number} sẽ đến hạn trả vào ${item.due_date.toISOString().slice(0, 10)}.`,
       reference_type: 'LOAN_ITEM',
       reference_id: item.id,
-      metadata: { risk_score: candidate.risk_score, risk_band: candidate.risk_band, due_date: item.due_date },
+      // loan_id lets the notification center link to the loan page.
+      metadata: { risk_score: candidate.risk_score, risk_band: candidate.risk_band, due_date: item.due_date, loan_id: loan.id },
       email: customer.email || null,
       email_data: { customer_name: customer.full_name, loan_number: loan.loan_number, due_date: item.due_date.toISOString().slice(0, 10) },
     });

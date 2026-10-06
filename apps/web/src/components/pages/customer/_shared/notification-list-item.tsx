@@ -1,9 +1,10 @@
-import { NotificationItem } from './notification-item';
+import { NotificationItem, type CustomerNotification } from './notification-item';
 
 interface NotificationListItemProps {
-  item: any;
+  item: CustomerNotification;
+  onMarkedRead?: (id: string) => void;
 }
 
-export function NotificationListItem({ item }: NotificationListItemProps) {
-  return <NotificationItem item={item} />;
+export function NotificationListItem({ item, onMarkedRead }: NotificationListItemProps) {
+  return <NotificationItem item={item} onMarkedRead={onMarkedRead} />;
 }
