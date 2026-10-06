@@ -73,6 +73,28 @@ async function getMyAvailabilityAlerts(req, res) {
   }
 }
 
+const AVAILABLE_MESSAGE = 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.';
+const UNVERIFIED_MESSAGE = 'Chưa kiểm tra được tình trạng sách, vui lòng thử lại sau.';
+
+/**
+ * Reverts what one subscribe request wrote — only while the row is still the
+ * ACTIVE/un-notified state it wrote. If the consumer claimed it meanwhile, the
+ * reader was notified and NOTIFIED is the correct final state, so it stays.
+ * A previously ACTIVE alert is left alone: it existed before this request, so
+ * the consumer handles every stock event since.
+ */
+async function undoAlertWrite(alert, previous) {
+  const untouched = { id: alert.id, status: 'ACTIVE', notified_at: null };
+  if (!previous) {
+    await prisma.availability_alerts.deleteMany({ where: untouched });
+  } else if (previous.status !== 'ACTIVE') {
+    await prisma.availability_alerts.updateMany({
+      where: untouched,
+      data: { status: previous.status, notified_at: previous.notified_at },
+    });
+  }
+}
+
 async function subscribeAvailabilityAlert(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -91,23 +113,41 @@ async function subscribeAvailabilityAlert(req, res) {
       availability = await getBookPublicAvailability({ bookId, requestId: req.requestId });
     } catch (error) {
       console.error('subscribeAvailabilityAlert availability check failed:', error.message);
-      return res.status(503).json({ message: 'Chưa kiểm tra được tình trạng sách, vui lòng thử lại sau.' });
+      return res.status(503).json({ message: UNVERIFIED_MESSAGE });
     }
     if (!availability) {
       return res.status(404).json({ message: 'Không tìm thấy sách trong danh mục.' });
     }
     if (Number(availability.available_quantity) > 0) {
-      return res.status(409).json({
-        message: 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.',
-        data: { available_quantity: availability.available_quantity },
-      });
+      return res.status(409).json({ message: AVAILABLE_MESSAGE, data: { available_quantity: availability.available_quantity } });
     }
 
+    const key = { customer_id_book_id: { customer_id: customer.id, book_id: bookId } };
+    const previous = await prisma.availability_alerts.findUnique({ where: key });
     const alert = await prisma.availability_alerts.upsert({
-      where: { customer_id_book_id: { customer_id: customer.id, book_id: bookId } },
+      where: key,
       create: { customer_id: customer.id, book_id: bookId, status: 'ACTIVE' },
       update: { status: 'ACTIVE', notified_at: null },
     });
+
+    // Second live check, after the alert exists. Inventory writes its stock
+    // event in the same transaction as the stock change, so a restock the
+    // consumer handled before this alert existed is already visible here; any
+    // event handled after the upsert finds the alert and claims it. If a copy
+    // appeared in between (or we cannot tell), undo this request's write and
+    // tell the reader instead of leaving an ACTIVE alert that may never fire.
+    let recheck;
+    try {
+      recheck = await getBookPublicAvailability({ bookId, requestId: req.requestId });
+    } catch (error) {
+      console.error('subscribeAvailabilityAlert re-check failed, undoing:', error.message);
+      await undoAlertWrite(alert, previous);
+      return res.status(503).json({ message: UNVERIFIED_MESSAGE });
+    }
+    if (recheck && Number(recheck.available_quantity) > 0) {
+      await undoAlertWrite(alert, previous);
+      return res.status(409).json({ message: AVAILABLE_MESSAGE, data: { available_quantity: recheck.available_quantity } });
+    }
     return res.status(201).json({ data: alert });
   } catch (error) {
     console.error('subscribeAvailabilityAlert error:', error);

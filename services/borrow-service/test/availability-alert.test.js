@@ -44,6 +44,11 @@ function createStore(alerts = [], { failNotificationWrites = 0 } = {}) {
     return {
       availability_alerts: {
         async findMany({ where }) { return target.availability_alerts.filter((row) => matches(row, where)).map((row) => ({ ...row })); },
+        async findUnique({ where }) {
+          const key = where.customer_id_book_id;
+          const row = target.availability_alerts.find((item) => item.customer_id === key.customer_id && item.book_id === key.book_id);
+          return row ? { ...row } : null;
+        },
         async updateMany({ where, data }) {
           const hits = target.availability_alerts.filter((row) => matches(row, where));
           hits.forEach((row) => Object.assign(row, data));
@@ -165,7 +170,8 @@ test('case 1: no public copy → 201, ACTIVE alert owned by the session customer
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.data.customer_id, 'cust-a');
   assert.equal(res.body.data.status, 'ACTIVE');
-  assert.deepEqual(calls, [BOOK_ID]);
+  // Checked before the upsert and again after it (race guard).
+  assert.deepEqual(calls, [BOOK_ID, BOOK_ID]);
   assert.equal((await subscribe(controller, 'cust-a', 'nope')).statusCode, 400);
 });
 
@@ -237,6 +243,97 @@ test('case 7: subscribed at 0, a copy comes back → exactly one notification an
 
   // While the copy is still on the shelf, re-subscribing is refused.
   assert.equal((await subscribe(controller, 'cust-a')).statusCode, 409);
+});
+
+// ── subscription race: stock appears between the check and the upsert ────────
+
+/** Inventory answers in order: first call, second call, … (last answer repeats). */
+function answers(...values) {
+  let call = 0;
+  return () => {
+    const value = values[Math.min(call, values.length - 1)];
+    call += 1;
+    return typeof value === 'function' ? value() : value;
+  };
+}
+
+test('race: 0 at the first check, a copy appears before the second → 409 and no alert left behind', async () => {
+  const store = createStore();
+  const { controller, calls } = loadControllerWith(store, answers(warehouseOnly, branchAvailability));
+  const res = await subscribe(controller, 'cust-a');
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.message, 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.');
+  assert.equal(calls.length, 2);
+  assert.equal(store.state.availability_alerts.length, 0, 'the alert this request created is removed');
+
+  // A restock event processed afterwards has nobody to notify.
+  await dispatch(store, branchAvailability, stockChanged());
+  assert.equal(store.state.customer_notifications.length, 0);
+});
+
+test('race on re-arm: NOTIFIED alert is restored (not left ACTIVE) when the second check finds stock', async () => {
+  const notifiedAt = new Date('2026-09-01');
+  const store = createStore([alert('alert-old', 'cust-a', { status: 'NOTIFIED', notified_at: notifiedAt })]);
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, branchAvailability));
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 409);
+  const row = store.state.availability_alerts[0];
+  assert.equal(row.status, 'NOTIFIED');
+  assert.equal(row.notified_at.getTime(), notifiedAt.getTime());
+});
+
+test('race: inventory fails on the second check → 503 and the alert state is rolled back (fail closed)', async () => {
+  const notifiedAt = new Date('2026-09-01');
+  const store = createStore([alert('alert-old', 'cust-b', { status: 'NOTIFIED', notified_at: notifiedAt })]);
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, new Error('inventory unreachable')));
+
+  const fresh = await subscribe(controller, 'cust-a');
+  assert.equal(fresh.statusCode, 503);
+  assert.equal(store.state.availability_alerts.some((row) => row.customer_id === 'cust-a'), false);
+
+  const { controller: again } = loadControllerWith(store, answers(warehouseOnly, new Error('inventory unreachable')));
+  assert.equal((await subscribe(again, 'cust-b')).statusCode, 503);
+  const restored = store.state.availability_alerts.find((row) => row.customer_id === 'cust-b');
+  assert.equal(restored.status, 'NOTIFIED');
+  assert.equal(restored.notified_at.getTime(), notifiedAt.getTime());
+});
+
+test('race: the consumer claims the new alert before the second check → one notification, NOTIFIED kept', async () => {
+  const store = createStore();
+  // Between upsert and re-check the restock event is processed by the consumer.
+  const consumerRunsThenStock = async () => {
+    await dispatch(store, branchAvailability, stockChanged());
+    return branchAvailability;
+  };
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, consumerRunsThenStock));
+  const res = await subscribe(controller, 'cust-a');
+  assert.equal(res.statusCode, 409);
+  assert.deepEqual(notifiedCustomers(store), ['cust-a']);
+  const row = store.state.availability_alerts[0];
+  assert.equal(row.status, 'NOTIFIED', 'the claim by the consumer is not undone');
+  assert.ok(row.notified_at instanceof Date);
+
+  await dispatch(store, branchAvailability, stockChanged()); // redelivery
+  assert.equal(store.state.customer_notifications.length, 1);
+});
+
+test('race: stock 0 at both checks, restock right after → the consumer notifies exactly once', async () => {
+  const store = createStore();
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, warehouseOnly));
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 201);
+  await dispatch(store, branchAvailability, stockChanged());
+  await dispatch(store, branchAvailability, stockChanged());
+  assert.deepEqual(notifiedCustomers(store), ['cust-a']);
+  assert.equal(store.state.availability_alerts[0].status, 'NOTIFIED');
+});
+
+test('racing subscribe requests from the same customer and book keep one alert and one notification', async () => {
+  const store = createStore();
+  const { controller } = loadControllerWith(store, warehouseOnly);
+  const results = await Promise.all([subscribe(controller, 'cust-a'), subscribe(controller, 'cust-a'), subscribe(controller, 'cust-a')]);
+  assert.deepEqual(results.map((res) => res.statusCode), [201, 201, 201]);
+  assert.equal(store.state.availability_alerts.length, 1);
+  await Promise.all([dispatch(store, branchAvailability, stockChanged()), dispatch(store, branchAvailability, stockChanged())]);
+  assert.equal(store.state.customer_notifications.length, 1);
 });
 
 test('cancelling removes only the caller\'s alert, and a cancelled alert is never notified', async () => {
