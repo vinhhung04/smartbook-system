@@ -1,14 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, MapPin, CheckCircle, Loader2 } from 'lucide-react';
 import { CustomerCatalogBook } from '@/services/customer-catalog';
-import type { PickupBranch } from '@/services/public-catalog';
+import { publicCatalogService, type PickupBranch } from '@/services/public-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 
 /** The public catalog sends per-branch availability already grouped
- *  (`pickup_branches`); the authenticated catalog sends raw `locations`. */
+ *  (`pickup_branches`); the authenticated catalog sends raw `locations` of every
+ *  warehouse type, so those are narrowed to the public pickup branches. */
 interface ReservableBook {
   title: string;
   variant_id?: string | null;
@@ -34,14 +35,28 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   useDialogA11y(Boolean(book), onClose, containerRef);
 
+  // Raw `locations` include internal warehouses, which carry no type here; the
+  // public branch list is the backend's pickup rule (BRANCH/LIBRARY) applied.
+  const usesLocations = Boolean(book && !book.pickup_branches && book.locations);
+  const [pickupBranchIds, setPickupBranchIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!usesLocations || pickupBranchIds) return undefined;
+    let cancelled = false;
+    publicCatalogService.getBranches()
+      .then((branches) => { if (!cancelled) setPickupBranchIds(new Set(branches.map((branch) => branch.id))); })
+      .catch(() => { if (!cancelled) setPickupBranchIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [usesLocations, pickupBranchIds]);
+  const loadingPickupBranches = usesLocations && !pickupBranchIds;
+
   const availableWarehouses = useMemo<WarehouseOption[]>(() => {
     if (book?.pickup_branches) return book.pickup_branches.filter((branch) => branch.available_quantity > 0);
-    if (!book?.locations) return [];
+    if (!book?.locations || !pickupBranchIds) return [];
     const map = new Map<string, WarehouseOption>();
     for (const loc of book.locations) {
       if (loc.is_receiving) continue;
       const avail = loc.available_quantity ?? loc.quantity;
-      if (!avail || avail <= 0 || !loc.warehouse_id) continue;
+      if (!avail || avail <= 0 || !loc.warehouse_id || !pickupBranchIds.has(loc.warehouse_id)) continue;
       const existing = map.get(loc.warehouse_id);
       if (existing) {
         existing.available_quantity += avail;
@@ -54,7 +69,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
       }
     }
     return Array.from(map.values()).sort((a, b) => b.available_quantity - a.available_quantity);
-  }, [book?.pickup_branches, book?.locations]);
+  }, [book?.pickup_branches, book?.locations, pickupBranchIds]);
 
   const autoSelected = availableWarehouses.length === 1 ? availableWarehouses[0].warehouse_id : '';
   const effectiveWarehouseId = selectedWarehouseId || autoSelected;
@@ -101,7 +116,11 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
 
         {/* Body */}
         <div className="px-5 py-4">
-          {availableWarehouses.length === 0 ? (
+          {loadingPickupBranches ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Đang tải chi nhánh" />
+            </div>
+          ) : availableWarehouses.length === 0 ? (
             <div className="py-6 text-center">
               <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" />
               <p className="text-[13px] text-muted-foreground">Hiện không có chi nhánh nào có sách trên kệ</p>

@@ -7,6 +7,7 @@
 // unless it is added below on purpose.
 
 const { PUBLIC_PICKUP_WAREHOUSE_TYPES, RECEIVING_LOCATION_TYPES } = require('../utils/constants');
+const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
 const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
@@ -61,19 +62,9 @@ const PUBLIC_BOOK_SELECT = {
 
 const PUBLIC_BOOK_WHERE = { is_active: true };
 
-/** The one rule for "can a reader see this location and pick a book up there". */
-function isPublicPickupWarehouse(warehouse) {
-  return Boolean(
-    warehouse
-    && warehouse.is_active !== false
-    && PUBLIC_PICKUP_TYPES.has(String(warehouse.warehouse_type || '').toUpperCase()),
-  );
-}
-
 // Branches as visitors see them: a name and a street address. Only reader-facing
 // locations (PUBLIC_PICKUP_WAREHOUSE_TYPES) are branches; internal warehouses are
 // never listed and their stock never counts as public availability.
-const PUBLIC_PICKUP_TYPES = new Set(PUBLIC_PICKUP_WAREHOUSE_TYPES);
 const PUBLIC_BRANCH_WHERE = { is_active: true, warehouse_type: { in: PUBLIC_PICKUP_WAREHOUSE_TYPES } };
 // type/is_active are selected to re-check the rule; toPublicBranch drops them,
 // as it drops code, manager, settings, locations and capacity (never selected).

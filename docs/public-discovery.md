@@ -236,11 +236,12 @@ Test thêm: `available_now` (inventory unit), typeahead bàn phím và "Báo khi
 - **Chi nhánh — dữ liệu còn thiếu**: bảng `warehouses` chưa có số điện thoại, giờ mở cửa, slug hay toạ độ. Trang `/branches`
   chỉ hiện dữ liệu đang có (tên, địa chỉ, số sách) và không bịa thêm. Muốn hiển thị cần migration thêm cột (vd `phone`,
   `opening_hours` JSON, `slug` unique), form nhập ở trang quản lý kho, seed, rồi thêm vào `PUBLIC_BRANCH_SELECT` + test.
-- **Rule điểm nhận sách chưa áp ở backend đặt trước**: web công khai chỉ đưa chi nhánh `BRANCH`/`LIBRARY`, nhưng
-  `POST /my/reservations` (borrow-service → inventory `reserveFromBorrow`) vẫn nhận mọi `warehouse_id` active, và màn
-  "Tìm sách bằng ảnh bìa" trong cổng bạn đọc (`/customer/scan-cover`) dựng lựa chọn kho từ `locations` của catalog có xác thực
-  (chưa lọc loại kho). Nhân viên đặt hộ ở trang quản lý cũng dùng mọi kho. Nếu nghiệp vụ muốn chặn cứng, thêm kiểm tra
-  `PUBLIC_PICKUP_WAREHOUSE_TYPES` cho kênh `CUSTOMER` ở `reserveFromBorrow` và lọc `locations` ở scan-cover.
+- **Rule điểm nhận sách ở backend đặt trước — đã áp cho bạn đọc**: `POST /my/reservations` gắn `reservation_channel=CUSTOMER`
+  (đặt ở server, không đọc từ body) khi gọi inventory; `getAvailability` và `reserveFromBorrow` khi đó kiểm tra kho bằng cùng
+  `isPublicPickupWarehouse()` (`src/utils/public-pickup-warehouse.js`) và trả 409 "Selected warehouse is not a valid pickup
+  location" trước khi giữ hàng. Màn `/customer/scan-cover` chỉ đưa các `locations` nằm trong `/public/catalog/branches`.
+  Nhân viên (đặt hộ ở trang quản lý, mượn tại quầy) không gửi kênh nên vẫn dùng mọi kho. Còn lại: app mobile đặt tại
+  `default_warehouse_id` của catalog có xác thực — nếu đó là kho nội bộ, backend sẽ từ chối (409) thay vì đề xuất chi nhánh.
 - **Gói thẻ — dữ liệu còn thiếu**: `membership_plans` không có phí/giá và thời hạn riêng từng gói (thẻ cấp khi đăng ký có hạn
   `DEFAULT_MEMBERSHIP_DURATION_DAYS` = 365 ngày); đổi gói chỉ do nhân viên làm (`POST /borrow/customers/:id/membership/renew`).
   Mô tả gói trong seed demo đang là tiếng Việt không dấu — nên sửa dữ liệu ở trang quản lý gói.
