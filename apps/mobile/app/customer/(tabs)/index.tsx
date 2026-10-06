@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import * as customerCatalogApi from '../../../src/api/customerCatalog';
-import { ApiError } from '../../../src/auth/auth-context';
 import { HeroBanner } from '../../../src/components/customer/HeroBanner';
 import { PosterCard } from '../../../src/components/customer/PosterCard';
 import { colors, radius, spacing, typography } from '../../../src/theme/customerTokens';
+import { useCatalogPages } from '../../../src/hooks/useCatalogPages';
 import type { CustomerCatalogBook } from '../../../src/types/customerCatalog';
+
+const ALL_BOOKS = {};
 
 type Shelf = {
   category: string;
@@ -32,26 +32,9 @@ function groupByCategory(books: CustomerCatalogBook[]): Shelf[] {
 }
 
 export default function CustomerHomeScreen() {
-  const [books, setBooks] = useState<CustomerCatalogBook[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      // 16 seeded books total — small enough to fetch once and group/browse
-      // client-side, rather than paginating a home-browse surface.
-      const result = await customerCatalogApi.getCatalogBooks({});
-      setBooks(result);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Không tải được danh mục sách');
-    }
-  }, []);
-
-  useEffect(() => {
-    setIsLoading(true);
-    load().finally(() => setIsLoading(false));
-  }, [load]);
+  // Paged: the first page fills the shelves, "Tải thêm sách" adds the next one.
+  const catalog = useCatalogPages(ALL_BOOKS);
+  const books = catalog.items;
 
   const featured = books.find((b) => b.available_quantity > 0) ?? books[0] ?? null;
   const shelves = groupByCategory(books);
@@ -65,18 +48,19 @@ export default function CustomerHomeScreen() {
         </Pressable>
       </View>
 
-      {isLoading ? (
+      {catalog.loadingInitial && books.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
+      ) : catalog.error && books.length === 0 ? (
+        <Pressable style={styles.center} onPress={catalog.retry} accessibilityRole="button">
+          <Text style={styles.error}>{catalog.error} · Thử lại</Text>
+        </Pressable>
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={load} tintColor={colors.primary} />}
+          // Pull-to-refresh reloads page 1 and replaces the shelves.
+          refreshControl={<RefreshControl refreshing={catalog.refreshing} onRefresh={catalog.refresh} tintColor={colors.primary} />}
         >
           {featured ? (
             <HeroBanner
@@ -108,6 +92,24 @@ export default function CustomerHomeScreen() {
               />
             </View>
           ))}
+
+          {catalog.hasNextPage || catalog.error ? (
+            <Pressable
+              style={[styles.moreButton, catalog.loadingMore && styles.moreButtonDisabled]}
+              onPress={catalog.error ? catalog.retry : catalog.loadMore}
+              disabled={catalog.loadingMore || catalog.refreshing}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: catalog.loadingMore || catalog.refreshing }}
+            >
+              {catalog.loadingMore ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Text style={styles.moreButtonText}>
+                  {catalog.error ? 'Không tải thêm được · Thử lại' : `Tải thêm sách (${books.length}/${catalog.total})`}
+                </Text>
+              )}
+            </Pressable>
+          ) : null}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -166,6 +168,22 @@ const styles = StyleSheet.create({
   shelfTitle: {
     ...typography.label,
     marginLeft: spacing.lg,
+  },
+  moreButton: {
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.lg,
+    minHeight: 48,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreButtonDisabled: {
+    opacity: 0.6,
+  },
+  moreButtonText: {
+    ...typography.bodyBold,
   },
   shelfList: {
     paddingHorizontal: spacing.lg,
