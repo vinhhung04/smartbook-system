@@ -114,6 +114,11 @@ export interface PublicBranch {
   id: string;
   name: string;
   address: string | null;
+  /** Reader contact details; null when staff have not entered them (never invented). */
+  phone: string | null;
+  email: string | null;
+  opening_hours: string | null;
+  description: string | null;
   stats: BranchStats;
 }
 
@@ -132,13 +137,18 @@ export interface PublicMembershipPlan {
   max_renewal_count: number;
   reservation_hold_hours: number;
   fine_per_day: number;
+  /** Plan fee in VND for one card period; 0 = free. Collected at the counter (no online payment). */
+  price: number;
+  /** How long a card on this plan stays valid. */
+  duration_days: number;
   /** The plan a newly created account receives (business rule, not a ranking). */
   is_default: boolean;
 }
 
 export interface PublicMembershipPlans {
   data: PublicMembershipPlan[];
-  card_validity_days: number;
+  /** Validity of the card issued at sign-up (the default plan's duration); null when no default plan. */
+  card_validity_days: number | null;
 }
 
 export interface PublicHome {

@@ -25,9 +25,15 @@ export interface MembershipInfo {
   customer_name?: string;
   membership_id: string;
   card_number?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string | null;
   plan_id: string;
   plan_code: string;
   plan_name: string;
+  plan_description?: string | null;
+  price?: number;
+  duration_days?: number;
   limits: {
     max_active_loans: number;
     max_loan_days: number;

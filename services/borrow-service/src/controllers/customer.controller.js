@@ -1,6 +1,6 @@
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
-const { resolveActiveMembership, computeMembershipEndDate, resolveRenewalStart, DEFAULT_MEMBERSHIP_DURATION_DAYS } = require('../services/membership.service');
+const { assignDefaultMembership, resolveActiveMembership, computeMembershipEndDate, resolveRenewalStart } = require('../services/membership.service');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -87,39 +87,10 @@ async function ensureCurrentCustomer(req) {
         data: { customer_id: customer.id },
       });
 
-      const membershipPlan = await tx.membership_plans.findFirst({
-        where: {
-          is_active: true,
-          code: String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim(),
-        },
-      }) || await tx.membership_plans.findFirst({
-        where: { is_active: true },
-        orderBy: [{ created_at: 'asc' }],
-      }) || await tx.membership_plans.create({
-        data: {
-          code: String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim(),
-          name: 'Standard Plan',
-          description: 'Auto-created default plan for customer self provisioning',
-          max_active_loans: 5,
-          max_loan_days: 14,
-          max_renewal_count: 2,
-          reservation_hold_hours: 24,
-          fine_per_day: 5000,
-          lost_item_fee_multiplier: 1,
-          is_active: true,
-        },
-      });
-
-      await tx.customer_memberships.create({
-        data: {
-          customer_id: customer.id,
-          plan_id: membershipPlan.id,
-          card_number: generateCardNumber(customer.id),
-          start_date: new Date(),
-          end_date: computeMembershipEndDate(new Date()),
-          status: 'ACTIVE',
-          note: 'Auto assigned from customer self provisioning',
-        },
+      await assignDefaultMembership(tx, {
+        customerId: customer.id,
+        cardNumber: generateCardNumber(customer.id),
+        note: 'Auto assigned from customer self provisioning',
       });
 
       return customer;
@@ -181,7 +152,6 @@ async function listCustomers(req, res) {
 async function createCustomer(req, res) {
   const { full_name, email, phone, birth_date, address, status } = req.body;
   const actorUserId = req.user?.id || null;
-  const defaultPlanCode = String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim();
 
   if (!full_name || String(full_name).trim().length < 2) {
     return res.status(400).json({ message: 'full_name is required and must be at least 2 chars' });
@@ -216,29 +186,15 @@ async function createCustomer(req, res) {
         },
       });
 
-      const membershipPlan = await tx.membership_plans.findFirst({
-        where: {
-          is_active: true,
-          ...(defaultPlanCode ? { code: defaultPlanCode } : {}),
-        },
-      }) || await tx.membership_plans.findFirst({
-        where: { is_active: true },
-        orderBy: [{ created_at: 'asc' }],
+      const assigned = await assignDefaultMembership(tx, {
+        customerId: customer.id,
+        cardNumber: generateCardNumber(customer.id),
+        status: resolvedStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
+        note: 'Auto assigned on customer creation',
       });
 
-      if (membershipPlan) {
-        const membership = await tx.customer_memberships.create({
-          data: {
-            customer_id: customer.id,
-            plan_id: membershipPlan.id,
-            card_number: generateCardNumber(customer.id),
-            start_date: new Date(),
-            end_date: computeMembershipEndDate(new Date()),
-            status: resolvedStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
-            note: 'Auto assigned on customer creation',
-          },
-        });
-
+      if (assigned) {
+        const { membership, plan: membershipPlan } = assigned;
         await writeAuditLog(tx, {
           actor_user_id: actorUserId,
           action_name: 'AUTO_ASSIGN_CUSTOMER_MEMBERSHIP',
@@ -367,6 +323,31 @@ async function updateCustomer(req, res) {
   }
 }
 
+/** What a reader (or staff) sees about the current card: plan terms, card
+ *  dates and the effective limits. No internal plan code beyond what staff
+ *  already used, no audit fields. */
+function toMembershipView(customerId, membershipInfo, activeLoanCount, totalFineBalance) {
+  const { membership, plan, limits } = membershipInfo;
+  return {
+    customer_id: customerId,
+    membership_id: membership.id,
+    card_number: membership.card_number,
+    status: membership.status,
+    start_date: membership.start_date,
+    end_date: membership.end_date,
+    plan_id: plan.id,
+    plan_code: plan.code,
+    plan_name: plan.name,
+    plan_description: plan.description || null,
+    price: Number(plan.price),
+    duration_days: plan.duration_days,
+    limits,
+    active_loan_count: activeLoanCount,
+    remaining_loan_slots: Math.max(0, limits.max_active_loans - activeLoanCount),
+    outstanding_fine_balance: Number(totalFineBalance),
+  };
+}
+
 async function getActiveMembership(req, res) {
   const id = parseId(req.params.id);
 
@@ -392,19 +373,7 @@ async function getActiveMembership(req, res) {
       },
     });
 
-    return res.json({
-      data: {
-        customer_id: id,
-        membership_id: membershipInfo.membership.id,
-        plan_id: membershipInfo.plan.id,
-        plan_code: membershipInfo.plan.code,
-        plan_name: membershipInfo.plan.name,
-        limits: membershipInfo.limits,
-        active_loan_count: activeLoanCount,
-        remaining_loan_slots: Math.max(0, membershipInfo.limits.max_active_loans - activeLoanCount),
-        outstanding_fine_balance: Number(customer.total_fine_balance),
-      },
-    });
+    return res.json({ data: toMembershipView(id, membershipInfo, activeLoanCount, customer.total_fine_balance) });
   } catch (error) {
     console.error('Error while loading active membership:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -417,11 +386,10 @@ async function renewMembership(req, res) {
     return res.status(400).json({ message: 'Invalid customer id' });
   }
 
-  const durationDays = req.body?.duration_days == null
-    ? DEFAULT_MEMBERSHIP_DURATION_DAYS
-    : Number(req.body.duration_days);
-  if (!Number.isFinite(durationDays) || durationDays <= 0) {
-    return res.status(400).json({ message: 'duration_days must be a positive number' });
+  // Omitted: the plan's own duration_days (resolved below once the plan is known).
+  const requestedDuration = req.body?.duration_days == null ? null : Number(req.body.duration_days);
+  if (requestedDuration !== null && (!Number.isInteger(requestedDuration) || requestedDuration <= 0)) {
+    return res.status(400).json({ message: 'duration_days must be a positive integer' });
   }
 
   try {
@@ -439,6 +407,9 @@ async function renewMembership(req, res) {
     if (!planId) {
       return res.status(400).json({ message: 'plan_id is required when the customer has no prior membership' });
     }
+    if (!isUuid(planId)) {
+      return res.status(400).json({ message: 'plan_id must be a valid UUID' });
+    }
 
     const plan = await prisma.membership_plans.findUnique({ where: { id: planId } });
     if (!plan || !plan.is_active) {
@@ -446,7 +417,7 @@ async function renewMembership(req, res) {
     }
 
     const startDate = resolveRenewalStart(currentMembership?.end_date || null);
-    const endDate = computeMembershipEndDate(startDate, durationDays);
+    const endDate = computeMembershipEndDate(startDate, requestedDuration ?? plan.duration_days);
 
     const membership = await prisma.$transaction(async (tx) => {
       const created = await tx.customer_memberships.create({
@@ -563,19 +534,7 @@ async function getMyMembership(req, res) {
       },
     });
 
-    return res.json({
-      data: {
-        customer_id: customer.id,
-        membership_id: membershipInfo.membership.id,
-        plan_id: membershipInfo.plan.id,
-        plan_code: membershipInfo.plan.code,
-        plan_name: membershipInfo.plan.name,
-        limits: membershipInfo.limits,
-        active_loan_count: activeLoanCount,
-        remaining_loan_slots: Math.max(0, membershipInfo.limits.max_active_loans - activeLoanCount),
-        outstanding_fine_balance: Number(customer.total_fine_balance),
-      },
-    });
+    return res.json({ data: toMembershipView(customer.id, membershipInfo, activeLoanCount, customer.total_fine_balance) });
   } catch (error) {
     console.error('Error while loading own membership:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -620,41 +579,10 @@ async function provisionCustomerFromAuth(req, res) {
         },
       });
 
-      const membershipPlan = await tx.membership_plans.findFirst({
-        where: {
-          is_active: true,
-          code: String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim(),
-        },
-      }) || await tx.membership_plans.findFirst({
-        where: { is_active: true },
-        orderBy: [{ created_at: 'asc' }],
-      });
-
-      const ensuredPlan = membershipPlan || await tx.membership_plans.create({
-        data: {
-          code: String(process.env.DEFAULT_MEMBERSHIP_PLAN_CODE || 'STANDARD').trim(),
-          name: 'Standard Plan',
-          description: 'Auto-created default plan for customer provisioning',
-          max_active_loans: 5,
-          max_loan_days: 14,
-          max_renewal_count: 2,
-          reservation_hold_hours: 24,
-          fine_per_day: 5000,
-          lost_item_fee_multiplier: 1,
-          is_active: true,
-        },
-      });
-
-      await tx.customer_memberships.create({
-        data: {
-          customer_id: customer.id,
-          plan_id: ensuredPlan.id,
-          card_number: generateCardNumber(customer.id),
-          start_date: new Date(),
-          end_date: computeMembershipEndDate(new Date()),
-          status: 'ACTIVE',
-          note: 'Auto assigned from auth register',
-        },
+      await assignDefaultMembership(tx, {
+        customerId: customer.id,
+        cardNumber: generateCardNumber(customer.id),
+        note: 'Auto assigned from auth register',
       });
 
       return customer;
@@ -711,6 +639,7 @@ async function resolveCustomerByAuth(req, res) {
 }
 
 module.exports = {
+  toMembershipView,
   listCustomers,
   createCustomer,
   getCustomerById,
