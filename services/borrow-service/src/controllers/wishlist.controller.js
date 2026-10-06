@@ -1,5 +1,6 @@
 const { prisma } = require('../lib/prisma');
 const { ensureCurrentCustomer } = require('./customer.controller');
+const { getBookPublicAvailability } = require('../services/inventory-integration.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -80,6 +81,27 @@ async function subscribeAvailabilityAlert(req, res) {
     const bookId = String(req.body?.book_id || '').trim();
     if (!bookId) return res.status(400).json({ message: 'book_id is required' });
     if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id must be a valid UUID' });
+
+    // "Báo khi có sách" only makes sense for a book no reader can pick up today.
+    // Checked here (not trusted to the UI) against inventory's live public
+    // availability — the same BRANCH/LIBRARY rule as the catalog, so stock in an
+    // internal warehouse or still in receiving does not count. Fails closed.
+    let availability;
+    try {
+      availability = await getBookPublicAvailability({ bookId, requestId: req.requestId });
+    } catch (error) {
+      console.error('subscribeAvailabilityAlert availability check failed:', error.message);
+      return res.status(503).json({ message: 'Chưa kiểm tra được tình trạng sách, vui lòng thử lại sau.' });
+    }
+    if (!availability) {
+      return res.status(404).json({ message: 'Không tìm thấy sách trong danh mục.' });
+    }
+    if (Number(availability.available_quantity) > 0) {
+      return res.status(409).json({
+        message: 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.',
+        data: { available_quantity: availability.available_quantity },
+      });
+    }
 
     const alert = await prisma.availability_alerts.upsert({
       where: { customer_id_book_id: { customer_id: customer.id, book_id: bookId } },

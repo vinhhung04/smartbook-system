@@ -109,15 +109,31 @@ const notifiedCustomers = (store) => store.state.customer_notifications.map((n) 
 
 // ── subscribe / cancel (wishlist.controller) ─────────────────────────────────
 
-function loadControllerWith(store) {
+/** Loads wishlist.controller with stubbed prisma, session and inventory.
+ *  `availability` is what inventory reports for the book: a value, a function
+ *  of the book id, or an Error (inventory unreachable). */
+function loadControllerWith(store, availability = warehouseOnly) {
   const prismaPath = require.resolve('../src/lib/prisma');
   const customerControllerPath = require.resolve('../src/controllers/customer.controller');
+  const inventoryPath = require.resolve('../src/services/inventory-integration.service');
   const controllerPath = require.resolve('../src/controllers/wishlist.controller');
-  const saved = [prismaPath, customerControllerPath, controllerPath].map((path) => [path, require.cache[path]]);
+  const saved = [prismaPath, customerControllerPath, inventoryPath, controllerPath].map((path) => [path, require.cache[path]]);
+  const calls = [];
   require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { prisma: store.prisma } };
   require.cache[customerControllerPath] = {
     id: customerControllerPath, filename: customerControllerPath, loaded: true,
     exports: { ensureCurrentCustomer: async (req) => ({ id: req.user.customer_id }) },
+  };
+  require.cache[inventoryPath] = {
+    id: inventoryPath, filename: inventoryPath, loaded: true,
+    exports: {
+      getBookPublicAvailability: async ({ bookId }) => {
+        calls.push(bookId);
+        const value = typeof availability === 'function' ? availability(bookId) : availability;
+        if (value instanceof Error) throw value;
+        return value;
+      },
+    },
   };
   delete require.cache[controllerPath];
   const controller = require('../src/controllers/wishlist.controller');
@@ -125,7 +141,7 @@ function loadControllerWith(store) {
     if (entry) require.cache[path] = entry;
     else delete require.cache[path];
   }
-  return controller;
+  return { controller, calls };
 }
 
 function response() {
@@ -136,29 +152,96 @@ function response() {
   };
 }
 
-test('subscribing creates an ACTIVE alert for the signed-in customer; re-subscribing re-arms a notified one', async () => {
-  const store = createStore([alert('alert-old', 'cust-b', { status: 'NOTIFIED', notified_at: new Date('2026-09-01') })]);
-  const controller = loadControllerWith(store);
-
+async function subscribe(controller, customerId, bookId = BOOK_ID, extraBody = {}) {
   const res = response();
-  await controller.subscribeAvailabilityAlert({ user: { customer_id: 'cust-a' }, body: { book_id: BOOK_ID, customer_id: 'cust-b' } }, res);
+  await controller.subscribeAvailabilityAlert({ user: { customer_id: customerId }, body: { book_id: bookId, ...extraBody } }, res);
+  return res;
+}
+
+test('case 1: no public copy → 201, ACTIVE alert owned by the session customer (never the body)', async () => {
+  const store = createStore();
+  const { controller, calls } = loadControllerWith(store, { ...branchAvailability, available_quantity: 0, pickup_branches: [] });
+  const res = await subscribe(controller, 'cust-a', BOOK_ID, { customer_id: 'cust-b' });
   assert.equal(res.statusCode, 201);
-  assert.equal(res.body.data.customer_id, 'cust-a', 'owner comes from the session, never the body');
+  assert.equal(res.body.data.customer_id, 'cust-a');
   assert.equal(res.body.data.status, 'ACTIVE');
+  assert.deepEqual(calls, [BOOK_ID]);
+  assert.equal((await subscribe(controller, 'cust-a', 'nope')).statusCode, 400);
+});
 
-  await controller.subscribeAvailabilityAlert({ user: { customer_id: 'cust-b' }, body: { book_id: BOOK_ID } }, response());
-  const rearmed = store.state.availability_alerts.find((row) => row.customer_id === 'cust-b');
-  assert.equal(rearmed.status, 'ACTIVE');
-  assert.equal(rearmed.notified_at, null);
+test('case 2: book on a public shelf → 409 with a Vietnamese message, no alert created', async () => {
+  const store = createStore();
+  const { controller } = loadControllerWith(store, branchAvailability);
+  const res = await subscribe(controller, 'cust-a');
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.message, 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.');
+  assert.equal(store.state.availability_alerts.length, 0);
+});
 
-  const bad = response();
-  await controller.subscribeAvailabilityAlert({ user: { customer_id: 'cust-a' }, body: { book_id: 'nope' } }, bad);
-  assert.equal(bad.statusCode, 400);
+test('case 3: copies only in an internal warehouse (public stock 0) → subscribing still works', async () => {
+  const store = createStore();
+  // Inventory applies the BRANCH/LIBRARY rule, so warehouse-only copies report as 0.
+  const { controller } = loadControllerWith(store, warehouseOnly);
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 201);
+  assert.equal(store.state.availability_alerts[0].status, 'ACTIVE');
+});
+
+test('case 4: a NOTIFIED alert is re-armed (ACTIVE, notified_at null) when the book is gone again', async () => {
+  const store = createStore([alert('alert-old', 'cust-b', { status: 'NOTIFIED', notified_at: new Date('2026-09-01') })]);
+  const { controller } = loadControllerWith(store, warehouseOnly);
+  assert.equal((await subscribe(controller, 'cust-b')).statusCode, 201);
+  const row = store.state.availability_alerts.find((item) => item.customer_id === 'cust-b');
+  assert.equal(row.status, 'ACTIVE');
+  assert.equal(row.notified_at, null);
+});
+
+test('case 5: a NOTIFIED alert is not re-armed while the book is on a public shelf', async () => {
+  const notifiedAt = new Date('2026-09-01');
+  const store = createStore([alert('alert-old', 'cust-b', { status: 'NOTIFIED', notified_at: notifiedAt })]);
+  const { controller } = loadControllerWith(store, branchAvailability);
+  assert.equal((await subscribe(controller, 'cust-b')).statusCode, 409);
+  const row = store.state.availability_alerts[0];
+  assert.equal(row.status, 'NOTIFIED');
+  assert.equal(row.notified_at, notifiedAt);
+});
+
+test('case 6: inventory unreachable → 503 and no alert (fail closed); unknown book → 404, no orphan alert', async () => {
+  const store = createStore();
+  const down = loadControllerWith(store, new Error('inventory unreachable'));
+  const res = await subscribe(down.controller, 'cust-a');
+  assert.equal(res.statusCode, 503);
+  assert.match(res.body.message, /thử lại/);
+
+  const missing = loadControllerWith(store, null);
+  assert.equal((await subscribe(missing.controller, 'cust-a')).statusCode, 404);
+  assert.equal(store.state.availability_alerts.length, 0);
+});
+
+test('case 7: subscribed at 0, a copy comes back → exactly one notification and notified_at set', async () => {
+  let publicStock = warehouseOnly;
+  const store = createStore();
+  const { controller } = loadControllerWith(store, () => publicStock);
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 201);
+
+  // A positive event while public stock is still 0 (e.g. into the internal warehouse) does nothing.
+  await dispatch(store, publicStock, stockChanged({ warehouse_id: 'wh-internal' }));
+  assert.equal(store.state.customer_notifications.length, 0);
+
+  publicStock = branchAvailability; // 0 → >0 at a branch
+  await dispatch(store, publicStock, stockChanged());
+  await dispatch(store, publicStock, stockChanged()); // redelivery / next restock
+  assert.deepEqual(notifiedCustomers(store), ['cust-a']);
+  const row = store.state.availability_alerts[0];
+  assert.equal(row.status, 'NOTIFIED');
+  assert.ok(row.notified_at instanceof Date);
+
+  // While the copy is still on the shelf, re-subscribing is refused.
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 409);
 });
 
 test('cancelling removes only the caller\'s alert, and a cancelled alert is never notified', async () => {
   const store = createStore([alert('alert-a', 'cust-a'), alert('alert-b', 'cust-b')]);
-  const controller = loadControllerWith(store);
+  const { controller } = loadControllerWith(store);
 
   await controller.unsubscribeAvailabilityAlert({ user: { customer_id: 'cust-a' }, params: { bookId: BOOK_ID } }, response());
   assert.deepEqual(store.state.availability_alerts.map((row) => row.id), ['alert-b']);

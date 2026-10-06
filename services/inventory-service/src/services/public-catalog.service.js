@@ -443,6 +443,18 @@ function relatedBooks(books, detail, limit = 6) {
     .slice(0, limit);
 }
 
+function toPublicAvailability(row) {
+  if (!isPublishable(row)) return null;
+  const book = toPublicBook(row);
+  return {
+    book_id: book.id,
+    title: book.title,
+    available_quantity: book.available_quantity,
+    reservable: book.reservable,
+    pickup_branches: book.pickup_branches,
+  };
+}
+
 /** Live (uncached) reader availability of the book a variant belongs to —
  *  the same rule as the public book page, so internal warehouses and
  *  receiving stock never count. Used by borrow-service to decide whether an
@@ -453,15 +465,18 @@ async function readPublicAvailabilityByVariant(prisma, variantId) {
     where: { ...PUBLIC_BOOK_WHERE, book_variants: { some: { id: variantId } } },
     select: PUBLIC_BOOK_SELECT,
   });
-  if (!isPublishable(row)) return null;
-  const book = toPublicBook(row);
-  return {
-    book_id: book.id,
-    title: book.title,
-    available_quantity: book.available_quantity,
-    reservable: book.reservable,
-    pickup_branches: book.pickup_branches,
-  };
+  return toPublicAvailability(row);
+}
+
+/** Same live availability, by book: borrow-service checks it before accepting
+ *  an availability alert (only books with no public copy can be watched). */
+async function readPublicAvailabilityByBook(prisma, bookId) {
+  if (!UUID_PATTERN.test(String(bookId || ''))) return null;
+  const row = await prisma.books.findFirst({
+    where: { ...PUBLIC_BOOK_WHERE, id: bookId },
+    select: PUBLIC_BOOK_SELECT,
+  });
+  return toPublicAvailability(row);
 }
 
 // ── caches ──────────────────────────────────────────────────────────────────
@@ -583,6 +598,7 @@ module.exports = {
   createPublicCatalog,
   normalizeText,
   parseCatalogQuery,
+  readPublicAvailabilityByBook,
   readPublicAvailabilityByVariant,
   relatedBooks,
   searchCatalog,

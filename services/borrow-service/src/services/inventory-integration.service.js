@@ -200,6 +200,22 @@ async function getVariantPublicAvailability({ variantId, requestId }) {
   }
 }
 
+// Live public availability of a whole book (BRANCH/LIBRARY shelf stock only).
+// Null when the book is not in the public catalog; throws when inventory
+// cannot answer, so callers can fail closed.
+async function getBookPublicAvailability({ bookId, requestId }) {
+  try {
+    const result = await requestInventory(
+      `/api/borrow-integration/books/${encodeURIComponent(bookId)}/public-availability`,
+      { method: 'GET', headers: { Authorization: createServiceAuthHeader(), ...correlationHeader(requestId) } }
+    );
+    return result?.data || null;
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
+}
+
 async function getBookVariantIds({ bookId, requestId }) {
   const result = await requestInventory(
     `/api/borrow-integration/books/${encodeURIComponent(bookId)}/variant-ids`,
@@ -210,6 +226,7 @@ async function getBookVariantIds({ bookId, requestId }) {
 
 module.exports = {
   getVariantPublicAvailability,
+  getBookPublicAvailability,
   getBookVariantIds,
   checkAvailability,
   reserveStock,

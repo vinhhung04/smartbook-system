@@ -11,6 +11,7 @@ const {
   isPublicPickupWarehouse,
   isPublishable,
   parseCatalogQuery,
+  readPublicAvailabilityByBook,
   readPublicAvailabilityByVariant,
   searchCatalog,
   toPublicBook,
@@ -539,4 +540,28 @@ test('availability by variant: invalid ids, unknown and placeholder books return
   assert.equal(await readPublicAvailabilityByVariant(prisma, '99999999-9999-4999-8999-999999999999'), null);
   const placeholder = makeBook({ metadata: { is_incomplete: true } });
   assert.equal(await readPublicAvailabilityByVariant(availabilityPrisma(placeholder), '99999999-9999-4999-8999-999999999999'), null);
+});
+
+test('availability by book (alert subscription check) uses the same pickup rule as the catalog', async () => {
+  const rows = branchFixtureRows();
+  const warehouseOnly = availabilityPrisma(rows[3]);
+  const result = await readPublicAvailabilityByBook(warehouseOnly, '44444444-4444-4444-8444-444444444444');
+  // 100 copies in the internal WAREHOUSE + 7 in a STORE: still nothing a reader can pick up.
+  assert.equal(result.available_quantity, 0);
+  assert.deepEqual(result.pickup_branches, []);
+  assert.deepEqual(warehouseOnly.calls[0].where, { is_active: true, id: '44444444-4444-4444-8444-444444444444' });
+  assert.equal(warehouseOnly.calls[0].select, PUBLIC_BOOK_SELECT);
+
+  const library = await readPublicAvailabilityByBook(availabilityPrisma(rows[4]), '55555555-5555-4555-8555-555555555555');
+  assert.equal(library.available_quantity, 2);
+
+  // Receiving-only stock at a branch is not available either.
+  const receiving = await readPublicAvailabilityByBook(availabilityPrisma(rows[2]), '33333333-3333-4333-8333-333333333333');
+  assert.equal(receiving.available_quantity, 0);
+
+  const none = availabilityPrisma(null);
+  assert.equal(await readPublicAvailabilityByBook(none, 'not-a-uuid'), null);
+  assert.equal(none.calls.length, 0);
+  assert.equal(await readPublicAvailabilityByBook(none, '99999999-9999-4999-8999-999999999999'), null);
+  assert.equal(await readPublicAvailabilityByBook(availabilityPrisma(makeBook({ metadata: { is_incomplete: true } })), '11111111-1111-4111-8111-111111111111'), null);
 });

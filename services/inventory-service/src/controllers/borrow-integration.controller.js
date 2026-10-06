@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
 const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
-const { readPublicAvailabilityByVariant } = require('../services/public-catalog.service');
+const { readPublicAvailabilityByBook, readPublicAvailabilityByVariant } = require('../services/public-catalog.service');
 
 const prisma = new PrismaClient();
 
@@ -893,6 +893,24 @@ async function getVariantPublicAvailability(req, res) {
   }
 }
 
+async function getBookPublicAvailability(req, res) {
+  const bookId = String(req.params.bookId || '');
+  if (!isUuid(bookId)) {
+    return res.status(400).json({ message: 'bookId must be a valid UUID value' });
+  }
+
+  try {
+    const availability = await readPublicAvailabilityByBook(prisma, bookId);
+    if (!availability) {
+      return res.status(404).json({ message: 'Book not found in the public catalog' });
+    }
+    return res.json({ data: availability });
+  } catch (error) {
+    console.error('getBookPublicAvailability error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 async function getBookVariantIds(req, res) {
   const bookId = String(req.params.bookId || '');
   if (!isUuid(bookId)) {
@@ -913,6 +931,7 @@ async function getBookVariantIds(req, res) {
 
 module.exports = {
   getVariantPublicAvailability,
+  getBookPublicAvailability,
   getBookVariantIds,
   searchBorrowVariants,
   listBorrowWarehouses,
