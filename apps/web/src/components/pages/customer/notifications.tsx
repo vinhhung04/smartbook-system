@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, CheckCheck } from 'lucide-react';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
@@ -8,8 +8,9 @@ import { useSocketEvent } from '@/lib/socket';
 import {
   applyAllRead,
   applyIncoming,
-  applyMarkedRead,
+  applyMarkReadResponse,
   createRecentIds,
+  needsRefill,
   type NotificationFilter,
   type NotificationListState,
 } from '@/lib/notification-state';
@@ -76,17 +77,23 @@ export function CustomerNotificationsPage() {
     setList((prev) => applyIncoming(prev, data, filter));
   }, [filter, seen]));
 
+  // Latest committed list, for decisions taken in event handlers (never a
+  // stale render closure). State updates themselves are functional (prev => …).
+  const listRef = useRef(list);
+  useEffect(() => { listRef.current = list; }, [list]);
+
   const handleMarkedRead = useCallback((id: string, serverUnread?: number) => {
-    const marked = applyMarkedRead(list, id, filter, new Date().toISOString());
-    setList(serverUnread === undefined ? marked : { ...marked, unreadCount: serverUnread });
+    const readAt = new Date().toISOString();
+    setList((prev) => applyMarkReadResponse(prev, id, filter, readAt, serverUnread));
     if (serverUnread !== undefined) publishUnreadCount(serverUnread);
     // The last unread row on this page was read but more remain: fetch the
     // (possibly earlier, never out-of-range) page that still has them.
-    if (filter === 'UNREAD' && marked.rows.length === 0 && marked.total > 0) {
-      setRequestedPage(marked.page);
+    const after = applyMarkReadResponse(listRef.current, id, filter, readAt, serverUnread);
+    if (needsRefill(after, filter)) {
+      setRequestedPage(after.page);
       setReloadKey((key) => key + 1);
     }
-  }, [list, filter]);
+  }, [filter]);
 
   const markAllRead = async () => {
     try {

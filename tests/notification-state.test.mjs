@@ -15,7 +15,7 @@ const ts = createRequire(resolve(root, 'apps/web/package.json'))('typescript');
 const { outputText } = ts.transpileModule(src('lib/notification-state.ts'), {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 });
-const { applyMarkedRead, applyAllRead, applyIncoming, createRecentIds, pageCount } =
+const { applyMarkedRead, applyAllRead, applyIncoming, applyMarkReadResponse, needsRefill, createRecentIds, pageCount } =
   await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 const NOW = '2026-10-06T08:00:00.000Z';
@@ -120,4 +120,47 @@ test('bell and notifications page share one unread count channel and the bell re
   }
   assert.match(bell, /getUnreadNotificationCount/);
   assert.match(bell, /RECONCILE_DELAY_MS/);
+});
+
+test('mark-read response applied to the latest state keeps a notification that arrived meanwhile', () => {
+  // A is on screen; the user marks it read; before the API answers, B arrives over the socket.
+  const atClick = state([row('a')], { total: 1, unreadCount: 1 });
+  const afterSocket = applyIncoming(atClick, row('b'), 'ALL');
+  assert.deepEqual(afterSocket.rows.map((r) => r.id), ['b', 'a']);
+
+  // Functional update: the response is applied to the state *now*, not to atClick.
+  const next = applyMarkReadResponse(afterSocket, 'a', 'ALL', NOW, 1);
+  assert.deepEqual(next.rows.map((r) => [r.id, Boolean(r.read_at)]), [['b', false], ['a', true]]);
+  assert.equal(next.total, 2);
+  assert.equal(next.unreadCount, 1); // server: B is the one unread left
+
+  // What the old closure-based update produced: B silently dropped.
+  const stale = applyMarkReadResponse(atClick, 'a', 'ALL', NOW, 1);
+  assert.deepEqual(stale.rows.map((r) => r.id), ['a']);
+
+  // Same in the UNREAD view: A leaves, B stays, totals follow.
+  const unread = applyMarkReadResponse(applyIncoming(state([row('a')], { total: 1, unreadCount: 1 }), row('b'), 'UNREAD'), 'a', 'UNREAD', NOW);
+  assert.deepEqual(unread.rows.map((r) => r.id), ['b']);
+  assert.deepEqual([unread.total, unread.unreadCount], [1, 1]);
+});
+
+test('mark-read response: server count wins, never negative; refill only when an UNREAD page empties with more left', () => {
+  assert.equal(applyMarkReadResponse(state([row('a')]), 'a', 'ALL', NOW, -3).unreadCount, 0);
+  assert.equal(applyMarkReadResponse(state([row('a')], { unreadCount: 5 }), 'a', 'ALL', NOW).unreadCount, 4);
+
+  const lastOnPage = applyMarkReadResponse(state([row('u')], { total: 25, unreadCount: 25, page: 2, totalPages: 2 }), 'u', 'UNREAD', NOW, 24);
+  assert.equal(needsRefill(lastOnPage, 'UNREAD'), true);
+  assert.equal(lastOnPage.page, 2); // 24 left over 2 pages: page 2 is still valid
+  assert.equal(needsRefill(applyMarkReadResponse(state([row('u')], { total: 1, unreadCount: 1 }), 'u', 'UNREAD', NOW, 0), 'UNREAD'), false);
+  assert.equal(needsRefill(state([], { total: 3 }), 'ALL'), false);
+});
+
+test('the notifications page applies mark-read with a functional update, not the render closure', () => {
+  const page = src('components/pages/customer/notifications.tsx');
+  assert.match(page, /setList\(\(prev\) => applyMarkReadResponse\(prev,/);
+  assert.doesNotMatch(page, /applyMarkedRead\(list,|setList\(marked/);
+  // Every list mutation goes through prev.
+  for (const call of page.match(/setList\([^)]*/g)) {
+    assert.ok(call === 'setList((prev' || call.startsWith('setList({'), call);
+  }
 });

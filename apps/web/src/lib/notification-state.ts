@@ -100,3 +100,25 @@ export function applyIncoming<T extends NotificationRowLike>(
   const rows = next.page === 1 ? [{ ...item, read_at: null }, ...next.rows].slice(0, next.pageSize) : next.rows;
   return withTotal({ ...next, rows }, next.total + 1);
 }
+
+/**
+ * The server confirmed a mark-read and returned its unread count. Meant for
+ * `setList(prev => applyMarkReadResponse(prev, …))` so a socket update that
+ * landed while the request was in flight is kept.
+ */
+export function applyMarkReadResponse<T extends NotificationRowLike>(
+  state: NotificationListState<T>,
+  id: string,
+  filter: NotificationFilter,
+  readAt: string,
+  serverUnread?: number,
+): NotificationListState<T> {
+  const marked = applyMarkedRead(state, id, filter, readAt);
+  return serverUnread === undefined || !Number.isFinite(serverUnread) ? marked : { ...marked, unreadCount: Math.max(0, serverUnread) };
+}
+
+/** The UNREAD page just lost its last row but other unread notifications
+ *  remain: fetch state.page (already clamped into range) again. */
+export function needsRefill<T extends NotificationRowLike>(state: NotificationListState<T>, filter: NotificationFilter): boolean {
+  return filter === 'UNREAD' && state.rows.length === 0 && state.total > 0;
+}
