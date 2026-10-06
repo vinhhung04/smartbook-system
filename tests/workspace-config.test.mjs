@@ -142,3 +142,18 @@ test("admin monitor only calls public gateway health boundaries", () => {
   assert.doesNotMatch(monitor, /localhost:300[1-9]/);
   assert.match(monitor, /'ready'/);
 });
+
+test("the unfinished mock messaging page is not reachable from any route or navigation", () => {
+  // apps/web/src/components/pages/messages runs on MOCK_CONVERSATIONS / MOCK_MESSAGES
+  // (no backend). It is kept as source only and must not be exposed in the KLTN build.
+  const sources = [
+    "apps/web/src/app/routes.ts",
+    "apps/web/src/lib/nav-groups.ts",
+    "apps/web/src/components/pages/customer/_shared/customer-nav.ts",
+  ].map((path) => readFileSync(resolve(repositoryRoot, path), "utf8"));
+  for (const source of sources) {
+    assert.doesNotMatch(source, /pages\/messages|["'`]\/messages\b|MOCK_(MESSAGES|CONVERSATIONS)/);
+  }
+  const readme = readFileSync(resolve(repositoryRoot, "README.md"), "utf8");
+  assert.doesNotMatch(readme, /\/messages\b/);
+});
