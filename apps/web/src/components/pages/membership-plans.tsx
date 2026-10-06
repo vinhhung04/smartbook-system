@@ -77,6 +77,20 @@ const initialFormState: PlanFormState = {
   is_active: true,
 };
 
+type PlanNumberKey = 'max_active_loans' | 'max_loan_days' | 'max_renewal_count' | 'reservation_hold_hours'
+  | 'fine_per_day' | 'lost_item_fee_multiplier' | 'price' | 'duration_days';
+
+const PLAN_NUMBER_FIELDS: Array<{ key: PlanNumberKey; label: string; integer: boolean; min: number }> = [
+  { key: 'max_active_loans', label: 'Tối đa mượn đồng thời', integer: true, min: 1 },
+  { key: 'max_loan_days', label: 'Tối đa số ngày mượn', integer: true, min: 1 },
+  { key: 'max_renewal_count', label: 'Tối đa lần gia hạn', integer: true, min: 0 },
+  { key: 'reservation_hold_hours', label: 'Giữ đặt trước (giờ)', integer: true, min: 1 },
+  { key: 'fine_per_day', label: 'Phạt/ngày', integer: false, min: 0 },
+  { key: 'lost_item_fee_multiplier', label: 'Hệ số phí mất sách', integer: false, min: 0 },
+  { key: 'price', label: 'Phí gói', integer: false, min: 0 },
+  { key: 'duration_days', label: 'Thời hạn thẻ', integer: true, min: 1 },
+];
+
 function toNum(v: unknown): number {
   if (typeof v === 'number' && !Number.isNaN(v)) return v;
   if (typeof v === 'string') {
@@ -243,15 +257,18 @@ export function MembershipPlansPage() {
       }
     }
 
-    const durationDays = Number(form.duration_days);
-    const price = Number(form.price);
-    if (!Number.isInteger(durationDays) || durationDays <= 0) {
-      toast.error('Thời hạn thẻ phải là số ngày nguyên dương');
-      return;
-    }
-    if (!Number.isFinite(price) || price < 0) {
-      toast.error('Phí gói không hợp lệ');
-      return;
+    // Same limits as the API (which stays the source of truth). 0 is a real value
+    // (e.g. 0 renewals), never replaced by a default.
+    const numbers: Record<string, number> = {};
+    for (const rule of PLAN_NUMBER_FIELDS) {
+      const raw = form[rule.key].trim();
+      const value = raw === '' ? Number.NaN : Number(raw);
+      const validShape = rule.integer ? Number.isInteger(value) : Number.isFinite(value);
+      if (!validShape || value < rule.min) {
+        toast.error(`${rule.label} phải là ${rule.integer ? 'số nguyên' : 'số'} ≥ ${rule.min}`);
+        return;
+      }
+      numbers[rule.key] = value;
     }
     if (form.is_default && !form.is_active) {
       toast.error('Gói mặc định phải đang hoạt động');
@@ -261,14 +278,7 @@ export function MembershipPlansPage() {
     const basePayload: Record<string, unknown> = {
       name,
       description: form.description.trim() || null,
-      max_active_loans: Number(form.max_active_loans) || 0,
-      max_loan_days: Number(form.max_loan_days) || 0,
-      max_renewal_count: Number(form.max_renewal_count) || 0,
-      reservation_hold_hours: Number(form.reservation_hold_hours) || 0,
-      fine_per_day: Number(form.fine_per_day) || 0,
-      lost_item_fee_multiplier: Number(form.lost_item_fee_multiplier) || 1,
-      price,
-      duration_days: durationDays,
+      ...numbers,
       // Only ever sent as true: the default moves to another plan, it is never just removed.
       ...(form.is_default ? { is_default: true } : {}),
     };
@@ -466,7 +476,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.max_active_loans}
                     onChange={(e) => setForm((f) => ({ ...f, max_active_loans: e.target.value }))}
@@ -478,7 +488,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.max_loan_days}
                     onChange={(e) => setForm((f) => ({ ...f, max_loan_days: e.target.value }))}
@@ -502,7 +512,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.reservation_hold_hours}
                     onChange={(e) => setForm((f) => ({ ...f, reservation_hold_hours: e.target.value }))}

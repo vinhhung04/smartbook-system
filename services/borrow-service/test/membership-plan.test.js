@@ -229,3 +229,74 @@ test('staff can set price/duration and move the default, but cannot leave the sy
     assert.deepEqual(client.state.plans.filter((row) => row.is_default).map((row) => row.id), ['gold']);
   });
 });
+
+// ── numeric plan limits: 0 is a value, not "missing" ─────────────────────────
+
+const PLAN_DEFAULTS = {
+  max_active_loans: 5, max_loan_days: 14, max_renewal_count: 2, reservation_hold_hours: 24,
+  fine_per_day: 0, lost_item_fee_multiplier: 1, price: 0, duration_days: 365,
+};
+
+test('POST keeps max_renewal_count 0 (no renewals) and other explicit zeros; omitted fields get defaults', async () => {
+  const client = planStore([plan('basic', { is_default: true })]);
+  await withPlanServer(client, async (send) => {
+    let res = await send('POST', '/', { code: 'norenew', name: 'Không gia hạn', max_renewal_count: 0, fine_per_day: 0, lost_item_fee_multiplier: 0, price: 0 });
+    assert.equal(res.status, 201);
+    const created = client.state.plans.find((row) => row.code === 'NORENEW');
+    assert.equal(created.max_renewal_count, 0);
+    assert.equal(created.lost_item_fee_multiplier, 0);
+    for (const key of ['max_active_loans', 'max_loan_days', 'reservation_hold_hours', 'duration_days']) {
+      assert.equal(created[key], PLAN_DEFAULTS[key], key);
+    }
+
+    res = await send('POST', '/', { code: 'defaults', name: 'Mặc định' });
+    assert.equal(res.status, 201);
+    const defaults = client.state.plans.find((row) => row.code === 'DEFAULTS');
+    for (const [key, value] of Object.entries(PLAN_DEFAULTS)) assert.equal(defaults[key], value, key);
+
+    // Numeric strings from the HTML form are parsed explicitly.
+    res = await send('POST', '/', { code: 'form', name: 'Form', max_active_loans: '5', max_renewal_count: '0', price: '100000' });
+    assert.equal(res.status, 201);
+    const fromForm = client.state.plans.find((row) => row.code === 'FORM');
+    assert.deepEqual([fromForm.max_active_loans, fromForm.max_renewal_count, fromForm.price], [5, 0, 100000]);
+  });
+});
+
+test('PATCH max_renewal_count 0 is stored as 0; only the sent fields change', async () => {
+  const client = planStore([plan('basic', { is_default: true, max_renewal_count: 3, max_active_loans: 4 })]);
+  await withPlanServer(client, async (send) => {
+    const res = await send('PATCH', '/basic', { max_renewal_count: 0 });
+    assert.equal(res.status, 200);
+    const row = client.state.plans.find((item) => item.id === 'basic');
+    assert.equal(row.max_renewal_count, 0);
+    assert.equal(row.max_active_loans, 4, 'untouched');
+  });
+});
+
+test('out-of-range, fractional and non-numeric limits are rejected (400), never coerced', async () => {
+  const invalid = [
+    { max_active_loans: 0 }, { max_active_loans: -1 }, { max_active_loans: 1.5 },
+    { max_loan_days: 0 },
+    { max_renewal_count: -1 }, { max_renewal_count: 2.5 },
+    { reservation_hold_hours: 0 },
+    { fine_per_day: -1 }, { fine_per_day: 0.005 },
+    { lost_item_fee_multiplier: -0.1 }, { lost_item_fee_multiplier: 1000 },
+    { price: -1000 }, { price: -1 },
+    { duration_days: 0 }, { duration_days: 30.5 },
+    { max_active_loans: 'abc' }, { max_active_loans: '' }, { max_active_loans: null }, { max_active_loans: true },
+    { price: 'Infinity' }, { duration_days: 'NaN' }, { max_loan_days: 2147483648 },
+  ];
+  const original = plan('basic', { is_default: true, max_active_loans: 4, max_renewal_count: 3, price: 0 });
+  const client = planStore([original]);
+  await withPlanServer(client, async (send) => {
+    for (const body of invalid) {
+      const patched = await send('PATCH', '/basic', body);
+      assert.equal(patched.status, 400, `PATCH ${JSON.stringify(body)}`);
+      const created = await send('POST', '/', { code: `bad${Math.random().toString(36).slice(2, 7)}`, name: 'x', ...body });
+      assert.equal(created.status, 400, `POST ${JSON.stringify(body)}`);
+    }
+  });
+  const row = client.state.plans.find((item) => item.id === 'basic');
+  assert.deepEqual([row.max_active_loans, row.max_renewal_count, row.price], [4, 3, 0]);
+  assert.equal(client.state.plans.length, 1, 'no invalid plan was created');
+});

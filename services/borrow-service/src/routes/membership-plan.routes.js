@@ -5,21 +5,53 @@ const { setDefaultMembershipPlan } = require('../services/membership.service');
 
 const router = express.Router();
 
-/** price / duration_days from a staff form: undefined when absent, an error
- *  string when present but invalid. */
-function parsePlanTerms(body) {
-  const terms = {};
-  if (body.price !== undefined) {
-    const price = Number(body.price);
-    if (!Number.isFinite(price) || price < 0) return { error: 'price must be a number >= 0' };
-    terms.price = price;
+// Numeric plan fields. `default` is what POST uses when the field is omitted
+// (undefined) — never when it is 0: max_renewal_count 0 means "no renewals".
+// Upper bounds are the column limits (INT, DECIMAL(10,2), DECIMAL(5,2),
+// DECIMAL(12,2)), so an oversized value is a 400 instead of a database error.
+const INT_MAX = 2147483647;
+const PLAN_NUMBER_RULES = {
+  max_active_loans: { integer: true, min: 1, max: INT_MAX, default: 5 },
+  max_loan_days: { integer: true, min: 1, max: INT_MAX, default: 14 },
+  max_renewal_count: { integer: true, min: 0, max: INT_MAX, default: 2 },
+  reservation_hold_hours: { integer: true, min: 1, max: INT_MAX, default: 24 },
+  fine_per_day: { integer: false, min: 0, max: 99999999.99, default: 0 },
+  lost_item_fee_multiplier: { integer: false, min: 0, max: 999.99, default: 1 },
+  price: { integer: false, min: 0, max: 9999999999.99, default: 0 },
+  duration_days: { integer: true, min: 1, max: INT_MAX, default: 365 },
+};
+
+/** A number, or a numeric string from an HTML form ("0", "5", "100000").
+ *  Everything else — "", "abc", null, booleans, NaN, Infinity — is NaN. */
+function toNumber(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim() !== '') return Number(value.trim());
+  return Number.NaN;
+}
+
+function describeRule(key, rule) {
+  const kind = rule.integer ? 'an integer' : 'a number';
+  return `${key} must be ${kind} >= ${rule.min}${rule.integer ? '' : ' with at most 2 decimals'}`;
+}
+
+/**
+ * Validates the numeric fields present in `body`. With `withDefaults` (POST)
+ * omitted fields get their default; without it (PATCH) only sent fields are
+ * returned. `{ error }` on the first invalid value — nothing is coerced.
+ */
+function parsePlanNumbers(body, { withDefaults = false } = {}) {
+  const values = {};
+  for (const [key, rule] of Object.entries(PLAN_NUMBER_RULES)) {
+    if (body[key] === undefined) {
+      if (withDefaults) values[key] = rule.default;
+      continue;
+    }
+    const value = toNumber(body[key]);
+    const validShape = rule.integer ? Number.isInteger(value) : Number.isFinite(value) && Math.round(value * 100) / 100 === value;
+    if (!validShape || value < rule.min || value > rule.max) return { error: describeRule(key, rule) };
+    values[key] = value;
   }
-  if (body.duration_days !== undefined) {
-    const duration = Number(body.duration_days);
-    if (!Number.isInteger(duration) || duration <= 0) return { error: 'duration_days must be a positive integer' };
-    terms.duration_days = duration;
-  }
-  return { terms };
+  return { values };
 }
 
 router.get('/', authorizeBorrowAdminRead, async (req, res) => {
@@ -37,9 +69,9 @@ router.get('/', authorizeBorrowAdminRead, async (req, res) => {
 
 router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
   try {
-    const { code, name, description, max_active_loans, max_loan_days, max_renewal_count, reservation_hold_hours, fine_per_day, lost_item_fee_multiplier, is_default } = req.body;
+    const { code, name, description, is_default } = req.body;
     if (!code || !name) return res.status(400).json({ message: 'code and name are required' });
-    const { terms, error } = parsePlanTerms(req.body);
+    const { values, error } = parsePlanNumbers(req.body, { withDefaults: true });
     if (error) return res.status(400).json({ message: error });
 
     const plan = await prisma.$transaction(async (tx) => {
@@ -48,13 +80,7 @@ router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
           code: code.toUpperCase().trim(),
           name: name.trim(),
           description: description || null,
-          max_active_loans: Number(max_active_loans) || 5,
-          max_loan_days: Number(max_loan_days) || 14,
-          max_renewal_count: Number(max_renewal_count) || 2,
-          reservation_hold_hours: Number(reservation_hold_hours) || 24,
-          fine_per_day: Number(fine_per_day) || 0,
-          lost_item_fee_multiplier: Number(lost_item_fee_multiplier) || 1,
-          ...terms,
+          ...values,
         },
       });
       if (is_default === true) return (await setDefaultMembershipPlan(tx, created.id)).plan;
@@ -71,24 +97,15 @@ router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
 router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
   try {
     const { id } = req.params;
-    const allowed = ['name', 'description', 'max_active_loans', 'max_loan_days', 'max_renewal_count', 'reservation_hold_hours', 'fine_per_day', 'lost_item_fee_multiplier', 'is_active'];
     const data = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        if (['max_active_loans', 'max_loan_days', 'max_renewal_count', 'reservation_hold_hours'].includes(key)) {
-          data[key] = Number(req.body[key]);
-        } else if (['fine_per_day', 'lost_item_fee_multiplier'].includes(key)) {
-          data[key] = Number(req.body[key]);
-        } else if (key === 'is_active') {
-          data[key] = Boolean(req.body[key]);
-        } else {
-          data[key] = req.body[key];
-        }
-      }
+    for (const key of ['name', 'description']) {
+      if (req.body[key] !== undefined) data[key] = req.body[key];
     }
-    const { terms, error } = parsePlanTerms(req.body);
+    if (req.body.is_active !== undefined) data.is_active = Boolean(req.body.is_active);
+    // Only the numeric fields actually sent are validated and written.
+    const { values, error } = parsePlanNumbers(req.body);
     if (error) return res.status(400).json({ message: error });
-    Object.assign(data, terms);
+    Object.assign(data, values);
     data.updated_at = new Date();
 
     // The default flag can only be moved to another plan (is_default: true on
