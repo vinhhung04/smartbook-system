@@ -56,7 +56,8 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 - 📲 Pickup code / QR code khi nhận sách
 - 📖 Mượn, gia hạn, trả sách
 - 💸 Sinh phí phạt khi quá hạn / mất / hư sách; 💳 thanh toán phạt online qua VNPay
-- ❤️ Wishlist, review, thông báo cho khách hàng
+- ❤️ Wishlist, review (chỉ bạn đọc đã mượn và trả sách), trung tâm thông báo cho khách hàng
+- 🔔 "Báo khi có sách": thông báo tự động khi sách có lại tại chi nhánh (event-driven qua RabbitMQ)
 - ✨ Gợi ý sách cá nhân hóa (Recommendation V2) kèm lý do "Vì sao gợi ý"
 - 📱 App di động cho khách hàng (Expo/React Native)
 
@@ -209,7 +210,7 @@ flowchart LR
 ```
 
 > [!TIP]
-> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)). AI Service tự chạy CLIP (local, CPU) cho visual similarity ảnh bìa — không phải một service/container riêng nên không có node riêng trên sơ đồ. Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway cũng consume sự kiện từ RabbitMQ, và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
+> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) chưa có tracing như các service Node.js nên không nối vào khối observability (xem [📈 Observability](#observability)). AI Service tự chạy CLIP (local, CPU) cho visual similarity ảnh bìa — không phải một service/container riêng nên không có node riêng trên sơ đồ. Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway và Borrow Service cũng consume sự kiện từ RabbitMQ (relay realtime; thông báo "có sách"), và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
 
@@ -244,10 +245,13 @@ Auth Service quản lý định danh và phân quyền:
 Borrow Service là domain lưu thông sách:
 
 - Customer profile, membership plan, active membership.
+- 🪪 **Gói thẻ (`membership_plans`)**: ngoài hạn mức (`max_active_loans`, `max_loan_days`, `max_renewal_count`, `reservation_hold_hours`, `fine_per_day`, `lost_item_fee_multiplier`) mỗi gói có `price` (VND/kỳ, 0 = miễn phí), `duration_days` (thời hạn thẻ) và `is_default`. Tài khoản mới nhận **gói có `is_default = true`** (nếu chưa gói nào được đánh dấu thì gói có mã `DEFAULT_MEMBERSHIP_PLAN_CODE`), thẻ hết hạn sau `duration_days` của gói — không chọn theo tên gói, `created_at` hay thứ tự bản ghi; không có gói mặc định thì tài khoản được tạo không kèm thẻ (không tự tạo gói). Chỉ một gói là mặc định (đổi trong một transaction có advisory lock), gói mặc định không thể bị tắt, gói inactive không được cấp/gia hạn. Phí gói thu tại quầy; đổi/gia hạn gói do thủ thư làm (`POST /borrow/customers/:id/membership/renew`, mặc định theo `duration_days` của gói) — chưa có thanh toán gói online.
 - Reservation lifecycle: `PENDING`, `CONFIRMED`, `READY_FOR_PICKUP`, `CONVERTED_TO_LOAN`, `CANCELLED`, `EXPIRED`.
 - Loan lifecycle: mượn, gia hạn, trả, quá hạn, mất, hư.
 - Fine lifecycle: sinh fine, thanh toán, waive/reduce.
 - Notification và audit log cho các nghiệp vụ quan trọng.
+- 🔔 **Báo khi có sách (availability alert)**: khách đăng ký `POST /my/availability-alerts`, huỷ `DELETE /my/availability-alerts/:bookId`. Khi tồn kho tăng (trả sách, nhập/putaway — kể cả hàng chuyển kho đến, điều chỉnh kiểm kê, nhả giữ chỗ), inventory ghi `inventory.stock.changed` / `inventory.reservation.released` vào outbox → RabbitMQ → consumer của borrow-service hỏi lại inventory **tồn công khai hiện tại** của đầu sách (chỉ kệ của chi nhánh `BRANCH`/`LIBRARY`) và chỉ gửi khi số lượng > 0. Mỗi alert được "claim" (`ACTIVE` + `notified_at IS NULL` → `NOTIFIED` + `notified_at`) trong cùng transaction tạo notification, nên redelivery/retry/2 consumer chạy song song không bao giờ gửi trùng; đăng ký lại sẽ bật lại alert.
+- ⭐ **Review đã xác minh**: chỉ khách có `loan_items` (bất kỳ ấn bản nào của sách) ở trạng thái `RETURNED` mới được tạo/sửa review; 1 khách / 1 sách / 1 review, rating 1–5, chỉ sửa/xoá review của chính mình; trang công khai chỉ hiện review `VISIBLE`.
 - Account/wallet ledger cho phí mượn/phí phạt.
 - 💳 **Thanh toán phạt online qua VNPay** (sandbox mặc định): khách tạo payment intent (`POST /my/fines/payments/vnpay/create`, bảng `fine_payment_intents`, hết hạn sau 15 phút) → chuyển sang VNPay → VNPay gọi lại `GET /webhooks/vnpay/return` và/hoặc `GET /webhooks/vnpay/ipn` → hệ thống xác minh chữ ký HMAC-SHA512 rồi mới finalize khoản phạt (`SUCCESS`/`AMOUNT_MISMATCH`/`PAYMENT_FAILED`/...). Cần cấu hình `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_PAYMENT_URL`, `VNPAY_RETURN_URL`; thiếu cấu hình thì endpoint trả 503 thay vì lỗi mập mờ.
 
@@ -255,11 +259,13 @@ Borrow Service là domain lưu thông sách:
 
 Customer Portal là phần trải nghiệm khách hàng:
 
-- Xem catalog và chi tiết sách, đặt sách.
+- Xem catalog và chi tiết sách, đặt sách (chọn chi nhánh nhận sách).
+- 🏢 Trang chi nhánh công khai (`/branches`, `/branches/:id`): tên, địa chỉ, giờ mở cửa, điện thoại, email, mô tả (cột `phone`, `email`, `opening_hours`, `description` của `warehouses`, nhân viên nhập ở trang Kho) cùng số đầu sách/bản sách sẵn sàng. Chỉ kho `BRANCH`/`LIBRARY` đang hoạt động được public; không lộ mã kho, người quản lý, sức chứa hay vị trí kệ. Chi tiết: [`docs/public-discovery.md`](docs/public-discovery.md).
 - 📷 Tìm sách bằng cách chụp ảnh bìa (xem mục [🤖 AI](#ai)).
 - Theo dõi reservation, hạn nhận sách, xem pickup code/QR khi sách sẵn sàng nhận.
 - Xem loan, yêu cầu gia hạn, xem fine, thanh toán fine (online qua VNPay hoặc tại quầy).
-- Wishlist, review, notification, preference.
+- Wishlist, review, preference.
+- 🔔 **Trung tâm thông báo** (`/customer/notifications` + chuông trên header): số chưa đọc lấy từ server (`meta.unread_count`, `GET /my/notifications/unread-count`), lọc đã đọc/chưa đọc ở server, đánh dấu một/tất cả đã đọc, realtime qua Socket.IO (`notification:new`); bấm vào thông báo mở đúng đối tượng — phiếu mượn (`LOAN_TRANSACTION`, nhắc hạn `LOAN_ITEM`), danh sách đặt trước (`LOAN_RESERVATION`), phí phạt (`FINE`), trang sách (`BOOK`, thông báo "có sách"). Mọi truy vấn khoá theo khách đang đăng nhập — id thông báo của người khác trả 404.
 - ✨ Trang **Gợi ý cho bạn**: sách xếp theo mức phù hợp (tier) thay vì phần trăm/số sao, kèm "Vì sao gợi ý" lấy từ các tín hiệu thật của bộ xếp hạng, ảnh bìa và nút "Thêm yêu thích" (xem [✨ Gợi ý sách](#gợi-ý-sách-cá-nhân-hóa-recommendation-v2)).
 
 ### 📱 Mobile App
@@ -267,7 +273,7 @@ Customer Portal là phần trải nghiệm khách hàng:
 Một app Expo/React Native duy nhất (`apps/mobile`, tên hiển thị "SmartBook Picking") phục vụ hai nhóm người dùng khác nhau:
 
 - **Nhân viên kho**: đăng nhập, danh sách task (`(tabs)/tasks`), quét barcode, picking theo task, putaway theo từng phiếu nhập (`putaway/receipt/[receiptId]`), outbound (quét xuất kho + lịch sử theo phiên), stock audit, báo cáo exception, tra cứu nhanh (`lookup`).
-- **Khách hàng** (dưới `app/customer/`): duyệt catalog, tìm sách bằng ảnh bìa (`customer/scan-cover.tsx`), xem sách đang mượn/đặt, quản lý ví và **thanh toán phạt qua VNPay ngay trên app** (`customer/wallet/pay/[fineId].tsx`).
+- **Khách hàng** (dưới `app/customer/`): duyệt catalog công khai (`/public/catalog`, cùng nguồn với website), tìm sách bằng ảnh bìa (`customer/scan-cover.tsx`), xem sách đang mượn/đặt, quản lý ví và **thanh toán phạt qua VNPay ngay trên app** (`customer/wallet/pay/[fineId].tsx`). Trang chi tiết sách liệt kê các chi nhánh nhận sách (`pickup_branches`: chỉ `BRANCH`/`LIBRARY`, không bao giờ có kho nội bộ) kèm số cuốn còn; khách **tự chọn chi nhánh** (chỉ 1 chi nhánh thì tự chọn, chi nhánh hết sách không chọn được) rồi mới đặt trước. Backend vẫn gắn `reservation_channel=CUSTOMER` và kiểm tra lại kho; nếu tồn thay đổi (409) app báo bằng tiếng Việt và tải lại danh sách chi nhánh.
 
 Dùng `expo-camera` để quét mã vạch/QR và chụp ảnh bìa, `expo-secure-store` để lưu token đăng nhập.
 
@@ -434,8 +440,10 @@ API Gateway giữ một kết nối Socket.IO dùng chung cho cả hai phía. Cl
 
 Inventory Service không publish thẳng lên RabbitMQ trong lúc xử lý request — nó ghi sự kiện vào bảng `integration_outbox` **trong cùng transaction** với thao tác nghiệp vụ (đặt/nhả/tiêu tồn kho, post goods receipt, duyệt/gửi purchase order), rồi một job nền (`outbox-publisher.job.js`) quét và publish bất đồng bộ. Cách này đảm bảo sự kiện không bao giờ "biến mất" nếu publish thất bại giữa chừng — job tự retry tối đa 10 lần trước khi đánh dấu `FAILED`.
 
-- Loại sự kiện phát ra: `inventory.reservation.created|released|consumed`, `goods_receipt.posted`, `purchase_order.approved|sent`, `inventory.stock.changed`.
-- API Gateway là consumer duy nhất hiện tại (`rabbitmq-consumer.js`): lắng nghe `inventory.reservation.created` qua exchange `smartbook.events`, có dead-letter queue riêng khi xử lý lỗi, rồi relay sự kiện vào đúng phòng Socket.IO của khách hàng.
+- Loại sự kiện phát ra: `inventory.reservation.created|released|consumed`, `goods_receipt.posted`, `purchase_order.approved|sent`, `inventory.stock.changed` (nhận hàng, putaway, kiểm kê, trả sách tốt).
+- Hai consumer, mỗi consumer một queue riêng + dead-letter queue trên exchange `smartbook.events.dlx`:
+  - API Gateway (`apps/api-gateway/src/lib/rabbitmq-consumer.js`): `inventory.reservation.created` → relay vào phòng Socket.IO của khách hàng.
+  - Borrow Service (`services/borrow-service/src/lib/rabbitmq-consumer.js`, queue `borrow-service.availability-alerts.queue`): `inventory.stock.changed` + `inventory.reservation.released` → gửi thông báo "có sách" (xem [Borrow](#borrow-mượn--trả--đặt-sách)). Lỗi xử lý được requeue một lần, lần hai vào DLQ; tắt bằng `ENABLE_AVAILABILITY_ALERT_CONSUMER=false`.
 - Quản lý hàng đợi tại http://localhost:15672.
 
 > [!NOTE]

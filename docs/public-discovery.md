@@ -80,9 +80,9 @@ inventory-service ──(x-internal-service-key)──► analytics-service /ana
 | `GET /public/catalog/books` | `q, category(slug), branch(UUID), author, publisher, language, year, availability=available, sort=relevance\|popular\|newest\|rating\|title, page, pageSize(≤48), ids` + facets (gồm `facets.branches`) + `branch: {id,name}\|null` |
 | `GET /public/catalog/books/:id` | chi tiết (mô tả, tóm tắt AI, ISBN-13/10, số trang, NXB, năm, lần XB, thể loại, chi nhánh còn sách) + sách cùng thể loại |
 | `GET /public/catalog/categories` | thể loại có sách, số đầu sách, số đang có trên kệ |
-| `GET /public/catalog/branches` | chi nhánh đang hoạt động: `id, name, address, stats{title_count, available_title_count, available_copies}` |
+| `GET /public/catalog/branches` | chi nhánh đang hoạt động: `id, name, address, phone, email, opening_hours, description, stats{title_count, available_title_count, available_copies}` (trường liên hệ `null` nếu chưa nhập) |
 | `GET /public/catalog/branches/:id` | chi nhánh + `available_books` (đặt trước được tại đây), `new_arrivals` (sách chi nhánh giữ), `categories`; id sai/không tồn tại/đã đóng → 404 |
-| `GET /public/membership/plans` | gói thẻ `is_active`: `id, name, description, max_active_loans, max_loan_days, max_renewal_count, reservation_hold_hours, fine_per_day, is_default` + `card_validity_days` |
+| `GET /public/membership/plans` | gói thẻ `is_active`: `id, name, description, max_active_loans, max_loan_days, max_renewal_count, reservation_hold_hours, fine_per_day, price, duration_days, is_default` + `card_validity_days` (= `duration_days` của gói mặc định, `null` nếu không có) |
 | `GET /public/reviews/book/:bookId` | review hiển thị, tên dạng "An N.", phân bố sao trên toàn bộ review |
 | `GET /public/reviews/stats?bookIds=` | điểm trung bình/số review (không PII) |
 | `GET /public/discover?q=` | gợi ý AI grounded trên catalog |
@@ -110,16 +110,17 @@ Vẫn bắt buộc đăng nhập: `POST /my/reservations`, `POST /my/wishlists`,
   bao giờ gửi một kho nội bộ làm nơi nhận sách. Query kho lọc ở DB (`PUBLIC_BRANCH_WHERE`) rồi kiểm lại bằng cùng hàm.
   `id` của kho nội bộ ở `/public/catalog/branches/:id` → 404, ở `?branch=` → trang rỗng `branch: null` — giống chi nhánh đã
   đóng, không tiết lộ đó là kho nội bộ. Muốn mở thêm loại (vd `STORE`) chỉ sửa hằng số này.
-- `PUBLIC_BRANCH_SELECT` chỉ select `id, name, warehouse_type, is_active, address_line1/2, ward, district, province`
+- `PUBLIC_BRANCH_SELECT` chỉ select `id, name, warehouse_type, is_active, address_line1/2, ward, district, province, phone, email, opening_hours, description`
   (type/active chỉ để kiểm rule, `toPublicBranch` bỏ đi); JSON không bao giờ có `code`, `warehouse_type`, `manager_user_id`,
   settings, location/kệ, sức chứa, tồn receiving/staging hay stock movement. Số liệu tính trên snapshot catalog
   đã cache (1 query sách + 1 query kho mỗi TTL, không N+1). Bộ lọc `branch` chạy ở server; id sai/không tồn tại/đã đóng trả
   trang rỗng với `branch: null` (không lặng lẽ bỏ bộ lọc để trả toàn bộ catalog). "Có sẵn tại chi nhánh" = chi nhánh nằm
   trong `pickup_branches` của sách, nên sách thấy ở trang chi nhánh luôn đặt trước được tại đúng chi nhánh đó.
 - **Gói thẻ**: route riêng `public-membership.routes.js` (chỉ `GET /plans`), select whitelist — không trả `code`, `created_at`,
-  `updated_at`, `lost_item_fee_multiplier`, số hội viên (`_count`), gói `is_active=false`. `is_default` lấy theo đúng quy tắc
-  cấp gói khi tạo tài khoản (`DEFAULT_MEMBERSHIP_PLAN_CODE`, nếu không có thì gói active cũ nhất) — không có nhãn
-  "Phổ biến/Khuyên dùng". Schema không có phí/giá gói nên trang không hiển thị giá.
+  `updated_at`, `lost_item_fee_multiplier`, `is_active`, số hội viên (`_count`), gói `is_active=false`. `is_default` lấy theo đúng
+  quy tắc cấp gói khi tạo tài khoản: gói active có cờ `is_default` (nếu không gói nào có cờ thì gói có mã
+  `DEFAULT_MEMBERSHIP_PLAN_CODE`; không bao giờ "gói cũ nhất") — không có nhãn "Phổ biến/Khuyên dùng". Mỗi gói hiển thị
+  `price` ("Miễn phí" khi 0) và `duration_days`; phí thu tại quầy, không có thanh toán gói online.
 - AI discover: per-IP 6/phút + 40/giờ ở gateway, trần toàn hệ thống 30/phút + 300/giờ ở ai-service (chỉ tính khi
   cache miss), cache truy vấn 10 phút, không gọi LLM sinh văn bản (không thể bịa sách), kết quả phải được inventory
   public catalog xác nhận lại; lỗi/quá tải → UI tự chuyển sang tìm theo từ khóa.
@@ -233,24 +234,26 @@ Test thêm: `available_now` (inventory unit), typeahead bàn phím và "Báo khi
   và `/ai/find-book-by-cover/reindex` không có auth qua gateway `/ai/*`. Cần trước khi public: route `/public/cover-search`
   riêng, kiểm tra magic bytes + giới hạn kích thước (vd 4 MB) + resize, rate limit per-IP và trần chi phí như discover,
   lấy catalog từ public endpoint, không lưu ảnh.
-- **Chi nhánh — dữ liệu còn thiếu**: bảng `warehouses` chưa có số điện thoại, giờ mở cửa, slug hay toạ độ. Trang `/branches`
-  chỉ hiện dữ liệu đang có (tên, địa chỉ, số sách) và không bịa thêm. Muốn hiển thị cần migration thêm cột (vd `phone`,
-  `opening_hours` JSON, `slug` unique), form nhập ở trang quản lý kho, seed, rồi thêm vào `PUBLIC_BRANCH_SELECT` + test.
+- **Chi nhánh — đã bổ sung liên hệ**: migration `20261006100000_add_branch_contact_metadata` thêm `phone`, `email`,
+  `opening_hours` (chuỗi hiển thị), `description` (nullable) vào `warehouses`; nhân viên nhập ở form Kho (chỉ hiện với loại
+  `BRANCH`/`LIBRARY`, validate độ dài/định dạng ở `warehouse.controller.js`); seed demo chỉ điền ô còn trống (số điện thoại/email
+  demo, không phải dữ liệu thật). `/branches` và `/branches/:id` hiển thị khi có, ẩn khi `null`. Chưa làm: `slug` (URL vẫn dùng
+  UUID) và toạ độ/bản đồ — chưa có use case.
 - **Rule điểm nhận sách ở backend đặt trước — đã áp cho bạn đọc**: `POST /my/reservations` gắn `reservation_channel=CUSTOMER`
   (đặt ở server, không đọc từ body) khi gọi inventory; `getAvailability` và `reserveFromBorrow` khi đó kiểm tra kho bằng cùng
   `isPublicPickupWarehouse()` (`src/utils/public-pickup-warehouse.js`) và trả 409 "Selected warehouse is not a valid pickup
   location" trước khi giữ hàng. Màn `/customer/scan-cover` chỉ đưa các `locations` nằm trong `/public/catalog/branches`.
-  Nhân viên (đặt hộ ở trang quản lý, mượn tại quầy) không gửi kênh nên vẫn dùng mọi kho. Còn lại: app mobile đặt tại
-  `default_warehouse_id` của catalog có xác thực — nếu đó là kho nội bộ, backend sẽ từ chối (409) thay vì đề xuất chi nhánh.
-- **Gói thẻ — dữ liệu còn thiếu**: `membership_plans` không có phí/giá và thời hạn riêng từng gói (thẻ cấp khi đăng ký có hạn
-  `DEFAULT_MEMBERSHIP_DURATION_DAYS` = 365 ngày); đổi gói chỉ do nhân viên làm (`POST /borrow/customers/:id/membership/renew`).
-  Mô tả gói trong seed demo đang là tiếng Việt không dấu — nên sửa dữ liệu ở trang quản lý gói.
-  Seed tạo 4 gói cùng một `created_at` và không có gói `STANDARD`, nên "gói active cũ nhất" (cả khi cấp thẻ lẫn `is_default`)
-  phụ thuộc thứ tự Postgres trả về khi trùng (dữ liệu demo hiện là SILVER, khớp 91 thẻ đã cấp tự động). Nên đặt
-  `DEFAULT_MEMBERSHIP_PLAN_CODE` rõ ràng trong `.env`.
-- **"Báo khi có sách" chưa gửi thông báo**: `availability_alerts` chỉ được lưu/xoá; chưa có job/consumer nào gửi thông báo khi
-  sách có lại (`notified_at` không bao giờ được ghi). Vì vậy `/membership` không quảng cáo tính năng này; câu "Sẽ báo cho bạn
-  khi sách có trở lại" trên trang chi tiết sách là có từ trước và cần job gửi thông báo để đúng.
+  Nhân viên (đặt hộ ở trang quản lý, mượn tại quầy) không gửi kênh nên vẫn dùng mọi kho. App mobile dùng cùng catalog công
+  khai: màn chi tiết sách liệt kê `pickup_branches` để khách tự chọn chi nhánh (1 chi nhánh thì tự chọn), gửi đúng `warehouse_id`
+  đã chọn; 409 do tồn thay đổi được báo bằng tiếng Việt và tải lại danh sách (`apps/mobile/src/lib/publicCatalog.ts` + test).
+- **Gói thẻ — đã hoàn thiện**: migration `20261006090000_add_membership_plan_terms` thêm `price`, `duration_days` (mặc định 365),
+  `is_default`. Migration đánh dấu mặc định **một lần** từ dữ liệu: gói active đang được nhiều thẻ dùng nhất (hoà thì theo mã) — tức
+  đúng gói mà quy tắc cũ đã cấp trên thực tế; DB mới lấy mặc định từ seed (`BASIC`). Từ đó cấp thẻ chỉ theo cờ (fallback duy nhất
+  là `DEFAULT_MEMBERSHIP_PLAN_CODE`), hạn thẻ = ngày cấp + `duration_days` của gói. Giá trong seed là dữ liệu demo. Đổi/gia hạn gói
+  vẫn do nhân viên (`POST /borrow/customers/:id/membership/renew`); khách tự đổi gói cần thanh toán gói → để future work.
+- **"Báo khi có sách" — đã gửi thông báo**: inventory outbox (`inventory.stock.changed`, `inventory.reservation.released`) →
+  RabbitMQ → consumer của borrow-service → kiểm tra tồn công khai hiện tại (chỉ chi nhánh `BRANCH`/`LIBRARY`, > 0) → tạo
+  notification + ghi `notified_at` trong cùng transaction (không gửi trùng). `/membership` giờ nhắc đến thông báo này.
 - SEO sâu hơn: SPA nên crawler không chạy JS chỉ thấy meta mặc định; có thể prerender `/`, `/books/:id` hoặc sitemap động.
 - Review discovery (lọc theo sao, review hữu ích), cảnh báo "báo khi có sách" ngay trên trang công khai.
 - Phase 3: conversion analytics anonymous → account, cá nhân hoá discovery theo phiên.
