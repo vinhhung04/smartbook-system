@@ -1,4 +1,23 @@
 const { prisma } = require('../lib/prisma');
+const { getBookVariantIds } = require('../services/inventory-integration.service');
+
+const NOT_ELIGIBLE_MESSAGE = 'Bạn chỉ có thể đánh giá sách mình đã mượn và trả';
+
+/** Verified-reader rule: the customer has a loan item of any edition of the
+ *  book that was RETURNED (lost items are not "read and returned"). Editions
+ *  live in inventory, loans here, so the book's variant ids come from inventory. */
+async function hasReturnedLoanForBook(customerId, bookId, requestId) {
+  const variantIds = await getBookVariantIds({ bookId, requestId });
+  if (variantIds.length === 0) return false;
+  const returned = await prisma.loan_items.count({
+    where: {
+      variant_id: { in: variantIds },
+      status: 'RETURNED',
+      loan_transactions: { customer_id: customerId },
+    },
+  });
+  return returned > 0;
+}
 
 async function getReviewsByBook(req, res) {
   try {
@@ -94,9 +113,23 @@ async function createOrUpdateMyReview(req, res) {
     if (!book_id) {
       return res.status(400).json({ message: 'book_id is required' });
     }
+    if (!UUID_PATTERN.test(String(book_id))) {
+      return res.status(400).json({ message: 'book_id must be a valid UUID' });
+    }
     const numRating = Number(rating);
     if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
       return res.status(400).json({ message: 'rating must be an integer between 1 and 5' });
+    }
+
+    let eligible;
+    try {
+      eligible = await hasReturnedLoanForBook(customerId, book_id, req.requestId);
+    } catch (error) {
+      console.error('[review] eligibility check failed:', error.message);
+      return res.status(503).json({ message: 'Chưa kiểm tra được lịch sử mượn, vui lòng thử lại sau' });
+    }
+    if (!eligible) {
+      return res.status(403).json({ message: NOT_ELIGIBLE_MESSAGE });
     }
 
     const review = await prisma.book_reviews.upsert({
@@ -171,7 +204,14 @@ async function getMyReviewForBook(req, res) {
       },
     });
 
-    return res.json({ data: review });
+    // Lets the form explain the rule up front instead of failing on submit.
+    // null = could not be checked right now (the POST still decides).
+    let canReview = null;
+    if (UUID_PATTERN.test(String(bookId || ''))) {
+      canReview = await hasReturnedLoanForBook(customerId, bookId, req.requestId).catch(() => null);
+    }
+
+    return res.json({ data: review, can_review: canReview });
   } catch (error) {
     console.error('[review] getMyReviewForBook error:', error);
     return res.status(500).json({ message: 'Failed to load my review' });

@@ -46,10 +46,13 @@ function ReviewForm({ bookId, onSaved }: { bookId: string; onSaved: () => void }
   const [comment, setComment] = useState('');
   const [hasReview, setHasReview] = useState(false);
   const [busy, setBusy] = useState(false);
+  // false = no returned loan of this book yet (server rule); null = unknown, let the POST decide.
+  const [canReview, setCanReview] = useState<boolean | null>(null);
 
   useEffect(() => {
     customerBorrowService.getMyReviewForBook(bookId)
       .then((res) => {
+        setCanReview(typeof res?.can_review === 'boolean' ? res.can_review : null);
         if (res?.data) {
           setHasReview(true);
           setRating(res.data.rating);
@@ -89,6 +92,14 @@ function ReviewForm({ bookId, onSaved }: { bookId: string; onSaved: () => void }
       setBusy(false);
     }
   };
+
+  if (canReview === false && !hasReview) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 text-[13.5px] text-muted-foreground sm:p-6" data-testid="review-not-eligible">
+        Bạn có thể đánh giá cuốn sách này sau khi đã mượn và trả sách.
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
