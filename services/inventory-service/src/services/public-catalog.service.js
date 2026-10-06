@@ -62,7 +62,8 @@ const PUBLIC_BOOK_SELECT = {
 
 const PUBLIC_BOOK_WHERE = { is_active: true };
 
-// Branches as visitors see them: a name and a street address. Only reader-facing
+// Branches as visitors see them: name, street address and the contact details a
+// reader needs (phone, email, opening hours, short description). Only reader-facing
 // locations (PUBLIC_PICKUP_WAREHOUSE_TYPES) are branches; internal warehouses are
 // never listed and their stock never counts as public availability.
 const PUBLIC_BRANCH_WHERE = { is_active: true, warehouse_type: { in: PUBLIC_PICKUP_WAREHOUSE_TYPES } };
@@ -78,6 +79,10 @@ const PUBLIC_BRANCH_SELECT = {
   ward: true,
   district: true,
   province: true,
+  phone: true,
+  email: true,
+  opening_hours: true,
+  description: true,
 };
 const BRANCH_FEATURED_SIZE = 12;
 const BRANCH_CATEGORY_SIZE = 8;
@@ -202,7 +207,16 @@ function toPublicBranch(row) {
     .map((part) => (typeof part === 'string' ? part.trim() : ''))
     .filter(Boolean)
     .join(', ');
-  return { id: row.id, name: row.name, address: address || null };
+  const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+  return {
+    id: row.id,
+    name: row.name,
+    address: address || null,
+    phone: text(row.phone),
+    email: text(row.email),
+    opening_hours: text(row.opening_hours),
+    description: text(row.description),
+  };
 }
 
 function toPublicBookDetail(book) {
@@ -429,6 +443,27 @@ function relatedBooks(books, detail, limit = 6) {
     .slice(0, limit);
 }
 
+/** Live (uncached) reader availability of the book a variant belongs to —
+ *  the same rule as the public book page, so internal warehouses and
+ *  receiving stock never count. Used by borrow-service to decide whether an
+ *  "báo khi có sách" alert should fire. Null for unknown/unpublished books. */
+async function readPublicAvailabilityByVariant(prisma, variantId) {
+  if (!UUID_PATTERN.test(String(variantId || ''))) return null;
+  const row = await prisma.books.findFirst({
+    where: { ...PUBLIC_BOOK_WHERE, book_variants: { some: { id: variantId } } },
+    select: PUBLIC_BOOK_SELECT,
+  });
+  if (!isPublishable(row)) return null;
+  const book = toPublicBook(row);
+  return {
+    book_id: book.id,
+    title: book.title,
+    available_quantity: book.available_quantity,
+    reservable: book.reservable,
+    pickup_branches: book.pickup_branches,
+  };
+}
+
 // ── caches ──────────────────────────────────────────────────────────────────
 // One catalog query per TTL for every anonymous visitor instead of one per
 // request; stock shown in lists can be up to SNAPSHOT_TTL_MS old, while the
@@ -548,6 +583,7 @@ module.exports = {
   createPublicCatalog,
   normalizeText,
   parseCatalogQuery,
+  readPublicAvailabilityByVariant,
   relatedBooks,
   searchCatalog,
   toPublicBook,

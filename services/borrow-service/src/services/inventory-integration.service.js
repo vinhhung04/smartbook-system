@@ -184,7 +184,33 @@ async function getVariantDetails({ variantIds, authHeader, requestId }) {
   return Array.isArray(result?.data) ? result.data : [];
 }
 
+// Background callers (the availability-alert consumer) have no user token, so
+// these always use the service token. Returns null when the book is not (or no
+// longer) in the public catalog.
+async function getVariantPublicAvailability({ variantId, requestId }) {
+  try {
+    const result = await requestInventory(
+      `/api/borrow-integration/variants/${encodeURIComponent(variantId)}/public-availability`,
+      { method: 'GET', headers: { Authorization: createServiceAuthHeader(), ...correlationHeader(requestId) } }
+    );
+    return result?.data || null;
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
+}
+
+async function getBookVariantIds({ bookId, requestId }) {
+  const result = await requestInventory(
+    `/api/borrow-integration/books/${encodeURIComponent(bookId)}/variant-ids`,
+    { method: 'GET', headers: { Authorization: createServiceAuthHeader(), ...correlationHeader(requestId) } }
+  );
+  return Array.isArray(result?.data) ? result.data : [];
+}
+
 module.exports = {
+  getVariantPublicAvailability,
+  getBookVariantIds,
   checkAvailability,
   reserveStock,
   releaseReservation,

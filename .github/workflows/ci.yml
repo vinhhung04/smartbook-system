@@ -129,6 +129,7 @@ jobs:
             purchase-supplier-receiving-integration.mjs \
             borrow-phase2-integration.mjs \
             reservation-pickup-loan-return-integration.mjs \
+            availability-alert-integration.mjs \
             supplier-portal-integration.mjs \
             admin-user-management-integration.mjs \
             analytics-integration.mjs \

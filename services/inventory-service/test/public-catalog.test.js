@@ -11,6 +11,7 @@ const {
   isPublicPickupWarehouse,
   isPublishable,
   parseCatalogQuery,
+  readPublicAvailabilityByVariant,
   searchCatalog,
   toPublicBook,
   toPublicBookDetail,
@@ -320,8 +321,8 @@ function branchCatalog(rows = branchFixtureRows()) {
 
 const FORBIDDEN_BRANCH_KEYS = ['code', 'warehouse_type', 'manager_user_id', 'is_active', 'locations', 'location_code', 'location_id', 'on_hand_qty', 'reserved_qty', 'capacity', 'warehouse_settings', 'stock_movements'];
 
-test('branch select only asks for name, address and the fields the pickup rule needs', () => {
-  assert.deepEqual(Object.keys(PUBLIC_BRANCH_SELECT).sort(), ['address_line1', 'address_line2', 'district', 'id', 'is_active', 'name', 'province', 'ward', 'warehouse_type']);
+test('branch select only asks for name, address, reader contact details and the fields the pickup rule needs', () => {
+  assert.deepEqual(Object.keys(PUBLIC_BRANCH_SELECT).sort(), ['address_line1', 'address_line2', 'description', 'district', 'email', 'id', 'is_active', 'name', 'opening_hours', 'phone', 'province', 'ward', 'warehouse_type']);
   for (const key of ['code', 'manager_user_id', 'warehouse_settings', 'locations', 'capacity']) assert.equal(key in PUBLIC_BRANCH_SELECT, false);
 });
 
@@ -409,10 +410,22 @@ test('the branch list re-checks the rule even if the query returned an internal 
   assert.deepEqual((await catalog.branches()).map((b) => b.id).sort(), [WH_Q1, WH_Q3, WH_LIBRARY].sort());
 });
 
-test('public branch shape joins the address and drops internal columns', () => {
-  assert.deepEqual(toPublicBranch(WAREHOUSE_ROWS[0]), { id: WH_Q1, name: 'Chi nhánh Quận 1', address: '78 Lê Duẩn, Bến Nghé, Quận 1, TP. Hồ Chí Minh' });
-  // No address on file stays null rather than an empty string.
-  assert.equal(toPublicBranch(WAREHOUSE_ROWS[1]).address, null);
+test('public branch shape joins the address, adds contact details and drops internal columns', () => {
+  assert.deepEqual(toPublicBranch({ ...WAREHOUSE_ROWS[0], phone: ' 028 3822 1234 ', email: 'q1@smartbook.example', opening_hours: 'T2–T6: 8:00–20:00', description: 'Chi nhánh trung tâm' }), {
+    id: WH_Q1,
+    name: 'Chi nhánh Quận 1',
+    address: '78 Lê Duẩn, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    phone: '028 3822 1234',
+    email: 'q1@smartbook.example',
+    opening_hours: 'T2–T6: 8:00–20:00',
+    description: 'Chi nhánh trung tâm',
+  });
+  // Nothing on file stays null rather than an empty string — the page shows no invented hours.
+  const bare = toPublicBranch({ ...WAREHOUSE_ROWS[1], phone: '  ', opening_hours: null });
+  assert.equal(bare.address, null);
+  assert.equal(bare.phone, null);
+  assert.equal(bare.opening_hours, null);
+  assert.equal(bare.email, null);
 });
 
 test('branch holdings count shelf copies (lent out too) but not receiving, closed branches or non-borrowable editions', () => {
@@ -488,4 +501,42 @@ test('invalid or closed branch filter returns an empty page instead of the whole
     assert.deepEqual(result.data, []);
     assert.equal(result.branch, null);
   }
+});
+
+// ── availability alerts: live reader availability by variant ────────────────
+
+function availabilityPrisma(row) {
+  const calls = [];
+  return {
+    calls,
+    books: { findFirst: async (args) => { calls.push(args); return row; } },
+  };
+}
+
+test('availability by variant: stock only in the internal WAREHOUSE is not reader availability', async () => {
+  const rows = branchFixtureRows();
+  const prisma = availabilityPrisma(rows[3]);
+  const result = await readPublicAvailabilityByVariant(prisma, '99999999-9999-4999-8999-999999999999');
+  assert.equal(result.book_id, '44444444-4444-4444-8444-444444444444');
+  assert.equal(result.available_quantity, 0);
+  assert.deepEqual(result.pickup_branches, []);
+  // Reads the book through the variant with the public select, not a cached snapshot.
+  assert.deepEqual(prisma.calls[0].where.book_variants, { some: { id: '99999999-9999-4999-8999-999999999999' } });
+  assert.equal(prisma.calls[0].select, PUBLIC_BOOK_SELECT);
+});
+
+test('availability by variant: library/branch shelf stock counts, the internal warehouse part does not', async () => {
+  const result = await readPublicAvailabilityByVariant(availabilityPrisma(branchFixtureRows()[4]), '99999999-9999-4999-8999-999999999999');
+  assert.equal(result.available_quantity, 2);
+  assert.deepEqual(result.pickup_branches.map((branch) => branch.warehouse_id), [WH_LIBRARY]);
+  assert.deepEqual(Object.keys(result).sort(), ['available_quantity', 'book_id', 'pickup_branches', 'reservable', 'title']);
+});
+
+test('availability by variant: invalid ids, unknown and placeholder books return null', async () => {
+  const prisma = availabilityPrisma(null);
+  assert.equal(await readPublicAvailabilityByVariant(prisma, 'not-a-uuid'), null);
+  assert.equal(prisma.calls.length, 0);
+  assert.equal(await readPublicAvailabilityByVariant(prisma, '99999999-9999-4999-8999-999999999999'), null);
+  const placeholder = makeBook({ metadata: { is_incomplete: true } });
+  assert.equal(await readPublicAvailabilityByVariant(availabilityPrisma(placeholder), '99999999-9999-4999-8999-999999999999'), null);
 });

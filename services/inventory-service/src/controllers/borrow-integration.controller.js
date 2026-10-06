@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
 const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
+const { readPublicAvailabilityByVariant } = require('../services/public-catalog.service');
 
 const prisma = new PrismaClient();
 
@@ -791,6 +792,29 @@ async function returnBorrowedLoan(req, res) {
         },
       });
 
+      // A good-condition return puts the copy back on the shelf: publish it like
+      // putaway/receiving do so availability alerts can react. Lost/damaged
+      // returns never raise available_qty, so there is nothing to announce.
+      if (!isLost && !isDamaged) {
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: 'STOCK_BALANCE',
+            aggregate_id: variant_id,
+            event_type: 'inventory.stock.changed',
+            payload: {
+              variant_id,
+              location_id: targetLocationId,
+              warehouse_id,
+              delta_qty: normalizedQuantity,
+              reason_code: 'LOAN_RETURNED',
+              source_reference_type: 'LOAN_TRANSACTION',
+              source_reference_id: loan_id,
+            },
+            headers: { correlation_id: req.requestId || null },
+          },
+        });
+      }
+
       return { data: movement, idempotent: false };
     });
 
@@ -851,7 +875,45 @@ async function getVariantDetails(req, res) {
   }
 }
 
+async function getVariantPublicAvailability(req, res) {
+  const variantId = String(req.params.variantId || '');
+  if (!isUuid(variantId)) {
+    return res.status(400).json({ message: 'variantId must be a valid UUID value' });
+  }
+
+  try {
+    const availability = await readPublicAvailabilityByVariant(prisma, variantId);
+    if (!availability) {
+      return res.status(404).json({ message: 'Book not found in the public catalog' });
+    }
+    return res.json({ data: availability });
+  } catch (error) {
+    console.error('getVariantPublicAvailability error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function getBookVariantIds(req, res) {
+  const bookId = String(req.params.bookId || '');
+  if (!isUuid(bookId)) {
+    return res.status(400).json({ message: 'bookId must be a valid UUID value' });
+  }
+
+  try {
+    const variants = await prisma.book_variants.findMany({
+      where: { book_id: bookId },
+      select: { id: true },
+    });
+    return res.json({ data: variants.map((variant) => variant.id) });
+  } catch (error) {
+    console.error('getBookVariantIds error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
 module.exports = {
+  getVariantPublicAvailability,
+  getBookVariantIds,
   searchBorrowVariants,
   listBorrowWarehouses,
   getAvailability,

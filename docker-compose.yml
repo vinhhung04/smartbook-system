@@ -225,6 +225,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - GATEWAY_URL=http://api-gateway:3000
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -239,6 +240,8 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       tempo:
         condition: service_healthy

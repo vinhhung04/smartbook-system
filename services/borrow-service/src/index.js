@@ -23,6 +23,10 @@ const { startOverdueSweepJob } = require('./jobs/overdue.job');
 const { startReservationExpiryJob } = require('./jobs/reservation-expiry.job');
 const { startDueSoonReminderJob } = require('./jobs/due-soon-reminder.job');
 const { startReservationReconciliationJob } = require('./jobs/reservation-reconciliation.job');
+const { startAvailabilityAlertConsumer } = require('./lib/rabbitmq-consumer');
+const { dispatchAvailabilityAlerts } = require('./services/availability-alert.service');
+const { getVariantPublicAvailability } = require('./services/inventory-integration.service');
+const { createNotificationRecord } = require('./lib/notifications');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -126,6 +130,11 @@ app.listen(PORT, () => {
   startReservationExpiryJob();
   startDueSoonReminderJob();
   startReservationReconciliationJob();
+  startAvailabilityAlertConsumer((envelope) => dispatchAvailabilityAlerts(envelope, {
+    prisma,
+    getAvailability: (variantId) => getVariantPublicAvailability({ variantId, requestId: envelope.correlation_id || undefined }),
+    createNotification: createNotificationRecord,
+  }));
 });
 
 process.on('SIGTERM', async () => {
