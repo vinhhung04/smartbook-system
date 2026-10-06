@@ -173,5 +173,41 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     });
     const valid = ajv.validate(schemas.release, res.data);
     assert.ok(valid, ajv.errorsText(ajv.errors));
+    assert.equal(res.data.idempotent, true);
+  });
+});
+
+test('contract: reserve -> release -> replay always reports `idempotent`', async (t) => {
+  const target = await findTarget();
+  const reservationId = crypto.randomUUID();
+  const runTag = `${Date.now()}-rel`;
+
+  const reserved = await request('POST', '/api/borrow-integration/reservations/reserve', {
+    reservation_id: reservationId,
+    reservation_number: `CT-${runTag}`,
+    variant_id: target.variant_id,
+    warehouse_id: target.warehouse_id,
+    quantity: 1,
+    expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    idempotency_key: `ct-reserve-${runTag}`,
+  });
+  assert.equal(reserved.status, 201, JSON.stringify(reserved.data));
+
+  await t.test('POST reservations/release (first execution) → idempotent false', async () => {
+    const res = await request('POST', '/api/borrow-integration/reservations/release', {
+      reservation_id: reservationId, reason: 'CANCELLED', idempotency_key: `ct-release-${runTag}`,
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.ok(ajv.validate(schemas.release, res.data), ajv.errorsText(ajv.errors));
+    assert.equal(res.data.idempotent, false);
+  });
+
+  await t.test('POST reservations/release replay (same key) → idempotent true', async () => {
+    const res = await request('POST', '/api/borrow-integration/reservations/release', {
+      reservation_id: reservationId, reason: 'CANCELLED', idempotency_key: `ct-release-${runTag}`,
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.ok(ajv.validate(schemas.release, res.data), ajv.errorsText(ajv.errors));
+    assert.equal(res.data.idempotent, true);
   });
 });

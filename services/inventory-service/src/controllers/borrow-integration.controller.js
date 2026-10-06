@@ -491,7 +491,8 @@ async function releaseBorrowReservation(req, res) {
         },
       });
 
-      return { data: updated };
+      // Same shape as the replay branches: `idempotent` is always present on 200.
+      return { data: updated, idempotent: false };
     });
 
     return res.json(result);
