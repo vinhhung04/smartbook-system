@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Bell as BellData, BellRing as BellRingData, Wifi, WifiOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from 'morphicons/react';
@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { formatDateTime } from './customer-format';
 import { notificationTarget } from '@/lib/notification-links';
+import { applyAllRead, applyIncoming, applyMarkedRead, createRecentIds, type NotificationListState } from '@/lib/notification-state';
+import { onUnreadCount, publishUnreadCount } from '@/lib/notification-sync';
 import { useSocket, useSocketEvent } from '@/lib/socket';
 import { toast } from 'sonner';
 import {
@@ -35,23 +37,28 @@ function toRows(payload: any): NotificationRow[] {
   return [];
 }
 
+const BELL_SIZE = 5;
+// After a burst of realtime events, re-read the authoritative unread count once.
+const RECONCILE_DELAY_MS = 1500;
+
 export function NotificationBellDropdown() {
   const navigate = useNavigate();
   const { connected } = useSocket();
-  const [rows, setRows] = useState<NotificationRow[]>([]);
+  // Latest 5 rows; unreadCount is the server's (meta.unread_count), not derived from them.
+  const [list, setList] = useState<NotificationListState<NotificationRow>>({ rows: [], total: 0, unreadCount: 0, page: 1, totalPages: 1, pageSize: BELL_SIZE });
   const [isLoading, setIsLoading] = useState(false);
   const [hasNewPush, setHasNewPush] = useState(false);
-  // From the server (meta.unread_count), not from the 5 rows shown here.
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const recentRows = useMemo(() => rows.slice(0, 5), [rows]);
+  const [seen] = useState(() => createRecentIds());
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { rows: recentRows, unreadCount } = list;
 
   const loadNotifications = async () => {
     try {
       setIsLoading(true);
-      const response = await customerBorrowService.getMyNotifications({ page: 1, pageSize: 5 });
-      setRows(toRows(response));
-      setUnreadCount(Number(response?.meta?.unread_count) || 0);
+      const response = await customerBorrowService.getMyNotifications({ page: 1, pageSize: BELL_SIZE });
+      const count = Number(response?.meta?.unread_count) || 0;
+      setList((prev) => ({ ...prev, rows: toRows(response), total: Number(response?.meta?.total) || 0, unreadCount: count }));
+      publishUnreadCount(count);
     } catch {
       /* the bell stays usable; the notifications page shows the error */
     } finally {
@@ -63,9 +70,29 @@ export function NotificationBellDropdown() {
     void loadNotifications();
   }, []);
 
+  // The notifications page (or an earlier reconcile) learned a newer server count.
+  useEffect(() => onUnreadCount((count) => setList((prev) => (prev.unreadCount === count ? prev : { ...prev, unreadCount: count }))), []);
+
+  useEffect(() => () => {
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+  }, []);
+
+  const scheduleReconcile = useCallback(() => {
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      reconcileTimer.current = null;
+      customerBorrowService.getUnreadNotificationCount()
+        .then((count) => publishUnreadCount(count))
+        .catch(() => { /* keep the local count until the next event or page load */ });
+    }, RECONCILE_DELAY_MS);
+  }, []);
+
   const handleNewNotification = useCallback((data: any) => {
+    // Every server notification carries its id; the same id emitted twice is
+    // counted (and toasted) once.
+    if (!data?.id || !seen.addIfNew(data.id)) return;
     const newRow: NotificationRow = {
-      id: data.id || `push-${Date.now()}`,
+      id: data.id,
       subject: data.subject,
       body: data.body,
       template_code: data.template_code,
@@ -75,8 +102,8 @@ export function NotificationBellDropdown() {
       created_at: data.created_at || new Date().toISOString(),
       read_at: null,
     };
-    setRows((prev) => [newRow, ...prev]);
-    setUnreadCount((count) => count + 1);
+    setList((prev) => applyIncoming(prev, newRow, 'ALL'));
+    scheduleReconcile();
     setHasNewPush(true);
 
     toast(data.subject || 'Thông báo mới', {
@@ -85,16 +112,20 @@ export function NotificationBellDropdown() {
     });
 
     setTimeout(() => setHasNewPush(false), 2000);
-  }, []);
+  }, [seen, scheduleReconcile]);
 
   useSocketEvent('notification:new', handleNewNotification);
 
   const openNotification = async (row: NotificationRow) => {
-    if (!row.read_at && !row.id.startsWith('push-')) {
+    if (!row.read_at) {
       try {
         const result = await customerBorrowService.markNotificationRead(row.id);
-        setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, read_at: new Date().toISOString() } : item)));
-        setUnreadCount(Number(result?.data?.unread_count ?? 0));
+        const serverCount = Number(result?.data?.unread_count);
+        setList((prev) => {
+          const marked = applyMarkedRead(prev, row.id, 'ALL', new Date().toISOString());
+          return Number.isFinite(serverCount) ? { ...marked, unreadCount: serverCount } : marked;
+        });
+        if (Number.isFinite(serverCount)) publishUnreadCount(serverCount);
       } catch { /* still open the target */ }
     }
     navigate(notificationTarget(row) || '/customer/notifications');
@@ -129,8 +160,8 @@ export function NotificationBellDropdown() {
             onClick={async () => {
               try {
                 await customerBorrowService.markAllNotificationsRead();
-                setRows((prev) => prev.map((r) => ({ ...r, read_at: r.read_at || new Date().toISOString() })));
-                setUnreadCount(0);
+                setList((prev) => applyAllRead(prev, 'ALL', new Date().toISOString()));
+                publishUnreadCount(0);
               } catch { /* ignore */ }
             }}
             disabled={unreadCount === 0}

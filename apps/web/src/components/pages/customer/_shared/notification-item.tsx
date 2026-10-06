@@ -21,8 +21,8 @@ export interface CustomerNotification {
 
 interface NotificationItemProps {
   item: CustomerNotification;
-  /** Called after the server confirmed the notification is read. */
-  onMarkedRead?: (id: string) => void;
+  /** Called after the server confirmed the notification is read, with the server's new unread count. */
+  onMarkedRead?: (id: string, unreadCount?: number) => void;
 }
 
 function pickIcon(code: string) {
@@ -45,8 +45,9 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
     if (!unread) return;
     try {
       setMarking(true);
-      await customerBorrowService.markNotificationRead(item.id);
-      onMarkedRead?.(item.id);
+      const result = await customerBorrowService.markNotificationRead(item.id);
+      const unreadCount = Number(result?.data?.unread_count);
+      onMarkedRead?.(item.id, Number.isFinite(unreadCount) ? unreadCount : undefined);
     } catch {
       toast.error('Chưa đánh dấu được thông báo là đã đọc');
     } finally {

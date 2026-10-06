@@ -2,7 +2,7 @@ import { NotificationItem, type CustomerNotification } from './notification-item
 
 interface NotificationListItemProps {
   item: CustomerNotification;
-  onMarkedRead?: (id: string) => void;
+  onMarkedRead?: (id: string, unreadCount?: number) => void;
 }
 
 export function NotificationListItem({ item, onMarkedRead }: NotificationListItemProps) {

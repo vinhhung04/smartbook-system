@@ -5,6 +5,15 @@ import { getApiErrorMessage } from '@/services/api';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/components/ui/utils';
 import { useSocketEvent } from '@/lib/socket';
+import {
+  applyAllRead,
+  applyIncoming,
+  applyMarkedRead,
+  createRecentIds,
+  type NotificationFilter,
+  type NotificationListState,
+} from '@/lib/notification-state';
+import { onUnreadCount, publishUnreadCount } from '@/lib/notification-sync';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { NotificationListItem } from './_shared/notification-list-item';
@@ -12,65 +21,83 @@ import type { CustomerNotification } from './_shared/notification-item';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 20;
-type Filter = 'ALL' | 'UNREAD' | 'READ';
-const STATUS_PARAM: Record<Filter, 'unread' | 'read' | undefined> = { ALL: undefined, UNREAD: 'unread', READ: 'read' };
+const STATUS_PARAM: Record<NotificationFilter, 'unread' | 'read' | undefined> = { ALL: undefined, UNREAD: 'unread', READ: 'read' };
+const EMPTY_LIST: NotificationListState<CustomerNotification> = { rows: [], total: 0, unreadCount: 0, page: 1, totalPages: 1, pageSize: PAGE_SIZE };
 
 export function CustomerNotificationsPage() {
-  const [rows, setRows] = useState<CustomerNotification[]>([]);
+  const [list, setList] = useState(EMPTY_LIST);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>('ALL');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [filter, setFilter] = useState<NotificationFilter>('ALL');
+  // The page to fetch; list.page is the page on screen (clamped by the state helpers).
+  const [requestedPage, setRequestedPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
   const [markingAll, setMarkingAll] = useState(false);
+  const [seen] = useState(() => createRecentIds());
 
-  // Filtering and the unread count come from the server, so they cover every
-  // page — not just the 20 rows on screen.
+  // Filtering, totals and the unread count come from the server, so they cover
+  // every page — not just the rows on screen.
   const loadNotifications = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await customerBorrowService.getMyNotifications({ page, pageSize: PAGE_SIZE, status: STATUS_PARAM[filter] });
-      setRows(Array.isArray(response?.data) ? response.data : []);
-      setTotalPages(response?.meta?.totalPages || 1);
-      setTotal(response?.meta?.total || 0);
-      setUnreadCount(Number(response?.meta?.unread_count) || 0);
+      const response = await customerBorrowService.getMyNotifications({ page: requestedPage, pageSize: PAGE_SIZE, status: STATUS_PARAM[filter] });
+      const totalPages = response?.meta?.totalPages || 1;
+      if (requestedPage > totalPages) {
+        // Items disappeared since (e.g. read elsewhere): fall back to the last real page.
+        setRequestedPage(totalPages);
+        return;
+      }
+      const unreadCount = Number(response?.meta?.unread_count) || 0;
+      setList({
+        rows: Array.isArray(response?.data) ? response.data : [],
+        total: response?.meta?.total || 0,
+        unreadCount,
+        page: requestedPage,
+        totalPages,
+        pageSize: PAGE_SIZE,
+      });
+      publishUnreadCount(unreadCount);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Không tải được thông báo'));
     } finally {
       setLoading(false);
     }
-  }, [page, filter]);
+  }, [requestedPage, filter]);
 
-  useEffect(() => { void loadNotifications(); }, [loadNotifications]);
+  useEffect(() => { void loadNotifications(); }, [loadNotifications, reloadKey]);
 
-  // A new notification arrives while the page is open: show it if it belongs here.
+  // The header bell (or another action) learned a newer server count.
+  useEffect(() => onUnreadCount((count) => setList((prev) => (prev.unreadCount === count ? prev : { ...prev, unreadCount: count }))), []);
+
+  // Realtime: a duplicate emit of the same notification is ignored (see applyIncoming).
   useSocketEvent<CustomerNotification>('notification:new', useCallback((data) => {
-    setUnreadCount((count) => count + 1);
-    if (page === 1 && filter !== 'READ' && data?.id) {
-      setRows((prev) => (prev.some((row) => row.id === data.id) ? prev : [{ ...data, read_at: null }, ...prev].slice(0, PAGE_SIZE)));
-      setTotal((count) => count + 1);
-    }
-  }, [page, filter]));
+    if (!data?.id || !seen.addIfNew(data.id)) return;
+    setList((prev) => applyIncoming(prev, data, filter));
+  }, [filter, seen]));
 
-  const handleMarkedRead = useCallback((id: string) => {
-    const now = new Date().toISOString();
-    setUnreadCount((count) => Math.max(0, count - 1));
-    // In the "unread" view a read notification no longer belongs on the list.
-    setRows((prev) => (filter === 'UNREAD'
-      ? prev.filter((row) => row.id !== id)
-      : prev.map((row) => (row.id === id ? { ...row, read_at: row.read_at || now } : row))));
-  }, [filter]);
+  const handleMarkedRead = useCallback((id: string, serverUnread?: number) => {
+    const marked = applyMarkedRead(list, id, filter, new Date().toISOString());
+    setList(serverUnread === undefined ? marked : { ...marked, unreadCount: serverUnread });
+    if (serverUnread !== undefined) publishUnreadCount(serverUnread);
+    // The last unread row on this page was read but more remain: fetch the
+    // (possibly earlier, never out-of-range) page that still has them.
+    if (filter === 'UNREAD' && marked.rows.length === 0 && marked.total > 0) {
+      setRequestedPage(marked.page);
+      setReloadKey((key) => key + 1);
+    }
+  }, [list, filter]);
 
   const markAllRead = async () => {
     try {
       setMarkingAll(true);
       await customerBorrowService.markAllNotificationsRead();
-      setUnreadCount(0);
-      if (filter === 'UNREAD') setRows([]);
-      else setRows((prev) => prev.map((r) => ({ ...r, read_at: r.read_at || new Date().toISOString() })));
+      setList((prev) => applyAllRead(prev, filter, new Date().toISOString()));
+      // UNREAD is now empty (page 1); ALL keeps its page with every row read.
+      if (filter === 'UNREAD') setRequestedPage(1);
+      publishUnreadCount(0);
+      // The READ view just gained rows it cannot know about locally.
+      if (filter === 'READ') setReloadKey((key) => key + 1);
       toast.success('Đã đánh dấu tất cả là đã đọc');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Chưa đánh dấu được thông báo'));
@@ -79,10 +106,12 @@ export function CustomerNotificationsPage() {
     }
   };
 
-  const changeFilter = (next: Filter) => {
+  const changeFilter = (next: NotificationFilter) => {
     setFilter(next);
-    setPage(1);
+    setRequestedPage(1);
   };
+
+  const { rows, total, unreadCount, page, totalPages } = list;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
@@ -103,7 +132,7 @@ export function CustomerNotificationsPage() {
             </button>
             <button
               type="button"
-              onClick={() => void loadNotifications()}
+              onClick={() => setReloadKey((key) => key + 1)}
               disabled={loading}
               aria-label="Làm mới thông báo"
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -129,12 +158,12 @@ export function CustomerNotificationsPage() {
         />
       </div>
 
-      {loading ? (
+      {loading && rows.length === 0 ? (
         <div className="space-y-2" aria-busy="true">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl border bg-card" />)}
         </div>
       ) : error ? (
-        <EmptyState variant="error" title="Không tải được thông báo" description={error} action={<button type="button" onClick={() => void loadNotifications()} className="font-medium text-primary hover:underline">Thử lại</button>} />
+        <EmptyState variant="error" title="Không tải được thông báo" description={error} action={<button type="button" onClick={() => setReloadKey((key) => key + 1)} className="font-medium text-primary hover:underline">Thử lại</button>} />
       ) : rows.length === 0 ? (
         <EmptyState
           variant="inbox"
@@ -143,7 +172,7 @@ export function CustomerNotificationsPage() {
         />
       ) : (
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" data-testid="notifications-total">
             {filter === 'UNREAD' ? 'Chưa đọc' : filter === 'READ' ? 'Đã đọc' : 'Tất cả'} ({total})
           </p>
           <ul className="space-y-2" data-testid="notification-list">
@@ -159,16 +188,16 @@ export function CustomerNotificationsPage() {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
+                  onClick={() => setRequestedPage(Math.max(1, page - 1))}
+                  disabled={page <= 1 || loading}
                   className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   Trước
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
+                  onClick={() => setRequestedPage(Math.min(totalPages, page + 1))}
+                  disabled={page >= totalPages || loading}
                   className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   Tiếp
