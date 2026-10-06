@@ -56,11 +56,32 @@ async function getWarehouseById(req, res) {
   }
 }
 
+// Optional reader-facing contact fields. Returns { data } with only the keys
+// present in the body, or { error } for an invalid value. Empty string clears.
+const BRANCH_CONTACT_LIMITS = { phone: 30, email: 255, opening_hours: 255, description: 2000 };
+
+function parseBranchContact(body = {}) {
+  const data = {};
+  for (const [key, max] of Object.entries(BRANCH_CONTACT_LIMITS)) {
+    if (body[key] === undefined) continue;
+    const value = body[key] === null ? '' : String(body[key]).trim();
+    if (value.length > max) return { error: `${key} must be at most ${max} characters` };
+    if (key === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { error: 'email is invalid' };
+    if (key === 'phone' && value && !/^[0-9+().\s-]{6,30}$/.test(value)) return { error: 'phone is invalid' };
+    data[key] = value || null;
+  }
+  return { data };
+}
+
 async function createWarehouse(req, res) {
   const { name, code, warehouse_type, address_line1 } = req.body;
 
   if (!name || !code) {
     return res.status(400).json({ message: 'name and code are required' });
+  }
+  const contact = parseBranchContact(req.body);
+  if (contact.error) {
+    return res.status(400).json({ message: contact.error });
   }
 
   try {
@@ -71,6 +92,7 @@ async function createWarehouse(req, res) {
           code,
           warehouse_type: warehouse_type || 'WAREHOUSE',
           address_line1: address_line1 || null,
+          ...contact.data,
         },
       });
 
@@ -142,6 +164,10 @@ async function updateWarehouse(req, res) {
   }
 
   const { name, code, warehouse_type, address_line1 } = req.body;
+  const contact = parseBranchContact(req.body);
+  if (contact.error) {
+    return res.status(400).json({ message: contact.error });
+  }
 
   try {
     const exists = await prisma.warehouses.findUnique({ where: { id } });
@@ -156,6 +182,7 @@ async function updateWarehouse(req, res) {
         ...(code !== undefined ? { code } : {}),
         ...(warehouse_type !== undefined ? { warehouse_type } : {}),
         ...(address_line1 !== undefined ? { address_line1 } : {}),
+        ...contact.data,
       },
     });
 
@@ -235,6 +262,7 @@ async function deleteWarehouse(req, res) {
 }
 
 module.exports = {
+  parseBranchContact,
   getAllWarehouses,
   getWarehouseById,
   createWarehouse,

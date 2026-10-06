@@ -88,6 +88,19 @@ async function main() {
 
 console.log(`✅ Created ${warehouses.length} warehouses`);
 
+// Demo contact details for the reader-facing branches (shown on /branches/:id).
+// Only fills fields that are still empty, so re-seeding never overwrites what
+// staff entered in the warehouse screen. Example data, not real numbers.
+const BRANCH_CONTACT_DEMO = {
+  'BR-HCM-01': { phone: '028 0000 0101', email: 'chinhanh.q1@smartbook.example', opening_hours: 'Thứ 2 – Thứ 6: 8:00 – 20:00 · Thứ 7, CN: 8:00 – 17:00', description: 'Chi nhánh trung tâm Quận 1, nhận và trả sách đặt trước.' },
+  'BR-HCM-02': { phone: '028 0000 0303', email: 'chinhanh.q3@smartbook.example', opening_hours: 'Thứ 2 – Thứ 7: 8:00 – 19:00 · Chủ nhật nghỉ', description: 'Chi nhánh Quận 3, có góc đọc tại chỗ.' },
+};
+for (const [code, contact] of Object.entries(BRANCH_CONTACT_DEMO)) {
+  for (const [field, value] of Object.entries(contact)) {
+    await prisma.warehouses.updateMany({ where: { code, [field]: null }, data: { [field]: value } });
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // STEP 2: LOCATIONS (Hierarchical Structure)
 // ═══════════════════════════════════════════════════════════════════════════════

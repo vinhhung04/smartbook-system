@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import axios from 'axios';
-import { ArrowRight, MapPin } from 'lucide-react';
+import { ArrowRight, Clock, Mail, MapPin, Phone } from 'lucide-react';
 import { publicCatalogService, type PublicBranchDetail } from '@/services/public-catalog';
 import { usePageMeta } from '@/lib/page-meta';
 import { branchBooksUrl } from '@/lib/branch-links';
@@ -106,9 +106,30 @@ export function PublicBranchDetailPage() {
         eyebrow="Chi nhánh"
         title={branch.name}
         description={(
-          <span className="flex gap-2">
-            <MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
-            {branch.address || 'Địa chỉ đang được cập nhật'}
+          <span className="block space-y-1.5">
+            <span className="flex gap-2">
+              <MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+              {branch.address || 'Địa chỉ đang được cập nhật'}
+            </span>
+            {branch.opening_hours ? (
+              <span className="flex gap-2" data-testid="branch-opening-hours">
+                <Clock className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span><span className="sr-only">Giờ mở cửa: </span>{branch.opening_hours}</span>
+              </span>
+            ) : null}
+            {branch.phone ? (
+              <span className="flex gap-2" data-testid="branch-phone">
+                <Phone className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+                <a href={`tel:${branch.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">{branch.phone}</a>
+              </span>
+            ) : null}
+            {branch.email ? (
+              <span className="flex gap-2">
+                <Mail className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+                <a href={`mailto:${branch.email}`} className="hover:underline">{branch.email}</a>
+              </span>
+            ) : null}
+            {branch.description ? <span className="block pt-1">{branch.description}</span> : null}
           </span>
         )}
       >

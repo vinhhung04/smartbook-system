@@ -34,6 +34,10 @@ interface WarehouseFormState {
   name: string;
   warehouse_type: string;
   address_line1: string;
+  phone: string;
+  email: string;
+  opening_hours: string;
+  description: string;
   is_active: boolean;
 }
 
@@ -50,6 +54,10 @@ const EMPTY_WAREHOUSE_FORM: WarehouseFormState = {
   name: "",
   warehouse_type: "WAREHOUSE",
   address_line1: "",
+  phone: "",
+  email: "",
+  opening_hours: "",
+  description: "",
   is_active: true,
 };
 
@@ -203,6 +211,10 @@ export function WarehousesPage() {
       name: selectedWarehouse.name || "",
       warehouse_type: selectedWarehouse.warehouse_type || "WAREHOUSE",
       address_line1: selectedWarehouse.address_line1 || "",
+      phone: selectedWarehouse.phone || "",
+      email: selectedWarehouse.email || "",
+      opening_hours: selectedWarehouse.opening_hours || "",
+      description: selectedWarehouse.description || "",
       is_active: selectedWarehouse.is_active ?? true,
     });
     setWarehouseMode("edit");
@@ -267,6 +279,10 @@ export function WarehousesPage() {
       name: selectedWarehouse.name || "",
       warehouse_type: selectedWarehouse.warehouse_type || "WAREHOUSE",
       address_line1: selectedWarehouse.address_line1 || "",
+      phone: selectedWarehouse.phone || "",
+      email: selectedWarehouse.email || "",
+      opening_hours: selectedWarehouse.opening_hours || "",
+      description: selectedWarehouse.description || "",
       is_active: selectedWarehouse.is_active ?? true,
     });
     setShowWarehouseForm(true);
@@ -292,6 +308,10 @@ export function WarehousesPage() {
         name,
         warehouse_type: warehouseForm.warehouse_type,
         address_line1: warehouseForm.address_line1.trim() || undefined,
+        phone: warehouseForm.phone.trim(),
+        email: warehouseForm.email.trim(),
+        opening_hours: warehouseForm.opening_hours.trim(),
+        description: warehouseForm.description.trim(),
         is_active: warehouseForm.is_active,
       };
 
@@ -534,6 +554,15 @@ export function WarehousesPage() {
                 </SelectContent>
               </Select>
               <Input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Địa chỉ" />
+              {["BRANCH", "LIBRARY"].includes(warehouseForm.warehouse_type) ? (
+                <fieldset className="space-y-2 rounded-lg border border-border p-3">
+                  <legend className="px-1 text-[11px] font-medium text-muted-foreground">Thông tin hiển thị cho bạn đọc</legend>
+                  <Input aria-label="Giờ mở cửa" value={warehouseForm.opening_hours} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, opening_hours: event.target.value }))} placeholder="Giờ mở cửa (vd: Thứ 2 – Thứ 6: 8:00 – 20:00)" maxLength={255} />
+                  <Input aria-label="Số điện thoại" value={warehouseForm.phone} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" maxLength={30} inputMode="tel" />
+                  <Input aria-label="Email chi nhánh" type="email" value={warehouseForm.email} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email chi nhánh" maxLength={255} />
+                  <Input aria-label="Mô tả ngắn" value={warehouseForm.description} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Mô tả ngắn" maxLength={2000} />
+                </fieldset>
+              ) : null}
 
               <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
                 <Checkbox checked={warehouseForm.is_active} onCheckedChange={(checked) => setWarehouseForm((prev) => ({ ...prev, is_active: checked === true }))} />
