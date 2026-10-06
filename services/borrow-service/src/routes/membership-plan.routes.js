@@ -54,6 +54,14 @@ function parsePlanNumbers(body, { withDefaults = false } = {}) {
   return { values };
 }
 
+/** A flag sent as a real JSON boolean, or absent. "false", 0, null, [] are
+ *  rejected rather than coerced (Boolean("false") is true). */
+function parseOptionalBoolean(body, key) {
+  if (body[key] === undefined) return { value: undefined };
+  if (typeof body[key] !== 'boolean') return { error: `${key} must be a boolean` };
+  return { value: body[key] };
+}
+
 router.get('/', authorizeBorrowAdminRead, async (req, res) => {
   try {
     const plans = await prisma.membership_plans.findMany({
@@ -69,10 +77,12 @@ router.get('/', authorizeBorrowAdminRead, async (req, res) => {
 
 router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
   try {
-    const { code, name, description, is_default } = req.body;
+    const { code, name, description } = req.body;
     if (!code || !name) return res.status(400).json({ message: 'code and name are required' });
     const { values, error } = parsePlanNumbers(req.body, { withDefaults: true });
     if (error) return res.status(400).json({ message: error });
+    const isDefault = parseOptionalBoolean(req.body, 'is_default');
+    if (isDefault.error) return res.status(400).json({ message: isDefault.error });
 
     const plan = await prisma.$transaction(async (tx) => {
       const created = await tx.membership_plans.create({
@@ -83,7 +93,7 @@ router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
           ...values,
         },
       });
-      if (is_default === true) return (await setDefaultMembershipPlan(tx, created.id)).plan;
+      if (isDefault.value === true) return (await setDefaultMembershipPlan(tx, created.id)).plan;
       return created;
     });
     return res.status(201).json({ data: plan });
@@ -101,7 +111,11 @@ router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
     for (const key of ['name', 'description']) {
       if (req.body[key] !== undefined) data[key] = req.body[key];
     }
-    if (req.body.is_active !== undefined) data.is_active = Boolean(req.body.is_active);
+    const isActive = parseOptionalBoolean(req.body, 'is_active');
+    if (isActive.error) return res.status(400).json({ message: isActive.error });
+    if (isActive.value !== undefined) data.is_active = isActive.value;
+    const isDefault = parseOptionalBoolean(req.body, 'is_default');
+    if (isDefault.error) return res.status(400).json({ message: isDefault.error });
     // Only the numeric fields actually sent are validated and written.
     const { values, error } = parsePlanNumbers(req.body);
     if (error) return res.status(400).json({ message: error });
@@ -110,7 +124,7 @@ router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
 
     // The default flag can only be moved to another plan (is_default: true on
     // that plan), never simply removed: new accounts must always get a card.
-    if (req.body.is_default === false) {
+    if (isDefault.value === false) {
       return res.status(400).json({ message: 'Choose another plan as default instead of unsetting it' });
     }
 
@@ -121,7 +135,7 @@ router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
         return { status: 409, message: 'The default plan cannot be deactivated; choose another default first' };
       }
       const updated = await tx.membership_plans.update({ where: { id }, data });
-      if (req.body.is_default === true) {
+      if (isDefault.value === true) {
         const outcome = await setDefaultMembershipPlan(tx, id);
         // Throwing rolls back the update above as well.
         if (outcome.error === 'INACTIVE') throw new Error('INACTIVE_DEFAULT');

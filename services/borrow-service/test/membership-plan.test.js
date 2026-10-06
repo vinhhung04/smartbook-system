@@ -300,3 +300,49 @@ test('out-of-range, fractional and non-numeric limits are rejected (400), never 
   assert.deepEqual([row.max_active_loans, row.max_renewal_count, row.price], [4, 3, 0]);
   assert.equal(client.state.plans.length, 1, 'no invalid plan was created');
 });
+
+// ── boolean flags: only real JSON booleans ───────────────────────────────────
+
+test('PATCH is_active accepts true/false and rejects strings, numbers, null and objects without touching the plan', async () => {
+  const client = planStore([plan('basic', { is_default: true }), plan('gold')]);
+  await withPlanServer(client, async (send) => {
+    let res = await send('PATCH', '/gold', { is_active: false });
+    assert.equal(res.status, 200);
+    assert.equal(client.state.plans.find((row) => row.id === 'gold').is_active, false);
+
+    res = await send('PATCH', '/gold', { is_active: true });
+    assert.equal(res.status, 200);
+    assert.equal(client.state.plans.find((row) => row.id === 'gold').is_active, true);
+
+    for (const value of ['false', 'true', 0, 1, null, [], {}]) {
+      res = await send('PATCH', '/gold', { is_active: value, name: 'đổi tên' });
+      assert.equal(res.status, 400, JSON.stringify(value));
+      assert.equal(res.body.message, 'is_active must be a boolean');
+    }
+    const gold = client.state.plans.find((row) => row.id === 'gold');
+    assert.equal(gold.is_active, true);
+    assert.equal(gold.name, 'gold', 'invalid payload did not mutate the plan');
+
+    // Omitting is_active leaves it alone; default-plan rules still hold.
+    res = await send('PATCH', '/gold', { name: 'Vàng' });
+    assert.equal(res.status, 200);
+    assert.equal(client.state.plans.find((row) => row.id === 'gold').is_active, true);
+    assert.equal((await send('PATCH', '/basic', { is_active: false })).status, 409);
+  });
+});
+
+test('is_default must be a real boolean on create and update', async () => {
+  const client = planStore([plan('basic', { is_default: true }), plan('gold')]);
+  await withPlanServer(client, async (send) => {
+    for (const value of ['true', 'false', 1, 0, null]) {
+      assert.equal((await send('PATCH', '/gold', { is_default: value })).status, 400, `PATCH ${JSON.stringify(value)}`);
+      assert.equal((await send('POST', '/', { code: `x${String(value)}`, name: 'x', is_default: value })).status, 400, `POST ${JSON.stringify(value)}`);
+    }
+    assert.deepEqual(client.state.plans.filter((row) => row.is_default).map((row) => row.id), ['basic']);
+    assert.equal(client.state.plans.length, 2, 'no plan created from an invalid flag');
+
+    const res = await send('POST', '/', { code: 'new', name: 'Mới', is_default: true });
+    assert.equal(res.status, 201);
+    assert.deepEqual(client.state.plans.filter((row) => row.is_default).map((row) => row.code), ['NEW']);
+  });
+});
