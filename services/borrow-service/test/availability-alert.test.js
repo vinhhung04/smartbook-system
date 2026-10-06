@@ -297,6 +297,38 @@ test('race: inventory fails on the second check → 503 and the alert state is r
   assert.equal(restored.notified_at.getTime(), notifiedAt.getTime());
 });
 
+test('book leaves the public catalog between the checks → 404 and the new alert is removed', async () => {
+  const store = createStore();
+  const { controller, calls } = loadControllerWith(store, answers(warehouseOnly, null));
+  const res = await subscribe(controller, 'cust-a');
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.body.message, 'Không tìm thấy sách trong danh mục.');
+  assert.equal(calls.length, 2);
+  assert.equal(store.state.availability_alerts.length, 0, 'no orphan ACTIVE alert');
+});
+
+test('book leaves the public catalog during a re-arm → 404 and the previous NOTIFIED state is restored', async () => {
+  const notifiedAt = new Date('2026-09-01');
+  const store = createStore([alert('alert-old', 'cust-a', { status: 'NOTIFIED', notified_at: notifiedAt })]);
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, null));
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 404);
+  const row = store.state.availability_alerts[0];
+  assert.equal(row.status, 'NOTIFIED');
+  assert.equal(row.notified_at.getTime(), notifiedAt.getTime());
+});
+
+test('null re-check after the consumer already claimed the alert → NOTIFIED is kept, not reverted', async () => {
+  const store = createStore();
+  const consumerClaimsThenUnpublished = async () => {
+    await dispatch(store, branchAvailability, stockChanged());
+    return null;
+  };
+  const { controller } = loadControllerWith(store, answers(warehouseOnly, consumerClaimsThenUnpublished));
+  assert.equal((await subscribe(controller, 'cust-a')).statusCode, 404);
+  assert.equal(store.state.availability_alerts[0].status, 'NOTIFIED');
+  assert.deepEqual(notifiedCustomers(store), ['cust-a']);
+});
+
 test('race: the consumer claims the new alert before the second check → one notification, NOTIFIED kept', async () => {
   const store = createStore();
   // Between upsert and re-check the restock event is processed by the consumer.

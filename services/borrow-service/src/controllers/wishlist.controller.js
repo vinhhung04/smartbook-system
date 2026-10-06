@@ -75,6 +75,7 @@ async function getMyAvailabilityAlerts(req, res) {
 
 const AVAILABLE_MESSAGE = 'Sách hiện đang có sẵn tại chi nhánh, bạn có thể đặt trước ngay.';
 const UNVERIFIED_MESSAGE = 'Chưa kiểm tra được tình trạng sách, vui lòng thử lại sau.';
+const NOT_FOUND_MESSAGE = 'Không tìm thấy sách trong danh mục.';
 
 /**
  * Reverts what one subscribe request wrote — only while the row is still the
@@ -116,7 +117,7 @@ async function subscribeAvailabilityAlert(req, res) {
       return res.status(503).json({ message: UNVERIFIED_MESSAGE });
     }
     if (!availability) {
-      return res.status(404).json({ message: 'Không tìm thấy sách trong danh mục.' });
+      return res.status(404).json({ message: NOT_FOUND_MESSAGE });
     }
     if (Number(availability.available_quantity) > 0) {
       return res.status(409).json({ message: AVAILABLE_MESSAGE, data: { available_quantity: availability.available_quantity } });
@@ -144,7 +145,13 @@ async function subscribeAvailabilityAlert(req, res) {
       await undoAlertWrite(alert, previous);
       return res.status(503).json({ message: UNVERIFIED_MESSAGE });
     }
-    if (recheck && Number(recheck.available_quantity) > 0) {
+    if (!recheck) {
+      // Deactivated/unpublished between the two checks: no alert for a book
+      // that is no longer in the public catalog.
+      await undoAlertWrite(alert, previous);
+      return res.status(404).json({ message: NOT_FOUND_MESSAGE });
+    }
+    if (Number(recheck.available_quantity) > 0) {
       await undoAlertWrite(alert, previous);
       return res.status(409).json({ message: AVAILABLE_MESSAGE, data: { available_quantity: recheck.available_quantity } });
     }
