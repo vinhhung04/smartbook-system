@@ -105,7 +105,7 @@ export default function CustomerHomeScreen() {
                 <ActivityIndicator color={colors.primary} />
               ) : (
                 <Text style={styles.moreButtonText}>
-                  {catalog.error ? 'Không tải thêm được · Thử lại' : `Tải thêm sách (${books.length}/${catalog.total})`}
+                  {catalog.error ? 'Không tải được sách · Thử lại' : `Tải thêm sách (${books.length}/${catalog.total})`}
                 </Text>
               )}
             </Pressable>

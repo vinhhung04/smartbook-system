@@ -159,3 +159,79 @@ describe('createCatalogLoader', () => {
     expect(current().error).toBeNull();
   });
 });
+
+describe('retry repeats the request that failed', () => {
+  async function loadThreePages() {
+    const ctx = setup();
+    const first = ctx.loader.setQuery({});
+    ctx.calls[0].resolve(pageOf(1, 5, ['a']));
+    await first;
+    for (const [index, id] of [[1, 'b'], [2, 'c']] as const) {
+      const more = ctx.loader.loadMore();
+      ctx.calls[index].resolve(pageOf(index + 1, 5, [id]));
+      await more;
+    }
+    expect(ids(ctx.current())).toEqual(['a', 'b', 'c']);
+    expect(ctx.current().page).toBe(3);
+    return ctx;
+  }
+
+  it('a failed refresh is retried as page 1 (not page 4) and replaces the list', async () => {
+    const { calls, loader, current } = await loadThreePages();
+    const refresh = loader.refresh();
+    expect(calls[3].page).toBe(1);
+    calls[3].reject(new Error('Mất kết nối mạng'));
+    await refresh;
+    expect(ids(current())).toEqual(['a', 'b', 'c']); // nothing lost on a failed refresh
+    expect(current()).toMatchObject({ page: 3, error: 'Mất kết nối mạng', refreshing: false });
+
+    const retried = loader.retry();
+    expect(calls).toHaveLength(5);
+    expect(calls[4].page).toBe(1);
+    expect(current().refreshing).toBe(true); // still a refresh, list stays on screen
+    calls[4].resolve(pageOf(1, 4, ['z']));
+    await retried;
+    expect(ids(current())).toEqual(['z']);
+    expect(current()).toMatchObject({ page: 1, hasNextPage: true, error: null });
+  });
+
+  it('a failed page 4 is retried as page 4 and appended', async () => {
+    const { calls, loader, current } = await loadThreePages();
+    const more = loader.loadMore();
+    expect(calls[3].page).toBe(4);
+    calls[3].reject(new Error('timeout'));
+    await more;
+
+    const retried = loader.retry();
+    expect(calls[4].page).toBe(4);
+    expect(current().loadingMore).toBe(true);
+    calls[4].resolve(pageOf(4, 5, ['d']));
+    await retried;
+    expect(ids(current())).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('a failed first load is retried as page 1; nothing to retry after success or a new query', async () => {
+    const { calls, loader, current } = setup();
+    const first = loader.setQuery({ search: 'x' });
+    calls[0].reject(new Error('down'));
+    await first;
+    const retried = loader.retry();
+    expect(calls[1].page).toBe(1);
+    expect(current().loadingInitial).toBe(true);
+    calls[1].resolve(pageOf(1, 1, ['a']));
+    await retried;
+
+    await loader.retry(); // succeeded: no failed request to repeat
+    expect(calls).toHaveLength(2);
+
+    const other = loader.setQuery({ search: 'y' });
+    calls[2].reject(new Error('down'));
+    await other;
+    const next = loader.setQuery({ search: 'z' }); // new query clears the failure
+    calls[3].resolve(pageOf(1, 1, ['q']));
+    await next;
+    await loader.retry();
+    expect(calls).toHaveLength(4);
+    expect(calls[3].params).toEqual({ search: 'z' });
+  });
+});

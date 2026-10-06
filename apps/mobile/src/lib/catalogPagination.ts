@@ -62,6 +62,10 @@ export function isBusy(state: CatalogState): boolean {
 
 type LoadKind = 'initial' | 'more' | 'refresh';
 
+/** The request that failed, so retry repeats exactly it (a failed refresh of
+ *  page 1 must not turn into "load page N+1"). */
+type FailedLoad = { page: number; kind: LoadKind };
+
 const LOADING_FLAG: Record<LoadKind, Partial<CatalogState>> = {
   initial: { loadingInitial: true },
   more: { loadingMore: true },
@@ -78,6 +82,7 @@ export function createCatalogLoader(
   let state: CatalogState = EMPTY_CATALOG_STATE;
   let params: CustomerCatalogSearchParams | null = null;
   let generation = 0;
+  let failedLoad: FailedLoad | null = null;
 
   function emit(patch: Partial<CatalogState>) {
     state = { ...state, ...patch };
@@ -91,6 +96,7 @@ export function createCatalogLoader(
     try {
       const result = await fetchPage(params, page);
       if (current !== generation) return; // superseded by a newer query/refresh
+      failedLoad = null;
       emit({
         ...IDLE,
         items: page === 1 ? mergeById([], result.items) : mergeById(state.items, result.items),
@@ -100,6 +106,8 @@ export function createCatalogLoader(
       });
     } catch (error) {
       if (current !== generation) return;
+      // The list on screen is kept (a failed refresh does not clear it).
+      failedLoad = { page, kind };
       emit({ ...IDLE, error: describeError(error) });
     }
   }
@@ -111,6 +119,7 @@ export function createCatalogLoader(
     setQuery(next: CustomerCatalogSearchParams | null) {
       generation += 1;
       params = next;
+      failedLoad = null;
       state = { ...EMPTY_CATALOG_STATE };
       if (!next) {
         onChange(state);
@@ -132,10 +141,12 @@ export function createCatalogLoader(
       return load(1, 'refresh');
     },
 
-    /** After an error: the page that failed (page 1 if nothing loaded yet). */
+    /** After an error: repeats the request that failed — same page, same kind. */
     retry() {
-      if (!params || isBusy(state)) return Promise.resolve();
-      return state.page === 0 ? load(1, 'initial') : load(state.page + 1, 'more');
+      if (!params || !failedLoad || isBusy(state)) return Promise.resolve();
+      const { page, kind } = failedLoad;
+      if (kind === 'refresh') generation += 1;
+      return load(page, kind);
     },
   };
 }
