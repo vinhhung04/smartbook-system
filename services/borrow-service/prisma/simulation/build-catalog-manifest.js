@@ -114,4 +114,4 @@ if (require.main === module) {
   console.log(`[catalog] ${manifest.books.length} books, ${variantCount} borrowable variants, ${manifest.categories.length} categories -> ${OUT_PATH}`);
 }
 
-module.exports = { buildManifest, splitValues, SQL_PATH };
+module.exports = { buildManifest, parseInserts, splitValues, SQL_PATH };

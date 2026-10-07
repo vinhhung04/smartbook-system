@@ -264,4 +264,4 @@ function generateDataset(options = {}) {
   };
 }
 
-module.exports = { generateDataset, runSimulation, EventHeap };
+module.exports = { generateDataset, runSimulation, calibrateCopies, EventHeap };

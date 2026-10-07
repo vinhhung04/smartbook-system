@@ -1,0 +1,1423 @@
+{
+  "provenance": {
+    "synthetic": true,
+    "disclaimer_vi": "Dữ liệu tổng hợp mô phỏng hành vi người dùng, không phải dữ liệu thu thập từ người dùng thực tế.",
+    "disclaimer_en": "Synthetic data from a behavioural simulation. Not collected from real users.",
+    "generator": "services/borrow-service/prisma/simulation",
+    "generator_version": "2.0.0",
+    "seed": 20260928,
+    "customer_count": 600,
+    "simulation_start": "2024-09-28T00:00:00.000Z",
+    "simulation_end": "2026-09-28T00:00:00.000Z"
+  },
+  "protocol": {
+    "demand_source": "pilot run of the synthetic simulator with unlimited stock (uncensored borrow requests); same seed as the observed dataset",
+    "inventory_model": "circulating copies: a served borrow holds one copy until the loan return day; purchases add copies permanently; unmet requests are lost",
+    "simulation_start": "2024-09-28",
+    "scoring_start": "2025-10-28",
+    "scoring_end_exclusive": "2026-09-28",
+    "warm_up_days": 395,
+    "evaluated_days": 335,
+    "steady_state_start": "2025-11-25",
+    "steady_state_days": 307,
+    "review_period_days": 7,
+    "inventory_position": "shelf copies + copies on order (copies on loan excluded, as in production available_qty)",
+    "reorder_point_policy": {
+      "reorder_point": 5,
+      "order_up_to": 10
+    },
+    "declared_lead_time_days": 14,
+    "budget_rule": "per review = min(total cost of REORDER_POINT, total cost of MA30_FIXED_LT) / number of reviews, same scenario",
+    "variants": 114
+  },
+  "scenarios": [
+    {
+      "id": "BASE",
+      "description": "Calibrated starting collection, every order delivered after 14 days.",
+      "initial_stock_rule": "simulator calibrated copies",
+      "lead_time_rule": "14 days",
+      "initial_catalog_copies": 724,
+      "budget_per_review_vnd": 3058382.708333
+    },
+    {
+      "id": "SUPPLIER_DELAY",
+      "description": "Calibrated starting collection, each order delivered after 14-28 days (supplier slower than its declared 14 days).",
+      "initial_stock_rule": "simulator calibrated copies",
+      "lead_time_rule": "14 + (hash(seed, variant, order day) mod 15) days",
+      "initial_catalog_copies": 724,
+      "budget_per_review_vnd": 3078344.166667
+    },
+    {
+      "id": "LEAN_START",
+      "description": "Half of the calibrated starting collection (at least 1 copy), 14-day delivery.",
+      "initial_stock_rule": "max(1, floor(calibrated copies / 2))",
+      "lead_time_rule": "14 days",
+      "initial_catalog_copies": 340,
+      "budget_per_review_vnd": 4161987.5
+    }
+  ],
+  "ablation": [
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10947,
+        "unmet_demand": 74,
+        "fill_rate": 0.993286,
+        "stockout_days": 64,
+        "stockout_rate": 0.001676,
+        "variants_with_stockout": 34,
+        "average_inventory": 2925.934328,
+        "max_inventory": 3669,
+        "average_available_inventory": 2345.414925,
+        "ordered_units": 2991,
+        "order_count": 728,
+        "procurement_cost": 365406620,
+        "average_order_size": 4.108516
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10204,
+        "unmet_demand": 2,
+        "fill_rate": 0.999804,
+        "stockout_days": 2,
+        "stockout_rate": 0.000057,
+        "variants_with_stockout": 2,
+        "average_inventory": 3086.540717,
+        "max_inventory": 3669,
+        "average_available_inventory": 2497.508143,
+        "ordered_units": 1643,
+        "order_count": 478,
+        "procurement_cost": 198233210,
+        "average_order_size": 3.437238
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 728,
+        "funded": 728,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 143,
+          "LOW": 9,
+          "MEDIUM": 576
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 555
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_NO_SEASONALITY",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": false,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10947,
+        "unmet_demand": 74,
+        "fill_rate": 0.993286,
+        "stockout_days": 64,
+        "stockout_rate": 0.001676,
+        "variants_with_stockout": 34,
+        "average_inventory": 3190.432836,
+        "max_inventory": 4144,
+        "average_available_inventory": 2609.913433,
+        "ordered_units": 3480,
+        "order_count": 886,
+        "procurement_cost": 425904570,
+        "average_order_size": 3.927765
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10204,
+        "unmet_demand": 2,
+        "fill_rate": 0.999804,
+        "stockout_days": 2,
+        "stockout_rate": 0.000057,
+        "variants_with_stockout": 2,
+        "average_inventory": 3374.592834,
+        "max_inventory": 4144,
+        "average_available_inventory": 2785.560261,
+        "ordered_units": 2121,
+        "order_count": 639,
+        "procurement_cost": 254760970,
+        "average_order_size": 3.319249
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 886,
+        "funded": 886,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 132,
+          "LOW": 8,
+          "MEDIUM": 746
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 166,
+          "LEARNED": 720
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_FIXED_LEAD_TIME",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": false,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10947,
+        "unmet_demand": 74,
+        "fill_rate": 0.993286,
+        "stockout_days": 64,
+        "stockout_rate": 0.001676,
+        "variants_with_stockout": 34,
+        "average_inventory": 2925.934328,
+        "max_inventory": 3669,
+        "average_available_inventory": 2345.414925,
+        "ordered_units": 2991,
+        "order_count": 728,
+        "procurement_cost": 365406620,
+        "average_order_size": 4.108516
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10204,
+        "unmet_demand": 2,
+        "fill_rate": 0.999804,
+        "stockout_days": 2,
+        "stockout_rate": 0.000057,
+        "variants_with_stockout": 2,
+        "average_inventory": 3086.540717,
+        "max_inventory": 3669,
+        "average_available_inventory": 2497.508143,
+        "ordered_units": 1643,
+        "order_count": 478,
+        "procurement_cost": 198233210,
+        "average_order_size": 3.437238
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 728,
+        "funded": 728,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 143,
+          "LOW": 9,
+          "MEDIUM": 576
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 728
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_NO_SAFETY_STOCK",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": false,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10944,
+        "unmet_demand": 77,
+        "fill_rate": 0.993013,
+        "stockout_days": 67,
+        "stockout_rate": 0.001754,
+        "variants_with_stockout": 37,
+        "average_inventory": 2836.59403,
+        "max_inventory": 3596,
+        "average_available_inventory": 2256.292537,
+        "ordered_units": 2914,
+        "order_count": 776,
+        "procurement_cost": 356751090,
+        "average_order_size": 3.755155
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10204,
+        "unmet_demand": 2,
+        "fill_rate": 0.999804,
+        "stockout_days": 2,
+        "stockout_rate": 0.000057,
+        "variants_with_stockout": 2,
+        "average_inventory": 2994.980456,
+        "max_inventory": 3596,
+        "average_available_inventory": 2406.140065,
+        "ordered_units": 1681,
+        "order_count": 516,
+        "procurement_cost": 204516380,
+        "average_order_size": 3.257752
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 776,
+        "funded": 776,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 158,
+          "MEDIUM": 618
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 603
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10947,
+        "unmet_demand": 74,
+        "fill_rate": 0.993286,
+        "stockout_days": 64,
+        "stockout_rate": 0.001676,
+        "variants_with_stockout": 34,
+        "average_inventory": 2921.591045,
+        "max_inventory": 3654,
+        "average_available_inventory": 2341.071642,
+        "ordered_units": 2976,
+        "order_count": 723,
+        "procurement_cost": 363504620,
+        "average_order_size": 4.116183
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10204,
+        "unmet_demand": 2,
+        "fill_rate": 0.999804,
+        "stockout_days": 2,
+        "stockout_rate": 0.000057,
+        "variants_with_stockout": 2,
+        "average_inventory": 3081.801303,
+        "max_inventory": 3654,
+        "average_available_inventory": 2492.76873,
+        "ordered_units": 1628,
+        "order_count": 473,
+        "procurement_cost": 196331210,
+        "average_order_size": 3.44186
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 723,
+        "funded": 723,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 143,
+          "LOW": 9,
+          "MEDIUM": 571
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 550
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "budget_per_review_vnd": 3058382.708333
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10004,
+        "unmet_demand": 1017,
+        "fill_rate": 0.907722,
+        "stockout_days": 920,
+        "stockout_rate": 0.02409,
+        "variants_with_stockout": 94,
+        "average_inventory": 1293.373134,
+        "max_inventory": 1882,
+        "average_available_inventory": 760.226866,
+        "ordered_units": 1215,
+        "order_count": 187,
+        "procurement_cost": 145432260,
+        "average_order_size": 6.497326,
+        "budget_total": 146802370,
+        "budget_utilization": 0.990667,
+        "unfunded_reorder_count": 3785
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 9325,
+        "unmet_demand": 881,
+        "fill_rate": 0.913678,
+        "stockout_days": 799,
+        "stockout_rate": 0.02283,
+        "variants_with_stockout": 90,
+        "average_inventory": 1342.931596,
+        "max_inventory": 1882,
+        "average_available_inventory": 804.348534,
+        "ordered_units": 1101,
+        "order_count": 174,
+        "procurement_cost": 133310260,
+        "average_order_size": 6.327586
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3972,
+        "funded": 187,
+        "unfunded_reorder_count": 3785,
+        "budget_total": 146802370,
+        "budget_spent": 145432260,
+        "by_priority": {
+          "HIGH": 162,
+          "LOW": 7,
+          "MEDIUM": 18
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 7,
+          "LEARNED": 180
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false,
+        "budget_per_review_vnd": 3058382.708333
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10180,
+        "unmet_demand": 841,
+        "fill_rate": 0.923691,
+        "stockout_days": 739,
+        "stockout_rate": 0.019351,
+        "variants_with_stockout": 91,
+        "average_inventory": 1372.686567,
+        "max_inventory": 1940,
+        "average_available_inventory": 831.364179,
+        "ordered_units": 1257,
+        "order_count": 187,
+        "procurement_cost": 145192180,
+        "average_order_size": 6.721925,
+        "budget_total": 146802370,
+        "budget_utilization": 0.989032,
+        "unfunded_reorder_count": 3626
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 9494,
+        "unmet_demand": 712,
+        "fill_rate": 0.930237,
+        "stockout_days": 624,
+        "stockout_rate": 0.01783,
+        "variants_with_stockout": 84,
+        "average_inventory": 1429.205212,
+        "max_inventory": 1940,
+        "average_available_inventory": 881.837134,
+        "ordered_units": 1108,
+        "order_count": 174,
+        "procurement_cost": 133014180,
+        "average_order_size": 6.367816
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3813,
+        "funded": 187,
+        "unfunded_reorder_count": 3626,
+        "budget_total": 146802370,
+        "budget_spent": 145192180,
+        "by_priority": {
+          "HIGH": 160,
+          "MEDIUM": 16,
+          "LOW": 11
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 7,
+          "LEARNED": 180
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10915,
+        "unmet_demand": 106,
+        "fill_rate": 0.990382,
+        "stockout_days": 95,
+        "stockout_rate": 0.002488,
+        "variants_with_stockout": 47,
+        "average_inventory": 3213.850746,
+        "max_inventory": 4119,
+        "average_available_inventory": 2634.871642,
+        "ordered_units": 3511,
+        "order_count": 630,
+        "procurement_cost": 428082040,
+        "average_order_size": 5.573016
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10200,
+        "unmet_demand": 6,
+        "fill_rate": 0.999412,
+        "stockout_days": 6,
+        "stockout_rate": 0.000171,
+        "variants_with_stockout": 5,
+        "average_inventory": 3423.016287,
+        "max_inventory": 4119,
+        "average_available_inventory": 2834.921824,
+        "ordered_units": 2146,
+        "order_count": 385,
+        "procurement_cost": 258933580,
+        "average_order_size": 5.574026
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 630,
+        "funded": 630,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 215,
+          "LOW": 18,
+          "MEDIUM": 397
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 457
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_NO_SEASONALITY",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": false,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10915,
+        "unmet_demand": 106,
+        "fill_rate": 0.990382,
+        "stockout_days": 95,
+        "stockout_rate": 0.002488,
+        "variants_with_stockout": 47,
+        "average_inventory": 3493.092537,
+        "max_inventory": 4604,
+        "average_available_inventory": 2914.113433,
+        "ordered_units": 3967,
+        "order_count": 724,
+        "procurement_cost": 485546640,
+        "average_order_size": 5.479282
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10200,
+        "unmet_demand": 6,
+        "fill_rate": 0.999412,
+        "stockout_days": 6,
+        "stockout_rate": 0.000171,
+        "variants_with_stockout": 5,
+        "average_inventory": 3727.260586,
+        "max_inventory": 4604,
+        "average_available_inventory": 3139.166124,
+        "ordered_units": 2596,
+        "order_count": 482,
+        "procurement_cost": 313571240,
+        "average_order_size": 5.385892
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 724,
+        "funded": 724,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 190,
+          "LOW": 11,
+          "MEDIUM": 523
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 166,
+          "LEARNED": 558
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_FIXED_LEAD_TIME",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": false,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10915,
+        "unmet_demand": 106,
+        "fill_rate": 0.990382,
+        "stockout_days": 95,
+        "stockout_rate": 0.002488,
+        "variants_with_stockout": 47,
+        "average_inventory": 2855.325373,
+        "max_inventory": 3639,
+        "average_available_inventory": 2276.346269,
+        "ordered_units": 2985,
+        "order_count": 734,
+        "procurement_cost": 364576270,
+        "average_order_size": 4.066757
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10200,
+        "unmet_demand": 6,
+        "fill_rate": 0.999412,
+        "stockout_days": 6,
+        "stockout_rate": 0.000171,
+        "variants_with_stockout": 5,
+        "average_inventory": 3031.791531,
+        "max_inventory": 3639,
+        "average_available_inventory": 2443.697068,
+        "ordered_units": 1669,
+        "order_count": 489,
+        "procurement_cost": 200460410,
+        "average_order_size": 3.413088
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 734,
+        "funded": 734,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 141,
+          "LOW": 10,
+          "MEDIUM": 583
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 734
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_NO_SAFETY_STOCK",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": false,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10912,
+        "unmet_demand": 109,
+        "fill_rate": 0.99011,
+        "stockout_days": 98,
+        "stockout_rate": 0.002566,
+        "variants_with_stockout": 48,
+        "average_inventory": 3009.58209,
+        "max_inventory": 3871,
+        "average_available_inventory": 2430.826866,
+        "ordered_units": 3262,
+        "order_count": 700,
+        "procurement_cost": 396827260,
+        "average_order_size": 4.66
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10198,
+        "unmet_demand": 8,
+        "fill_rate": 0.999216,
+        "stockout_days": 8,
+        "stockout_rate": 0.000229,
+        "variants_with_stockout": 7,
+        "average_inventory": 3203.296417,
+        "max_inventory": 3871,
+        "average_available_inventory": 2615.429967,
+        "ordered_units": 2017,
+        "order_count": 445,
+        "procurement_cost": 243329400,
+        "average_order_size": 4.532584
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 700,
+        "funded": 700,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 246,
+          "MEDIUM": 454
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 527
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10915,
+        "unmet_demand": 106,
+        "fill_rate": 0.990382,
+        "stockout_days": 95,
+        "stockout_rate": 0.002488,
+        "variants_with_stockout": 47,
+        "average_inventory": 3212.373134,
+        "max_inventory": 4108,
+        "average_available_inventory": 2633.39403,
+        "ordered_units": 3506,
+        "order_count": 623,
+        "procurement_cost": 428096040,
+        "average_order_size": 5.627608
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10200,
+        "unmet_demand": 6,
+        "fill_rate": 0.999412,
+        "stockout_days": 6,
+        "stockout_rate": 0.000171,
+        "variants_with_stockout": 5,
+        "average_inventory": 3421.403909,
+        "max_inventory": 4108,
+        "average_available_inventory": 2833.309446,
+        "ordered_units": 2141,
+        "order_count": 378,
+        "procurement_cost": 258947580,
+        "average_order_size": 5.664021
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 623,
+        "funded": 623,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 218,
+          "LOW": 18,
+          "MEDIUM": 387
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 173,
+          "LEARNED": 450
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "budget_per_review_vnd": 3078344.166667
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 9883,
+        "unmet_demand": 1138,
+        "fill_rate": 0.896743,
+        "stockout_days": 1023,
+        "stockout_rate": 0.026787,
+        "variants_with_stockout": 96,
+        "average_inventory": 1287.423881,
+        "max_inventory": 1886,
+        "average_available_inventory": 759.716418,
+        "ordered_units": 1241,
+        "order_count": 164,
+        "procurement_cost": 146481940,
+        "average_order_size": 7.567073,
+        "budget_total": 147760520,
+        "budget_utilization": 0.991347,
+        "unfunded_reorder_count": 3835
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 9205,
+        "unmet_demand": 1001,
+        "fill_rate": 0.90192,
+        "stockout_days": 901,
+        "stockout_rate": 0.025744,
+        "variants_with_stockout": 92,
+        "average_inventory": 1337.889251,
+        "max_inventory": 1886,
+        "average_available_inventory": 805.198697,
+        "ordered_units": 1126,
+        "order_count": 150,
+        "procurement_cost": 134291940,
+        "average_order_size": 7.506667
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3999,
+        "funded": 164,
+        "unfunded_reorder_count": 3835,
+        "budget_total": 147760520,
+        "budget_spent": 146481940,
+        "by_priority": {
+          "HIGH": 134,
+          "LOW": 16,
+          "MEDIUM": 14
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 14,
+          "LEARNED": 150
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false,
+        "budget_per_review_vnd": 3078344.166667
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10073,
+        "unmet_demand": 948,
+        "fill_rate": 0.913982,
+        "stockout_days": 827,
+        "stockout_rate": 0.021655,
+        "variants_with_stockout": 94,
+        "average_inventory": 1346.961194,
+        "max_inventory": 1987,
+        "average_available_inventory": 811.80597,
+        "ordered_units": 1334,
+        "order_count": 180,
+        "procurement_cost": 146132560,
+        "average_order_size": 7.411111,
+        "budget_total": 147760520,
+        "budget_utilization": 0.988982,
+        "unfunded_reorder_count": 3554
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 9395,
+        "unmet_demand": 811,
+        "fill_rate": 0.920537,
+        "stockout_days": 707,
+        "stockout_rate": 0.020201,
+        "variants_with_stockout": 87,
+        "average_inventory": 1402.892508,
+        "max_inventory": 1987,
+        "average_available_inventory": 862.143322,
+        "ordered_units": 1204,
+        "order_count": 166,
+        "procurement_cost": 133957560,
+        "average_order_size": 7.253012
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3734,
+        "funded": 180,
+        "unfunded_reorder_count": 3554,
+        "budget_total": 147760520,
+        "budget_spent": 146132560,
+        "by_priority": {
+          "HIGH": 149,
+          "MEDIUM": 18,
+          "LOW": 13
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 14,
+          "LEARNED": 166
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10773,
+        "unmet_demand": 248,
+        "fill_rate": 0.977498,
+        "stockout_days": 207,
+        "stockout_rate": 0.00542,
+        "variants_with_stockout": 81,
+        "average_inventory": 2743.110448,
+        "max_inventory": 3434,
+        "average_available_inventory": 2180.564179,
+        "ordered_units": 3124,
+        "order_count": 731,
+        "procurement_cost": 382246710,
+        "average_order_size": 4.273598
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10192,
+        "unmet_demand": 14,
+        "fill_rate": 0.998628,
+        "stockout_days": 12,
+        "stockout_rate": 0.000343,
+        "variants_with_stockout": 5,
+        "average_inventory": 2925.964169,
+        "max_inventory": 3434,
+        "average_available_inventory": 2340.921824,
+        "ordered_units": 1777,
+        "order_count": 491,
+        "procurement_cost": 217647080,
+        "average_order_size": 3.619145
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 731,
+        "funded": 731,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 182,
+          "LOW": 16,
+          "MEDIUM": 533
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 156,
+          "LEARNED": 575
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_NO_SEASONALITY",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": false,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10773,
+        "unmet_demand": 248,
+        "fill_rate": 0.977498,
+        "stockout_days": 207,
+        "stockout_rate": 0.00542,
+        "variants_with_stockout": 81,
+        "average_inventory": 3021.710448,
+        "max_inventory": 4099,
+        "average_available_inventory": 2459.164179,
+        "ordered_units": 3822,
+        "order_count": 966,
+        "procurement_cost": 469294480,
+        "average_order_size": 3.956522
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10192,
+        "unmet_demand": 14,
+        "fill_rate": 0.998628,
+        "stockout_days": 12,
+        "stockout_rate": 0.000343,
+        "variants_with_stockout": 5,
+        "average_inventory": 3231.52443,
+        "max_inventory": 4099,
+        "average_available_inventory": 2646.482085,
+        "ordered_units": 2555,
+        "order_count": 723,
+        "procurement_cost": 313222420,
+        "average_order_size": 3.533887
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 966,
+        "funded": 966,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 172,
+          "LOW": 15,
+          "MEDIUM": 779
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 158,
+          "LEARNED": 808
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_FIXED_LEAD_TIME",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": false,
+        "safety_stock": true,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10773,
+        "unmet_demand": 248,
+        "fill_rate": 0.977498,
+        "stockout_days": 207,
+        "stockout_rate": 0.00542,
+        "variants_with_stockout": 81,
+        "average_inventory": 2743.110448,
+        "max_inventory": 3434,
+        "average_available_inventory": 2180.564179,
+        "ordered_units": 3124,
+        "order_count": 731,
+        "procurement_cost": 382246710,
+        "average_order_size": 4.273598
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10192,
+        "unmet_demand": 14,
+        "fill_rate": 0.998628,
+        "stockout_days": 12,
+        "stockout_rate": 0.000343,
+        "variants_with_stockout": 5,
+        "average_inventory": 2925.964169,
+        "max_inventory": 3434,
+        "average_available_inventory": 2340.921824,
+        "ordered_units": 1777,
+        "order_count": 491,
+        "procurement_cost": 217647080,
+        "average_order_size": 3.619145
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 731,
+        "funded": 731,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 182,
+          "LOW": 16,
+          "MEDIUM": 533
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 731
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_NO_SAFETY_STOCK",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": false,
+        "demand_signals": true
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10762,
+        "unmet_demand": 259,
+        "fill_rate": 0.976499,
+        "stockout_days": 216,
+        "stockout_rate": 0.005656,
+        "variants_with_stockout": 82,
+        "average_inventory": 2643.289552,
+        "max_inventory": 3358,
+        "average_available_inventory": 2081.191045,
+        "ordered_units": 3048,
+        "order_count": 774,
+        "procurement_cost": 372034110,
+        "average_order_size": 3.937984
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10189,
+        "unmet_demand": 17,
+        "fill_rate": 0.998334,
+        "stockout_days": 15,
+        "stockout_rate": 0.000429,
+        "variants_with_stockout": 7,
+        "average_inventory": 2822.32899,
+        "max_inventory": 3358,
+        "average_available_inventory": 2237.635179,
+        "ordered_units": 1837,
+        "order_count": 538,
+        "procurement_cost": 225162900,
+        "average_order_size": 3.414498
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 774,
+        "funded": 774,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 211,
+          "MEDIUM": 563
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 144,
+          "LEARNED": 630
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10772,
+        "unmet_demand": 249,
+        "fill_rate": 0.977407,
+        "stockout_days": 208,
+        "stockout_rate": 0.005446,
+        "variants_with_stockout": 81,
+        "average_inventory": 2739.20597,
+        "max_inventory": 3419,
+        "average_available_inventory": 2176.695522,
+        "ordered_units": 3106,
+        "order_count": 723,
+        "procurement_cost": 379477710,
+        "average_order_size": 4.295989
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10191,
+        "unmet_demand": 15,
+        "fill_rate": 0.99853,
+        "stockout_days": 13,
+        "stockout_rate": 0.000371,
+        "variants_with_stockout": 5,
+        "average_inventory": 2921.703583,
+        "max_inventory": 3419,
+        "average_available_inventory": 2336.700326,
+        "ordered_units": 1760,
+        "order_count": 484,
+        "procurement_cost": 214976180,
+        "average_order_size": 3.636364
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 723,
+        "funded": 723,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 184,
+          "LOW": 15,
+          "MEDIUM": 524
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 156,
+          "LEARNED": 567
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_FULL",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "budget_per_review_vnd": 4161987.5
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 8471,
+        "unmet_demand": 2550,
+        "fill_rate": 0.768624,
+        "stockout_days": 2250,
+        "stockout_rate": 0.058916,
+        "variants_with_stockout": 112,
+        "average_inventory": 1099.244776,
+        "max_inventory": 1920,
+        "average_available_inventory": 655.904478,
+        "ordered_units": 1641,
+        "order_count": 243,
+        "procurement_cost": 198754230,
+        "average_order_size": 6.753086,
+        "budget_total": 199775400,
+        "budget_utilization": 0.994888,
+        "unfunded_reorder_count": 3541
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 8039,
+        "unmet_demand": 2167,
+        "fill_rate": 0.787674,
+        "stockout_days": 1931,
+        "stockout_rate": 0.055175,
+        "variants_with_stockout": 105,
+        "average_inventory": 1165.664495,
+        "max_inventory": 1920,
+        "average_available_inventory": 707.628664,
+        "ordered_units": 1490,
+        "order_count": 225,
+        "procurement_cost": 182159230,
+        "average_order_size": 6.622222
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3784,
+        "funded": 243,
+        "unfunded_reorder_count": 3541,
+        "budget_total": 199775400,
+        "budget_spent": 198754230,
+        "by_priority": {
+          "HIGH": 209,
+          "LOW": 23,
+          "MEDIUM": 11
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 7,
+          "LEARNED": 236
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_NO_DEMAND_SIGNALS",
+      "budget_constrained": true,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": false,
+        "budget_per_review_vnd": 4161987.5
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 8772,
+        "unmet_demand": 2249,
+        "fill_rate": 0.795935,
+        "stockout_days": 1931,
+        "stockout_rate": 0.050563,
+        "variants_with_stockout": 110,
+        "average_inventory": 1113.743284,
+        "max_inventory": 1949,
+        "average_available_inventory": 653.955224,
+        "ordered_units": 1673,
+        "order_count": 239,
+        "procurement_cost": 198111180,
+        "average_order_size": 7,
+        "budget_total": 199775400,
+        "budget_utilization": 0.99167,
+        "unfunded_reorder_count": 3551
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 8362,
+        "unmet_demand": 1844,
+        "fill_rate": 0.819322,
+        "stockout_days": 1600,
+        "stockout_rate": 0.045717,
+        "variants_with_stockout": 103,
+        "average_inventory": 1182.260586,
+        "max_inventory": 1949,
+        "average_available_inventory": 705.850163,
+        "ordered_units": 1557,
+        "order_count": 223,
+        "procurement_cost": 181593330,
+        "average_order_size": 6.982063
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 3790,
+        "funded": 239,
+        "unfunded_reorder_count": 3551,
+        "budget_total": 199775400,
+        "budget_spent": 198111180,
+        "by_priority": {
+          "HIGH": 211,
+          "LOW": 15,
+          "MEDIUM": 13
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 9,
+          "LEARNED": 230
+        }
+      }
+    }
+  ]
+}

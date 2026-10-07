@@ -8,7 +8,8 @@
     "dev": "node --watch -r ./src/tracing.js src/index.js",
     "start": "node -r ./src/tracing.js src/index.js",
     "test": "node --test test/*.test.js",
-    "test:contract": "node --test test/contract/*.test.js"
+    "test:contract": "node --test test/contract/*.test.js",
+    "eval:reorder": "node eval/run-all.js"
   },
   "dependencies": {
     "@smartbook/shared": "workspace:*",

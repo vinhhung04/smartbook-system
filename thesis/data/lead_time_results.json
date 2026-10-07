@@ -1,0 +1,76 @@
+{
+  "status": "INSUFFICIENT_DATA",
+  "source": "seed:data/smartbook_sample_seed.sql",
+  "protocol": "each delivery predicted only from deliveries received on or before its order date",
+  "deliveries": 2,
+  "variants": 2,
+  "suppliers": 1,
+  "paired_samples": 0,
+  "min_evaluation_samples": 5,
+  "min_observations_to_learn": 3,
+  "methods": [
+    {
+      "method": "FIXED_14_DAYS",
+      "applicable": {
+        "samples": 2,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      },
+      "paired": {
+        "samples": 0,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      }
+    },
+    {
+      "method": "SUPPLIER_DECLARED",
+      "applicable": {
+        "samples": 2,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      },
+      "paired": {
+        "samples": 0,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      }
+    },
+    {
+      "method": "LEARNED_MEDIAN",
+      "applicable": {
+        "samples": 0,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      },
+      "paired": {
+        "samples": 0,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      }
+    },
+    {
+      "method": "PRODUCTION_RESOLVER",
+      "applicable": {
+        "samples": 2,
+        "mae": null,
+        "median_absolute_error": null,
+        "rmse": null,
+        "bias": null
+      },
+      "paired": null
+    }
+  ],
+  "note": "Only 0 deliveries had >= 3 earlier observations plus a declared lead time (need 5); error metrics are withheld rather than computed on too few points."
+}

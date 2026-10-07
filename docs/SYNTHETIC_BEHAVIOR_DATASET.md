@@ -148,6 +148,9 @@ mượn, no-show trước đó chỉ tính các lần đã có kết quả, số
   cold-start, bootstrap CI → `services/ai-service/eval/reports/recommendation_v2_report.{json,md}`; kèm bảng
   "legacy protocol" khớp đúng `simulation-report.json`.
 * **Turnover/Storage suggestion**: phân tầng variant HIGH/MEDIUM/LOW theo số lượt mượn 90 ngày.
+* **Nhập kho (reorder) & dự báo intermittent**: `services/analytics-service/eval/run-all.js` — backtest kho ảo
+  trên nhu cầu chưa bị kiểm duyệt của lần chạy pilot, so sánh chính sách, ablation, lead time; kết quả trong
+  `thesis/`, phương pháp trong `docs/ANALYSIS/REORDER_DECISION_EVALUATION.md`.
 
 ## 8. Kiểm tra thống kê
 

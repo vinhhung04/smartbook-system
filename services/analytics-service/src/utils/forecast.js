@@ -48,8 +48,11 @@ function projectedDemand(series, horizonDays, seasonalIndex = 1) {
 
 function metricSummary(actual, predicted) {
   const samples = actual.length;
-  if (!samples) return { mae: null, rmse: null, wape: null, mape: null, mapeSamples: 0, samples: 0 };
+  if (!samples) return { mae: null, rmse: null, wape: null, mape: null, mapeSamples: 0, bias: null, samples: 0 };
   const absolute = actual.reduce((sum, value, index) => sum + Math.abs(value - predicted[index]), 0);
+  // Mean signed error (forecast - actual): > 0 over-forecasts. On mostly-zero
+  // series MAE alone rewards forecasting ~0, so bias is reported alongside it.
+  const signed = actual.reduce((sum, value, index) => sum + (predicted[index] - value), 0);
   const squared = actual.reduce((sum, value, index) => sum + (value - predicted[index]) ** 2, 0);
   const totalActual = actual.reduce((sum, value) => sum + Math.abs(value), 0);
   // Index-preserving: .filter().map() would re-index after filtering out
@@ -60,20 +63,89 @@ function metricSummary(actual, predicted) {
   for (let i = 0; i < actual.length; i += 1) {
     if (actual[i] > 0) mapeValues.push(Math.abs(actual[i] - predicted[i]) / actual[i]);
   }
-  return { mae: absolute / samples, rmse: Math.sqrt(squared / samples), wape: totalActual ? absolute / totalActual : null, mape: mapeValues.length ? mapeValues.reduce((sum, value) => sum + value, 0) / mapeValues.length : null, mapeSamples: mapeValues.length, samples };
+  return { mae: absolute / samples, rmse: Math.sqrt(squared / samples), wape: totalActual ? absolute / totalActual : null, mape: mapeValues.length ? mapeValues.reduce((sum, value) => sum + value, 0) / mapeValues.length : null, mapeSamples: mapeValues.length, bias: signed / samples, samples };
 }
 
+// ── Intermittent-demand models ───────────────────────────────────────────────
+// Per-title daily borrow counts are mostly zeros (~80% zero days on the
+// synthetic dataset), the textbook case for intermittent-demand methods. They
+// are evaluation candidates only: production reorder suggestions keep using
+// EWMA + trend until a backtest gives a reason to switch.
+//
+// Smoothing constants are the usual literature defaults (alpha = beta = 0.1,
+// Syntetos & Boylan 2005; Teunter, Syntetos & Babai 2011), fixed up front -
+// never tuned on the series being evaluated.
+const INTERMITTENT_ALPHA = 0.1;
+
+// Croston (1972): smooth the non-zero demand size and the interval between
+// demands separately, forecast = size / interval. Both are updated only on
+// demand days, so the forecast is frozen through a run of zeros. The first
+// demand initialises size and interval (interval counted from the series
+// start). debias = true gives SBA (Syntetos-Boylan approximation), which
+// multiplies by (1 - alpha/2) to remove Croston's known positive bias.
+function croston(series, { alpha = INTERMITTENT_ALPHA, debias = false } = {}) {
+  let size = null;
+  let interval = null;
+  let gap = 0;
+  for (const value of series) {
+    gap += 1;
+    if (value > 0) {
+      if (size === null) {
+        size = value;
+        interval = gap;
+      } else {
+        size += alpha * (value - size);
+        interval += alpha * (gap - interval);
+      }
+      gap = 0;
+    }
+  }
+  if (size === null) return 0;
+  const rate = size / interval;
+  return debias ? (1 - alpha / 2) * rate : rate;
+}
+
+// TSB (Teunter-Syntetos-Babai 2011): smooth the demand size on demand days and
+// the probability of a demand on EVERY day, forecast = probability * size.
+// Unlike Croston the forecast decays through long zero gaps, so a title that
+// stopped circulating stops being forecast. Initialised at the first demand
+// with probability = 1 / (periods until that demand).
+function tsb(series, { alpha = INTERMITTENT_ALPHA, beta = INTERMITTENT_ALPHA } = {}) {
+  let size = null;
+  let probability = null;
+  for (let i = 0; i < series.length; i += 1) {
+    const value = series[i];
+    if (size === null) {
+      if (value > 0) {
+        size = value;
+        probability = 1 / (i + 1);
+      }
+      continue;
+    }
+    probability += beta * ((value > 0 ? 1 : 0) - probability);
+    if (value > 0) size += alpha * (value - size);
+  }
+  return size === null ? 0 : probability * size;
+}
+
+const FORECAST_MODELS = ['NAIVE_LAST_VALUE', 'MOVING_AVERAGE_7', 'MOVING_AVERAGE_30', 'CURRENT_EWMA_TREND', 'CROSTON', 'SBA', 'TSB'];
+
+// Daily point forecasts for the next `horizon` days, using only `training`
+// (oldest -> newest). Every model is non-negative for non-negative input.
 function predict(model, training, horizon) {
   if (model === 'NAIVE_LAST_VALUE') return Array(horizon).fill(training.at(-1) || 0);
   if (model === 'MOVING_AVERAGE_7') return Array(horizon).fill(training.slice(-7).reduce((a, b) => a + b, 0) / Math.min(training.length, 7));
   if (model === 'MOVING_AVERAGE_30') return Array(horizon).fill(training.slice(-30).reduce((a, b) => a + b, 0) / Math.min(training.length, 30));
+  if (model === 'CROSTON') return Array(horizon).fill(croston(training));
+  if (model === 'SBA') return Array(horizon).fill(croston(training, { debias: true }));
+  if (model === 'TSB') return Array(horizon).fill(tsb(training));
   const level = ewma(training, 0.35); const trend = linearTrendSlope(training);
   return Array.from({ length: horizon }, (_, index) => Math.max(0, level + trend * (index + 1)));
 }
 
 function rollingBacktest(series, { horizonDays = 7, minTrainDays = 30 } = {}) {
   if (!Array.isArray(series) || series.length < minTrainDays + horizonDays) return { status: 'INSUFFICIENT_DATA', requiredDays: minTrainDays + horizonDays, availableDays: Array.isArray(series) ? series.length : 0 };
-  const models = ['NAIVE_LAST_VALUE', 'MOVING_AVERAGE_7', 'MOVING_AVERAGE_30', 'CURRENT_EWMA_TREND'];
+  const models = FORECAST_MODELS;
   const actualByModel = new Map(models.map((model) => [model, { actual: [], predicted: [] }]));
   for (let cut = minTrainDays; cut + horizonDays <= series.length; cut += horizonDays) {
     const training = series.slice(0, cut); const actual = series.slice(cut, cut + horizonDays);
@@ -90,5 +162,9 @@ module.exports = {
   stdDev,
   projectedDemand,
   metricSummary,
+  croston,
+  tsb,
+  FORECAST_MODELS,
+  predict,
   rollingBacktest,
 };
