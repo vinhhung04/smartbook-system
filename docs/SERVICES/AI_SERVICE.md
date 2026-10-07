@@ -51,6 +51,19 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | GET | /assistant/conversations/{conversation_id} | Chi tiết hội thoại + toàn bộ message |
 | PATCH | /assistant/conversations/{conversation_id} | Đổi tên hội thoại (`{ "title": "..." }`) |
 | DELETE | /assistant/conversations/{conversation_id} | Archive hội thoại (soft delete) |
+| POST | /chat/stream | Bản streaming (SSE) của /chat |
+| POST | /enrich-book-after-isbn | Tra cứu ISBN rồi đề xuất bổ sung metadata cho sách vừa tạo (`lookup` dùng chung hợp đồng với `/isbn-intelligence`) |
+| POST | /enrich-book-metadata | Bộ công cụ gợi ý metadata (`keywords`, `short_summary`, `normalize_description`, `suggest_categories`, `quality_check`) — chỉ trả đề xuất, không ghi đè |
+| POST | /scan-receipt | OCR hóa đơn/phiếu giao hàng khi nhập kho (OpenRouter vision) |
+| POST | /verify-packing-photo | Xác minh ảnh bằng chứng đóng gói (`MATCH`/`MISMATCH`) |
+| POST | /explain-storage-suggestion | Viết lại giải thích cho gợi ý vị trí lưu kho |
+| POST | /find-book-by-cover | Tìm sách bằng ảnh bìa (CLIP local + OCR OpenRouter) |
+| POST | /find-book-by-cover/reindex | Index lại gallery bìa sách (`ai_cover_embeddings`) |
+| GET | /metadata-intelligence/capabilities | Khả năng của Metadata Intelligence V2 |
+| POST | /metadata-intelligence/extract | Trích xuất metadata (chỉ khi `ENABLE_METADATA_INTELLIGENCE_V2=true`) |
+| GET | /public/discover | "Không biết nên đọc gì?" — tìm sách theo mô tả tự nhiên cho khách chưa đăng nhập (gateway `/public/discover`, có rate limit riêng) |
+| GET | /cache/stats | Thống kê cache |
+| POST | /cache/clear | Xoá response cache (admin) |
 
 Ghi chú quan trọng:
 
@@ -348,6 +361,19 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | BOOK_BROWSER_TIMEOUT_SECONDS | 20 | Timeout cho mỗi `page.goto()` trong CloakBrowser |
 | FAHASA_BROWSER_HARD_TIMEOUT_SECONDS | 35 | Ngưỡng cứng cho toàn bộ 1 phiên CloakBrowser (chạy trong subprocess riêng, `fahasa_browser.py`, bị SIGKILL cả process group nếu vượt quá — cần thiết vì `page.goto()`'s timeout không chặn được `launch()` bị treo) |
 | FAHASA_SEARCH_RESPONSE_WAIT_SECONDS | 8 | Thời gian tối đa poll response API tìm kiếm nội bộ của Fahasa sau khi trang bắt đầu tải |
+| SMARTBOOK_GATEWAY_URL | http://api-gateway:3000 | Gateway mà tool của `/assistant`, nightly briefing, retrieval và cover search gọi vào |
+| INVENTORY_SERVICE_URL, BORROW_SERVICE_URL, INTERNAL_SERVICE_KEY | — | Gọi nội bộ (vd feed tương tác cho gợi ý sách) |
+| RAG_RETRIEVAL_TIMEOUT_SECONDS | 8 | Timeout lấy ngữ cảnh retrieval/ngữ cảnh cá nhân cho chat |
+| CHAT_LLM_TIMEOUT_SECONDS | 12 | Timeout gọi LLM cho `/chat` |
+| ENABLE_METADATA_INTELLIGENCE_V2 | false | Bật `/metadata-intelligence/extract` |
+| CLIP_MODEL_NAME | openai/clip-vit-base-patch32 | Model CLIP (local, CPU) cho visual similarity ảnh bìa |
+| COVER_OCR_MAX_TOKENS / COVER_OCR_TIMEOUT_SECONDS | 200 / 20 | Cap output/timeout OCR bìa sách |
+| COVER_SEARCH_VISUAL_THRESHOLD / COVER_SEARCH_MIN_CONFIDENCE / COVER_SEARCH_VISUAL_WEIGHT / COVER_SEARCH_RESULT_LIMIT | 0.80 / 0.5 / 0.6 / 5 | Ngưỡng và trọng số kết hợp tín hiệu ảnh + OCR của `/find-book-by-cover` |
+| ENABLE_NIGHTLY_BRIEFING | true | Bật job nightly briefing |
+| NIGHTLY_BRIEFING_HOUR_VN | 2 | Giờ chạy (giờ Việt Nam) |
+| NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS | 180 | Timeout bước tóm tắt bằng LLM |
+| PUBLIC_DISCOVER_RESULT_LIMIT / PUBLIC_DISCOVER_CACHE_TTL_SECONDS / PUBLIC_DISCOVER_GLOBAL_RPM / PUBLIC_DISCOVER_GLOBAL_RPH | 12 / 600 / 30 / 300 | Số kết quả, cache và trần lượt gọi toàn thư viện của `/public/discover` |
+| RECOMMENDATION_MODEL | v2 | `v2` hoặc `v1` (rollback) — xem mục Gợi ý sách |
 
 **CloakBrowser binary cache:** lần `launch()` đầu tiên tải một bản Chromium đã vá (~217MB) từ `cloakbrowser.dev` về `/root/.cloakbrowser`. Thư mục này **phải** được mount volume persistent (xem `ai_service_cloakbrowser_cache` trong `docker-compose.yml`) — nếu không, container bị xoá/tạo lại sẽ làm mất cache và phải tải lại từ đầu mỗi lần, và vì tốc độ tải quan sát được chỉ ~30KB/s trong container, một lần tải có thể mất hàng chục phút đến hơn 1 giờ, khiến mọi lookup Fahasa timeout liên tục dù đã tăng timeout.
 
@@ -364,8 +390,10 @@ docker compose --profile ai up -d --build ai-service
 ```bash
 cd services/ai-service
 pip install -r requirements.txt
-python main.py
+uvicorn main:app --reload --port 8000
 ```
+
+Docker image chạy `opentelemetry-instrument uvicorn main:app --host 0.0.0.0 --port 8000`, nên AI Service cũng xuất trace về Tempo như các service Node.js.
 
 ## Demo: Action Center + trí nhớ hội thoại + Evidence-first
 
@@ -378,7 +406,7 @@ python main.py
 
 ## Tích hợp với hệ thống
 
-- Gateway định tuyến vào AI qua /ai và /api/ai.
+- Gateway định tuyến vào AI qua `/ai` (bỏ tiền tố `/ai`), `/api/ai` và `/public/discover` (công khai, rate limit `PUBLIC_DISCOVER_RATE_LIMIT_PER_MINUTE`/`_PER_HOUR`).
 - Frontend gọi qua VITE_AI_BASE_URL.
 - Khi chạy Docker, chỉ cần `OPENROUTER_API_KEY` trong `.env` — không cần container/GPU nào khác cho AI.
 
@@ -386,7 +414,7 @@ python main.py
 
 - README root: ../../README.md
 - Docker runbook: ../RUN_WITH_DOCKER.md
-- Kiến trúc tổng quan: ../PROJECT_OVERVIEW.md
+- Kiến trúc tổng quan: ../ARCHITECTURE/PROJECT_OVERVIEW.md
 
 ## Gợi ý sách (POST /recommendations)
 

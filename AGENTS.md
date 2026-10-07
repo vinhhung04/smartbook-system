@@ -26,6 +26,18 @@ Main areas:
 
 \- services/inventory-service: Express + Prisma inventory service
 
+\- services/borrow-service: Express + Prisma borrow/reservation/fine service
+
+\- services/analytics-service: Express reporting service (reads inventory_db/borrow_db, no Prisma)
+
+\- services/ai-service: Python + FastAPI AI service (OpenRouter, ai_db)
+
+\- apps/api-gateway: Express gateway (HTTP proxy + Socket.IO)
+
+\- apps/mobile: Expo/React Native app for warehouse staff and customers
+
+\- packages/shared: shared Node utilities and service contracts
+
 
 
 \## Branch rules
