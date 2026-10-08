@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from agent_actions import (
     PENDING_CONFIRMATION,
+    CONFIRMED,
     EXECUTED,
     CANCELLED,
     FAILED,
@@ -179,23 +180,24 @@ async def get_pending_action(action_id: str) -> PendingAction | None:
 
 
 async def cancel_pending_action(action_id: str, actor_user_id: str | None = None) -> bool:
+    """Cancel only an action still waiting for confirmation. Returns False when
+    it is already confirmed/executing, executed, failed or expired - marking an
+    executed action CANCELLED would make the audit log claim its side effects
+    never happened. Conditional UPDATE, so a concurrent confirm cannot slip in
+    between the check and the write."""
     async with get_session() as session:
         result = await session.execute(
-            select(PendingActionRow).where(PendingActionRow.action_id == action_id)
+            update(PendingActionRow)
+            .where(PendingActionRow.action_id == action_id, PendingActionRow.status == PENDING_CONFIRMATION)
+            .values(status=CANCELLED, cancelled_at=_now(), cancelled_by_user_id=actor_user_id)
         )
-        row = result.scalar_one_or_none()
-        if row is None:
+        if result.rowcount != 1:
             return False
-
-        old_status = row.status
-        row.status = CANCELLED
-        row.cancelled_at = _now()
-        row.cancelled_by_user_id = actor_user_id
         await _log_audit(
             session,
             action_id=action_id,
             event_type="CANCELLED",
-            old_status=old_status,
+            old_status=PENDING_CONFIRMATION,
             new_status=CANCELLED,
             actor_user_id=actor_user_id,
         )
@@ -258,28 +260,35 @@ async def mark_action_failed(action_id: str, error: str, actor_user_id: str | No
         return True
 
 
-async def mark_action_confirmed(action_id: str, actor_user_id: str | None = None) -> None:
-    """Record the CONFIRMED transition in the audit log. Status stays PENDING_CONFIRMATION
-    in the row itself until execution finishes (mark_action_executed/mark_action_failed
-    move it to its terminal state) — this only marks *who* confirmed and *when*."""
+async def mark_action_confirmed(action_id: str, actor_user_id: str | None = None) -> bool:
+    """Claim the action for execution: PENDING_CONFIRMATION (or FAILED, which may
+    be retried) -> CONFIRMED in ONE conditional UPDATE, recording who confirmed
+    and when. Returns False if another request already claimed it (double click,
+    client retry, a second tab) - the caller must then NOT execute, otherwise the
+    same draft/order would be created twice. mark_action_executed /
+    mark_action_failed move CONFIRMED to its terminal state."""
     async with get_session() as session:
+        current = (await session.execute(
+            select(PendingActionRow.status).where(PendingActionRow.action_id == action_id)
+        )).scalar_one_or_none()
         result = await session.execute(
-            select(PendingActionRow).where(PendingActionRow.action_id == action_id)
+            update(PendingActionRow)
+            .where(PendingActionRow.action_id == action_id,
+                   PendingActionRow.status.in_([PENDING_CONFIRMATION, FAILED]))
+            .values(status=CONFIRMED, confirmed_at=_now(), confirmed_by_user_id=actor_user_id)
         )
-        row = result.scalar_one_or_none()
-        if row is None:
-            return
-        row.confirmed_at = _now()
-        row.confirmed_by_user_id = actor_user_id
+        if result.rowcount != 1:
+            return False
         await _log_audit(
             session,
             action_id=action_id,
             event_type="CONFIRMED",
-            old_status=row.status,
-            new_status=row.status,
+            old_status=current,
+            new_status=CONFIRMED,
             actor_user_id=actor_user_id,
         )
         await session.commit()
+        return True
 
 
 async def get_action_result(action_id: str) -> dict | None:

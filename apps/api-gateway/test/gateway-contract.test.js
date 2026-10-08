@@ -17,6 +17,12 @@ test('AI proxy fails in a documented degraded mode', () => {
   assert.match(source, /on: \{ error: handleAiProxyError \}/);
 });
 
+test('ai-service internal endpoints are never proxied from the public edge', () => {
+  assert.match(source, /app\.use\("\/ai\/internal", \(_req, res\) => res\.status\(404\)/);
+  // The block must be registered before the /ai proxy, or the proxy would win.
+  assert.ok(source.indexOf('app.use("/ai/internal"') < source.search(/"\/ai",\r?\n\s*createProxyMiddleware/));
+});
+
 test('per-service health breakdown is admin-only and readiness checks dependency /ready', () => {
   assert.match(source, /app\.get\("\/system\/health", requireAdminToken,/);
   assert.match(source, /path: "\/ready", critical: true/);

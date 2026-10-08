@@ -552,6 +552,11 @@ app.use(
   }),
 );
 
+// ai-service's /internal/* endpoints (catalog sync trigger/status) are
+// service-to-service only. They check the internal key themselves; this keeps
+// them off the public edge entirely instead of relying on that check alone.
+app.use("/ai/internal", (_req, res) => res.status(404).json({ message: "Not found" }));
+
 app.use(
   "/ai",
   createProxyMiddleware({

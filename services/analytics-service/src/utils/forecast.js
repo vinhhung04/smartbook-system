@@ -36,9 +36,16 @@ function stdDev(series) {
 // linear trend estimated from `series` (oldest -> newest), adjusted by a
 // seasonal multiplier. Each day's projected demand is floored at 0 so a
 // negative trend can't drive the forecast below zero.
-function projectedDemand(series, horizonDays, seasonalIndex = 1) {
-  const level = ewma(series, 0.35);
-  const trend = linearTrendSlope(series);
+//
+// model 'MOVING_AVERAGE' (flat mean of `series`, no trend) is an evaluation
+// candidate - see eval/forecast-diagnostics.js; production passes nothing and
+// keeps 'EWMA_TREND'.
+function projectedDemand(series, horizonDays, seasonalIndex = 1, model = 'EWMA_TREND') {
+  const movingAverage = model === 'MOVING_AVERAGE';
+  const level = movingAverage
+    ? (series.length ? series.reduce((sum, value) => sum + value, 0) / series.length : 0)
+    : ewma(series, 0.35);
+  const trend = movingAverage ? 0 : linearTrendSlope(series);
   let total = 0;
   for (let day = 1; day <= horizonDays; day += 1) {
     total += Math.max(0, level + trend * day);

@@ -10,7 +10,7 @@ const { PUBLIC_PICKUP_WAREHOUSE_TYPES, RECEIVING_LOCATION_TYPES } = require('../
 const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
-const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 const SNAPSHOT_TTL_MS = Number(process.env.PUBLIC_CATALOG_CACHE_TTL_MS || 60_000);
 const SIGNALS_TTL_MS = Number(process.env.PUBLIC_CATALOG_SIGNALS_TTL_MS || 5 * 60_000);
 const SIGNALS_FAILURE_TTL_MS = 30_000;

@@ -33,15 +33,18 @@ function countInRange(sortedTimes, from, to) {
   return upperBound(sortedTimes, to) - lowerBound(sortedTimes, from);
 }
 
-// getDailyBorrowSeriesByVariant: one bucket per UTC day from date_trunc(from)
-// to date_trunc(to) inclusive, zero-filled - and NO series at all (callers use
-// []) when the variant had no borrow inside [from, to].
+// getDailyBorrowSeriesByVariant: one bucket per UTC day for the COMPLETE days
+// [floor(from), floor(to)) - the partial day `to` falls in is never a bucket -
+// zero-filled, and NO series at all (callers use []) when the variant had no
+// borrow on those days.
 function dailySeries(sortedTimes, from, to) {
-  const start = lowerBound(sortedTimes, from);
-  const end = upperBound(sortedTimes, to);
-  if (end <= start) return [];
   const firstDay = Math.floor(from / DAY_MS);
-  const series = new Array(Math.floor(to / DAY_MS) - firstDay + 1).fill(0);
+  const endDay = Math.floor(to / DAY_MS);
+  if (endDay <= firstDay) return [];
+  const start = lowerBound(sortedTimes, firstDay * DAY_MS);
+  const end = lowerBound(sortedTimes, endDay * DAY_MS);
+  if (end <= start) return [];
+  const series = new Array(endDay - firstDay).fill(0);
   for (let i = start; i < end; i += 1) series[Math.floor(sortedTimes[i] / DAY_MS) - firstDay] += 1;
   return series;
 }

@@ -10,8 +10,8 @@ const {
 const { findSeasonalEvent } = require('../config/seasonal-events');
 const { rollingBacktest } = require('../utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
-const { calculateSuggestion, compareReorderCandidates, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
-const { allocateBudget } = require('../utils/budget-allocation');
+const { calculateSuggestion, compareReorderCandidates, compareByShortfallPerCost, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
+const { allocateBudgetInOrder } = require('../utils/budget-allocation');
 const { classifyWeedingCandidate } = require('../utils/weeding');
 const { mergeCatalogSignals } = require('../utils/catalog-signals');
 const { LATE_RETURN_FEATURES, NO_SHOW_FEATURES, toLateReturnSample, toNoShowSample } = require('../utils/risk-features');
@@ -539,10 +539,20 @@ async function getYearlyBorrowCountByVariant(to) {
   return getBorrowDemandByVariant(from, to);
 }
 
-// Daily borrow-count series per variant (oldest -> newest, zero-filled) for the
-// window [from, to]. Only variants with at least one borrow in the window are
-// included; variants with no activity simply have no entry, and callers treat
-// that as an empty series (forecast helpers already return 0 for []).
+// Daily borrow-count series per variant (oldest -> newest, zero-filled) over
+// the COMPLETE days [date_trunc(from), date_trunc(to)) - i.e. with the default
+// 30-day window, the 30 full days ending yesterday. Only variants with at least
+// one borrow in those days are included; variants with no activity simply have
+// no entry, and callers treat that as an empty series (forecast helpers already
+// return 0 for []).
+//
+// Complete days only: the series used to run up to date_trunc(to) inclusive,
+// so its last bucket was "today so far" (and its first bucket a partial day).
+// EWMA (alpha 0.35) weights that last bucket most, so the same history gave a
+// lower forecast - and a smaller reorder quantity - when the endpoint was
+// called in the morning than in the evening (see
+// docs/ANALYSIS/REORDER_DECISION_EVALUATION.md). The reorder backtest
+// (eval/point-in-time.js dailySeries) mirrors exactly this window.
 async function getDailyBorrowSeriesByVariant(from, to) {
   const rows = await query(
     borrowPool,
@@ -550,7 +560,7 @@ async function getDailyBorrowSeriesByVariant(from, to) {
     WITH buckets AS (
       SELECT generate_series(
         date_trunc('day', $1::timestamptz),
-        date_trunc('day', $2::timestamptz),
+        date_trunc('day', $2::timestamptz) - '1 day'::interval,
         '1 day'::interval
       ) AS bucket
     ),
@@ -558,7 +568,8 @@ async function getDailyBorrowSeriesByVariant(from, to) {
       SELECT li.variant_id::text AS variant_id, date_trunc('day', lt.borrow_date) AS bucket, COUNT(*) AS count
       FROM loan_items li
       JOIN loan_transactions lt ON lt.id = li.loan_id
-      WHERE lt.borrow_date >= $1::timestamptz AND lt.borrow_date <= $2::timestamptz
+      WHERE lt.borrow_date >= date_trunc('day', $1::timestamptz)
+        AND lt.borrow_date < date_trunc('day', $2::timestamptz)
       GROUP BY 1, 2
     ),
     active_variants AS (
@@ -866,18 +877,22 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     estimated_total_cost: 0,
   });
 
-  // Budget is applied over the full sorted candidate set (not just the page
-  // being returned) so within_budget reflects the real priority order, then
-  // the same page slice is taken as usual.
+  // Budget is applied over the full candidate set (not just the page being
+  // returned). Lines are funded by expected lead-time shortfall per VND
+  // (compareByShortfallPerCost) - in a held-out backtest this served more
+  // demand at the same spend than funding in priority order
+  // (docs/ANALYSIS/REORDER_CANDIDATES.md) - while the list itself stays in
+  // priority order, so the same page slice is taken as usual.
   let resultItems = candidates;
   let budget = null;
   if (budgetVnd !== null) {
-    const allocation = allocateBudget(candidates, budgetVnd);
+    const allocation = allocateBudgetInOrder(candidates, budgetVnd, compareByShortfallPerCost);
     resultItems = allocation.items;
     budget = {
       budget_vnd: budgetVnd,
       funded_cost: allocation.funded_cost,
       remaining_vnd: allocation.remaining_vnd,
+      funding_order: 'SHORTFALL_PER_COST',
     };
   }
 

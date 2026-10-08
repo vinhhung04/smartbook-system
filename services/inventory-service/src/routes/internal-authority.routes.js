@@ -3,7 +3,7 @@ const { reconcileMetadata } = require('../services/authority-normalization.servi
 const { readAuthorities } = require('../controllers/metadata-reconciliation.controller');
 
 router.post('/normalize', async (req, res) => {
-  const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+  const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
   const providedKey = String(req.headers['x-internal-service-key'] || '').trim();
   if (!providedKey || providedKey !== expectedKey) return res.status(403).json({ message: 'Forbidden' });
   try {

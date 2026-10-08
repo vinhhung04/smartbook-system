@@ -33,11 +33,23 @@ test('countInRange is inclusive on both ends, like the production SQL', () => {
   assert.equal(countInRange(times, 0, 100), 4);
 });
 
-test('dailySeries has one bucket per day from date_trunc(from) to date_trunc(to), or none at all', () => {
+test('dailySeries has one bucket per COMPLETE day from date_trunc(from) up to (not including) the day of `to`', () => {
   const from = at(D - 3, 12);
-  const to = at(D, 0) - 1; // 23:59:59.999 of day D-1
-  assert.deepEqual(dailySeries([at(D - 3, 8)], from, to), []); // before `from` -> no series
-  assert.deepEqual(dailySeries([at(D - 3, 13), at(D - 1, 9), at(D - 1, 10)], from, to), [1, 0, 2]);
+  const to = at(D, 15); // mid-afternoon of day D: day D is not complete yet
+  assert.deepEqual(dailySeries([at(D - 4, 8)], from, to), []); // before the first day -> no series
+  // The first day is counted whole (08:00 < `from`'s 12:00 still counts); today's borrow never does.
+  assert.deepEqual(dailySeries([at(D - 3, 8), at(D - 1, 9), at(D - 1, 10), at(D, 9)], from, to), [1, 0, 2]);
+  assert.deepEqual(dailySeries([at(D, 9)], from, to), []); // only a borrow today -> no series yet
+});
+
+test('the forecast series does not depend on the time of day the suggestion is computed', () => {
+  // Regression: a partial "today" bucket used to sit at the end of the series,
+  // so EWMA (alpha 0.35) - and the suggested quantity - dropped in the morning.
+  const history = [at(D - 5, 10), at(D - 2, 10), at(D - 1, 20), at(D, 1)];
+  const seriesAt = (hour) => dailySeries(history, at(D, hour) - 30 * DAY_MS, at(D, hour));
+  assert.deepEqual(seriesAt(0), seriesAt(9));
+  assert.deepEqual(seriesAt(9), seriesAt(23));
+  assert.equal(seriesAt(9).length, 30);
 });
 
 test('reservations count only while still open at the evaluation moment', () => {
@@ -103,8 +115,9 @@ function smartbook(options = {}) {
   });
 }
 
-// Last 31 complete days (D-31 .. D-1): one borrow every other day, plus a
-// borrow 365 days back so the seasonal index has a trailing year.
+// One borrow every other day over D-31 .. D-1 (the series sees the 30
+// complete days D-30 .. D-1), plus older borrows so the seasonal index has a
+// trailing year.
 const HISTORY = [
   ...Array.from({ length: 400 }, (_, i) => at(D - 400 + i)).filter((_, i) => i % 9 === 0),
   ...Array.from({ length: 16 }, (_, i) => at(D - 31 + 2 * i)),
@@ -115,7 +128,7 @@ test('SMARTBOOK passes production calculateSuggestion the point-in-time inputs a
   const context = ctx({ history: HISTORY, available: 1, onOrder: 1, owned: 6, onLoan: 5, supplierLeadTimes: [10, 12, 30] });
   const decision = policy.decide(context);
 
-  const to = D * DAY_MS - 1;
+  const to = D * DAY_MS;
   const from = to - 30 * DAY_MS;
   const expected = calculateSuggestion(
     { variant_id: 'v1', book_id: 'b1', title: 'T', available_qty: 2, on_hand_qty: 6, reserved_qty: 0, borrowed_qty: 5, reorder_point: 0, unit_cost: 50000 },

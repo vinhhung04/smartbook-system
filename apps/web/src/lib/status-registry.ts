@@ -68,6 +68,7 @@ const DOMAINS = {
   // maps for the same statuses; this is now their one shared source.
   aiAction: {
     PENDING_CONFIRMATION: 'info',
+    CONFIRMED: 'info',
     EXECUTED: 'success',
     CANCELLED: 'neutral',
     EXPIRED: 'danger',

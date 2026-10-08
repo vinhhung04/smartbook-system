@@ -12,7 +12,7 @@
 
 const { stdDev, predict } = require('../src/utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../src/utils/lead-time');
-const { calculateSuggestion, compareReorderCandidates, seasonalIndexFromCounts, SAFETY_STOCK_Z_SCORE } = require('../src/utils/reorder-suggestion');
+const { calculateSuggestion, compareReorderCandidates, compareByShortfallPerCost, seasonalIndexFromCounts, SAFETY_STOCK_Z_SCORE } = require('../src/utils/reorder-suggestion');
 const { findSeasonalEvent } = require('../src/config/seasonal-events');
 const { DAY_MS, countInRange, dailySeries, activeReservationCount, wishlistCountAt, dayCounts } = require('./point-in-time');
 
@@ -67,18 +67,22 @@ function ma30FixedLeadTimePolicy({ leadTimeDays = DEFAULT_LEAD_TIME_DAYS, window
  * Policy C - production reorder logic (calculateSuggestion, reused verbatim)
  * fed with point-in-time inputs. Order quantity = suggested_reorder_qty.
  *
- * The production call is simulated at 23:59:59.999 of the day before the
- * review (to = dayStart - 1 ms): the daily series then holds 31 complete days.
- * Calling it at 00:00 would append an empty bucket for "today" and drag the
- * EWMA level down by 35% - a time-of-day sensitivity of the production
- * endpoint, documented in REORDER_DECISION_EVALUATION.md, deliberately not
- * reproduced here.
+ * The production call is simulated at the start of the review day
+ * (to = dayStart). The daily series is the 30 complete days before it; since
+ * getDailyBorrowSeriesByVariant only uses complete days, production returns
+ * the same series whatever the time of day it is called (before that fix a
+ * partial "today" bucket dragged the EWMA level down in the morning).
  *
  * Feature switches (ablation):
  *   seasonality      false -> seasonal index fixed at 1
  *   learnedLeadTime  false -> lead time fixed at the 14-day default
  *   safetyStock      false -> safety stock 0 (calculateSuggestion option)
  *   demandSignals    false -> reservation and wishlist counts set to 0
+ *   forecastModel    'MOVING_AVERAGE' -> 30-day mean instead of EWMA(0.35) +
+ *                    trend (candidate from eval/forecast-diagnostics.js)
+ *   priorityFloors   false -> no HIGH >= 5 / MEDIUM >= 3 minimum quantity
+ *   rankBy           budget order: 'SHORTFALL_PER_COST' (production) or
+ *                    'PRIORITY' (pre-2026-10-08 production, priority + score)
  * Availability alerts are 0 in EVERY variant: they are created when a copy is
  * unavailable, i.e. they depend on the policy's own stock-outs, and the
  * pilot demand world (unlimited stock) has none. Using the observed dataset's
@@ -90,16 +94,21 @@ function smartbookPolicy({
   learnedLeadTime = true,
   safetyStock = true,
   demandSignals = true,
+  forecastModel = 'EWMA_TREND',
+  priorityFloors = true,
+  // Production funds budgets by shortfall per VND since 2026-10-08
+  // (eval/reorder-candidates.js); 'PRIORITY' is the pre-change order.
+  rankBy = 'SHORTFALL_PER_COST',
   reservationsByVariant,
   wishlistsByBook,
   defaultLeadTimeDays = DEFAULT_LEAD_TIME_DAYS,
 } = {}) {
   return {
     name,
-    params: { seasonality, learned_lead_time: learnedLeadTime, safety_stock: safetyStock, demand_signals: demandSignals },
-    rankCandidates: compareReorderCandidates,
+    params: { seasonality, learned_lead_time: learnedLeadTime, safety_stock: safetyStock, demand_signals: demandSignals, forecast_model: forecastModel, priority_floors: priorityFloors, rank_by: rankBy },
+    rankCandidates: rankBy === 'SHORTFALL_PER_COST' ? compareByShortfallPerCost : compareReorderCandidates,
     decide(ctx) {
-      const to = ctx.dayStartMs - 1;
+      const to = ctx.dayStartMs;
       const from = to - PRODUCTION_WINDOW_DAYS * DAY_MS;
       const ranges = { days: PRODUCTION_WINDOW_DAYS, leadTimeDays: defaultLeadTimeDays };
       const history = ctx.history;
@@ -145,7 +154,7 @@ function smartbookPolicy({
         unit_cost: ctx.variant.unitCost,
       };
       const series = dailySeries(history, from, to);
-      const candidate = calculateSuggestion(row, demand, ranges, seasonal, series, leadTime, { includeSafetyStock: safetyStock });
+      const candidate = calculateSuggestion(row, demand, ranges, seasonal, series, leadTime, { includeSafetyStock: safetyStock, forecastModel, priorityFloors });
       return { qty: candidate.suggested_reorder_qty, candidate };
     },
   };

@@ -188,7 +188,7 @@ FAHASA_BROWSER_HARD_TIMEOUT_SECONDS = float(os.getenv("FAHASA_BROWSER_HARD_TIMEO
 # Verified live: Fahasa's own search API typically answers in 1-3s; this just gives headroom.
 FAHASA_SEARCH_RESPONSE_WAIT_SECONDS = float(os.getenv("FAHASA_SEARCH_RESPONSE_WAIT_SECONDS", "8"))
 INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
-INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
@@ -250,43 +250,62 @@ async def _startup_nightly_briefing() -> None:
 @app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
-    len duoc ngay ca khi OpenRouter chua san sang — retrieval se degrade xuong
-    keyword-only cho den khi ingest xong.
+    len duoc ngay ca khi OpenRouter/inventory chua san sang — retrieval se
+    degrade xuong keyword-only cho den khi ingest xong.
+
+    INTERNAL_DOC: nap mot lan tu corpus/*.md (noi dung di theo image).
+    BOOK_METADATA: catalog_sync.sync_loop() doc feed noi bo cua inventory-service
+    (xac thuc bang INTERNAL_SERVICE_KEY, khong can JWT nguoi dung) va dong bo
+    dinh ky — truoc day hook nay goi /api/books khong co token nen corpus sach
+    luon rong (task_5448fb5f).
 
     Tat bang ENABLE_CORPUS_INGEST=false (vd trong test e2e khong can semantic).
     """
     if os.getenv("ENABLE_CORPUS_INGEST", "true").strip().lower() in ("false", "0", "no"):
         return
+    if not INTERNAL_SERVICE_KEY:
+        logger.warning(
+            "INTERNAL_SERVICE_KEY chua duoc cau hinh: dong bo catalog sach va cac goi noi bo "
+            "toi inventory/borrow se bi tu choi")
 
     async def _run() -> None:
+        import catalog_sync
         import ingestion
         try:
             # Purge any chunk embedded by a stale model/dimension (e.g. leftover
             # nomic-embed-text vectors from before the OpenRouter migration)
             # BEFORE re-ingesting, so a document that never gets re-ingested
-            # (no longer in corpus/ or /api/books) doesn't leave an orphaned
-            # vector search_semantic could still match against the wrong space.
+            # doesn't leave an orphaned vector search_semantic could still
+            # match against the wrong space.
             purged = await vector_store.get_store().delete_chunks_except_model(embeddings.EMBED_IDENTITY)
             if purged:
                 logger.info("startup ingest: purged %d chunk(s) from a stale embedding model", purged)
             await ingestion.ingest_internal_docs()
-            books = await assistant_tools._get("/api/books", None, truncate=False)
-            stats = await ingestion.ingest_books(books) if isinstance(books, list) else {}
-            if not stats.get("documents"):
-                # Khong im lang cho truong hop no-op: /api/books doi JWT nguoi dung
-                # that va hook nay khong co token nao, nen duong nay HIEN DANG
-                # khong chay duoc — phai nhin thay trong log, khong phai suy ra tu
-                # viec search_books tra ve rong (task_5448fb5f).
-                logger.warning(
-                    "startup ingest: 0 book documents ingested — corpus BOOK_METADATA rong, "
-                    "search_books se khong tra ve ket qua nao cho den khi duoc khac phuc "
-                    "(xem task_5448fb5f); phan hoi /api/books: %s",
-                    books if not isinstance(books, list) else f"{len(books)} muc",
-                )
         except Exception as exc:
             logger.warning("startup ingest that bai: %s", type(exc).__name__)
+        await catalog_sync.sync_loop()
 
     asyncio.create_task(_run())
+
+
+@app.get("/internal/catalog-sync/status")
+async def catalog_sync_status(request: Request):
+    """Trang thai lan dong bo BOOK_METADATA gan nhat (outcome, so quyen embed /
+    khong doi / da go, loi). Chi cho service noi bo / van hanh."""
+    import catalog_sync
+    if not catalog_sync.is_valid_internal_key(request.headers.get("x-internal-service-key")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return catalog_sync.get_status()
+
+
+@app.post("/internal/catalog-sync")
+async def catalog_sync_trigger(request: Request):
+    """Chay dong bo ngay (vd ngay sau khi seed catalog). Idempotent; neu mot
+    lan dong bo khac dang chay thi tra ve trang thai voi skipped=busy."""
+    import catalog_sync
+    if not catalog_sync.is_valid_internal_key(request.headers.get("x-internal-service-key")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return await catalog_sync.sync_book_corpus()
 
 
 ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
@@ -4736,7 +4755,8 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
             raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if not req.confirm:
-        await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
+        if not await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id):
+            raise HTTPException(status_code=409, detail="Action is no longer pending and cannot be cancelled.")
         asyncio.ensure_future(push_ai_action_event(
             "ai_action:cancelled",
             req.action_id,
@@ -4758,7 +4778,19 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         action = action.model_copy(update={"payload": merged_payload})
 
     user_id_for_emit = action.created_by_user_id
-    await mark_action_confirmed(req.action_id, actor_user_id=user_ctx.user_id)
+    # Atomic claim: of two concurrent confirms only one gets here; the other
+    # must not execute the same action a second time.
+    if not await mark_action_confirmed(req.action_id, actor_user_id=user_ctx.user_id):
+        latest = await get_pending_action(req.action_id)
+        if latest is not None and latest.status == EXECUTED:
+            return ConfirmActionResponse(
+                success=True,
+                action_id=req.action_id,
+                status=EXECUTED,
+                message="Action was already executed (idempotent).",
+                result=await get_action_result(req.action_id),
+            )
+        raise HTTPException(status_code=409, detail="Action is already being executed or is no longer pending.")
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:confirmed",
         req.action_id,
@@ -4815,7 +4847,8 @@ async def cancel_action(request: Request, req: CancelActionRequest):
         if user_ctx.user_id != action.created_by_user_id:
             raise HTTPException(status_code=403, detail="You can only cancel your own actions.")
 
-    await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id)
+    if not await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id):
+        raise HTTPException(status_code=409, detail="Action is no longer pending and cannot be cancelled.")
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:cancelled",
         req.action_id,

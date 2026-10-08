@@ -159,6 +159,11 @@ function findingsSection({ forecast, reorder }) {
     const cheaper = rp.procurement_cost <= ma.procurement_cost ? ['REORDER_POINT', rp] : ['MA30_FIXED_LT', ma];
     lines.push(`- ${s.id}, cùng ngân sách với ${cheaper[0]}: SMARTBOOK_BUDGET_MATCHED đạt fill rate ${pct(budget.fill_rate)}, `
       + `${compareWord(budget.fill_rate - cheaper[1].fill_rate)} ${cheaper[0]} (${pct(cheaper[1].fill_rate)}), chênh ${pp(budget.fill_rate - cheaper[1].fill_rate)}.`);
+    const capped = reorder.policies.find((p) => p.scenario === s.id && p.policy === `${cheaper[0]}_SAME_BUDGET`);
+    if (capped) {
+      lines.push(`- ${s.id}, cùng ngân sách **mỗi tuần** (công bằng): SMARTBOOK_BUDGET_MATCHED ${pct(budget.fill_rate)} so với `
+        + `${cheaper[0]}_SAME_BUDGET ${pct(capped.metrics.fill_rate)}, chênh ${pp(budget.fill_rate - capped.metrics.fill_rate)}.`);
+    }
   }
   return lines.join('\n');
 }

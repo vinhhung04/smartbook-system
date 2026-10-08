@@ -67,4 +67,24 @@ function assertReady(draft) {
   if (pending.length) { const error = new Error(`Review required: ${pending.join(', ')}`); error.statusCode = 409; throw error; }
 }
 
-module.exports = { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady };
+// ISBN lookup field statuses (ai-service isbn_coverage.classify_field) that mean
+// the value must not be accepted without a person looking at it: the sources
+// disagree, or the evidence is too weak.
+const UNSETTLED_LOOKUP_STATUSES = new Set(['CONFLICTED', 'LOW_CONFIDENCE']);
+
+/** Initial ACCEPTED/PENDING status of each draft field. A passthrough field is
+ * auto-accepted only while nothing says it is unsettled: a V2 extraction
+ * decision of REVIEW_REQUIRED, or - on the default lookup path, which has no
+ * V2 bundle - an ISBN-lookup fieldStatus of CONFLICTED / LOW_CONFIDENCE. */
+function initialDecisionStatuses({ autoAcceptFields, intelligenceDecisions = {}, lookupFieldStatus = {} }) {
+  const accepted = new Set(autoAcceptFields);
+  for (const [field, decision] of Object.entries(intelligenceDecisions || {})) {
+    if (decision?.status === 'REVIEW_REQUIRED') accepted.delete(field);
+  }
+  for (const [field, status] of Object.entries(lookupFieldStatus || {})) {
+    if (UNSETTLED_LOOKUP_STATUSES.has(status)) accepted.delete(field);
+  }
+  return Object.fromEntries(FIELDS.map((field) => [field, accepted.has(field) ? 'ACCEPTED' : 'PENDING']));
+}
+
+module.exports = { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady, initialDecisionStatuses };

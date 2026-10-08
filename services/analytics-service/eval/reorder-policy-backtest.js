@@ -22,7 +22,9 @@
 //  * Budget-matched run: SmartBook with a per-review budget equal to the total
 //    spend of the cheaper of the two simple baselines (REORDER_POINT,
 //    MA30_FIXED_LT) in the same scenario, divided by the number of reviews;
-//    candidates funded in production order via allocateBudget().
+//    candidates funded in production order via allocateBudget(). The two
+//    baselines are also re-run under that same per-review budget
+//    (*_SAME_BUDGET, added 2026-10-08) for a like-for-like comparison.
 //  * Secondary "steady-state" window: scoring days from STEADY_STATE_OFFSET_DAYS
 //    (the longest lead time any scenario can produce) onward. Before that no
 //    order placed in the scoring window can have arrived, so every policy is
@@ -79,6 +81,10 @@ function ablationPolicies(world) {
     SMARTBOOK_FIXED_LEAD_TIME: smartbookPolicy({ ...common, name: 'SMARTBOOK_FIXED_LEAD_TIME', learnedLeadTime: false }),
     SMARTBOOK_NO_SAFETY_STOCK: smartbookPolicy({ ...common, name: 'SMARTBOOK_NO_SAFETY_STOCK', safetyStock: false }),
     SMARTBOOK_NO_DEMAND_SIGNALS: smartbookPolicy({ ...common, name: 'SMARTBOOK_NO_DEMAND_SIGNALS', demandSignals: false }),
+    // Not an ablation of an existing feature: the forecast candidate from
+    // eval/forecast-diagnostics.js, run through the same inventory backtest to
+    // check business risk before any production change.
+    SMARTBOOK_MA30_FORECAST: smartbookPolicy({ ...common, name: 'SMARTBOOK_MA30_FORECAST', forecastModel: 'MOVING_AVERAGE' }),
   };
 }
 
@@ -129,6 +135,14 @@ function runReorderBacktest(world, { timelinePolicies = ['NO_REORDER', 'REORDER_
     const budgetPerReview = Math.min(rp.metrics.procurement_cost, ma.metrics.procurement_cost) / reviews;
     const budgetFull = run(ablation.SMARTBOOK_FULL, { budgetPerReview });
     record('smartbook', ablation.SMARTBOOK_FULL, budgetFull, { name: 'SMARTBOOK_BUDGET_MATCHED', params: { budget_per_review_vnd: budgetPerReview } });
+    // The simple baselines under the SAME per-review budget (added 2026-10-08).
+    // Unconstrained they can spend most of their total in the first reviews,
+    // which SMARTBOOK_BUDGET_MATCHED's weekly, non-rolling budget forbids - so
+    // "same total spend" alone over-states the gap. They fund their lines in
+    // catalog order (they have no ranking of their own).
+    for (const baseline of [reorderPointPolicy(), ma30FixedLeadTimePolicy()]) {
+      record('baseline_same_budget', baseline, run(baseline, { budgetPerReview }), { name: `${baseline.name}_SAME_BUDGET`, params: { budget_per_review_vnd: budgetPerReview } });
+    }
 
     for (const [name, policy] of Object.entries(ablation)) {
       const result = name === 'SMARTBOOK_FULL' ? full : run(policy);

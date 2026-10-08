@@ -12,7 +12,7 @@ const { prisma } = require('../lib/prisma');
 const { createNotificationRecord } = require('../lib/notifications');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
-const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 const WINDOW_DAYS = Number(process.env.DUE_SOON_REMINDER_WINDOW_DAYS || 3);
 const BATCH_SIZE = Math.min(200, Math.max(1, Number(process.env.DUE_SOON_REMINDER_BATCH_SIZE || 100)));
 

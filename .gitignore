@@ -24,3 +24,6 @@ services/borrow-service/prisma/simulation/output/
 
 .worktrees/
 ollama_data/
+
+# Offline eval query-embedding cache (services/ai-service/eval/embed_cache.py)
+services/ai-service/eval/.cache/

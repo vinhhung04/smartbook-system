@@ -63,7 +63,16 @@ TAU_CONFIDENT_GRID = [0.5, 0.6, 0.66, 0.75, 0.85]
 SPLIT_SEED = 20260925
 
 
+SPLIT_MODE = "seed"  # "hash": calib = scoring.dataset_split() val, test = its test half
+
+
 def _split(cases: list[dict]) -> tuple[list[dict], list[dict]]:
+    if SPLIT_MODE == "hash":
+        # Same halves eval_rag.py --split uses, so a threshold chosen here is
+        # reported on cases that played no part in choosing it - or in any
+        # other tuning done on the val half.
+        return ([c for c in cases if scoring.dataset_split(c["id"]) == "val"],
+                [c for c in cases if scoring.dataset_split(c["id"]) == "test"])
     shuffled = list(cases)
     random.Random(SPLIT_SEED).shuffle(shuffled)
     midpoint = len(shuffled) // 2
@@ -138,7 +147,7 @@ def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.Confide
 
 
 def render_report(by_corpus: dict, tables: dict, timestamp: str) -> str:
-    lines = [f"# RAG confidence-threshold calibration — {timestamp}", ""]
+    lines = [f"# RAG confidence-threshold calibration — {timestamp} (split={SPLIT_MODE})", ""]
     for corpus, outcome in by_corpus.items():
         chosen = outcome["chosen"]
         lines += [
@@ -165,10 +174,14 @@ def render_report(by_corpus: dict, tables: dict, timestamp: str) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("usage: python eval/calibrate_rag.py eval/reports/rag_signals_<timestamp>.json", file=sys.stderr)
+    global SPLIT_MODE
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    if "--split=hash" in sys.argv[1:]:
+        SPLIT_MODE = "hash"
+    if not args:
+        print("usage: python eval/calibrate_rag.py [--split=hash] eval/reports/rag_signals_<timestamp>.json", file=sys.stderr)
         return 2
-    with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    with open(args[0], "r", encoding="utf-8") as handle:
         rows = json.load(handle)
 
     by_corpus_rows = {

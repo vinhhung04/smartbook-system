@@ -3,7 +3,7 @@ const { canonicalKey, reconcileMetadata } = require('../services/authority-norma
 const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
 
 const prisma = new PrismaClient();
-const { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady } = require('../services/metadata-provenance.service');
+const { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady, initialDecisionStatuses } = require('../services/metadata-provenance.service');
 // Only authors/publisher/categories are matched against a catalog authority (see reconcileMetadata) and
 // surfaced for staff review in AuthorityReviewPanel. The rest are plain passthrough fields with nothing
 // to reconcile, so they must not stay PENDING forever — that would permanently block save.
@@ -68,9 +68,13 @@ async function createDraft(req, res) {
     const autoAcceptFields = new Set(AUTO_ACCEPT_FIELDS);
     if (result.authorNormalization.length === 0) autoAcceptFields.add('authors');
     if (result.categoryNormalization.length === 0) autoAcceptFields.add('categories');
-    for (const [field, decision] of Object.entries(raw.intelligence?.decisions || {})) {
-      if (decision.status === 'REVIEW_REQUIRED') autoAcceptFields.delete(field);
-    }
+    // Conflicting or low-confidence values (V2 decisions, or the default lookup's
+    // fieldStatus) stay PENDING for staff - AuthorityReviewPanel lists them.
+    const initialStatus = initialDecisionStatuses({
+      autoAcceptFields,
+      intelligenceDecisions: raw.intelligence?.decisions,
+      lookupFieldStatus: raw.fieldStatus,
+    });
     const draft = await prisma.metadata_reconciliation_drafts.create({
       data: {
         isbn,
@@ -82,7 +86,7 @@ async function createDraft(req, res) {
         authority_matches: result.authorityMatches,
         explanation: explain(result, raw),
         created_by_user_id: req.user.id,
-        decisions: { create: FIELDS.map((field) => ({ field, value: jsonValue(result.normalized[field]), provenance: 'RULE', status: autoAcceptFields.has(field) ? 'ACCEPTED' : 'PENDING' })) },
+        decisions: { create: FIELDS.map((field) => ({ field, value: jsonValue(result.normalized[field]), provenance: 'RULE', status: initialStatus[field] })) },
       },
       include: { decisions: true },
     });

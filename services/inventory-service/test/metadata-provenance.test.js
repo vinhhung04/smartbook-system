@@ -23,3 +23,31 @@ test('malformed pipeline references are rejected', () => {
   assert.throws(() => validateBundle({ schemaVersion: 'metadata-intelligence-v2.1', documents: [], candidates: [
     { id: 'c', sourceDocumentId: 'missing', evidenceIds: [] }], evidence: [], decisions: {}, provenance: {} }));
 });
+
+const { initialDecisionStatuses } = require('../src/services/metadata-provenance.service');
+
+test('passthrough fields auto-accept only when no source marks them unsettled', () => {
+  const statuses = initialDecisionStatuses({ autoAcceptFields: ['title', 'publishedDate', 'pageCount', 'description', 'isbn'] });
+  assert.equal(statuses.title, 'ACCEPTED');
+  assert.equal(statuses.authors, 'PENDING'); // authority field, reviewed in its own row
+});
+
+test('default ISBN lookup: CONFLICTED or LOW_CONFIDENCE fields wait for staff instead of being auto-accepted', () => {
+  const statuses = initialDecisionStatuses({
+    autoAcceptFields: ['title', 'publishedDate', 'pageCount', 'description', 'isbn'],
+    lookupFieldStatus: { title: 'SUFFICIENT', publishedDate: 'CONFLICTED', description: 'LOW_CONFIDENCE', pageCount: 'MISSING' },
+  });
+  assert.equal(statuses.title, 'ACCEPTED');
+  assert.equal(statuses.publishedDate, 'PENDING');
+  assert.equal(statuses.description, 'PENDING');
+  assert.equal(statuses.pageCount, 'ACCEPTED'); // nothing found -> nothing to approve
+});
+
+test('V2 REVIEW_REQUIRED decisions still demote a field', () => {
+  const statuses = initialDecisionStatuses({
+    autoAcceptFields: ['title', 'isbn'],
+    intelligenceDecisions: { isbn: { status: 'REVIEW_REQUIRED' }, title: { status: 'PROPOSED' } },
+  });
+  assert.equal(statuses.isbn, 'PENDING');
+  assert.equal(statuses.title, 'ACCEPTED');
+});

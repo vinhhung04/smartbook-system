@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 ai_request_duration = Histogram(
     "ai_request_duration_seconds",
@@ -46,4 +46,26 @@ ai_isbn_field_status_total = Counter(
     "ai_isbn_field_status_total",
     "ISBN Intelligence field-level status by field and status",
     ["field", "status"],
+)
+
+# catalog_sync.py - BOOK_METADATA corpus sync with inventory-service. A
+# dashboard alerts on a stale last-success timestamp instead of anyone having
+# to notice that book search quietly stopped finding new titles.
+ai_catalog_sync_runs_total = Counter(
+    "ai_catalog_sync_runs_total",
+    "BOOK_METADATA catalog sync runs by outcome (ok / degraded / failed)",
+    ["outcome"],
+)
+ai_catalog_sync_documents_total = Counter(
+    "ai_catalog_sync_documents_total",
+    "Books handled by catalog sync, by action (embedded / unchanged / removed / embed_failed / error)",
+    ["action"],
+)
+ai_catalog_sync_last_success_timestamp_seconds = Gauge(
+    "ai_catalog_sync_last_success_timestamp_seconds",
+    "Unix time of the last catalog sync that fetched the full catalog",
+)
+ai_catalog_sync_catalog_books = Gauge(
+    "ai_catalog_sync_catalog_books",
+    "Active books returned by inventory-service in the last successful catalog fetch",
 )

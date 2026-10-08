@@ -43,6 +43,8 @@ import httpx  # noqa: E402
 
 import scoring  # noqa: E402
 import assistant_tools  # noqa: E402
+import embed_cache  # noqa: E402
+import embeddings  # noqa: E402
 import faq_retrieval  # noqa: E402
 
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "rag_dataset.json")
@@ -54,8 +56,16 @@ async def _fetch_books() -> list[dict]:
     """Fetched once for the whole run, same catalog every BOOK_METADATA case
     scores against (assistant_tools.search_books does this per-call in
     production; here it would just be the same HTTP round-trip repeated
-    60 times for no benefit)."""
-    headers = {"Authorization": f"Bearer {AUTH_TOKEN}"} if AUTH_TOKEN else {}
+    60 times for no benefit).
+
+    With EVAL_AUTH_TOKEN: GET /api/books through the gateway, as before.
+    Without it: inventory-service's internal feed (catalog_sync.fetch_catalog_books,
+    INTERNAL_SERVICE_KEY) - the same active-book list the BOOK_METADATA corpus
+    is synced from, so no user login is needed to run the eval."""
+    if not AUTH_TOKEN:
+        import catalog_sync
+        return await catalog_sync.fetch_catalog_books()
+    headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
     async with httpx.AsyncClient(timeout=httpx.Timeout(20)) as client:
         response = await client.get(f"{assistant_tools.GATEWAY_URL}/api/books", headers=headers)
     if response.status_code >= 400:
@@ -106,13 +116,30 @@ async def main() -> int:
                               "off: raw RRF results, to reproduce the pre-abstention baseline.")
     parser.add_argument("--dump-signals", action="store_true",
                          help="also write rag_signals_<timestamp>.json for eval/calibrate_rag.py")
+    parser.add_argument("--split", choices=["all", "val", "test"], default="all",
+                         help="evaluate only the hash-assigned validation or test half "
+                              "(scoring.dataset_split); tune on val, report on test")
+    parser.add_argument("--no-embed-cache", action="store_true",
+                         help="call OpenRouter for every query instead of eval/.cache (not reproducible)")
+    parser.add_argument("--label", default="",
+                         help="short tag added to the report file name, e.g. baseline / after-fix")
     args = parser.parse_args()
     apply_abstention = args.abstention == "on"
+    if not args.no_embed_cache:
+        embed_cache.install()
 
     with open(DATASET_PATH, "r", encoding="utf-8") as handle:
         dataset = json.load(handle)
 
+    if args.split != "all":
+        dataset = [entry for entry in dataset if scoring.dataset_split(entry["id"]) == args.split]
+
     books = await _fetch_books()
+    if any(entry["corpus"] == "BOOK_METADATA" for entry in dataset) and not books:
+        # Truoc day catalog rong (vd token het han) lam moi case sach thanh
+        # NO_EVIDENCE im lang va ket qua van duoc ghi thanh report nhu that.
+        print("Catalog rong - khong the danh gia BOOK_METADATA. Kiem tra EVAL_AUTH_TOKEN/INTERNAL_SERVICE_KEY.")
+        return 2
     results = []
     for entry in dataset:
         outcome = await retrieve(entry, books, apply_abstention)
@@ -121,6 +148,8 @@ async def main() -> int:
             "expected_ids": entry["expected_ids"], **outcome,
         })
 
+    embed_cache.save()
+    no_semantic = [r["id"] for r in results if not r["signals"].get("semantic_available")]
     overall = scoring.aggregate_retrieval_scores(results)
     by_corpus = {
         corpus: scoring.aggregate_retrieval_scores([r for r in results if r["corpus"] == corpus])
@@ -136,10 +165,19 @@ async def main() -> int:
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     os.makedirs(REPORTS_DIR, exist_ok=True)
-    report_path = os.path.join(REPORTS_DIR, f"rag_{timestamp}.md")
+    suffix = "".join(f"_{part}" for part in (args.label, args.split if args.split != "all" else "") if part)
+    report_path = os.path.join(REPORTS_DIR, f"rag_{timestamp}{suffix}.md")
     lines = [
-        f"# RAG retrieval eval — {timestamp} (abstention={args.abstention})",
+        f"# RAG retrieval eval — {timestamp} (abstention={args.abstention}, split={args.split}"
+        f"{', label=' + args.label if args.label else ''})",
         "",
+        f"- Catalog: {len(books)} sach; embedding: {embeddings.EMBED_IDENTITY}; "
+        f"BOOK_CONF tau={assistant_tools.retrieval_confidence.BOOK_CONFIDENCE.tau_confident}/"
+        f"{assistant_tools.retrieval_confidence.BOOK_CONFIDENCE.tau_evidence}, "
+        f"DOC_CONF tau={assistant_tools.retrieval_confidence.DOC_CONFIDENCE.tau_confident}/"
+        f"{assistant_tools.retrieval_confidence.DOC_CONFIDENCE.tau_evidence}",
+        f"- Query embedding cache: {embed_cache.stats}; case khong co tin hieu semantic "
+        f"(provider loi -> keyword-only, KHONG so sanh duoc): {len(no_semantic)} {no_semantic[:10]}",
         f"- Tong: {overall['count']} case",
         f"- Recall@1 {overall['recall_at_1']} / Recall@3 {overall['recall_at_3']} / Recall@5 {overall['recall_at_5']}",
         f"- MRR {overall['mrr']}",
@@ -171,7 +209,7 @@ async def main() -> int:
     print(f"\nReport: {report_path}")
 
     if args.dump_signals:
-        signals_path = os.path.join(REPORTS_DIR, f"rag_signals_{timestamp}.json")
+        signals_path = os.path.join(REPORTS_DIR, f"rag_signals_{timestamp}{suffix}.json")
         with open(signals_path, "w", encoding="utf-8") as handle:
             json.dump(results, handle, ensure_ascii=False, indent=2, default=str)
         print(f"Signals: {signals_path}")

@@ -103,11 +103,13 @@ function buildReason(item, days, leadTimeDays) {
   return parts.join(' ');
 }
 
-// `options.includeSafetyStock` exists only for the offline ablation study
-// (eval/reorder-policy-backtest.js, SMARTBOOK_NO_SAFETY_STOCK). Production
-// never passes it, so the endpoint always includes safety stock.
+// `options.includeSafetyStock`, `options.forecastModel` and
+// `options.priorityFloors` exist only for the offline evaluation
+// (eval/reorder-policy-backtest.js, eval/reorder-candidates.js). Production
+// never passes them, so the endpoint always includes safety stock, forecasts
+// with EWMA + trend and applies the priority minimum quantities.
 function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], leadTime = null, options = {}) {
-  const { includeSafetyStock = true } = options;
+  const { includeSafetyStock = true, forecastModel = 'EWMA_TREND', priorityFloors = true } = options;
   // Lead time drives both the safety stock and the demand projected over the
   // reorder horizon, so it is resolved per item from real delivery history
   // rather than shared across the whole catalog.
@@ -129,11 +131,13 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
   // Recency-weighted current pace (EWMA), linear trend (bản/ngày) and demand
   // volatility (std dev) estimated from the daily borrow series, replacing the
   // flat-average heuristic for forecasting and safety stock.
-  const demandPace = ewma(series, EWMA_ALPHA);
+  const demandPace = forecastModel === 'MOVING_AVERAGE'
+    ? (series.length ? series.reduce((sum, value) => sum + value, 0) / series.length : 0)
+    : ewma(series, EWMA_ALPHA);
   const dailyTrend = linearTrendSlope(series);
   const demandVolatility = stdDev(series);
-  const forecast7d = projectedDemand(series, 7, seasonalIndex);
-  const forecast30d = projectedDemand(series, 30, seasonalIndex);
+  const forecast7d = projectedDemand(series, 7, seasonalIndex, forecastModel);
+  const forecast30d = projectedDemand(series, 30, seasonalIndex, forecastModel);
   const demandTrendPct = previousBorrowCount > 0
     ? round(((borrowCount - previousBorrowCount) / previousBorrowCount) * 100, 1)
     : (borrowCount > 0 ? 100 : 0);
@@ -146,7 +150,7 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
       hasDemandSignal ? 2 : 0,
     )
     : 0;
-  const expectedDemandDuringLeadTime = projectedDemand(series, leadTimeDays, seasonalIndex);
+  const expectedDemandDuringLeadTime = projectedDemand(series, leadTimeDays, seasonalIndex, forecastModel);
   let suggestedReorderQty = Math.max(0, expectedDemandDuringLeadTime + safetyStock - availableQty);
   const demandScore = round(
     borrowCount * 2
@@ -166,10 +170,10 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     leadTimeDays,
   });
 
-  if (priority === 'HIGH' && suggestedReorderQty < 5) {
+  if (priorityFloors && priority === 'HIGH' && suggestedReorderQty < 5) {
     suggestedReorderQty = 5;
   }
-  if (priority === 'MEDIUM' && suggestedReorderQty < 3) {
+  if (priorityFloors && priority === 'MEDIUM' && suggestedReorderQty < 3) {
     suggestedReorderQty = 3;
   }
 
@@ -199,6 +203,9 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     demand_volatility: round(demandVolatility, 2),
     forecast_7d: forecast7d,
     forecast_30d: forecast30d,
+    // Demand expected before an order placed now arrives; with available_qty it
+    // gives the shortfall compareByShortfallPerCost ranks on.
+    lead_time_demand: expectedDemandDuringLeadTime,
     estimated_days_until_stockout: estimatedDaysUntilStockout,
     demand_trend_pct: demandTrendPct,
     demand_score: demandScore,
@@ -229,7 +236,23 @@ function compareReorderCandidates(a, b) {
     || a.title.localeCompare(b.title);
 }
 
+// Budget order that spends where it buys the most expected service: requests
+// expected during the lead time that the copies on hand cannot cover
+// (lead_time_demand - available_qty), per VND of the line. Lines with no
+// shortfall (ordered only for safety stock) come after every line with one.
+// Ties keep the production order.
+function shortfallPerCost(item) {
+  const shortfall = Math.max(0, Number(item.lead_time_demand || 0) - Number(item.available_qty || 0));
+  const cost = Number(item.estimated_cost || 0);
+  return cost > 0 ? shortfall / cost : 0;
+}
+
+function compareByShortfallPerCost(a, b) {
+  return shortfallPerCost(b) - shortfallPerCost(a) || compareReorderCandidates(a, b);
+}
+
 module.exports = {
+  compareByShortfallPerCost,
   EWMA_ALPHA,
   SAFETY_STOCK_Z_SCORE,
   seasonalIndexFromCounts,

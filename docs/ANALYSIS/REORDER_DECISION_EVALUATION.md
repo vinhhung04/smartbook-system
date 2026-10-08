@@ -200,10 +200,13 @@ cho mượn **không** được tính — giống production.
 | `SMARTBOOK` (C) | gọi nguyên văn `calculateSuggestion()` của production với đầu vào dựng lại tại thời điểm; đặt `suggested_reorder_qty` |
 | `SMARTBOOK_BUDGET_MATCHED` | SMARTBOOK + ngân sách mỗi lần xem xét = chi phí tổng của baseline rẻ hơn (A hoặc B, cùng kịch bản) ÷ số lần xem xét; phân bổ bằng `allocateBudget()` theo thứ tự production |
 
-SMARTBOOK được gọi như production chạy lúc 23:59:59.999 ngày hôm trước (chuỗi gồm 31 ngày trọn). *Quan sát về
-production:* nếu endpoint được gọi lúc 00:00, chuỗi có thêm một bucket rỗng cho "hôm nay" và mức EWMA giảm
-35% — kết quả gợi ý phụ thuộc giờ gọi trong ngày. Backtest không tái hiện hiệu ứng này; đây là điểm nên
-cân nhắc sửa ở production (chỉ dùng ngày trọn vẹn).
+SMARTBOOK được gọi như production chạy vào đầu ngày xem xét; chuỗi dự báo là **30 ngày trọn vẹn** trước đó.
+*Đã sửa ở production (2026-10-08):* trước đây `getDailyBorrowSeriesByVariant` lấy bucket tới `date_trunc(to)`
+**bao gồm** "hôm nay" (chưa trọn) và bucket đầu là một phần ngày; vì EWMA (α=0.35) dồn trọng số vào bucket cuối, cùng
+một lịch sử cho dự báo — và số lượng đề xuất — thấp hơn khi gọi buổi sáng (gọi lúc 00:00: mức EWMA giảm 35%). Nay
+chuỗi chỉ gồm các ngày trọn `[date_trunc(from), date_trunc(to))`, không phụ thuộc giờ gọi (test
+`the forecast series does not depend on the time of day...`). Các bảng tự động bên dưới đã được tính lại theo
+ngữ nghĩa mới (bản cũ gọi lúc 23:59:59.999 với 31 bucket, bucket đầu gần như rỗng).
 
 **Kịch bản** (giả định mô phỏng, không phải hành vi nhà cung cấp đo được):
 
@@ -328,10 +331,12 @@ Cửa sổ chấm điểm: 2025-10-28 → 2026-09-28 (không gồm ngày cuối)
 | NO_REORDER | 82.71% | 1905 | 1634 | 4.279% | 724.0 | 724 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 98.98% | 112 | 83 | 0.217% | 1793.9 | 1972 | 1259 | 165 | 146.8 | 7.63 |
 | MA30_FIXED_LT | 99.27% | 80 | 69 | 0.181% | 1950.8 | 2338 | 1629 | 524 | 199.6 | 3.11 |
-| SMARTBOOK | 99.33% | 74 | 64 | 0.168% | 2925.9 | 3669 | 2991 | 728 | 365.4 | 4.11 |
-| SMARTBOOK_BUDGET_MATCHED | 90.77% | 1017 | 920 | 2.409% | 1293.4 | 1882 | 1215 | 187 | 145.4 | 6.50 |
+| SMARTBOOK | 99.33% | 74 | 64 | 0.168% | 2894.2 | 3630 | 2956 | 715 | 360.3 | 4.13 |
+| SMARTBOOK_BUDGET_MATCHED | 92.45% | 832 | 690 | 1.807% | 1518.7 | 2194 | 1526 | 191 | 143.9 | 7.99 |
+| REORDER_POINT_SAME_BUDGET | 92.91% | 781 | 664 | 1.739% | 1324.4 | 1912 | 1203 | 166 | 135.0 | 7.25 |
+| MA30_FIXED_LT_SAME_BUDGET | 92.77% | 797 | 660 | 1.728% | 1313.5 | 1939 | 1263 | 464 | 144.5 | 2.72 |
 
-Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử dụng 99.1%; 3785 dòng đề xuất không được cấp vốn.
+Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử dụng 98.0%; 3050 dòng đề xuất không được cấp vốn.
 
 **Kịch bản SUPPLIER_DELAY** — Calibrated starting collection, each order delivered after 14-28 days (supplier slower than its declared 14 days). Bộ sưu tập ban đầu: 724 bản.
 
@@ -340,10 +345,12 @@ Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử
 | NO_REORDER | 82.71% | 1905 | 1634 | 4.279% | 724.0 | 724 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 98.73% | 140 | 110 | 0.288% | 1765.8 | 1971 | 1266 | 166 | 147.8 | 7.63 |
 | MA30_FIXED_LT | 98.98% | 112 | 100 | 0.262% | 1905.8 | 2319 | 1627 | 537 | 199.3 | 3.03 |
-| SMARTBOOK | 99.04% | 106 | 95 | 0.249% | 3213.9 | 4119 | 3511 | 630 | 428.1 | 5.57 |
-| SMARTBOOK_BUDGET_MATCHED | 89.67% | 1138 | 1023 | 2.679% | 1287.4 | 1886 | 1241 | 164 | 146.5 | 7.57 |
+| SMARTBOOK | 99.04% | 106 | 95 | 0.249% | 3201.7 | 4114 | 3507 | 630 | 427.0 | 5.57 |
+| SMARTBOOK_BUDGET_MATCHED | 90.45% | 1052 | 890 | 2.330% | 1556.0 | 2335 | 1695 | 169 | 145.1 | 10.03 |
+| REORDER_POINT_SAME_BUDGET | 92.53% | 823 | 703 | 1.841% | 1297.8 | 1889 | 1192 | 160 | 133.8 | 7.45 |
+| MA30_FIXED_LT_SAME_BUDGET | 92.50% | 827 | 691 | 1.809% | 1296.5 | 1941 | 1280 | 474 | 146.2 | 2.70 |
 
-Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử dụng 99.1%; 3835 dòng đề xuất không được cấp vốn.
+Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử dụng 98.2%; 3067 dòng đề xuất không được cấp vốn.
 
 **Kịch bản LEAN_START** — Half of the calibrated starting collection (at least 1 copy), 14-day delivery. Bộ sưu tập ban đầu: 340 bản.
 
@@ -352,10 +359,12 @@ Ngân sách SMARTBOOK_BUDGET_MATCHED: 3.1 triệu VND/lần xem xét; mức sử
 | NO_REORDER | 46.93% | 5849 | 4689 | 12.278% | 340.0 | 340 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 97.21% | 308 | 228 | 0.597% | 1728.9 | 2021 | 1689 | 217 | 199.8 | 7.78 |
 | MA30_FIXED_LT | 97.50% | 276 | 231 | 0.605% | 1831.5 | 2324 | 1999 | 684 | 247.2 | 2.92 |
-| SMARTBOOK | 97.75% | 248 | 207 | 0.542% | 2743.1 | 3434 | 3124 | 731 | 382.2 | 4.27 |
-| SMARTBOOK_BUDGET_MATCHED | 76.86% | 2550 | 2250 | 5.892% | 1099.2 | 1920 | 1641 | 243 | 198.8 | 6.75 |
+| SMARTBOOK | 97.77% | 246 | 205 | 0.537% | 2739.5 | 3432 | 3122 | 724 | 381.5 | 4.31 |
+| SMARTBOOK_BUDGET_MATCHED | 76.63% | 2576 | 1958 | 5.127% | 1381.1 | 2230 | 1946 | 253 | 197.5 | 7.69 |
+| REORDER_POINT_SAME_BUDGET | 76.98% | 2537 | 2001 | 5.240% | 1124.1 | 1881 | 1564 | 204 | 184.3 | 7.67 |
+| MA30_FIXED_LT_SAME_BUDGET | 77.06% | 2528 | 1914 | 5.012% | 1146.7 | 1956 | 1663 | 601 | 194.9 | 2.77 |
 
-Ngân sách SMARTBOOK_BUDGET_MATCHED: 4.2 triệu VND/lần xem xét; mức sử dụng 99.5%; 3541 dòng đề xuất không được cấp vốn.
+Ngân sách SMARTBOOK_BUDGET_MATCHED: 4.2 triệu VND/lần xem xét; mức sử dụng 98.9%; 2763 dòng đề xuất không được cấp vốn.
 <!-- AUTO:reorder:end -->
 
 ### 7.2 Cửa sổ ổn định
@@ -370,8 +379,10 @@ Cửa sổ ổn định: từ 2025-11-25 (307 ngày). Chi phí và số đơn ch
 | NO_REORDER | 82.74% | 1762 | 1509 | 4.312% | 724.0 | 724 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 99.62% | 39 | 20 | 0.057% | 1849.7 | 1972 | 331 | 58 | 41.5 | 5.71 |
 | MA30_FIXED_LT | 99.92% | 8 | 7 | 0.020% | 2033.5 | 2338 | 876 | 353 | 105.5 | 2.48 |
-| SMARTBOOK | 99.98% | 2 | 2 | 0.006% | 3086.5 | 3669 | 1643 | 478 | 198.2 | 3.44 |
-| SMARTBOOK_BUDGET_MATCHED | 91.37% | 881 | 799 | 2.283% | 1342.9 | 1882 | 1101 | 174 | 133.3 | 6.33 |
+| SMARTBOOK | 99.98% | 2 | 2 | 0.006% | 3052.7 | 3630 | 1637 | 471 | 196.8 | 3.48 |
+| SMARTBOOK_BUDGET_MATCHED | 93.17% | 697 | 572 | 1.634% | 1587.9 | 2194 | 1338 | 172 | 131.8 | 7.78 |
+| REORDER_POINT_SAME_BUDGET | 93.60% | 653 | 550 | 1.572% | 1376.6 | 1912 | 1093 | 153 | 123.0 | 7.14 |
+| MA30_FIXED_LT_SAME_BUDGET | 93.55% | 658 | 539 | 1.540% | 1365.4 | 1939 | 1152 | 434 | 132.5 | 2.65 |
 
 **Kịch bản SUPPLIER_DELAY**
 
@@ -380,8 +391,10 @@ Cửa sổ ổn định: từ 2025-11-25 (307 ngày). Chi phí và số đơn ch
 | NO_REORDER | 82.74% | 1762 | 1509 | 4.312% | 724.0 | 724 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 99.62% | 39 | 20 | 0.057% | 1842.9 | 1971 | 340 | 59 | 42.5 | 5.76 |
 | MA30_FIXED_LT | 99.88% | 12 | 11 | 0.031% | 1999.4 | 2319 | 897 | 371 | 107.3 | 2.42 |
-| SMARTBOOK | 99.94% | 6 | 6 | 0.017% | 3423.0 | 4119 | 2146 | 385 | 258.9 | 5.57 |
-| SMARTBOOK_BUDGET_MATCHED | 90.19% | 1001 | 901 | 2.574% | 1337.9 | 1886 | 1126 | 150 | 134.3 | 7.51 |
+| SMARTBOOK | 99.94% | 6 | 6 | 0.017% | 3410.1 | 4114 | 2170 | 391 | 261.5 | 5.55 |
+| SMARTBOOK_BUDGET_MATCHED | 91.09% | 909 | 765 | 2.186% | 1630.8 | 2335 | 1517 | 151 | 132.9 | 10.05 |
+| REORDER_POINT_SAME_BUDGET | 93.29% | 685 | 582 | 1.663% | 1349.2 | 1889 | 1082 | 147 | 121.7 | 7.36 |
+| MA30_FIXED_LT_SAME_BUDGET | 93.29% | 685 | 567 | 1.620% | 1348.1 | 1941 | 1177 | 444 | 133.9 | 2.65 |
 
 **Kịch bản LEAN_START**
 
@@ -390,8 +403,10 @@ Cửa sổ ổn định: từ 2025-11-25 (307 ngày). Chi phí và số đơn ch
 | NO_REORDER | 46.73% | 5437 | 4352 | 12.435% | 340.0 | 340 | 0 | 0 | 0.0 | — |
 | REORDER_POINT | 99.19% | 83 | 44 | 0.126% | 1806.3 | 2021 | 589 | 100 | 72.4 | 5.89 |
 | MA30_FIXED_LT | 99.62% | 39 | 35 | 0.100% | 1944.2 | 2324 | 1313 | 499 | 161.9 | 2.63 |
-| SMARTBOOK | 99.86% | 14 | 12 | 0.034% | 2926.0 | 3434 | 1777 | 491 | 217.6 | 3.62 |
-| SMARTBOOK_BUDGET_MATCHED | 78.77% | 2167 | 1931 | 5.517% | 1165.7 | 1920 | 1490 | 225 | 182.2 | 6.62 |
+| SMARTBOOK | 99.86% | 14 | 12 | 0.034% | 2922.3 | 3432 | 1779 | 484 | 217.8 | 3.68 |
+| SMARTBOOK_BUDGET_MATCHED | 78.70% | 2174 | 1629 | 4.655% | 1471.9 | 2230 | 1714 | 226 | 180.9 | 7.58 |
+| REORDER_POINT_SAME_BUDGET | 79.05% | 2138 | 1674 | 4.783% | 1192.8 | 1881 | 1409 | 187 | 167.9 | 7.53 |
+| MA30_FIXED_LT_SAME_BUDGET | 79.00% | 2143 | 1595 | 4.557% | 1217.9 | 1956 | 1531 | 561 | 178.4 | 2.73 |
 <!-- AUTO:reorder_steady:end -->
 
 Hình: `reorder_fill_rate.png`, `reorder_stockout_days.png`, `reorder_average_inventory.png`,
@@ -405,37 +420,40 @@ Hình: `reorder_fill_rate.png`, `reorder_stockout_days.png`, `reorder_average_in
 
 | Biến thể | Ngân sách | Fill rate | Δ fill | Stockout days | Δ stockout | Tồn kho TB | Δ tồn kho | Chi phí (triệu) | Δ chi phí |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SMARTBOOK_FULL | không | 99.33% | +0.00 điểm % | 64 | +0 | 2925.9 | 0.0% | 365.4 | 0.0% |
-| SMARTBOOK_NO_SEASONALITY | không | 99.33% | +0.00 điểm % | 64 | +0 | 3190.4 | 9.0% | 425.9 | 16.6% |
-| SMARTBOOK_FIXED_LEAD_TIME | không | 99.33% | +0.00 điểm % | 64 | +0 | 2925.9 | 0.0% | 365.4 | 0.0% |
-| SMARTBOOK_NO_SAFETY_STOCK | không | 99.30% | -0.03 điểm % | 67 | +3 | 2836.6 | -3.1% | 356.8 | -2.4% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | không | 99.33% | +0.00 điểm % | 64 | +0 | 2921.6 | -0.1% | 363.5 | -0.5% |
-| SMARTBOOK_FULL | có | 90.77% | +0.00 điểm % | 920 | +0 | 1293.4 | 0.0% | 145.4 | 0.0% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | có | 92.37% | +1.60 điểm % | 739 | -181 | 1372.7 | 6.1% | 145.2 | -0.2% |
+| SMARTBOOK_FULL | không | 99.33% | +0.00 điểm % | 64 | +0 | 2894.2 | 0.0% | 360.3 | 0.0% |
+| SMARTBOOK_NO_SEASONALITY | không | 99.33% | +0.00 điểm % | 64 | +0 | 3165.7 | 9.4% | 420.6 | 16.7% |
+| SMARTBOOK_FIXED_LEAD_TIME | không | 99.33% | +0.00 điểm % | 64 | +0 | 2894.2 | 0.0% | 360.3 | 0.0% |
+| SMARTBOOK_NO_SAFETY_STOCK | không | 99.30% | -0.03 điểm % | 67 | +3 | 2803.4 | -3.1% | 350.4 | -2.8% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | không | 99.33% | +0.00 điểm % | 64 | +0 | 2889.0 | -0.2% | 357.6 | -0.8% |
+| SMARTBOOK_MA30_FORECAST | không | 99.28% | -0.05 điểm % | 68 | +4 | 2401.3 | -17.0% | 260.0 | -27.8% |
+| SMARTBOOK_FULL | có | 92.45% | +0.00 điểm % | 690 | +0 | 1518.7 | 0.0% | 143.9 | 0.0% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | có | 92.29% | -0.16 điểm % | 704 | +14 | 1521.9 | 0.2% | 144.4 | 0.3% |
 
 **Kịch bản SUPPLIER_DELAY** (Δ so với SMARTBOOK_FULL cùng điều kiện ngân sách)
 
 | Biến thể | Ngân sách | Fill rate | Δ fill | Stockout days | Δ stockout | Tồn kho TB | Δ tồn kho | Chi phí (triệu) | Δ chi phí |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SMARTBOOK_FULL | không | 99.04% | +0.00 điểm % | 95 | +0 | 3213.9 | 0.0% | 428.1 | 0.0% |
-| SMARTBOOK_NO_SEASONALITY | không | 99.04% | +0.00 điểm % | 95 | +0 | 3493.1 | 8.7% | 485.5 | 13.4% |
-| SMARTBOOK_FIXED_LEAD_TIME | không | 99.04% | +0.00 điểm % | 95 | +0 | 2855.3 | -11.2% | 364.6 | -14.8% |
-| SMARTBOOK_NO_SAFETY_STOCK | không | 99.01% | -0.03 điểm % | 98 | +3 | 3009.6 | -6.4% | 396.8 | -7.3% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | không | 99.04% | +0.00 điểm % | 95 | +0 | 3212.4 | -0.0% | 428.1 | 0.0% |
-| SMARTBOOK_FULL | có | 89.67% | +0.00 điểm % | 1023 | +0 | 1287.4 | 0.0% | 146.5 | 0.0% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | có | 91.40% | +1.72 điểm % | 827 | -196 | 1347.0 | 4.6% | 146.1 | -0.2% |
+| SMARTBOOK_FULL | không | 99.04% | +0.00 điểm % | 95 | +0 | 3201.7 | 0.0% | 427.0 | 0.0% |
+| SMARTBOOK_NO_SEASONALITY | không | 99.04% | +0.00 điểm % | 95 | +0 | 3476.3 | 8.6% | 479.1 | 12.2% |
+| SMARTBOOK_FIXED_LEAD_TIME | không | 99.04% | +0.00 điểm % | 95 | +0 | 2824.3 | -11.8% | 360.2 | -15.7% |
+| SMARTBOOK_NO_SAFETY_STOCK | không | 99.01% | -0.03 điểm % | 98 | +3 | 2990.4 | -6.6% | 394.4 | -7.6% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | không | 99.04% | +0.00 điểm % | 95 | +0 | 3196.4 | -0.2% | 425.7 | -0.3% |
+| SMARTBOOK_MA30_FORECAST | không | 99.02% | -0.02 điểm % | 96 | +1 | 2402.7 | -25.0% | 265.1 | -37.9% |
+| SMARTBOOK_FULL | có | 90.45% | +0.00 điểm % | 890 | +0 | 1556.0 | 0.0% | 145.1 | 0.0% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | có | 90.41% | -0.05 điểm % | 892 | +2 | 1556.6 | 0.0% | 145.2 | 0.1% |
 
 **Kịch bản LEAN_START** (Δ so với SMARTBOOK_FULL cùng điều kiện ngân sách)
 
 | Biến thể | Ngân sách | Fill rate | Δ fill | Stockout days | Δ stockout | Tồn kho TB | Δ tồn kho | Chi phí (triệu) | Δ chi phí |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| SMARTBOOK_FULL | không | 97.75% | +0.00 điểm % | 207 | +0 | 2743.1 | 0.0% | 382.2 | 0.0% |
-| SMARTBOOK_NO_SEASONALITY | không | 97.75% | +0.00 điểm % | 207 | +0 | 3021.7 | 10.2% | 469.3 | 22.8% |
-| SMARTBOOK_FIXED_LEAD_TIME | không | 97.75% | +0.00 điểm % | 207 | +0 | 2743.1 | 0.0% | 382.2 | 0.0% |
-| SMARTBOOK_NO_SAFETY_STOCK | không | 97.65% | -0.10 điểm % | 216 | +9 | 2643.3 | -3.6% | 372.0 | -2.7% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | không | 97.74% | -0.01 điểm % | 208 | +1 | 2739.2 | -0.1% | 379.5 | -0.7% |
-| SMARTBOOK_FULL | có | 76.86% | +0.00 điểm % | 2250 | +0 | 1099.2 | 0.0% | 198.8 | 0.0% |
-| SMARTBOOK_NO_DEMAND_SIGNALS | có | 79.59% | +2.73 điểm % | 1931 | -319 | 1113.7 | 1.3% | 198.1 | -0.3% |
+| SMARTBOOK_FULL | không | 97.77% | +0.00 điểm % | 205 | +0 | 2739.5 | 0.0% | 381.5 | 0.0% |
+| SMARTBOOK_NO_SEASONALITY | không | 97.75% | -0.02 điểm % | 207 | +2 | 3004.2 | 9.7% | 462.3 | 21.2% |
+| SMARTBOOK_FIXED_LEAD_TIME | không | 97.77% | +0.00 điểm % | 205 | +0 | 2739.5 | 0.0% | 381.5 | 0.0% |
+| SMARTBOOK_NO_SAFETY_STOCK | không | 97.64% | -0.13 điểm % | 216 | +11 | 2630.0 | -4.0% | 370.4 | -2.9% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | không | 97.76% | -0.01 điểm % | 206 | +1 | 2733.9 | -0.2% | 378.5 | -0.8% |
+| SMARTBOOK_MA30_FORECAST | không | 97.72% | -0.05 điểm % | 209 | +4 | 2227.5 | -18.7% | 290.5 | -23.9% |
+| SMARTBOOK_FULL | có | 76.63% | +0.00 điểm % | 1958 | +0 | 1381.1 | 0.0% | 197.5 | 0.0% |
+| SMARTBOOK_NO_DEMAND_SIGNALS | có | 76.37% | -0.25 điểm % | 2018 | +60 | 1389.3 | 0.6% | 197.1 | -0.2% |
 <!-- AUTO:ablation:end -->
 
 Hình: `thesis/figures/reorder_ablation.png`.
@@ -466,21 +484,24 @@ Với dữ liệu thật: xuất các lần giao thành JSON
 <!-- AUTO:findings:start -->
 - Dự báo, horizon 7 ngày: MAE thấp nhất là MA30 (0.3314); EWMA + trend (production) xếp hạng 4/7 (MAE 0.3382, bias -0.0221); mô hình intermittent tốt nhất là TSB (MAE 0.3328, thấp hơn EWMA 1.6%).
 - Dự báo, horizon 14 ngày: MAE thấp nhất là TSB (0.3278); EWMA + trend (production) xếp hạng 3/7 (MAE 0.3286, bias -0.0304); mô hình intermittent tốt nhất là TSB (MAE 0.3278, thấp hơn EWMA 0.2%).
-- BASE, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 99.33% vs 98.98% (+0.34 điểm %), stockout days 64 vs 83, tồn kho TB 2925.9 vs 1793.9 bản (×1.63), chi phí 365.4 vs 146.8 triệu VND (×2.49).
-- BASE, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.33% vs 99.27% (+0.05 điểm %), stockout days 64 vs 69, tồn kho TB 2925.9 vs 1950.8 bản (×1.50), chi phí 365.4 vs 199.6 triệu VND (×1.83).
-- BASE, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.98% vs 99.62% (+0.36 điểm %), stockout days 2 vs 20, tồn kho TB 3086.5 vs 1849.7 bản (×1.67), chi phí 198.2 vs 41.5 triệu VND (×4.78).
-- BASE, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.98% vs 99.92% (+0.06 điểm %), stockout days 2 vs 7, tồn kho TB 3086.5 vs 2033.5 bản (×1.52), chi phí 198.2 vs 105.5 triệu VND (×1.88).
-- BASE, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 90.77%, thấp hơn REORDER_POINT (98.98%), chênh -8.21 điểm %.
-- SUPPLIER_DELAY, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 99.04% vs 98.73% (+0.31 điểm %), stockout days 95 vs 110, tồn kho TB 3213.9 vs 1765.8 bản (×1.82), chi phí 428.1 vs 147.8 triệu VND (×2.90).
-- SUPPLIER_DELAY, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.04% vs 98.98% (+0.05 điểm %), stockout days 95 vs 100, tồn kho TB 3213.9 vs 1905.8 bản (×1.69), chi phí 428.1 vs 199.3 triệu VND (×2.15).
-- SUPPLIER_DELAY, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.94% vs 99.62% (+0.32 điểm %), stockout days 6 vs 20, tồn kho TB 3423.0 vs 1842.9 bản (×1.86), chi phí 258.9 vs 42.5 triệu VND (×6.09).
-- SUPPLIER_DELAY, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.94% vs 99.88% (+0.06 điểm %), stockout days 6 vs 11, tồn kho TB 3423.0 vs 1999.4 bản (×1.71), chi phí 258.9 vs 107.3 triệu VND (×2.41).
-- SUPPLIER_DELAY, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 89.67%, thấp hơn REORDER_POINT (98.73%), chênh -9.06 điểm %.
-- LEAN_START, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 97.75% vs 97.21% (+0.54 điểm %), stockout days 207 vs 228, tồn kho TB 2743.1 vs 1728.9 bản (×1.59), chi phí 382.2 vs 199.8 triệu VND (×1.91).
-- LEAN_START, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 97.75% vs 97.50% (+0.25 điểm %), stockout days 207 vs 231, tồn kho TB 2743.1 vs 1831.5 bản (×1.50), chi phí 382.2 vs 247.2 triệu VND (×1.55).
-- LEAN_START, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.86% vs 99.19% (+0.68 điểm %), stockout days 12 vs 44, tồn kho TB 2926.0 vs 1806.3 bản (×1.62), chi phí 217.6 vs 72.4 triệu VND (×3.01).
-- LEAN_START, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.86% vs 99.62% (+0.24 điểm %), stockout days 12 vs 35, tồn kho TB 2926.0 vs 1944.2 bản (×1.50), chi phí 217.6 vs 161.9 triệu VND (×1.34).
-- LEAN_START, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 76.86%, thấp hơn REORDER_POINT (97.21%), chênh -20.34 điểm %.
+- BASE, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 99.33% vs 98.98% (+0.34 điểm %), stockout days 64 vs 83, tồn kho TB 2894.2 vs 1793.9 bản (×1.61), chi phí 360.3 vs 146.8 triệu VND (×2.45).
+- BASE, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.33% vs 99.27% (+0.05 điểm %), stockout days 64 vs 69, tồn kho TB 2894.2 vs 1950.8 bản (×1.48), chi phí 360.3 vs 199.6 triệu VND (×1.81).
+- BASE, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.98% vs 99.62% (+0.36 điểm %), stockout days 2 vs 20, tồn kho TB 3052.7 vs 1849.7 bản (×1.65), chi phí 196.8 vs 41.5 triệu VND (×4.74).
+- BASE, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.98% vs 99.92% (+0.06 điểm %), stockout days 2 vs 7, tồn kho TB 3052.7 vs 2033.5 bản (×1.50), chi phí 196.8 vs 105.5 triệu VND (×1.87).
+- BASE, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 92.45%, thấp hơn REORDER_POINT (98.98%), chênh -6.53 điểm %.
+- BASE, cùng ngân sách **mỗi tuần** (công bằng): SMARTBOOK_BUDGET_MATCHED 92.45% so với REORDER_POINT_SAME_BUDGET 92.91%, chênh -0.46 điểm %.
+- SUPPLIER_DELAY, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 99.04% vs 98.73% (+0.31 điểm %), stockout days 95 vs 110, tồn kho TB 3201.7 vs 1765.8 bản (×1.81), chi phí 427.0 vs 147.8 triệu VND (×2.89).
+- SUPPLIER_DELAY, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.04% vs 98.98% (+0.05 điểm %), stockout days 95 vs 100, tồn kho TB 3201.7 vs 1905.8 bản (×1.68), chi phí 427.0 vs 199.3 triệu VND (×2.14).
+- SUPPLIER_DELAY, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.94% vs 99.62% (+0.32 điểm %), stockout days 6 vs 20, tồn kho TB 3410.1 vs 1842.9 bản (×1.85), chi phí 261.5 vs 42.5 triệu VND (×6.15).
+- SUPPLIER_DELAY, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.94% vs 99.88% (+0.06 điểm %), stockout days 6 vs 11, tồn kho TB 3410.1 vs 1999.4 bản (×1.71), chi phí 261.5 vs 107.3 triệu VND (×2.44).
+- SUPPLIER_DELAY, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 90.45%, thấp hơn REORDER_POINT (98.73%), chênh -8.28 điểm %.
+- SUPPLIER_DELAY, cùng ngân sách **mỗi tuần** (công bằng): SMARTBOOK_BUDGET_MATCHED 90.45% so với REORDER_POINT_SAME_BUDGET 92.53%, chênh -2.08 điểm %.
+- LEAN_START, toàn cửa sổ: SMARTBOOK so với REORDER_POINT — fill rate 97.77% vs 97.21% (+0.56 điểm %), stockout days 205 vs 228, tồn kho TB 2739.5 vs 1728.9 bản (×1.58), chi phí 381.5 vs 199.8 triệu VND (×1.91).
+- LEAN_START, toàn cửa sổ: SMARTBOOK so với MA30_FIXED_LT — fill rate 97.77% vs 97.50% (+0.27 điểm %), stockout days 205 vs 231, tồn kho TB 2739.5 vs 1831.5 bản (×1.50), chi phí 381.5 vs 247.2 triệu VND (×1.54).
+- LEAN_START, cửa sổ ổn định: SMARTBOOK so với REORDER_POINT — fill rate 99.86% vs 99.19% (+0.68 điểm %), stockout days 12 vs 44, tồn kho TB 2922.3 vs 1806.3 bản (×1.62), chi phí 217.8 vs 72.4 triệu VND (×3.01).
+- LEAN_START, cửa sổ ổn định: SMARTBOOK so với MA30_FIXED_LT — fill rate 99.86% vs 99.62% (+0.24 điểm %), stockout days 12 vs 35, tồn kho TB 2922.3 vs 1944.2 bản (×1.50), chi phí 217.8 vs 161.9 triệu VND (×1.35).
+- LEAN_START, cùng ngân sách với REORDER_POINT: SMARTBOOK_BUDGET_MATCHED đạt fill rate 76.63%, thấp hơn REORDER_POINT (97.21%), chênh -20.58 điểm %.
+- LEAN_START, cùng ngân sách **mỗi tuần** (công bằng): SMARTBOOK_BUDGET_MATCHED 76.63% so với REORDER_POINT_SAME_BUDGET 76.98%, chênh -0.35 điểm %.
 <!-- AUTO:findings:end -->
 
 ## 11. Diễn giải
@@ -495,8 +516,11 @@ trơn. Không mô hình nào thắng áp đảo trên cả hai horizon và mọi
 
 **Chính sách nhập kho.** SMARTBOOK đạt fill rate cao nhất và ít stockout days nhất trong cả ba kịch bản, nhưng
 mức hơn baseline rất nhỏ, trong khi tồn kho trung bình và chi phí mua cao hơn rõ rệt (xem mục 10). Khi bị giới
-hạn ở đúng mức chi tiêu của baseline rẻ hơn, SMARTBOOK đáp ứng **kém hơn** baseline đó. Nói cách khác, ở dữ
-liệu này phần cải thiện của SMARTBOOK đến từ việc mua nhiều hơn, không phải từ việc phân bổ thông minh hơn.
+hạn ở đúng mức chi tiêu của baseline rẻ hơn, SMARTBOOK đáp ứng **kém hơn** baseline đó. *Đính chính 2026-10-08:*
+phần lớn khoảng cách này đến từ **thời điểm chi tiêu**, không phải từ cách phân bổ — baseline không giới hạn được
+dồn tiền mua ở các lần xem xét đầu, còn SMARTBOOK_BUDGET_MATCHED bị giới hạn theo tuần, không cộng dồn. Khi chính
+baseline chạy dưới cùng ngân sách tuần (`*_SAME_BUDGET`), khoảng cách còn −0.35 đến −2.08 điểm % (mục 10), thay vì
+−6.5 đến −20.6 điểm %. Ở dữ liệu này, phần cải thiện khi *không* có ngân sách vẫn chủ yếu đến từ việc mua nhiều hơn.
 
 Nguyên nhân quan sát được từ cơ chế:
 1. Công thức production coi lượt mượn trong lead time như hàng *tiêu hao*, trong khi sách thư viện quay lại
@@ -505,7 +529,8 @@ Nguyên nhân quan sát được từ cơ chế:
    (`forecast_30d > available`); phần lớn đơn của SMARTBOOK ở BASE là MEDIUM (`decision_stats.by_priority`
    trong `reorder_policy_results.json`).
 3. Khi có ngân sách, thứ tự (priority, demand score) ưu tiên các dòng HIGH/MEDIUM có sàn số lượng, không ưu
-   tiên nơi một bản thêm giảm được nhiều unmet nhất.
+   tiên nơi một bản thêm giảm được nhiều unmet nhất. **Đã sửa (2026-10-08)**: production cấp vốn theo thiếu hụt
+   kỳ vọng trên mỗi đồng — xem mục 13.2; các bảng tự động phía trên đã dùng thứ tự mới.
 
 **Ablation.** Mùa vụ giúp *giảm* chi phí mà không đổi fill rate trên dữ liệu này; lead time học chỉ có tác dụng
 khi nhà cung cấp thực sự lệch khai báo (SUPPLIER_DELAY) và ở đó làm tăng chi phí mà fill rate gần như không đổi;
@@ -527,17 +552,59 @@ sách, và dưới ngân sách thì bỏ chúng đi lại cho fill rate cao hơn
   sách; availability alert không backtest được và được đặt bằng 0.
 * **Lịch sử nhà cung cấp.** Repo chỉ có 1 PO / 1 phiếu nhập (2 dòng) ⇒ lead time `INSUFFICIENT_DATA`; lợi ích
   của lead time học chưa được kiểm chứng trên dữ liệu thật.
-* **Một seed.** Kết quả của một quần thể tổng hợp; chưa có khoảng tin cậy qua nhiều seed.
+* **Một seed.** Kết quả các mục tự động là của một quần thể tổng hợp. Nghiên cứu ứng viên ở mục 13.2 dùng thêm 3 seed
+  kiểm định, nhưng vẫn chưa có khoảng tin cậy thống kê.
 
 ## 13. Kết luận
 
 Trên dữ liệu tổng hợp và giao thức trên, câu trả lời cho câu hỏi đánh giá là **chưa**: SmartBook có giảm hết
 sách và tăng mức đáp ứng so với chính sách đơn giản, nhưng chỉ với biên rất nhỏ, đổi lại tồn kho và chi phí
-tăng nhiều; ở cùng mức chi tiêu thì một chính sách min/max đơn giản đáp ứng tốt hơn. Về dự báo, các mô hình
+tăng nhiều; ở cùng mức chi tiêu *tổng* thì một chính sách min/max đơn giản đáp ứng tốt hơn, nhưng phần lớn chênh
+lệch đó là do baseline được chi tiền tự do theo thời gian (mục 11); ở cùng ngân sách *mỗi tuần* hai bên gần
+ngang nhau. Về dự báo, các mô hình
 intermittent (Croston/SBA/TSB) không vượt trội rõ rệt so với mô hình production.
 
 Vì vậy **không thay mô hình dự báo production** dựa trên các kết quả này. Các hướng cải tiến có căn cứ từ
 thực nghiệm (cần đánh giá lại bằng chính pipeline này trước khi đưa vào production):
 (1) tính vị trí tồn kho có cộng bản đang cho mượn sắp trả và hàng đang đặt; (2) xem lại sàn số lượng theo
-priority; (3) xếp hạng dưới ngân sách theo unmet kỳ vọng giảm được trên mỗi đồng; (4) chỉ dùng ngày trọn
-vẹn trong chuỗi dự báo; (5) thu thập lịch sử giao hàng thật để đánh giá lead time học.
+priority; (3) xếp hạng dưới ngân sách theo unmet kỳ vọng giảm được trên mỗi đồng; (4) ~~chỉ dùng ngày trọn
+vẹn trong chuỗi dự báo~~ — **đã làm** (xem mục 5.2); (5) thu thập lịch sử giao hàng thật để đánh giá lead time học.
+
+### 13.1 Vì sao EWMA + trend không vượt MA30 (bổ sung 2026-10-08)
+
+Chẩn đoán phân rã trong `docs/ANALYSIS/FORECAST_DIAGNOSTICS.md` (sinh bởi `eval/forecast-diagnostics.js`;
+chọn mô hình trên nửa đầu các fold — validation, báo cáo trên nửa sau — test, CI bootstrap theo variant):
+
+* **Nguyên nhân chính — α = 0.35 quá nhạy với nhu cầu gián đoạn.** Bỏ trend rồi giảm α (0.35 → 0.2 → 0.1 →
+  0.05) cải thiện đơn điệu cả MAE ngày lẫn sai số tổng nhu cầu 14 ngày (đại lượng mà gợi ý nhập kho dùng);
+  α = 0.35 tương đương "bộ nhớ" ~5 ngày, nên một lượt mượn lẻ làm dự báo nhảy vọt.
+* **Nguyên nhân phụ — trend tuyến tính trên 30 ngày chỉ thêm nhiễu**: bỏ trend làm giảm MAE có ý nghĩa
+  (CI 95% không chứa 0).
+* Mô hình production *thực tế* (EWMA + trend trên đúng 30 ngày) kém hơn biến thể "EWMA + trend" ở mục 6 (tính
+  trên cửa sổ huấn luyện mở rộng) — mục 6 hơi lạc quan về production.
+* Mô hình chọn trên validation (SES α = 0.05) **ngang** MA30 trên test (khác biệt ≈ 0, CI chứa 0).
+
+**Kiểm tra rủi ro nghiệp vụ trước khi áp dụng.** Biến thể `SMARTBOOK_MA30_FORECAST` (mục 8: production
+nhưng dự báo bằng trung bình 30 ngày, không trend) giảm chi phí mua 24–38% và tồn kho trung bình 17–25% so với
+SMARTBOOK, nhưng **tăng nhẹ stockout days** ở cả ba kịch bản (BASE +4, SUPPLIER_DELAY +1, LEAN_START +4; fill rate
+−0.02…−0.05 điểm %). Vì quy tắc là chỉ đổi production khi không làm tăng rủi ro hết sách, **mô hình production
+được giữ nguyên**; đây là một đánh đổi chi phí ↔ mức phục vụ để nhóm/GVHD quyết định, không phải một cải tiến
+thuần. Cũng lưu ý: ngay cả với MA30, SMARTBOOK vẫn đắt hơn chính sách `MA30_FIXED_LT` ở cùng fill rate — phần
+mua thừa chủ yếu đến từ sàn số lượng theo priority (hướng (2)), không phải từ mô hình dự báo.
+
+### 13.2 Sàn số lượng theo priority và thứ tự cấp vốn (bổ sung 2026-10-08)
+
+Kết quả đầy đủ: `docs/ANALYSIS/REORDER_CANDIDATES.md` (sinh bởi `eval/reorder-candidates.js`). Giao thức: thiết kế
+ứng viên trên seed phát triển 20260928; tiêu chí chấp nhận cố định trong script **trước** khi chạy 3 seed kiểm định mới
+(20261101–20261103); ứng viên chỉ được đưa vào production nếu đạt ở mọi seed × mọi kịch bản.
+
+* **Bỏ sàn số lượng (`NO_FLOOR`) — không áp dụng.** Giảm ~16.5% chi phí nhưng stockout days tăng quá biên cho phép
+  (+5%) ở nhiều seed/kịch bản: trên dữ liệu này sàn số lượng thực sự "mua" được mức phục vụ.
+* **Cấp vốn theo thiếu hụt kỳ vọng trên mỗi đồng (`SHORTFALL_RANK`) — đã áp dụng vào production.** Đạt ở 9/9 seed ×
+  kịch bản kiểm định: cùng mức chi, fill rate +0.22 đến +4.03 điểm %, nhu cầu không đáp ứng giảm 2.7–29.6%; không đổi
+  hành vi khi không có ngân sách. Production (`GET /analytics/reorder-suggestions?budgetVnd=`) vẫn trả danh sách theo
+  priority nhưng `within_budget` được tính theo thứ tự mới (`budget.funding_order = SHORTFALL_PER_COST`).
+* So với min/max chạy dưới cùng ngân sách tuần, thứ tự mới tốt hơn ở LEAN_START, ngang ở BASE, nhưng vẫn **kém ở
+  SUPPLIER_DELAY** (3/3 seed) — khi nhà cung cấp giao chậm hơn khai báo, công thức dựa trên lead time học được vẫn chưa
+  bắt kịp.
+

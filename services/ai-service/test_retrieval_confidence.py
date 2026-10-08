@@ -121,3 +121,18 @@ class EvaluateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_internal_doc_weak_match_between_old_and_new_threshold_now_abstains():
+    """Regression (re-calibration 2026-10-08): a top INTERNAL_DOC hit with a
+    middling cosine and no keyword support scores between the old 0.35 and the
+    new 0.40 evidence threshold - the profile of out-of-scope questions such as
+    'Thu vien co wifi mien phi khong?' - and must be withheld, not answered."""
+    import vector_store
+
+    signals = rc.RetrievalSignals(
+        corpus=vector_store.CORPUS_DOC, result_count=3, semantic_available=True,
+        semantic_top1=0.49, semantic_rank=1, keyword_rank=None, top1_agree=False)
+    result = rc.evaluate(signals, rc._DOC_DEFAULTS)
+    assert 0.35 <= result.confidence < 0.40
+    assert result.decision == rc.NO_EVIDENCE

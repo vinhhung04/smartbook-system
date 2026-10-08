@@ -65,7 +65,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -77,13 +80,13 @@
         "stockout_days": 64,
         "stockout_rate": 0.001676,
         "variants_with_stockout": 34,
-        "average_inventory": 2925.934328,
-        "max_inventory": 3669,
-        "average_available_inventory": 2345.414925,
-        "ordered_units": 2991,
-        "order_count": 728,
-        "procurement_cost": 365406620,
-        "average_order_size": 4.108516
+        "average_inventory": 2894.226866,
+        "max_inventory": 3630,
+        "average_available_inventory": 2313.707463,
+        "ordered_units": 2956,
+        "order_count": 715,
+        "procurement_cost": 360349720,
+        "average_order_size": 4.134266
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -95,29 +98,29 @@
         "stockout_days": 2,
         "stockout_rate": 0.000057,
         "variants_with_stockout": 2,
-        "average_inventory": 3086.540717,
-        "max_inventory": 3669,
-        "average_available_inventory": 2497.508143,
-        "ordered_units": 1643,
-        "order_count": 478,
-        "procurement_cost": 198233210,
-        "average_order_size": 3.437238
+        "average_inventory": 3052.67101,
+        "max_inventory": 3630,
+        "average_available_inventory": 2463.638436,
+        "ordered_units": 1637,
+        "order_count": 471,
+        "procurement_cost": 196814910,
+        "average_order_size": 3.475584
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 728,
-        "funded": 728,
+        "candidates": 715,
+        "funded": 715,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 143,
+          "HIGH": 147,
           "LOW": 9,
-          "MEDIUM": 576
+          "MEDIUM": 559
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 555
+          "DEFAULT": 171,
+          "LEARNED": 544
         }
       }
     },
@@ -129,7 +132,10 @@
         "seasonality": false,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -141,13 +147,13 @@
         "stockout_days": 64,
         "stockout_rate": 0.001676,
         "variants_with_stockout": 34,
-        "average_inventory": 3190.432836,
-        "max_inventory": 4144,
-        "average_available_inventory": 2609.913433,
-        "ordered_units": 3480,
-        "order_count": 886,
-        "procurement_cost": 425904570,
-        "average_order_size": 3.927765
+        "average_inventory": 3165.710448,
+        "max_inventory": 4110,
+        "average_available_inventory": 2585.191045,
+        "ordered_units": 3437,
+        "order_count": 872,
+        "procurement_cost": 420572610,
+        "average_order_size": 3.941514
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -159,29 +165,29 @@
         "stockout_days": 2,
         "stockout_rate": 0.000057,
         "variants_with_stockout": 2,
-        "average_inventory": 3374.592834,
-        "max_inventory": 4144,
-        "average_available_inventory": 2785.560261,
-        "ordered_units": 2121,
-        "order_count": 639,
-        "procurement_cost": 254760970,
-        "average_order_size": 3.319249
+        "average_inventory": 3348.117264,
+        "max_inventory": 4110,
+        "average_available_inventory": 2759.084691,
+        "ordered_units": 2096,
+        "order_count": 628,
+        "procurement_cost": 252368010,
+        "average_order_size": 3.33758
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 886,
-        "funded": 886,
+        "candidates": 872,
+        "funded": 872,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
           "HIGH": 132,
           "LOW": 8,
-          "MEDIUM": 746
+          "MEDIUM": 732
         },
         "by_lead_time_source": {
           "DEFAULT": 166,
-          "LEARNED": 720
+          "LEARNED": 706
         }
       }
     },
@@ -193,7 +199,10 @@
         "seasonality": true,
         "learned_lead_time": false,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -205,13 +214,13 @@
         "stockout_days": 64,
         "stockout_rate": 0.001676,
         "variants_with_stockout": 34,
-        "average_inventory": 2925.934328,
-        "max_inventory": 3669,
-        "average_available_inventory": 2345.414925,
-        "ordered_units": 2991,
-        "order_count": 728,
-        "procurement_cost": 365406620,
-        "average_order_size": 4.108516
+        "average_inventory": 2894.226866,
+        "max_inventory": 3630,
+        "average_available_inventory": 2313.707463,
+        "ordered_units": 2956,
+        "order_count": 715,
+        "procurement_cost": 360349720,
+        "average_order_size": 4.134266
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -223,28 +232,28 @@
         "stockout_days": 2,
         "stockout_rate": 0.000057,
         "variants_with_stockout": 2,
-        "average_inventory": 3086.540717,
-        "max_inventory": 3669,
-        "average_available_inventory": 2497.508143,
-        "ordered_units": 1643,
-        "order_count": 478,
-        "procurement_cost": 198233210,
-        "average_order_size": 3.437238
+        "average_inventory": 3052.67101,
+        "max_inventory": 3630,
+        "average_available_inventory": 2463.638436,
+        "ordered_units": 1637,
+        "order_count": 471,
+        "procurement_cost": 196814910,
+        "average_order_size": 3.475584
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 728,
-        "funded": 728,
+        "candidates": 715,
+        "funded": 715,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 143,
+          "HIGH": 147,
           "LOW": 9,
-          "MEDIUM": 576
+          "MEDIUM": 559
         },
         "by_lead_time_source": {
-          "DEFAULT": 728
+          "DEFAULT": 715
         }
       }
     },
@@ -256,7 +265,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": false,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -268,13 +280,13 @@
         "stockout_days": 67,
         "stockout_rate": 0.001754,
         "variants_with_stockout": 37,
-        "average_inventory": 2836.59403,
-        "max_inventory": 3596,
-        "average_available_inventory": 2256.292537,
-        "ordered_units": 2914,
-        "order_count": 776,
-        "procurement_cost": 356751090,
-        "average_order_size": 3.755155
+        "average_inventory": 2803.352239,
+        "max_inventory": 3553,
+        "average_available_inventory": 2223.050746,
+        "ordered_units": 2871,
+        "order_count": 760,
+        "procurement_cost": 350374490,
+        "average_order_size": 3.777632
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -286,28 +298,28 @@
         "stockout_days": 2,
         "stockout_rate": 0.000057,
         "variants_with_stockout": 2,
-        "average_inventory": 2994.980456,
-        "max_inventory": 3596,
-        "average_available_inventory": 2406.140065,
-        "ordered_units": 1681,
-        "order_count": 516,
-        "procurement_cost": 204516380,
-        "average_order_size": 3.257752
+        "average_inventory": 2959.254072,
+        "max_inventory": 3553,
+        "average_available_inventory": 2370.413681,
+        "ordered_units": 1659,
+        "order_count": 505,
+        "procurement_cost": 200877380,
+        "average_order_size": 3.285149
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 776,
-        "funded": 776,
+        "candidates": 760,
+        "funded": 760,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 158,
-          "MEDIUM": 618
+          "HIGH": 162,
+          "MEDIUM": 598
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 603
+          "DEFAULT": 172,
+          "LEARNED": 588
         }
       }
     },
@@ -319,7 +331,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": false
+        "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -331,13 +346,13 @@
         "stockout_days": 64,
         "stockout_rate": 0.001676,
         "variants_with_stockout": 34,
-        "average_inventory": 2921.591045,
-        "max_inventory": 3654,
-        "average_available_inventory": 2341.071642,
-        "ordered_units": 2976,
-        "order_count": 723,
-        "procurement_cost": 363504620,
-        "average_order_size": 4.116183
+        "average_inventory": 2889.00597,
+        "max_inventory": 3615,
+        "average_available_inventory": 2308.486567,
+        "ordered_units": 2938,
+        "order_count": 709,
+        "procurement_cost": 357634720,
+        "average_order_size": 4.143865
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -349,29 +364,96 @@
         "stockout_days": 2,
         "stockout_rate": 0.000057,
         "variants_with_stockout": 2,
-        "average_inventory": 3081.801303,
-        "max_inventory": 3654,
-        "average_available_inventory": 2492.76873,
-        "ordered_units": 1628,
-        "order_count": 473,
-        "procurement_cost": 196331210,
-        "average_order_size": 3.44186
+        "average_inventory": 3046.973941,
+        "max_inventory": 3615,
+        "average_available_inventory": 2457.941368,
+        "ordered_units": 1619,
+        "order_count": 465,
+        "procurement_cost": 194099910,
+        "average_order_size": 3.48172
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 723,
-        "funded": 723,
+        "candidates": 709,
+        "funded": 709,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 143,
+          "HIGH": 147,
           "LOW": 9,
-          "MEDIUM": 571
+          "MEDIUM": 553
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 550
+          "DEFAULT": 171,
+          "LEARNED": 538
+        }
+      }
+    },
+    {
+      "scenario": "BASE",
+      "variant": "SMARTBOOK_MA30_FORECAST",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "forecast_model": "MOVING_AVERAGE",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10942,
+        "unmet_demand": 79,
+        "fill_rate": 0.992832,
+        "stockout_days": 68,
+        "stockout_rate": 0.001781,
+        "variants_with_stockout": 37,
+        "average_inventory": 2401.298507,
+        "max_inventory": 2833,
+        "average_available_inventory": 1820.925373,
+        "ordered_units": 2135,
+        "order_count": 589,
+        "procurement_cost": 260044280,
+        "average_order_size": 3.624788
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10199,
+        "unmet_demand": 7,
+        "fill_rate": 0.999314,
+        "stockout_days": 6,
+        "stockout_rate": 0.000171,
+        "variants_with_stockout": 5,
+        "average_inventory": 2518.273616,
+        "max_inventory": 2833,
+        "average_available_inventory": 1929.400651,
+        "ordered_units": 984,
+        "order_count": 321,
+        "procurement_cost": 118640920,
+        "average_order_size": 3.065421
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 589,
+        "funded": 589,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 96,
+          "LOW": 31,
+          "MEDIUM": 462
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 185,
+          "LEARNED": 404
         }
       }
     },
@@ -384,62 +466,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 3058382.708333
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10004,
-        "unmet_demand": 1017,
-        "fill_rate": 0.907722,
-        "stockout_days": 920,
-        "stockout_rate": 0.02409,
-        "variants_with_stockout": 94,
-        "average_inventory": 1293.373134,
-        "max_inventory": 1882,
-        "average_available_inventory": 760.226866,
-        "ordered_units": 1215,
-        "order_count": 187,
-        "procurement_cost": 145432260,
-        "average_order_size": 6.497326,
+        "fulfilled_demand": 10189,
+        "unmet_demand": 832,
+        "fill_rate": 0.924508,
+        "stockout_days": 690,
+        "stockout_rate": 0.018068,
+        "variants_with_stockout": 87,
+        "average_inventory": 1518.740299,
+        "max_inventory": 2194,
+        "average_available_inventory": 977.453731,
+        "ordered_units": 1526,
+        "order_count": 191,
+        "procurement_cost": 143925330,
+        "average_order_size": 7.989529,
         "budget_total": 146802370,
-        "budget_utilization": 0.990667,
-        "unfunded_reorder_count": 3785
+        "budget_utilization": 0.980402,
+        "unfunded_reorder_count": 3050
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 9325,
-        "unmet_demand": 881,
-        "fill_rate": 0.913678,
-        "stockout_days": 799,
-        "stockout_rate": 0.02283,
-        "variants_with_stockout": 90,
-        "average_inventory": 1342.931596,
-        "max_inventory": 1882,
-        "average_available_inventory": 804.348534,
-        "ordered_units": 1101,
-        "order_count": 174,
-        "procurement_cost": 133310260,
-        "average_order_size": 6.327586
+        "fulfilled_demand": 9509,
+        "unmet_demand": 697,
+        "fill_rate": 0.931707,
+        "stockout_days": 572,
+        "stockout_rate": 0.016344,
+        "variants_with_stockout": 74,
+        "average_inventory": 1587.872964,
+        "max_inventory": 2194,
+        "average_available_inventory": 1040.547231,
+        "ordered_units": 1338,
+        "order_count": 172,
+        "procurement_cost": 131786080,
+        "average_order_size": 7.77907
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3972,
-        "funded": 187,
-        "unfunded_reorder_count": 3785,
+        "candidates": 3241,
+        "funded": 191,
+        "unfunded_reorder_count": 3050,
         "budget_total": 146802370,
-        "budget_spent": 145432260,
+        "budget_spent": 143925330,
         "by_priority": {
-          "HIGH": 162,
+          "HIGH": 146,
           "LOW": 7,
-          "MEDIUM": 18
+          "MEDIUM": 38
         },
         "by_lead_time_source": {
-          "DEFAULT": 7,
-          "LEARNED": 180
+          "DEFAULT": 12,
+          "LEARNED": 179
         }
       }
     },
@@ -452,62 +537,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 3058382.708333
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10180,
-        "unmet_demand": 841,
-        "fill_rate": 0.923691,
-        "stockout_days": 739,
-        "stockout_rate": 0.019351,
-        "variants_with_stockout": 91,
-        "average_inventory": 1372.686567,
-        "max_inventory": 1940,
-        "average_available_inventory": 831.364179,
-        "ordered_units": 1257,
-        "order_count": 187,
-        "procurement_cost": 145192180,
-        "average_order_size": 6.721925,
+        "fulfilled_demand": 10171,
+        "unmet_demand": 850,
+        "fill_rate": 0.922875,
+        "stockout_days": 704,
+        "stockout_rate": 0.018434,
+        "variants_with_stockout": 89,
+        "average_inventory": 1521.877612,
+        "max_inventory": 2193,
+        "average_available_inventory": 981.552239,
+        "ordered_units": 1533,
+        "order_count": 196,
+        "procurement_cost": 144367170,
+        "average_order_size": 7.821429,
         "budget_total": 146802370,
-        "budget_utilization": 0.989032,
-        "unfunded_reorder_count": 3626
+        "budget_utilization": 0.983412,
+        "unfunded_reorder_count": 2991
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 9494,
-        "unmet_demand": 712,
-        "fill_rate": 0.930237,
-        "stockout_days": 624,
-        "stockout_rate": 0.01783,
-        "variants_with_stockout": 84,
-        "average_inventory": 1429.205212,
-        "max_inventory": 1940,
-        "average_available_inventory": 881.837134,
-        "ordered_units": 1108,
-        "order_count": 174,
-        "procurement_cost": 133014180,
-        "average_order_size": 6.367816
+        "fulfilled_demand": 9491,
+        "unmet_demand": 715,
+        "fill_rate": 0.929943,
+        "stockout_days": 586,
+        "stockout_rate": 0.016744,
+        "variants_with_stockout": 77,
+        "average_inventory": 1591.296417,
+        "max_inventory": 2193,
+        "average_available_inventory": 1045.019544,
+        "ordered_units": 1345,
+        "order_count": 177,
+        "procurement_cost": 132214170,
+        "average_order_size": 7.59887
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3813,
-        "funded": 187,
-        "unfunded_reorder_count": 3626,
+        "candidates": 3187,
+        "funded": 196,
+        "unfunded_reorder_count": 2991,
         "budget_total": 146802370,
-        "budget_spent": 145192180,
+        "budget_spent": 144367170,
         "by_priority": {
-          "HIGH": 160,
-          "MEDIUM": 16,
-          "LOW": 11
+          "HIGH": 143,
+          "LOW": 8,
+          "MEDIUM": 45
         },
         "by_lead_time_source": {
-          "DEFAULT": 7,
-          "LEARNED": 180
+          "DEFAULT": 12,
+          "LEARNED": 184
         }
       }
     },
@@ -519,7 +607,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -531,13 +622,13 @@
         "stockout_days": 95,
         "stockout_rate": 0.002488,
         "variants_with_stockout": 47,
-        "average_inventory": 3213.850746,
-        "max_inventory": 4119,
-        "average_available_inventory": 2634.871642,
-        "ordered_units": 3511,
+        "average_inventory": 3201.734328,
+        "max_inventory": 4114,
+        "average_available_inventory": 2622.755224,
+        "ordered_units": 3507,
         "order_count": 630,
-        "procurement_cost": 428082040,
-        "average_order_size": 5.573016
+        "procurement_cost": 427020830,
+        "average_order_size": 5.566667
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -549,13 +640,13 @@
         "stockout_days": 6,
         "stockout_rate": 0.000171,
         "variants_with_stockout": 5,
-        "average_inventory": 3423.016287,
-        "max_inventory": 4119,
-        "average_available_inventory": 2834.921824,
-        "ordered_units": 2146,
-        "order_count": 385,
-        "procurement_cost": 258933580,
-        "average_order_size": 5.574026
+        "average_inventory": 3410.130293,
+        "max_inventory": 4114,
+        "average_available_inventory": 2822.035831,
+        "ordered_units": 2170,
+        "order_count": 391,
+        "procurement_cost": 261479470,
+        "average_order_size": 5.549872
       },
       "decision_stats": {
         "reviews": 48,
@@ -566,12 +657,12 @@
         "budget_spent": 0,
         "by_priority": {
           "HIGH": 215,
-          "LOW": 18,
-          "MEDIUM": 397
+          "LOW": 21,
+          "MEDIUM": 394
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 457
+          "DEFAULT": 171,
+          "LEARNED": 459
         }
       }
     },
@@ -583,7 +674,10 @@
         "seasonality": false,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -595,13 +689,13 @@
         "stockout_days": 95,
         "stockout_rate": 0.002488,
         "variants_with_stockout": 47,
-        "average_inventory": 3493.092537,
-        "max_inventory": 4604,
-        "average_available_inventory": 2914.113433,
-        "ordered_units": 3967,
-        "order_count": 724,
-        "procurement_cost": 485546640,
-        "average_order_size": 5.479282
+        "average_inventory": 3476.310448,
+        "max_inventory": 4570,
+        "average_available_inventory": 2897.331343,
+        "ordered_units": 3926,
+        "order_count": 711,
+        "procurement_cost": 479078610,
+        "average_order_size": 5.5218
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -613,29 +707,29 @@
         "stockout_days": 6,
         "stockout_rate": 0.000171,
         "variants_with_stockout": 5,
-        "average_inventory": 3727.260586,
-        "max_inventory": 4604,
-        "average_available_inventory": 3139.166124,
-        "ordered_units": 2596,
-        "order_count": 482,
-        "procurement_cost": 313571240,
-        "average_order_size": 5.385892
+        "average_inventory": 3709.237785,
+        "max_inventory": 4570,
+        "average_available_inventory": 3121.143322,
+        "ordered_units": 2573,
+        "order_count": 472,
+        "procurement_cost": 310091210,
+        "average_order_size": 5.451271
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 724,
-        "funded": 724,
+        "candidates": 711,
+        "funded": 711,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 190,
-          "LOW": 11,
-          "MEDIUM": 523
+          "HIGH": 186,
+          "LOW": 10,
+          "MEDIUM": 515
         },
         "by_lead_time_source": {
           "DEFAULT": 166,
-          "LEARNED": 558
+          "LEARNED": 545
         }
       }
     },
@@ -647,7 +741,10 @@
         "seasonality": true,
         "learned_lead_time": false,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -659,13 +756,13 @@
         "stockout_days": 95,
         "stockout_rate": 0.002488,
         "variants_with_stockout": 47,
-        "average_inventory": 2855.325373,
-        "max_inventory": 3639,
-        "average_available_inventory": 2276.346269,
-        "ordered_units": 2985,
-        "order_count": 734,
-        "procurement_cost": 364576270,
-        "average_order_size": 4.066757
+        "average_inventory": 2824.289552,
+        "max_inventory": 3604,
+        "average_available_inventory": 2245.310448,
+        "ordered_units": 2954,
+        "order_count": 722,
+        "procurement_cost": 360153770,
+        "average_order_size": 4.091413
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -677,28 +774,28 @@
         "stockout_days": 6,
         "stockout_rate": 0.000171,
         "variants_with_stockout": 5,
-        "average_inventory": 3031.791531,
-        "max_inventory": 3639,
-        "average_available_inventory": 2443.697068,
-        "ordered_units": 1669,
-        "order_count": 489,
-        "procurement_cost": 200460410,
-        "average_order_size": 3.413088
+        "average_inventory": 2998.260586,
+        "max_inventory": 3604,
+        "average_available_inventory": 2410.166124,
+        "ordered_units": 1665,
+        "order_count": 483,
+        "procurement_cost": 199655410,
+        "average_order_size": 3.447205
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 734,
-        "funded": 734,
+        "candidates": 722,
+        "funded": 722,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 141,
-          "LOW": 10,
-          "MEDIUM": 583
+          "HIGH": 145,
+          "LOW": 9,
+          "MEDIUM": 568
         },
         "by_lead_time_source": {
-          "DEFAULT": 734
+          "DEFAULT": 722
         }
       }
     },
@@ -710,7 +807,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": false,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -722,13 +822,13 @@
         "stockout_days": 98,
         "stockout_rate": 0.002566,
         "variants_with_stockout": 48,
-        "average_inventory": 3009.58209,
-        "max_inventory": 3871,
-        "average_available_inventory": 2430.826866,
-        "ordered_units": 3262,
-        "order_count": 700,
-        "procurement_cost": 396827260,
-        "average_order_size": 4.66
+        "average_inventory": 2990.379104,
+        "max_inventory": 3858,
+        "average_available_inventory": 2411.623881,
+        "ordered_units": 3249,
+        "order_count": 694,
+        "procurement_cost": 394403640,
+        "average_order_size": 4.681556
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -740,28 +840,28 @@
         "stockout_days": 8,
         "stockout_rate": 0.000229,
         "variants_with_stockout": 7,
-        "average_inventory": 3203.296417,
-        "max_inventory": 3871,
-        "average_available_inventory": 2615.429967,
-        "ordered_units": 2017,
-        "order_count": 445,
-        "procurement_cost": 243329400,
-        "average_order_size": 4.532584
+        "average_inventory": 3182.612378,
+        "max_inventory": 3858,
+        "average_available_inventory": 2594.745928,
+        "ordered_units": 2024,
+        "order_count": 444,
+        "procurement_cost": 243417780,
+        "average_order_size": 4.558559
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 700,
-        "funded": 700,
+        "candidates": 694,
+        "funded": 694,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 246,
-          "MEDIUM": 454
+          "HIGH": 252,
+          "MEDIUM": 442
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 527
+          "DEFAULT": 172,
+          "LEARNED": 522
         }
       }
     },
@@ -773,7 +873,10 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": false
+        "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -785,13 +888,13 @@
         "stockout_days": 95,
         "stockout_rate": 0.002488,
         "variants_with_stockout": 47,
-        "average_inventory": 3212.373134,
-        "max_inventory": 4108,
-        "average_available_inventory": 2633.39403,
-        "ordered_units": 3506,
+        "average_inventory": 3196.38806,
+        "max_inventory": 4099,
+        "average_available_inventory": 2617.408955,
+        "ordered_units": 3497,
         "order_count": 623,
-        "procurement_cost": 428096040,
-        "average_order_size": 5.627608
+        "procurement_cost": 425691830,
+        "average_order_size": 5.613162
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -803,13 +906,13 @@
         "stockout_days": 6,
         "stockout_rate": 0.000171,
         "variants_with_stockout": 5,
-        "average_inventory": 3421.403909,
-        "max_inventory": 4108,
-        "average_available_inventory": 2833.309446,
-        "ordered_units": 2141,
-        "order_count": 378,
-        "procurement_cost": 258947580,
-        "average_order_size": 5.664021
+        "average_inventory": 3404.296417,
+        "max_inventory": 4099,
+        "average_available_inventory": 2816.201954,
+        "ordered_units": 2160,
+        "order_count": 384,
+        "procurement_cost": 260150470,
+        "average_order_size": 5.625
       },
       "decision_stats": {
         "reviews": 48,
@@ -819,13 +922,80 @@
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 218,
-          "LOW": 18,
+          "HIGH": 215,
+          "LOW": 21,
           "MEDIUM": 387
         },
         "by_lead_time_source": {
-          "DEFAULT": 173,
-          "LEARNED": 450
+          "DEFAULT": 171,
+          "LEARNED": 452
+        }
+      }
+    },
+    {
+      "scenario": "SUPPLIER_DELAY",
+      "variant": "SMARTBOOK_MA30_FORECAST",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "forecast_model": "MOVING_AVERAGE",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10913,
+        "unmet_demand": 108,
+        "fill_rate": 0.990201,
+        "stockout_days": 96,
+        "stockout_rate": 0.002514,
+        "variants_with_stockout": 48,
+        "average_inventory": 2402.740299,
+        "max_inventory": 2867,
+        "average_available_inventory": 1823.823881,
+        "ordered_units": 2186,
+        "order_count": 591,
+        "procurement_cost": 265130400,
+        "average_order_size": 3.698816
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10198,
+        "unmet_demand": 8,
+        "fill_rate": 0.999216,
+        "stockout_days": 7,
+        "stockout_rate": 0.0002,
+        "variants_with_stockout": 6,
+        "average_inventory": 2539.752443,
+        "max_inventory": 2867,
+        "average_available_inventory": 1951.726384,
+        "ordered_units": 1055,
+        "order_count": 329,
+        "procurement_cost": 125709790,
+        "average_order_size": 3.206687
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 591,
+        "funded": 591,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 109,
+          "LOW": 72,
+          "MEDIUM": 410
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 185,
+          "LEARNED": 406
         }
       }
     },
@@ -838,62 +1008,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 3078344.166667
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 9883,
-        "unmet_demand": 1138,
-        "fill_rate": 0.896743,
-        "stockout_days": 1023,
-        "stockout_rate": 0.026787,
-        "variants_with_stockout": 96,
-        "average_inventory": 1287.423881,
-        "max_inventory": 1886,
-        "average_available_inventory": 759.716418,
-        "ordered_units": 1241,
-        "order_count": 164,
-        "procurement_cost": 146481940,
-        "average_order_size": 7.567073,
+        "fulfilled_demand": 9969,
+        "unmet_demand": 1052,
+        "fill_rate": 0.904546,
+        "stockout_days": 890,
+        "stockout_rate": 0.023305,
+        "variants_with_stockout": 92,
+        "average_inventory": 1555.98209,
+        "max_inventory": 2335,
+        "average_available_inventory": 1025.459701,
+        "ordered_units": 1695,
+        "order_count": 169,
+        "procurement_cost": 145097750,
+        "average_order_size": 10.029586,
         "budget_total": 147760520,
-        "budget_utilization": 0.991347,
-        "unfunded_reorder_count": 3835
+        "budget_utilization": 0.981979,
+        "unfunded_reorder_count": 3067
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 9205,
-        "unmet_demand": 1001,
-        "fill_rate": 0.90192,
-        "stockout_days": 901,
-        "stockout_rate": 0.025744,
-        "variants_with_stockout": 92,
-        "average_inventory": 1337.889251,
-        "max_inventory": 1886,
-        "average_available_inventory": 805.198697,
-        "ordered_units": 1126,
-        "order_count": 150,
-        "procurement_cost": 134291940,
-        "average_order_size": 7.506667
+        "fulfilled_demand": 9297,
+        "unmet_demand": 909,
+        "fill_rate": 0.910935,
+        "stockout_days": 765,
+        "stockout_rate": 0.021858,
+        "variants_with_stockout": 84,
+        "average_inventory": 1630.76873,
+        "max_inventory": 2335,
+        "average_available_inventory": 1094.967427,
+        "ordered_units": 1517,
+        "order_count": 151,
+        "procurement_cost": 132887600,
+        "average_order_size": 10.046358
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3999,
-        "funded": 164,
-        "unfunded_reorder_count": 3835,
+        "candidates": 3236,
+        "funded": 169,
+        "unfunded_reorder_count": 3067,
         "budget_total": 147760520,
-        "budget_spent": 146481940,
+        "budget_spent": 145097750,
         "by_priority": {
-          "HIGH": 134,
-          "LOW": 16,
-          "MEDIUM": 14
+          "HIGH": 131,
+          "LOW": 6,
+          "MEDIUM": 32
         },
         "by_lead_time_source": {
           "DEFAULT": 14,
-          "LEARNED": 150
+          "LEARNED": 155
         }
       }
     },
@@ -906,62 +1079,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 3078344.166667
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10073,
-        "unmet_demand": 948,
-        "fill_rate": 0.913982,
-        "stockout_days": 827,
-        "stockout_rate": 0.021655,
-        "variants_with_stockout": 94,
-        "average_inventory": 1346.961194,
-        "max_inventory": 1987,
-        "average_available_inventory": 811.80597,
-        "ordered_units": 1334,
-        "order_count": 180,
-        "procurement_cost": 146132560,
-        "average_order_size": 7.411111,
+        "fulfilled_demand": 9964,
+        "unmet_demand": 1057,
+        "fill_rate": 0.904092,
+        "stockout_days": 892,
+        "stockout_rate": 0.023357,
+        "variants_with_stockout": 92,
+        "average_inventory": 1556.555224,
+        "max_inventory": 2309,
+        "average_available_inventory": 1026.367164,
+        "ordered_units": 1665,
+        "order_count": 163,
+        "procurement_cost": 145249440,
+        "average_order_size": 10.214724,
         "budget_total": 147760520,
-        "budget_utilization": 0.988982,
-        "unfunded_reorder_count": 3554
+        "budget_utilization": 0.983006,
+        "unfunded_reorder_count": 3043
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 9395,
-        "unmet_demand": 811,
-        "fill_rate": 0.920537,
-        "stockout_days": 707,
-        "stockout_rate": 0.020201,
-        "variants_with_stockout": 87,
-        "average_inventory": 1402.892508,
-        "max_inventory": 1987,
-        "average_available_inventory": 862.143322,
-        "ordered_units": 1204,
-        "order_count": 166,
-        "procurement_cost": 133957560,
-        "average_order_size": 7.253012
+        "fulfilled_demand": 9292,
+        "unmet_demand": 914,
+        "fill_rate": 0.910445,
+        "stockout_days": 767,
+        "stockout_rate": 0.021916,
+        "variants_with_stockout": 84,
+        "average_inventory": 1631.394137,
+        "max_inventory": 2309,
+        "average_available_inventory": 1095.957655,
+        "ordered_units": 1487,
+        "order_count": 145,
+        "procurement_cost": 133015440,
+        "average_order_size": 10.255172
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3734,
-        "funded": 180,
-        "unfunded_reorder_count": 3554,
+        "candidates": 3206,
+        "funded": 163,
+        "unfunded_reorder_count": 3043,
         "budget_total": 147760520,
-        "budget_spent": 146132560,
+        "budget_spent": 145249440,
         "by_priority": {
-          "HIGH": 149,
-          "MEDIUM": 18,
-          "LOW": 13
+          "HIGH": 129,
+          "LOW": 11,
+          "MEDIUM": 23
         },
         "by_lead_time_source": {
           "DEFAULT": 14,
-          "LEARNED": 166
+          "LEARNED": 149
         }
       }
     },
@@ -973,25 +1149,28 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10773,
-        "unmet_demand": 248,
-        "fill_rate": 0.977498,
-        "stockout_days": 207,
-        "stockout_rate": 0.00542,
+        "fulfilled_demand": 10775,
+        "unmet_demand": 246,
+        "fill_rate": 0.977679,
+        "stockout_days": 205,
+        "stockout_rate": 0.005368,
         "variants_with_stockout": 81,
-        "average_inventory": 2743.110448,
-        "max_inventory": 3434,
-        "average_available_inventory": 2180.564179,
-        "ordered_units": 3124,
-        "order_count": 731,
-        "procurement_cost": 382246710,
-        "average_order_size": 4.273598
+        "average_inventory": 2739.522388,
+        "max_inventory": 3432,
+        "average_available_inventory": 2176.883582,
+        "ordered_units": 3122,
+        "order_count": 724,
+        "procurement_cost": 381496410,
+        "average_order_size": 4.312155
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -1003,29 +1182,29 @@
         "stockout_days": 12,
         "stockout_rate": 0.000343,
         "variants_with_stockout": 5,
-        "average_inventory": 2925.964169,
-        "max_inventory": 3434,
-        "average_available_inventory": 2340.921824,
-        "ordered_units": 1777,
-        "order_count": 491,
-        "procurement_cost": 217647080,
-        "average_order_size": 3.619145
+        "average_inventory": 2922.345277,
+        "max_inventory": 3432,
+        "average_available_inventory": 2337.211726,
+        "ordered_units": 1779,
+        "order_count": 484,
+        "procurement_cost": 217789180,
+        "average_order_size": 3.67562
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 731,
-        "funded": 731,
+        "candidates": 724,
+        "funded": 724,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 182,
+          "HIGH": 184,
           "LOW": 16,
-          "MEDIUM": 533
+          "MEDIUM": 524
         },
         "by_lead_time_source": {
-          "DEFAULT": 156,
-          "LEARNED": 575
+          "DEFAULT": 157,
+          "LEARNED": 567
         }
       }
     },
@@ -1037,7 +1216,10 @@
         "seasonality": false,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
@@ -1049,13 +1231,13 @@
         "stockout_days": 207,
         "stockout_rate": 0.00542,
         "variants_with_stockout": 81,
-        "average_inventory": 3021.710448,
-        "max_inventory": 4099,
-        "average_available_inventory": 2459.164179,
-        "ordered_units": 3822,
-        "order_count": 966,
-        "procurement_cost": 469294480,
-        "average_order_size": 3.956522
+        "average_inventory": 3004.214925,
+        "max_inventory": 4052,
+        "average_available_inventory": 2441.668657,
+        "ordered_units": 3769,
+        "order_count": 946,
+        "procurement_cost": 462276520,
+        "average_order_size": 3.984144
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -1067,29 +1249,29 @@
         "stockout_days": 12,
         "stockout_rate": 0.000343,
         "variants_with_stockout": 5,
-        "average_inventory": 3231.52443,
-        "max_inventory": 4099,
-        "average_available_inventory": 2646.482085,
-        "ordered_units": 2555,
-        "order_count": 723,
-        "procurement_cost": 313222420,
-        "average_order_size": 3.533887
+        "average_inventory": 3212.775244,
+        "max_inventory": 4052,
+        "average_available_inventory": 2627.732899,
+        "ordered_units": 2503,
+        "order_count": 702,
+        "procurement_cost": 306439160,
+        "average_order_size": 3.565527
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 966,
-        "funded": 966,
+        "candidates": 946,
+        "funded": 946,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
           "HIGH": 172,
           "LOW": 15,
-          "MEDIUM": 779
+          "MEDIUM": 759
         },
         "by_lead_time_source": {
-          "DEFAULT": 158,
-          "LEARNED": 808
+          "DEFAULT": 157,
+          "LEARNED": 789
         }
       }
     },
@@ -1101,25 +1283,28 @@
         "seasonality": true,
         "learned_lead_time": false,
         "safety_stock": true,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10773,
-        "unmet_demand": 248,
-        "fill_rate": 0.977498,
-        "stockout_days": 207,
-        "stockout_rate": 0.00542,
+        "fulfilled_demand": 10775,
+        "unmet_demand": 246,
+        "fill_rate": 0.977679,
+        "stockout_days": 205,
+        "stockout_rate": 0.005368,
         "variants_with_stockout": 81,
-        "average_inventory": 2743.110448,
-        "max_inventory": 3434,
-        "average_available_inventory": 2180.564179,
-        "ordered_units": 3124,
-        "order_count": 731,
-        "procurement_cost": 382246710,
-        "average_order_size": 4.273598
+        "average_inventory": 2739.522388,
+        "max_inventory": 3432,
+        "average_available_inventory": 2176.883582,
+        "ordered_units": 3122,
+        "order_count": 724,
+        "procurement_cost": 381496410,
+        "average_order_size": 4.312155
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -1131,28 +1316,28 @@
         "stockout_days": 12,
         "stockout_rate": 0.000343,
         "variants_with_stockout": 5,
-        "average_inventory": 2925.964169,
-        "max_inventory": 3434,
-        "average_available_inventory": 2340.921824,
-        "ordered_units": 1777,
-        "order_count": 491,
-        "procurement_cost": 217647080,
-        "average_order_size": 3.619145
+        "average_inventory": 2922.345277,
+        "max_inventory": 3432,
+        "average_available_inventory": 2337.211726,
+        "ordered_units": 1779,
+        "order_count": 484,
+        "procurement_cost": 217789180,
+        "average_order_size": 3.67562
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 731,
-        "funded": 731,
+        "candidates": 724,
+        "funded": 724,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 182,
+          "HIGH": 184,
           "LOW": 16,
-          "MEDIUM": 533
+          "MEDIUM": 524
         },
         "by_lead_time_source": {
-          "DEFAULT": 731
+          "DEFAULT": 724
         }
       }
     },
@@ -1164,25 +1349,28 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": false,
-        "demand_signals": true
+        "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10762,
-        "unmet_demand": 259,
-        "fill_rate": 0.976499,
+        "fulfilled_demand": 10761,
+        "unmet_demand": 260,
+        "fill_rate": 0.976409,
         "stockout_days": 216,
         "stockout_rate": 0.005656,
         "variants_with_stockout": 82,
-        "average_inventory": 2643.289552,
-        "max_inventory": 3358,
-        "average_available_inventory": 2081.191045,
-        "ordered_units": 3048,
-        "order_count": 774,
-        "procurement_cost": 372034110,
-        "average_order_size": 3.937984
+        "average_inventory": 2630.01791,
+        "max_inventory": 3345,
+        "average_available_inventory": 2067.952239,
+        "ordered_units": 3035,
+        "order_count": 771,
+        "procurement_cost": 370401110,
+        "average_order_size": 3.936446
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -1194,28 +1382,28 @@
         "stockout_days": 15,
         "stockout_rate": 0.000429,
         "variants_with_stockout": 7,
-        "average_inventory": 2822.32899,
-        "max_inventory": 3358,
-        "average_available_inventory": 2237.635179,
-        "ordered_units": 1837,
-        "order_count": 538,
-        "procurement_cost": 225162900,
-        "average_order_size": 3.414498
+        "average_inventory": 2808.188925,
+        "max_inventory": 3345,
+        "average_available_inventory": 2223.52443,
+        "ordered_units": 1831,
+        "order_count": 536,
+        "procurement_cost": 224665900,
+        "average_order_size": 3.416045
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 774,
-        "funded": 774,
+        "candidates": 771,
+        "funded": 771,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
           "HIGH": 211,
-          "MEDIUM": 563
+          "MEDIUM": 560
         },
         "by_lead_time_source": {
           "DEFAULT": 144,
-          "LEARNED": 630
+          "LEARNED": 627
         }
       }
     },
@@ -1227,25 +1415,28 @@
         "seasonality": true,
         "learned_lead_time": true,
         "safety_stock": true,
-        "demand_signals": false
+        "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 10772,
-        "unmet_demand": 249,
-        "fill_rate": 0.977407,
-        "stockout_days": 208,
-        "stockout_rate": 0.005446,
+        "fulfilled_demand": 10774,
+        "unmet_demand": 247,
+        "fill_rate": 0.977588,
+        "stockout_days": 206,
+        "stockout_rate": 0.005394,
         "variants_with_stockout": 81,
-        "average_inventory": 2739.20597,
-        "max_inventory": 3419,
-        "average_available_inventory": 2176.695522,
-        "ordered_units": 3106,
-        "order_count": 723,
-        "procurement_cost": 379477710,
-        "average_order_size": 4.295989
+        "average_inventory": 2733.934328,
+        "max_inventory": 3414,
+        "average_available_inventory": 2171.331343,
+        "ordered_units": 3101,
+        "order_count": 715,
+        "procurement_cost": 378451410,
+        "average_order_size": 4.337063
       },
       "steady_state_metrics": {
         "variants": 114,
@@ -1257,29 +1448,96 @@
         "stockout_days": 13,
         "stockout_rate": 0.000371,
         "variants_with_stockout": 5,
-        "average_inventory": 2921.703583,
-        "max_inventory": 3419,
-        "average_available_inventory": 2336.700326,
-        "ordered_units": 1760,
-        "order_count": 484,
-        "procurement_cost": 214976180,
-        "average_order_size": 3.636364
+        "average_inventory": 2916.247557,
+        "max_inventory": 3414,
+        "average_available_inventory": 2331.153094,
+        "ordered_units": 1759,
+        "order_count": 476,
+        "procurement_cost": 214842280,
+        "average_order_size": 3.695378
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 723,
-        "funded": 723,
+        "candidates": 715,
+        "funded": 715,
         "unfunded_reorder_count": 0,
         "budget_total": 0,
         "budget_spent": 0,
         "by_priority": {
-          "HIGH": 184,
+          "HIGH": 186,
           "LOW": 15,
-          "MEDIUM": 524
+          "MEDIUM": 514
         },
         "by_lead_time_source": {
-          "DEFAULT": 156,
-          "LEARNED": 567
+          "DEFAULT": 157,
+          "LEARNED": 558
+        }
+      }
+    },
+    {
+      "scenario": "LEAN_START",
+      "variant": "SMARTBOOK_MA30_FORECAST",
+      "budget_constrained": false,
+      "params": {
+        "seasonality": true,
+        "learned_lead_time": true,
+        "safety_stock": true,
+        "demand_signals": true,
+        "forecast_model": "MOVING_AVERAGE",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST"
+      },
+      "metrics": {
+        "variants": 114,
+        "evaluated_days": 335,
+        "total_demand": 11021,
+        "fulfilled_demand": 10770,
+        "unmet_demand": 251,
+        "fill_rate": 0.977225,
+        "stockout_days": 209,
+        "stockout_rate": 0.005473,
+        "variants_with_stockout": 81,
+        "average_inventory": 2227.462687,
+        "max_inventory": 2702,
+        "average_available_inventory": 1664.892537,
+        "ordered_units": 2368,
+        "order_count": 658,
+        "procurement_cost": 290481390,
+        "average_order_size": 3.598784
+      },
+      "steady_state_metrics": {
+        "variants": 114,
+        "evaluated_days": 307,
+        "total_demand": 10206,
+        "fulfilled_demand": 10184,
+        "unmet_demand": 22,
+        "fill_rate": 0.997844,
+        "stockout_days": 19,
+        "stockout_rate": 0.000543,
+        "variants_with_stockout": 9,
+        "average_inventory": 2368.667752,
+        "max_inventory": 2702,
+        "average_available_inventory": 1783.65798,
+        "ordered_units": 1345,
+        "order_count": 422,
+        "procurement_cost": 164886670,
+        "average_order_size": 3.187204
+      },
+      "decision_stats": {
+        "reviews": 48,
+        "candidates": 658,
+        "funded": 658,
+        "unfunded_reorder_count": 0,
+        "budget_total": 0,
+        "budget_spent": 0,
+        "by_priority": {
+          "HIGH": 124,
+          "MEDIUM": 506,
+          "LOW": 28
+        },
+        "by_lead_time_source": {
+          "DEFAULT": 154,
+          "LEARNED": 504
         }
       }
     },
@@ -1292,62 +1550,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": true,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 4161987.5
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 8471,
-        "unmet_demand": 2550,
-        "fill_rate": 0.768624,
-        "stockout_days": 2250,
-        "stockout_rate": 0.058916,
-        "variants_with_stockout": 112,
-        "average_inventory": 1099.244776,
-        "max_inventory": 1920,
-        "average_available_inventory": 655.904478,
-        "ordered_units": 1641,
-        "order_count": 243,
-        "procurement_cost": 198754230,
-        "average_order_size": 6.753086,
+        "fulfilled_demand": 8445,
+        "unmet_demand": 2576,
+        "fill_rate": 0.766264,
+        "stockout_days": 1958,
+        "stockout_rate": 0.05127,
+        "variants_with_stockout": 107,
+        "average_inventory": 1381.056716,
+        "max_inventory": 2230,
+        "average_available_inventory": 941.841791,
+        "ordered_units": 1946,
+        "order_count": 253,
+        "procurement_cost": 197519330,
+        "average_order_size": 7.6917,
         "budget_total": 199775400,
-        "budget_utilization": 0.994888,
-        "unfunded_reorder_count": 3541
+        "budget_utilization": 0.988707,
+        "unfunded_reorder_count": 2763
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 8039,
-        "unmet_demand": 2167,
-        "fill_rate": 0.787674,
-        "stockout_days": 1931,
-        "stockout_rate": 0.055175,
-        "variants_with_stockout": 105,
-        "average_inventory": 1165.664495,
-        "max_inventory": 1920,
-        "average_available_inventory": 707.628664,
-        "ordered_units": 1490,
-        "order_count": 225,
-        "procurement_cost": 182159230,
-        "average_order_size": 6.622222
+        "fulfilled_demand": 8032,
+        "unmet_demand": 2174,
+        "fill_rate": 0.786988,
+        "stockout_days": 1629,
+        "stockout_rate": 0.046546,
+        "variants_with_stockout": 89,
+        "average_inventory": 1471.90228,
+        "max_inventory": 2230,
+        "average_available_inventory": 1017.970684,
+        "ordered_units": 1714,
+        "order_count": 226,
+        "procurement_cost": 180941480,
+        "average_order_size": 7.584071
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3784,
-        "funded": 243,
-        "unfunded_reorder_count": 3541,
+        "candidates": 3016,
+        "funded": 253,
+        "unfunded_reorder_count": 2763,
         "budget_total": 199775400,
-        "budget_spent": 198754230,
+        "budget_spent": 197519330,
         "by_priority": {
-          "HIGH": 209,
-          "LOW": 23,
-          "MEDIUM": 11
+          "HIGH": 197,
+          "LOW": 8,
+          "MEDIUM": 48
         },
         "by_lead_time_source": {
-          "DEFAULT": 7,
-          "LEARNED": 236
+          "DEFAULT": 15,
+          "LEARNED": 238
         }
       }
     },
@@ -1360,62 +1621,65 @@
         "learned_lead_time": true,
         "safety_stock": true,
         "demand_signals": false,
+        "forecast_model": "EWMA_TREND",
+        "priority_floors": true,
+        "rank_by": "SHORTFALL_PER_COST",
         "budget_per_review_vnd": 4161987.5
       },
       "metrics": {
         "variants": 114,
         "evaluated_days": 335,
         "total_demand": 11021,
-        "fulfilled_demand": 8772,
-        "unmet_demand": 2249,
-        "fill_rate": 0.795935,
-        "stockout_days": 1931,
-        "stockout_rate": 0.050563,
-        "variants_with_stockout": 110,
-        "average_inventory": 1113.743284,
-        "max_inventory": 1949,
-        "average_available_inventory": 653.955224,
-        "ordered_units": 1673,
-        "order_count": 239,
-        "procurement_cost": 198111180,
-        "average_order_size": 7,
+        "fulfilled_demand": 8417,
+        "unmet_demand": 2604,
+        "fill_rate": 0.763724,
+        "stockout_days": 2018,
+        "stockout_rate": 0.052841,
+        "variants_with_stockout": 105,
+        "average_inventory": 1389.343284,
+        "max_inventory": 2240,
+        "average_available_inventory": 951.495522,
+        "ordered_units": 1958,
+        "order_count": 241,
+        "procurement_cost": 197057650,
+        "average_order_size": 8.124481,
         "budget_total": 199775400,
-        "budget_utilization": 0.99167,
-        "unfunded_reorder_count": 3551
+        "budget_utilization": 0.986396,
+        "unfunded_reorder_count": 2729
       },
       "steady_state_metrics": {
         "variants": 114,
         "evaluated_days": 307,
         "total_demand": 10206,
-        "fulfilled_demand": 8362,
-        "unmet_demand": 1844,
-        "fill_rate": 0.819322,
-        "stockout_days": 1600,
-        "stockout_rate": 0.045717,
-        "variants_with_stockout": 103,
-        "average_inventory": 1182.260586,
-        "max_inventory": 1949,
-        "average_available_inventory": 705.850163,
-        "ordered_units": 1557,
-        "order_count": 223,
-        "procurement_cost": 181593330,
-        "average_order_size": 6.982063
+        "fulfilled_demand": 8006,
+        "unmet_demand": 2200,
+        "fill_rate": 0.784441,
+        "stockout_days": 1688,
+        "stockout_rate": 0.048231,
+        "variants_with_stockout": 86,
+        "average_inventory": 1480.85342,
+        "max_inventory": 2240,
+        "average_available_inventory": 1028.37785,
+        "ordered_units": 1724,
+        "order_count": 213,
+        "procurement_cost": 180498050,
+        "average_order_size": 8.093897
       },
       "decision_stats": {
         "reviews": 48,
-        "candidates": 3790,
-        "funded": 239,
-        "unfunded_reorder_count": 3551,
+        "candidates": 2970,
+        "funded": 241,
+        "unfunded_reorder_count": 2729,
         "budget_total": 199775400,
-        "budget_spent": 198111180,
+        "budget_spent": 197057650,
         "by_priority": {
-          "HIGH": 211,
-          "LOW": 15,
-          "MEDIUM": 13
+          "HIGH": 191,
+          "LOW": 3,
+          "MEDIUM": 47
         },
         "by_lead_time_source": {
-          "DEFAULT": 9,
-          "LEARNED": 230
+          "DEFAULT": 16,
+          "LEARNED": 225
         }
       }
     }

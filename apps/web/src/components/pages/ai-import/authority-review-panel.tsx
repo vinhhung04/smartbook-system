@@ -4,6 +4,26 @@ import type { ReconciliationDraft } from "@/services/metadata-intelligence";
 import { formatQualityWarning } from "./utils";
 import { ConfidenceMeter } from "./confidence-meter";
 
+const FIELD_LABELS: Record<string, string> = {
+  title: "Tên sách",
+  subtitle: "Phụ đề",
+  authors: "Tác giả",
+  translator: "Dịch giả",
+  publisher: "Nhà xuất bản",
+  categories: "Thể loại",
+  language: "Ngôn ngữ",
+  publishedDate: "Ngày xuất bản",
+  pageCount: "Số trang",
+  coverFormat: "Loại bìa",
+  description: "Mô tả",
+  isbn: "ISBN",
+};
+
+function formatDecisionValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "(trống)";
+  return Array.isArray(value) ? value.join(", ") : String(value);
+}
+
 export function AuthorityReviewPanel({
   draft,
   onDecision,
@@ -19,7 +39,12 @@ export function AuthorityReviewPanel({
     { field: "publisher", label: t("metadata_reconciliation.publisher"), items: [draft.normalizationSuggestions.publisherNormalization] },
     { field: "categories", label: t("metadata_reconciliation.categories"), items: draft.normalizationSuggestions.categoryNormalization },
   ].filter((row) => row.items.length > 0);
-  if (!rows.length) return null;
+  // Fields the backend left PENDING because the lookup sources disagree or the
+  // evidence is weak (not authority matches): staff must confirm or reject the
+  // value shown in the form before the draft can be applied.
+  const shownFields = new Set(rows.map((row) => row.field));
+  const otherPending = draft.decisions.filter((item) => item.status === "PENDING" && !shownFields.has(item.field));
+  if (!rows.length && !otherPending.length) return null;
   return (
     <section aria-label={t("metadata_reconciliation.title")}>
       <p className="mb-2 text-[13px] leading-5 text-muted-foreground">{t("metadata_reconciliation.hint")}</p>
@@ -65,6 +90,26 @@ export function AuthorityReviewPanel({
           );
         })}
       </div>
+      {otherPending.length ? (
+        <div className="divide-y divide-border border-b border-border">
+          {otherPending.map((item) => (
+            <div key={item.field} className="flex flex-col gap-3 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-[14px] font-semibold text-foreground">{FIELD_LABELS[item.field] || item.field}</h4>
+                  <StatusBadge label="Chờ duyệt" variant="warning" />
+                </div>
+                <p className="mt-1 text-[13px] text-muted-foreground">Các nguồn tra cứu không thống nhất hoặc bằng chứng yếu — kiểm tra giá trị trong biểu mẫu trước khi chấp nhận.</p>
+                <p className="mt-1 truncate text-[13px] font-medium text-foreground">{formatDecisionValue(item.value)}</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button type="button" onClick={() => onDecision(item.field, "ACCEPTED")} className="min-h-10 cursor-pointer rounded-md border border-success/30 bg-success/10 px-3 text-[12px] font-semibold text-success transition-colors hover:bg-success/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success/30">{t("metadata_reconciliation.accept")}</button>
+                <button type="button" onClick={() => onDecision(item.field, "REJECTED")} className="min-h-10 cursor-pointer rounded-md border border-border bg-card px-3 text-[12px] font-semibold text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30">{t("metadata_reconciliation.reject")}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {draft.qualityWarnings.length ? (
         <ul className="mt-3 flex flex-wrap gap-2" aria-label="Cảnh báo chất lượng">
           {draft.qualityWarnings.map((warning) => (

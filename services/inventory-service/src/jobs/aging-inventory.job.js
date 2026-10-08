@@ -1,7 +1,7 @@
 const { upsertStockAlert } = require('../controllers/stock-alert.controller');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
-const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 const THRESHOLD_DAYS = Number(process.env.AGING_INVENTORY_DAYS_THRESHOLD || 90);
 
 let timer = null;

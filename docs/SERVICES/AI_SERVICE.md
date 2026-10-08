@@ -132,22 +132,37 @@ không còn tự cache embedding ra file JSON (`.book_index_cache.json`/`.faq_em
   - `ingestion.ingest_internal_docs()` — đọc toàn bộ `services/ai-service/corpus/*.md`, chạy tự
     động ở mỗi lần khởi động service (`main.py`'s `_startup_ingest_corpus`, không phụ thuộc auth,
     không chặn startup).
-  - `ingestion.ingest_books(books)` — nhận list book dict (shape của `/api/books`) và ingest vào
-    `BOOK_METADATA`. **Không tự chạy được lúc khởi động** — `_startup_ingest_corpus` gọi
-    `/api/books` không kèm token, bị gateway trả 401 nên no-op im lặng (theo dõi ở follow-up
-    `task_5448fb5f`). Cách chạy thủ công với JWT thật:
+  - **Đồng bộ `BOOK_METADATA`** (`catalog_sync.py`, thay cho cơ chế cũ gọi `/api/books` không
+    JWT khiến corpus sách luôn rỗng — `task_5448fb5f`, đã đóng):
+    - Nguồn: `GET {INVENTORY_SERVICE_URL}/internal/catalog/books?after=<id>&limit=<n>` của
+      inventory-service, xác thực service-to-service bằng header `x-internal-service-key`
+      (`INTERNAL_SERVICE_KEY`, so sánh timing-safe, không có giá trị fallback). Chỉ trả sách
+      `is_active = true`; phân trang keyset theo `id` (`id > after`, không dùng Prisma `cursor`
+      để một sách bị xoá giữa hai trang không làm scan dừng sớm). Gateway chặn `/ai/internal/*`.
+    - Chạy ngay khi khởi động (sau `ingest_internal_docs`) rồi định kỳ mỗi
+      `CATALOG_SYNC_INTERVAL_SECONDS` (mặc định 300s). Lỗi → thử lại sau 15s, 30s, 60s… (tối đa
+      bằng chu kỳ). Mỗi trang retry tối đa `CATALOG_SYNC_MAX_ATTEMPTS` lần cho timeout/5xx/429;
+      401/403 dừng ngay (sai khoá).
+    - Incremental: sách có title + text (title, author, category, description, summary_vi) +
+      metadata (author, category, isbn) + hash chunk (gồm embedding identity) không đổi thì không
+      ghi DB, không gọi embedding. Chỉ đổi ISBN → cập nhật metadata, không embed lại.
+    - Sách không còn trong lần quét **đầy đủ** (bị xoá/ngừng hoạt động) bị gỡ khỏi corpus. Lần quét
+      lỗi giữa chừng không xoá gì; catalog trả 0 sách trong khi corpus đang có dữ liệu cũng không
+      xoá (outcome `degraded`, `removal_skipped=true`).
+    - OpenRouter lỗi: sau `CATALOG_SYNC_EMBED_FAILURE_LIMIT` (3) lần embed lỗi liên tiếp thì hoãn
+      các sách còn lại sang lần sau; vẫn gỡ sách đã xoá; outcome `degraded`.
+    - Idempotent: upsert theo `UNIQUE (corpus, source_id)` và `UNIQUE (document_id, chunk_index)`;
+      hai lần chạy chồng nhau thì lần sau trả `skipped: busy`.
+    - Quan sát: `GET /internal/catalog-sync/status` (header `x-internal-service-key`), kích hoạt ngay:
+      `POST /internal/catalog-sync`. Prometheus: `ai_catalog_sync_runs_total{outcome}`,
+      `ai_catalog_sync_documents_total{action}`, `ai_catalog_sync_last_success_timestamp_seconds`,
+      `ai_catalog_sync_catalog_books`. Log: dòng `catalog_sync: outcome=... embedded=... removed=...`.
     ```bash
-    docker compose -p smartbook-system exec ai-service python -c "
-    import asyncio, httpx, ingestion
-    async def main():
-        token = '<JWT tu POST /auth/login>'
-        async with httpx.AsyncClient() as c:
-            books = (await c.get('http://api-gateway:3000/api/books',
-                headers={'Authorization': f'Bearer {token}'})).json()
-        print(await ingestion.ingest_books(books))
-    asyncio.run(main())
-    "
+    # Kích hoạt đồng bộ ngay sau khi seed catalog (không cần JWT người dùng):
+    docker compose exec ai-service sh -c 'curl -s -X POST -H "x-internal-service-key: $INTERNAL_SERVICE_KEY" http://localhost:8000/internal/catalog-sync'
     ```
+  - `ingestion.ingest_internal_docs()` cũng gỡ document của file `.md` đã bị xoá khỏi `corpus/`, và
+    `_ingest_one` xoá chunk mồ côi khi một tài liệu ngắn lại (ít chunk hơn lần trước).
   - Kiểm tra số chunk theo corpus: `docker compose -p smartbook-system exec db psql -U <user> -d
     ai_db -c "SELECT corpus, count(*) FROM ai_document_chunks GROUP BY corpus;"`.
 - **Biến môi trường mới**: xem `INGEST_MAX_CHUNK_CHARS`, `ENABLE_CORPUS_INGEST` trong bảng dưới.
@@ -160,7 +175,7 @@ Embedding cho semantic FAQ + book search (`faq_retrieval.find_relevant()` và `s
 
 **Quan trọng: `dimensions:768` là bắt buộc** — `ai_document_chunks.embedding` được định nghĩa cố định là `vector(768)` trong schema (xem `schema.sql`). Model `qwen/qwen3-embedding-8b` mặc định trả embedding 4096 chiều, nên **luôn gửi `dimensions: 768`** trong request (`OPENROUTER_EMBED_DIMENSIONS`) để model trả 768 chiều trực tiếp.
 
-**Embedding identity = model + dimensions** (`embeddings.EMBED_IDENTITY`, ví dụ `qwen/qwen3-embedding-8b@768`) — được lưu vào cột `embedding_model` của mỗi chunk VÀ gấp vào `content_hash` (xem `ingestion.chunk_hash`). Đổi `OPENROUTER_EMBED_MODEL`/`OPENROUTER_EMBED_DIMENSIONS` khiến mọi chunk bị coi là "đã đổi" nên được embed lại tự động; `VectorStore.delete_chunks_except_model()` (gọi lúc khởi động và bởi `reindex_embeddings.py`) còn dọn cả những vector của model cũ thuộc tài liệu không được ingest lại (không còn trong `corpus/` hoặc `/api/books`) — xem "Migration embedding model" bên dưới.
+**Embedding identity = model + dimensions** (`embeddings.EMBED_IDENTITY`, ví dụ `qwen/qwen3-embedding-8b@768`) — được lưu vào cột `embedding_model` của mỗi chunk VÀ gấp vào `content_hash` (xem `ingestion.chunk_hash`). Đổi `OPENROUTER_EMBED_MODEL`/`OPENROUTER_EMBED_DIMENSIONS` khiến mọi chunk bị coi là "đã đổi" nên được embed lại tự động; `VectorStore.delete_chunks_except_model()` (gọi lúc khởi động và bởi `reindex_embeddings.py`) còn dọn cả những vector của model cũ thuộc tài liệu không được ingest lại (không còn trong `corpus/` hoặc catalog) — xem "Migration embedding model" bên dưới.
 
 **Debug**: khi provider lỗi, xem log từ `embeddings.py` (dòng `embed_call model=... error=...`) để biết nguyên nhân (timeout, HTTP error, dimension mismatch...).
 
@@ -170,10 +185,10 @@ Vector cũ của một model khác **không dùng lại được** — nó nằm
 
 ```bash
 cd services/ai-service
-REINDEX_AUTH_TOKEN=<JWT của ADMIN/WAREHOUSE_MANAGER, từ POST /auth/login> python reindex_embeddings.py
+INTERNAL_SERVICE_KEY=<cùng khoá với inventory-service> python reindex_embeddings.py
 ```
 
-Script này: (1) xoá mọi chunk không mang `embedding_model` hiện tại (`delete_chunks_except_model`), (2) `ingest_internal_docs()`, (3) `ingest_books()` qua `/api/books` (cần token vì endpoint đó có auth — startup ingest không có token, xem ghi chú `task_5448fb5f` ở trên). Không có token, script chỉ re-index corpus `INTERNAL_DOC` và in cảnh báo bỏ qua `BOOK_METADATA`. Kiểm tra kết quả: `SELECT embedding_model, count(*) FROM ai_document_chunks GROUP BY 1;` — chỉ nên còn đúng một giá trị.
+Script này: (1) xoá mọi chunk không mang `embedding_model` hiện tại (`delete_chunks_except_model`), (2) `ingest_internal_docs()`, (3) `catalog_sync.sync_book_corpus()` qua feed nội bộ của inventory-service (không cần JWT). Vận hành bình thường **không cần** script này — `catalog_sync` tự chạy lúc khởi động và định kỳ. Kiểm tra kết quả: `SELECT embedding_model, count(*) FROM ai_document_chunks GROUP BY 1;` — chỉ nên còn đúng một giá trị.
 
 ### Upgrade notes: đổi image Postgres sang `pgvector/pgvector:pg15`
 
@@ -288,6 +303,13 @@ Theo nguyên tắc "không được làm Recall@5 tụt mạnh chỉ để tăng
 rệt) thay vì 0.35. Xem rationale đầy đủ trong comment của `retrieval_confidence._BOOK_DEFAULTS` và
 `eval/reports/calibration_20260925_082519.md`.
 
+**Hiệu chỉnh lại 2026-10-08.** Thêm 54 câu không đáp án đã đối chiếu với catalog/corpus (`bm-076..107`,
+`doc-056..077`, snapshot catalog `eval/rag_catalog_snapshot_20261008.json`), chọn ngưỡng trên nửa **val**
+(`calibrate_rag.py --split=hash`, cùng cách tách với `eval_rag.py --split`) và kiểm định trên nửa **test**:
+`INTERNAL_DOC` `tau_evidence` 0.35 → **0.40** (test: No-answer Accuracy 0.917 → 1.0, Answerable R@5 giữ 1.0);
+`BOOK_METADATA` giữ 0.25 vì ngưỡng chặt hơn làm FNR trên test tăng 0.13 → 0.23. Chi tiết:
+`eval/reports/RAG_EVAL_20261008_SUMMARY.md`.
+
 **Bước 3 — `eval/eval_rag.py`** (mặc định, `--abstention on`, ngưỡng đã hiệu chỉnh —
 `eval/reports/rag_20260925_083313.md`):
 
@@ -342,12 +364,15 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | BOOK_SEMANTIC_THRESHOLD | 0.3 | Ngưỡng cosine tối thiểu để nhánh semantic của một cuốn sách được đưa vào RRF trong `search_books` (hạ từ 0.6, cùng lý do). Cũng chỉ còn là sàn candidate — xem `retrieval_confidence.py` |
 | RAG_ABSTENTION_ENABLED | true | Tắt để `find_relevant()` không còn ẩn kết quả khi `retrieval_confidence.py` trả `NO_EVIDENCE` (dùng để tái lập baseline trong `eval/eval_rag.py --abstention off`) |
 | BOOK_CONF_TAU_CONFIDENT / BOOK_CONF_TAU_EVIDENCE / BOOK_CONF_COS_FLOOR / BOOK_CONF_COS_CEIL | 0.66 / **0.25** / 0.30 / 0.60 | Ngưỡng quyết định CONFIDENT_MATCH/UNCERTAIN/NO_EVIDENCE cho corpus `BOOK_METADATA`. `tau_evidence=0.25` là kết quả calibration thật (`eval/calibrate_rag.py`, xem mục eval RAG bên trên) — đã đánh đổi có chủ đích để không làm Recall@5 tụt mạnh |
-| DOC_CONF_TAU_CONFIDENT / DOC_CONF_TAU_EVIDENCE / DOC_CONF_COS_FLOOR / DOC_CONF_COS_CEIL | 0.66 / 0.35 / 0.30 / 0.55 | Như trên, cho corpus `INTERNAL_DOC` |
+| DOC_CONF_TAU_CONFIDENT / DOC_CONF_TAU_EVIDENCE / DOC_CONF_COS_FLOOR / DOC_CONF_COS_CEIL | 0.66 / 0.40 / 0.30 / 0.55 | Như trên, cho corpus `INTERNAL_DOC` |
 | ISBN_FUSION_MODE | evidence | `evidence` (mặc định): chọn giá trị field bằng Evidence Fusion (`isbn_fusion.py`) — chuẩn hoá + gộp nhóm nguồn đồng thuận trước khi chọn. `prior`: thuật toán cũ (nguồn có reliability cao nhất thắng tuyệt đối), giữ lại để so sánh/rollback |
 | PACKING_VISION_MAX_TOKENS / PACKING_VISION_TIMEOUT_SECONDS | 200 / 15 | Cap output/timeout cho `/verify-packing-photo` — timeout thấp hơn `AbortSignal.timeout(20000)` của caller (`packing-evidence-ai.service.js`) |
 | RECEIPT_VISION_MAX_TOKENS / RECEIPT_VISION_TIMEOUT_SECONDS | 1200 / 30 | Cap output/timeout cho `/scan-receipt` |
 | INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
-| ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền lúc khởi động (`ingest_internal_docs`/`ingest_books`) — tắt trong môi trường test e2e không cần semantic |
+| ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền (`ingest_internal_docs` lúc khởi động + vòng lặp `catalog_sync`) — tắt trong môi trường test e2e không cần semantic |
+| CATALOG_SYNC_INTERVAL_SECONDS | 300 | Chu kỳ đồng bộ `BOOK_METADATA` với `/internal/catalog/books`; 0 = chỉ chạy lúc khởi động |
+| CATALOG_SYNC_PAGE_SIZE / CATALOG_SYNC_TIMEOUT_SECONDS / CATALOG_SYNC_MAX_ATTEMPTS | 200 / 10 / 3 | Kích thước trang, timeout mỗi request, số lần thử cho lỗi tạm thời |
+| CATALOG_SYNC_EMBED_FAILURE_LIMIT | 3 | Số lần embed lỗi liên tiếp trước khi hoãn phần còn lại của lần đồng bộ |
 | GOOGLE_BOOKS_API_BASE_URL | https://www.googleapis.com/books/v1/volumes | Nguồn metadata chính |
 | OPEN_LIBRARY_API_BASE_URL | https://openlibrary.org/api/books | Nguồn metadata bổ sung |
 | GOOGLE_BOOKS_API_KEY | rỗng | API key tùy chọn |

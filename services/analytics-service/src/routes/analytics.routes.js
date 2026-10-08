@@ -26,7 +26,7 @@ const readBorrowAnalytics = authorizeAnyPermission(['analytics.borrow.read']);
 function authenticateInternalOrUser(permissionCheck = readAnalytics) {
   return (req, res, next) => {
     const providedKey = String(req.headers['x-internal-service-key'] || '').trim();
-    const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+    const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
     if (providedKey && providedKey === expectedKey) {
       return next();
     }

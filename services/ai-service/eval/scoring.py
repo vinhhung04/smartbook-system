@@ -518,3 +518,17 @@ def selective_accuracy(results: list[dict], k: int = 1) -> float | None:
     if not answered:
         return None
     return round(sum(recall_at_k(r["retrieved_ids"], r["expected_ids"], k) for r in answered) / len(answered), 4)
+
+
+def dataset_split(case_id: str) -> str:
+    """Stable validation/test assignment for one eval case: "val" or "test".
+
+    Derived from a hash of the case id alone, so it does not depend on the
+    dataset's order or size, never changes when cases are added, and needs no
+    edit to the ground-truth file. Retrieval changes are designed/tuned looking
+    only at "val"; "test" is reported, never looked at while tuning.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(f"smartbook-eval-split:{case_id}".encode("utf-8")).digest()
+    return "val" if digest[0] % 2 == 0 else "test"

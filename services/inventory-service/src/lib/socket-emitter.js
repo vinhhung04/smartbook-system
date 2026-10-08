@@ -1,5 +1,5 @@
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://api-gateway:3000';
-const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key';
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
 const SERVICE_NAME = 'inventory-service';
 
 async function pushEvent({ room, event, data }) {

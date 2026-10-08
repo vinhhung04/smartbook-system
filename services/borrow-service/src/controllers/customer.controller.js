@@ -542,10 +542,10 @@ async function getMyMembership(req, res) {
 }
 
 async function provisionCustomerFromAuth(req, res) {
-  const internalServiceKey = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook-internal-dev-key').trim();
+  const internalServiceKey = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 
   const providedKey = String(req.headers['x-internal-service-key'] || '').trim();
-  if (providedKey !== internalServiceKey) {
+  if (!internalServiceKey || providedKey !== internalServiceKey) {
     return res.status(401).json({ message: 'Unauthorized internal call' });
   }
 
@@ -599,8 +599,8 @@ async function provisionCustomerFromAuth(req, res) {
 }
 
 async function resolveCustomerByAuth(req, res) {
-  const internalKey = process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key';
-  if (req.headers['x-internal-service-key'] !== internalKey) {
+  const internalKey = process.env.INTERNAL_SERVICE_KEY || '';
+  if (!internalKey || req.headers['x-internal-service-key'] !== internalKey) {
     return res.status(403).json({ message: 'Forbidden' });
   }
 

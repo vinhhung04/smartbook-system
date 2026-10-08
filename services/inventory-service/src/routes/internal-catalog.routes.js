@@ -8,9 +8,11 @@ const prisma = new PrismaClient();
 // live user JWT exists for that background job, so this follows the same
 // shared-secret pattern as /internal/authority instead of /api's JWT auth.
 router.get('/', async (_req, res) => {
-  const expectedKey = process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key';
-  const providedKey = _req.headers['x-internal-service-key'];
-  if (!isValidInternalKey(providedKey, expectedKey)) return res.status(403).json({ message: 'Forbidden' });
+  // No fallback key: index.js refuses to start without INTERNAL_SERVICE_KEY,
+  // and an unset key must reject every caller rather than accept a public default.
+  if (!isValidInternalKey(_req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
 
   try {
     const variants = await prisma.book_variants.findMany({

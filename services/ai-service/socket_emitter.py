@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Support both GATEWAY_URL (standard) and SMARTBOOK_GATEWAY_URL (legacy ai-service convention)
 GATEWAY_URL = os.getenv("GATEWAY_URL") or os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000")
-INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key")
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "")
 SERVICE_NAME = "ai-service"
 
 _HEADERS = {

@@ -6,6 +6,25 @@ source of double-annotation agreement figures.** It exists to give the
 `run_experiments.py` harness real signal before the actual human annotation
 pass happens, and to catch pipeline/harness bugs against real data.
 
+## Turning this into a human-annotated set
+
+`../human_review.py` exports a worksheet (CSV, Excel-friendly, one row per
+edition x field with the AI label and what each frozen source says), and
+imports filled worksheets into `human_dataset.json` with
+`labelProvenance: human_annotated`, an AI-vs-human agreement report and - with
+two annotators - percent agreement plus the rows to adjudicate. Only rows a
+person actually answered enter the new dataset; report it as AI-assisted human
+annotation, since annotators saw the AI suggestion.
+
+Worksheets are pre-generated in `../annotation/` (A: all 120 editions; B: a stratified
+24-edition sample for the independent second annotator). Instructions for annotators,
+in Vietnamese: `../HUONG_DAN_GAN_NHAN.md`.
+
+```bash
+python eval/metadata_intelligence/human_review.py import eval/metadata_intelligence/annotation/review_A.csv eval/metadata_intelligence/annotation/review_B.csv --adjudication eval/metadata_intelligence/annotation/adjudication.csv --out eval/metadata_intelligence/human_dataset.json
+python eval/metadata_intelligence/run_experiments.py --dataset eval/metadata_intelligence/human_dataset.json
+```
+
 ## Scope
 - 120 real editions (real, valid ISBN-13, live Google Books API lookups), split
   40 `development` / 80 `test` per the original protocol's split sizes.

@@ -13,6 +13,7 @@ export const AI_ACTION_TYPE_LABEL: Record<string, string> = {
 
 export const AI_ACTION_STATUS_LABEL: Record<string, string> = {
   PENDING_CONFIRMATION: 'Cần xác nhận',
+  CONFIRMED: 'Đang thực thi',
   EXECUTED: 'Đã thực thi',
   CANCELLED: 'Đã từ chối',
   EXPIRED: 'Hết hạn',
