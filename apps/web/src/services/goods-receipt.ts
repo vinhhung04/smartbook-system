@@ -11,6 +11,9 @@ export interface GoodsReceipt {
   warehouse_name?: string;
   warehouse_code?: string;
   item_count: number;
+  total_quantity?: number;
+  counted_line_count?: number;
+  supplier_name?: string | null;
   total_amount: number;
   status: 'DRAFT' | 'POSTED' | 'CANCELLED';
   created_at: string;

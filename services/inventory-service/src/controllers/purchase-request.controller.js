@@ -89,6 +89,7 @@ async function getMyPurchaseRequests(req, res) {
     const requests = await prisma.purchase_requests.findMany({
       where: { created_by_user_id: userId },
       include: {
+        purchase_orders: { select: { id: true, po_number: true } },
         warehouses: { select: { id: true, code: true, name: true } },
         book_variants: {
           select: {

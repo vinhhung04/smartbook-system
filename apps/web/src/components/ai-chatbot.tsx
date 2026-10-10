@@ -10,6 +10,7 @@ import { authService, type AuthUser } from '@/services/auth';
 import { getPrimaryRole } from '@/lib/rbac';
 import { toast } from 'sonner';
 import { ActionCard } from './ai-action-card';
+import { onChatbotAsk } from '@/lib/chatbot-bus';
 import { useMemo } from 'react';
 
 interface UIMessage {
@@ -427,6 +428,12 @@ export function AIChatbot() {
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  useEffect(() => onChatbotAsk((prompt) => {
+    setInput(prompt);
+    setOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }), []);
 
   const buildHistory = useCallback((): ChatMessage[] => {
     return messages.map((m) => ({ role: m.role, content: m.text }));

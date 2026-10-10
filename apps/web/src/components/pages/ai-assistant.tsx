@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   AlertTriangle,
@@ -226,8 +227,10 @@ function newConversationId() {
 }
 
 export function AIAssistantPage() {
+  const location = useLocation();
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  const [input, setInput] = useState('');
+  // Another page can hand over a question via router state; it is only pre-filled, never auto-sent.
+  const [input, setInput] = useState(() => (location.state as { prompt?: string } | null)?.prompt ?? '');
   const [loading, setLoading] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [conversationId, setConversationId] = useState<string>(newConversationId);

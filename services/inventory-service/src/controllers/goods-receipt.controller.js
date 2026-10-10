@@ -255,12 +255,14 @@ async function getGoodsReceipts(req, res) {
           select: {
             id: true,
             po_number: true,
+            suppliers: { select: { name: true } },
           },
         },
         goods_receipt_items: {
           select: {
             id: true,
             quantity: true,
+            actual_quantity: true,
             unit_cost: true,
           },
         },
@@ -269,6 +271,8 @@ async function getGoodsReceipts(req, res) {
 
     const data = receipts.map((receipt) => {
       const itemCount = receipt.goods_receipt_items.length;
+      const totalQuantity = receipt.goods_receipt_items.reduce((sum, item) => sum + item.quantity, 0);
+      const countedLineCount = receipt.goods_receipt_items.filter((item) => item.actual_quantity !== null).length;
       const totalAmount = receipt.goods_receipt_items.reduce((sum, item) => {
         return sum + Number(item.unit_cost) * item.quantity;
       }, 0);
@@ -278,6 +282,7 @@ async function getGoodsReceipts(req, res) {
         receipt_number: receipt.receipt_number,
         purchase_order_id: receipt.purchase_order_id,
         po_number: receipt.purchase_orders?.po_number || null,
+        supplier_name: receipt.purchase_orders?.suppliers?.name || null,
         source_type: receipt.source_type,
         warehouse_id: receipt.warehouse_id,
         warehouse_name: receipt.warehouses?.name || null,
@@ -289,6 +294,8 @@ async function getGoodsReceipts(req, res) {
         created_at: receipt.created_at,
         updated_at: receipt.updated_at,
         item_count: itemCount,
+        total_quantity: totalQuantity,
+        counted_line_count: countedLineCount,
         total_amount: totalAmount,
       };
     });
