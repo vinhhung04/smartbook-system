@@ -93,6 +93,23 @@ test("workspace lint and build quote their package globs", () => {
   }
 });
 
+test("test:node runs the Prisma services one at a time", () => {
+  // auth, inventory and borrow each run `prisma generate` as pretest. pnpm 10 skips
+  // Prisma's install scripts, so the first generate downloads the query engine, and
+  // Prisma saves it with unlink + copy into ~/.cache/prisma and node_modules/prisma —
+  // concurrent generates then open a file another one just deleted (ENOENT, CI
+  // 2026-10-02 and 2026-10-08). All three also write the same deduped @prisma/client,
+  // so only serial runs give each service's tests the client of its own schema.
+  const manifest = readJson("package.json");
+  const prismaServices = ["auth-service", "borrow-service", "inventory-service"];
+  for (const service of prismaServices) {
+    const scripts = readJson(`services/${service}/package.json`).scripts;
+    assert.match(scripts.pretest, /prisma generate/, `${service} must generate its client before tests`);
+    assert.match(manifest.scripts["test:node"], new RegExp(`--filter ${service}\\b`));
+  }
+  assert.match(manifest.scripts["test:node"], /--workspace-concurrency=1\b/);
+});
+
 test("Node Docker images build from the workspace lockfile", () => {
   const compose = readFileSync(resolve(repositoryRoot, "docker-compose.yml"), "utf8");
   const dockerfiles = [
