@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, UserPlus, Send, X, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/components/ui/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
-import { getStatusVariant } from '@/lib/status-registry';
+import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
+import { StageTabs, type StageTab } from './borrow-shared/stage-tabs';
+import { ListFooter } from './borrow-shared/list-footer';
+import { sumCounts, useServerList } from './borrow-shared/use-server-list';
 
 const customerStatuses: CustomerStatus[] = ['ACTIVE', 'SUSPENDED', 'BLOCKED', 'INACTIVE'];
+const PAGE_SIZE = 20;
 
 const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
 
@@ -48,10 +51,12 @@ const initialFormState: CustomerFormState = {
 };
 
 export function BorrowCustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | CustomerStatus>('ALL');
+  const list = useServerList(borrowService.getCustomers, {
+    pageSize: PAGE_SIZE,
+    errorMessage: 'Không tải được danh sách khách hàng',
+    params: statusFilter === 'ALL' ? {} : { status: statusFilter },
+  });
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formState, setFormState] = useState<CustomerFormState>(initialFormState);
@@ -59,41 +64,16 @@ export function BorrowCustomersPage() {
   const [notifyForm, setNotifyForm] = useState({ subject: '', body: '' });
   const [notifySending, setNotifySending] = useState(false);
 
-  const loadCustomers = async () => {
-    try {
-      setLoading(true);
-      const response = await borrowService.getCustomers();
-      setCustomers(response.data ?? []);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Không tải được danh sách khách hàng'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadCustomers();
-  }, []);
-
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    return customers.filter((customer) => {
-      if (statusFilter !== 'ALL' && customer.status !== statusFilter) return false;
-      if (!keyword) return true;
-      return (
-        customer.full_name.toLowerCase().includes(keyword)
-        || customer.customer_code.toLowerCase().includes(keyword)
-        || String(customer.email || '').toLowerCase().includes(keyword)
-        || String(customer.phone || '').toLowerCase().includes(keyword)
-      );
-    });
-  }, [customers, search, statusFilter]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: customers.length };
-    for (const customer of customers) counts[customer.status] = (counts[customer.status] || 0) + 1;
-    return counts;
-  }, [customers]);
+  const counts = list.meta.status_counts;
+  const tabs: StageTab<'ALL' | CustomerStatus>[] = [
+    { key: 'ALL', label: 'Tất cả', count: sumCounts(counts, Object.keys(counts ?? {})) },
+    ...customerStatuses.map((status) => ({
+      key: status,
+      label: getBorrowLabel('borrowCustomer', status),
+      count: counts?.[status] ?? 0,
+      attention: status === 'SUSPENDED' || status === 'BLOCKED',
+    })),
+  ];
 
   const resetForm = () => {
     setFormState(initialFormState);
@@ -144,7 +124,7 @@ export function BorrowCustomersPage() {
         toast.success('Đã tạo khách hàng thành công');
       }
       resetForm();
-      await loadCustomers();
+      await list.reload();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Lưu khách hàng thất bại'));
     } finally {
@@ -163,7 +143,7 @@ export function BorrowCustomersPage() {
         <PageHeader
           icon={Users}
           title="Khách hàng thư viện"
-          description={`${customers.length} khách hàng`}
+          description="Hồ sơ bạn đọc, tình trạng tài khoản và dư nợ tiền phạt"
           iconBg="bg-gradient-to-br from-teal-100 to-emerald-50 border border-teal-200/40 shadow-sm dark:from-teal-500/15 dark:to-emerald-500/10 dark:border-teal-500/20"
           iconColor="text-teal-600 dark:text-teal-400"
           actions={
@@ -181,25 +161,17 @@ export function BorrowCustomersPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
       >
-        <FilterBar
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Tìm khách hàng..."
-          filters={
-            <div className="max-w-full overflow-x-auto">
-              <SegmentedControl
-                layoutId="customer-filter"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={(['ALL', ...customerStatuses] as const).map((status) => ({
-                  value: status,
-                  label: `${status === 'ALL' ? 'Tất cả' : status} (${statusCounts[status] || 0})`,
-                }))}
-                className="w-max"
-              />
-            </div>
-          }
-        />
+        <div className="rounded-xl border border-border bg-card">
+          <StageTabs label="Lọc theo tình trạng tài khoản" tabs={tabs} value={statusFilter} onChange={setStatusFilter} loading={list.loading && !counts} />
+          <div className="border-t border-border px-4 py-3">
+            <FilterBar
+              searchValue={list.search}
+              onSearchChange={list.setSearch}
+              searchPlaceholder="Tìm khách hàng..."
+              showSearchClear
+            />
+          </div>
+        </div>
       </motion.div>
 
       {/* Customers Table */}
@@ -215,9 +187,9 @@ export function BorrowCustomersPage() {
                 <tr className="border-b border-border bg-muted/50">
                   {[
                     { label: 'Khách hàng', className: '' },
-                    { label: 'Liên hệ', className: 'hidden w-[240px] md:table-cell' },
-                    { label: 'Trạng thái', className: 'hidden w-[130px] sm:table-cell' },
-                    { label: 'Dư nợ phạt', className: 'hidden w-[140px] text-right sm:table-cell' },
+                    { label: 'Liên hệ', className: 'hidden w-[240px] lg:table-cell' },
+                    { label: 'Trạng thái', className: 'hidden w-[140px] md:table-cell' },
+                    { label: 'Dư nợ phạt', className: 'hidden w-[140px] text-right md:table-cell' },
                     { label: 'Thao tác', className: 'w-[92px] text-right' },
                   ].map((header) => (
                     <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
@@ -227,21 +199,21 @@ export function BorrowCustomersPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {list.loading && list.rows.length === 0 ? (
                   <SkeletonTableRow columns={5} rows={5} />
-                ) : filtered.length === 0 ? (
+                ) : list.rows.length === 0 ? (
                   <tr>
                     <td colSpan={5}>
                       <EmptyState
-                        variant="no-results"
-                        title="Không tìm thấy khách hàng"
-                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
+                        variant={list.search ? 'no-results' : 'no-data'}
+                        title={list.search ? 'Không tìm thấy khách hàng' : 'Không có khách hàng nào ở mục này'}
+                        description={list.search ? 'Thử tìm theo tên, mã khách, email hoặc số điện thoại.' : 'Chọn mục khác hoặc tạo khách hàng mới.'}
                         className="py-12"
                       />
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((customer, index) => {
+                  list.rows.map((customer, index) => {
                     const fine = Number(customer.total_fine_balance) || 0;
                     return (
                       <motion.tr
@@ -259,21 +231,21 @@ export function BorrowCustomersPage() {
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-semibold" title={customer.full_name}>{customer.full_name}</p>
                               <p className="truncate text-xs text-muted-foreground">{customer.customer_code}</p>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                                <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
+                                <StatusBadge label={getBorrowLabel('borrowCustomer', customer.status)} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
                                 {fine > 0 ? <span className="text-xs font-medium text-rose-600 dark:text-rose-400">{formatFine(fine)}</span> : null}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="hidden px-4 py-3 md:table-cell">
+                        <td className="hidden px-4 py-3 lg:table-cell">
                           <p className="truncate text-sm" title={customer.email || undefined}>{customer.email || '-'}</p>
                           <p className="truncate text-xs text-muted-foreground">{customer.phone || '-'}</p>
                         </td>
-                        <td className="hidden px-4 py-3 sm:table-cell">
-                          <StatusBadge label={customer.status} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
+                        <td className="hidden px-4 py-3 md:table-cell">
+                          <StatusBadge label={getBorrowLabel('borrowCustomer', customer.status)} variant={getStatusVariant('borrowCustomer', customer.status)} dot />
                         </td>
-                        <td className={cn('hidden px-4 py-3 text-right text-sm sm:table-cell', fine > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
+                        <td className={cn('hidden px-4 py-3 text-right text-sm md:table-cell', fine > 0 ? 'font-semibold text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>
                           {fine > 0 ? formatFine(fine) : '-'}
                         </td>
                         <td className="px-4 py-3">
@@ -305,6 +277,15 @@ export function BorrowCustomersPage() {
               </tbody>
             </table>
           </div>
+          <ListFooter
+            page={list.page}
+            pageSize={PAGE_SIZE}
+            total={list.meta.total}
+            totalPages={list.meta.totalPages}
+            shown={list.rows.length}
+            noun="khách hàng"
+            onPageChange={list.setPage}
+          />
         </SectionCard>
       </motion.div>
 
@@ -346,7 +327,7 @@ export function BorrowCustomersPage() {
                     className="mt-1 w-full px-3 py-2 border border-input rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
                   >
                     {customerStatuses.map((status) => (
-                      <option key={status} value={status}>{status}</option>
+                      <option key={status} value={status}>{getBorrowLabel('borrowCustomer', status)}</option>
                     ))}
                   </select>
                 </label>

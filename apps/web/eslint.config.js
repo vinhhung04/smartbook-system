@@ -14,8 +14,6 @@ const legacyExplicitAnyFiles = [
   'src/components/pages/ai-assistant.tsx',
   'src/components/pages/audit-trail.tsx',
   'src/components/pages/borrow-loan-detail.tsx',
-  'src/components/pages/borrow-loans.tsx',
-  'src/components/pages/borrow-reservations.tsx',
   'src/components/pages/catalog.tsx',
   'src/components/pages/customer/_shared/fine-card.tsx',
   'src/components/pages/customer/_shared/fine-item.tsx',

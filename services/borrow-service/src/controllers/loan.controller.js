@@ -14,6 +14,7 @@ const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('..
 const { queueReconciliation } = require('../services/reconciliation.service');
 const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
 const { normalizePickupCode } = require('../utils/pickup-code');
+const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
@@ -58,30 +59,34 @@ function getBorrowFeePerItem() {
 }
 
 async function listLoans(req, res) {
-  const { status, customer_id } = req.query;
+  const { customer_id } = req.query;
   const pagination = parsePagination(req.query);
-  const q = String(req.query?.q || '').trim();
+  const q = searchTerm(req.query);
+  const status = parseStatusFilter(req.query.status);
 
-  const whereBase = {
-    ...(typeof status === 'string' && status ? { status } : {}),
+  // Everything except the status condition; per-status counts are taken over this.
+  const whereWithoutStatus = {
     ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
+    ...(q
+      ? {
+        OR: [
+          { loan_number: { contains: q, mode: 'insensitive' } },
+          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+          // customer_id is a UUID column: comparing it with a name made Postgres throw (500).
+          ...(isUuid(q) ? [{ customer_id: q }] : []),
+        ],
+      }
+      : {}),
   };
-
-  const where = q
-    ? {
-      ...whereBase,
-      OR: [
-        { loan_number: { contains: q, mode: 'insensitive' } },
-        { customer_id: { equals: q } },
-      ],
-    }
-    : whereBase;
+  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
+  const orderBy = req.query.sort === 'due_date' ? [{ due_date: 'asc' }] : [{ borrow_date: 'desc' }];
 
   try {
-    const [items, total] = await Promise.all([
+    const [items, total, statusCounts] = await Promise.all([
       prisma.loan_transactions.findMany({
         where,
-        orderBy: [{ borrow_date: 'desc' }],
+        orderBy,
         skip: pagination.skip,
         take: pagination.take,
         include: {
@@ -97,6 +102,7 @@ async function listLoans(req, res) {
         },
       }),
       prisma.loan_transactions.count({ where }),
+      countByStatus(prisma.loan_transactions, whereWithoutStatus),
     ]);
 
     return res.json({
@@ -106,6 +112,7 @@ async function listLoans(req, res) {
         pageSize: pagination.pageSize,
         total,
         totalPages: Math.ceil(total / pagination.pageSize) || 1,
+        status_counts: statusCounts,
       },
     });
   } catch (error) {

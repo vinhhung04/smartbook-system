@@ -2,6 +2,7 @@ const { prisma } = require('../lib/prisma');
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
 const { normalizeMoney, recomputeCustomerFineBalance } = require('../services/fine.service');
+const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
@@ -25,20 +26,63 @@ function summarizeFine(fine) {
   };
 }
 
+// Money totals over ALL fines (not just one page). `outstanding` uses the same formula as the
+// analytics dashboard's unpaid_fine_amount so both screens show one number.
+async function fineMoneySummary() {
+  const [row] = await prisma.$queryRaw`
+    WITH payments AS (
+      SELECT fine_id, COALESCE(SUM(amount), 0) AS paid_amount
+      FROM fine_payments
+      GROUP BY fine_id
+    ),
+    balances AS (
+      SELECT
+        f.status,
+        COALESCE(p.paid_amount, 0) AS paid_amount,
+        GREATEST(f.amount - COALESCE(f.waived_amount, 0) - COALESCE(p.paid_amount, 0), 0) AS remaining
+      FROM fines f
+      LEFT JOIN payments p ON p.fine_id = f.id
+    )
+    SELECT
+      COALESCE(SUM(remaining), 0) AS outstanding,
+      COALESCE(SUM(paid_amount), 0) AS collected,
+      -- By status, so it matches the "Chưa thu xong" tab count.
+      COUNT(*) FILTER (WHERE status IN ('UNPAID', 'PARTIALLY_PAID')) AS open_count
+    FROM balances
+  `;
+  return {
+    outstanding: normalizeMoney(row?.outstanding),
+    collected: normalizeMoney(row?.collected),
+    open_count: Number(row?.open_count || 0),
+  };
+}
+
 async function listFines(req, res) {
   const pagination = parsePagination(req.query);
-  const status = String(req.query?.status || '').trim().toUpperCase();
+  const status = parseStatusFilter(req.query?.status);
   const customerId = String(req.query?.customer_id || '').trim();
   const fineType = String(req.query?.fine_type || '').trim().toUpperCase();
+  const q = searchTerm(req.query);
 
-  const where = {
-    ...(status ? { status } : {}),
+  // Everything except the status condition; per-status counts are taken over this.
+  const whereWithoutStatus = {
     ...(customerId ? { customer_id: customerId } : {}),
     ...(fineType ? { fine_type: fineType } : {}),
+    ...(q
+      ? {
+        OR: [
+          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+          { loan_items: { loan_transactions: { loan_number: { contains: q, mode: 'insensitive' } } } },
+          ...(isUuid(q) ? [{ id: q }] : []),
+        ],
+      }
+      : {}),
   };
+  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
 
   try {
-    const [items, total] = await Promise.all([
+    const [items, total, statusCounts, summary] = await Promise.all([
       prisma.fines.findMany({
         where,
         orderBy: [{ issued_at: 'desc' }],
@@ -59,6 +103,7 @@ async function listFines(req, res) {
               loan_id: true,
               status: true,
               item_barcode: true,
+              loan_transactions: { select: { loan_number: true } },
             },
           },
           fine_payments: {
@@ -67,6 +112,8 @@ async function listFines(req, res) {
         },
       }),
       prisma.fines.count({ where }),
+      countByStatus(prisma.fines, whereWithoutStatus),
+      req.query?.summary ? fineMoneySummary() : undefined,
     ]);
 
     return res.json({
@@ -76,6 +123,8 @@ async function listFines(req, res) {
         pageSize: pagination.pageSize,
         total,
         totalPages: Math.ceil(total / pagination.pageSize) || 1,
+        status_counts: statusCounts,
+        ...(summary ? { summary } : {}),
       },
     });
   } catch (error) {

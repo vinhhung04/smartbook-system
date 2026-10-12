@@ -1,6 +1,7 @@
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { assignDefaultMembership, resolveActiveMembership, computeMembershipEndDate, resolveRenewalStart } = require('../services/membership.service');
+const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -106,25 +107,25 @@ async function ensureCurrentCustomer(req) {
 }
 
 async function listCustomers(req, res) {
-  const { status, q } = req.query;
+  const q = searchTerm(req.query);
+  const status = parseStatusFilter(req.query.status);
   const pagination = parsePagination(req.query);
 
-  const where = {
-    ...(typeof status === 'string' && status ? { status } : {}),
-    ...(typeof q === 'string' && q.trim()
-      ? {
-          OR: [
-            { full_name: { contains: q.trim(), mode: 'insensitive' } },
-            { customer_code: { contains: q.trim(), mode: 'insensitive' } },
-            { email: { contains: q.trim(), mode: 'insensitive' } },
-            { phone: { contains: q.trim(), mode: 'insensitive' } },
-          ],
-        }
-      : {}),
-  };
+  // Everything except the status condition; per-status counts are taken over this.
+  const whereWithoutStatus = q
+    ? {
+        OR: [
+          { full_name: { contains: q, mode: 'insensitive' } },
+          { customer_code: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q, mode: 'insensitive' } },
+        ],
+      }
+    : {};
+  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
 
   try {
-    const [items, total] = await Promise.all([
+    const [items, total, statusCounts] = await Promise.all([
       prisma.customers.findMany({
         where,
         orderBy: [{ created_at: 'desc' }],
@@ -132,6 +133,7 @@ async function listCustomers(req, res) {
         take: pagination.take,
       }),
       prisma.customers.count({ where }),
+      countByStatus(prisma.customers, whereWithoutStatus),
     ]);
 
     return res.json({
@@ -141,6 +143,7 @@ async function listCustomers(req, res) {
         pageSize: pagination.pageSize,
         total,
         totalPages: Math.ceil(total / pagination.pageSize) || 1,
+        status_counts: statusCounts,
       },
     });
   } catch (error) {

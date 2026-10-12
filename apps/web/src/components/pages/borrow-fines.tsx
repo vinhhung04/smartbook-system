@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { BadgePercent, CircleAlert, Eye, Loader2, RefreshCw, Wallet, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageWrapper, FadeItem } from '../motion-utils';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
@@ -19,28 +19,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
-import { getPaginationRange } from '@/lib/pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/components/ui/utils';
-import { getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Fine } from '@/services/borrow';
+import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
+import { borrowService, type Fine, type PaginatedResponse } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
-
-const STATUS_LABELS: Record<string, string> = {
-  ALL: 'Tất cả',
-  UNPAID: 'Chưa trả',
-  PARTIALLY_PAID: 'Trả một phần',
-  PAID: 'Đã trả',
-  WAIVED: 'Đã miễn',
-};
+import { StageTabs, type StageTab } from './borrow-shared/stage-tabs';
+import { ListFooter } from './borrow-shared/list-footer';
+import { sumCounts, useServerList } from './borrow-shared/use-server-list';
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Tiền mặt',
@@ -51,16 +37,22 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 const PAGE_SIZE = 20;
-// Backend caps pageSize at 100 (see fine.controller.js parsePagination) — fetch the max
-// in one request instead of the previous unparameterized call, which silently defaulted
-// to only 20 fines with no way to see the rest.
-const FETCH_PAGE_SIZE = 100;
+
+// "Chưa thu xong" is what the counter works through, so it is the default.
+const TABS = [
+  { key: 'open', label: 'Chưa thu xong', statuses: ['UNPAID', 'PARTIALLY_PAID'], attention: true },
+  { key: 'paid', label: 'Đã trả', statuses: ['PAID'] },
+  { key: 'waived', label: 'Đã miễn', statuses: ['WAIVED'] },
+  { key: 'all', label: 'Tất cả', statuses: [], separated: true },
+] as const satisfies readonly { key: string; label: string; statuses: readonly string[]; attention?: boolean; separated?: boolean }[];
+
+type TabKey = (typeof TABS)[number]['key'];
+type MoneySummary = NonNullable<PaginatedResponse<Fine>['meta']['summary']>;
 
 function formatVnd(amount: number | string | undefined | null): string {
   return `${Number(amount || 0).toLocaleString('vi-VN')} VND`;
 }
 
-const FILTER_STATUSES = ['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'WAIVED'] as const;
 const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50';
 
 function remainingClass(status: string, remaining: number): string {
@@ -70,12 +62,24 @@ function remainingClass(status: string, remaining: number): string {
   return 'text-foreground font-medium';
 }
 
+function isTabKey(value: string | null): value is TabKey {
+  return TABS.some((tab) => tab.key === value);
+}
+
 export function BorrowFinesPage() {
-  const [fines, setFines] = useState<Fine[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'WAIVED'>('ALL');
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: TabKey = isTabKey(tabParam) ? tabParam : 'open';
+  const activeTab = TABS.find((item) => item.key === tab) ?? TABS[0];
+
+  const list = useServerList(borrowService.getFines, {
+    pageSize: PAGE_SIZE,
+    errorMessage: 'Không tải được danh sách tiền phạt',
+    params: activeTab.statuses.length ? { status: activeTab.statuses.join(',') } : {},
+  });
+
+  // Money totals cover every fine, not just the page on screen.
+  const [totals, setTotals] = useState<MoneySummary | null>(null);
 
   const [detailFine, setDetailFine] = useState<Fine | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
@@ -88,56 +92,39 @@ export function BorrowFinesPage() {
   const [waiveForm, setWaiveForm] = useState({ amount: '', note: '' });
   const [submittingWaive, setSubmittingWaive] = useState(false);
 
-  const loadFines = async () => {
+  const loadTotals = async () => {
     try {
-      setLoading(true);
-      const response = await borrowService.getFines({ pageSize: FETCH_PAGE_SIZE });
-      setFines(response.data ?? []);
+      const response = await borrowService.getFines({ pageSize: 1, summary: 1 });
+      setTotals(response.meta.summary ?? null);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Không tải được danh sách tiền phạt'));
-    } finally {
-      setLoading(false);
+      toast.error(getApiErrorMessage(error, 'Không tải được tổng tiền phạt'));
     }
   };
 
   useEffect(() => {
-    void loadFines();
+    void loadTotals();
   }, []);
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, statusFilter]);
+  const refresh = async () => {
+    await Promise.all([list.reload(), loadTotals()]);
+  };
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return fines.filter((fine) => {
-      if (statusFilter !== 'ALL' && fine.status !== statusFilter) return false;
-      if (!keyword) return true;
-      return (
-        fine.id.toLowerCase().includes(keyword)
-        || fine.customers?.full_name?.toLowerCase().includes(keyword)
-        || fine.customers?.customer_code?.toLowerCase().includes(keyword)
-        || fine.fine_type.toLowerCase().includes(keyword)
-      );
-    });
-  }, [fines, query, statusFilter]);
+  const counts = list.meta.status_counts;
+  const tabs: StageTab<TabKey>[] = TABS.map((item) => ({
+    key: item.key,
+    label: item.label,
+    count: item.statuses.length ? sumCounts(counts, item.statuses) : sumCounts(counts, Object.keys(counts ?? {})),
+    attention: 'attention' in item ? item.attention : undefined,
+    separated: 'separated' in item ? item.separated : undefined,
+  }));
 
-  const totals = useMemo(() => {
-    let outstanding = 0;
-    let collected = 0;
-    let openCount = 0;
-    for (const fine of fines) {
-      const remaining = Number(fine.summary?.remaining_balance || 0);
-      outstanding += remaining;
-      collected += Number(fine.summary?.paid_amount || 0);
-      if (remaining > 0) openCount += 1;
-    }
-    return { outstanding, collected, openCount };
-  }, [fines]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const selectTab = (key: TabKey) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (key === 'open') next.delete('tab'); else next.set('tab', key);
+      return next;
+    }, { replace: true });
+  };
 
   const openDetail = async (fine: Fine) => {
     setDetailLoadingId(fine.id);
@@ -185,7 +172,7 @@ export function BorrowFinesPage() {
       });
       toast.success('Đã ghi nhận thanh toán tiền phạt');
       setPaymentDialogFine(null);
-      await loadFines();
+      await refresh();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Ghi nhận thanh toán thất bại'));
     } finally {
@@ -214,7 +201,7 @@ export function BorrowFinesPage() {
       });
       toast.success('Đã miễn giảm tiền phạt');
       setWaiveDialogFine(null);
-      await loadFines();
+      await refresh();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Miễn giảm tiền phạt thất bại'));
     } finally {
@@ -223,254 +210,176 @@ export function BorrowFinesPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-      >
+    <PageWrapper className="space-y-5">
+      <FadeItem>
         <PageHeader
           icon={CircleAlert}
           title="Tiền phạt mượn trả"
-          description={`${fines.length} khoản phạt`}
+          description="Thu tiền phạt trả trễ, mất hoặc hư hỏng sách và miễn giảm khi cần"
           iconBg="bg-gradient-to-br from-amber-100 to-orange-50 border border-amber-200/40 shadow-sm dark:from-amber-500/15 dark:to-orange-500/10 dark:border-amber-500/20"
           iconColor="text-amber-600 dark:text-amber-400"
           actions={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void loadFines()}
-              className="gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={list.loading} className="gap-2">
+              <RefreshCw className={cn('h-4 w-4', list.loading && 'animate-spin')} />
               Làm mới
             </Button>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.section
-        aria-label="Tổng quan tiền phạt"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05, ease: 'easeOut' }}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-      >
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-[12px] font-medium text-muted-foreground">Còn phải thu</p>
-          <p className={cn('mt-2 font-mono text-[24px] font-bold leading-none tabular-nums', totals.outstanding > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40')}>
-            {loading ? '-' : formatVnd(totals.outstanding)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-[12px] font-medium text-muted-foreground">Đã thu</p>
-          <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
-            {loading ? '-' : formatVnd(totals.collected)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-[12px] font-medium text-muted-foreground">Khoản chưa thu xong</p>
-          <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">
-            {loading ? '-' : totals.openCount}
-            <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">/ {fines.length} khoản</span>
-          </p>
-        </div>
-      </motion.section>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
-      >
-        <FilterBar
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Tìm tiền phạt..."
-          filters={
-            <div className="max-w-full overflow-x-auto">
-              <SegmentedControl
-                layoutId="fine-filter"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={FILTER_STATUSES.map((status) => ({
-                  value: status,
-                  label: `${STATUS_LABELS[status] ?? status} (${status === 'ALL' ? fines.length : fines.filter((item) => item.status === status).length})`,
-                }))}
-                className="w-max"
-              />
-            </div>
-          }
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
-      >
-        <SectionCard noPadding>
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  {[
-                    { label: 'Khoản phạt', className: '' },
-                    { label: 'Số tiền', className: 'hidden w-[140px] text-right lg:table-cell' },
-                    { label: 'Còn lại', className: 'hidden w-[160px] text-right sm:table-cell' },
-                    { label: 'Trạng thái', className: 'hidden w-[150px] md:table-cell' },
-                    { label: 'Thao tác', className: 'w-[190px] text-right' },
-                  ].map((header) => (
-                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
-                      {header.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <SkeletonTableRow columns={5} rows={5} />
-                ) : paged.length === 0 ? (
-                  <tr>
-                    <td colSpan={5}>
-                      <EmptyState
-                        variant="no-results"
-                        title="Không tìm thấy tiền phạt"
-                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
-                        className="py-12"
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  paged.map((fine, index) => {
-                    const total = Number(fine.amount || 0);
-                    const paid = Number(fine.summary?.paid_amount || 0);
-                    const remaining = Number(fine.summary?.remaining_balance || 0);
-                    const paidPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-                    const customerName = fine.customers?.full_name || fine.customer_id;
-                    return (
-                      <motion.tr
-                        key={fine.id}
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15, delay: Math.min(index, 10) * 0.02 }}
-                        className="border-b border-border transition-colors last:border-0 hover:bg-muted/30"
-                      >
-                        <td className="px-4 py-3">
-                          <p className="truncate text-sm font-semibold text-foreground" title={customerName}>{customerName}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {[fine.customers?.customer_code, fine.fine_type].filter(Boolean).join(' · ')}
-                          </p>
-                          <p className="font-mono text-[11px] text-muted-foreground/70">#{fine.id.slice(0, 8)}</p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
-                            <StatusBadge label={fine.status} variant={getStatusVariant('fine', fine.status)} dot />
-                            <span className={cn('font-mono text-xs sm:hidden', remainingClass(fine.status, remaining))}>Còn {formatVnd(remaining)}</span>
-                          </div>
-                        </td>
-                        <td className="hidden px-4 py-3 text-right font-mono text-sm tabular-nums text-muted-foreground lg:table-cell">{formatVnd(total)}</td>
-                        <td className="hidden px-4 py-3 sm:table-cell">
-                          <div className="text-right font-mono text-sm tabular-nums">
-                            <span className={remainingClass(fine.status, remaining)}>{formatVnd(remaining)}</span>
-                          </div>
-                          {total > 0 && (
-                            <div className="ml-auto mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã trả ${paidPct}%`}>
-                              <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${paidPct}%` }} />
-                            </div>
-                          )}
-                        </td>
-                        <td className="hidden px-4 py-3 md:table-cell">
-                          <StatusBadge label={fine.status} variant={getStatusVariant('fine', fine.status)} dot />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="success-outline"
-                              onClick={() => openPaymentDialog(fine)}
-                              disabled={remaining <= 0}
-                            >
-                              Thanh toán
-                            </Button>
-                            <button
-                              type="button"
-                              aria-label={`Xem chi tiết khoản phạt của ${customerName}`}
-                              title="Chi tiết"
-                              disabled={detailLoadingId === fine.id}
-                              onClick={() => void openDetail(fine)}
-                              className={cn(ICON_BUTTON_CLASS, 'border-input hover:bg-muted')}
-                            >
-                              {detailLoadingId === fine.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Miễn giảm khoản phạt của ${customerName}`}
-                              title="Miễn giảm"
-                              disabled={remaining <= 0}
-                              onClick={() => openWaiveDialog(fine)}
-                              className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
-                            >
-                              <BadgePercent className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+      <FadeItem>
+        <section aria-label="Tổng quan tiền phạt" className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-[12px] font-medium text-muted-foreground">Còn phải thu</p>
+            <p className={cn('mt-2 font-mono text-[24px] font-bold leading-none tabular-nums', totals && totals.outstanding > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40')}>
+              {totals ? formatVnd(totals.outstanding) : '-'}
+            </p>
           </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-[12px] font-medium text-muted-foreground">Đã thu</p>
+            <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
+              {totals ? formatVnd(totals.collected) : '-'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-[12px] font-medium text-muted-foreground">Khoản chưa thu xong</p>
+            <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">
+              {totals ? totals.open_count.toLocaleString('vi-VN') : '-'}
+              <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">khoản</span>
+            </p>
+          </div>
+        </section>
+      </FadeItem>
 
-          {!loading && filtered.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-muted-foreground">
-                Hiển thị <span className="font-medium text-foreground">{paged.length}</span> / {filtered.length} khoản phạt
-              </p>
-              {totalPages > 1 && (
-                <Pagination className="mx-0 w-auto justify-end">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setPage((current) => Math.max(1, current - 1));
-                        }}
-                        className={cn('cursor-pointer', currentPage === 1 && 'pointer-events-none opacity-50')}
-                      />
-                    </PaginationItem>
-                    {getPaginationRange(currentPage, totalPages).map((item, i) => (
-                      <PaginationItem key={typeof item === 'number' ? item : `${item}-${i}`}>
-                        {typeof item === 'number' ? (
-                          <PaginationLink
-                            isActive={item === currentPage}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage(item);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            {item}
-                          </PaginationLink>
-                        ) : (
-                          <PaginationEllipsis />
+      <FadeItem>
+        <div className="rounded-xl border border-border bg-card">
+          <StageTabs label="Lọc theo tình trạng thanh toán" tabs={tabs} value={tab} onChange={selectTab} loading={list.loading && !counts} />
+          <div className="border-t border-border px-4 py-3">
+            <FilterBar
+              searchValue={list.search}
+              onSearchChange={list.setSearch}
+              searchPlaceholder="Tìm theo tên, mã khách hoặc mã phiếu mượn..."
+              showSearchClear
+            />
+          </div>
+        </div>
+      </FadeItem>
+
+      <FadeItem>
+        <SectionCard noPadding>
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                {[
+                  { label: 'Khoản phạt', className: '' },
+                  { label: 'Số tiền', className: 'hidden w-[140px] text-right xl:table-cell' },
+                  { label: 'Còn lại', className: 'hidden w-[160px] text-right md:table-cell' },
+                  { label: 'Trạng thái', className: 'hidden w-[150px] lg:table-cell' },
+                  { label: 'Thao tác', className: 'w-[190px] text-right' },
+                ].map((header) => (
+                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                    {header.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.loading && list.rows.length === 0 ? (
+                <SkeletonTableRow columns={5} rows={5} />
+              ) : list.rows.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="whitespace-normal">
+                    <EmptyState
+                      variant={list.search ? 'no-results' : 'no-data'}
+                      title={list.search ? 'Không tìm thấy tiền phạt' : `Không có khoản phạt nào ở mục "${activeTab.label}"`}
+                      description={list.search ? 'Thử tìm theo tên, mã khách hoặc mã phiếu mượn.' : 'Tiền phạt phát sinh khi trả trễ, mất hoặc hư hỏng sách.'}
+                      className="py-12"
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                list.rows.map((fine) => {
+                  const total = Number(fine.amount || 0);
+                  const paid = Number(fine.summary?.paid_amount || 0);
+                  const remaining = Number(fine.summary?.remaining_balance || 0);
+                  const paidPct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+                  const customerName = fine.customers?.full_name || 'Khách hàng';
+                  const loanNumber = fine.loan_items?.loan_transactions?.loan_number;
+                  const badge = <StatusBadge label={getBorrowLabel('fine', fine.status)} variant={getStatusVariant('fine', fine.status)} dot />;
+                  return (
+                    <TableRow key={fine.id} className={cn('hover:bg-muted/30', list.loading && 'opacity-60')}>
+                      <TableCell className="px-4 py-3">
+                        <p className="truncate text-sm font-semibold text-foreground" title={customerName}>{customerName}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {getBorrowLabel('fineType', fine.fine_type)}
+                          {fine.customers?.customer_code ? ` · ${fine.customers.customer_code}` : ''}
+                        </p>
+                        {loanNumber && fine.loan_items ? (
+                          <Link to={`/borrow/loans/${fine.loan_items.loan_id}`} className="block truncate text-xs text-primary hover:underline">
+                            {loanNumber}
+                          </Link>
+                        ) : null}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 lg:hidden">
+                          {badge}
+                          <span className={cn('font-mono text-xs md:hidden', remainingClass(fine.status, remaining))}>Còn {formatVnd(remaining)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 text-right font-mono text-sm tabular-nums text-muted-foreground xl:table-cell">{formatVnd(total)}</TableCell>
+                      <TableCell className="hidden px-4 py-3 md:table-cell">
+                        <div className="text-right font-mono text-sm tabular-nums">
+                          <span className={remainingClass(fine.status, remaining)}>{formatVnd(remaining)}</span>
+                        </div>
+                        {total > 0 && (
+                          <div className="ml-auto mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã trả ${paidPct}%`}>
+                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${paidPct}%` }} />
+                          </div>
                         )}
-                      </PaginationItem>
-                    ))}
-                    <PaginationItem>
-                      <PaginationNext
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setPage((current) => Math.min(totalPages, current + 1));
-                        }}
-                        className={cn('cursor-pointer', currentPage === totalPages && 'pointer-events-none opacity-50')}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 lg:table-cell">{badge}</TableCell>
+                      <TableCell className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button size="sm" variant="success-outline" onClick={() => openPaymentDialog(fine)} disabled={remaining <= 0}>
+                            Thanh toán
+                          </Button>
+                          <button
+                            type="button"
+                            aria-label={`Xem chi tiết khoản phạt của ${customerName}`}
+                            title="Chi tiết"
+                            disabled={detailLoadingId === fine.id}
+                            onClick={() => void openDetail(fine)}
+                            className={cn(ICON_BUTTON_CLASS, 'border-input hover:bg-muted')}
+                          >
+                            {detailLoadingId === fine.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Miễn giảm khoản phạt của ${customerName}`}
+                            title="Miễn giảm"
+                            disabled={remaining <= 0}
+                            onClick={() => openWaiveDialog(fine)}
+                            className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
+                          >
+                            <BadgePercent className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
-            </div>
-          )}
+            </TableBody>
+          </Table>
+          <ListFooter
+            page={list.page}
+            pageSize={PAGE_SIZE}
+            total={list.meta.total}
+            totalPages={list.meta.totalPages}
+            shown={list.rows.length}
+            noun="khoản phạt"
+            onPageChange={list.setPage}
+          />
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
       {/* Chi tiết khoản phạt — thay cho toast.message() trước đây, giờ hiển thị đúng lịch sử thanh toán */}
       <Dialog open={detailFine !== null} onOpenChange={(open) => !open && setDetailFine(null)}>
@@ -480,10 +389,10 @@ export function BorrowFinesPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <span className="font-mono text-muted-foreground">#{detailFine.id.slice(0, 8)}</span>
-                  <StatusBadge label={detailFine.status} variant={getStatusVariant('fine', detailFine.status)} dot />
+                  <StatusBadge label={getBorrowLabel('fine', detailFine.status)} variant={getStatusVariant('fine', detailFine.status)} dot />
                 </DialogTitle>
                 <DialogDescription>
-                  {detailFine.fine_type} · {detailFine.customers?.full_name || detailFine.customer_id}
+                  {getBorrowLabel('fineType', detailFine.fine_type)} · {detailFine.customers?.full_name || 'Khách hàng'}
                 </DialogDescription>
               </DialogHeader>
 
@@ -565,7 +474,7 @@ export function BorrowFinesPage() {
                   Thanh toán tiền phạt
                 </DialogTitle>
                 <DialogDescription>
-                  {paymentDialogFine.customers?.full_name || paymentDialogFine.customer_id}
+                  {paymentDialogFine.customers?.full_name || 'Khách hàng'}
                   {paymentDialogFine.customers?.customer_code ? ` · ${paymentDialogFine.customers.customer_code}` : ''}
                 </DialogDescription>
               </DialogHeader>
@@ -639,7 +548,7 @@ export function BorrowFinesPage() {
               <DialogHeader>
                 <DialogTitle>Miễn giảm tiền phạt</DialogTitle>
                 <DialogDescription>
-                  {waiveDialogFine.customers?.full_name || waiveDialogFine.customer_id}
+                  {waiveDialogFine.customers?.full_name || 'Khách hàng'}
                   {waiveDialogFine.customers?.customer_code ? ` · ${waiveDialogFine.customers.customer_code}` : ''}
                 </DialogDescription>
               </DialogHeader>
@@ -687,6 +596,6 @@ export function BorrowFinesPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageWrapper>
   );
 }

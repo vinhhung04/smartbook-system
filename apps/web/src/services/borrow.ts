@@ -3,7 +3,7 @@ import { gatewayAPI } from './http-clients';
 export type CustomerStatus = 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'INACTIVE';
 export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'READY_FOR_PICKUP' | 'CANCELLED' | 'EXPIRED' | 'CONVERTED_TO_LOAN';
 export type ReservationSource = 'WEB' | 'MOBILE' | 'COUNTER' | 'ADMIN';
-export type LoanStatus = 'RESERVED' | 'BORROWED' | 'RETURNED' | 'OVERDUE' | 'LOST' | 'CANCELLED' | 'DAMAGED';
+export type LoanStatus = 'RESERVED' | 'BORROWED' | 'RETURNED' | 'RETURNED_LATE' | 'OVERDUE' | 'LOST' | 'CANCELLED' | 'DAMAGED';
 
 export interface Customer {
   id: string;
@@ -205,6 +205,13 @@ export interface Fine {
     status: CustomerStatus;
     total_fine_balance?: number;
   };
+  loan_items?: {
+    id: string;
+    loan_id: string;
+    status: string;
+    item_barcode: string | null;
+    loan_transactions?: { loan_number: string };
+  } | null;
   fine_payments?: FinePayment[];
   summary?: FineSummary;
 }
@@ -216,6 +223,10 @@ export interface PaginatedResponse<T> {
     pageSize: number;
     total: number;
     totalPages: number;
+    /** Rows per status for the current search, ignoring the status filter (staff list endpoints). */
+    status_counts?: Record<string, number>;
+    /** Money totals over all fines; only returned by GET /borrow/fines?summary=1. */
+    summary?: { outstanding: number; collected: number; open_count: number };
   };
 }
 

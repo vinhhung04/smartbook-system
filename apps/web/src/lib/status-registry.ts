@@ -34,6 +34,7 @@ const DOMAINS = {
     RESERVED: 'primary',
     BORROWED: 'info',
     RETURNED: 'success',
+    RETURNED_LATE: 'amber',
     OVERDUE: 'rose',
     LOST: 'rose',
     DAMAGED: 'rose',
@@ -147,6 +148,60 @@ export function getWarehouseTaskStatusVariant(status: string): Tone {
   if (upper.includes('PENDING') || upper.includes('READY') || upper.includes('APPROVED')) return 'warning';
   if (upper.includes('CANCEL') || upper.includes('REJECT')) return 'danger';
   return 'neutral';
+}
+
+// Vietnamese labels for the borrow domains, so staff pages never show raw codes like
+// CONVERTED_TO_LOAN or UNPAID. Unknown values fall back to the raw value.
+const BORROW_LABELS = {
+  loan: {
+    RESERVED: 'Đã đặt trước',
+    BORROWED: 'Đang mượn',
+    OVERDUE: 'Quá hạn',
+    RETURNED: 'Đã trả',
+    RETURNED_LATE: 'Đã trả (trễ hạn)',
+    LOST: 'Mất sách',
+    DAMAGED: 'Hư hỏng',
+    CANCELLED: 'Đã hủy',
+  },
+  reservation: {
+    PENDING: 'Chờ xác nhận',
+    CONFIRMED: 'Đang chuẩn bị',
+    READY_FOR_PICKUP: 'Chờ khách lấy',
+    CONVERTED_TO_LOAN: 'Đã cho mượn',
+    EXPIRED: 'Hết hạn',
+    CANCELLED: 'Đã hủy',
+  },
+  fine: {
+    UNPAID: 'Chưa trả',
+    PARTIALLY_PAID: 'Trả một phần',
+    PAID: 'Đã trả',
+    WAIVED: 'Đã miễn',
+  },
+  borrowCustomer: {
+    ACTIVE: 'Hoạt động',
+    SUSPENDED: 'Tạm khóa',
+    BLOCKED: 'Bị chặn',
+    INACTIVE: 'Đã ngừng',
+  },
+  fineType: {
+    OVERDUE: 'Trả trễ',
+    LOST: 'Mất sách',
+    DAMAGED: 'Hư hỏng',
+  },
+  sourceChannel: {
+    WEB: 'Website',
+    MOBILE: 'Ứng dụng',
+    COUNTER: 'Tại quầy',
+    ADMIN: 'Quản trị',
+    STAFF: 'Nhân viên',
+  },
+} satisfies Record<string, Record<string, string>>;
+
+export type BorrowLabelDomain = keyof typeof BORROW_LABELS;
+
+export function getBorrowLabel(domain: BorrowLabelDomain, value: string | null | undefined): string {
+  const map: Record<string, string> = BORROW_LABELS[domain];
+  return map[String(value || '').toUpperCase()] ?? String(value || '-');
 }
 
 // Vietnamese labels for the raw statuses of the task types in "Công việc kho" (picking, outbound,

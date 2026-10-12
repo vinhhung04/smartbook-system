@@ -104,5 +104,5 @@ test('customer reservation through pickup and return', async ({ page }) => {
   await page.getByTestId('confirm-dialog-action').click();
   await expect(toast(page, 'Đã trả sách thành công')).toBeVisible();
 
-  await expect(page.getByTestId('loan-status-badge')).toContainText('RETURNED');
+  await expect(page.getByTestId('loan-status-badge')).toContainText('Đã trả');
 });
