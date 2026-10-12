@@ -1,32 +1,7 @@
-import crypto from 'node:crypto';
-
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const username = process.env.ASSISTANT_TEST_USERNAME || 'manager01';
 const password = process.env.ASSISTANT_TEST_PASSWORD || '123456';
-const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
-
-function b64url(input) {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-function signJwt(payload, secret) {
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const encodedHeader = b64url(JSON.stringify(header));
-  const encodedPayload = b64url(JSON.stringify(payload));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signature = crypto
-    .createHmac('sha256', secret)
-    .update(signingInput)
-    .digest('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-  return `${signingInput}.${signature}`;
-}
+const customerUsername = process.env.ASSISTANT_TEST_CUSTOMER_USERNAME || 'customer01';
 
 async function request(path, token, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -42,11 +17,11 @@ async function request(path, token, options = {}) {
   return { response, body };
 }
 
-async function login() {
+async function login(identifier = username) {
   const response = await fetch(`${baseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier: username, password }),
+    body: JSON.stringify({ identifier, password }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body?.token) {
@@ -100,6 +75,7 @@ async function run() {
   }
 
   // 2. Overdue/fine question — expect the model to call an overdue- or fine-related tool.
+  let overdueConversationId;
   {
     const { response, body } = await request('/ai/assistant', managerToken, {
       body: { message: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
@@ -115,6 +91,7 @@ async function run() {
     if (!usedRelevantTool) {
       throw new Error(`expected an overdue/fine/dashboard tool call, got: ${JSON.stringify(body.tools_used)}`);
     }
+    overdueConversationId = body.conversation_id;
     passed += 1;
     console.log('PASS assistant/overdue-fine-question');
   }
@@ -122,11 +99,12 @@ async function run() {
   // 2b. Cache hit — same question sent again immediately must come back near-instantly
   //     (short-TTL response cache), unlike the ~seconds-to-tens-of-seconds a fresh
   //     tool-calling round takes even on GPU. Must run right after case 2 (same
-  //     message, same TTL window) — do not reorder or separate from it.
+  //     message, same TTL window) — do not reorder or separate from it. The cache is
+  //     keyed per conversation, so the follow-up has to reuse case 2's conversation_id.
   {
     const start = Date.now();
     const { response, body } = await request('/ai/assistant', managerToken, {
-      body: { message: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
+      body: { message: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?', conversation_id: overdueConversationId },
     });
     const elapsedMs = Date.now() - start;
     if (!response.ok) {
@@ -140,20 +118,11 @@ async function run() {
     console.log(`PASS assistant/cache-hit (${elapsedMs}ms)`);
   }
 
-  // 3. Customer token must be denied before any LLM call is made.
+  // 3. Customer token must be denied before any LLM call is made. A real customer login,
+  //    not a self-signed token: ai-service resolves the user via auth-service, so a token
+  //    for a user that does not exist is rejected with 401 before the role check runs.
   {
-    const customerToken = signJwt(
-      {
-        sub: crypto.randomUUID(),
-        username: 'assistant-customer-test',
-        email: 'assistant-customer-test@smartbook.local',
-        roles: ['CUSTOMER'],
-        permissions: ['inventory.catalog.read', 'borrow.read', 'borrow.write'],
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 60 * 60,
-      },
-      jwtSecret,
-    );
+    const customerToken = await login(customerUsername);
     const { response } = await request('/ai/assistant', customerToken, {
       body: { message: 'Cho tôi xem KPI tổng quan thư viện.' },
     });

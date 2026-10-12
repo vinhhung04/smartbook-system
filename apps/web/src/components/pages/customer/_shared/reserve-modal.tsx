@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, MapPin, CheckCircle, Loader2 } from 'lucide-react';
+import { Link } from 'react-router';
+import { X, MapPin, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { CustomerCatalogBook } from '@/services/customer-catalog';
 import { publicCatalogService, type PickupBranch } from '@/services/public-catalog';
 import { customerBorrowService } from '@/services/customer-borrow';
+import { customerService } from '@/services/customer';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
@@ -49,6 +51,20 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   }, [usesLocations, pickupBranchIds]);
   const loadingPickupBranches = usesLocations && !pickupBranchIds;
 
+  // borrow-service rejects a reservation while total_fine_balance > 0; say so before the
+  // reader confirms. If the profile can't be read, don't block — the server still decides.
+  const isOpen = Boolean(book);
+  const [fineBalance, setFineBalance] = useState(0);
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    customerService.getMyProfile()
+      .then((profile) => { if (!cancelled) setFineBalance(Number(profile?.total_fine_balance) || 0); })
+      .catch(() => { if (!cancelled) setFineBalance(0); });
+    return () => { cancelled = true; };
+  }, [isOpen]);
+  const blockedByFines = fineBalance > 0;
+
   const availableWarehouses = useMemo<WarehouseOption[]>(() => {
     if (book?.pickup_branches) return book.pickup_branches.filter((branch) => branch.available_quantity > 0);
     if (!book?.locations || !pickupBranchIds) return [];
@@ -77,7 +93,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
   if (!book) return null;
 
   const handleConfirm = async () => {
-    if (!effectiveWarehouseId || !book.variant_id) return;
+    if (!effectiveWarehouseId || !book.variant_id || blockedByFines) return;
     try {
       setSubmitting(true);
       await customerBorrowService.createReservation({
@@ -168,6 +184,16 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
               </div>
             </div>
           )}
+
+          {blockedByFines && availableWarehouses.length > 0 ? (
+            <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                Bạn còn {fineBalance.toLocaleString('vi-VN')}đ tiền phạt chưa thanh toán nên chưa thể đặt trước.{' '}
+                <Link to="/customer/fines" className="font-semibold underline">Xem và thanh toán</Link>
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {/* Footer */}
@@ -183,7 +209,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
             </button>
             <button
               onClick={() => void handleConfirm()}
-              disabled={!effectiveWarehouseId || submitting}
+              disabled={!effectiveWarehouseId || submitting || blockedByFines}
               data-testid="confirm-reserve-button"
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground transition-colors"
               style={{ fontWeight: 600 }}

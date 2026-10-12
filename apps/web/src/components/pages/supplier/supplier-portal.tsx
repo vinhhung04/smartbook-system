@@ -133,7 +133,7 @@ export function SupplierPortalPage() {
         setRedeliveryQty(Object.fromEntries(firstOpen.items.map((item) => [item.purchase_order_item_id, item.shortage_qty])));
       }
     } catch (loadError) {
-      const message = getApiErrorMessage(loadError, "Failed to load supplier order");
+      const message = getApiErrorMessage(loadError, "Không tải được đơn hàng");
       setError(message);
       toast.error(message);
     } finally {
@@ -368,7 +368,7 @@ export function SupplierPortalPage() {
     return (
       <div className="mx-auto max-w-4xl p-6">
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-5 text-[13px] text-rose-800">
-          {error || "Supplier order not found."}
+          {error || "Không tìm thấy đơn hàng."}
         </div>
       </div>
     );
@@ -700,7 +700,7 @@ export function SupplierPortalPage() {
                         <div className="flex flex-wrap gap-2">
                           {["OPEN", "SENT_TO_SUPPLIER"].includes(report.status) ? (
                             <Button variant="outline" size="sm" onClick={() => void acknowledgeShortage(report)} disabled={working}>
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Acknowledge
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Ghi nhận
                             </Button>
                           ) : null}
                           {["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status) ? (
@@ -730,7 +730,7 @@ export function SupplierPortalPage() {
                           <input
                             value={cannotReason[report.id] || ""}
                             onChange={(event) => setCannotReason((current) => ({ ...current, [report.id]: event.target.value }))}
-                            placeholder="Cannot fulfill reason"
+                            placeholder="Lý do không thể cung cấp"
                             className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[13px]"
                           />
                           <Button variant="outline" size="sm" onClick={() => void markCannotFulfill(report)} disabled={working}>

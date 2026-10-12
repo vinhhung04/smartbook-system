@@ -849,47 +849,56 @@ const finePaymentsData = [
   },
 ].filter(p => p.fine_id !== undefined);
 
-if (finePaymentsData.length > 0) {
-  await prisma.fine_payments.createMany({
-    data: finePaymentsData,
-    skipDuplicates: true,
-  });
-  console.log(`✅ Created ${finePaymentsData.length} fine payments`);
+// fine_payments has no unique key, so skipDuplicates never skipped anything: every re-run paid
+// the same fine again. Insert a payment only if this fine has no payment with the same note.
+let createdFinePayments = 0;
+for (const payment of finePaymentsData) {
+  const existing = await prisma.fine_payments.findFirst({ where: { fine_id: payment.fine_id, note: payment.note } });
+  if (existing) continue;
+  await prisma.fine_payments.create({ data: payment });
+  createdFinePayments += 1;
 }
+console.log(`✅ Created ${createdFinePayments} fine payments`);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STEP 8: FINES (For Analytics)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-await prisma.fines.createMany({
-  data: [
-    {
-      customer_id: customers[2].id,
-      fine_type: 'OVERDUE',
-      amount: 15000,
-      waived_amount: 0,
-      status: 'UNPAID',
-      note: 'Qua han 3 ngay - 5000VND/ngay',
-    },
-    {
-      customer_id: customers[4].id,
-      fine_type: 'OVERDUE',
-      amount: 25000,
-      waived_amount: 0,
-      status: 'UNPAID',
-      note: 'Qua han 5 ngay - 5000VND/ngay',
-    },
-    {
-      customer_id: customers[6].id,
-      fine_type: 'DAMAGED',
-      amount: 100000,
-      waived_amount: 0,
-      status: 'UNPAID',
-      note: 'Sach bi hu hong nang',
-    },
-  ],
-  skipDuplicates: true,
-});
+// Same problem as fine_payments: no unique key, so re-runs duplicated these fines. A fine is
+// identified here by customer + type + note.
+const analyticsFines = [
+  {
+    customer_id: customers[2].id,
+    fine_type: 'OVERDUE',
+    amount: 15000,
+    waived_amount: 0,
+    status: 'UNPAID',
+    note: 'Qua han 3 ngay - 5000VND/ngay',
+  },
+  {
+    customer_id: customers[4].id,
+    fine_type: 'OVERDUE',
+    amount: 25000,
+    waived_amount: 0,
+    status: 'UNPAID',
+    note: 'Qua han 5 ngay - 5000VND/ngay',
+  },
+  {
+    customer_id: customers[6].id,
+    fine_type: 'DAMAGED',
+    amount: 100000,
+    waived_amount: 0,
+    status: 'UNPAID',
+    note: 'Sach bi hu hong nang',
+  },
+];
+
+for (const fine of analyticsFines) {
+  const existing = await prisma.fines.findFirst({
+    where: { customer_id: fine.customer_id, fine_type: fine.fine_type, note: fine.note },
+  });
+  if (!existing) await prisma.fines.create({ data: fine });
+}
 
 console.log('✅ Created fines');
 
@@ -1193,7 +1202,9 @@ const existingExtendedItem = await prisma.loan_items.findFirst({ where: { item_b
 const extendedLoanItem = existingExtendedItem ?? await prisma.loan_items.create({
   data: { loan_id: extendedLoan.id, variant_id: '00000000-0000-0000-0000-000000000001', item_barcode: 'LI-EXT-OVERDUE-001', due_date: new Date('2026-07-15T09:00:00+07:00'), status: 'OVERDUE', item_condition_on_checkout: 'GOOD', fine_amount: 20000, notes: 'Two reminders sent; awaiting return.' },
 });
-const extendedFine = await prisma.fines.findFirst({ where: { customer_id: extendedCustomer.id, note: 'Extended overdue fine for reminder workflow.' }, select: { id: true } })
+// Look up by loan item + type (one fine per pair, as fine.service's upsertFine enforces), not by
+// note: the overdue sweep rewrites the note, after which every re-seed created another fine.
+const extendedFine = await prisma.fines.findFirst({ where: { loan_item_id: extendedLoanItem.id, fine_type: 'OVERDUE' }, select: { id: true } })
   ?? await prisma.fines.create({ data: { customer_id: extendedCustomer.id, loan_item_id: extendedLoanItem.id, fine_type: 'OVERDUE', amount: 20000, waived_amount: 0, status: 'UNPAID', issued_by_user_id: userId, issued_at: new Date('2026-07-20T09:00:00+07:00'), note: 'Extended overdue fine for reminder workflow.' } });
 
 const existingPaymentMethod = await prisma.payment_methods.findFirst({ where: { customer_id: extendedCustomer.id, provider_reference: 'PAYMENT-EXT-WALLET' }, select: { id: true } });

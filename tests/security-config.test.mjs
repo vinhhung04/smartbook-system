@@ -95,7 +95,9 @@ test('the web CSP takes its API origin from the environment and allows Google Fo
 
 test('long-lived infrastructure restarts itself after a crash or a Docker restart', () => {
   const compose = read('docker-compose.yml');
-  for (const service of ['db', 'redis', 'rabbitmq', 'api-gateway']) {
+  // The business services too: with `on-failure`, a Docker restart revives them after a manual
+  // `docker compose stop` while db stays stopped, and they crash-loop on "Can't reach database".
+  for (const service of ['db', 'redis', 'rabbitmq', 'api-gateway', 'inventory-service', 'auth-service', 'borrow-service', 'analytics-service']) {
     const block = compose.split(new RegExp(`^  ${service}:\\r?$`, 'm'))[1]?.split(/^  [a-z-]+:\r?$/m)[0] ?? '';
     assert.match(block, /restart: unless-stopped/, service);
   }

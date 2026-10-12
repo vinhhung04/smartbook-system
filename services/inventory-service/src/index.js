@@ -105,7 +105,13 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   try {
     const [goodsReceipts, outboundOrders, transferOrders, transferReceivingOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
       prisma.goods_receipts.findMany({
-        where: { received_by_user_id: userId },
+        // Receipts this user received, plus receipts they claimed for putaway (claimPutawayTask).
+        where: {
+          OR: [
+            { received_by_user_id: userId },
+            { putaway_assignee_user_id: userId },
+          ],
+        },
         select: {
           id: true,
           receipt_number: true,

@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as customerBorrowApi from '../../../src/api/customerBorrow';
 import { ApiError } from '../../../src/auth/auth-context';
 import { GlowBadge } from '../../../src/components/customer/GlowBadge';
-import { canPayFine, getFineStatusDisplay } from '../../../src/lib/fineStatus';
+import { canPayFine, getFineStatusDisplay, getFineTypeLabel } from '../../../src/lib/fineStatus';
 import { colors, radius, shadow, spacing, typography } from '../../../src/theme/customerTokens';
 import type { Fine } from '../../../src/types/borrow';
 
@@ -69,7 +69,7 @@ export default function CustomerWalletScreen() {
             return (
               <View style={styles.card}>
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.fine_type}</Text>
+                  <Text style={styles.cardTitle}>{getFineTypeLabel(item.fine_type)}</Text>
                   <Text style={styles.cardSubtitle}>{new Date(item.issued_at).toLocaleDateString('vi-VN')}</Text>
                   <Text style={styles.cardAmount}>{formatCurrency(item.amount - item.waived_amount)}</Text>
                 </View>

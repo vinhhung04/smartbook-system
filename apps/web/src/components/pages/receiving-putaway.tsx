@@ -718,6 +718,12 @@ export function ReceivingPutawayPage() {
                   <Input
                     value={scanSkuInput}
                     onChange={(event) => setScanSkuInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleScanSku();
+                      }
+                    }}
                     placeholder="Nhập ISBN13"
                     className="flex-1 h-auto py-2.5"
                   />
@@ -734,6 +740,12 @@ export function ReceivingPutawayPage() {
                 <Input
                   value={scanTargetBarcodeInput}
                   onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleScanTargetLocation();
+                    }
+                  }}
                   placeholder="Mã vạch ngăn kệ"
                   className="flex-1 h-auto py-2.5"
                 />
