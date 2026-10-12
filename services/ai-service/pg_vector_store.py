@@ -16,7 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import db
-from vector_store import Chunk, Hit
+import vector_store
+from vector_store import Chunk, DocumentState, Hit
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -161,6 +162,8 @@ class PgVectorStore:
     ) -> list[Hit]:
         if not (query or "").strip():
             return []
+        if vector_store.KEYWORD_MODE == "terms":
+            return await self._search_keyword_terms(corpus, query, k, source_ids)
         sql = text("""
             SELECT c.id AS chunk_id, c.document_id, d.source_id, c.corpus, c.content,
                    ts_rank(c.tsv, plainto_tsquery('simple', unaccent(:query))) AS score,
@@ -179,9 +182,91 @@ class PgVectorStore:
             "source_ids": list(source_ids or []),
         })
 
+    async def _search_keyword_terms(
+        self, corpus: str, query: str, k: int, source_ids: list[str] | None,
+    ) -> list[Hit]:
+        """OR tren tu noi dung (vector_store.keyword_terms), lay du ung vien roi
+        xep lai theo coverage - cung dinh nghia diem voi InMemoryVectorStore.
+        Tu noi dung chi gom [a-z0-9]+ nen ghep thang vao to_tsquery an toan."""
+        terms = vector_store.keyword_terms(query)
+        if not terms:
+            return []
+        sql = text("""
+            SELECT c.id AS chunk_id, c.document_id, d.source_id, c.corpus, c.content,
+                   ts_rank(c.tsv, to_tsquery('simple', :tsquery)) AS score,
+                   d.metadata
+            FROM ai_document_chunks c
+            JOIN ai_documents d ON d.id = c.document_id
+            WHERE c.corpus = :corpus
+              AND c.tsv @@ to_tsquery('simple', :tsquery)
+              AND (:filter_sources = FALSE OR d.source_id = ANY(:source_ids))
+            ORDER BY score DESC
+            LIMIT :candidates
+        """)
+        candidates = await self._search(sql, {
+            "corpus": corpus, "tsquery": " | ".join(terms), "candidates": max(k * 5, 50),
+            "filter_sources": source_ids is not None,
+            "source_ids": list(source_ids or []),
+        })
+        scored = []
+        for hit in candidates:
+            coverage = vector_store.keyword_coverage(terms, hit.content)
+            if coverage > 0 and coverage >= vector_store.KEYWORD_MIN_COVERAGE:
+                scored.append((coverage, hit.score, hit))
+        scored.sort(key=lambda item: (-item[0], -item[1], item[2].source_id))
+        return [
+            Hit(chunk_id=hit.chunk_id, document_id=hit.document_id, source_id=hit.source_id,
+                corpus=hit.corpus, content=hit.content, score=coverage, metadata=hit.metadata)
+            for coverage, _, hit in scored[:k]
+        ]
+
     async def delete_chunks_except_model(self, embedding_model: str) -> int:
         sql = text("DELETE FROM ai_document_chunks WHERE embedding_model != :embedding_model")
         async with self._session() as session:
             result = await session.execute(sql, {"embedding_model": embedding_model})
+            await session.commit()
+        return result.rowcount or 0
+
+    async def list_documents(self, corpus: str) -> dict[str, DocumentState]:
+        sql = text("""
+            SELECT d.id, d.source_id, d.title, d.content_hash, d.metadata,
+                   COALESCE(
+                       jsonb_object_agg(c.chunk_index, c.content_hash) FILTER (WHERE c.id IS NOT NULL),
+                       '{}'::jsonb
+                   ) AS chunk_hashes
+            FROM ai_documents d
+            LEFT JOIN ai_document_chunks c ON c.document_id = d.id
+            WHERE d.corpus = :corpus
+            GROUP BY d.id
+        """)
+        async with self._session() as session:
+            rows = (await session.execute(sql, {"corpus": corpus})).mappings().all()
+        return {
+            str(row["source_id"]): DocumentState(
+                document_id=str(row["id"]), source_id=str(row["source_id"]),
+                title=row["title"], content_hash=str(row["content_hash"]),
+                metadata=row["metadata"] or {},
+                chunk_hashes={int(index): str(value) for index, value in (row["chunk_hashes"] or {}).items()},
+            )
+            for row in rows
+        }
+
+    async def delete_documents(self, corpus: str, source_ids: list[str]) -> int:
+        if not source_ids:
+            return 0
+        # Chunk di theo qua ON DELETE CASCADE (schema.sql).
+        sql = text("DELETE FROM ai_documents WHERE corpus = :corpus AND source_id = ANY(:source_ids)")
+        async with self._session() as session:
+            result = await session.execute(sql, {"corpus": corpus, "source_ids": list(source_ids)})
+            await session.commit()
+        return result.rowcount or 0
+
+    async def delete_chunks_from(self, document_id: str, start_index: int) -> int:
+        sql = text("""
+            DELETE FROM ai_document_chunks
+            WHERE document_id = CAST(:document_id AS UUID) AND chunk_index >= :start_index
+        """)
+        async with self._session() as session:
+            result = await session.execute(sql, {"document_id": document_id, "start_index": start_index})
             await session.commit()
         return result.rowcount or 0

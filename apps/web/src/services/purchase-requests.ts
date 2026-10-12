@@ -57,6 +57,11 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  async withdraw(id: string): Promise<{ data: PurchaseRequest }> {
+    const response = await inventoryAPI.post<{ data: PurchaseRequest }>(`/api/purchase-requests/${id}/withdraw`);
+    return response.data;
+  },
+
   async approve(id: string): Promise<{ data: PurchaseRequest }> {
     const response = await inventoryAPI.post<{ data: PurchaseRequest }>(`/api/purchase-requests/${id}/approve`);
     return response.data;

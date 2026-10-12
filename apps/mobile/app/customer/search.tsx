@@ -1,44 +1,27 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack, router } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import * as customerCatalogApi from '../../src/api/customerCatalog';
-import { ApiError } from '../../src/auth/auth-context';
 import { PosterCard } from '../../src/components/customer/PosterCard';
 import { colors, radius, spacing, typography } from '../../src/theme/customerTokens';
-import type { CustomerCatalogBook } from '../../src/types/customerCatalog';
+import { useCatalogPages } from '../../src/hooks/useCatalogPages';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
 export default function CustomerSearchScreen() {
-  const [books, setBooks] = useState<CustomerCatalogBook[]>([]);
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (searchTerm: string) => {
-    setError(null);
-    try {
-      const result = await customerCatalogApi.getCatalogBooks({ search: searchTerm || undefined });
-      setBooks(result);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Không tải được kết quả tìm kiếm');
-    }
-  }, []);
+  // The term actually queried: updated after the debounce, so each keystroke
+  // does not start a request. Empty → nothing to load.
+  const [term, setTerm] = useState('');
 
   useEffect(() => {
-    if (!search.trim()) {
-      setBooks([]);
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      load(search).finally(() => setIsLoading(false));
-    }, SEARCH_DEBOUNCE_MS);
+    const timer = setTimeout(() => setTerm(search.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [search, load]);
+  }, [search]);
+
+  const catalog = useCatalogPages(term ? { search: term } : null);
+  const isTyping = search.trim() !== term;
 
   return (
     <>
@@ -69,17 +52,34 @@ export default function CustomerSearchScreen() {
           autoFocus
         />
 
-        {isLoading ? (
+        {(catalog.loadingInitial || (isTyping && catalog.items.length === 0)) && search.trim() ? (
           <ActivityIndicator color={colors.primary} style={styles.spinner} />
-        ) : error ? (
-          <Text style={styles.error}>{error}</Text>
+        ) : catalog.error && catalog.items.length === 0 ? (
+          <Pressable onPress={catalog.retry} accessibilityRole="button">
+            <Text style={styles.error}>{catalog.error} · Thử lại</Text>
+          </Pressable>
         ) : (
           <FlatList
-            data={books}
+            data={catalog.items}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
+            // Guarded in the loader: ignored while a page is loading or after the last page.
+            onEndReached={catalog.loadMore}
+            onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              term && catalog.total > 0 ? <Text style={styles.count}>{catalog.total} kết quả</Text> : null
+            }
+            ListFooterComponent={
+              catalog.loadingMore ? (
+                <ActivityIndicator color={colors.primary} style={styles.footer} />
+              ) : catalog.error ? (
+                <Pressable onPress={catalog.retry} accessibilityRole="button" style={styles.footer}>
+                  <Text style={styles.error}>Không tải thêm được · Thử lại</Text>
+                </Pressable>
+              ) : null
+            }
             ListEmptyComponent={
-              search.trim() ? <Text style={styles.empty}>Không tìm thấy sách phù hợp</Text> : null
+              term && !isTyping ? <Text style={styles.empty}>Không tìm thấy sách phù hợp</Text> : null
             }
             renderItem={({ item }) => (
               <View style={styles.row}>
@@ -136,6 +136,12 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+  count: {
+    ...typography.caption,
+  },
+  footer: {
+    paddingVertical: spacing.lg,
   },
   list: {
     gap: spacing.md,

@@ -74,9 +74,14 @@ export const customerBorrowService = {
     return response.data;
   },
 
-  async getMyNotifications(params?: { page?: number; pageSize?: number }) {
+  async getMyNotifications(params?: { page?: number; pageSize?: number; status?: 'unread' | 'read' }) {
     const response = await gatewayAPI.get('/my/notifications', { params });
     return response.data;
+  },
+
+  async getUnreadNotificationCount(): Promise<number> {
+    const response = await gatewayAPI.get('/my/notifications/unread-count');
+    return Number(response.data?.data?.unread_count) || 0;
   },
 
   async submitReview(payload: { book_id: string; rating: number; comment?: string }) {

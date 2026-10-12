@@ -1607,5 +1607,437 @@
     "expected_ids": [],
     "expected_facts": [],
     "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+  },
+  {
+    "id": "bm-076",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy lập trình Java hướng đối tượng không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-077",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách nào giải thích về trí tuệ nhân tạo và học máy cho người mới?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-078",
+    "corpus": "BOOK_METADATA",
+    "question": "Có giáo trình toán cao cấp giải tích không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-079",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách luyện thi IELTS Writing band 7?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-080",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách ngữ pháp tiếng Nhật N3 không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-081",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn yoga và thiền cho người mới tập?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-082",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy làm bánh mì và bánh ngọt tại nhà không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-083",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách cẩm nang du lịch bụi Đông Nam Á?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-084",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách về lịch sử Đế chế La Mã cổ đại không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-085",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách giải phẫu học cho sinh viên y khoa?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-086",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách hướng dẫn chăm sóc trẻ sơ sinh không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-087",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách về kiến trúc nhà ở xanh tiết kiệm năng lượng?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-088",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy chơi cờ vua nâng cao không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-089",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách hướng dẫn marketing trên TikTok không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-090",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách về luật hôn nhân và gia đình Việt Nam?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-091",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách dạy vẽ truyện tranh manga không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-092",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn chạy bộ marathon cho người mới?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-093",
+    "corpus": "BOOK_METADATA",
+    "question": "Có cuốn Harry Potter và Hòn đá Phù thủy không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-094",
+    "corpus": "BOOK_METADATA",
+    "question": "Thư viện có sách Đắc Nhân Tâm của Dale Carnegie không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-095",
+    "corpus": "BOOK_METADATA",
+    "question": "Có cuốn Sapiens: Lược sử loài người không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-096",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách Atomic Habits - Thay đổi tí hon hiệu quả bất ngờ không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-097",
+    "corpus": "BOOK_METADATA",
+    "question": "Có bộ truyện Thám tử lừng danh Conan không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-098",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hóa học hữu cơ lớp 11?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-099",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách về sinh học phân tử và di truyền không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-100",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn sửa chữa máy tính và lắp ráp PC?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-101",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách về thời trang và phối đồ công sở không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-102",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách hướng dẫn nuôi chó và huấn luyện thú cưng?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-103",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách về lịch sử chiến tranh thế giới thứ hai không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-104",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách dạy đánh đàn piano cơ bản?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-105",
+    "corpus": "BOOK_METADATA",
+    "question": "Có tiểu thuyết trinh thám của Agatha Christie không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-106",
+    "corpus": "BOOK_METADATA",
+    "question": "Sách về kế toán tài chính doanh nghiệp nhỏ?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "bm-107",
+    "corpus": "BOOK_METADATA",
+    "question": "Có sách hướng dẫn trồng lan và chăm sóc hoa kiểng không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu tu dong (keyword coverage) va doc thu cong voi eval/rag_catalog_snapshot_20261008.json (116 sach) - khong co sach chu de nay. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-056",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có cho thuê máy tính xách tay không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-057",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có được mang thú cưng vào thư viện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-058",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quy định về trang phục khi đến thư viện là gì?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-059",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tuyển cộng tác viên tình nguyện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-060",
+    "corpus": "INTERNAL_DOC",
+    "question": "Lương nhân viên kho được trả vào ngày nào trong tháng?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-061",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có cho mượn sách nói (audiobook) không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-062",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có máy photocopy tự phục vụ ở thư viện không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-063",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có khu vực dành riêng cho trẻ em không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-064",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có được ăn uống trong phòng đọc không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-065",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có tổ chức lớp dạy kỹ năng sống cuối tuần không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-066",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể đặt lịch tham quan thư viện cho đoàn học sinh không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-067",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có camera an ninh ở những khu vực nào?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-068",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên được hỗ trợ chi phí gửi xe không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-069",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có chương trình giới thiệu bạn bè để nhận quà không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-070",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có xuất hóa đơn VAT cho phí hội viên không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-071",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quy trình xử lý khi có hỏa hoạn trong kho là gì?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-072",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có cho phép mượn sách liên thư viện với nơi khác không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-073",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-074",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có chỗ sạc điện thoại miễn phí không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-075",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên mới được đào tạo bao nhiêu ngày?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-076",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thư viện có phát hành báo và tạp chí hằng ngày không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-077",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có dịch vụ bọc bìa sách cho bạn đọc không?",
+    "expected_ids": [],
+    "expected_facts": [],
+    "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
   }
 ]

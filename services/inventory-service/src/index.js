@@ -45,6 +45,7 @@ const metadataReconciliationRoutes = require('./routes/metadata-reconciliation.r
 const duplicateIntelligenceRoutes = require('./routes/duplicate-intelligence.routes');
 const internalAuthorityRoutes = require('./routes/internal-authority.routes');
 const internalCatalogRoutes = require('./routes/internal-catalog.routes');
+const internalBookCorpusRoutes = require('./routes/internal-book-corpus.routes');
 const publicCatalogRoutes = require('./routes/public-catalog.routes');
 const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
 const { startOutboxPublisherJob } = require('./jobs/outbox-publisher.job');
@@ -87,6 +88,7 @@ app.get('/ready', async (_req, res) => {
 app.use('/api/supplier-portal', supplierPortalRoutes);
 app.use('/internal/authority', internalAuthorityRoutes);
 app.use('/internal/covers', internalCatalogRoutes);
+app.use('/internal/catalog/books', internalBookCorpusRoutes);
 // Read-only anonymous catalog for the public website (see routes/public-catalog.routes.js).
 app.use('/public/catalog', publicCatalogRoutes);
 

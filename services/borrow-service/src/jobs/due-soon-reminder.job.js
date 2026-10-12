@@ -12,7 +12,7 @@ const { prisma } = require('../lib/prisma');
 const { createNotificationRecord } = require('../lib/notifications');
 
 const ANALYTICS_SERVICE_URL = String(process.env.ANALYTICS_SERVICE_URL || 'http://analytics-service:3006').replace(/\/$/, '');
-const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || 'smartbook_internal_key').trim();
+const INTERNAL_SERVICE_KEY = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
 const WINDOW_DAYS = Number(process.env.DUE_SOON_REMINDER_WINDOW_DAYS || 3);
 const BATCH_SIZE = Math.min(200, Math.max(1, Number(process.env.DUE_SOON_REMINDER_BATCH_SIZE || 100)));
 
@@ -75,7 +75,8 @@ async function sendReminderIfNeeded(candidate) {
       body: `Phiếu mượn ${loan.loan_number} sẽ đến hạn trả vào ${item.due_date.toISOString().slice(0, 10)}.`,
       reference_type: 'LOAN_ITEM',
       reference_id: item.id,
-      metadata: { risk_score: candidate.risk_score, risk_band: candidate.risk_band, due_date: item.due_date },
+      // loan_id lets the notification center link to the loan page.
+      metadata: { risk_score: candidate.risk_score, risk_band: candidate.risk_band, due_date: item.due_date, loan_id: loan.id },
       email: customer.email || null,
       email_data: { customer_name: customer.full_name, loan_number: loan.loan_number, due_date: item.due_date.toISOString().slice(0, 10) },
     });

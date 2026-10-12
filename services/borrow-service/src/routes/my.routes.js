@@ -9,8 +9,13 @@ const {
   getMyAccount,
   getMyAccountLedger,
   getMyFines,
-  getMyNotifications,
 } = require('../controllers/my.controller');
+const {
+  getMyNotifications,
+  getMyUnreadNotificationCount,
+  markMyNotificationRead,
+  markAllMyNotificationsRead,
+} = require('../controllers/notification.controller');
 const {
   createOrUpdateMyReview,
   getMyReviews,
@@ -50,38 +55,9 @@ router.get('/fines', getMyFines);
 router.post('/fines/payments/vnpay/create', createVnpayFinePayment);
 router.get('/fines/payments/vnpay/status/:txnRef', getVnpayFinePaymentStatus);
 router.get('/notifications', getMyNotifications);
-router.patch('/notifications/:id/read', async (req, res) => {
-  try {
-    const { ensureCurrentCustomer } = require('../controllers/customer.controller');
-    const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
-    const { prisma } = require('../lib/prisma');
-    await prisma.customer_notifications.updateMany({
-      where: { id: req.params.id, customer_id: customer.id, read_at: null },
-      data: { read_at: new Date() },
-    });
-    return res.json({ message: 'Marked as read' });
-  } catch (err) {
-    console.error('markNotificationRead error:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-router.patch('/notifications/read-all', async (req, res) => {
-  try {
-    const { ensureCurrentCustomer } = require('../controllers/customer.controller');
-    const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
-    const { prisma } = require('../lib/prisma');
-    const result = await prisma.customer_notifications.updateMany({
-      where: { customer_id: customer.id, read_at: null },
-      data: { read_at: new Date() },
-    });
-    return res.json({ message: 'All marked as read', count: result.count });
-  } catch (err) {
-    console.error('markAllNotificationsRead error:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
+router.get('/notifications/unread-count', getMyUnreadNotificationCount);
+router.patch('/notifications/read-all', markAllMyNotificationsRead);
+router.patch('/notifications/:id/read', markMyNotificationRead);
 
 router.get('/preferences', async (req, res) => {
   try {

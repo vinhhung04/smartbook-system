@@ -1,3 +1,4 @@
+import type { CreateReservationPayload } from '../types/borrow';
 import type { CustomerCatalogBook, CustomerCatalogLocation } from '../types/customerCatalog';
 
 // Shape of GET /public/catalog/books[/:id] (inventory-service public-catalog.service.js) — only the
@@ -29,20 +30,32 @@ export type PublicCatalogBook = {
   pickup_branches?: PublicPickupBranch[];
 };
 
-// The branch holding the most copies; the first one wins a tie so the choice is stable.
-export function pickBestBranch(branches: PublicPickupBranch[] | undefined | null): PublicPickupBranch | null {
-  let best: PublicPickupBranch | null = null;
-  for (const branch of branches ?? []) {
-    if (branch.available_quantity > 0 && (!best || branch.available_quantity > best.available_quantity)) {
-      best = branch;
-    }
-  }
-  return best;
+/** Branches a reader may pick the book up at: the public pickup branches the catalog returned
+ *  (BRANCH/LIBRARY only — internal warehouses are never in pickup_branches) that still hold a copy. */
+export function selectablePickupBranches(book: Pick<CustomerCatalogBook, 'locations'>): CustomerCatalogLocation[] {
+  return book.locations.filter((location) => location.available_quantity > 0);
+}
+
+/** A lone branch is chosen for the reader; with several the reader has to pick one. */
+export function initialPickupBranchId(book: Pick<CustomerCatalogBook, 'locations'>): string | null {
+  const branches = selectablePickupBranches(book);
+  return branches.length === 1 ? branches[0].warehouse_id : null;
+}
+
+/** The POST /my/reservations body for the chosen branch, or null when that branch can't be used.
+ *  UX only — borrow-service still forces reservation_channel=CUSTOMER and inventory re-checks
+ *  that the warehouse is a public pickup branch with stock. */
+export function buildReservationPayload(
+  book: Pick<CustomerCatalogBook, 'reservable' | 'variant_id' | 'locations'>,
+  branchId: string | null,
+): CreateReservationPayload | null {
+  if (!book.reservable || !book.variant_id || !branchId) return null;
+  if (!selectablePickupBranches(book).some((branch) => branch.warehouse_id === branchId)) return null;
+  return { variant_id: book.variant_id, warehouse_id: branchId, quantity: 1 };
 }
 
 export function toCustomerCatalogBook(book: PublicCatalogBook): CustomerCatalogBook {
   const branches = book.pickup_branches ?? [];
-  const best = pickBestBranch(branches);
   const locations: CustomerCatalogLocation[] = branches.map((branch) => ({
     warehouse_id: branch.warehouse_id,
     warehouse_name: branch.warehouse_name,
@@ -66,17 +79,41 @@ export function toCustomerCatalogBook(book: PublicCatalogBook): CustomerCatalogB
     quantity: book.available_quantity,
     available_quantity: book.available_quantity,
     variant_id: book.variant_id ?? null,
-    default_warehouse_id: best?.warehouse_id ?? null,
+    default_warehouse_id: initialPickupBranchId({ locations }),
     default_location_id: null,
-    reservable: Boolean(book.reservable && best),
+    reservable: Boolean(book.reservable && selectablePickupBranches({ locations }).length > 0),
     is_incomplete: false,
     locations,
   };
 }
 
-export function describePickup(book: Pick<CustomerCatalogBook, 'default_warehouse_id' | 'locations'>): string {
-  const best = book.locations.find((location) => location.warehouse_id === book.default_warehouse_id);
-  if (!best) return '—';
-  const others = book.locations.filter((location) => location.available_quantity > 0 && location.warehouse_id !== best.warehouse_id).length;
-  return others > 0 ? `${best.warehouse_name} (+${others} chi nhánh khác)` : best.warehouse_name;
+const STOCK_CHANGED_MESSAGES = [
+  'Insufficient available stock',
+  'Insufficient available stock to reserve',
+  'Selected warehouse is not a valid pickup location',
+  'Reservation stock changed concurrently; retry',
+];
+
+const RESERVATION_ERROR_MESSAGES: Record<string, string> = {
+  'Customer exceeded max active loans limit by membership plan':
+    'Bạn đã đạt số sách tối đa theo gói thẻ (tính cả sách đang mượn và đang đặt trước).',
+  'Customer does not have active membership': 'Thẻ bạn đọc của bạn chưa có hiệu lực hoặc đã hết hạn.',
+  'Customer is not eligible: status must be ACTIVE': 'Tài khoản bạn đọc đang bị tạm khóa, vui lòng liên hệ thư viện.',
+  'Variant is not borrowable': 'Ấn bản này hiện không cho mượn.',
+};
+
+/** Vietnamese text for a failed reservation. `refresh` means stock changed under the reader
+ *  (409 from inventory): reload the book so the branch list shows what is left. */
+export function describeReservationError(status: number, message: string): { message: string; refresh: boolean } {
+  if (status === 409 && STOCK_CHANGED_MESSAGES.includes(message)) {
+    return {
+      message: 'Chi nhánh bạn chọn vừa hết sách có thể đặt. Danh sách chi nhánh đã được cập nhật, vui lòng chọn lại.',
+      refresh: true,
+    };
+  }
+  if (RESERVATION_ERROR_MESSAGES[message]) return { message: RESERVATION_ERROR_MESSAGES[message], refresh: false };
+  // borrow-service already answers some cases in Vietnamese (duplicate reservation, unpaid fines).
+  if (status > 0 && status < 500 && /[À-ỹ]/.test(message)) return { message, refresh: false };
+  if (status === 0) return { message, refresh: false };
+  return { message: 'Không đặt trước được. Vui lòng thử lại sau.', refresh: false };
 }

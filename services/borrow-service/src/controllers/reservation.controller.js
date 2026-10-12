@@ -6,6 +6,7 @@ const { compensateWithRetry } = require('../services/reconciliation.service');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
 const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
+const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
 const DUPLICATE_RESERVATION_MESSAGE = 'Khách đã có một đặt chỗ đang hoạt động cho cuốn sách này';
@@ -33,19 +34,33 @@ function parseIdempotencyKey(req) {
 }
 
 async function listReservations(req, res) {
-  const { status, customer_id } = req.query;
+  const { customer_id } = req.query;
   const pagination = parsePagination(req.query);
+  const q = searchTerm(req.query);
+  const status = parseStatusFilter(req.query.status);
 
-  const where = {
-    ...(typeof status === 'string' && status ? { status } : {}),
+  // Everything except the status condition; per-status counts are taken over this.
+  const whereWithoutStatus = {
     ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
+    ...(q
+      ? {
+        OR: [
+          { reservation_number: { contains: q, mode: 'insensitive' } },
+          { pickup_code: { contains: q, mode: 'insensitive' } },
+          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+        ],
+      }
+      : {}),
   };
+  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
+  const orderBy = req.query.sort === 'expires_at' ? [{ expires_at: 'asc' }] : [{ reserved_at: 'desc' }];
 
   try {
-    const [items, total] = await Promise.all([
+    const [items, total, statusCounts] = await Promise.all([
       prisma.loan_reservations.findMany({
         where,
-        orderBy: [{ reserved_at: 'desc' }],
+        orderBy,
         skip: pagination.skip,
         take: pagination.take,
         include: {
@@ -60,6 +75,7 @@ async function listReservations(req, res) {
         },
       }),
       prisma.loan_reservations.count({ where }),
+      countByStatus(prisma.loan_reservations, whereWithoutStatus),
     ]);
 
     return res.json({
@@ -69,6 +85,7 @@ async function listReservations(req, res) {
         pageSize: pagination.pageSize,
         total,
         totalPages: Math.ceil(total / pagination.pageSize) || 1,
+        status_counts: statusCounts,
       },
     });
   } catch (error) {

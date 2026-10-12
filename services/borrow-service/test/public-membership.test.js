@@ -13,9 +13,9 @@ const publicMembershipRoutes = require('../src/routes/public-membership.routes')
 // Rows as the database holds them, including columns that must never reach
 // the public page (plan code, audit timestamps, member counts).
 const PLAN_ROWS = [
-  { id: 'p-gold', code: 'GOLD', name: 'Vàng', description: 'Gói cao cấp', max_active_loans: 8, max_loan_days: 30, max_renewal_count: 3, reservation_hold_hours: 48, fine_per_day: '2000.00', lost_item_fee_multiplier: '1.20', is_active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-03'), _count: { customer_memberships: 40 } },
-  { id: 'p-basic', code: 'BASIC', name: 'Cơ bản', description: null, max_active_loans: 3, max_loan_days: 14, max_renewal_count: 1, reservation_hold_hours: 24, fine_per_day: '5000.00', lost_item_fee_multiplier: '1.50', is_active: true, created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'), _count: { customer_memberships: 120 } },
-  { id: 'p-old', code: 'LEGACY', name: 'Ngừng áp dụng', description: 'Cũ', max_active_loans: 2, max_loan_days: 7, max_renewal_count: 0, reservation_hold_hours: 12, fine_per_day: '9000.00', lost_item_fee_multiplier: '2.00', is_active: false, created_at: new Date('2025-01-01'), updated_at: new Date('2025-01-01') },
+  { id: 'p-gold', code: 'GOLD', name: 'Vàng', description: 'Gói cao cấp', max_active_loans: 8, max_loan_days: 30, max_renewal_count: 3, reservation_hold_hours: 48, fine_per_day: '2000.00', lost_item_fee_multiplier: '1.20', price: '120000.00', duration_days: 365, is_default: false, is_active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-03'), _count: { customer_memberships: 40 } },
+  { id: 'p-basic', code: 'BASIC', name: 'Cơ bản', description: null, max_active_loans: 3, max_loan_days: 14, max_renewal_count: 1, reservation_hold_hours: 24, fine_per_day: '5000.00', lost_item_fee_multiplier: '1.50', price: '0.00', duration_days: 180, is_default: true, is_active: true, created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'), _count: { customer_memberships: 120 } },
+  { id: 'p-old', code: 'LEGACY', name: 'Ngừng áp dụng', description: 'Cũ', max_active_loans: 2, max_loan_days: 7, max_renewal_count: 0, reservation_hold_hours: 12, fine_per_day: '9000.00', lost_item_fee_multiplier: '2.00', price: '0.00', duration_days: 30, is_default: false, is_active: false, created_at: new Date('2025-01-01'), updated_at: new Date('2025-01-01') },
 ];
 
 /** Minimal Prisma stand-in that honours where/orderBy/select the way the route uses them. */
@@ -30,6 +30,7 @@ function mockClient(rows = PLAN_ROWS) {
         calls.push({ op: 'findMany', args });
         return rows.filter((row) => matches(row, args.where))
           .sort((a, b) => a.max_active_loans - b.max_active_loans)
+          .slice(0, args.take ?? Infinity)
           .map((row) => project(row, args.select));
       },
       findFirst: async (args) => {
@@ -87,14 +88,18 @@ test('anonymous GET returns active plans only, as a whitelist, with numeric fees
     const body = await response.json();
     assert.deepEqual(body.data.map((plan) => plan.name), ['Cơ bản', 'Vàng']);
     assert.deepEqual(Object.keys(body.data[0]).sort(), [
-      'description', 'fine_per_day', 'id', 'is_default', 'max_active_loans', 'max_loan_days',
-      'max_renewal_count', 'name', 'reservation_hold_hours',
+      'description', 'duration_days', 'fine_per_day', 'id', 'is_default', 'max_active_loans', 'max_loan_days',
+      'max_renewal_count', 'name', 'price', 'reservation_hold_hours',
     ]);
     assert.equal(body.data[0].fine_per_day, 5000);
+    assert.equal(body.data[0].price, 0);
+    assert.equal(body.data[1].price, 120000);
+    assert.equal(body.data[0].duration_days, 180);
     assert.equal(body.data[0].description, null);
-    assert.equal(body.card_validity_days, 365);
+    // The sign-up card lasts as long as the default plan says.
+    assert.equal(body.card_validity_days, 180);
     const keys = collectKeys(body);
-    for (const key of ['code', 'created_at', 'updated_at', '_count', 'customer_memberships', 'note', 'card_number', 'customer_id']) {
+    for (const key of ['code', 'created_at', 'updated_at', '_count', 'customer_memberships', 'note', 'card_number', 'customer_id', 'is_active', 'lost_item_fee_multiplier']) {
       assert.equal(keys.has(key), false, `leaked ${key}`);
     }
   });
@@ -102,17 +107,24 @@ test('anonymous GET returns active plans only, as a whitelist, with numeric fees
   assert.deepEqual(listCall.args.where, { is_active: true });
 });
 
-test('is_default marks the plan new accounts receive: configured code first, else the oldest active plan', async () => {
+test('is_default marks the plan new accounts receive: the flagged plan, else the configured code — never the oldest plan', async () => {
   const previous = process.env.DEFAULT_MEMBERSHIP_PLAN_CODE;
   try {
     process.env.DEFAULT_MEMBERSHIP_PLAN_CODE = 'GOLD';
+    // The flag wins over the env code.
     let body = await listPublicPlans(mockClient());
+    assert.deepEqual(body.data.filter((plan) => plan.is_default).map((plan) => plan.name), ['Cơ bản']);
+
+    // No plan flagged: the explicitly configured code.
+    const unflagged = PLAN_ROWS.map((row) => ({ ...row, is_default: false }));
+    body = await listPublicPlans(mockClient(unflagged));
     assert.deepEqual(body.data.filter((plan) => plan.is_default).map((plan) => plan.name), ['Vàng']);
 
-    // Configured code missing (the seed has no STANDARD plan): oldest active plan, never an inactive one.
-    process.env.DEFAULT_MEMBERSHIP_PLAN_CODE = 'STANDARD';
-    body = await listPublicPlans(mockClient());
-    assert.deepEqual(body.data.filter((plan) => plan.is_default).map((plan) => plan.name), ['Cơ bản']);
+    // Nothing flagged, nothing configured: no default — not the oldest active plan.
+    delete process.env.DEFAULT_MEMBERSHIP_PLAN_CODE;
+    body = await listPublicPlans(mockClient(unflagged));
+    assert.deepEqual(body.data.filter((plan) => plan.is_default), []);
+    assert.equal(body.card_validity_days, null);
 
     body = await listPublicPlans(mockClient([]));
     assert.deepEqual(body.data, []);

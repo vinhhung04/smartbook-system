@@ -6,6 +6,10 @@ export interface Warehouse {
   name: string;
   warehouse_type?: string;
   address_line1?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  opening_hours?: string | null;
+  description?: string | null;
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -34,6 +38,11 @@ export interface WarehouseCreateRequest {
   name: string;
   warehouse_type?: string;
   address_line1?: string;
+  /** Reader contact details shown on the public branch page (BRANCH/LIBRARY). Empty string clears. */
+  phone?: string;
+  email?: string;
+  opening_hours?: string;
+  description?: string;
   is_active?: boolean;
 }
 

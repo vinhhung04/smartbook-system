@@ -38,6 +38,28 @@ function allocateBudget(items, budgetVnd) {
   };
 }
 
+/**
+ * Funds lines in `fundingOrder` (best value first) but returns them in their
+ * original (display) order, each flagged within_budget. Lets the endpoint keep
+ * showing suggestions by priority while the money goes where it covers the most
+ * expected shortfall - see compareByShortfallPerCost and
+ * docs/ANALYSIS/REORDER_CANDIDATES.md for why the two orders differ.
+ */
+function allocateBudgetInOrder(items, budgetVnd, fundingOrder) {
+  const ranked = items.map((item, index) => ({ item, index })).sort((a, b) => fundingOrder(a.item, b.item) || a.index - b.index);
+  const allocation = allocateBudget(ranked.map((entry) => entry.item), budgetVnd);
+  const withinBudget = new Array(items.length);
+  allocation.items.forEach((allocated, position) => {
+    withinBudget[ranked[position].index] = allocated.within_budget;
+  });
+  return {
+    items: items.map((item, index) => ({ ...item, within_budget: withinBudget[index] })),
+    funded_cost: allocation.funded_cost,
+    remaining_vnd: allocation.remaining_vnd,
+  };
+}
+
 module.exports = {
   allocateBudget,
+  allocateBudgetInOrder,
 };

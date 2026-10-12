@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Package, AlertTriangle, Leaf, Download, ArrowRightLeft, ArrowRight, MapPin, Check, Bell, RefreshCw } from "lucide-react";
-import { StatusBadge } from "../status-badge";
+import { AlertTriangle, ArrowRight, Bell, Download, History, Package, RefreshCw, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
+import { StatusBadge } from "../status-badge";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
-import { StatCard } from "@/components/ui/stat-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -21,7 +20,6 @@ import { getPaginationRange } from "@/lib/pagination";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageWrapper, FadeItem } from "@/components/motion-utils";
-import { getStatusVariant } from "@/lib/status-registry";
 import { useInventoryRealtime } from "@/hooks/useInventoryRealtime";
 
 interface InventoryLocation {
@@ -40,63 +38,73 @@ interface InventoryBook {
   title: string;
   isbn: string;
   category: string;
+  author?: string;
   quantity: number;
-  available_quantity?: number;
-  receiving_quantity?: number;
-  location: string;
   locations?: InventoryLocation[];
   updated_at: string;
 }
 
-interface InventoryWarehouseRow extends InventoryBook {
-  rowKey: string;
-  warehouseId: string;
+// One row per (book, warehouse). Books with no stock record anywhere get a single
+// "absent" row — the API can't tell "never received" from "sold out everywhere".
+interface StockRow {
+  key: string;
+  book: InventoryBook;
+  warehouseId: string | null;
   warehouseName: string;
-  warehouseQty: number;
-  warehouseAvailQty: number;
-  warehouseRecvQty: number;
-  locationSummary: string;
+  total: number;
+  available: number;
+  receiving: number;
+  locs: InventoryLocation[];
+  status: StockStatus;
 }
 
 const LOW_STOCK_THRESHOLD = 5;
 const PAGE_SIZE = 25;
 
-type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
+type StockStatus = "LOW" | "RECEIVING" | "OK" | "ABSENT";
 
-const STOCK_STATUS_LABEL: Record<StockStatus, string> = {
-  IN_STOCK: "Tốt",
-  LOW_STOCK: "Sắp hết",
-  OUT_OF_STOCK: "Hết hàng",
+const STATUS: Record<StockStatus, { label: string; tone: string; hint: string }> = {
+  LOW: { label: "Sắp hết", tone: "warning", hint: `Còn ${LOW_STOCK_THRESHOLD} cuốn trở xuống sẵn sàng` },
+  RECEIVING: { label: "Chờ cất kệ", tone: "violet", hint: "Có hàng nhưng toàn bộ còn ở khu nhận" },
+  OK: { label: "Đủ hàng", tone: "success", hint: `Trên ${LOW_STOCK_THRESHOLD} cuốn sẵn sàng` },
+  ABSENT: { label: "Không có trong kho", tone: "neutral", hint: "Chưa nhập hoặc đã hết ở mọi kho" },
 };
+const FILTER_ORDER: StockStatus[] = ["LOW", "RECEIVING", "OK", "ABSENT"];
+const ATTENTION_RANK: Record<StockStatus, number> = { LOW: 0, RECEIVING: 1, OK: 2, ABSENT: 3 };
 
-function getStockStatus(quantity: number): StockStatus {
-  if (quantity <= 0) return "OUT_OF_STOCK";
-  if (quantity <= LOW_STOCK_THRESHOLD) return "LOW_STOCK";
-  return "IN_STOCK";
+type SortKey = "attention" | "title" | "available" | "updated";
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "attention", label: "Cần chú ý trước" },
+  { value: "available", label: "Ít hàng sẵn sàng nhất" },
+  { value: "title", label: "Tên sách A–Z" },
+  { value: "updated", label: "Cập nhật gần nhất" },
+];
+
+function statusOf(available: number, total: number): StockStatus {
+  if (total <= 0) return "ABSENT";
+  if (available <= 0) return "RECEIVING";
+  if (available <= LOW_STOCK_THRESHOLD) return "LOW";
+  return "OK";
 }
 
-const GAUGE_TONE_FILL: Record<StockStatus, string> = {
-  IN_STOCK: "bg-emerald-500",
-  LOW_STOCK: "bg-amber-500",
-  OUT_OF_STOCK: "bg-red-500",
+const GAUGE_FILL: Record<StockStatus, string> = {
+  OK: "bg-emerald-500",
+  LOW: "bg-amber-500",
+  RECEIVING: "bg-violet-400",
+  ABSENT: "bg-muted-foreground/30",
 };
 
 /**
  * A vertical bin-level gauge — fills bottom-up relative to 2x the reorder
  * threshold, with a fixed tick at the halfway mark showing exactly where
- * that threshold sits. Reads like a warehouse bin gauge: below the tick
- * means "below the reorder line," at or above means clear of it.
+ * that threshold sits.
  */
 function StockGauge({ quantity, status }: { quantity: number; status: StockStatus }) {
   const fillPct = Math.min(Math.max((quantity / (LOW_STOCK_THRESHOLD * 2)) * 100, 0), 100);
   return (
-    <div
-      className="relative h-8 w-2 shrink-0 overflow-hidden rounded-full bg-muted"
-      title={`Ngưỡng cảnh báo: dưới ${LOW_STOCK_THRESHOLD} bản`}
-      aria-hidden="true"
-    >
+    <div className="relative h-8 w-2 shrink-0 overflow-hidden rounded-full bg-muted" title={`Vạch giữa: ngưỡng ${LOW_STOCK_THRESHOLD} cuốn`} aria-hidden="true">
       <motion.div
-        className={`absolute inset-x-0 bottom-0 rounded-full ${GAUGE_TONE_FILL[status]}`}
+        className={`absolute inset-x-0 bottom-0 rounded-full ${GAUGE_FILL[status]}`}
         initial={{ height: 0 }}
         animate={{ height: `${fillPct}%` }}
         transition={{ duration: 0.5, ease: "easeOut" }}
@@ -111,68 +119,39 @@ function csvCell(value: string | number) {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
-function formatUpdatedDate(value: string) {
+function formatDate(value: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("vi-VN");
 }
 
-function formatUpdatedTime(value: string) {
+function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("vi-VN");
 }
 
-function summarizeLocationCodes(locs: InventoryLocation[]): string {
-  if (locs.length === 0) return "-";
-  const sorted = [...locs].sort((a, b) => b.quantity - a.quantity || a.location_code.localeCompare(b.location_code));
-  const first = sorted[0];
-  return sorted.length > 1 ? `${first.location_code} +${sorted.length - 1}` : first.location_code;
-}
-
-function expandBooksByWarehouse(data: InventoryBook[]): InventoryWarehouseRow[] {
-  const rows: InventoryWarehouseRow[] = [];
-  for (const item of data) {
-    const locs = item.locations || [];
-    const byWh = new Map<string, { name: string; locs: InventoryLocation[] }>();
-    for (const loc of locs) {
-      const wid = loc.warehouse_id ? String(loc.warehouse_id) : "";
-      const key = wid || `__name:${loc.warehouse_name || "Unknown"}`;
-      const displayName = loc.warehouse_name || "Unknown";
-      if (!byWh.has(key)) {
-        byWh.set(key, { name: displayName, locs: [] });
-      }
-      byWh.get(key)!.locs.push(loc);
+function buildRows(data: InventoryBook[]): StockRow[] {
+  const rows: StockRow[] = [];
+  for (const book of data) {
+    const byWarehouse = new Map<string, { name: string; locs: InventoryLocation[] }>();
+    for (const loc of book.locations || []) {
+      const key = loc.warehouse_id ? String(loc.warehouse_id) : `__name:${loc.warehouse_name || "?"}`;
+      if (!byWarehouse.has(key)) byWarehouse.set(key, { name: loc.warehouse_name || "Không rõ kho", locs: [] });
+      byWarehouse.get(key)!.locs.push(loc);
     }
-    if (byWh.size === 0) {
-      rows.push({
-        ...item,
-        rowKey: `${item.id}::__none__`,
-        warehouseId: "__none__",
-        warehouseName: "-",
-        warehouseQty: 0,
-        warehouseAvailQty: 0,
-        warehouseRecvQty: 0,
-        locationSummary: "-",
-      });
+    if (byWarehouse.size === 0) {
+      rows.push({ key: `${book.id}::none`, book, warehouseId: null, warehouseName: "-", total: 0, available: 0, receiving: 0, locs: [], status: "ABSENT" });
       continue;
     }
-    for (const [key, { name: whName, locs: whLocs }] of byWh) {
-      const warehouseQty = whLocs.reduce((s, l) => s + Number(l.quantity || 0), 0);
-      const warehouseAvailQty = whLocs.reduce((s, l) => s + Number(l.available_quantity ?? l.quantity), 0);
-      const warehouseRecvQty = whLocs.reduce((s, l) => s + Number(l.receiving_quantity ?? 0), 0);
-      rows.push({
-        ...item,
-        rowKey: `${item.id}::${key}`,
-        warehouseId: key,
-        warehouseName: whName,
-        warehouseQty,
-        warehouseAvailQty,
-        warehouseRecvQty,
-        locationSummary: summarizeLocationCodes(whLocs),
-      });
+    for (const [warehouseId, { name, locs }] of byWarehouse) {
+      const total = locs.reduce((s, l) => s + Number(l.quantity || 0), 0);
+      const available = locs.reduce((s, l) => s + Number(l.available_quantity ?? (l.is_receiving ? 0 : l.quantity)), 0);
+      const receiving = locs.reduce((s, l) => s + Number(l.receiving_quantity ?? (l.is_receiving ? l.quantity : 0)), 0);
+      const sortedLocs = [...locs].sort((a, b) => Number(!!a.is_receiving) - Number(!!b.is_receiving) || b.quantity - a.quantity);
+      rows.push({ key: `${book.id}::${warehouseId}`, book, warehouseId, warehouseName: name, total, available, receiving, locs: sortedLocs, status: statusOf(available, total) });
     }
   }
   return rows;
@@ -181,10 +160,10 @@ function expandBooksByWarehouse(data: InventoryBook[]): InventoryWarehouseRow[] 
 export function InventoryPage() {
   const [data, setData] = useState<InventoryBook[]>([]);
   const [loading, setLoading] = useState(true);
-  const [whFilterId, setWhFilterId] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState("Tất cả");
+  const [warehouseFilter, setWarehouseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StockStatus | "ALL">("ALL");
+  const [sortKey, setSortKey] = useState<SortKey>("attention");
   const [searchQuery, setSearchQuery] = useState("");
-  const [exporting, setExporting] = useState(false);
   const [hasNewData, setHasNewData] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -201,136 +180,155 @@ export function InventoryPage() {
     }
   };
 
+  useEffect(() => { void loadInventory(); }, []);
+
+  const markNewData = useCallback(() => setHasNewData(true), []);
+  useInventoryRealtime({ onStockEvent: markNewData, onPurchaseRequestEvent: markNewData, onGoodsReceiptEvent: markNewData });
+
+  const allRows = useMemo(() => buildRows(data), [data]);
+
+  const warehouseOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of allRows) if (row.warehouseId) map.set(row.warehouseId, row.warehouseName);
+    return Array.from(map, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  }, [allRows]);
+
+  // Absent titles have no warehouse, so they only belong to the all-warehouses view.
+  const scoped = useMemo(
+    () => (warehouseFilter === "all" ? allRows : allRows.filter((row) => row.warehouseId === warehouseFilter)),
+    [allRows, warehouseFilter],
+  );
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = { ALL: scoped.length };
+    for (const row of scoped) map[row.status] = (map[row.status] ?? 0) + 1;
+    return map;
+  }, [scoped]);
+
+  const totals = useMemo(() => {
+    let available = 0;
+    let receiving = 0;
+    const titles = new Set<string>();
+    for (const row of scoped) {
+      available += row.available;
+      receiving += row.receiving;
+      if (row.status !== "ABSENT") titles.add(row.book.id);
+    }
+    return { available, receiving, titles: titles.size };
+  }, [scoped]);
+
+  const filtered = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    const rows = scoped.filter((row) => {
+      if (statusFilter !== "ALL" && row.status !== statusFilter) return false;
+      if (!keyword) return true;
+      return [row.book.title, row.book.isbn, row.book.author, ...row.locs.map((l) => l.location_code)]
+        .some((v) => String(v || "").toLowerCase().includes(keyword));
+    });
+    return rows.sort((a, b) => {
+      if (sortKey === "title") return a.book.title.localeCompare(b.book.title, "vi");
+      if (sortKey === "available") return a.available - b.available || a.book.title.localeCompare(b.book.title, "vi");
+      if (sortKey === "updated") return new Date(b.book.updated_at).getTime() - new Date(a.book.updated_at).getTime();
+      return ATTENTION_RANK[a.status] - ATTENTION_RANK[b.status] || a.available - b.available || a.book.title.localeCompare(b.book.title, "vi");
+    });
+  }, [scoped, statusFilter, searchQuery, sortKey]);
+
+  useEffect(() => { setPage(1); }, [warehouseFilter, statusFilter, searchQuery, sortKey]);
   useEffect(() => {
-    void loadInventory();
-  }, []);
+    if (statusFilter === "ABSENT" && warehouseFilter !== "all") setStatusFilter("ALL");
+  }, [statusFilter, warehouseFilter]);
 
-  const markNewData = useCallback(() => {
-    setHasNewData((prev) => prev || true);
-  }, []);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const hasFilters = statusFilter !== "ALL" || warehouseFilter !== "all" || !!searchQuery.trim();
+  const lowCount = counts.LOW ?? 0;
 
-  useInventoryRealtime({
-    onStockEvent: markNewData,
-    onPurchaseRequestEvent: markNewData,
-    onGoodsReceiptEvent: markNewData,
-  });
+  const clearFilters = () => {
+    setStatusFilter("ALL");
+    setWarehouseFilter("all");
+    setSearchQuery("");
+  };
 
   const handleExport = () => {
     if (filtered.length === 0) {
       toast.error("Không có dòng tồn kho nào để xuất");
       return;
     }
-    setExporting(true);
-    try {
-      const header = ["Sách", "ISBN", "Thể loại", "Kho", "Vị trí", "Số lượng", "Sẵn sàng", "Đang nhận", "Trạng thái", "Cập nhật"];
-      const rows = filtered.map((row) => {
-        const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
-        const status = getStockStatus(availQty);
-        return [
-          row.title,
-          row.isbn || "",
-          row.category || "",
-          row.warehouseName,
-          row.locationSummary,
-          row.warehouseQty,
-          availQty,
-          row.warehouseRecvQty,
-          STOCK_STATUS_LABEL[status],
-          formatUpdatedTime(row.updated_at),
-        ];
-      });
-      const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
-      const csvBom = String.fromCharCode(0xfeff);
-      const blob = new Blob([csvBom + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `ton-kho-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Đã xuất ${filtered.length} dòng`);
-    } finally {
-      setExporting(false);
-    }
+    const header = ["Sách", "ISBN", "Thể loại", "Kho", "Vị trí", "Tổng", "Sẵn sàng", "Ở khu nhận", "Tình trạng", "Cập nhật"];
+    const rows = filtered.map((row) => [
+      row.book.title,
+      row.book.isbn || "",
+      row.book.category || "",
+      row.warehouseName,
+      row.locs.map((l) => `${l.location_code} (${l.quantity})`).join("; "),
+      row.total,
+      row.available,
+      row.receiving,
+      STATUS[row.status].label,
+      formatDateTime(row.book.updated_at),
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([String.fromCharCode(0xfeff) + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ton-kho-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${filtered.length} dòng`);
   };
 
-  const expandedRows = useMemo(() => expandBooksByWarehouse(data), [data]);
-
-  const warehouseOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const row of expandedRows) {
-      if (row.warehouseId === "__none__") continue;
-      map.set(row.warehouseId, row.warehouseName);
-    }
-    const sorted = Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "vi"));
-    return [{ value: "all", label: "Tất cả kho" }, ...sorted.map(([value, label]) => ({ value, label }))];
-  }, [expandedRows]);
-
-  const whScopedRows = useMemo(() => {
-    if (whFilterId === "all") return expandedRows;
-    return expandedRows.filter((row) => row.warehouseId === whFilterId);
-  }, [expandedRows, whFilterId]);
-
-  const filtered = whScopedRows
-    .filter((row) => {
-      const status = getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty));
-      if (statusFilter === "Còn hàng" && status !== "IN_STOCK") return false;
-      if (statusFilter === "Sắp hết" && status !== "LOW_STOCK") return false;
-      if (statusFilter === "Hết hàng" && status !== "OUT_OF_STOCK") return false;
-      return true;
-    })
-    .filter((row) => {
-      if (!searchQuery.trim()) return true;
-      const keyword = searchQuery.trim().toLowerCase();
-      return row.title.toLowerCase().includes(keyword) || String(row.isbn || "").toLowerCase().includes(keyword);
-    });
-
-  const totalUnits = whScopedRows.reduce((sum, row) => sum + Number(row.warehouseQty || 0), 0);
-  const healthyCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "IN_STOCK").length;
-  const lowCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "LOW_STOCK").length;
-  const outCount = whScopedRows.filter((row) => getStockStatus(Number(row.warehouseAvailQty ?? row.warehouseQty)) === "OUT_OF_STOCK").length;
-
-  const uniqueTitles = new Set(whScopedRows.map((r) => r.id)).size;
-  const selectedWhLabel = warehouseOptions.find((o) => o.value === whFilterId)?.label ?? "Tất cả kho";
-  const whSubtitle =
-    whFilterId === "all"
-      ? `${data.length} đầu sách · ${expandedRows.length} dòng kho · ${totalUnits} bản tổng cộng`
-      : `${uniqueTitles} đầu sách · ${selectedWhLabel} · ${totalUnits} bản trong kho này`;
-
-  useEffect(() => {
-    setPage(1);
-  }, [whFilterId, statusFilter, searchQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  const qtyTone = (qty: number) =>
-    qty === 0 ? "text-red-500 dark:text-red-400" : qty <= LOW_STOCK_THRESHOLD ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
+  const filterButton = (key: StockStatus | "ALL") => {
+    const active = statusFilter === key;
+    const count = counts[key] ?? 0;
+    const label = key === "ALL" ? "Tất cả" : STATUS[key].label;
+    const attention = key === "LOW" && count > 0;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => setStatusFilter(key)}
+        aria-pressed={active}
+        title={key === "ALL" ? undefined : STATUS[key].hint}
+        className={cn(
+          "flex flex-1 shrink-0 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active
+            ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300"
+            : "border-transparent hover:border-border hover:bg-muted/50",
+        )}
+      >
+        <span className={cn("text-[18px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>{loading ? "–" : count}</span>
+        <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
+          {attention && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="cần chú ý" />}
+          {label}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={Package}
           title="Tồn kho"
-          description={whSubtitle}
+          description={loading ? "Đang tải…" : `${totals.titles} đầu sách có hàng · ${totals.available.toLocaleString("vi-VN")} cuốn sẵn sàng${totals.receiving ? ` · ${totals.receiving.toLocaleString("vi-VN")} cuốn chờ cất kệ` : ""}`}
           iconBg="bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-500/20 dark:to-teal-500/10"
           iconColor="text-emerald-600 dark:text-emerald-400"
           actions={
-            <>
-              <Button
-                variant="outline"
-                loading={exporting}
-                onClick={() => void handleExport()}
-                className="rounded-xl border-emerald-100 bg-card text-emerald-700 hover:bg-emerald-50 shadow-sm dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
-              >
-                {!exporting && <Download className="w-3.5 h-3.5" />} Xuất
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void loadInventory()} disabled={loading} aria-label="Làm mới">
+                <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+                <span className="hidden sm:inline">Làm mới</span>
               </Button>
-              <NavLink to="/movements" className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
-                <ArrowRightLeft className="w-3.5 h-3.5" /> Biến động
-              </NavLink>
-            </>
+              <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
+                <Download className="h-3.5 w-3.5" />Xuất CSV
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <NavLink to="/movements"><History className="h-3.5 w-3.5" />Lịch sử kho</NavLink>
+              </Button>
+            </div>
           }
         />
       </FadeItem>
@@ -338,174 +336,191 @@ export function InventoryPage() {
       <AnimatePresence>
         {hasNewData && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-              <div className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
-                <Bell className="h-4 w-4 shrink-0" />
-                Có dữ liệu mới — số liệu tồn kho bên dưới có thể đã thay đổi.
-              </div>
-              <button
-                type="button"
-                onClick={() => void loadInventory()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-indigo-700 transition-colors"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Làm mới
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10" role="status">
+              <p className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
+                <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Tồn kho vừa thay đổi. Số liệu bên dưới có thể đã cũ.
+              </p>
+              <Button size="sm" onClick={() => void loadInventory()}>
+                <RefreshCw className="h-3.5 w-3.5" />Tải số liệu mới
+              </Button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* The four tiles double as the status filter - click one to filter, click again to clear. */}
-      <FadeItem className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { key: "Tất cả", label: "Tổng bản sao", value: totalUnits, icon: Package, variant: "default" as const },
-          { key: "Còn hàng", label: "Tình trạng tốt", value: healthyCount, icon: Leaf, variant: "success" as const },
-          { key: "Sắp hết", label: "Sắp hết", value: lowCount, icon: AlertTriangle, variant: "warning" as const },
-          { key: "Hết hàng", label: "Hết hàng", value: outCount, icon: Package, variant: "danger" as const },
-        ].map((card) => {
-          const isActive = statusFilter === card.key;
-          return (
-            <button
-              key={card.key}
-              type="button"
-              onClick={() => setStatusFilter(isActive ? "Tất cả" : card.key)}
-              aria-pressed={isActive}
-              className={`relative w-full rounded-xl text-left transition-all cursor-pointer ${isActive ? "scale-[0.98] shadow-md" : ""}`}
-            >
-              <StatCard label={card.label} value={card.value} icon={card.icon} variant={card.variant} animateValue />
-              {isActive && (
-                <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
-                  <Check className="h-3 w-3" />
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </FadeItem>
-
       <FadeItem>
-        <FilterBar
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder="Tìm theo tên sách / mã barcode..."
-          showSearchClear
-          filters={
-            <label className="flex items-center gap-2 text-[12px] text-muted-foreground font-medium">
-              <span>Kho</span>
-              <Select value={whFilterId} onValueChange={setWhFilterId}>
-                <SelectTrigger className="min-w-[200px] max-w-[280px] bg-card shadow-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouseOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-          }
-        />
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
+          <div className="flex items-center gap-1 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo tình trạng tồn kho">
+            {filterButton("ALL")}
+            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
+            {FILTER_ORDER.filter((key) => key !== "ABSENT" || warehouseFilter === "all").map((key) => filterButton(key))}
+          </div>
+          <div className="border-t border-border px-4 py-3">
+            <FilterBar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Tìm tên sách, tác giả, ISBN, vị trí..."
+              showSearchClear
+              filters={
+                <>
+                  <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                    <SelectTrigger size="sm" className="w-[200px]" aria-label="Kho">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả kho</SelectItem>
+                      {warehouseOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                    <SelectTrigger size="sm" className="w-[190px]" aria-label="Sắp xếp">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {hasFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                      <X className="h-3.5 w-3.5" />Xóa lọc
+                    </Button>
+                  )}
+                </>
+              }
+            />
+          </div>
+          {lowCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-amber-50/70 px-4 py-2.5 text-[12px] text-amber-800 dark:bg-amber-500/[0.07] dark:text-amber-300">
+              <p className="flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span><span className="font-semibold">{lowCount} dòng sắp hết</span> (còn {LOW_STOCK_THRESHOLD} cuốn trở xuống sẵn sàng ở một kho)</span>
+              </p>
+              <NavLink to="/reorder-suggestions" className="inline-flex items-center gap-1 rounded font-semibold underline decoration-current/40 underline-offset-4 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" aria-hidden="true" />
+              </NavLink>
+            </div>
+          )}
+        </div>
       </FadeItem>
 
       <FadeItem>
         <SectionCard noPadding>
-          {(lowCount > 0 || outCount > 0) && (
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border bg-amber-50/70 px-4 py-2.5 text-[12px] text-amber-800 dark:bg-amber-500/[0.07] dark:text-amber-300 sm:px-5">
-              <p className="flex items-center gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>
-                  {outCount > 0 && <span className="font-semibold">{outCount} hết hàng</span>}
-                  {outCount > 0 && lowCount > 0 && " · "}
-                  {lowCount > 0 && <span className="font-semibold">{lowCount} sắp hết</span>}
-                  <span className="text-amber-700/80 dark:text-amber-300/70"> (dưới {LOW_STOCK_THRESHOLD} bản mỗi kho)</span>
-                </span>
-              </p>
-              <NavLink
-                to="/reorder-suggestions"
-                className="inline-flex items-center gap-1 font-semibold underline decoration-current/40 underline-offset-4 hover:opacity-80"
-              >
-                Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" />
-              </NavLink>
-            </div>
-          )}
-
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  {[
-                    { label: "Sách", className: "" },
-                    { label: "Kho / Vị trí", className: "hidden w-[200px] md:table-cell" },
-                    { label: "Số lượng", className: "w-[130px]" },
-                    { label: "Trạng thái", className: "hidden w-[130px] sm:table-cell" },
-                    { label: "Cập nhật", className: "hidden w-[110px] xl:table-cell" },
-                  ].map((h) => (
-                    <th key={h.label} className={cn("px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground", h.className)}>{h.label}</th>
-                  ))}
+          <table className="w-full table-fixed">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                {[
+                  { label: "Sách", className: "" },
+                  { label: "Kho · vị trí", className: "hidden w-[260px] md:table-cell" },
+                  { label: "Sẵn sàng", className: "w-[120px] sm:w-[150px]" },
+                  { label: "Tình trạng", className: "hidden w-[150px] sm:table-cell" },
+                  { label: "Cập nhật", className: "hidden w-[100px] xl:table-cell" },
+                ].map((h) => (
+                  <th key={h.label} scope="col" className={cn("px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground", h.className)}>{h.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonTableRow columns={5} rows={6} />
+              ) : paged.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState
+                      variant={hasFilters ? "no-results" : "no-data"}
+                      title={hasFilters ? "Không có dòng tồn kho phù hợp" : "Chưa có dữ liệu tồn kho"}
+                      description={hasFilters ? "Thử đổi tình trạng, kho hoặc từ khóa tìm kiếm" : "Tồn kho xuất hiện sau khi phiếu nhập đầu tiên được ghi sổ"}
+                      action={hasFilters ? <Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button> : undefined}
+                      className="py-12"
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <SkeletonTableRow columns={5} rows={6} />
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan={5}><EmptyState variant="no-data" title="Không tìm thấy mục tồn kho" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td></tr>
-                ) : paged.map((row, i) => {
-                  const qty = Number(row.warehouseQty || 0);
-                  const availQty = Number(row.warehouseAvailQty ?? row.warehouseQty);
-                  const recvQty = Number(row.warehouseRecvQty || 0);
-                  const status = getStockStatus(availQty);
-                  return (
-                    <motion.tr key={row.rowKey} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 10) * 0.02 }}
-                      className="border-b border-border transition-all duration-150 last:border-0 hover:bg-muted/40">
-                      <td className="px-4 py-3">
-                        <p className="truncate text-[13px] font-semibold text-foreground" title={row.title}>{row.title}</p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
-                          {[row.isbn || "-", row.category].filter(Boolean).join(" · ")}
+              ) : paged.map((row) => {
+                const status = STATUS[row.status];
+                const absent = row.status === "ABSENT";
+                const shownLocs = row.locs.slice(0, 3);
+                const moreLocs = row.locs.length - shownLocs.length;
+                return (
+                  <tr key={row.key} className={cn("border-b border-border last:border-0 hover:bg-muted/40", absent && "text-muted-foreground")}>
+                    <td className="px-4 py-3 align-top">
+                      <p className={cn("line-clamp-2 text-[13px] font-semibold sm:line-clamp-none sm:truncate", absent ? "text-muted-foreground" : "text-foreground")} title={row.book.title}>{row.book.title}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        <span className="font-mono">{row.book.isbn || "-"}</span>
+                        {row.book.category ? ` · ${row.book.category}` : ""}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+                        <StatusBadge label={status.label} variant={status.tone} dot />
+                      </div>
+                      {!absent && (
+                        <p className="mt-1 truncate text-[11px] text-muted-foreground md:hidden">
+                          {row.warehouseName} · <span className="font-mono">{row.locs.map((l) => l.location_code).join(", ")}</span>
                         </p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                          <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
-                        </div>
-                        <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-muted-foreground md:hidden">
-                          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" /> {row.warehouseName} · {row.locationSummary}
-                        </p>
-                      </td>
-                      <td className="hidden px-4 py-3 md:table-cell">
-                        <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-foreground" title={row.warehouseName}>
-                          <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" /> {row.warehouseName}
-                        </p>
-                        <p className="ml-[18px] truncate font-mono text-[11px] text-muted-foreground">{row.locationSummary}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className={cn("shrink-0 font-mono text-[15px] font-bold tabular-nums", qtyTone(qty))}>{qty}</span>
-                          <StockGauge quantity={availQty} status={status} />
-                        </div>
-                        {recvQty > 0 && (
-                          <p className="mt-1 text-[10px] leading-tight text-amber-600 dark:text-amber-400">Sẵn sàng {availQty} · Nhận {recvQty}</p>
+                      )}
+                    </td>
+                    <td className="hidden px-4 py-3 align-top md:table-cell">
+                      {absent ? (
+                        <span className="text-[12px]">-</span>
+                      ) : (
+                        <>
+                          <p className="truncate text-[12px] font-medium text-foreground" title={row.warehouseName}>{row.warehouseName}</p>
+                          <div className="mt-1 flex flex-wrap gap-1" title={row.locs.map((l) => `${l.location_code}: ${l.quantity}`).join("\n")}>
+                            {shownLocs.map((loc) => (
+                              <span
+                                key={`${loc.location_code}-${loc.is_receiving ? "r" : "s"}`}
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[10px]",
+                                  loc.is_receiving
+                                    ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+                                    : "border-border bg-muted/40 text-muted-foreground",
+                                )}
+                              >
+                                {loc.location_code}<span className="font-semibold text-foreground/80">{loc.quantity}</span>
+                              </span>
+                            ))}
+                            {moreLocs > 0 && <span className="text-[10px] text-muted-foreground">+{moreLocs} vị trí</span>}
+                          </div>
+                        </>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "w-8 shrink-0 text-right font-mono text-[16px] font-bold tabular-nums",
+                          row.status === "LOW" ? "text-amber-600 dark:text-amber-400" : row.status === "OK" ? "text-foreground" : "text-muted-foreground",
                         )}
-                      </td>
-                      <td className="hidden px-4 py-3 sm:table-cell">
-                        <StatusBadge label={STOCK_STATUS_LABEL[status]} variant={getStatusVariant("stockLevel", status)} dot />
-                      </td>
-                      <td className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell" title={formatUpdatedTime(row.updated_at)}>
-                        {formatUpdatedDate(row.updated_at)}
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        >
+                          {row.available}
+                        </span>
+                        <StockGauge quantity={row.available} status={row.status} />
+                      </div>
+                      {row.receiving > 0 && (
+                        <p className="mt-1 text-[10px] leading-tight text-violet-700 dark:text-violet-300">+{row.receiving} ở khu nhận</p>
+                      )}
+                    </td>
+                    <td className="hidden px-4 py-3 align-top sm:table-cell">
+                      <StatusBadge label={status.label} variant={status.tone} dot />
+                    </td>
+                    <td className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell" title={formatDateTime(row.book.updated_at)}>
+                      {formatDate(row.book.updated_at)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
           <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>Hiển thị {paged.length} / {filtered.length} dòng ({data.length} đầu sách)</span>
+            <span>
+              {filtered.length > 0
+                ? `Hiển thị ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} trong ${filtered.length} dòng`
+                : "Không có dòng nào"}
+            </span>
             {totalPages > 1 && (
               <Pagination className="mx-0 w-auto justify-end">
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
-                      onClick={(event) => { event.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
+                      onClick={(event) => { event.preventDefault(); setPage(Math.max(1, currentPage - 1)); }}
                       className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
                     />
                   </PaginationItem>
@@ -522,7 +537,7 @@ export function InventoryPage() {
                   ))}
                   <PaginationItem>
                     <PaginationNext
-                      onClick={(event) => { event.preventDefault(); setPage((p) => Math.min(totalPages, p + 1)); }}
+                      onClick={(event) => { event.preventDefault(); setPage(Math.min(totalPages, currentPage + 1)); }}
                       className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
                     />
                   </PaginationItem>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, useNavigate, useParams } from "react-router";
+import { NavLink, useLocation, useNavigate, useParams } from "react-router";
 import { ArrowLeft, ClipboardList, Plus, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderLinePayload, type VariantSearchItem } from "@/services/purchase-order";
@@ -33,6 +33,12 @@ const newLine = (): FormLine => ({
   sku: "",
 });
 
+// Lines handed over by another page (e.g. reorder suggestions) via router state.
+export interface PurchaseOrderPrefill {
+  note?: string;
+  lines: Array<{ variant_id: string; title: string; isbn13?: string | null; ordered_qty: number; unit_cost: number }>;
+}
+
 function formatCurrency(value: number) {
   return `${Number(value || 0).toLocaleString("vi-VN")} VND`;
 }
@@ -40,6 +46,8 @@ function formatCurrency(value: number) {
 export function PurchaseOrderFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefill = (location.state as { prefill?: PurchaseOrderPrefill } | null)?.prefill;
   const isEdit = Boolean(id);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -86,6 +94,16 @@ export function PurchaseOrderFormPage() {
             title: item.title,
             sku: item.sku,
           })));
+        } else if (prefill?.lines.length) {
+          setNote(prefill.note || "");
+          setLines(prefill.lines.map((line) => ({
+            ...newLine(),
+            variant_id: line.variant_id,
+            isbn13: line.isbn13 || "",
+            ordered_qty: line.ordered_qty,
+            unit_cost: line.unit_cost,
+            title: line.title,
+          })));
         }
       } catch (error) {
         toast.error(getApiErrorMessage(error, "Không tải được biểu mẫu đơn mua hàng"));
@@ -94,6 +112,8 @@ export function PurchaseOrderFormPage() {
       }
     };
     void load();
+    // The prefill is read once on mount; later state changes must not reset the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, navigate]);
 
   const totalAmount = useMemo(() => lines.reduce((sum, line) => sum + Number(line.ordered_qty || 0) * Number(line.unit_cost || 0), 0), [lines]);

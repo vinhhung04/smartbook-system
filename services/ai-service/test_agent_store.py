@@ -189,3 +189,87 @@ def test_cleanup_expired_actions_counts_due_rows():
         assert count >= 1
 
     _run(_t())
+
+
+def test_second_confirm_cannot_claim_an_already_claimed_action():
+    """Regression: the claim used to be read-status-then-execute, so a double
+    click / client retry executed the same action (e.g. a purchase draft) twice.
+    True concurrency (separate connections) is covered on Postgres in
+    test_agent_store_pg.py - this SQLite harness shares one connection."""
+    async def _t():
+        action = await agent_store.create_pending_action(
+            action_type="CREATE_REORDER_DRAFT", summary="race", payload={}, risk="LOW", user_context=_user(),
+        )
+        assert await agent_store.mark_action_confirmed(action.id, actor_user_id="u1")
+        assert not await agent_store.mark_action_confirmed(action.id, actor_user_id="u1")
+        assert (await agent_store.get_pending_action(action.id)).status == "CONFIRMED"
+        assert await _audit_events(action.id) == ["CREATED", "CONFIRMED"]
+
+    _run(_t())
+
+
+def test_executed_or_claimed_action_cannot_be_cancelled():
+    async def _t():
+        action = await agent_store.create_pending_action(
+            action_type="CREATE_STOCK_ALERT", summary="done", payload={}, risk="LOW", user_context=_user(),
+        )
+        assert await agent_store.mark_action_confirmed(action.id, actor_user_id="u1")
+        assert not await agent_store.cancel_pending_action(action.id, actor_user_id="u1")  # mid-execution
+        await agent_store.mark_action_executed(action.id, {"ok": True}, actor_user_id="u1")
+        assert not await agent_store.cancel_pending_action(action.id, actor_user_id="u1")
+        assert (await agent_store.get_pending_action(action.id)).status == "EXECUTED"
+        assert await _audit_events(action.id) == ["CREATED", "CONFIRMED", "EXECUTED"]
+
+    _run(_t())
+
+
+def test_failed_action_can_be_confirmed_again_but_cancelled_cannot():
+    async def _t():
+        failed = await agent_store.create_pending_action(
+            action_type="CREATE_STOCK_ALERT", summary="retry", payload={}, risk="LOW", user_context=_user(),
+        )
+        await agent_store.mark_action_failed(failed.id, "boom", actor_user_id="u1")
+        assert await agent_store.mark_action_confirmed(failed.id, actor_user_id="u1")
+
+        cancelled = await agent_store.create_pending_action(
+            action_type="CREATE_STOCK_ALERT", summary="no", payload={}, risk="LOW", user_context=_user(),
+        )
+        assert await agent_store.cancel_pending_action(cancelled.id, actor_user_id="u1")
+        assert not await agent_store.mark_action_confirmed(cancelled.id, actor_user_id="u1")
+
+    _run(_t())
+
+
+def test_confirm_endpoint_replays_instead_of_re_executing():
+    from unittest import mock
+
+    import main
+    from agent_schemas import ConfirmActionRequest
+
+    executions = []
+
+    async def execute(action, auth_header, user_ctx):
+        executions.append(action.id)
+        return {"created": True}
+
+    async def _t():
+        action = await agent_store.create_pending_action(
+            action_type="CREATE_REPORT_DRAFT", summary="endpoint", payload={}, risk="LOW", user_context=_user(),
+        )
+        request = type("R", (), {"headers": {"authorization": "Bearer t"}})()
+        req = ConfirmActionRequest(action_id=action.id, confirm=True)
+        with mock.patch.object(main, "get_user_context", mock.AsyncMock(return_value=_user())),                 mock.patch.object(main, "require_can_confirm_action", lambda *a, **k: None),                 mock.patch.object(main, "execute_agent_action", execute),                 mock.patch.object(main, "push_ai_action_event", mock.AsyncMock()):
+            first = await main.confirm_action(request, req)
+            second = await main.confirm_action(request, req)
+            cancel_status = None
+            try:
+                await main.cancel_action(request, main.CancelActionRequest(action_id=action.id))
+            except main.HTTPException as exc:
+                cancel_status = exc.status_code
+        return first, second, cancel_status
+
+    first, second, cancel_status = _run(_t())
+    assert len(executions) == 1
+    assert first.status == second.status == "EXECUTED"
+    assert second.result == {"created": True}
+    assert cancel_status == 409  # an executed action is never re-labelled CANCELLED

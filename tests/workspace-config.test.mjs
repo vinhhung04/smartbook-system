@@ -93,6 +93,23 @@ test("workspace lint and build quote their package globs", () => {
   }
 });
 
+test("test:node runs the Prisma services one at a time", () => {
+  // auth, inventory and borrow each run `prisma generate` as pretest. pnpm 10 skips
+  // Prisma's install scripts, so the first generate downloads the query engine, and
+  // Prisma saves it with unlink + copy into ~/.cache/prisma and node_modules/prisma —
+  // concurrent generates then open a file another one just deleted (ENOENT, CI
+  // 2026-10-02 and 2026-10-08). All three also write the same deduped @prisma/client,
+  // so only serial runs give each service's tests the client of its own schema.
+  const manifest = readJson("package.json");
+  const prismaServices = ["auth-service", "borrow-service", "inventory-service"];
+  for (const service of prismaServices) {
+    const scripts = readJson(`services/${service}/package.json`).scripts;
+    assert.match(scripts.pretest, /prisma generate/, `${service} must generate its client before tests`);
+    assert.match(manifest.scripts["test:node"], new RegExp(`--filter ${service}\\b`));
+  }
+  assert.match(manifest.scripts["test:node"], /--workspace-concurrency=1\b/);
+});
+
 test("Node Docker images build from the workspace lockfile", () => {
   const compose = readFileSync(resolve(repositoryRoot, "docker-compose.yml"), "utf8");
   const dockerfiles = [
@@ -141,4 +158,19 @@ test("admin monitor only calls public gateway health boundaries", () => {
   assert.match(monitor, /localhost:3000\/ready/);
   assert.doesNotMatch(monitor, /localhost:300[1-9]/);
   assert.match(monitor, /'ready'/);
+});
+
+test("the unfinished mock messaging page is not reachable from any route or navigation", () => {
+  // apps/web/src/components/pages/messages runs on MOCK_CONVERSATIONS / MOCK_MESSAGES
+  // (no backend). It is kept as source only and must not be exposed in the KLTN build.
+  const sources = [
+    "apps/web/src/app/routes.ts",
+    "apps/web/src/lib/nav-groups.ts",
+    "apps/web/src/components/pages/customer/_shared/customer-nav.ts",
+  ].map((path) => readFileSync(resolve(repositoryRoot, path), "utf8"));
+  for (const source of sources) {
+    assert.doesNotMatch(source, /pages\/messages|["'`]\/messages\b|MOCK_(MESSAGES|CONVERSATIONS)/);
+  }
+  const readme = readFileSync(resolve(repositoryRoot, "README.md"), "utf8");
+  assert.doesNotMatch(readme, /\/messages\b/);
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import test from 'node:test';
 
 const root = resolve(import.meta.dirname, '..');
@@ -31,6 +31,36 @@ test('runtime source contains no fallback authentication secret', () => {
     assert.doesNotMatch(source, /smartbook_shared_jwt_secret|smartbook_internal_key|your-secret-key/, path);
   }
   assert.doesNotMatch(read('services/auth-service/src/middlewares/redis-auth.middleware.js'), /JWT_SECRET\s*=.*\|\|/);
+});
+
+function listSource(dir, extensions) {
+  const found = [];
+  for (const entry of readdirSync(resolve(root, dir), { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!entry.name.startsWith('.') && !['node_modules', '__pycache__', 'eval', 'tests', 'test'].includes(entry.name)) {
+        found.push(...listSource(path, extensions));
+      }
+    } else if (extensions.some((ext) => entry.name.endsWith(ext)) && !entry.name.startsWith('test_')) {
+      found.push(path);
+    }
+  }
+  return found;
+}
+
+test('no service module falls back to a public internal-service key', () => {
+  // Entry points refuse to start without INTERNAL_SERVICE_KEY, but a module-level
+  // `|| 'smartbook_internal_key'` still documents a reusable secret and becomes
+  // live the moment that module is used from a script or a different entry point.
+  const files = [
+    ...['apps/api-gateway/src', 'services/auth-service/src', 'services/inventory-service/src',
+      'services/borrow-service/src', 'services/analytics-service/src'].flatMap((dir) => listSource(dir, ['.js'])),
+    ...listSource('services/ai-service', ['.py']),
+  ];
+  assert.ok(files.length > 50, `expected to scan the service sources, got ${files.length}`);
+  for (const path of files) {
+    assert.doesNotMatch(read(path), /smartbook_internal_key|smartbook-internal-dev-key/, relative(root, resolve(root, path)));
+  }
 });
 
 test('demo access tokens use a short default lifetime', () => {

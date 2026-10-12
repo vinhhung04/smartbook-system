@@ -19,6 +19,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.getByRole('option', { name: /WH-HCM-01/ }).click();
   await page.getByTestId('new-pr-book-title').fill(bookTitle);
   await page.getByTestId('new-pr-quantity').fill('5');
+  await page.getByRole('radio', { name: 'Tồn kho thấp' }).click();
   await page.getByTestId('new-pr-submit').click();
   await expect(page.getByText(/Đã (gửi|tạo) yêu cầu/)).toBeVisible();
 

@@ -9,7 +9,7 @@
     "lint": "pnpm -r --filter \"./apps/*\" lint",
     "lint:ci": "pnpm lint",
     "typecheck": "pnpm --filter web exec tsc --noEmit",
-    "test:node": "pnpm -r --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
+    "test:node": "pnpm -r --workspace-concurrency=1 --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
     "test:ai": "python -m pytest services/ai-service -q",
     "test:workspace-config": "node --test tests/*.test.mjs",
     "test:smoke": "node scripts/demo-smoke.mjs",

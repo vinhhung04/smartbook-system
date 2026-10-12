@@ -80,9 +80,14 @@ def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfi
 # eval/reports/rag_20260925_082047.md and the per-threshold trade-off table in
 # docs/SERVICES/AI_SERVICE.md's calibration section).
 #
-# INTERNAL_DOC: tau_evidence=0.35 gives No-answer Accuracy 1.0 AND zero recall
-# cost (Answerable Recall@5 stays 1.0 across the whole 0.15-0.40 range tested)
-# - no trade-off to make here.
+# INTERNAL_DOC: tau_evidence=0.35 gave No-answer Accuracy 1.0 AND zero recall
+# cost on the 2026-09-25 run. Re-calibrated 2026-10-08 with 20 more verified
+# no-answer questions (eval/rag_dataset.json doc-056..077), chosen on the val
+# half and checked on the untouched test half (eval/reports/
+# calibration_20261008_044653.md, RAG_EVAL_20261008_SUMMARY.md): 0.40 takes
+# test No-answer Accuracy 0.917 -> 1.0 with Answerable Recall@5 still 1.0.
+# The same run left BOOK_METADATA at 0.25: a stricter value cut its false
+# positives but raised false negatives on test (FNR 0.13 -> 0.23).
 #
 # BOOK_METADATA has a real trade-off (author-only queries like "Tác phẩm nào
 # của Xuân Diệu?" carry a weak semantic signal that's hard to tell apart from
@@ -93,7 +98,7 @@ def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfi
 # chỉ để tăng no-answer"). Re-run eval/calibrate_rag.py if the corpus or
 # embedding model changes enough to shift this trade-off.
 _BOOK_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.60, tau_confident=0.66, tau_evidence=0.25)
-_DOC_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.55, tau_confident=0.66, tau_evidence=0.35)
+_DOC_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.55, tau_confident=0.66, tau_evidence=0.40)
 
 BOOK_CONFIDENCE = _config_from_env("BOOK_CONF", _BOOK_DEFAULTS)
 DOC_CONFIDENCE = _config_from_env("DOC_CONF", _DOC_DEFAULTS)

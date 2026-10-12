@@ -35,6 +35,9 @@ export interface MembershipPlan {
   reservation_hold_hours: number;
   fine_per_day: number | string;
   lost_item_fee_multiplier: number | string;
+  price: number | string;
+  duration_days: number;
+  is_default: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -52,6 +55,9 @@ interface PlanFormState {
   reservation_hold_hours: string;
   fine_per_day: string;
   lost_item_fee_multiplier: string;
+  price: string;
+  duration_days: string;
+  is_default: boolean;
   is_active: boolean;
 }
 
@@ -65,8 +71,25 @@ const initialFormState: PlanFormState = {
   reservation_hold_hours: '24',
   fine_per_day: '0',
   lost_item_fee_multiplier: '1',
+  price: '0',
+  duration_days: '365',
+  is_default: false,
   is_active: true,
 };
+
+type PlanNumberKey = 'max_active_loans' | 'max_loan_days' | 'max_renewal_count' | 'reservation_hold_hours'
+  | 'fine_per_day' | 'lost_item_fee_multiplier' | 'price' | 'duration_days';
+
+const PLAN_NUMBER_FIELDS: Array<{ key: PlanNumberKey; label: string; integer: boolean; min: number }> = [
+  { key: 'max_active_loans', label: 'Tối đa mượn đồng thời', integer: true, min: 1 },
+  { key: 'max_loan_days', label: 'Tối đa số ngày mượn', integer: true, min: 1 },
+  { key: 'max_renewal_count', label: 'Tối đa lần gia hạn', integer: true, min: 0 },
+  { key: 'reservation_hold_hours', label: 'Giữ đặt trước (giờ)', integer: true, min: 1 },
+  { key: 'fine_per_day', label: 'Phạt/ngày', integer: false, min: 0 },
+  { key: 'lost_item_fee_multiplier', label: 'Hệ số phí mất sách', integer: false, min: 0 },
+  { key: 'price', label: 'Phí gói', integer: false, min: 0 },
+  { key: 'duration_days', label: 'Thời hạn thẻ', integer: true, min: 1 },
+];
 
 function toNum(v: unknown): number {
   if (typeof v === 'number' && !Number.isNaN(v)) return v;
@@ -84,6 +107,8 @@ function formatVnd(value: unknown): string {
 function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: MembershipPlan) => void }) {
   const members = plan._count?.customer_memberships ?? 0;
   const rules: Array<{ label: string; value: string }> = [
+    { label: 'Phí gói', value: toNum(plan.price) > 0 ? formatVnd(plan.price) : 'Miễn phí' },
+    { label: 'Thời hạn thẻ', value: `${plan.duration_days} ngày` },
     { label: 'Gia hạn tối đa', value: `${plan.max_renewal_count} lần` },
     { label: 'Giữ chỗ đặt trước', value: `${plan.reservation_hold_hours} giờ` },
     { label: 'Phạt mỗi ngày trễ', value: toNum(plan.fine_per_day) > 0 ? formatVnd(plan.fine_per_day) : 'Không phạt' },
@@ -96,11 +121,14 @@ function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: Membe
           <h3 className="truncate text-[15px] font-semibold text-foreground" title={plan.name}>{plan.name}</h3>
           <p className="font-mono text-[11px] text-muted-foreground">{plan.code}</p>
         </div>
-        {plan.is_active ? (
-          <StatusBadge label="Hoạt động" variant="success" dot />
-        ) : (
-          <StatusBadge label="Không hoạt động" variant="neutral" dot />
-        )}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {plan.is_active ? (
+            <StatusBadge label="Hoạt động" variant="success" dot />
+          ) : (
+            <StatusBadge label="Không hoạt động" variant="neutral" dot />
+          )}
+          {plan.is_default ? <StatusBadge label="Mặc định khi đăng ký" variant="info" /> : null}
+        </div>
       </header>
 
       {plan.description ? <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{plan.description}</p> : null}
@@ -151,6 +179,9 @@ function planToForm(p: MembershipPlan): PlanFormState {
     reservation_hold_hours: String(p.reservation_hold_hours),
     fine_per_day: String(toNum(p.fine_per_day)),
     lost_item_fee_multiplier: String(toNum(p.lost_item_fee_multiplier)),
+    price: String(toNum(p.price)),
+    duration_days: String(p.duration_days),
+    is_default: p.is_default,
     is_active: p.is_active,
   };
 }
@@ -226,15 +257,30 @@ export function MembershipPlansPage() {
       }
     }
 
+    // Same limits as the API (which stays the source of truth). 0 is a real value
+    // (e.g. 0 renewals), never replaced by a default.
+    const numbers: Record<string, number> = {};
+    for (const rule of PLAN_NUMBER_FIELDS) {
+      const raw = form[rule.key].trim();
+      const value = raw === '' ? Number.NaN : Number(raw);
+      const validShape = rule.integer ? Number.isInteger(value) : Number.isFinite(value);
+      if (!validShape || value < rule.min) {
+        toast.error(`${rule.label} phải là ${rule.integer ? 'số nguyên' : 'số'} ≥ ${rule.min}`);
+        return;
+      }
+      numbers[rule.key] = value;
+    }
+    if (form.is_default && !form.is_active) {
+      toast.error('Gói mặc định phải đang hoạt động');
+      return;
+    }
+
     const basePayload: Record<string, unknown> = {
       name,
       description: form.description.trim() || null,
-      max_active_loans: Number(form.max_active_loans) || 0,
-      max_loan_days: Number(form.max_loan_days) || 0,
-      max_renewal_count: Number(form.max_renewal_count) || 0,
-      reservation_hold_hours: Number(form.reservation_hold_hours) || 0,
-      fine_per_day: Number(form.fine_per_day) || 0,
-      lost_item_fee_multiplier: Number(form.lost_item_fee_multiplier) || 1,
+      ...numbers,
+      // Only ever sent as true: the default moves to another plan, it is never just removed.
+      ...(form.is_default ? { is_default: true } : {}),
     };
 
     try {
@@ -430,7 +476,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.max_active_loans}
                     onChange={(e) => setForm((f) => ({ ...f, max_active_loans: e.target.value }))}
@@ -442,7 +488,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.max_loan_days}
                     onChange={(e) => setForm((f) => ({ ...f, max_loan_days: e.target.value }))}
@@ -466,7 +512,7 @@ export function MembershipPlansPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
+                    min={1}
                     className={inputClass}
                     value={form.reservation_hold_hours}
                     onChange={(e) => setForm((f) => ({ ...f, reservation_hold_hours: e.target.value }))}
@@ -486,6 +532,33 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
+                  <label htmlFor="plan-price" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Phí gói (VND)
+                  </label>
+                  <input
+                    id="plan-price"
+                    type="number"
+                    min={0}
+                    step="1000"
+                    className={inputClass}
+                    value={form.price}
+                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="plan-duration" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Thời hạn thẻ (ngày)
+                  </label>
+                  <input
+                    id="plan-duration"
+                    type="number"
+                    min={1}
+                    className={inputClass}
+                    value={form.duration_days}
+                    onChange={(e) => setForm((f) => ({ ...f, duration_days: e.target.value }))}
+                  />
+                </div>
+                <div>
                   <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                     Hệ số phí mất sách
                   </label>
@@ -499,6 +572,21 @@ export function MembershipPlansPage() {
                   />
                 </div>
               </div>
+
+              <label className="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={form.is_default}
+                  // The current default can only be replaced by choosing another plan.
+                  disabled={Boolean(form.id && plans.find((p) => p.id === form.id)?.is_default)}
+                  onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.checked }))}
+                />
+                <span>
+                  <span className="block text-[13px] font-medium text-foreground">Gói mặc định khi đăng ký</span>
+                  <span className="block text-[11px] text-muted-foreground">Tài khoản bạn đọc mới được cấp gói này; chỉ một gói là mặc định.</span>
+                </span>
+              </label>
 
               <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
                 <div>

@@ -41,7 +41,7 @@ logger = logging.getLogger("uvicorn.error")
 # routes modules never import main.py, to avoid a circular import (main.py
 # constructs the FastAPI app and includes these routers).
 INVENTORY_SERVICE_URL = os.getenv("INVENTORY_SERVICE_URL", "http://inventory-service:3001").rstrip("/")
-INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
 COVER_FETCH_TIMEOUT_SECONDS = float(os.getenv("COVER_FETCH_TIMEOUT_SECONDS", "10"))
 
 # (hash, gallery rows) for the most recently synced gallery. Each row:

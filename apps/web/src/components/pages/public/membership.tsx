@@ -4,6 +4,7 @@ import { ArrowRight, BellRing, CalendarCheck, ClipboardList, Heart, Sparkles, St
 import { publicCatalogService, type PublicMembershipPlan, type PublicMembershipPlans } from '@/services/public-catalog';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { usePageMeta } from '@/lib/page-meta';
+import { priceLabel, validityLabel } from '@/lib/membership-format';
 import { buildLoginUrl } from '@/lib/return-url';
 import { cn } from '@/components/ui/utils';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -21,7 +22,7 @@ const BENEFITS: Array<{ icon: LucideIcon; title: string; body: string }> = [
   { icon: Heart, title: 'Danh sách yêu thích', body: 'Lưu những cuốn muốn đọc để quay lại sau.' },
   { icon: Star, title: 'Đánh giá sách', body: 'Chấm điểm và chia sẻ cảm nhận về sách bạn đã đọc.' },
   { icon: Sparkles, title: 'Gợi ý dành riêng cho bạn', body: 'Gợi ý sách theo lịch sử đọc của bạn.' },
-  { icon: BellRing, title: 'Thông báo', body: 'Nhận tin khi đặt trước được xác nhận, sách sắp đến hạn trả, quá hạn hoặc có khoản phí mới.' },
+  { icon: BellRing, title: 'Thông báo', body: 'Nhận tin khi đặt trước được xác nhận, sách sắp đến hạn trả, quá hạn, có khoản phí mới — và khi cuốn sách bạn chờ có lại tại chi nhánh.' },
   { icon: Wallet, title: 'Phí trễ hạn & thanh toán', body: 'Xem các khoản phí trễ hạn và thanh toán trực tuyến qua VNPay.' },
 ];
 
@@ -32,12 +33,9 @@ const STEPS: BorrowingStep[] = [
   { title: 'Nhận sách tại chi nhánh', body: 'Đưa mã nhận sách cho thủ thư và theo dõi hạn trả trong “Sách của tôi”.' },
 ];
 
-function validityLabel(days: number) {
-  return days % 365 === 0 ? `${days / 365 * 12} tháng` : `${days} ngày`;
-}
-
 function PlanCard({ plan, wide }: { plan: PublicMembershipPlan; wide: boolean }) {
   const facts = [
+    { label: 'Thời hạn thẻ', value: validityLabel(plan.duration_days) },
     { label: 'Mượn và đặt trước cùng lúc', value: `Tối đa ${plan.max_active_loans} cuốn` },
     { label: 'Thời hạn mỗi lượt mượn', value: `${plan.max_loan_days} ngày` },
     { label: 'Gia hạn', value: plan.max_renewal_count > 0 ? `${plan.max_renewal_count} lần / phiếu` : 'Không gia hạn' },
@@ -60,6 +58,10 @@ function PlanCard({ plan, wide }: { plan: PublicMembershipPlan; wide: boolean })
           </span>
         ) : null}
       </div>
+      <p className="mt-3 flex items-baseline gap-1.5" data-testid={`membership-plan-price-${plan.id}`}>
+        <span className="text-[24px] font-semibold tabular-nums tracking-tight">{priceLabel(plan.price)}</span>
+        {plan.price > 0 ? <span className="text-[13px] text-muted-foreground">/ {validityLabel(plan.duration_days)}</span> : null}
+      </p>
       {plan.description ? <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{plan.description}</p> : null}
       <dl className={cn('mt-5 grid border-t border-border', wide && 'sm:grid-cols-2 sm:gap-x-10')}>
         {facts.map((fact) => (
@@ -91,7 +93,8 @@ function Plans({ result, defaultPlan }: { result: PublicMembershipPlans; default
       </ul>
       <p className="mt-5 max-w-3xl text-[13.5px] leading-relaxed text-muted-foreground">
         {defaultPlan ? <>Tài khoản mới được cấp gói <span className="font-semibold text-foreground">{defaultPlan.name}</span>. </> : null}
-        Thẻ có hiệu lực {validityLabel(result.card_validity_days)} kể từ ngày cấp. Muốn đổi gói hoặc gia hạn thẻ, hãy liên hệ thủ thư tại{' '}
+        {result.card_validity_days ? <>Thẻ cấp khi đăng ký có hiệu lực {validityLabel(result.card_validity_days)} kể từ ngày cấp. </> : null}
+        Phí gói (nếu có) thanh toán tại quầy — đổi gói hoặc gia hạn thẻ do thủ thư thực hiện tại{' '}
         <Link to="/branches" className="font-semibold text-indigo-700 hover:underline dark:text-indigo-300">chi nhánh</Link> gần bạn.
       </p>
     </>

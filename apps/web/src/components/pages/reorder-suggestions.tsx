@@ -11,6 +11,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SectionCard } from '@/components/ui/section-card';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -18,6 +19,9 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingSpinner } from '@/components/ui/loading-state';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   analyticsService,
   type LateReturnRiskItem,
@@ -31,12 +35,15 @@ import {
 } from '@/services/analytics';
 import { getApiErrorMessage } from '@/services/api';
 import { hasPermission } from '@/services/http-clients';
+import { authService } from '@/services/auth';
+import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
+import { askChatbot } from '@/lib/chatbot-bus';
+import type { PurchaseOrderPrefill } from './purchase-order-form';
 
 type PriorityFilter = 'ALL' | 'HIGH' | 'MEDIUM' | 'LOW';
 type Tab = 'reorder' | 'weeding' | 'late-return' | 'no-show';
 
 const dayOptions = [7, 30, 90];
-const priorityOptions: PriorityFilter[] = ['ALL', 'HIGH', 'MEDIUM', 'LOW'];
 
 const RISK_METER_FILL: Record<RiskBand, string> = {
   HIGH: 'bg-red-500',
@@ -71,12 +78,6 @@ const NO_SHOW_FACTOR_LABELS: Record<string, string> = {
   active_loans_at_reservation: 'Số phiếu đang mượn',
 };
 
-function priorityVariant(priority: ReorderSuggestionItem['priority']) {
-  if (priority === 'HIGH') return 'danger';
-  if (priority === 'MEDIUM') return 'warning';
-  return 'info';
-}
-
 const PRIORITY_LABELS: Record<PriorityFilter, string> = {
   ALL: 'Tất cả',
   HIGH: 'Cao',
@@ -96,9 +97,30 @@ function riskBandLabel(band: RiskBand) {
   return 'Nguy cơ thấp';
 }
 
-function formatStockoutDays(value: number | null) {
-  if (value === null || value === undefined) return 'Chưa xác định';
-  return `${value.toLocaleString('vi-VN')} ngày`;
+// Urgency is what a buyer acts on: almost every candidate comes back HIGH priority,
+// so the list is split by when the shelf runs empty relative to the supplier lead time.
+type Urgency = 'OUT' | 'BEFORE_RESTOCK' | 'LATER';
+type UrgencyFilter = 'ALL' | Urgency;
+const URGENCY_FILTERS: UrgencyFilter[] = ['ALL', 'OUT', 'BEFORE_RESTOCK', 'LATER'];
+const URGENCY_RANK: Record<Urgency, number> = { OUT: 0, BEFORE_RESTOCK: 1, LATER: 2 };
+const URGENCY: Record<Urgency, { label: string; dot: string; text: string; hint: (leadDays: number) => string }> = {
+  OUT: { label: 'Đã hết hàng', dot: 'bg-red-500', text: 'text-red-600 dark:text-red-400', hint: () => 'Không còn cuốn nào sẵn sàng' },
+  BEFORE_RESTOCK: { label: 'Sẽ hết trước khi hàng về', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400', hint: (d) => `Dự kiến hết trong ${d} ngày tới — đặt bây giờ vẫn có thể thiếu hàng một thời gian` },
+  LATER: { label: 'Còn thời gian', dot: 'bg-emerald-500', text: 'text-foreground', hint: (d) => `Hết sau hơn ${d} ngày hoặc chưa xác định` },
+};
+
+function urgencyOf(item: ReorderSuggestionItem, leadDays: number): Urgency {
+  if (item.available_qty <= 0) return 'OUT';
+  const days = item.estimated_days_until_stockout;
+  if (days !== null && days !== undefined && days <= leadDays) return 'BEFORE_RESTOCK';
+  return 'LATER';
+}
+
+function stockoutText(item: ReorderSuggestionItem) {
+  if (item.available_qty <= 0) return 'Đã hết hàng';
+  const days = item.estimated_days_until_stockout;
+  if (days === null || days === undefined) return 'Chưa xác định';
+  return `Hết sau ~${Math.round(days).toLocaleString('vi-VN')} ngày`;
 }
 
 function formatVnd(value: number) {
@@ -306,29 +328,21 @@ function RiskTable({ rows, factorLabels }: { rows: RiskRow[]; factorLabels: Reco
   );
 }
 
-function SummaryStrip({ items }: { items: Array<{ label: string; value: string | number; tone?: string; hint?: string }> }) {
-  return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-border bg-card p-4 sm:grid-cols-3 sm:p-5 xl:grid-cols-6">
-      {items.map((item) => (
-        <div key={item.label} className="min-w-0">
-          <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
-          <dd className={`mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums ${item.tone ?? 'text-foreground'}`}>{item.value}</dd>
-          {item.hint ? <p className="mt-1 truncate text-[11px] text-muted-foreground">{item.hint}</p> : null}
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 export function ReorderSuggestionsPage() {
+  const navigate = useNavigate();
+  const canCreatePo = canAccess(authService.getCurrentUser(), ROUTE_ACCESS.purchaseWrite);
   const [activeTab, setActiveTab] = useState<Tab>('reorder');
   // Borrow-domain risk models are gated by analytics.borrow.read; roles without it (e.g. warehouse manager) get 403.
   const canViewBorrowRisk = hasPermission('analytics.borrow.read');
 
   const [days, setDays] = useState(30);
-  const [priority, setPriority] = useState<PriorityFilter>('ALL');
   const [limit, setLimit] = useState(20);
   const [budgetVnd, setBudgetVnd] = useState<number | ''>('');
+  const [budgetDraft, setBudgetDraft] = useState('');
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>('ALL');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+  const [reasonOpen, setReasonOpen] = useState<string | null>(null);
   const [data, setData] = useState<ReorderSuggestionsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -351,7 +365,7 @@ export function ReorderSuggestionsPage() {
       setError(null);
       const response = await analyticsService.getReorderSuggestions({
         days,
-        priority,
+        priority: 'ALL',
         limit,
         budgetVnd: budgetVnd === '' ? undefined : budgetVnd,
       });
@@ -363,7 +377,7 @@ export function ReorderSuggestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [days, priority, limit, budgetVnd]);
+  }, [days, limit, budgetVnd]);
 
   const loadWeedingSuggestions = useCallback(async () => {
     try {
@@ -423,6 +437,79 @@ export function ReorderSuggestionsPage() {
   const summary = data?.summary;
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data]);
 
+  const leadDays = data?.range.leadTimeDays ?? 14;
+  const sortedItems = useMemo(() => [...items].sort((a, b) => {
+    const ua = urgencyOf(a, leadDays);
+    const ub = urgencyOf(b, leadDays);
+    if (ua !== ub) return URGENCY_RANK[ua] - URGENCY_RANK[ub];
+    const da = a.estimated_days_until_stockout ?? Number.POSITIVE_INFINITY;
+    const db = b.estimated_days_until_stockout ?? Number.POSITIVE_INFINITY;
+    return da - db || b.demand_score - a.demand_score;
+  }), [items, leadDays]);
+  const urgencyCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: sortedItems.length };
+    for (const item of sortedItems) {
+      const key = urgencyOf(item, leadDays);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [sortedItems, leadDays]);
+  const visibleItems = useMemo(
+    () => (urgencyFilter === 'ALL' ? sortedItems : sortedItems.filter((item) => urgencyOf(item, leadDays) === urgencyFilter)),
+    [sortedItems, urgencyFilter, leadDays],
+  );
+  const qtyFor = (item: ReorderSuggestionItem) => qtyOverrides[item.variant_id] ?? item.suggested_reorder_qty;
+  const setQtyOverride = (variantId: string, value: number) => {
+    setQtyOverrides((current) => ({ ...current, [variantId]: Math.max(1, Math.round(value) || 1) }));
+  };
+  const visibleQty = visibleItems.reduce((sum, item) => sum + qtyFor(item), 0);
+  const visibleCost = visibleItems.reduce((sum, item) => sum + qtyFor(item) * (item.unit_cost || 0), 0);
+  const selectedItems = sortedItems.filter((item) => selectedIds.has(item.variant_id));
+  const selectedQty = selectedItems.reduce((sum, item) => sum + qtyFor(item), 0);
+  const selectedCost = selectedItems.reduce((sum, item) => sum + qtyFor(item) * (item.unit_cost || 0), 0);
+  const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((item) => selectedIds.has(item.variant_id));
+
+  const toggleItem = (variantId: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(variantId); else next.delete(variantId);
+      return next;
+    });
+  };
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const item of visibleItems) {
+        if (checked) next.add(item.variant_id); else next.delete(item.variant_id);
+      }
+      return next;
+    });
+  };
+  const commitBudget = () => {
+    const digits = budgetDraft.replace(/[^\d]/g, '');
+    setBudgetVnd(digits ? Number(digits) : '');
+  };
+  const createPurchaseOrder = () => {
+    const prefill: PurchaseOrderPrefill = {
+      note: `Tạo từ đề xuất nhập thêm (${days} ngày qua, ${new Date().toLocaleDateString('vi-VN')})`,
+      lines: selectedItems.map((item) => ({
+        variant_id: item.variant_id,
+        title: item.title,
+        isbn13: item.isbn || null,
+        ordered_qty: qtyFor(item),
+        unit_cost: item.unit_cost || 0,
+      })),
+    };
+    navigate('/purchase-orders/new', { state: { prefill } });
+  };
+
+  // A new analysis replaces the list, so per-row choices from the old one no longer apply.
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setQtyOverrides({});
+    setReasonOpen(null);
+  }, [data]);
+
   const lateReturnReady = lateReturn != null && lateReturn.status !== 'INSUFFICIENT_DATA';
   const noShowReady = noShow != null && noShow.status !== 'INSUFFICIENT_DATA';
   const lateReturnHighCount = useMemo(
@@ -436,7 +523,7 @@ export function ReorderSuggestionsPage() {
   const weedingActionableCount = weedingItems.length;
 
   const askAiPrompts: Record<Tab, string> = {
-    reorder: 'Giải thích kế hoạch nhập thêm sách dựa trên Reorder Suggestions hiện tại.',
+    reorder: 'Giải thích danh sách đề xuất nhập thêm sách hiện tại: sách nào cần đặt gấp và vì sao?',
     weeding: 'Giải thích danh sách sách nên thanh lý hoặc chuyển kho hiện tại.',
     'late-return': 'Giải thích các khoản mượn có nguy cơ trả trễ cao và đề xuất cách xử lý.',
     'no-show': 'Giải thích các đặt chỗ có nguy cơ bỏ lỡ cao và đề xuất cách xử lý.',
@@ -444,6 +531,12 @@ export function ReorderSuggestionsPage() {
 
   const handleAskAi = async () => {
     const prompt = askAiPrompts[activeTab];
+    if (askChatbot(prompt)) return;
+    // Roles with the full assistant page have no floating chatbot; hand the question over there.
+    if (canAccess(authService.getCurrentUser(), ROUTE_ACCESS.aiAssistant)) {
+      navigate('/ai-assistant', { state: { prompt } });
+      return;
+    }
     try {
       await navigator.clipboard.writeText(prompt);
       toast.success('Đã sao chép prompt để hỏi AI chatbot');
@@ -489,7 +582,7 @@ export function ReorderSuggestionsPage() {
         iconColor="text-violet-600 dark:text-violet-400"
         actions={
           <>
-            <Button type="button" variant="outline" size="sm" onClick={handleAskAi} title="Sao chép câu hỏi mẫu để dán vào chatbot AI">
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleAskAi()} title="Mở trợ lý AI với câu hỏi về mục đang xem">
               <Copy className="h-3.5 w-3.5" />
               Hỏi AI về mục này
             </Button>
@@ -507,8 +600,8 @@ export function ReorderSuggestionsPage() {
           onClick={() => setActiveTab('reorder')}
           icon={PackagePlus}
           label="Nhập thêm"
-          value={summary?.high_priority ?? 0}
-          hint={`ưu tiên cao · ${summary?.total_candidates ?? 0} đầu sách xem xét`}
+          value={loading ? '–' : (urgencyCounts.OUT ?? 0) + (urgencyCounts.BEFORE_RESTOCK ?? 0)}
+          hint={`sách đã hết hoặc sắp hết · ${summary?.total_candidates ?? 0} đầu sách đã xét`}
           accent="violet"
         />
         <DomainNavItem
@@ -547,137 +640,202 @@ export function ReorderSuggestionsPage() {
       <div className="space-y-4">
         {activeTab === 'reorder' && (
           <div className="space-y-4">
-            <SectionCard
-              title="Bộ lọc dự báo"
-              subtitle={data ? `Dữ liệu từ ${data.range.from} đến ${data.range.to}, thời gian giao hàng ${data.range.leadTimeDays} ngày` : 'Chọn khoảng thời gian và mức ưu tiên'}
-              icon={BrainCircuit}
-            >
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                <div className="max-w-full overflow-x-auto">
-                  <SegmentedControl
-                    layoutId="reorder-days"
-                    value={String(days)}
-                    onChange={(value) => setDays(Number(value))}
-                    options={dayOptions.map((option) => ({ value: String(option), label: `${option} ngày` }))}
-                    className="w-max"
-                  />
+            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
+              <div className="flex flex-wrap items-end gap-x-5 gap-y-3 px-4 py-3">
+                <div>
+                  <p className="mb-1 text-[11px] font-medium text-muted-foreground">Dựa trên lượt mượn</p>
+                  <div className="max-w-full overflow-x-auto">
+                    <SegmentedControl
+                      layoutId="reorder-days"
+                      value={String(days)}
+                      onChange={(value) => setDays(Number(value))}
+                      options={dayOptions.map((option) => ({ value: String(option), label: `${option} ngày qua` }))}
+                      className="w-max whitespace-nowrap"
+                    />
+                  </div>
                 </div>
-                <div className="max-w-full overflow-x-auto">
-                  <SegmentedControl
-                    layoutId="reorder-priority"
-                    value={priority}
-                    onChange={(value) => setPriority(value as PriorityFilter)}
-                    options={priorityOptions.map((option) => ({ value: option, label: PRIORITY_LABELS[option] }))}
-                    className="w-max"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                  Hiển thị tối đa
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={limit}
-                    onChange={(event) => setLimit(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
-                    className="h-9 w-20 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
-                  />
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Số đề xuất</span>
+                  <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+                    <SelectTrigger size="sm" className="w-[110px]" aria-label="Số đề xuất">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[20, 50, 100].map((n) => <SelectItem key={n} value={String(n)}>Top {n}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </label>
-                <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                  Ngân sách (đ)
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="Không giới hạn"
-                    value={budgetVnd}
-                    onChange={(event) => {
-                      const raw = event.target.value;
-                      setBudgetVnd(raw === '' ? '' : Math.max(0, Number(raw) || 0));
-                    }}
-                    className="h-9 w-40 rounded-lg border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-indigo-300 dark:focus:border-indigo-500/40"
-                  />
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Ngân sách</span>
+                  <div className="relative">
+                    <Input
+                      inputMode="numeric"
+                      placeholder="Không giới hạn"
+                      value={budgetDraft}
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/[^\d]/g, '');
+                        setBudgetDraft(digits ? Number(digits).toLocaleString('vi-VN') : '');
+                      }}
+                      onBlur={commitBudget}
+                      onKeyDown={(event) => { if (event.key === 'Enter') commitBudget(); }}
+                      className="h-8 w-[170px] pr-7 text-[13px]"
+                    />
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">đ</span>
+                  </div>
                 </label>
+                {data ? (
+                  <p className="text-[11px] text-muted-foreground lg:ml-auto">
+                    Hàng về sau khoảng <span className="font-medium text-foreground">{data.range.leadTimeDays} ngày</span> kể từ lúc đặt · cập nhật {formatDateTime(data.generated_at)}
+                  </p>
+                ) : null}
               </div>
-            </SectionCard>
 
-            <SummaryStrip
-              items={[
-                { label: 'Đầu sách xem xét', value: (summary?.total_candidates ?? 0).toLocaleString('vi-VN') },
-                { label: 'Ưu tiên cao', value: summary?.high_priority ?? 0, tone: (summary?.high_priority ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40' },
-                { label: 'Ưu tiên trung bình', value: summary?.medium_priority ?? 0, tone: 'text-amber-600 dark:text-amber-400' },
-                { label: 'Tổng số lượng đề xuất', value: (summary?.estimated_total_reorder_qty ?? 0).toLocaleString('vi-VN'), tone: 'text-emerald-600 dark:text-emerald-400' },
-                { label: 'Chi phí ước tính', value: formatVnd(summary?.estimated_total_cost ?? 0), tone: 'text-indigo-600 dark:text-indigo-400' },
-                ...(data?.budget
-                  ? [{ label: 'Ngân sách còn lại', value: formatVnd(data.budget.remaining_vnd), tone: data.budget.remaining_vnd <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }]
-                  : []),
-              ]}
-            />
+              <div className="flex items-center gap-1 overflow-x-auto border-t border-border p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo độ gấp">
+                {URGENCY_FILTERS.map((key) => {
+                  const active = urgencyFilter === key;
+                  const count = urgencyCounts[key] ?? 0;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setUrgencyFilter(key)}
+                      title={key === 'ALL' ? undefined : URGENCY[key].hint(leadDays)}
+                      className={`flex shrink-0 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        active ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300' : 'border-transparent hover:border-border hover:bg-muted/50'
+                      }`}
+                    >
+                      <span className={`text-[18px] font-semibold leading-tight tabular-nums ${!active && !count ? 'text-muted-foreground/60' : ''}`}>{loading ? '–' : count}</span>
+                      <span className={`flex items-center gap-1.5 whitespace-nowrap text-[11px] ${active ? 'font-medium' : 'text-muted-foreground'}`}>
+                        {key !== 'ALL' && <span className={`h-1.5 w-1.5 rounded-full ${URGENCY[key].dot}`} aria-hidden="true" />}
+                        {key === 'ALL' ? 'Tất cả đề xuất' : URGENCY[key].label}
+                      </span>
+                    </button>
+                  );
+                })}
+                <div className="ml-auto hidden shrink-0 px-3 text-right sm:block">
+                  <p className="font-mono text-[15px] font-semibold tabular-nums text-foreground">{formatVnd(visibleCost)}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {visibleQty.toLocaleString('vi-VN')} cuốn đề xuất
+                    {data?.budget ? <> · ngân sách còn <span className={data.budget.remaining_vnd <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>{formatVnd(data.budget.remaining_vnd)}</span></> : null}
+                  </p>
+                </div>
+              </div>
+            </div>
 
-            <SectionCard
-              title="Sách nên xem xét nhập thêm"
-              subtitle="Sắp xếp theo mức ưu tiên, điểm nhu cầu và số lượng đề xuất"
-              icon={PackagePlus}
-              noPadding
-            >
+            <SectionCard noPadding>
               {loading ? (
                 <div className="flex min-h-[260px] items-center justify-center">
                   <LoadingSpinner message="Đang phân tích nhu cầu..." />
                 </div>
               ) : error ? (
                 errorState(error, () => void loadData(), 'Không thể tải gợi ý nhập thêm')
-              ) : items.length === 0 ? (
-                <EmptyState title="Chưa có sách cần nhập thêm" description="Không có tín hiệu mượn, đặt chỗ hoặc thiếu tồn kho trong bộ lọc hiện tại." icon={PackagePlus} />
+              ) : visibleItems.length === 0 ? (
+                <EmptyState
+                  title={items.length === 0 ? 'Chưa có sách cần nhập thêm' : 'Không có đề xuất ở mức này'}
+                  description={items.length === 0 ? 'Không có tín hiệu mượn, đặt chỗ hoặc thiếu tồn kho trong khoảng thời gian đã chọn.' : 'Chọn mức độ gấp khác để xem các đề xuất còn lại.'}
+                  icon={PackagePlus}
+                />
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full table-fixed text-left text-[13px]">
-                    <thead className="border-y border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Sách</th>
-                        <th className="hidden w-[190px] px-3 py-3 font-semibold md:table-cell">Nhu cầu</th>
-                        <th className="w-[170px] px-3 py-3 font-semibold">Ưu tiên</th>
-                        <th className="w-[170px] px-4 py-3 font-semibold">Đề xuất nhập</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {items.map((item) => (
-                        <tr key={item.variant_id} className="align-top transition hover:bg-muted/40">
-                          <td className="px-4 py-3">
-                            <p className="truncate font-semibold text-foreground" title={item.title || undefined}>{item.title || 'Chưa có tên sách'}</p>
+                <table className="w-full table-fixed text-left text-[13px]">
+                  <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <tr>
+                      {canCreatePo ? (
+                        <th className="w-10 px-3 py-3">
+                          <Checkbox checked={allVisibleSelected} onCheckedChange={(checked) => toggleAllVisible(checked === true)} aria-label="Chọn tất cả đề xuất đang hiển thị" />
+                        </th>
+                      ) : null}
+                      <th className="px-3 py-3 font-semibold">Sách</th>
+                      <th className="hidden w-[200px] px-3 py-3 font-semibold md:table-cell">Tồn &amp; nhu cầu</th>
+                      <th className="hidden w-[160px] px-3 py-3 font-semibold sm:table-cell">Khi nào hết</th>
+                      <th className="w-[120px] px-4 py-3 text-right font-semibold">Nên nhập</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {visibleItems.map((item) => {
+                      const urgency = urgencyOf(item, leadDays);
+                      const qty = qtyFor(item);
+                      const selected = selectedIds.has(item.variant_id);
+                      const trend = Math.round(item.demand_trend_pct);
+                      const expanded = reasonOpen === item.variant_id;
+                      return (
+                        <tr key={item.variant_id} className={`align-top transition hover:bg-muted/30 ${selected ? 'bg-violet-50/50 dark:bg-violet-500/5' : ''}`}>
+                          {canCreatePo ? (
+                            <td className="px-3 py-3">
+                              <Checkbox checked={selected} onCheckedChange={(checked) => toggleItem(item.variant_id, checked === true)} aria-label={`Chọn ${item.title}`} />
+                            </td>
+                          ) : null}
+                          <td className="px-3 py-3">
+                            <p className="line-clamp-2 font-semibold text-foreground sm:line-clamp-none sm:truncate" title={item.title || undefined}>{item.title || 'Chưa có tên sách'}</p>
                             <p className="truncate text-[12px] text-muted-foreground">
-                              {[item.author, item.category, item.isbn].filter(Boolean).join(' · ') || 'Chưa có metadata'}
+                              {[item.author, item.isbn].filter(Boolean).join(' · ') || 'Chưa có metadata'}
                             </p>
-                            <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-muted-foreground" title={item.reason}>{item.reason}</p>
                             <p className="mt-1 text-[12px] text-muted-foreground md:hidden">
-                              Còn {item.available_qty} · dự báo 30 ngày: {item.forecast_30d}
+                              Còn {item.available_qty} · {item.borrow_count} lượt mượn
                             </p>
+                            <p className={`mt-0.5 text-[12px] font-medium sm:hidden ${URGENCY[urgency].text}`}>{stockoutText(item)}</p>
+                            <button
+                              type="button"
+                              onClick={() => setReasonOpen(expanded ? null : item.variant_id)}
+                              aria-expanded={expanded}
+                              className="mt-1 rounded text-[11px] text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-400"
+                            >
+                              {expanded ? 'Ẩn lý do' : 'Vì sao?'}
+                            </button>
+                            {expanded ? <p className="mt-1 rounded-md bg-muted/40 px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground">{item.reason}</p> : null}
                           </td>
                           <td className="hidden px-3 py-3 text-[12px] leading-relaxed md:table-cell">
-                            <p><span className="font-semibold text-foreground">{item.available_qty}</span> <span className="text-muted-foreground">còn lại</span></p>
-                            <p className="text-muted-foreground">{item.borrow_count} mượn · {item.reservation_count} đặt chỗ</p>
-                            <p className="mt-1 text-foreground">Dự báo 30 ngày: <span className="font-semibold">{item.forecast_30d}</span></p>
+                            <p><span className="font-semibold text-foreground">Còn {item.available_qty}</span> <span className="text-muted-foreground">sẵn sàng</span></p>
+                            <p className="text-muted-foreground">
+                              {item.borrow_count} lượt mượn{item.reservation_count ? ` · ${item.reservation_count} đặt chỗ` : ''}
+                              {trend !== 0 ? <span className={trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}> · {trend > 0 ? '↑' : '↓'}{Math.abs(trend)}%</span> : null}
+                            </p>
                             {item.seasonal_event ? (
                               <div className="mt-1"><StatusBadge label={`${item.seasonal_event} · ${item.seasonal_index}x`} variant="info" dot /></div>
-                            ) : item.seasonal_index !== 1 ? (
-                              <p className="text-muted-foreground">{item.seasonal_index}x mùa vụ</p>
                             ) : null}
                           </td>
-                          <td className="px-3 py-3">
-                            <StatusBadge label={PRIORITY_LABELS[item.priority as PriorityFilter] ?? item.priority} variant={priorityVariant(item.priority)} dot />
-                            <p className="mt-1.5 text-[12px] text-muted-foreground">Hết hàng sau: {formatStockoutDays(item.estimated_days_until_stockout)}</p>
+                          <td className="hidden px-3 py-3 sm:table-cell">
+                            <p className={`text-[13px] font-semibold ${URGENCY[urgency].text}`}>{stockoutText(item)}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Ưu tiên {(PRIORITY_LABELS[item.priority as PriorityFilter] ?? item.priority).toLowerCase()}</p>
                           </td>
-                          <td className="px-4 py-3">
-                            <p className="font-semibold text-emerald-700 dark:text-emerald-400">{item.suggested_reorder_qty} cuốn</p>
-                            <p className="text-[12px] text-muted-foreground">{formatVnd(item.estimated_cost)}</p>
-                            {data?.budget ? (
-                              <div className="mt-1"><StatusBadge label={item.within_budget ? 'Trong ngân sách' : 'Vượt ngân sách'} variant={item.within_budget ? 'success' : 'danger'} dot /></div>
+                          <td className="px-4 py-3 text-right">
+                            {canCreatePo ? (
+                              <Input
+                                type="number"
+                                min={1}
+                                inputMode="numeric"
+                                value={qty}
+                                onChange={(event) => setQtyOverride(item.variant_id, Number(event.target.value))}
+                                aria-label={`Số lượng nhập cho ${item.title}`}
+                                className="ml-auto h-8 w-20 text-right font-mono text-[13px] font-semibold"
+                              />
+                            ) : (
+                              <p className="font-semibold text-foreground">{qty} cuốn</p>
+                            )}
+                            <p className="mt-1 text-[11px] text-muted-foreground">{formatVnd(qty * (item.unit_cost || 0))}</p>
+                            {data?.budget && item.within_budget === false ? (
+                              <p className="mt-0.5 text-[11px] font-medium text-rose-600 dark:text-rose-400">Vượt ngân sách</p>
                             ) : null}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
             </SectionCard>
+
+            {canCreatePo && selectedItems.length > 0 ? (
+              <div className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[13px] shadow-lg">
+                <span>
+                  Đã chọn <span className="font-semibold">{selectedItems.length} sách</span> · {selectedQty.toLocaleString('vi-VN')} cuốn · <span className="font-mono">{formatVnd(selectedCost)}</span>
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Bỏ chọn</Button>
+                <Button size="sm" onClick={createPurchaseOrder}>
+                  <PackagePlus className="h-3.5 w-3.5" />Tạo đơn đặt hàng
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
 

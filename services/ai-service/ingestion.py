@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import re
+from typing import NamedTuple
 
 import book_index
 import embeddings
@@ -85,24 +86,36 @@ def plan_chunks(existing: dict[int, str], texts: list[str]) -> list[int]:
     ]
 
 
+class IngestOutcome(NamedTuple):
+    embedded: int
+    skipped: int
+    # True khi embedding provider tra ve None: tai lieu da duoc upsert nhung
+    # chunk can embed chua co vector moi. Lan dong bo sau se thu lai (hash chunk
+    # van lech), nen caller can dem rieng truong hop nay thay vi coi la "bo qua".
+    embed_failed: bool = False
+
+
 async def _ingest_one(
     store, corpus: str, source_id: str, title: str | None,
     content: str, texts: list[str], metadata: dict,
-) -> tuple[int, int]:
-    """Tra ve (so chunk da embed, so chunk bo qua)."""
+) -> IngestOutcome:
     document_id = await store.upsert_document(
         corpus=corpus, source_id=source_id, title=title,
         content=content, content_hash=chunk_hash(content), metadata=metadata)
 
     existing = await store.existing_chunk_hashes(document_id)
+    if any(index >= len(texts) for index in existing):
+        # Tai lieu ngan lai: chunk duoi cung la noi dung da bi xoa, khong duoc
+        # tiep tuc khop tim kiem.
+        await store.delete_chunks_from(document_id, len(texts))
     todo = plan_chunks(existing, texts)
     if not todo:
-        return 0, len(texts)
+        return IngestOutcome(0, len(texts))
 
     embed_result = await asyncio.to_thread(embeddings.embed_batch, [texts[i] for i in todo])
     if embed_result is None:
         logger.warning("ingestion: embed that bai cho %s/%s, bo qua", corpus, source_id)
-        return 0, len(texts)
+        return IngestOutcome(0, len(texts), embed_failed=True)
 
     await store.upsert_chunks([
         Chunk(
@@ -112,7 +125,14 @@ async def _ingest_one(
         )
         for index, vector in zip(todo, embed_result.vectors)
     ])
-    return len(todo), len(texts) - len(todo)
+    return IngestOutcome(len(todo), len(texts) - len(todo))
+
+
+def book_metadata(book: dict) -> dict:
+    """Metadata luu kem document sach. Khong gom so luong ton kho: ton kho doi
+    lien tuc theo nghiep vu kho, dua vao day chi lam moi lan dong bo deu phai
+    ghi lai document ma noi dung tim kiem khong he doi."""
+    return {"author": book.get("author"), "category": book.get("category"), "isbn": book.get("isbn")}
 
 
 async def ingest_books(books: list[dict]) -> dict:
@@ -127,11 +147,10 @@ async def ingest_books(books: list[dict]) -> dict:
         if not text.strip():
             continue
         try:
-            done, skip = await _ingest_one(
+            done, skip, _ = await _ingest_one(
                 store, vector_store.CORPUS_BOOK, str(book["id"]),
                 str(book.get("title") or ""), text, [text],
-                {"author": book.get("author"), "category": book.get("category"),
-                 "isbn": book.get("isbn"), "quantity": book.get("quantity")},
+                book_metadata(book),
             )
         except Exception as exc:
             logger.warning(
@@ -154,6 +173,7 @@ async def ingest_internal_docs(directory: str = CORPUS_DIR) -> dict:
         logger.warning("ingestion: khong tim thay thu muc corpus %s", directory)
         return {"documents": 0, "chunks_embedded": 0, "chunks_skipped": 0}
 
+    present: set[str] = set()
     for filename in sorted(os.listdir(directory)):
         if not filename.endswith(".md"):
             continue
@@ -164,9 +184,12 @@ async def ingest_internal_docs(directory: str = CORPUS_DIR) -> dict:
         if not texts:
             continue
         source_id = filename[:-3]
+        # Danh dau "con ton tai" TRUOC khi ingest: mot file loi tam thoi (DB/embed)
+        # van la tai lieu hop le, khong duoc bi coi la da xoa va bi go khoi corpus.
+        present.add(source_id)
         title = texts[0].splitlines()[0].lstrip("# ").strip()
         try:
-            done, skip = await _ingest_one(
+            done, skip, _ = await _ingest_one(
                 store, vector_store.CORPUS_DOC, source_id, title, content, texts,
                 {"filename": filename},
             )
@@ -177,5 +200,18 @@ async def ingest_internal_docs(directory: str = CORPUS_DIR) -> dict:
         documents += 1
         embedded += done
         skipped += skip
-    logger.info("ingestion: docs %d doc, %d chunk embed, %d bo qua", documents, embedded, skipped)
-    return {"documents": documents, "chunks_embedded": embedded, "chunks_skipped": skipped}
+
+    removed = 0
+    if present:
+        # File .md da bi xoa khoi corpus/ thi document cua no cung phai roi khoi
+        # vector store, neu khong RAG van trich dan mot chinh sach khong con hieu luc.
+        # Chi xoa khi lan quet nay ingest duoc it nhat mot file, de mot thu muc
+        # corpus rong/hong khong xoa sach corpus.
+        try:
+            stale = [sid for sid in await store.list_documents(vector_store.CORPUS_DOC) if sid not in present]
+            removed = await store.delete_documents(vector_store.CORPUS_DOC, stale) if stale else 0
+        except Exception as exc:
+            logger.warning("ingestion: khong go duoc tai lieu da xoa: %s", type(exc).__name__)
+    logger.info(
+        "ingestion: docs %d doc, %d chunk embed, %d bo qua, %d go bo", documents, embedded, skipped, removed)
+    return {"documents": documents, "chunks_embedded": embedded, "chunks_skipped": skipped, "removed": removed}

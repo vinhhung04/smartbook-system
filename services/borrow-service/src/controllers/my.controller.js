@@ -634,39 +634,6 @@ async function getMyAccountLedger(req, res) {
   }
 }
 
-async function getMyNotifications(req, res) {
-  try {
-    const customer = await ensureCurrentCustomer(req);
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
-    }
-
-    const pagination = parsePagination(req.query);
-    const [items, total] = await Promise.all([
-      prisma.customer_notifications.findMany({
-        where: { customer_id: customer.id },
-        orderBy: [{ scheduled_at: 'desc' }],
-        skip: pagination.skip,
-        take: pagination.take,
-      }),
-      prisma.customer_notifications.count({ where: { customer_id: customer.id } }),
-    ]);
-
-    return res.json({
-      data: items,
-      meta: {
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        total,
-        totalPages: Math.ceil(total / pagination.pageSize) || 1,
-      },
-    });
-  } catch (error) {
-    console.error('getMyNotifications error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-}
-
 module.exports = {
   getMyReservations,
   createMyReservation,
@@ -680,5 +647,4 @@ module.exports = {
   getMyFines,
   payMyFine,
   getMyMomoPaymentStatus,
-  getMyNotifications,
 };

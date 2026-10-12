@@ -10,6 +10,8 @@ Giong embeddings.py / book_index.py: khong bao gio raise, loi thi degrade.
 """
 from __future__ import annotations
 
+import os
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -21,6 +23,51 @@ EMBEDDING_DIM = 768
 CORPUS_BOOK = "BOOK_METADATA"
 CORPUS_DOC = "INTERNAL_DOC"
 
+# Nhanh keyword (full-text) cua hybrid retrieval.
+#
+# "all" (mac dinh, hanh vi production): plainto_tsquery - MOI tu cua cau hoi
+# phai co trong tai lieu. Cau hoi tu nhien ("Sach nao cua nha van To Hoai?")
+# gan nhu khong bao gio khop vi "sach", "nao", "cua"... khong nam trong noi
+# dung; tren tap validation cua eval/rag_dataset.json nhanh nay chi ho tro
+# top-1 o 4/36 cau co dap an, tuc "hybrid" thuc chat chi con semantic.
+# "terms" (thu nghiem, opt-in): bo hu tu / tu hoi tieng Viet (danh sach co dinh
+# ben duoi, lap theo ngu phap, KHONG hoc tu dataset), tim OR tren cac tu noi
+# dung con lai roi xep hang theo ty le tu khop (coverage >= KEYWORD_MIN_COVERAGE).
+# Ket qua 2026-10-08 (eval/reports/rag_*_C-terms067_test.md vs *_B-legacy_test.md):
+# tot hon tren validation (cov 0.67 chon tren val) nhung KHONG tot hon tren test
+# (them 1 false positive sach, Recall@1 giam 1 case) nen KHONG bat mac dinh -
+# nguong retrieval_confidence duoc hieu chinh cho phan bo tin hieu keyword cu.
+KEYWORD_MODE = os.getenv("RAG_KEYWORD_MODE", "all").strip().lower()
+KEYWORD_MIN_COVERAGE = float(os.getenv("RAG_KEYWORD_MIN_COVERAGE", "0.67"))
+
+# Hu tu, dai tu, tu hoi, tro tu va danh tu chung chi "sach" - da bo dau (sau
+# intent.normalize_text). Chon theo ngu phap tieng Viet, khong theo cau hoi eval.
+_KEYWORD_STOPWORDS = frozenset(
+    "a ai anh ban bao bi biet cac can chi cho chua co con cua cuon da dang dau "
+    "de den di do duoc gi giup ha hay hoac hoi khi khong la lam len ma minh mot muon "
+    "nao nay ne nhe nhieu nhu nhung o oi quyen ra roi sach sao se ta tai the thi "
+    "tim toi trong tu va vao ve vay voi xin".split()
+)
+_TERM_RE = re.compile(r"[a-z0-9]+")
+
+
+def keyword_terms(query: str) -> list[str]:
+    """Tu noi dung cua cau hoi, da bo dau, giu thu tu, khong trung lap."""
+    terms: list[str] = []
+    for token in _TERM_RE.findall(normalize_text(query or "")):
+        if len(token) >= 2 and token not in _KEYWORD_STOPWORDS and token not in terms:
+            terms.append(token)
+    return terms
+
+
+def keyword_coverage(terms: list[str], content: str) -> float:
+    """Ty le tu noi dung xuat hien NGUYEN TU trong content (khong phai substring:
+    "an" khong duoc khop vao "toan")."""
+    if not terms:
+        return 0.0
+    words = set(_TERM_RE.findall(normalize_text(content or "")))
+    return sum(1 for term in terms if term in words) / len(terms)
+
 
 @dataclass(frozen=True)
 class Chunk:
@@ -31,6 +78,18 @@ class Chunk:
     content_hash: str
     embedding: list[float]
     embedding_model: str
+
+
+@dataclass(frozen=True)
+class DocumentState:
+    """Mot document da luu cung hash cua tung chunk — du de catalog_sync.py
+    quyet dinh "khong doi, bo qua" ma khong can mot query rieng cho moi quyen."""
+    document_id: str
+    source_id: str
+    title: str | None
+    content_hash: str
+    metadata: dict
+    chunk_hashes: dict[int, str]
 
 
 @dataclass(frozen=True)
@@ -74,6 +133,19 @@ class VectorStore(Protocol):
         Dung khi khoi dong (truoc ingest) va boi reindex_embeddings.py, de
         khong vector nao cua model cu song sot ke ca voi tai lieu khong duoc
         ingest lai."""
+        ...
+
+    async def list_documents(self, corpus: str) -> dict[str, DocumentState]:
+        """source_id -> DocumentState cho moi document cua corpus."""
+        ...
+
+    async def delete_documents(self, corpus: str, source_ids: list[str]) -> int:
+        """Xoa document (va chunk cua no). Tra ve so document da xoa."""
+        ...
+
+    async def delete_chunks_from(self, document_id: str, start_index: int) -> int:
+        """Xoa chunk co chunk_index >= start_index: tai lieu ngan lai thi chunk
+        duoi cung khong duoc de lai lam ket qua tim kiem ma."""
         ...
 
 
@@ -152,6 +224,15 @@ class InMemoryVectorStore:
         self, corpus: str, query: str, k: int,
         source_ids: list[str] | None = None,
     ) -> list[Hit]:
+        if KEYWORD_MODE == "terms":
+            terms = keyword_terms(query)
+            scored = []
+            for doc, row in self._candidates(corpus, source_ids):
+                coverage = keyword_coverage(terms, row["content"])
+                if coverage > 0 and coverage >= KEYWORD_MIN_COVERAGE:
+                    scored.append(self._hit(doc, row, coverage))
+            scored.sort(key=lambda hit: (-hit.score, hit.source_id))
+            return scored[:k]
         tokens = [token for token in normalize_text(query).split() if len(token) >= 2]
         if not tokens:
             return []
@@ -172,6 +253,35 @@ class InMemoryVectorStore:
                 del rows[index]
             deleted += len(stale)
         return deleted
+
+    async def list_documents(self, corpus: str) -> dict[str, DocumentState]:
+        return {
+            doc["source_id"]: DocumentState(
+                document_id=doc["id"], source_id=doc["source_id"], title=doc["title"],
+                content_hash=doc["content_hash"], metadata=dict(doc["metadata"]),
+                chunk_hashes={
+                    index: row["content_hash"] for index, row in self._chunks.get(doc["id"], {}).items()
+                },
+            )
+            for (doc_corpus, _), doc in self._docs.items()
+            if doc_corpus == corpus
+        }
+
+    async def delete_documents(self, corpus: str, source_ids: list[str]) -> int:
+        deleted = 0
+        for source_id in source_ids:
+            doc = self._docs.pop((corpus, source_id), None)
+            if doc is not None:
+                self._chunks.pop(doc["id"], None)
+                deleted += 1
+        return deleted
+
+    async def delete_chunks_from(self, document_id: str, start_index: int) -> int:
+        rows = self._chunks.get(document_id, {})
+        stale = [index for index in rows if index >= start_index]
+        for index in stale:
+            del rows[index]
+        return len(stale)
 
 
 _store: VectorStore | None = None

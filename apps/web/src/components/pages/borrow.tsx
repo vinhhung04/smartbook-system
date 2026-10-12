@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/components/ui/utils';
-import { borrowService, type Customer, type Reservation, type Loan } from '@/services/borrow';
+import { borrowService, type Loan } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DUE_SOON_DAYS = 3;
 const WORKLIST_LIMIT = 8;
+const WORKLIST_FETCH = 30;
 
 type Tone = 'rose' | 'sky' | 'amber';
 
@@ -47,28 +48,42 @@ interface JourneyStep {
   metricLabel: string;
 }
 
+/** "494,4 tr" — the full amount does not fit a stat tile once it reaches hundreds of millions. */
+function formatCompactVnd(value: number) {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tỷ`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr`;
+  return value.toLocaleString('vi-VN');
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('vi-VN');
 }
 
 export function BorrowPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [loans, setLoans] = useState<Loan[]>([]);
+  const [loanCounts, setLoanCounts] = useState<Record<string, number>>({});
+  const [reservationCounts, setReservationCounts] = useState<Record<string, number>>({});
+  const [customerCounts, setCustomerCounts] = useState<Record<string, number>>({});
+  const [fineOutstanding, setFineOutstanding] = useState(0);
+  const [openLoans, setOpenLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Counts come from the server's per-status totals; the worklist is the loans still out,
+  // earliest due first (so the longest overdue lead).
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [customerResp, reservationResp, loanResp] = await Promise.all([
-        borrowService.getCustomers({ pageSize: 200 }),
-        borrowService.getReservations({ pageSize: 200 }),
-        borrowService.getLoans({ pageSize: 200 }),
+      const [loanResp, reservationResp, customerResp, fineResp] = await Promise.all([
+        borrowService.getLoans({ status: 'BORROWED,OVERDUE', sort: 'due_date', pageSize: WORKLIST_FETCH }),
+        borrowService.getReservations({ pageSize: 1 }),
+        borrowService.getCustomers({ pageSize: 1 }),
+        borrowService.getFines({ pageSize: 1, summary: 1 }),
       ]);
-      setCustomers(customerResp.data || []);
-      setReservations(reservationResp.data || []);
-      setLoans(loanResp.data || []);
+      setOpenLoans(loanResp.data || []);
+      setLoanCounts(loanResp.meta.status_counts ?? {});
+      setReservationCounts(reservationResp.meta.status_counts ?? {});
+      setCustomerCounts(customerResp.meta.status_counts ?? {});
+      setFineOutstanding(fineResp.meta.summary?.outstanding ?? 0);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Không tải được tổng quan mượn trả'));
     } finally {
@@ -82,17 +97,8 @@ export function BorrowPage() {
 
   const summary = useMemo(() => {
     const now = Date.now();
-    const activeCustomers = customers.filter((customer) => customer.status === 'ACTIVE').length;
-    const pendingReservations = reservations.filter((reservation) => reservation.status === 'PENDING').length;
-    const readyReservations = reservations.filter((reservation) => reservation.status === 'READY_FOR_PICKUP').length;
-    const activeLoans = loans.filter((loan) => loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED').length;
-    const totalFineBalance = customers.reduce((sum, customer) => sum + Number(customer.total_fine_balance || 0), 0);
-
-    // Worklist: what a librarian should chase today - late loans first (longest overdue on top),
-    // then loans falling due in the next few days.
     const worklist: WorklistItem[] = [];
-    for (const loan of loans) {
-      if (loan.status !== 'BORROWED' && loan.status !== 'OVERDUE') continue;
+    for (const loan of openLoans) {
       const due = new Date(loan.due_date).getTime();
       if (Number.isNaN(due)) continue;
       if (loan.status === 'OVERDUE' || due < now) {
@@ -103,32 +109,29 @@ export function BorrowPage() {
         worklist.push({ loan, overdue: false, days, label: days === 0 ? 'Đến hạn hôm nay' : `Còn ${days} ngày` });
       }
     }
-    worklist.sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
-      return a.overdue ? b.days - a.days : a.days - b.days;
-    });
 
     return {
-      activeCustomers,
-      pendingReservations,
-      readyReservations,
-      activeLoans,
-      totalFineBalance,
-      overdueCount: worklist.filter((item) => item.overdue).length,
+      activeCustomers: customerCounts.ACTIVE ?? 0,
+      pendingReservations: reservationCounts.PENDING ?? 0,
+      inProgressReservations: (reservationCounts.PENDING ?? 0) + (reservationCounts.CONFIRMED ?? 0) + (reservationCounts.READY_FOR_PICKUP ?? 0),
+      readyReservations: reservationCounts.READY_FOR_PICKUP ?? 0,
+      activeLoans: (loanCounts.BORROWED ?? 0) + (loanCounts.OVERDUE ?? 0) + (loanCounts.RESERVED ?? 0),
+      overdueCount: loanCounts.OVERDUE ?? 0,
+      totalFineBalance: fineOutstanding,
       worklist,
     };
-  }, [customers, reservations, loans]);
+  }, [openLoans, loanCounts, reservationCounts, customerCounts, fineOutstanding]);
 
   const tiles: AttentionTile[] = [
-    { to: '/borrow/loans', label: 'Quá hạn', hint: 'phiếu mượn cần thu hồi', value: summary.overdueCount, tone: 'rose' },
-    { to: '/borrow/reservations', label: 'Sẵn sàng lấy', hint: 'đặt trước chờ khách đến', value: summary.readyReservations, tone: 'sky' },
-    { to: '/borrow/reservations', label: 'Chờ xác nhận', hint: 'đặt trước chưa xử lý', value: summary.pendingReservations, tone: 'amber' },
+    { to: '/borrow/loans?tab=overdue', label: 'Quá hạn', hint: 'phiếu mượn cần thu hồi', value: summary.overdueCount, tone: 'rose' },
+    { to: '/borrow/reservations?tab=ready', label: 'Chờ khách lấy', hint: 'đặt trước chờ khách đến', value: summary.readyReservations, tone: 'sky' },
+    { to: '/borrow/reservations?tab=pending', label: 'Chờ xác nhận', hint: 'đặt trước chưa xử lý', value: summary.pendingReservations, tone: 'amber' },
     {
       to: '/borrow/fines',
       label: 'Dư nợ tiền phạt',
-      hint: 'VND chưa thu',
+      hint: `${summary.totalFineBalance.toLocaleString('vi-VN')} VND chưa thu`,
       value: summary.totalFineBalance,
-      display: summary.totalFineBalance.toLocaleString('vi-VN'),
+      display: formatCompactVnd(summary.totalFineBalance),
       tone: 'rose',
     },
   ];
@@ -147,7 +150,7 @@ export function BorrowPage() {
       icon: CalendarClock,
       label: 'Đặt trước',
       desc: 'Đặt, xác nhận và hủy theo tồn kho thực',
-      metric: loading ? '-' : summary.pendingReservations + summary.readyReservations,
+      metric: loading ? '-' : summary.inProgressReservations,
       metricLabel: 'đang xử lý',
     },
     {
@@ -163,13 +166,14 @@ export function BorrowPage() {
       icon: CircleAlert,
       label: 'Tiền phạt',
       desc: 'Ghi nhận thanh toán, miễn giảm',
-      metric: loading ? '-' : summary.totalFineBalance.toLocaleString('vi-VN'),
+      metric: loading ? '-' : formatCompactVnd(summary.totalFineBalance),
       metricLabel: 'VND dư nợ',
     },
   ];
 
   const visibleWork = summary.worklist.slice(0, WORKLIST_LIMIT);
-  const hiddenWork = summary.worklist.length - visibleWork.length;
+  // The worklist only holds the first few loans; the rest of the overdue total is linked.
+  const hiddenOverdue = Math.max(0, summary.overdueCount - visibleWork.filter((item) => item.overdue).length);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
@@ -285,9 +289,9 @@ export function BorrowPage() {
                 ))}
               </ul>
             )}
-            {hiddenWork > 0 ? (
+            {hiddenOverdue > 0 ? (
               <div className="border-t border-border px-5 py-3 text-[12px] text-muted-foreground">
-                và {hiddenWork} phiếu khác — <Link to="/borrow/loans" className="font-medium text-foreground underline-offset-2 hover:underline">xem tất cả phiếu mượn</Link>
+                và {hiddenOverdue.toLocaleString('vi-VN')} phiếu quá hạn khác — <Link to="/borrow/loans?tab=overdue" className="font-medium text-foreground underline-offset-2 hover:underline">xem danh sách quá hạn</Link>
               </div>
             ) : null}
           </SectionCard>

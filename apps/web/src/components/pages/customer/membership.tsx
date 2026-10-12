@@ -8,6 +8,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { QRCode } from '@/components/ui/qr-code';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { formatCurrencyVnd } from './_shared/customer-format';
+import { priceLabel, validityLabel } from '@/lib/membership-format';
+
+const dateFormat = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+
+function formatCardDate(value?: string | null) {
+  return value ? dateFormat.format(new Date(value)) : '—';
+}
 
 export function CustomerMembershipPage() {
   const [membership, setMembership] = useState<MembershipInfo | null>(null);
@@ -62,6 +69,8 @@ export function CustomerMembershipPage() {
   const cardNumber = membership.card_number || membership.membership_id || '—';
 
   const benefits = [
+    { label: 'Phí gói', value: membership.price == null ? '—' : priceLabel(membership.price) },
+    { label: 'Thời hạn thẻ', value: membership.duration_days ? validityLabel(membership.duration_days) : '—' },
     { label: 'Tối đa đang mượn', value: `${limits.max_active_loans} cuốn` },
     { label: 'Thời hạn mỗi lượt mượn', value: `${limits.max_loan_days} ngày` },
     { label: 'Gia hạn tối đa', value: `${limits.max_renewal_count} lần / phiếu` },
@@ -87,8 +96,11 @@ export function CustomerMembershipPage() {
                 <p className="flex items-center gap-1.5 text-[12px] font-medium text-white/70">
                   <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> SmartBook Library
                 </p>
-                <h2 className="mt-1 text-[22px] font-bold tracking-tight">{membership.plan_name || 'Gói tiêu chuẩn'}</h2>
+                <h2 className="mt-1 text-[22px] font-bold tracking-tight" data-testid="membership-plan-name">{membership.plan_name || '—'}</h2>
                 <p className="text-[12px] text-white/70">Mã gói: {membership.plan_code || '—'}</p>
+                <p className="mt-2 text-[12px] text-white/80" data-testid="membership-validity">
+                  Hiệu lực: {formatCardDate(membership.start_date)} – {membership.end_date ? formatCardDate(membership.end_date) : 'không thời hạn'}
+                </p>
               </div>
               <div className="rounded-xl bg-white p-2 shadow-sm">
                 <QRCode value={`SMARTBOOK:MEMBER:${membership.card_number || membership.membership_id}`} size={96} />
@@ -116,7 +128,7 @@ export function CustomerMembershipPage() {
         </section>
       </div>
 
-      <SectionCard title="Quyền lợi và chính sách" subtitle="Áp dụng theo gói hiện tại của bạn">
+      <SectionCard title="Quyền lợi và chính sách" subtitle={membership.plan_description || 'Áp dụng theo gói hiện tại của bạn'}>
         <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
           {benefits.map((item) => (
             <div key={item.label} className="flex items-baseline justify-between gap-3 border-b border-border py-3 last:border-0 sm:[&:nth-last-child(2)]:border-0">
@@ -126,8 +138,9 @@ export function CustomerMembershipPage() {
           ))}
         </dl>
         <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-          Hạn mức do gói hội viên quy định.{' '}
-          <NavLink to="/customer/support" className="font-medium underline">Liên hệ thư viện</NavLink> để nâng cấp gói hoặc thỏa thuận riêng.
+          Hạn mức do gói hội viên quy định. Đổi gói hoặc gia hạn thẻ do thủ thư thực hiện tại quầy (phí gói, nếu có, thanh toán tại quầy).{' '}
+          <NavLink to="/membership" className="font-medium underline">So sánh các gói</NavLink> ·{' '}
+          <NavLink to="/customer/support" className="font-medium underline">Liên hệ thư viện</NavLink>
         </p>
       </SectionCard>
     </div>

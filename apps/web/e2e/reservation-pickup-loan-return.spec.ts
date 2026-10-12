@@ -83,7 +83,9 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
     await staffPage.getByRole('alertdialog').getByRole('button', { name: 'Xác nhận' }).click();
 
     await expect(staffPage.getByText('Đã trả sách thành công')).toBeVisible({ timeout: 10_000 });
-    await expect(loanRow).toContainText('RETURNED', { timeout: 10_000 });
+    // The list opens on "Đang mượn"; a returned loan moves to the "Đã trả" tab.
+    await staffPage.getByRole('group', { name: 'Lọc theo tình trạng' }).getByRole('button', { name: /Đã trả/ }).click();
+    await expect(loanRow).toContainText('Đã trả', { timeout: 10_000 });
 
     test.info().annotations.push({ type: 'flow', description: `Book "${bookTitle}" — ${reservationNumber} -> ${loanNumber}` });
   } finally {

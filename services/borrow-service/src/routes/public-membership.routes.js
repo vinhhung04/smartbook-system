@@ -1,6 +1,6 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma');
-const { findDefaultMembershipPlan, DEFAULT_MEMBERSHIP_DURATION_DAYS } = require('../services/membership.service');
+const { findDefaultMembershipPlan } = require('../services/membership.service');
 
 // Anonymous, read-only membership plans for the public /membership page. GET
 // only; creating and editing plans stays on /borrow/membership-plans (staff).
@@ -14,6 +14,8 @@ const PUBLIC_PLAN_SELECT = {
   max_renewal_count: true,
   reservation_hold_hours: true,
   fine_per_day: true,
+  price: true,
+  duration_days: true,
 };
 
 function toPublicPlan(plan, defaultPlanId) {
@@ -26,6 +28,8 @@ function toPublicPlan(plan, defaultPlanId) {
     max_renewal_count: plan.max_renewal_count,
     reservation_hold_hours: plan.reservation_hold_hours,
     fine_per_day: Number(plan.fine_per_day),
+    price: Number(plan.price),
+    duration_days: plan.duration_days,
     // Business rule, not marketing: the plan a newly created account receives.
     is_default: plan.id === defaultPlanId,
   };
@@ -38,12 +42,12 @@ async function listPublicPlans(client) {
       select: PUBLIC_PLAN_SELECT,
       orderBy: [{ max_active_loans: 'asc' }, { max_loan_days: 'asc' }, { name: 'asc' }],
     }),
-    findDefaultMembershipPlan(client, { id: true }),
+    findDefaultMembershipPlan(client, { id: true, duration_days: true }),
   ]);
   return {
     data: plans.map((plan) => toPublicPlan(plan, defaultPlan?.id || null)),
-    // How long a card issued at sign-up stays valid (customer provisioning).
-    card_validity_days: DEFAULT_MEMBERSHIP_DURATION_DAYS,
+    // How long the card issued at sign-up stays valid: the default plan's duration.
+    card_validity_days: defaultPlan?.duration_days ?? null,
   };
 }
 

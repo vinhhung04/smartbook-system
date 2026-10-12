@@ -23,7 +23,7 @@ from socket_emitter import push_ai_action_event
 logger = logging.getLogger("uvicorn.error")
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
-INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "smartbook_internal_key").strip()
+INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
 NIGHTLY_BRIEFING_TIMEOUT_SECONDS = float(os.getenv("NIGHTLY_BRIEFING_TIMEOUT_SECONDS", "15"))
 # Deliberately NOT reusing _chat_with_text_llm's own timeout (CHAT_LLM_TIMEOUT_SECONDS,
 # 12s default) — that's tuned for a live chat UI where a person is waiting. Nobody is

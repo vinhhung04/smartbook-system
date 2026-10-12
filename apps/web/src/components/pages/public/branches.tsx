@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, MapPin } from 'lucide-react';
+import { ArrowRight, Clock, MapPin, Phone } from 'lucide-react';
 import { publicCatalogService, type PublicBranch } from '@/services/public-catalog';
 import { usePageMeta } from '@/lib/page-meta';
 import { branchBooksUrl } from '@/lib/branch-links';
@@ -23,6 +23,18 @@ function BranchCard({ branch }: { branch: PublicBranch }) {
         <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {branch.address ? <span>{branch.address}</span> : <span className="text-muted-foreground">Địa chỉ đang được cập nhật</span>}
       </p>
+      {branch.opening_hours ? (
+        <p className="mt-1.5 flex gap-2 text-[13px] leading-relaxed text-foreground/80">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span><span className="sr-only">Giờ mở cửa: </span>{branch.opening_hours}</span>
+        </p>
+      ) : null}
+      {branch.phone ? (
+        <p className="mt-1.5 flex gap-2 text-[13px] text-foreground/80">
+          <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <a href={`tel:${branch.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">{branch.phone}</a>
+        </p>
+      ) : null}
 
       {stats.title_count > 0 ? (
         <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border pt-4">

@@ -70,7 +70,7 @@ export function CustomerWishlistPage() {
         setAlerts((prev) => new Set(prev).add(bookId));
         toast.success('Sẽ thông báo khi sách có hàng');
       }
-    } catch { toast.error('Thao tác thất bại'); }
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Thao tác thất bại')); }
   };
 
   return (

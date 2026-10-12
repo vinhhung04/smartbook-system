@@ -998,6 +998,11 @@ model warehouses {
   district                                                      String?              @db.VarChar(120)
   province                                                      String?              @db.VarChar(120)
   country                                                       String               @default("Vietnam") @db.VarChar(120)
+  // Reader-facing contact details, shown on the public branch page (BRANCH/LIBRARY).
+  phone                                                         String?              @db.VarChar(30)
+  email                                                         String?              @db.VarChar(255)
+  opening_hours                                                 String?              @db.VarChar(255)
+  description                                                   String?
   manager_user_id                                               String?              @db.Uuid
   is_active                                                     Boolean              @default(true)
   created_at                                                    DateTime             @default(now()) @db.Timestamptz(6)

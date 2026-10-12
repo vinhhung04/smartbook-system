@@ -1,46 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
-import { motion } from 'motion/react';
-import { AlertTriangle, BookOpen, BookX, CheckCircle2, Loader2, RefreshCw, Plus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { AlertTriangle, BookOpen, BookX, CalendarPlus, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageWrapper, FadeItem } from '../motion-utils';
 import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
 import { Button } from '@/components/ui/button';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
-import { getPaginationRange } from '@/lib/pagination';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/components/ui/utils';
-import { getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Loan, type LoanStatus, type RenewalRequest, type WarehouseLookupItem } from '@/services/borrow';
-import { bookService } from '@/services/book';
+import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
+import { borrowService, type Loan, type LoanStatus, type RenewalRequest } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { useDialogA11y } from '@/hooks/useDialogA11y';
-
-const statuses: LoanStatus[] = ['RESERVED', 'BORROWED', 'RETURNED', 'OVERDUE', 'LOST', 'CANCELLED'];
+import { StageTabs, type StageTab } from './borrow-shared/stage-tabs';
+import { ListFooter } from './borrow-shared/list-footer';
+import { BorrowFormDialog } from './borrow-shared/borrow-form-dialog';
+import { sumCounts, useServerList } from './borrow-shared/use-server-list';
+import { useBookTitles } from './borrow-shared/use-book-titles';
 
 const PAGE_SIZE = 20;
-// Backend caps pageSize at 100 (see loan.controller.js parsePagination) — fetch the max in
-// one request instead of the previous unparameterized call, which silently capped at 20 loans.
-const FETCH_PAGE_SIZE = 100;
+
+// "Đang mượn" (incl. overdue) is the working list, so it is the default; history and
+// problem loans are one click away. "Tất cả" also covers rare statuses (RESERVED, CANCELLED).
+const TABS = [
+  { key: 'active', label: 'Đang mượn', statuses: ['BORROWED', 'OVERDUE'] },
+  { key: 'overdue', label: 'Quá hạn', statuses: ['OVERDUE'], attention: true },
+  { key: 'returned', label: 'Đã trả', statuses: ['RETURNED', 'RETURNED_LATE'] },
+  { key: 'problem', label: 'Mất / hư hỏng', statuses: ['LOST', 'DAMAGED'] },
+  { key: 'all', label: 'Tất cả', statuses: [], separated: true },
+] as const satisfies readonly { key: string; label: string; statuses: readonly LoanStatus[]; attention?: boolean; separated?: boolean }[];
+
+type TabKey = (typeof TABS)[number]['key'];
 
 const ACTIVE_LOAN_STATUSES: LoanStatus[] = ['BORROWED', 'OVERDUE', 'RESERVED'];
 const ICON_BUTTON_CLASS = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
@@ -63,36 +56,32 @@ const DUE_TONE_CLASS = {
   muted: 'text-muted-foreground',
 } as const;
 
-const STATUS_LABELS: Record<string, string> = {
-  ALL: 'Tất cả',
-  RESERVED: 'Đã đặt trước',
-  BORROWED: 'Đang mượn',
-  RETURNED: 'Đã trả',
-  OVERDUE: 'Quá hạn',
-  LOST: 'Mất sách',
-  CANCELLED: 'Đã hủy',
-};
+function isTabKey(value: string | null): value is TabKey {
+  return TABS.some((tab) => tab.key === value);
+}
 
 export function BorrowLoansPage() {
-  const [loans, setLoans] = useState<Loan[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: TabKey = isTabKey(tabParam) ? tabParam : 'active';
+  const activeTab = TABS.find((item) => item.key === tab) ?? TABS[0];
+
+  const list = useServerList(borrowService.getLoans, {
+    pageSize: PAGE_SIZE,
+    errorMessage: 'Không tải được danh sách phiếu mượn',
+    params: {
+      ...(activeTab.statuses.length ? { status: activeTab.statuses.join(',') } : {}),
+      // Loans still out: earliest due first, so the longest-overdue are on top.
+      ...(tab === 'active' || tab === 'overdue' ? { sort: 'due_date' } : {}),
+    },
+  });
+  const bookTitle = useBookTitles();
+
   const [renewalRequests, setRenewalRequests] = useState<RenewalRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | LoanStatus>('ALL');
-  const [page, setPage] = useState(1);
   const [renewalDialog, setRenewalDialog] = useState<{ request: RenewalRequest; decision: 'APPROVE' | 'REJECT' } | null>(null);
   const [renewalReason, setRenewalReason] = useState('');
   const [submittingRenewal, setSubmittingRenewal] = useState(false);
-  const [showDirectLoan, setShowDirectLoan] = useState(false);
-  const directLoanModalRef = useRef<HTMLDivElement>(null);
-  const closeDirectLoan = () => setShowDirectLoan(false);
-  useDialogA11y(showDirectLoan, closeDirectLoan, directLoanModalRef);
-  const [dlCustomers, setDlCustomers] = useState<any[]>([]);
-  const [dlBooks, setDlBooks] = useState<any[]>([]);
-  const [dlWarehouses, setDlWarehouses] = useState<WarehouseLookupItem[]>([]);
-  const [dlForm, setDlForm] = useState({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] as { variant_id: string; quantity: number }[] });
-  const [dlSaving, setDlSaving] = useState(false);
-  const [dlBookSearch, setDlBookSearch] = useState('');
+  const [directLoanOpen, setDirectLoanOpen] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     open: boolean;
     title: string;
@@ -101,46 +90,39 @@ export function BorrowLoansPage() {
     onConfirm: () => Promise<void>;
   }>({ open: false, title: '', variant: 'default', onConfirm: async () => {} });
 
-  const loadLoans = async () => {
+  const loadRenewals = async () => {
     try {
-      setLoading(true);
-      const [response, renewals] = await Promise.all([
-        borrowService.getLoans({ pageSize: FETCH_PAGE_SIZE }),
-        borrowService.getRenewalRequests({ status: 'PENDING', pageSize: 20 }),
-      ]);
-      setLoans(response.data ?? []);
+      const renewals = await borrowService.getRenewalRequests({ status: 'PENDING', pageSize: 20 });
       setRenewalRequests(renewals.data ?? []);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Không tải được danh sách phiếu mượn'));
-    } finally {
-      setLoading(false);
+      toast.error(getApiErrorMessage(error, 'Không tải được yêu cầu gia hạn'));
     }
   };
 
   useEffect(() => {
-    void loadLoans();
+    void loadRenewals();
   }, []);
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, statusFilter]);
+  const refresh = async () => {
+    await Promise.all([list.reload(), loadRenewals()]);
+  };
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return loans.filter((loan) => {
-      if (statusFilter !== 'ALL' && loan.status !== statusFilter) return false;
-      if (!keyword) return true;
-      return (
-        loan.loan_number.toLowerCase().includes(keyword)
-        || loan.customers?.full_name?.toLowerCase().includes(keyword)
-        || loan.customer_id.toLowerCase().includes(keyword)
-      );
-    });
-  }, [loans, query, statusFilter]);
+  const counts = list.meta.status_counts;
+  const tabs: StageTab<TabKey>[] = TABS.map((item) => ({
+    key: item.key,
+    label: item.label,
+    count: item.statuses.length ? sumCounts(counts, item.statuses) : sumCounts(counts, Object.keys(counts ?? {})),
+    attention: 'attention' in item ? item.attention : undefined,
+    separated: 'separated' in item ? item.separated : undefined,
+  }));
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const selectTab = (key: TabKey) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (key === 'active') next.delete('tab'); else next.set('tab', key);
+      return next;
+    }, { replace: true });
+  };
 
   const openConfirm = (title: string, description: string, variant: 'default' | 'destructive', action: () => Promise<void>) => {
     setConfirmState({ open: true, title, description, variant, onConfirm: action });
@@ -156,7 +138,7 @@ export function BorrowLoansPage() {
           await borrowService.returnLoan(loanId, {});
           toast.success('Đã trả sách thành công');
           setConfirmState((s) => ({ ...s, open: false }));
-          await loadLoans();
+          await list.reload();
         } catch (error) {
           toast.error(getApiErrorMessage(error, 'Trả sách thất bại'));
         }
@@ -174,7 +156,7 @@ export function BorrowLoansPage() {
           await borrowService.returnLoan(loanId, { item_condition_on_return: 'DAMAGED' });
           toast.success('Đã xử lý trả sách hư hỏng');
           setConfirmState((s) => ({ ...s, open: false }));
-          await loadLoans();
+          await list.reload();
         } catch (error) {
           toast.error(getApiErrorMessage(error, 'Báo hư hỏng thất bại'));
         }
@@ -198,49 +180,12 @@ export function BorrowLoansPage() {
           await borrowService.returnLoan(loanId, { loan_item_id: activeItem.id, mark_lost: true, item_condition_on_return: 'LOST' });
           toast.success('Đã xử lý sách mất');
           setConfirmState((s) => ({ ...s, open: false }));
-          await loadLoans();
+          await list.reload();
         } catch (error) {
           toast.error(getApiErrorMessage(error, 'Đánh dấu mất thất bại'));
         }
       },
     );
-  };
-
-  const openDirectLoanModal = async () => {
-    setShowDirectLoan(true);
-    setDlForm({ customer_id: '', warehouse_id: '', items: [{ variant_id: '', quantity: 1 }] });
-    try {
-      const [custRes, bookRes, warehouseRes] = await Promise.all([
-        borrowService.getCustomers(),
-        bookService.getAll({ page: 1, pageSize: 200 }),
-        borrowService.searchWarehouses({ limit: 20 }),
-      ]);
-      setDlCustomers(custRes.data ?? []);
-      setDlBooks(Array.isArray(bookRes) ? bookRes : bookRes?.data ?? []);
-      setDlWarehouses(warehouseRes.data ?? []);
-    } catch { /* ignore */ }
-  };
-
-  const submitDirectLoan = async () => {
-    if (!dlForm.customer_id) { toast.error('Vui lòng chọn khách hàng'); return; }
-    if (!dlForm.warehouse_id) { toast.error('Vui lòng chọn kho'); return; }
-    const validItems = dlForm.items.filter((i) => i.variant_id);
-    if (validItems.length === 0) { toast.error('Vui lòng thêm ít nhất một sách'); return; }
-    try {
-      setDlSaving(true);
-      await Promise.all(validItems.map((item) => borrowService.createDirectLoan({
-        customer_id: dlForm.customer_id,
-        variant_id: item.variant_id,
-        warehouse_id: dlForm.warehouse_id,
-        quantity: item.quantity,
-        source_channel: 'COUNTER',
-      })));
-      toast.success('Đã tạo phiếu mượn trực tiếp');
-      setShowDirectLoan(false);
-      await loadLoans();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Tạo phiếu mượn thất bại'));
-    } finally { setDlSaving(false); }
   };
 
   const openRenewalDialog = (request: RenewalRequest, decision: 'APPROVE' | 'REJECT') => {
@@ -258,7 +203,7 @@ export function BorrowLoansPage() {
       });
       toast.success(renewalDialog.decision === 'APPROVE' ? 'Đã duyệt gia hạn' : 'Đã từ chối gia hạn');
       setRenewalDialog(null);
-      await loadLoans();
+      await refresh();
     } catch (error) {
       toast.error(getApiErrorMessage(error, renewalDialog.decision === 'APPROVE' ? 'Duyệt gia hạn thất bại' : 'Từ chối gia hạn thất bại'));
     } finally {
@@ -266,93 +211,61 @@ export function BorrowLoansPage() {
     }
   };
 
+  /** "Tên sách" or "Tên sách + 2 cuốn khác" for the books on a loan. */
+  const booksLine = (loan: Loan) => {
+    const items = loan.loan_items ?? [];
+    if (items.length === 0) return `${loan.total_items} cuốn`;
+    const first = bookTitle(items[0].variant_id);
+    return items.length > 1 ? `${first} + ${items.length - 1} cuốn khác` : first;
+  };
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-      >
+    <PageWrapper className="space-y-5">
+      <FadeItem>
         <PageHeader
           icon={BookOpen}
           title="Phiếu mượn sách"
-          description={`${loans.length} phiếu mượn`}
+          description="Theo dõi sách đang cho mượn, thu hồi phiếu quá hạn và xử lý trả sách"
           iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 border border-blue-200/40 shadow-sm dark:from-blue-500/15 dark:to-indigo-500/10 dark:border-blue-500/20"
           iconColor="text-blue-600 dark:text-blue-400"
           actions={
             <>
-              <Button size="sm" onClick={() => void openDirectLoanModal()} className="gap-2">
-                <Plus className="w-4 h-4" /> Mượn trực tiếp
+              <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={list.loading} className="gap-2">
+                <RefreshCw className={cn('h-4 w-4', list.loading && 'animate-spin')} /> Làm mới
               </Button>
-              <Button variant="outline" size="sm" onClick={() => void loadLoans()} className="gap-2">
-                <RefreshCw className="w-4 h-4" /> Làm mới
+              <Button size="sm" onClick={() => setDirectLoanOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" /> Mượn trực tiếp
               </Button>
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
-      >
-        <FilterBar
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Tìm phiếu mượn..."
-          filters={
-            <div className="max-w-full overflow-x-auto">
-              <SegmentedControl
-                layoutId="loan-filter"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={(['ALL', ...statuses] as const).map((status) => ({
-                  value: status,
-                  label: `${STATUS_LABELS[status] ?? status} (${status === 'ALL' ? loans.length : loans.filter((item) => item.status === status).length})`,
-                }))}
-                className="w-max"
-              />
-            </div>
-          }
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.15, ease: 'easeOut' }}
-      >
-        <SectionCard
-          title="Yêu cầu gia hạn đang chờ"
-          subtitle={`${renewalRequests.length} yêu cầu`}
-          className="border-l-4 border-l-amber-400"
-        >
-          {renewalRequests.length === 0 ? (
-            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
-              Không có yêu cầu gia hạn nào đang chờ.
-            </p>
-          ) : (
+      {renewalRequests.length > 0 && (
+        <FadeItem>
+          <SectionCard
+            title="Yêu cầu gia hạn đang chờ"
+            subtitle={`${renewalRequests.length} yêu cầu cần duyệt`}
+            className="border-l-4 border-l-amber-400"
+          >
             <div className="space-y-3">
               {renewalRequests.map((request) => (
                 <div key={request.request_id} className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {request.loan?.loan_number || request.loan?.id || 'Phiếu không xác định'} - {request.customer?.full_name || request.customer?.customer_code || 'Khách hàng không xác định'}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Gia hạn thêm {request.requested_extension_days ?? '-'} ngày · yêu cầu lúc {new Date(request.requested_at).toLocaleString('vi-VN')}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <CalendarPlus className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {request.customer?.full_name || request.customer?.customer_code || 'Khách hàng'} · {request.loan?.loan_number || 'Phiếu không xác định'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Xin gia hạn thêm {request.requested_extension_days ?? '-'} ngày · gửi lúc {new Date(request.requested_at).toLocaleString('vi-VN')}
+                      </p>
+                    </div>
                   </div>
                   {request.loan?.id ? (
                     <div className="flex shrink-0 items-center gap-2">
-                      <Button size="sm" variant="success-outline" onClick={() => openRenewalDialog(request, 'APPROVE')}>
-                        Duyệt
-                      </Button>
-                      <Button size="sm" variant="danger-outline" onClick={() => openRenewalDialog(request, 'REJECT')}>
-                        Từ chối
-                      </Button>
+                      <Button size="sm" variant="success-outline" onClick={() => openRenewalDialog(request, 'APPROVE')}>Duyệt</Button>
+                      <Button size="sm" variant="danger-outline" onClick={() => openRenewalDialog(request, 'REJECT')}>Từ chối</Button>
                     </div>
                   ) : (
                     <span className="shrink-0 text-xs text-muted-foreground">Tham chiếu phiếu mượn không hợp lệ</span>
@@ -360,94 +273,103 @@ export function BorrowLoansPage() {
                 </div>
               ))}
             </div>
-          )}
-        </SectionCard>
-      </motion.div>
+          </SectionCard>
+        </FadeItem>
+      )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
-      >
+      <FadeItem>
+        <div className="rounded-xl border border-border bg-card">
+          <StageTabs label="Lọc theo tình trạng" tabs={tabs} value={tab} onChange={selectTab} loading={list.loading && !counts} />
+          <div className="border-t border-border px-4 py-3">
+            <FilterBar
+              searchValue={list.search}
+              onSearchChange={list.setSearch}
+              searchPlaceholder="Tìm phiếu mượn..."
+              showSearchClear
+            />
+          </div>
+        </div>
+      </FadeItem>
+
+      <FadeItem>
         <SectionCard noPadding>
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  {[
-                    { label: 'Phiếu mượn', className: '' },
-                    { label: 'Hạn trả', className: 'hidden w-[190px] md:table-cell' },
-                    { label: 'Trạng thái', className: 'hidden w-[140px] sm:table-cell' },
-                    { label: 'Thao tác', className: 'w-[190px] text-right' },
-                  ].map((header) => (
-                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
-                      {header.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <SkeletonTableRow columns={4} rows={5} />
-                ) : paged.length === 0 ? (
-                  <tr>
-                    <td colSpan={4}>
-                      <EmptyState
-                        variant="no-results"
-                        title="Không tìm thấy phiếu mượn"
-                        description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
-                        className="py-12"
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  paged.map((loan, index) => {
-                    const due = dueInfo(loan);
-                    const isActive = ACTIVE_LOAN_STATUSES.includes(loan.status);
-                    return (
-                    <motion.tr
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                {[
+                  { label: 'Phiếu mượn', className: '' },
+                  { label: 'Sách', className: 'hidden w-[28%] xl:table-cell' },
+                  { label: 'Hạn trả', className: 'hidden w-[170px] lg:table-cell' },
+                  { label: 'Trạng thái', className: 'hidden w-[150px] md:table-cell' },
+                  { label: 'Thao tác', className: 'w-[190px] text-right' },
+                ].map((header) => (
+                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                    {header.label}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.loading && list.rows.length === 0 ? (
+                <SkeletonTableRow columns={5} rows={5} />
+              ) : list.rows.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="whitespace-normal">
+                    <EmptyState
+                      variant={list.search ? 'no-results' : 'no-data'}
+                      title={list.search ? 'Không tìm thấy phiếu mượn' : `Không có phiếu nào ở mục "${activeTab.label}"`}
+                      description={list.search ? 'Thử tìm theo mã phiếu, tên hoặc mã khách hàng.' : 'Phiếu mượn mới sẽ xuất hiện ở đây.'}
+                      className="py-12"
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                list.rows.map((loan) => {
+                  const due = dueInfo(loan);
+                  const isActive = ACTIVE_LOAN_STATUSES.includes(loan.status);
+                  const badge = <StatusBadge label={getBorrowLabel('loan', loan.status)} variant={getStatusVariant('loan', loan.status)} dot />;
+                  return (
+                    <TableRow
                       key={loan.id}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: Math.min(index, 10) * 0.02 }}
                       className={cn(
-                        'border-b border-border last:border-0 hover:bg-muted/30 transition-colors',
+                        'hover:bg-muted/30',
                         loan.status === 'OVERDUE' && 'bg-rose-50/40 dark:bg-rose-500/[0.04]',
+                        list.loading && 'opacity-60',
                       )}
                     >
-                      <td className="px-4 py-3">
+                      <TableCell className="px-4 py-3">
                         <Link to={`/borrow/loans/${loan.id}`} className="block truncate text-sm font-semibold text-primary hover:underline">
                           {loan.loan_number}
                         </Link>
-                        <p className="truncate text-xs text-muted-foreground" title={loan.customers?.full_name || loan.customer_id}>
-                          {loan.customers?.full_name || loan.customer_id}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {loan.total_items} cuốn · mượn {new Date(loan.borrow_date).toLocaleDateString('vi-VN')}
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                          <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                        <p className="truncate text-xs text-muted-foreground">{loan.customers?.full_name || 'Khách hàng'}</p>
+                        <p className="truncate text-xs text-muted-foreground xl:hidden">{booksLine(loan)}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 lg:hidden">
+                          <span className="md:hidden">{badge}</span>
                           {due ? <span className={cn('text-xs', DUE_TONE_CLASS[due.tone])}>{due.text}</span> : null}
                         </div>
-                      </td>
-                      <td className="hidden px-4 py-3 md:table-cell">
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 xl:table-cell">
+                        <p className="line-clamp-2 whitespace-normal text-sm">{booksLine(loan)}</p>
+                        <p className="text-xs text-muted-foreground">mượn {new Date(loan.borrow_date).toLocaleDateString('vi-VN')}</p>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 lg:table-cell">
                         {due ? <p className={cn('text-sm', DUE_TONE_CLASS[due.tone])}>{due.text}</p> : null}
-                        <p className="text-xs text-muted-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</p>
-                      </td>
-                      <td className="hidden px-4 py-3 sm:table-cell">
-                        <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
-                      </td>
-                      <td className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">
+                          {loan.closed_at ? `trả ${new Date(loan.closed_at).toLocaleDateString('vi-VN')}` : `hạn ${new Date(loan.due_date).toLocaleDateString('vi-VN')}`}
+                        </p>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 md:table-cell">{badge}</TableCell>
+                      <TableCell className="px-4 py-3">
                         {isActive ? (
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button size="sm" variant="success-outline" onClick={() => void returnLoan(loan.id)}>
+                            <Button size="sm" variant="success-outline" onClick={() => returnLoan(loan.id)}>
                               Trả sách
                             </Button>
                             <button
                               type="button"
                               aria-label={`Báo hư hỏng phiếu ${loan.loan_number}`}
                               title="Báo hư hỏng"
-                              onClick={() => void reportDamage(loan.id)}
+                              onClick={() => reportDamage(loan.id)}
                               className={cn(ICON_BUTTON_CLASS, 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20')}
                             >
                               <AlertTriangle className="h-3.5 w-3.5" />
@@ -456,7 +378,7 @@ export function BorrowLoansPage() {
                               type="button"
                               aria-label={`Đánh dấu mất phiếu ${loan.loan_number}`}
                               title="Đánh dấu mất"
-                              onClick={() => void markLost(loan.id)}
+                              onClick={() => markLost(loan.id)}
                               className={cn(ICON_BUTTON_CLASS, 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20')}
                             >
                               <BookX className="h-3.5 w-3.5" />
@@ -465,125 +387,31 @@ export function BorrowLoansPage() {
                         ) : (
                           <span className="block text-right text-xs text-muted-foreground">-</span>
                         )}
-                      </td>
-                    </motion.tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {!loading && filtered.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-muted-foreground">
-                Hiển thị <span className="font-medium text-foreground">{paged.length}</span> / {filtered.length} phiếu mượn
-              </p>
-              {totalPages > 1 && (
-                <Pagination className="mx-0 w-auto justify-end">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setPage((current) => Math.max(1, current - 1));
-                        }}
-                        className={cn('cursor-pointer', currentPage === 1 && 'pointer-events-none opacity-50')}
-                      />
-                    </PaginationItem>
-                    {getPaginationRange(currentPage, totalPages).map((item, i) => (
-                      <PaginationItem key={typeof item === 'number' ? item : `${item}-${i}`}>
-                        {typeof item === 'number' ? (
-                          <PaginationLink
-                            isActive={item === currentPage}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage(item);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            {item}
-                          </PaginationLink>
-                        ) : (
-                          <PaginationEllipsis />
-                        )}
-                      </PaginationItem>
-                    ))}
-                    <PaginationItem>
-                      <PaginationNext
-                        onClick={(event) => {
-                          event.preventDefault();
-                          setPage((current) => Math.min(totalPages, current + 1));
-                        }}
-                        className={cn('cursor-pointer', currentPage === totalPages && 'pointer-events-none opacity-50')}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
-            </div>
-          )}
+            </TableBody>
+          </Table>
+          <ListFooter
+            page={list.page}
+            pageSize={PAGE_SIZE}
+            total={list.meta.total}
+            totalPages={list.meta.totalPages}
+            shown={list.rows.length}
+            noun="phiếu mượn"
+            onPageChange={list.setPage}
+          />
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
-      {showDirectLoan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="direct-loan-modal-title">
-          <motion.div ref={directLoanModalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 id="direct-loan-modal-title" className="text-[16px] font-semibold">Tạo phiếu mượn trực tiếp</h3>
-              <button onClick={() => setShowDirectLoan(false)} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Khách hàng</label>
-                <select value={dlForm.customer_id} onChange={(e) => setDlForm({ ...dlForm, customer_id: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
-                  <option value="">Chọn khách hàng...</option>
-                  {dlCustomers.map((c: any) => <option key={c.id} value={c.id}>{c.full_name} ({c.customer_code})</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Kho</label>
-                <select value={dlForm.warehouse_id} onChange={(e) => setDlForm({ ...dlForm, warehouse_id: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
-                  <option value="">Chọn kho...</option>
-                  {dlWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name} ({warehouse.code})</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Sách</label>
-                <input value={dlBookSearch} onChange={(e) => { setDlBookSearch(e.target.value); bookService.getAll({ search: e.target.value, page: 1, pageSize: 50 }).then((res: any) => setDlBooks(Array.isArray(res) ? res : res?.data ?? [])).catch(() => {}); }}
-                  placeholder="Tìm sách..." className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 mb-2" />
-                {dlForm.items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 mb-2">
-                    <select value={item.variant_id} onChange={(e) => { const items = [...dlForm.items]; items[idx].variant_id = e.target.value; setDlForm({ ...dlForm, items }); }}
-                      className="flex-1 h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20">
-                      <option value="">Chọn biến thể sách...</option>
-                      {dlBooks.map((b: any) => (b.variants || []).map((v: any) => <option key={v.id} value={v.id}>{b.title} - {v.format || v.isbn13 || v.id.slice(0, 8)}</option>))}
-                    </select>
-                    <input type="number" value={item.quantity} min={1} max={5} onChange={(e) => { const items = [...dlForm.items]; items[idx].quantity = Number(e.target.value) || 1; setDlForm({ ...dlForm, items }); }}
-                      className="w-16 h-9 px-2 rounded-lg border border-input bg-background text-[13px] text-center" />
-                    {dlForm.items.length > 1 && (
-                      <button onClick={() => { const items = dlForm.items.filter((_, i) => i !== idx); setDlForm({ ...dlForm, items }); }}
-                        aria-label="Xóa sách" className="h-9 px-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:text-red-400 dark:hover:bg-red-500/10"><X className="w-3.5 h-3.5" /></button>
-                    )}
-                  </div>
-                ))}
-                <button onClick={() => setDlForm({ ...dlForm, items: [...dlForm.items, { variant_id: '', quantity: 1 }] })}
-                  className="text-[12px] text-indigo-600 dark:text-indigo-400 hover:underline">+ Thêm sách khác</button>
-              </div>
-            </div>
-            <div className="mt-5 flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setShowDirectLoan(false)}>Hủy</Button>
-              <Button className="flex-1" onClick={() => void submitDirectLoan()} disabled={dlSaving}>
-                {dlSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
-                {dlSaving ? 'Đang tạo...' : 'Tạo phiếu mượn'}
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <BorrowFormDialog
+        open={directLoanOpen}
+        mode="DIRECT_LOAN"
+        onOpenChange={setDirectLoanOpen}
+        onCreated={() => void list.reload()}
+      />
 
       <ConfirmDialog
         open={confirmState.open}
@@ -594,15 +422,12 @@ export function BorrowLoansPage() {
         onConfirm={confirmState.onConfirm}
       />
 
-      {/* Duyệt/từ chối gia hạn — thay cho window.prompt() trước đây */}
       <Dialog open={renewalDialog !== null} onOpenChange={(open) => !open && setRenewalDialog(null)}>
         <DialogContent className="sm:max-w-sm">
           {renewalDialog && (
             <>
               <DialogHeader>
-                <DialogTitle>
-                  {renewalDialog.decision === 'APPROVE' ? 'Duyệt gia hạn' : 'Từ chối gia hạn'}
-                </DialogTitle>
+                <DialogTitle>{renewalDialog.decision === 'APPROVE' ? 'Duyệt gia hạn' : 'Từ chối gia hạn'}</DialogTitle>
                 <DialogDescription>
                   {renewalDialog.request.loan?.loan_number || renewalDialog.request.loan?.id} ·{' '}
                   {renewalDialog.request.customer?.full_name || renewalDialog.request.customer?.customer_code}
@@ -618,9 +443,7 @@ export function BorrowLoansPage() {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setRenewalDialog(null)} disabled={submittingRenewal}>
-                  Huỷ
-                </Button>
+                <Button variant="outline" onClick={() => setRenewalDialog(null)} disabled={submittingRenewal}>Huỷ</Button>
                 <Button
                   variant={renewalDialog.decision === 'APPROVE' ? 'success-outline' : 'danger-outline'}
                   loading={submittingRenewal}
@@ -633,6 +456,6 @@ export function BorrowLoansPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageWrapper>
   );
 }

@@ -7,7 +7,7 @@ import { StatusBadge } from '../status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { getStatusVariant } from '@/lib/status-registry';
+import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
@@ -187,7 +187,7 @@ export function BorrowLoanDetailPage() {
               <div>
                 <p className="text-[11px] text-muted-foreground">Trạng thái</p>
                 <div data-testid="loan-status-badge">
-                  <StatusBadge label={loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                  <StatusBadge label={getBorrowLabel('loan', loan.status)} variant={getStatusVariant('loan', loan.status)} dot />
                 </div>
               </div>
               <div>
@@ -242,7 +242,7 @@ export function BorrowLoanDetailPage() {
                       <td className="px-4 py-3 text-[12px] text-muted-foreground">{new Date(item.due_date).toLocaleString('vi-VN')}</td>
                       <td className="px-4 py-3 text-[12px] text-muted-foreground">{item.return_date ? new Date(item.return_date).toLocaleString('vi-VN') : '-'}</td>
                       <td className="px-4 py-3">
-                        <StatusBadge label={item.status} variant={getStatusVariant('loan', item.status)} dot />
+                        <StatusBadge label={getBorrowLabel('loan', item.status)} variant={getStatusVariant('loan', item.status)} dot />
                       </td>
                       <td className="px-4 py-3 font-mono text-[12px] tabular-nums text-foreground">
                         {Number(item.fine_amount || 0).toLocaleString('vi-VN')} VND

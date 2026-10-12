@@ -42,6 +42,11 @@ class PgVectorStoreTest(unittest.TestCase):
         self.store = PgVectorStore()
         asyncio.run(_init_and_dispose())
         asyncio.run(self._clean())
+        # Don dep ca SAU moi test: truoc day chi don o setUp nen hang 'test-b2' cua
+        # test cuoi cung con nam lai trong corpus BOOK_METADATA that cua ai_db
+        # (tim thay khi doi chieu corpus voi catalog). Nen tro TEST_PG_DSN vao mot
+        # DB rieng cho test, khong phai ai_db dang phuc vu.
+        self.addCleanup(lambda: asyncio.run(self._clean()))
 
     async def _clean(self):
         from sqlalchemy import text
@@ -168,6 +173,98 @@ class PgVectorStoreTest(unittest.TestCase):
             return hits
         hits = asyncio.run(scenario())
         self.assertIn("test-d1", [hit.source_id for hit in hits])
+
+    def test_list_and_delete_documents_for_catalog_sync(self):
+        """catalog_sync.py doc trang thai ca corpus trong mot query, cat chunk mo
+        coi va go document theo source_id (chunk di theo ON DELETE CASCADE)."""
+        corpus = self.vector_store.CORPUS_BOOK
+
+        async def scenario():
+            doc = await self.store.upsert_document(
+                corpus=corpus, source_id="test-s1", title="Sach",
+                content="Sach", content_hash="h1", metadata={"isbn": "1", "author": None})
+            await self.store.upsert_chunks([
+                self.vector_store.Chunk(doc, corpus, index, f"phan {index}", f"c{index}",
+                                        self._vec(0.5), embeddings.EMBED_IDENTITY)
+                for index in range(3)
+            ])
+            await self.store.upsert_document(
+                corpus=corpus, source_id="test-s2", title="Rong",
+                content="Rong", content_hash="h2", metadata={})
+            listed = await self.store.list_documents(corpus)
+            trimmed = await self.store.delete_chunks_from(doc, 1)
+            after_trim = await self.store.existing_chunk_hashes(doc)
+            removed = await self.store.delete_documents(corpus, ["test-s1", "test-s2", "test-missing"])
+            after_delete = await self.store.list_documents(corpus)
+            import db
+            await db.engine.dispose()
+            return listed, trimmed, after_trim, removed, after_delete
+
+        listed, trimmed, after_trim, removed, after_delete = asyncio.run(scenario())
+        self.assertEqual(listed["test-s1"].chunk_hashes, {0: "c0", 1: "c1", 2: "c2"})
+        self.assertEqual(listed["test-s1"].metadata, {"isbn": "1", "author": None})
+        self.assertEqual(listed["test-s2"].chunk_hashes, {})
+        self.assertEqual(trimmed, 2)
+        self.assertEqual(after_trim, {0: "c0"})
+        self.assertEqual(removed, 2)
+        self.assertNotIn("test-s1", after_delete)
+        self.assertNotIn("test-s2", after_delete)
+
+    def test_catalog_sync_end_to_end_on_postgres(self):
+        """catalog_sync tren Postgres that: lan 2 khong embed lai gi, doi mo ta
+        thi chi embed lai quyen do va tim kiem thay noi dung moi, quyen bien
+        mat khoi catalog bi go — khong co document/chunk trung lap."""
+        from unittest import mock
+
+        import catalog_sync
+
+        corpus = self.vector_store.CORPUS_BOOK
+        calls: list[int] = []
+
+        def fake_embed(texts):
+            calls.append(len(texts))
+            return embeddings.BatchEmbedResult(
+                vectors=[self._vec(1.0 if "python" in text.lower() else 0.2) for text in texts],
+                model=embeddings.EMBED_IDENTITY, provider="fake")
+
+        def book(book_id, description):
+            return {"id": book_id, "title": f"Sach {book_id}", "author": None,
+                    "category": "Tin hoc", "description": description, "isbn": None}
+
+        async def scenario():
+            self.vector_store.set_store(self.store)
+            catalog = [book("test-c1", "nau an"), book("test-c2", "lich su"), book("test-c3", "dia ly")]
+
+            async def fetch():
+                return list(catalog)
+
+            with mock.patch.object(embeddings, "embed_batch", side_effect=fake_embed):
+                first = await catalog_sync.sync_book_corpus(fetch=fetch)
+                second = await catalog_sync.sync_book_corpus(fetch=fetch)
+                calls_before_change = list(calls)
+                catalog[0] = book("test-c1", "lap trinh python")
+                del catalog[2]
+                third = await catalog_sync.sync_book_corpus(fetch=fetch)
+            hits = await self.store.search_semantic(
+                corpus, self._vec(1.0), k=1, embedding_model=embeddings.EMBED_IDENTITY,
+                source_ids=["test-c1", "test-c2"])
+            state = await self.store.list_documents(corpus)
+            self.vector_store.set_store(None)
+            import db
+            await db.engine.dispose()
+            return first, second, third, calls_before_change, hits, state
+
+        first, second, third, calls_before_change, hits, state = asyncio.run(scenario())
+        self.assertEqual(first["last_stats"]["embedded"], 3)
+        self.assertEqual(second["last_stats"]["unchanged"], 3)
+        self.assertEqual(calls_before_change, [1, 1, 1])
+        self.assertEqual(third["last_stats"]["embedded"], 1)
+        self.assertEqual(third["last_stats"]["removed"], 1)
+        self.assertEqual(hits[0].source_id, "test-c1")
+        self.assertIn("python", hits[0].content)
+        test_docs = {sid: s for sid, s in state.items() if sid.startswith("test-c")}
+        self.assertEqual(set(test_docs), {"test-c1", "test-c2"})
+        self.assertTrue(all(list(s.chunk_hashes) == [0] for s in test_docs.values()))
 
 
 if __name__ == "__main__":
