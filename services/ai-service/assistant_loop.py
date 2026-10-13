@@ -117,6 +117,32 @@ async def execute_tool_round(
 CallModel = Callable[..., Awaitable[Any]]
 
 
+async def answer_from_collected_data(
+    messages: list[dict],
+    collected_data: dict,
+    call_model: CallModel,
+    num_predict: int,
+    timeout: float,
+) -> tuple[str, dict | None]:
+    """When ASSISTANT_MAX_TOOL_ROUNDS runs out while the model still wants
+    more tools, ask once - with NO tools offered - for an answer from the data
+    already fetched, instead of giving up on a turn that has the data.
+    Returns (answer, usage); falls back to TOOL_LOOP_EXHAUSTED_MESSAGE when
+    nothing was fetched or the call fails/returns nothing."""
+    if not collected_data:
+        return TOOL_LOOP_EXHAUSTED_MESSAGE, None
+    messages.append({
+        "role": "user",
+        "content": "Đã đủ số lần tra cứu. Hãy trả lời câu hỏi ngay bằng dữ liệu đã có ở trên, nêu rõ phần nào còn thiếu.",
+    })
+    try:
+        result = await call_model(messages, [], num_predict=num_predict, timeout=timeout)
+    except Exception:  # noqa: BLE001 - the give-up message is the fallback
+        return TOOL_LOOP_EXHAUSTED_MESSAGE, None
+    messages.append(result.assistant_message)
+    return (result.text or TOOL_LOOP_EXHAUSTED_MESSAGE), result.usage.as_dict()
+
+
 async def retry_once_if_ungrounded(
     messages: list[dict],
     answer: str,

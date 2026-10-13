@@ -72,10 +72,15 @@ async def get_borrow_trends(
     to_date: str | None = None,
     granularity: str | None = None,
 ) -> dict:
+    # Untruncated: evidence.py sums every bucket into "Tổng lượt mượn trong
+    # khoảng thời gian". With the default 12-row preview a 30-day range was
+    # summed over its first 12 days only (530 real loans reported as 363).
+    # tool_context renders this tool through evidence, so the prompt stays short.
     return await _get(
         "/analytics/borrow-trends",
         auth_header,
         {"from": from_date, "to": to_date, "granularity": granularity},
+        truncate=False,
     )
 
 
@@ -112,7 +117,7 @@ async def get_reorder_suggestions(
     priority: str | None = None,
     budget_vnd: float | None = None,
 ) -> dict:
-    return await _get(
+    result = await _get(
         "/analytics/reorder-suggestions",
         auth_header,
         {
@@ -122,7 +127,18 @@ async def get_reorder_suggestions(
             "priority": priority,
             "budgetVnd": budget_vnd,
         },
+        truncate=False,
     )
+    if isinstance(result, dict) and isinstance(result.get("items"), list):
+        # Totals of exactly the lines returned (e.g. "chỉ lấy 3 cuốn đầu"), so
+        # the model quotes a computed sum instead of adding the lines itself.
+        items = [i for i in result["items"] if isinstance(i, dict)]
+        result["listed_totals"] = {
+            "lines": len(items),
+            "suggested_reorder_qty": sum(i.get("suggested_reorder_qty") or 0 for i in items),
+            "estimated_cost": round(sum(i.get("estimated_cost") or 0 for i in items), 2),
+        }
+    return _truncate(result)
 
 
 async def get_reservation_funnel(auth_header: str | None = None) -> dict:
@@ -333,7 +349,9 @@ async def get_aging_inventory(
     days: int | None = None,
     limit: int | None = None,
 ) -> dict:
-    return await _get("/analytics/aging-inventory", auth_header, {"days": days, "limit": limit})
+    # Untruncated for the same reason as get_borrow_trends: evidence.py counts
+    # the rows ("Số sách tồn kho lâu không hoạt động").
+    return await _get("/analytics/aging-inventory", auth_header, {"days": days, "limit": limit}, truncate=False)
 
 
 async def get_weeding_suggestions(

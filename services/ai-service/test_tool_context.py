@@ -103,3 +103,10 @@ class TruncateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PermissionErrorRenderTests(unittest.TestCase):
+    def test_forbidden_is_spelled_out_as_a_permission_problem(self):
+        rendered = tc.render_tool_result("get_overdue_summary", {"error": "/analytics/overdue-summary tra ve HTTP 403"})
+        self.assertIn("Không có quyền", rendered)
+        self.assertIn("không đưa ra số liệu thay thế", rendered)

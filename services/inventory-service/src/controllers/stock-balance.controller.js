@@ -1,4 +1,5 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
+const { UUID_RE } = require('../middlewares/uuid-params.middleware');
 
 const prisma = new PrismaClient();
 
@@ -19,11 +20,17 @@ async function getLowStockByWarehouse(req, res) {
   const warehouseId = req.query.warehouse_id || null;
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
 
+  if (warehouseId && !UUID_RE.test(String(warehouseId).trim())) {
+    return res.status(400).json({ message: 'Invalid warehouse_id' });
+  }
+
   try {
     // Aggregate available_qty and on_hand_qty across all locations for the same
     // (warehouse_id, variant_id) pair, then filter by the aggregated total.
     const warehouseFilter = warehouseId
-      ? Prisma.sql`AND sb.warehouse_id = ${warehouseId}`
+      // The bound parameter arrives as text; without the cast Postgres has no
+      // uuid = text operator and every warehouse-filtered call answered 500.
+      ? Prisma.sql`AND sb.warehouse_id = ${warehouseId}::uuid`
       : Prisma.empty;
 
     const rows = await prisma.$queryRaw`

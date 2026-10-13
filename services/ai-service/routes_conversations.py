@@ -32,6 +32,10 @@ def _message_summary(row: MessageRow) -> dict:
         "pending_action_id": row.pending_action_id,
         "grounding_warning": row.grounding_warning,
         "sources": row.sources,
+        # Copilot extras (recommendations, caveats, follow-ups) so a reopened
+        # conversation renders like the live one. The internal conversation
+        # state stays server-side.
+        "extras": (row.msg_metadata or {}).get("extras") if isinstance(row.msg_metadata, dict) else None,
         "created_at": row.created_at.isoformat(),
     }
 

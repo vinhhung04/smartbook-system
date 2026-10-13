@@ -13,6 +13,7 @@ const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time'
 const { calculateSuggestion, compareReorderCandidates, compareByShortfallPerCost, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
 const { allocateBudgetInOrder } = require('../utils/budget-allocation');
 const { classifyWeedingCandidate } = require('../utils/weeding');
+const { stockStatus, summarizeWarehouses } = require('../utils/warehouse-stock');
 const { mergeCatalogSignals } = require('../utils/catalog-signals');
 const { LATE_RETURN_FEATURES, NO_SHOW_FEATURES, toLateReturnSample, toNoShowSample } = require('../utils/risk-features');
 const { trainAndEvaluate, scoreRows } = require('../utils/risk-model');
@@ -480,42 +481,96 @@ function buildWarehouseRiskReasoning(row) {
   return 'Không có đầu sách nào dưới ngưỡng tồn kho tối thiểu tại kho này.';
 }
 
-const getWarehouseStockRisk = asyncHandler(async (_req, res) => {
-  const rows = await query(
+// One row per (warehouse, variant) with quantities summed over locations -
+// the unit warehouse-stock.js classifies. Active warehouses with no stock
+// still appear (variant_id null) so they show up with zero counts.
+async function getWarehouseVariantStock(warehouseId = null) {
+  return query(
     inventoryPool,
     `
     SELECT
       w.id::text AS warehouse_id,
       w.name AS warehouse_name,
-      COUNT(DISTINCT sb.variant_id) FILTER (
-        WHERE sb.available_qty <= COALESCE(NULLIF(sb.reorder_point, 0), $1)
-      ) AS low_stock_variants,
-      COUNT(DISTINCT sb.variant_id) FILTER (WHERE sb.available_qty <= 0) AS out_of_stock_variants,
-      COALESCE(SUM(sb.available_qty), 0) AS total_available_qty,
-      COALESCE(SUM(sb.reserved_qty), 0) AS total_reserved_qty,
-      COALESCE(SUM(sb.borrowed_qty), 0) AS total_borrowed_qty
+      w.code AS warehouse_code,
+      sb.variant_id::text AS variant_id,
+      COALESCE(SUM(sb.available_qty), 0) AS available_qty,
+      COALESCE(SUM(sb.on_hand_qty), 0) AS on_hand_qty,
+      COALESCE(SUM(sb.reserved_qty), 0) AS reserved_qty,
+      COALESCE(SUM(sb.borrowed_qty), 0) AS borrowed_qty,
+      COALESCE(MAX(sb.reorder_point), 0) AS reorder_point
     FROM warehouses w
     LEFT JOIN stock_balances sb ON sb.warehouse_id = w.id
     WHERE w.is_active = true
-    GROUP BY w.id, w.name
-    ORDER BY low_stock_variants DESC, out_of_stock_variants DESC, w.name ASC
+      AND ($1::uuid IS NULL OR w.id = $1::uuid)
+    GROUP BY w.id, w.name, w.code, sb.variant_id
     `,
-    [LOW_STOCK_THRESHOLD],
+    [warehouseId],
   );
+}
 
+const getWarehouseStockRisk = asyncHandler(async (_req, res) => {
+  const rows = await getWarehouseVariantStock();
   res.json({
-    data: rows.map((row) => {
-      const normalized = {
-        warehouse_id: row.warehouse_id,
-        warehouse_name: row.warehouse_name,
-        low_stock_variants: number(row.low_stock_variants),
-        out_of_stock_variants: number(row.out_of_stock_variants),
-        total_available_qty: number(row.total_available_qty),
-        total_reserved_qty: number(row.total_reserved_qty),
-        total_borrowed_qty: number(row.total_borrowed_qty),
-      };
-      return { ...normalized, reasoning: buildWarehouseRiskReasoning(normalized) };
-    }),
+    data: summarizeWarehouses(rows, LOW_STOCK_THRESHOLD)
+      .map((row) => ({ ...row, reasoning: buildWarehouseRiskReasoning(row) })),
+  });
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const STOCK_ITEM_STATUSES = new Set(['ATTENTION', 'OUT_OF_STOCK', 'LOW_STOCK', 'ALL']);
+
+// The variant rows behind one warehouse's /warehouse-stock-risk counts, same
+// definition (warehouse-stock.js), so "7 đầu sách hết hàng" and the list of
+// those 7 can never disagree. status=ATTENTION (default) = OUT_OF_STOCK + LOW_STOCK.
+const getWarehouseStockItems = asyncHandler(async (req, res) => {
+  const warehouseId = String(req.query.warehouseId || '').trim();
+  if (!UUID_RE.test(warehouseId)) {
+    throw createHttpError(400, 'warehouseId must be a UUID');
+  }
+  const status = String(req.query.status || 'ATTENTION').toUpperCase();
+  if (!STOCK_ITEM_STATUSES.has(status)) {
+    throw createHttpError(400, 'status must be one of ATTENTION, OUT_OF_STOCK, LOW_STOCK, ALL');
+  }
+  const limit = parseLimit(req.query.limit, 50, 200);
+  const rows = (await getWarehouseVariantStock(warehouseId)).filter((row) => row.variant_id);
+  const warehouse = rows[0] || (await queryOne(
+    inventoryPool,
+    'SELECT id::text AS warehouse_id, name AS warehouse_name, code AS warehouse_code FROM warehouses WHERE id = $1::uuid AND is_active = true',
+    [warehouseId],
+  ));
+  if (!warehouse) {
+    throw createHttpError(404, 'warehouse not found');
+  }
+  const classified = rows.map((row) => ({ ...row, status: stockStatus(row, LOW_STOCK_THRESHOLD) }));
+  const selected = classified
+    .filter((row) => status === 'ALL'
+      || (status === 'ATTENTION' ? row.status !== 'OK' : row.status === status))
+    .sort((a, b) => (a.status === 'OUT_OF_STOCK' ? 0 : 1) - (b.status === 'OUT_OF_STOCK' ? 0 : 1)
+      || number(a.available_qty) - number(b.available_qty));
+  const titles = await getTitlesByVariantIds(selected.slice(0, limit).map((row) => row.variant_id));
+  res.json({
+    data: {
+      warehouse_id: warehouse.warehouse_id,
+      warehouse_name: warehouse.warehouse_name,
+      warehouse_code: warehouse.warehouse_code,
+      low_stock_threshold: LOW_STOCK_THRESHOLD,
+      counts: {
+        out_of_stock: classified.filter((row) => row.status === 'OUT_OF_STOCK').length,
+        low_stock_including_out: classified.filter((row) => row.status !== 'OK').length,
+        variants: classified.length,
+      },
+      items: selected.slice(0, limit).map((row) => ({
+        variant_id: row.variant_id,
+        title: titles.get(row.variant_id) || null,
+        status: row.status,
+        available_qty: number(row.available_qty),
+        on_hand_qty: number(row.on_hand_qty),
+        reserved_qty: number(row.reserved_qty),
+        borrowed_qty: number(row.borrowed_qty),
+        reorder_point: number(row.reorder_point),
+      })),
+      truncated: selected.length > limit,
+    },
   });
 });
 
@@ -1581,6 +1636,7 @@ module.exports = {
   getOverdueSummary,
   getFineSummary,
   getWarehouseStockRisk,
+  getWarehouseStockItems,
   getReorderSuggestions,
   getReservationFunnel,
   getAgingInventory,

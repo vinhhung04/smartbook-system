@@ -27,4 +27,4 @@ function rejectInvalidUuidParams(router) {
   return router;
 }
 
-module.exports = { rejectInvalidUuidParams };
+module.exports = { rejectInvalidUuidParams, UUID_RE };

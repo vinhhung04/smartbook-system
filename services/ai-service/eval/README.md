@@ -265,3 +265,40 @@ sales-revenue figure this lending-library system has no endpoint for).
 `../test_eval_scoring.py`) — no I/O, no dependency on `main.py` — so the
 matching logic itself is verified independently of whether the live services
 happen to be reachable when you run the scripts.
+
+## 4. Management Copilot end-to-end — `eval_copilot.py`
+
+Drives the real `/assistant` and `/assistant/stream` endpoint coroutines of a
+given ai-service code tree (old or new) against live data and the live LLM,
+and scores every turn of `copilot_dataset.json` (157 cases / 171 turns:
+paraphrase, multi-intent, causal, comparison, decision, what-if, multi-turn
+follow-ups, clarification, out-of-scope, prompt injection, lookup, RBAC).
+Labels are written in `build_copilot_dataset.py`; regenerate the JSON with
+`python eval/build_copilot_dataset.py` after editing them.
+
+`needs` are data *capabilities*, not tool names, so the old tool set and the
+copilot's joining tools are scored on one scale (`TOOL_CAPS` in the script).
+The scorer never imports the planner and resolves the dataset's time tokens
+with its own calendar code - one scorer grades both trees.
+
+Runs in-process (the endpoint functions are called directly, only the
+100-requests/hour IP limiter is patched out) inside the Docker network, with
+conversations/pending actions in a throwaway SQLite file:
+
+```bash
+docker run --rm --network smartbook-system_default --env-file <ai-service env> \
+  -v <code tree>:/code -v services/ai-service/eval:/evalh smartbook-system-ai-service \
+  python /evalh/eval_copilot.py --code-dir /code --label after --concurrency 4
+```
+
+Metrics: capability precision/recall/exact (micro), temporal accuracy (tool
+date arguments vs the expected VN-calendar periods, ±1 day), clarification
+recall and false-clarification rate, refusal and tool-call rate on
+out-of-scope/injection turns, prompt-leak rate, raw-JSON/technical-field rate,
+share of answers with numbers absent from the tool data (`rag.unverified_numbers`,
+the same check both trees ship), RBAC acknowledgement, latency, LLM calls per
+turn; plus live access-control checks (customer blocked, another user's
+`conversation_id` refused on both endpoints) and a 12-case streaming vs
+non-streaming comparison (same tools, same response schema). Clarification
+and refusal detection are text heuristics, identical for both runs.
+Writes `eval/reports/copilot_<label>_<timestamp>.md/.json`.

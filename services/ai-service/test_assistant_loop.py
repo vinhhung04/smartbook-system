@@ -8,6 +8,7 @@ import asyncio
 import unittest
 
 from assistant_loop import (
+    answer_from_collected_data,
     TOOL_LOOP_EXHAUSTED_MESSAGE,
     execute_tool_round,
     retry_once_if_ungrounded,
@@ -213,3 +214,36 @@ class RetryOnceIfUngroundedTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnswerFromCollectedDataTests(unittest.TestCase):
+    def _result(self, text):
+        from types import SimpleNamespace
+        return SimpleNamespace(text=text, assistant_message={"role": "assistant", "content": text},
+                               usage=SimpleNamespace(as_dict=lambda: {"prompt_tokens": 1}))
+
+    def test_nothing_fetched_keeps_the_give_up_message_without_a_call(self):
+        async def call_model(*_a, **_k):
+            raise AssertionError("must not call the model with no data")
+        answer, usage = _run(answer_from_collected_data([], {}, call_model, 100, 5))
+        self.assertEqual(answer, TOOL_LOOP_EXHAUSTED_MESSAGE)
+        self.assertIsNone(usage)
+
+    def test_answers_from_fetched_data_with_no_tools_offered(self):
+        seen = {}
+
+        async def call_model(messages, tools, **_k):
+            seen["tools"] = tools
+            return self._result("Kho A rủi ro hơn.")
+        messages = [{"role": "system", "content": "s"}]
+        answer, usage = _run(answer_from_collected_data(messages, {"compare_warehouses": {"x": 1}}, call_model, 100, 5))
+        self.assertEqual(answer, "Kho A rủi ro hơn.")
+        self.assertEqual(seen["tools"], [])
+        self.assertEqual(usage, {"prompt_tokens": 1})
+
+    def test_model_failure_falls_back_to_the_give_up_message(self):
+        async def call_model(*_a, **_k):
+            raise RuntimeError("timeout")
+        answer, usage = _run(answer_from_collected_data([], {"t": {}}, call_model, 100, 5))
+        self.assertEqual(answer, TOOL_LOOP_EXHAUSTED_MESSAGE)
+        self.assertIsNone(usage)
