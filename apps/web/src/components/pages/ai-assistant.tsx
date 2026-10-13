@@ -32,7 +32,23 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { aiService, type AiConversationSummary, type AiEvidenceItem, type PendingAction } from '@/services/ai';
+import {
+  aiService,
+  type AiConversationSummary,
+  type AiEvidenceItem,
+  type AiRecommendation,
+  type AssistantExtras,
+  type PendingAction,
+} from '@/services/ai';
+import { authService, type AuthUser } from '@/services/auth';
+import { hasAnyPermission } from '@/lib/rbac';
+import {
+  CopilotAnswerText,
+  CopilotCaveats,
+  CopilotDataAsOf,
+  CopilotFollowups,
+  CopilotRecommendations,
+} from '@/components/ai-copilot-insights';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
@@ -46,17 +62,51 @@ interface AssistantMessage {
   evidence?: AiEvidenceItem[];
   groundingWarning?: string | null;
   retrievalWarnings?: string[];
+  followups?: string[];
+  caveats?: string[];
+  recommendations?: AiRecommendation[];
+  dataAsOf?: string | null;
   isError?: boolean;
+}
+
+function extrasToMessageFields(extras?: AssistantExtras | null): Partial<AssistantMessage> {
+  return {
+    followups: extras?.suggested_followups ?? [],
+    caveats: extras?.caveats ?? [],
+    recommendations: extras?.recommendations ?? [],
+    dataAsOf: extras?.data_as_of ?? null,
+  };
 }
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'smartbook:ai-assistant:active-conversation-id';
 
-const SUGGESTED_QUESTIONS = [
-  { icon: Warehouse, tone: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400', text: 'Kho nào đang có rủi ro tồn kho thấp nhất?' },
-  { icon: Package, tone: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400', text: 'Sách nào cần nhập thêm gấp trong 30 ngày tới?' },
-  { icon: Clock, tone: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400', text: 'Có bao nhiêu phiếu mượn đang quá hạn và tổng tiền phạt chưa thu là bao nhiêu?' },
-  { icon: TrendingUp, tone: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400', text: 'Tỷ lệ chuyển đổi reservation sang mượn sách hiện tại ra sao?' },
-];
+const TONES = {
+  indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
+  emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400',
+  amber: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+  violet: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
+};
+
+/** Starter questions by what the role can actually read: a warehouse manager
+ * has no borrow analytics (analytics.borrow.read), so loans/fines questions
+ * would only come back as "không có quyền". */
+function suggestedQuestionsFor(user: AuthUser | null) {
+  const readsBorrow = Boolean(user?.is_superuser) || hasAnyPermission(user, ['analytics.borrow.read']);
+  if (readsBorrow) {
+    return [
+      { icon: Clock, tone: TONES.amber, text: 'Nên ưu tiên xử lý việc gì hôm nay?' },
+      { icon: Package, tone: TONES.emerald, text: 'Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?' },
+      { icon: TrendingUp, tone: TONES.violet, text: 'Lượt mượn tháng này so với tháng trước thế nào?' },
+      { icon: Warehouse, tone: TONES.indigo, text: 'Với ngân sách 20 triệu nên nhập sách gì?' },
+    ];
+  }
+  return [
+    { icon: Warehouse, tone: TONES.indigo, text: 'Kho nào đang rủi ro thiếu sách nhất?' },
+    { icon: Package, tone: TONES.emerald, text: 'Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?' },
+    { icon: TrendingUp, tone: TONES.violet, text: 'Với ngân sách 20 triệu nên nhập sách gì?' },
+    { icon: Clock, tone: TONES.amber, text: 'Sách nào tồn kho lâu không ai mượn?' },
+  ];
+}
 
 // A multi-round tool-calling answer (OpenRouter/Qwen) can still take several seconds
 // per round across up to ASSISTANT_MAX_TOOL_ROUNDS rounds. A single static "loading"
@@ -68,40 +118,6 @@ const LOADING_STAGES = [
   { atSeconds: 30, label: 'Đang tra cứu dữ liệu từ hệ thống...' },
   { atSeconds: 60, label: 'Đang tổng hợp câu trả lời (có thể mất đến ~2 phút)...' },
 ];
-
-/** The assistant's system prompt asks it to bold key figures with **text** — render that
- * instead of showing literal asterisks. Intentionally bold-only (no headings/lists): that's
- * the only markdown construct the prompt actually asks the model to use. */
-function renderMessageLine(line: string, key: number) {
-  const parts = line.split(/\*\*(.*?)\*\*/g);
-  return (
-    <span key={key}>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <strong key={i} className="font-semibold">
-            {part}
-          </strong>
-        ) : (
-          part
-        ),
-      )}
-    </span>
-  );
-}
-
-function MessageText({ text }: { text: string }) {
-  const lines = text.split('\n');
-  return (
-    <>
-      {lines.map((line, idx) => (
-        <span key={idx}>
-          {renderMessageLine(line, idx)}
-          {idx < lines.length - 1 && <br />}
-        </span>
-      ))}
-    </>
-  );
-}
 
 function formatPlainValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -228,6 +244,8 @@ function newConversationId() {
 
 export function AIAssistantPage() {
   const location = useLocation();
+  const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
+  const suggestedQuestions = suggestedQuestionsFor(currentUser);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   // Another page can hand over a question via router state; it is only pre-filled, never auto-sent.
   const [input, setInput] = useState(() => (location.state as { prompt?: string } | null)?.prompt ?? '');
@@ -290,6 +308,7 @@ export function AIAssistantPage() {
         role: record.role === 'user' ? 'user' : 'assistant',
         content: record.content ?? '',
         groundingWarning: record.grounding_warning ?? undefined,
+        ...(record.role === 'user' ? {} : extrasToMessageFields(record.extras)),
       }));
       setMessages(base);
       setConversationId(id);
@@ -375,6 +394,7 @@ export function AIAssistantPage() {
             evidence: response.evidence,
             groundingWarning: response.grounding_warning,
             retrievalWarnings: response.retrieval_warnings,
+            ...extrasToMessageFields(response),
           }));
           const finalConversationId = response.conversation_id || conversationId;
           setConversationId(finalConversationId);
@@ -577,7 +597,7 @@ export function AIAssistantPage() {
                   </p>
                 </div>
                 <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-                  {SUGGESTED_QUESTIONS.map(({ icon: Icon, tone, text }, index) => (
+                  {suggestedQuestions.map(({ icon: Icon, tone, text }, index) => (
                     <motion.button
                       key={text}
                       type="button"
@@ -604,6 +624,7 @@ export function AIAssistantPage() {
                   const isAwaitingFirstToken = isStreamingMessage && message.content === '';
 
                   const isUser = message.role === 'user';
+                  const isLastAssistant = !isUser && idx === messages.length - 1;
 
                   return (
                     <motion.div
@@ -661,7 +682,7 @@ export function AIAssistantPage() {
                           ) : (
                             <>
                               {message.isError && <AlertTriangle className="mr-1.5 inline-block h-3.5 w-3.5 -translate-y-px" />}
-                              {isUser ? message.content : <MessageText text={message.content} />}
+                              {isUser ? message.content : <CopilotAnswerText text={message.content} />}
                               {isStreamingMessage && (
                                 <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-current" />
                               )}
@@ -699,8 +720,18 @@ export function AIAssistantPage() {
                           </Alert>
                         )}
 
+                        {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
+                          <CopilotRecommendations items={message.recommendations} />
+                        )}
+                        {!isStreamingMessage && message.caveats && message.caveats.length > 0 && (
+                          <CopilotCaveats items={message.caveats} />
+                        )}
                         {message.evidence && message.evidence.length > 0 && (
                           <EvidenceCitations evidence={message.evidence} />
+                        )}
+                        {!isStreamingMessage && <CopilotDataAsOf iso={message.dataAsOf} />}
+                        {isLastAssistant && !loading && message.followups && message.followups.length > 0 && (
+                          <CopilotFollowups items={message.followups} onPick={sendMessage} disabled={loading} />
                         )}
                       </div>
                       {isUser && (
@@ -724,7 +755,7 @@ export function AIAssistantPage() {
                   </AccordionTrigger>
                   <AccordionContent className="pb-2">
                     <div className="flex flex-wrap gap-1.5">
-                      {SUGGESTED_QUESTIONS.map(({ text }) => (
+                      {suggestedQuestions.map(({ text }) => (
                         <button
                           key={text}
                           type="button"
@@ -756,7 +787,7 @@ export function AIAssistantPage() {
                     sendMessage(input);
                   }
                 }}
-                placeholder="Hỏi về tồn kho, quá hạn, gợi ý nhập hàng..."
+                placeholder="Hỏi về tồn kho, nhu cầu mượn, so sánh kỳ, ngân sách nhập hàng..."
                 aria-label="Câu hỏi cho trợ lý AI"
                 className="max-h-32 min-h-[40px] resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0"
                 disabled={loading}

@@ -71,7 +71,20 @@ def render_tool_result(tool_name: str, tool_result) -> str:
     """The text placed in the "tool" role message sent back to the model for
     one tool call."""
     if isinstance(tool_result, dict) and tool_result.get("error"):
+        if "HTTP 403" in str(tool_result["error"]):
+            # Spelled out: a bare "HTTP 403" reached the user as a vague "lỗi
+            # truy xuất" instead of "your role cannot see this data".
+            return (f"Không có quyền: tài khoản hiện tại không được phép xem dữ liệu của {tool_name} (HTTP 403). "
+                    "Nói rõ với người dùng rằng họ không có quyền xem phần dữ liệu này; không đưa ra số liệu thay thế.")
         return f"Lỗi khi gọi {tool_name}: {tool_result['error']}"
+
+    # Copilot renderers show the rows a decision needs (every warehouse, the top
+    # reorder lines with their metrics, computed comparisons) - evidence.py's
+    # 2-3 citation items were too thin for "why"/"which first" answers.
+    import copilot_response  # deferred: copilot_response -> copilot_tools -> assistant_tools
+    rendered = copilot_response.render(tool_name, tool_result)
+    if rendered:
+        return _truncate(rendered, max(ASSISTANT_TOOL_CONTEXT_CHARS, 3500))
 
     items = extract_evidence(tool_name, tool_result)
     if items:

@@ -125,3 +125,43 @@ def test_get_conversation_detail_returns_messages_in_order():
         assert [m.role for m in messages] == ["user", "assistant"]
 
     _run(_t())
+
+
+def test_get_or_create_conversation_rejects_another_users_conversation():
+    """Regression: user B passing user A's conversation_id to /assistant used to get
+    A's row back - B's prompt then carried A's history and B's turns were appended
+    to A's conversation."""
+    async def _t():
+        cid = str(uuid.uuid4())
+        await conversation_store.get_or_create_conversation(cid, _user("owner-a"), first_message="bí mật của A")
+        try:
+            await conversation_store.get_or_create_conversation(cid, _user("intruder-b"), first_message="x")
+        except conversation_store.ConversationAccessDenied:
+            pass
+        else:
+            raise AssertionError("another user's conversation_id must be rejected")
+        # Superusers get no write exception either.
+        admin = UserContext(
+            user_id="admin-c", username="a", email=None, roles=["ADMIN"], permissions=[], is_superuser=True,
+        )
+        try:
+            await conversation_store.get_or_create_conversation(cid, admin, first_message="x")
+        except conversation_store.ConversationAccessDenied:
+            pass
+        else:
+            raise AssertionError("superuser must not write into another user's conversation")
+
+    _run(_t())
+
+
+def test_empty_user_id_never_owns_a_conversation():
+    async def _t():
+        cid = str(uuid.uuid4())
+        await conversation_store.get_or_create_conversation(cid, _user("owner-a"), first_message="x")
+        try:
+            await conversation_store.get_or_create_conversation(cid, _user(""), first_message="x")
+        except conversation_store.ConversationAccessDenied:
+            return
+        raise AssertionError("an id-less user context must not match")
+
+    _run(_t())

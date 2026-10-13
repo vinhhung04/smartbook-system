@@ -33,11 +33,27 @@ def _make_title(message: str) -> str:
     return text[:TITLE_MAX_LEN].rstrip() + "..."
 
 
+class ConversationAccessDenied(Exception):
+    """The conversation_id exists but belongs to another user."""
+
+
+def is_conversation_owner(row: ConversationRow, user_ctx: UserContext) -> bool:
+    # An empty user_id on either side never matches: a context without an id
+    # must not inherit a conversation created by another id-less context.
+    return bool(row.user_id) and bool(user_ctx.user_id) and row.user_id == user_ctx.user_id
+
+
 async def get_or_create_conversation(
     conversation_id: str | None, user_ctx: UserContext, first_message: str | None = None
 ) -> ConversationRow:
     """Resolve an existing conversation by conversation_id, or create one under that
-    same id (or a freshly generated one if conversation_id was missing/invalid)."""
+    same id (or a freshly generated one if conversation_id was missing/invalid).
+
+    Raises ConversationAccessDenied when the id belongs to another user - the
+    caller would otherwise load that user's history into its own prompt and
+    append its turns to their conversation. No superuser exception here: this
+    path writes, and an admin reading someone's conversation goes through the
+    read-only GET /assistant/conversations/{id} instead."""
     cid = _parse_uuid(conversation_id)
 
     async with get_session() as session:
@@ -46,6 +62,8 @@ async def get_or_create_conversation(
         )
         row = result.scalar_one_or_none()
         if row is not None:
+            if not is_conversation_owner(row, user_ctx):
+                raise ConversationAccessDenied(str(cid))
             return row
 
         row = ConversationRow(

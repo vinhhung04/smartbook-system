@@ -10,6 +10,7 @@ const {
   authorizeManagerRead,
   authorizeTaskRead,
 } = require('./middlewares/auth.middleware');
+const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -85,7 +86,7 @@ app.get('/ready', async (_req, res) => {
 });
 
 // Demo supplier portal is token-scoped and intentionally does not use internal RBAC.
-app.use('/api/supplier-portal', supplierPortalRoutes);
+app.use('/api/supplier-portal', rejectInvalidUuidParams(supplierPortalRoutes));
 app.use('/internal/authority', internalAuthorityRoutes);
 app.use('/internal/covers', internalCatalogRoutes);
 app.use('/internal/catalog/books', internalBookCorpusRoutes);
@@ -105,7 +106,13 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   try {
     const [goodsReceipts, outboundOrders, transferOrders, transferReceivingOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
       prisma.goods_receipts.findMany({
-        where: { received_by_user_id: userId },
+        // Receipts this user received, plus receipts they claimed for putaway (claimPutawayTask).
+        where: {
+          OR: [
+            { received_by_user_id: userId },
+            { putaway_assignee_user_id: userId },
+          ],
+        },
         select: {
           id: true,
           receipt_number: true,
@@ -372,37 +379,37 @@ app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.
   }
 });
 
-app.use('/api/my-warehouse-tasks', myWarehouseTasksRoutes);
+app.use('/api/my-warehouse-tasks', rejectInvalidUuidParams(myWarehouseTasksRoutes));
 
-app.use('/api/books', bookRoutes);
-app.use('/api/warehouses', warehouseRoutes);
-app.use('/api/locations', locationRoutes);
-app.use('/api/goods-receipts', goodsReceiptRoutes);
-app.use('/api/stock-movements', stockMovementRoutes);
-app.use('/api/borrow-integration', borrowIntegrationRoutes);
-app.use('/api/putaway', putawayRoutes);
-app.use('/api/shelves', shelfRoutes);
-app.use('/api/receiving-putaway', receivingPutawayRoutes);
-app.use('/api/picking', pickingRoutes);
-app.use('/api/packing', packingRoutes);
-app.use('/api/order-requests', orderRequestRoutes);
-app.use('/api/outbound', outboundRoutes);
-app.use('/api/suppliers', supplierRoutes);
-app.use('/api/receiving-smart', receivingSmartRoutes);
-app.use('/api/storage-suggestions', storageSuggestionRoutes);
-app.use('/api/reslotting-suggestions', reslottingSuggestionRoutes);
-app.use('/api/purchase-orders', purchaseOrderRoutes);
-app.use('/api/supplier-deliveries', supplierDeliveryRoutes);
-app.use('/api/supplier-account', supplierAccountRoutes);
-app.use('/api/purchase-requests', purchaseRequestRoutes);
-app.use('/api/stock-alerts', stockAlertRoutes);
-app.use('/api/stock-balances', stockBalanceRoutes);
-app.use('/api/stock-audits', stockAuditRoutes);
-app.use('/api/metadata-reconciliations', metadataReconciliationRoutes);
-app.use('/api/duplicate-intelligence', duplicateIntelligenceRoutes);
-app.use('/api/exception-reports', exceptionReportRoutes);
-app.use('/api/staff-tasks', staffTaskRoutes);
-app.use('/api/transfer-receiving', transferReceivingRoutes);
+app.use('/api/books', rejectInvalidUuidParams(bookRoutes));
+app.use('/api/warehouses', rejectInvalidUuidParams(warehouseRoutes));
+app.use('/api/locations', rejectInvalidUuidParams(locationRoutes));
+app.use('/api/goods-receipts', rejectInvalidUuidParams(goodsReceiptRoutes));
+app.use('/api/stock-movements', rejectInvalidUuidParams(stockMovementRoutes));
+app.use('/api/borrow-integration', rejectInvalidUuidParams(borrowIntegrationRoutes));
+app.use('/api/putaway', rejectInvalidUuidParams(putawayRoutes));
+app.use('/api/shelves', rejectInvalidUuidParams(shelfRoutes));
+app.use('/api/receiving-putaway', rejectInvalidUuidParams(receivingPutawayRoutes));
+app.use('/api/picking', rejectInvalidUuidParams(pickingRoutes));
+app.use('/api/packing', rejectInvalidUuidParams(packingRoutes));
+app.use('/api/order-requests', rejectInvalidUuidParams(orderRequestRoutes));
+app.use('/api/outbound', rejectInvalidUuidParams(outboundRoutes));
+app.use('/api/suppliers', rejectInvalidUuidParams(supplierRoutes));
+app.use('/api/receiving-smart', rejectInvalidUuidParams(receivingSmartRoutes));
+app.use('/api/storage-suggestions', rejectInvalidUuidParams(storageSuggestionRoutes));
+app.use('/api/reslotting-suggestions', rejectInvalidUuidParams(reslottingSuggestionRoutes));
+app.use('/api/purchase-orders', rejectInvalidUuidParams(purchaseOrderRoutes));
+app.use('/api/supplier-deliveries', rejectInvalidUuidParams(supplierDeliveryRoutes));
+app.use('/api/supplier-account', rejectInvalidUuidParams(supplierAccountRoutes));
+app.use('/api/purchase-requests', rejectInvalidUuidParams(purchaseRequestRoutes));
+app.use('/api/stock-alerts', rejectInvalidUuidParams(stockAlertRoutes));
+app.use('/api/stock-balances', rejectInvalidUuidParams(stockBalanceRoutes));
+app.use('/api/stock-audits', rejectInvalidUuidParams(stockAuditRoutes));
+app.use('/api/metadata-reconciliations', rejectInvalidUuidParams(metadataReconciliationRoutes));
+app.use('/api/duplicate-intelligence', rejectInvalidUuidParams(duplicateIntelligenceRoutes));
+app.use('/api/exception-reports', rejectInvalidUuidParams(exceptionReportRoutes));
+app.use('/api/staff-tasks', rejectInvalidUuidParams(staffTaskRoutes));
+app.use('/api/transfer-receiving', rejectInvalidUuidParams(transferReceivingRoutes));
 
 // ─── GET /api/inventory ──────────────────────────────────────────────────────
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ

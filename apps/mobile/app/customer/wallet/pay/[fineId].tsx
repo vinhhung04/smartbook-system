@@ -6,6 +6,7 @@ import * as Linking from 'expo-linking';
 
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
 import { ApiError } from '../../../../src/auth/auth-context';
+import { getFineTypeLabel } from '../../../../src/lib/fineStatus';
 import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
 import type { Fine, VnpayPaymentIntentStatus } from '../../../../src/types/borrow';
 
@@ -95,7 +96,7 @@ export default function CustomerPayFineScreen() {
       ) : (
         <View style={styles.container}>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>{fine.fine_type}</Text>
+            <Text style={styles.summaryLabel}>{getFineTypeLabel(fine.fine_type)}</Text>
             <Text style={styles.summaryAmount}>{formatCurrency(remainingOf(fine))}</Text>
             <Text style={styles.summaryHint}>Số tiền còn phải trả</Text>
           </View>

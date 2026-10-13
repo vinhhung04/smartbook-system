@@ -204,7 +204,8 @@ async function main(holds) {
   const staffBooks = await call(staffToken, 'GET', '/api/books');
   let internal = null;
   for (const item of Array.isArray(staffBooks.data) ? staffBooks.data : []) {
-    if (!item?.variant_id || !item?.default_warehouse_id || Number(item.quantity || 0) < 1) continue;
+    // available_quantity, not quantity: stock still in RECEIVING (awaiting putaway) cannot be reserved.
+    if (!item?.variant_id || !item?.default_warehouse_id || Number(item.available_quantity || 0) < 1) continue;
     const pub = await call(staffToken, 'GET', `/api/borrow-integration/variants/${item.variant_id}/public-availability`);
     if (pub.ok && pub.data?.data?.available_quantity === 0) {
       internal = { variantId: item.variant_id, warehouseId: item.default_warehouse_id, bookId: pub.data.data.book_id, title: pub.data.data.title };

@@ -225,7 +225,38 @@ export interface AiEvidenceItem {
   description?: string;
 }
 
-export interface AssistantResponse {
+/** Built by the copilot backend from tool data - never from the model. */
+export interface AiRecommendation {
+  title: string;
+  action: string;
+  priority?: string | null;
+  metrics: Array<{ label: string; value: unknown; unit?: string }>;
+  reason: string;
+  risks: string[];
+  confidence: { level: string; basis: string };
+  source: string;
+  retrieved_at: string;
+}
+
+export interface AssistantPlanSummary {
+  intent: string;
+  requested_analysis: string;
+  clarification_needed: boolean;
+  is_followup: boolean;
+  carried_over: string[];
+  assumptions: string[];
+  time_range?: { label: string; start: string; end: string } | null;
+  comparison_period?: { label: string; start: string; end: string } | null;
+}
+
+export interface AssistantExtras {
+  suggested_followups?: string[];
+  caveats?: string[];
+  recommendations?: AiRecommendation[];
+  data_as_of?: string | null;
+}
+
+export interface AssistantResponse extends AssistantExtras {
   answer: string;
   tools_used: AssistantToolCall[];
   data: Record<string, unknown>;
@@ -234,6 +265,7 @@ export interface AssistantResponse {
   pending_action?: PendingAction | null;
   evidence?: AiEvidenceItem[];
   retrieval_warnings?: string[];
+  plan?: AssistantPlanSummary | null;
 }
 
 export interface PendingAction {
@@ -327,6 +359,7 @@ export interface AiMessageRecord {
   pending_action_id: string | null;
   grounding_warning: string | null;
   sources: unknown[] | null;
+  extras?: AssistantExtras | null;
   created_at: string;
 }
 

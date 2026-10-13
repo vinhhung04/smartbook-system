@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api";
 import { supplierAccountService } from "@/services/supplier-account";
+import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
 import type { SupplierPortalOrder, SupplierPortalShortageReport } from "@/services/supplier-portal";
 
 type InvoiceLines = Record<string, number>;
@@ -81,7 +82,7 @@ export function SupplierAccountPage() {
       setOrders(nextOrders);
       setSelectedPoId((current) => current || nextOrders[0]?.purchase_order.id || "");
     } catch (loadError) {
-      setError(getApiErrorMessage(loadError, "Cannot load supplier account"));
+      setError(getApiErrorMessage(loadError, "Không tải được tài khoản nhà cung cấp"));
     } finally {
       setIsLoading(false);
     }
@@ -132,7 +133,7 @@ export function SupplierAccountPage() {
 
   async function submitInvoice(redeliveryReport?: SupplierPortalShortageReport) {
     if (!selectedOrder) return;
-    if (!invoiceNumber.trim()) return toast.error("Invoice number is required");
+    if (!invoiceNumber.trim()) return toast.error("Số hóa đơn là bắt buộc");
 
     const sourceItems = redeliveryReport?.items || selectedOrder.purchase_order.items;
     const payloadItems = sourceItems
@@ -198,15 +199,15 @@ export function SupplierAccountPage() {
 
   async function cannotFulfill(reportId: string) {
     if (!selectedOrder) return;
-    if (!cannotReason.trim()) return toast.error("Reason is required");
+    if (!cannotReason.trim()) return toast.error("Vui lòng nhập lý do không thể cung cấp hàng");
     try {
       setWorking(true);
       await supplierAccountService.cannotFulfillShortage(selectedOrder.purchase_order.id, reportId, cannotReason.trim());
-      toast.success("Shortage note submitted");
+      toast.success("Đã gửi thông báo không thể cung cấp");
       setCannotReason("");
       await load();
     } catch (cannotError) {
-      toast.error(getApiErrorMessage(cannotError, "Update failed"));
+      toast.error(getApiErrorMessage(cannotError, "Cập nhật thất bại"));
     } finally {
       setWorking(false);
     }
@@ -221,12 +222,12 @@ export function SupplierAccountPage() {
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">SmartBook Supplier Account</p>
-              <h1 className="text-[20px] font-bold">{supplierName || "Supplier"}</h1>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">SmartBook · Tài khoản nhà cung cấp</p>
+              <h1 className="text-[20px] font-bold">{supplierName || "Nhà cung cấp"}</h1>
             </div>
           </div>
           <Button variant="outline" onClick={() => void logout()}>
-            <LogOut className="mr-2 h-4 w-4" /> Sign out
+            <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
           </Button>
         </div>
       </header>
@@ -234,21 +235,21 @@ export function SupplierAccountPage() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-5 flex items-start gap-3 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>Supplier accounts can confirm orders and submit delivery documents only. Stock receiving and posting are handled by SmartBook warehouse staff.</p>
+          <p>Tài khoản nhà cung cấp chỉ xác nhận đơn hàng và gửi chứng từ giao hàng. Việc nhận hàng và ghi sổ kho do nhân viên kho SmartBook thực hiện.</p>
         </div>
 
         {isLoading ? (
-          <div className="rounded-[8px] border border-slate-200 bg-white p-8 text-[13px] text-slate-500">Loading supplier orders...</div>
+          <div className="rounded-[8px] border border-slate-200 bg-white p-8 text-[13px] text-slate-500">Đang tải đơn hàng...</div>
         ) : error ? (
           <div className="rounded-[8px] border border-rose-200 bg-white p-8">
             <p className="text-[14px] font-semibold text-rose-700">{error}</p>
-            <Button className="mt-4" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Retry</Button>
+            <Button className="mt-4" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Thử lại</Button>
           </div>
         ) : orders.length === 0 ? (
           <div className="rounded-[8px] border border-slate-200 bg-white p-10 text-center">
             <Truck className="mx-auto mb-3 h-8 w-8 text-slate-400" />
-            <h2 className="text-[16px] font-semibold">No supplier orders yet</h2>
-            <p className="mt-1 text-[13px] text-slate-500">Orders will appear here after SmartBook staff sends a purchase order to this supplier account.</p>
+            <h2 className="text-[16px] font-semibold">Chưa có đơn hàng nào</h2>
+            <p className="mt-1 text-[13px] text-slate-500">Đơn hàng sẽ hiện ở đây khi SmartBook gửi đơn mua hàng cho tài khoản này.</p>
           </div>
         ) : selectedOrder ? (
           <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -261,9 +262,9 @@ export function SupplierAccountPage() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[14px] font-semibold">{order.purchase_order.po_number}</p>
-                    <Badge className={statusTone(order.purchase_order.status)}>{order.purchase_order.status}</Badge>
+                    <Badge className={statusTone(order.purchase_order.status)}>{purchaseOrderStatusLabel(order.purchase_order.status)}</Badge>
                   </div>
-                  <p className="mt-2 text-[12px] text-slate-500">{order.purchase_order.warehouse?.name || "Warehouse"} - {order.dispatch.dispatch_number}</p>
+                  <p className="mt-2 text-[12px] text-slate-500">{order.purchase_order.warehouse?.name || "Kho"} - {order.dispatch.dispatch_number}</p>
                 </button>
               ))}
             </aside>
@@ -272,22 +273,22 @@ export function SupplierAccountPage() {
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-[12px] font-semibold uppercase text-slate-500">Purchase Order</p>
+                    <p className="text-[12px] font-semibold uppercase text-slate-500">Đơn mua hàng</p>
                     <h2 className="text-[24px] font-bold">{selectedOrder.purchase_order.po_number}</h2>
-                    <p className="text-[13px] text-slate-500">Warehouse: {selectedOrder.purchase_order.warehouse?.name || "-"} | Expected: {selectedOrder.purchase_order.expected_date ? new Date(selectedOrder.purchase_order.expected_date).toLocaleDateString() : "-"}</p>
+                    <p className="text-[13px] text-slate-500">Kho: {selectedOrder.purchase_order.warehouse?.name || "-"} | Dự kiến giao: {selectedOrder.purchase_order.expected_date ? new Date(selectedOrder.purchase_order.expected_date).toLocaleDateString("vi-VN") : "-"}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge className={statusTone(selectedOrder.purchase_order.status)}>{selectedOrder.purchase_order.status}</Badge>
-                    <Badge className={statusTone(selectedOrder.dispatch.status)}>{selectedOrder.dispatch.status}</Badge>
+                    <Badge className={statusTone(selectedOrder.purchase_order.status)}>{purchaseOrderStatusLabel(selectedOrder.purchase_order.status)}</Badge>
+                    <Badge className={statusTone(selectedOrder.dispatch.status)}>{purchaseOrderStatusLabel(selectedOrder.dispatch.status)}</Badge>
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-5">
                   {[
-                    ["Ordered", totals.ordered],
-                    ["Received", totals.received],
-                    ["Remaining", totals.remaining],
-                    ["Invoiced", totals.invoiced],
-                    ["Open shortage", totals.shortage],
+                    ["Đã đặt", totals.ordered],
+                    ["Đã nhận", totals.received],
+                    ["Còn lại", totals.remaining],
+                    ["Đã lập hóa đơn", totals.invoiced],
+                    ["Thiếu chưa xử lý", totals.shortage],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-[8px] border border-slate-100 bg-slate-50 p-3">
                       <p className="text-[11px] font-semibold uppercase text-slate-500">{label}</p>
@@ -297,7 +298,7 @@ export function SupplierAccountPage() {
                 </div>
                 {selectedOrder.purchase_order.status === "SENT_TO_SUPPLIER" ? (
                   <Button className="mt-5" onClick={() => void confirmOrder()} disabled={working}>
-                    <CheckCircle2 className="mr-2 h-4 w-4" /> Confirm order
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> Xác nhận đơn hàng
                   </Button>
                 ) : null}
               </div>
@@ -305,25 +306,25 @@ export function SupplierAccountPage() {
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-sky-700" />
-                  <h3 className="text-[16px] font-semibold">Create invoice / delivery note</h3>
+                  <h3 className="text-[16px] font-semibold">Tạo hóa đơn / phiếu giao hàng</h3>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Invoice number" />
-                  <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Delivery number" />
+                  <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Số hóa đơn" />
+                  <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Số phiếu giao" />
                   <input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" />
                   <input type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" />
                 </div>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-20 w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Supplier note" />
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-20 w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Ghi chú của nhà cung cấp" />
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full min-w-[760px] text-[13px]">
                     <thead className="bg-slate-50 text-left text-[11px] uppercase text-slate-500">
                       <tr>
-                        <th className="px-3 py-2">Book</th>
+                        <th className="px-3 py-2">Sách</th>
                         <th className="px-3 py-2">SKU</th>
-                        <th className="px-3 py-2">Ordered</th>
-                        <th className="px-3 py-2">Received</th>
-                        <th className="px-3 py-2">Remaining</th>
-                        <th className="px-3 py-2">Invoice qty</th>
+                        <th className="px-3 py-2">Đặt</th>
+                        <th className="px-3 py-2">Đã nhận</th>
+                        <th className="px-3 py-2">Còn lại</th>
+                        <th className="px-3 py-2">SL hóa đơn</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -343,41 +344,41 @@ export function SupplierAccountPage() {
                   </table>
                 </div>
                 <Button className="mt-4" onClick={() => void submitInvoice()} disabled={working || totals.remaining <= 0}>
-                  <PackageCheck className="mr-2 h-4 w-4" /> Submit invoice
+                  <PackageCheck className="mr-2 h-4 w-4" /> Gửi hóa đơn
                 </Button>
               </div>
 
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
-                <h3 className="text-[16px] font-semibold">Shortage reports and redelivery</h3>
+                <h3 className="text-[16px] font-semibold">Báo thiếu hàng và giao bù</h3>
                 {openShortages.length === 0 ? (
-                  <p className="mt-3 text-[13px] text-slate-500">No open shortage reports.</p>
+                  <p className="mt-3 text-[13px] text-slate-500">Không có báo cáo thiếu hàng nào đang mở.</p>
                 ) : (
                   <div className="mt-4 space-y-4">
                     {openShortages.map((report) => (
                       <div key={report.id} className="rounded-[8px] border border-slate-200 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-[13px] font-semibold">Shortage {report.id.slice(0, 8)}</p>
-                            <p className="text-[12px] text-slate-500">{report.reason || "No reason"}</p>
+                            <p className="text-[13px] font-semibold">Báo thiếu {report.id.slice(0, 8)}</p>
+                            <p className="text-[12px] text-slate-500">{report.reason || "Không có lý do"}</p>
                           </div>
-                          <Badge className={statusTone(report.status)}>{report.status}</Badge>
+                          <Badge className={statusTone(report.status)}>{purchaseOrderStatusLabel(report.status)}</Badge>
                         </div>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           {report.items.map((item) => (
                             <div key={item.id} className="rounded-[8px] bg-amber-50 p-3 text-[13px] text-amber-900">
-                              <span className="font-semibold">{item.title || item.variant_id}</span> - shortage qty {item.shortage_qty}
+                              <span className="font-semibold">{item.title || item.variant_id}</span> - thiếu {item.shortage_qty}
                             </div>
                           ))}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" onClick={() => void acknowledge(report.id)} disabled={working}>Acknowledge</Button>
-                          <Button size="sm" variant="outline" onClick={() => setRedeliveryReportId(report.id)}>Use for redelivery</Button>
+                          <Button size="sm" variant="outline" onClick={() => void acknowledge(report.id)} disabled={working}>Ghi nhận</Button>
+                          <Button size="sm" variant="outline" onClick={() => setRedeliveryReportId(report.id)}>Dùng để giao bù</Button>
                         </div>
                       </div>
                     ))}
                     {selectedShortage ? (
                       <div className="rounded-[8px] border border-sky-200 bg-sky-50 p-4">
-                        <p className="text-[14px] font-semibold">Create redelivery for shortage {selectedShortage.id.slice(0, 8)}</p>
+                        <p className="text-[14px] font-semibold">Tạo giao bù cho báo thiếu {selectedShortage.id.slice(0, 8)}</p>
                         <div className="mt-3 space-y-2">
                           {selectedShortage.items.map((item) => (
                             <label key={item.id} className="flex items-center justify-between gap-3 text-[13px]">
@@ -387,11 +388,11 @@ export function SupplierAccountPage() {
                           ))}
                         </div>
                         <Button className="mt-4" onClick={() => void submitInvoice(selectedShortage)} disabled={working}>
-                          <Truck className="mr-2 h-4 w-4" /> Submit redelivery invoice
+                          <Truck className="mr-2 h-4 w-4" /> Gửi hóa đơn giao bù
                         </Button>
                         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                          <input value={cannotReason} onChange={(event) => setCannotReason(event.target.value)} className="flex-1 rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Reason if cannot fulfill" />
-                          <Button variant="outline" onClick={() => void cannotFulfill(selectedShortage.id)} disabled={working}>Cannot fulfill</Button>
+                          <input value={cannotReason} onChange={(event) => setCannotReason(event.target.value)} className="flex-1 rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Lý do nếu không thể cung cấp" />
+                          <Button variant="outline" onClick={() => void cannotFulfill(selectedShortage.id)} disabled={working}>Không thể cung cấp</Button>
                         </div>
                       </div>
                     ) : null}
@@ -400,19 +401,19 @@ export function SupplierAccountPage() {
               </div>
 
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
-                <h3 className="text-[16px] font-semibold">Submitted invoices</h3>
+                <h3 className="text-[16px] font-semibold">Hóa đơn đã gửi</h3>
                 {selectedOrder.invoices.length === 0 ? (
-                  <p className="mt-3 text-[13px] text-slate-500">No invoice or delivery note submitted yet.</p>
+                  <p className="mt-3 text-[13px] text-slate-500">Chưa gửi hóa đơn hoặc phiếu giao hàng nào.</p>
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-[13px]">
                       <thead className="bg-slate-50 text-left text-[11px] uppercase text-slate-500">
                         <tr>
-                          <th className="px-3 py-2">Invoice</th>
-                          <th className="px-3 py-2">Delivery</th>
-                          <th className="px-3 py-2">Status</th>
-                          <th className="px-3 py-2">Qty</th>
-                          <th className="px-3 py-2">Goods receipt</th>
+                          <th className="px-3 py-2">Hóa đơn</th>
+                          <th className="px-3 py-2">Phiếu giao</th>
+                          <th className="px-3 py-2">Trạng thái</th>
+                          <th className="px-3 py-2">SL</th>
+                          <th className="px-3 py-2">Phiếu nhập</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -420,9 +421,9 @@ export function SupplierAccountPage() {
                           <tr key={invoice.id} className="border-b border-slate-100">
                             <td className="px-3 py-2 font-medium">{invoice.invoice_number}</td>
                             <td className="px-3 py-2">{invoice.delivery_number || "-"}</td>
-                            <td className="px-3 py-2"><Badge className={statusTone(invoice.status)}>{invoice.status}</Badge></td>
+                            <td className="px-3 py-2"><Badge className={statusTone(invoice.status)}>{purchaseOrderStatusLabel(invoice.status)}</Badge></td>
                             <td className="px-3 py-2">{invoice.items.reduce((sum, item) => sum + item.invoiced_qty, 0)}</td>
-                            <td className="px-3 py-2">{invoice.goods_receipts?.map((receipt) => `${receipt.receipt_number} (${receipt.status})`).join(", ") || "-"}</td>
+                            <td className="px-3 py-2">{invoice.goods_receipts?.map((receipt) => `${receipt.receipt_number} (${purchaseOrderStatusLabel(receipt.status)})`).join(", ") || "-"}</td>
                           </tr>
                         ))}
                       </tbody>

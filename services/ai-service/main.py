@@ -46,7 +46,8 @@ from rag import (
     verify_numeric_grounding,
 )
 from retrieval import retrieve_context
-from assistant_tools import ANALYTICS_TOOLS, GATEWAY_URL, TOOL_FUNCTIONS
+from assistant_tools import GATEWAY_URL
+from tool_registry import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 import assistant_tools
 from source_reliability import reliability
 import book_index
@@ -87,6 +88,7 @@ from evidence import extract_evidence
 import conversation_store
 from assistant_loop import (
     TOOL_LOOP_EXHAUSTED_MESSAGE,
+    answer_from_collected_data,
     execute_tool_round,
     retry_once_if_ungrounded,
     seed_fast_path,
@@ -94,6 +96,10 @@ from assistant_loop import (
 from llm_provider import get_openrouter_provider, VisionResponseError, TEXT_MODEL, ASSISTANT_MODEL, VISION_MODEL
 from metadata_intelligence.capture import capture as capture_metadata_source
 from tool_context import render_tool_result as _compact_tool_result
+import copilot_response
+import copilot_tools
+from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
+from copilot_response import COPILOT_SYSTEM_PROMPT
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
 from routes_cover_search import router as cover_search_router
@@ -3404,41 +3410,10 @@ ROLE_BASED_RULES = (
 # AI Assistant — Trợ lý hỗ trợ ra quyết định (tool-calling)
 # ────────────────────────────────────────────────────────────────────────────────
 
-ASSISTANT_SYSTEM_PROMPT = (
-    "Bạn là **SmartBook Decision Assistant** — trợ lý ra quyết định cho quản lý thư viện/kho vận "
-    "(WAREHOUSE_MANAGER, ADMIN).\n\n"
-
-    "## Quy tắc bắt buộc\n"
-    "- Khi câu hỏi cần dữ liệu, LUÔN gọi tool phù hợp trước khi trả lời; có thể gọi nhiều tool liên tiếp.\n"
-    "- CHỈ trả lời/khuyến nghị dựa trên kết quả tool đã gọi. TUYỆT ĐỐI không tự phỏng đoán hoặc bịa số liệu.\n"
-    "- Khi khuyến nghị (nên nhập sách, ưu tiên kho nào...), PHẢI trích số liệu cụ thể từ tool (tên sách, tồn, "
-    "forecast, priority, reason...), không nói chung chung.\n"
-    "- Nếu câu hỏi ngoài phạm vi dữ liệu thư viện/kho vận (thông tin cá nhân khách hàng, thời tiết, chứng khoán, "
-    "tin tức...), từ chối lịch sự, ngắn gọn, KHÔNG bịa câu trả lời và KHÔNG gọi tool nào.\n"
-    "- Nếu tool trả lỗi, nói rõ dữ liệu chưa lấy được, không suy diễn thay.\n"
-    "- search_books trả kèm retrievalStatus: NO_EVIDENCE nghĩa là catalog không có sách phù hợp — nói rõ điều đó, "
-    "KHÔNG gợi ý sách khác thay thế. UNCERTAIN nghĩa là kết quả chỉ gần đúng — trình bày như một gợi ý chưa chắc "
-    "chắn, không khẳng định như sự thật.\n"
-    "- Nếu câu hỏi chứa NHIỀU yêu cầu dữ liệu khác nhau, hãy gọi TẤT CẢ tool cần thiết TRONG CÙNG MỘT LƯỢT.\n"
-    "- Ví dụ: \"KPI hiện tại và các khoản quá hạn\" → gọi đồng thời get_dashboard_kpis VÀ get_overdue_summary.\n\n"
-
-    "## Kiến thức nghiệp vụ\n"
-    "- Reservation: PENDING → CONFIRMED → READY_FOR_PICKUP → CONVERTED_TO_LOAN / CANCELLED / EXPIRED.\n"
-    "- fine_type: OVERDUE (quá hạn), LOST (mất sách), DAMAGE (hư/hỏng).\n"
-    "- stock_balances: available_qty (khả dụng để đặt/mượn), reserved_qty (đang giữ cho reservation), "
-    "borrowed_qty (đang cho mượn).\n\n"
-
-    "## Trình bày\n"
-    "- Luôn trả lời tiếng Việt, ngắn gọn, chuyên nghiệp, đi thẳng khuyến nghị.\n"
-    "- Dùng **bold** cho số liệu và tên sách/kho quan trọng.\n\n"
-
-    "## Quy tắc số liệu bắt buộc\n"
-    "- Đơn vị tiền tệ LUÔN là đồng Việt Nam, viết dạng \"1.234.567 ₫\". TUYỆT ĐỐI không dùng \"$\" hay bất kỳ "
-    "ký hiệu tiền tệ nào khác.\n"
-    "- Chép số liệu NGUYÊN VẸN từ kết quả tool. Không tự quy đổi đơn vị, không nhân/chia, không làm tròn lại.\n"
-    "- KHÔNG BAO GIỜ mô tả cấu trúc dữ liệu, không liệt kê tên trường JSON, không viết code. Chỉ trả lời "
-    "thẳng câu hỏi bằng tiếng Việt.\n"
-)
+# The copilot's standing rules live with the rest of its answer shaping
+# (copilot_response.py); the per-turn context (date, resolved entities, answer
+# structure) is appended by _assistant_prompt_messages.
+ASSISTANT_SYSTEM_PROMPT = COPILOT_SYSTEM_PROMPT
 
 
 def _build_context_block(system_context: dict | None) -> str:
@@ -3545,6 +3520,14 @@ class AssistantResponse(BaseModel):
     # tool_call_count} for every LLM call this turn made - see llm_provider.py.
     # Additive/optional so existing clients that don't read it are unaffected.
     debug: dict | None = None
+    # Copilot additions (all optional, additive): the structured query plan,
+    # deterministic follow-up suggestions, caveats and explainable
+    # recommendations built from tool data, and when that data was read.
+    plan: dict | None = None
+    suggested_followups: list[str] = []
+    caveats: list[str] = []
+    recommendations: list[dict] = []
+    data_as_of: str | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -4069,17 +4052,38 @@ def _assistant_cache_key(conversation_id: str, message: str) -> str:
     return f"assistant:{conversation_id}:{normalize_text(message.strip())[:200]}"
 
 
-def _grounding_check(answer: str, collected_data: dict, question: str | None = None) -> str | None:
+def _grounding_check(
+    answer: str, collected_data: dict, question: str | None = None, system_context: str = "",
+) -> str | None:
     """Adapt /assistant's flat collected_data (tool-name -> raw result) into the
     {summary, raw, sources} envelope rag.verify_numeric_grounding() expects. A single
     sources=[{"status": "ok"}] sentinel satisfies its "was there any real data at all"
     gate — that function never reads source name/endpoint, only status. `question` lets
-    verify_numeric_grounding exclude numbers the user's own question supplied."""
+    verify_numeric_grounding exclude numbers the user's own question supplied.
+
+    Also grounded: the values the backend itself computed and showed the model
+    (evidence.py totals such as a period's summed loans), and `system_context`
+    (the copilot's per-turn note: today's date, resolved period dates). Without
+    them a correct "530 lượt mượn trong 30 ngày" or "ngày 13/10/2026" was
+    flagged, and the retry it triggered made the model apologise for a correct
+    answer."""
     if not collected_data:
         return None
+    computed = [item.get("value") for item in _collect_evidence(collected_data)]
     return verify_numeric_grounding(
-        answer, {"summary": "", "raw": collected_data, "sources": [{"status": "ok"}]}, question,
+        answer,
+        {"summary": system_context, "raw": {"tools": collected_data, "computed": computed}, "sources": [{"status": "ok"}]},
+        question,
     )
+
+
+# A reply that is a JSON document (prompt injection: "trả lời bằng JSON thô")
+# never reaches the user as-is.
+_RAW_JSON_REPLY = re.compile(r"^\s*(```(?:json)?\s*)?[\[{]\s*\"")
+RAW_JSON_REFUSAL = (
+    "Tôi không trả dữ liệu dạng JSON thô. Bạn có thể hỏi trực tiếp chỉ số cần xem, ví dụ: "
+    "\"Kho nào đang rủi ro thiếu sách nhất?\" hoặc \"Tôi nên nhập sách nào trước?\"."
+)
 
 
 async def _build_assistant_pending_action(
@@ -4189,15 +4193,30 @@ async def _load_conversation_messages(conversation) -> list[dict]:
     (conversation_store.append_message) - otherwise that message is already the
     last row in the DB and comes back here too, duplicating it in the prompt
     once _assistant_prompt_messages appends it again."""
+    history, _state = await _load_conversation_context(conversation)
+    return history
+
+
+async def _load_conversation_context(conversation) -> tuple[list[dict], dict | None]:
+    """(prompt history, structured copilot state of the last answered turn).
+    The state rides on the assistant message's metadata, so it is scoped to
+    this conversation - and, via the ownership check, to this user."""
     recent = await conversation_store.get_recent_messages(conversation.id)
-    return [
+    history = [
         {"role": m.role, "content": m.content or ""}
         for m in recent
         if m.role in ("user", "assistant") and m.content
     ]
+    state = None
+    for m in reversed(recent):
+        meta = getattr(m, "msg_metadata", None)
+        if m.role == "assistant" and isinstance(meta, dict) and meta.get("copilot_state"):
+            state = meta["copilot_state"]
+            break
+    return history, state
 
 
-def _assistant_prompt_messages(history: list[dict], message_text: str) -> list[dict]:
+def _assistant_prompt_messages(history: list[dict], message_text: str, plan_note: str | None = None) -> list[dict]:
     """System prompt + prior turns + the current question, exactly once.
 
     Callers should load `history` before persisting the current turn (see
@@ -4207,18 +4226,203 @@ def _assistant_prompt_messages(history: list[dict], message_text: str) -> list[d
     with this exact content is dropped: in normal conversation flow the
     assistant always replies before the next user turn, so two consecutive
     user messages with identical content is never a legitimate case - only
-    the accidental-duplicate one."""
+    the accidental-duplicate one.
+
+    `plan_note` (copilot_response.plan_note) is appended to the single system
+    message: today's date, resolved periods/warehouses, answer structure."""
     if history and history[-1].get("role") == "user" and history[-1].get("content") == message_text:
         history = history[:-1]
+    system = ASSISTANT_SYSTEM_PROMPT + (f"\n\n{plan_note}" if plan_note else "")
     return [
-        {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
+        {"role": "system", "content": system},
         *history,
         {"role": "user", "content": message_text},
     ]
 
 
-@app.post("/assistant", response_model=AssistantResponse)
-async def assistant(request: Request, req: AssistantRequest):
+async def _resolve_owned_conversation(conversation_id: str | None, user_ctx, message_text: str):
+    """get_or_create_conversation, mapped to HTTP: a conversation_id owned by
+    another user is a 403, never a silent read of their history (both
+    /assistant and /assistant/stream resolve through here)."""
+    try:
+        return await conversation_store.get_or_create_conversation(
+            conversation_id, user_ctx, first_message=message_text
+        )
+    except conversation_store.ConversationAccessDenied:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập hội thoại này.")
+
+
+async def _plan_assistant_turn(message_text: str, state: dict | None, auth_header: str | None):
+    """The copilot's deterministic plan for this turn (copilot_plan.build_plan),
+    with the warehouses this user can see. A planner failure degrades to the
+    pre-copilot behaviour (empty plan -> rule fast path / LLM tool choice),
+    never to a failed request."""
+    warehouses = await copilot_tools._warehouses(auth_header)
+    if not isinstance(warehouses, list):
+        warehouses = []
+    try:
+        plan = build_copilot_plan(message_text, state, warehouses)
+    except Exception:
+        logger.exception("copilot planning failed; falling back to the rule fast path")
+        plan = CopilotPlan(intent=GENERAL_QUERY)
+    return plan, warehouses
+
+
+def _plan_fast_path(plan):
+    """seed_fast_path's tool runner for this turn: the plan's whitelisted tools
+    when it has any; the original rule fast path when the plan understood
+    nothing; nothing at all for out-of-scope/sensitive requests."""
+    async def run(message: str, auth_header: str | None) -> list[dict]:
+        if not plan.required_tools:
+            if plan.requested_analysis == "out_of_scope" or plan.clarification_needed:
+                return []
+            return await _run_fast_path_tool(message, auth_header)
+
+        async def _run_one(call: dict) -> dict | None:
+            tool_fn = TOOL_FUNCTIONS.get(call["name"])
+            if tool_fn is None:
+                return None
+            result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, call["args"]))
+            return {"tool_name": call["name"], "tool_args": call["args"], "tool_result": result}
+
+        results = await asyncio.gather(*(_run_one(call) for call in plan.required_tools))
+        return [r for r in results if r is not None]
+    return run
+
+
+def _tool_call_dicts(tools_used: list) -> list[dict]:
+    return [call if isinstance(call, dict) else call.model_dump() for call in tools_used]
+
+
+def _assistant_payload(
+    *, answer: str, tools_used: list, collected_data: dict, conversation_id: str, grounding_warning: str | None,
+    pending_action: dict | None, plan, extras: dict, retrieval_warnings: list[str] | None = None,
+    evidence: list[dict] | None = None, debug: dict | None = None,
+) -> dict:
+    """The one response shape both endpoints emit (/assistant's body, the SSE
+    stream's `done` event), so the two cannot drift apart."""
+    payload = {
+        "answer": answer,
+        "tools_used": _tool_call_dicts(tools_used),
+        "data": collected_data,
+        "conversation_id": conversation_id,
+        "grounding_warning": grounding_warning,
+        "pending_action": pending_action,
+        "evidence": evidence if evidence is not None else _collect_evidence(collected_data),
+        "retrieval_warnings": (retrieval_warnings if retrieval_warnings is not None
+                               else _collect_retrieval_warnings(collected_data)),
+        "plan": plan.public() if plan is not None else None,
+        "suggested_followups": extras.get("suggested_followups", []),
+        "caveats": extras.get("caveats", []),
+        "recommendations": extras.get("recommendations", []),
+        "data_as_of": extras.get("data_as_of"),
+    }
+    if debug is not None:
+        payload["debug"] = debug
+    return payload
+
+
+async def _clarify_turn(plan, conversation, conversation_id_str: str, message_text: str, state: dict | None) -> dict:
+    """A deterministic clarifying question - no tool, no LLM call. The previous
+    turn's state is kept so the user's answer can continue from it."""
+    answer = plan.clarification_question or "Bạn có thể nói rõ hơn câu hỏi được không?"
+    extras = copilot_response.build_extras(plan, {})
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+    await conversation_store.append_message(
+        conversation.id, role="assistant", content=answer, tool_calls=[], data={},
+        metadata={"copilot_state": state or {}, "plan": plan.public(), "extras": extras},
+    )
+    return _assistant_payload(
+        answer=answer, tools_used=[], collected_data={}, conversation_id=conversation_id_str, grounding_warning=None,
+        pending_action=None, plan=plan, extras=extras, retrieval_warnings=[], evidence=[], debug={"llm_calls": []},
+    )
+
+
+async def _cached_turn(cached: dict, conversation, conversation_id_str: str, message_text: str) -> dict:
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+    await conversation_store.append_message(
+        conversation.id,
+        role="assistant",
+        content=cached["answer"],
+        tool_calls=_tool_call_dicts(cached["tools_used"]),
+        data=cached["data"],
+        grounding_warning=cached.get("grounding_warning"),
+        metadata=cached.get("metadata"),
+    )
+    payload = {key: value for key, value in cached.items() if key != "metadata"}
+    payload.update({"conversation_id": conversation_id_str, "pending_action": None,
+                    "tools_used": _tool_call_dicts(cached["tools_used"])})
+    payload.setdefault("evidence", _collect_evidence(cached["data"]))
+    payload.setdefault("retrieval_warnings", _collect_retrieval_warnings(cached["data"]))
+    return payload
+
+
+async def _finalize_assistant_turn(
+    *, message_text: str, answer: str, answered_normally: bool, tools_used: list, collected_data: dict,
+    messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
+    user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str,
+    plan_note_text: str = "",
+) -> dict:
+    """Everything after the tool loop, shared by both endpoints: one grounding
+    retry, the reorder pending action (still confirmation-gated), the
+    deterministic extras, the next conversation state, cache and persistence."""
+    if not answer:
+        answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
+    if _RAW_JSON_REPLY.match(answer):
+        answer = RAW_JSON_REFUSAL
+
+    grounding_warning = _grounding_check(answer, collected_data, message_text, plan_note_text)
+    if grounding_warning and answered_normally:
+        answer, retry_usage = await retry_once_if_ungrounded(
+            messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+            ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+        )
+        if retry_usage:
+            call_usage.append(retry_usage)
+        grounding_warning = _grounding_check(answer, collected_data, message_text, plan_note_text)
+        if _RAW_JSON_REPLY.match(answer):
+            answer = RAW_JSON_REFUSAL
+
+    pending_action_data = None
+    if answered_normally:
+        pending_action_data = await _build_assistant_pending_action(
+            message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
+        )
+
+    extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, question=message_text)
+    new_state = copilot_next_state(plan, collected_data, state)
+    metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras}
+    tool_calls = _tool_call_dicts(tools_used)
+    payload = _assistant_payload(
+        answer=answer, tools_used=tool_calls, collected_data=collected_data, conversation_id=conversation_id_str,
+        grounding_warning=grounding_warning, pending_action=pending_action_data, plan=plan, extras=extras,
+        debug={"llm_calls": call_usage},
+    )
+
+    if answered_normally and not pending_action_data:
+        assistant_response_cache.set(cache_key, {
+            **{k: v for k, v in payload.items() if k not in ("conversation_id", "pending_action", "debug")},
+            "metadata": metadata,
+        })
+
+    await conversation_store.append_message(
+        conversation.id,
+        role="assistant",
+        content=answer,
+        tool_calls=tool_calls,
+        data=collected_data,
+        pending_action_id=pending_action_data.get("id") if pending_action_data else None,
+        grounding_warning=grounding_warning,
+        metadata=metadata,
+    )
+    return payload
+
+
+async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict:
+    """Shared prologue: validation, rate limit, permission gate, conversation
+    ownership, cache lookup, then history/state/plan. `cached` short-circuits
+    everything after it; a clarification plan stops before the user message
+    is persisted (_clarify_turn persists both sides)."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
 
@@ -4229,41 +4433,50 @@ async def assistant(request: Request, req: AssistantRequest):
 
     auth_header = request.headers.get("authorization")
     user_ctx = await get_user_context(auth_header)
-
     if not _assistant_can_access(user_ctx):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
 
     message_text = req.message.strip()
-    conversation = await conversation_store.get_or_create_conversation(
-        req.conversation_id, user_ctx, first_message=message_text
-    )
+    conversation = await _resolve_owned_conversation(req.conversation_id, user_ctx, message_text)
     conversation_id_str = str(conversation.conversation_id)
-
     cache_key = _assistant_cache_key(conversation_id_str, message_text)
-    cached = assistant_response_cache.get(cache_key)
-    if cached is not None:
-        evidence = cached.get("evidence") or _collect_evidence(cached["data"])
-        await conversation_store.append_message(conversation.id, role="user", content=message_text)
-        await conversation_store.append_message(
-            conversation.id,
-            role="assistant",
-            content=cached["answer"],
-            tool_calls=[dict(call) for call in cached["tools_used"]],
-            data=cached["data"],
-            grounding_warning=cached.get("grounding_warning"),
-        )
-        return AssistantResponse(**{**cached, "evidence": evidence, "conversation_id": conversation_id_str})
+    turn = {
+        "auth_header": auth_header, "user_ctx": user_ctx, "message_text": message_text,
+        "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
+        "cached": assistant_response_cache.get(cache_key),
+    }
+    if turn["cached"] is not None:
+        return turn
 
-    history = await _load_conversation_messages(conversation)
+    history, state = await _load_conversation_context(conversation)
+    plan, warehouses = await _plan_assistant_turn(message_text, state, auth_header)
+    turn.update({"history": history, "state": state, "plan": plan, "warehouses": warehouses})
+    if plan.clarification_needed:
+        return turn
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
-    messages: list[dict] = _assistant_prompt_messages(history, message_text)
+    turn["plan_note"] = copilot_response.plan_note(plan)
+    turn["messages"] = _assistant_prompt_messages(history, message_text, turn["plan_note"])
+    return turn
 
+
+@app.post("/assistant", response_model=AssistantResponse)
+async def assistant(request: Request, req: AssistantRequest):
+    turn = await _start_assistant_turn(request, req)
+    conversation, conversation_id_str = turn["conversation"], turn["conversation_id_str"]
+    message_text, auth_header = turn["message_text"], turn["auth_header"]
+    if turn["cached"] is not None:
+        return AssistantResponse(**await _cached_turn(turn["cached"], conversation, conversation_id_str, message_text))
+    plan = turn["plan"]
+    if plan.clarification_needed:
+        return AssistantResponse(**await _clarify_turn(plan, conversation, conversation_id_str, message_text, turn["state"]))
+
+    messages = turn["messages"]
     answer = ""
     answered_normally = False
     call_usage: list[dict] = []
 
     tools_used, collected_data, start_round = await seed_fast_path(
-        message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+        message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
     )
 
     try:
@@ -4282,12 +4495,18 @@ async def assistant(request: Request, req: AssistantRequest):
                 answered_normally = True
                 break
 
-            # All ANALYTICS_TOOLS are read-only GETs — safe to run concurrently.
+            # Every tool in the registry is a read-only GET — safe to run concurrently.
             await execute_tool_round(
                 tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
             )
         else:
-            answer = TOOL_LOOP_EXHAUSTED_MESSAGE
+            answer, final_usage = await answer_from_collected_data(
+                messages, collected_data, functools.partial(provider.chat, feature="assistant"),
+                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            )
+            if final_usage:
+                call_usage.append(final_usage)
+                answered_normally = answer != TOOL_LOOP_EXHAUSTED_MESSAGE
     except Exception:
         logger.exception("Assistant tool-calling failed")
         raise HTTPException(
@@ -4295,58 +4514,14 @@ async def assistant(request: Request, req: AssistantRequest):
             detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi).",
         )
 
-    if not answer:
-        answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
-
-    grounding_warning = _grounding_check(answer, collected_data, message_text)
-    if grounding_warning and answered_normally:
-        answer, retry_usage = await retry_once_if_ungrounded(
-            messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
-            ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
-        )
-        if retry_usage:
-            call_usage.append(retry_usage)
-        grounding_warning = _grounding_check(answer, collected_data, message_text)
-
-    evidence = _collect_evidence(collected_data)
-    retrieval_warnings = _collect_retrieval_warnings(collected_data)
-
-    pending_action_data = None
-    if answered_normally:
-        pending_action_data = await _build_assistant_pending_action(
-            message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
-        )
-
-    if answered_normally and not pending_action_data:
-        assistant_response_cache.set(cache_key, {
-            "answer": answer,
-            "tools_used": [AssistantToolCall(**call) for call in tools_used],
-            "data": collected_data,
-            "grounding_warning": grounding_warning,
-            "evidence": evidence,
-        })
-
-    await conversation_store.append_message(
-        conversation.id,
-        role="assistant",
-        content=answer,
-        tool_calls=tools_used,
-        data=collected_data,
-        pending_action_id=pending_action_data.get("id") if pending_action_data else None,
-        grounding_warning=grounding_warning,
+    payload = await _finalize_assistant_turn(
+        message_text=message_text, answer=answer, answered_normally=answered_normally, tools_used=tools_used,
+        collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
+        state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
+        conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
+        plan_note_text=turn["plan_note"],
     )
-
-    return AssistantResponse(
-        answer=answer,
-        tools_used=[AssistantToolCall(**call) for call in tools_used],
-        data=collected_data,
-        conversation_id=conversation_id_str,
-        grounding_warning=grounding_warning,
-        pending_action=pending_action_data,
-        evidence=evidence,
-        retrieval_warnings=retrieval_warnings,
-        debug={"llm_calls": call_usage},
-    )
+    return AssistantResponse(**payload)
 
 
 def _sse(event: str, data: dict) -> str:
@@ -4355,63 +4530,33 @@ def _sse(event: str, data: dict) -> str:
 
 @app.post("/assistant/stream")
 async def assistant_stream(request: Request, req: AssistantRequest):
-    """Streaming twin of /assistant: same permission gate and tool-calling loop, but
-    each round's OpenRouter response is consumed with `stream=True` so the final answer's
-    tokens reach the client as they're generated, instead of only after the whole
-    tool-calling loop completes.
-    Tool-selection rounds normally produce no content deltas (the model emits only
-    tool_calls for those), so in practice only the final round streams visible text.
+    """Streaming twin of /assistant: same prologue, plan, tool loop and
+    finalization, but each round's OpenRouter response is consumed with
+    `stream=True` so the final answer's tokens reach the client as they're
+    generated. Tool-selection rounds normally produce no content deltas, so in
+    practice only the final round streams visible text. The `done` event
+    carries exactly /assistant's response body and is the source of truth.
     """
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="Message không được để trống.")
+    turn = await _start_assistant_turn(request, req)
+    conversation, conversation_id_str = turn["conversation"], turn["conversation_id_str"]
+    message_text, auth_header = turn["message_text"], turn["auth_header"]
 
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
-    auth_header = request.headers.get("authorization")
-    user_ctx = await get_user_context(auth_header)
-    if not _assistant_can_access(user_ctx):
-        raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
-
-    message_text = req.message.strip()
-    conversation = await conversation_store.get_or_create_conversation(
-        req.conversation_id, user_ctx, first_message=message_text
-    )
-    conversation_id_str = str(conversation.conversation_id)
-
-    cache_key = _assistant_cache_key(conversation_id_str, message_text)
-    cached = assistant_response_cache.get(cache_key)
-    if cached is not None:
-        evidence = cached.get("evidence") or _collect_evidence(cached["data"])
-
+    if turn["cached"] is not None:
         async def cached_event_generator():
-            yield _sse("token", {"text": cached["answer"]})
-            await conversation_store.append_message(conversation.id, role="user", content=message_text)
-            await conversation_store.append_message(
-                conversation.id,
-                role="assistant",
-                content=cached["answer"],
-                tool_calls=[dict(call) for call in cached["tools_used"]],
-                data=cached["data"],
-                grounding_warning=cached.get("grounding_warning"),
-            )
-            yield _sse("done", {
-                "answer": cached["answer"],
-                "tools_used": [dict(call) for call in cached["tools_used"]],
-                "data": cached["data"],
-                "conversation_id": conversation_id_str,
-                "grounding_warning": cached.get("grounding_warning"),
-                "pending_action": None,
-                "evidence": evidence,
-                "retrieval_warnings": [],
-            })
+            payload = await _cached_turn(turn["cached"], conversation, conversation_id_str, message_text)
+            yield _sse("token", {"text": payload["answer"]})
+            yield _sse("done", payload)
         return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
 
-    history = await _load_conversation_messages(conversation)
-    await conversation_store.append_message(conversation.id, role="user", content=message_text)
-    messages: list[dict] = _assistant_prompt_messages(history, message_text)
+    plan = turn["plan"]
+    if plan.clarification_needed:
+        async def clarify_event_generator():
+            payload = await _clarify_turn(plan, conversation, conversation_id_str, message_text, turn["state"])
+            yield _sse("token", {"text": payload["answer"]})
+            yield _sse("done", payload)
+        return StreamingResponse(clarify_event_generator(), media_type="text/event-stream")
+
+    messages = turn["messages"]
 
     async def event_generator():
         answer = ""
@@ -4419,7 +4564,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         call_usage: list[dict] = []
 
         tools_used, collected_data, start_round = await seed_fast_path(
-            message_text, auth_header, messages, _run_fast_path_tool, _render_tool_result,
+            message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
         )
 
         try:
@@ -4452,76 +4597,33 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 )
             else:
                 if not answer:
-                    answer = TOOL_LOOP_EXHAUSTED_MESSAGE
+                    answer, final_usage = await answer_from_collected_data(
+                        messages, collected_data, functools.partial(provider.chat, feature="assistant"),
+                        ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+                    )
+                    if final_usage:
+                        call_usage.append(final_usage)
+                        answered_normally = answer != TOOL_LOOP_EXHAUSTED_MESSAGE
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
             answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
             yield _sse("token", {"text": answer})
-            yield _sse("done", {
-                "answer": answer,
-                "tools_used": tools_used,
-                "data": collected_data,
-                "conversation_id": conversation_id_str,
-                "grounding_warning": None,
-                "pending_action": None,
-                "evidence": [],
-                "retrieval_warnings": [],
-            })
+            yield _sse("done", _assistant_payload(
+                answer=answer, tools_used=tools_used, collected_data=collected_data,
+                conversation_id=conversation_id_str, grounding_warning=None, pending_action=None, plan=plan,
+                extras={}, retrieval_warnings=[], evidence=[],
+            ))
             return
 
-        if not answer:
-            answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
-
-        grounding_warning = _grounding_check(answer, collected_data, message_text)
-        if grounding_warning and answered_normally:
-            answer, retry_usage = await retry_once_if_ungrounded(
-                messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
-                ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
-            )
-            if retry_usage:
-                call_usage.append(retry_usage)
-            grounding_warning = _grounding_check(answer, collected_data, message_text)
-
-        evidence = _collect_evidence(collected_data)
-        retrieval_warnings = _collect_retrieval_warnings(collected_data)
-
-        pending_action_data = None
-        if answered_normally:
-            pending_action_data = await _build_assistant_pending_action(
-                message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
-            )
-
-        if answered_normally and not pending_action_data:
-            assistant_response_cache.set(cache_key, {
-                "answer": answer,
-                "tools_used": [AssistantToolCall(name=call["name"], arguments=call["arguments"]) for call in tools_used],
-                "data": collected_data,
-                "grounding_warning": grounding_warning,
-                "evidence": evidence,
-            })
-
-        await conversation_store.append_message(
-            conversation.id,
-            role="assistant",
-            content=answer,
-            tool_calls=tools_used,
-            data=collected_data,
-            pending_action_id=pending_action_data.get("id") if pending_action_data else None,
-            grounding_warning=grounding_warning,
+        payload = await _finalize_assistant_turn(
+            message_text=message_text, answer=answer, answered_normally=answered_normally, tools_used=tools_used,
+            collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
+            state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
+            conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
+            plan_note_text=turn["plan_note"],
         )
-
-        yield _sse("done", {
-            "answer": answer,
-            "tools_used": tools_used,
-            "data": collected_data,
-            "conversation_id": conversation_id_str,
-            "grounding_warning": grounding_warning,
-            "pending_action": pending_action_data,
-            "evidence": evidence,
-            "retrieval_warnings": retrieval_warnings,
-            "debug": {"llm_calls": call_usage},
-        })
+        yield _sse("done", payload)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

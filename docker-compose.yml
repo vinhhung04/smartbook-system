@@ -168,7 +168,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
@@ -204,7 +204,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
@@ -245,7 +245,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
@@ -271,7 +271,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
@@ -344,11 +344,6 @@ services:
   ai-service:
     profiles: ["ai"]
     build: ./services/ai-service
-    # No hard dependency on ollama: the default LLM/assistant provider is OpenRouter
-    # (see OPENROUTER_*/LLM_PROVIDER below) — ollama only backs the optional vision/OCR
-    # and embedding paths, which already degrade gracefully when it's unreachable. Ollama
-    # is slow to become ready (model pulls) and has occasionally hung entirely on this
-    # stack; blocking ai-service's startup on it took down chat/analytics too.
     depends_on:
       db:
         condition: service_healthy

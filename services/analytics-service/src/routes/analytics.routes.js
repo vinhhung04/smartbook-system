@@ -47,6 +47,7 @@ router.get('/late-return-risk', authenticateInternalOrUser(readBorrowAnalytics),
 router.get('/overdue-summary', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getOverdueSummary);
 router.get('/fine-summary', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getFineSummary);
 router.get('/warehouse-stock-risk', authenticateInternalOrUser(), analyticsController.getWarehouseStockRisk);
+router.get('/warehouse-stock-items', authenticateInternalOrUser(), analyticsController.getWarehouseStockItems);
 router.get('/reorder-suggestions', authenticateInternalOrUser(), analyticsController.getReorderSuggestions);
 router.get('/reservation-funnel', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getReservationFunnel);
 router.get('/weeding-suggestions', authenticateInternalOrUser(), analyticsController.getWeedingSuggestions);
